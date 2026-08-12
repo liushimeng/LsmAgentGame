@@ -93,7 +93,8 @@
   display: grid;
   /* §127: 房间信息 0.6fr(原 1fr 的一半),棋牌 1.8fr(占据中间放大区),聊天 1fr 不变 */
   grid-template-columns: minmax(0, 0.6fr) minmax(0, 1.8fr) minmax(0, 1fr);
-  grid-template-rows: 1fr;
+  /* row 1 = 主内容(三栏自适应), row 2 = 观战者底栏(自动高度) */
+  grid-template-rows: 1fr auto;
   /* 2026-07-26 房间聊天滚动修复: 基类 .game-area 带 align-items:flex-start,
    * grid 模式下会让聊天列高度=内容高度而非撑满行高,聊天面板随消息无限
    * 增高 → 内嵌滚轮失效。stretch 让三列都占满 grid 行,聊天列表在列内
@@ -171,6 +172,27 @@
   gap: var(--ww-gap);
 }
 
+/* §20260812-02 — 观战者专属底栏：解说席 + 押注面板水平并排。
+   放在 .game-area grid 第 2 行，跨越中栏+右栏(col 2-4)，消除右侧留白。 */
+.spectator-bottom-row {
+  grid-column: 2 / 4;
+  grid-row: 2;
+  display: flex;
+  gap: var(--ww-gap);
+  min-height: 0;
+  max-height: 240px;
+  overflow: hidden;
+}
+.spectator-bottom-row__commentary {
+  flex: 1 1 50%;
+  min-width: 0;
+}
+.spectator-bottom-row .spectator-bet-panel {
+  flex: 1 1 50%;
+  min-width: 0;
+  margin: 0; /* 覆盖原 margin: 8px 0，避免 flex 间隙 */
+}
+
 /* 2K 显示器断点 (~2560×1440):保持 §127 比例 0.6:1.8:1,加 max-width 让大屏不撑爆 */
 @media (min-width: 2000px) {
   .werewolf-game .game-area {
@@ -210,7 +232,7 @@
 @media (max-width: 1024px) {
   .werewolf-game .game-area {
     grid-template-columns: 1fr !important;
-    grid-template-rows: minmax(420px, auto) auto auto;
+    grid-template-rows: minmax(420px, auto) auto auto auto;
     overflow: auto;
   }
   .werewolf-game .game-sidebar,
@@ -229,6 +251,13 @@
   /* 隐藏所有折叠按钮与折叠态 handle(垂直堆叠模式下无意义)
    * 2026-08-07 §房间聊天优化:werewolf-chat-wrap__fold-btn 已删除
    * (外层冗余 header + 折叠按钮移除),其余保留。 */
+  /* 观战者底栏：窄屏垂直堆叠，全宽，自动排到最后 */
+  .spectator-bottom-row {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    flex-direction: column;
+    max-height: none;
+  }
   .werewolf-game .room-info-panel__fold-btn,
   .werewolf-game .game-chat__toggle,
   .werewolf-game .room-info-fold-handle,

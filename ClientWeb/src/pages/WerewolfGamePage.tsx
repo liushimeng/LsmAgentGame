@@ -829,6 +829,31 @@ export function WerewolfGamePage() {
             />
           )}
         </div>
+        {/* §20260812-02 — 观战者专属底栏：解说席 + 押注面板水平并排。
+            放在 grid 内部(.game-area)，跨越中栏+右栏，消除右侧留白。 */}
+        {spectator && (
+          <div className="spectator-bottom-row">
+            <CommentaryPanel className="spectator-bottom-row__commentary" />
+            {gameState && (
+              <SpectatorBetPanel
+                roomId={roomId ?? ''}
+                phase={gameState.phase}
+                seatCount={(gameState as any).max_seat ?? 13}
+                playerNames={Object.fromEntries(
+                  (gameState.players ?? []).map((p: any) => [p.seat, p.account ?? `${p.seat + 1}号`])
+                )}
+                onPlaceBet={async (targetSeat, amount) => {
+                  const { wsClient } = await import('@/services/ws');
+                  wsClient.send('game.werewolf_bet', {
+                    room_id: roomId,
+                    target_seat: targetSeat,
+                    amount,
+                  });
+                }}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {/* 2026-07-10 12 人局: 警徽流声明面板(模态,ESC 关闭)。 */}
@@ -861,32 +886,7 @@ export function WerewolfGamePage() {
         />
       )}
 
-      {/* §20260811-09 U1 — 观战者专属 AI 解说席。仅在 spectator 路由时渲染。 */}
-      {spectator && (
-        <aside className="werewolf-game__commentary">
-          <CommentaryPanel />
-        </aside>
-      )}
-
-      {/* §20260812-02 U3 — 观众押注竞猜面板。仅观战者可见。 */}
-      {spectator && gameState && (
-        <SpectatorBetPanel
-          roomId={roomId ?? ''}
-          phase={gameState.phase}
-          seatCount={(gameState as any).max_seat ?? 13}
-          playerNames={Object.fromEntries(
-            (gameState.players ?? []).map((p: any) => [p.seat, p.account ?? `${p.seat + 1}号`])
-          )}
-          onPlaceBet={async (targetSeat, amount) => {
-            const { wsClient } = await import('@/services/ws');
-            wsClient.send('game.werewolf_bet', {
-              room_id: roomId,
-              target_seat: targetSeat,
-              amount,
-            });
-          }}
-        />
-      )}
+      {/* panels moved into .game-area grid — see spectator-bottom-row below */}
 
       {/* 2026-07-17 金池结算弹层 — 后端 game.settlement 帧触发。仅人类玩家收到
        * (per-user SendToUser),观战者/机器人不触发。展示底注/净收益/最终余额。 */}
