@@ -397,8 +397,12 @@ export function WerewolfGamePage() {
   // 二者均不再误导为「等待玩家入座」(真正的 filling 阶段由 showFillingOverlay 负责)。
   // WS 断连的全局 toast 由 AppLayout/ReconnectingOverlay 既有链路负责,此处不重复上报。
   const waitingHint = (() => {
-    if (spectator) return '👁 观战中…';
+    // Debug-2026-08-12-01 P3-7: 观战者此时并非「观战成功」,而是【尚未收到
+    // game.state】的过渡态。旧文案 '👁 观战中…' 既硬编码中文(违反 §12 三语
+    // 同步),又把「状态未知」说成「已在观战」,用户无从判断是否卡住。
+    // WS 未连通时优先报连接问题,与玩家路径保持一致。
     if (wsStatus !== 'open') return t('werewolf.connecting');
+    if (spectator) return t('werewolf.spectatorSyncing');
     return t('werewolf.syncingState');
   })();
 

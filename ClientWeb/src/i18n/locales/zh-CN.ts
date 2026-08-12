@@ -632,6 +632,7 @@ const zhCN: Dict = {
   // R187-4: gameState 尚未到达时区分「连接服务器」与「同步游戏状态」。
   'werewolf.connecting': '🔌 正在连接服务器…',
   'werewolf.syncingState': '⏳ 正在同步游戏状态…',
+  'werewolf.spectatorSyncing': '👁 观战中，正在同步游戏状态…',
   'werewolf.syncStalled': '游戏状态同步超时',
   'werewolf.syncStalledHint': '已连接服务器,但长时间未收到房间状态。服务器可能繁忙或该房间已异常,可重试或返回大厅。',
   'werewolf.syncRetry': '重试',

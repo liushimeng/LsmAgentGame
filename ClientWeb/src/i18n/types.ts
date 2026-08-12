@@ -11,6 +11,8 @@ export interface Dict {
   // R187-4: gameState 尚未到达时区分「连接服务器」与「同步游戏状态」。
   'werewolf.connecting': string;
   'werewolf.syncingState': string;
+  /** 观战者等待 game.state 到达时的过渡文案(Debug-2026-08-12-01 P3-7)。 */
+  'werewolf.spectatorSyncing': string;
   // BUG-R212-P1-03 (2026-07-30): 同步超时后的可操作错误态(替代无限 spinner)。
   'werewolf.syncStalled': string;
   'werewolf.syncStalledHint': string;

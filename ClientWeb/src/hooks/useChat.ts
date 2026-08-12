@@ -18,6 +18,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { wsClient, type WsEnvelope } from '@/services/ws';
+import { reportGlobalError } from '@/services/globalError';
 import { useAuth } from './useAuth';
 import type { ChatMessage, ChatScope } from '@/types/api';
 
@@ -227,8 +228,25 @@ export function useChat(scope: ChatScope, roomId?: string): UseChat {
           setConnected(false);
           break;
         case 'chat.error': {
-          const p = env.payload as { message?: string };
-          if (p?.message) setError(p.message);
+          const p = env.payload as { code?: number; message?: string };
+          const msg = p?.message || '聊天服务返回错误';
+          setError(msg);
+          // Debug-2026-08-12-01 P1-3 FIX: `loadingMore` used to be cleared ONLY
+          // by an incoming chat.history frame. When a history request failed
+          // (e.g. code 40002 on a transient DB error) the in-flight flag stayed
+          // true forever: the panel showed "正在加载历史消息…" permanently and
+          // loadMore()'s `if (loadingMoreRef.current) return` guard silently
+          // swallowed every later page request. Every terminal path of an
+          // in-flight request must release the lock.
+          loadingMoreRef.current = false;
+          setLoadingMore(false);
+          // §7.1 — surface API failures at the top level, not just inline.
+          // History errors are recoverable and self-explanatory inline, so only
+          // escalate the ones the user cannot otherwise notice.
+          reportGlobalError({
+            message: p?.code ? `聊天错误 [${p.code}]：${msg}` : `聊天错误：${msg}`,
+            severity: 'error',
+          });
           break;
         }
         case 'heartbeat':

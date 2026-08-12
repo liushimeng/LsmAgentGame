@@ -12,19 +12,25 @@
 //
 //   server → client
 //     chat.message     { id, scope, room_id?, from_user_id, from_account, text, ts }
-//     chat.history     { scope, room_id?, messages: [...], has_more: boolean, next_cursor: number|null }
-//     chat.error       { code, message }
+//     chat.history     { scope, room_id?, messages: [...], has_more: boolean, next_cursor: number|null, before_id: number|null }
+//     chat.error       { code, message }   (Seq echoes the failing request)
 //     chat.subscribed  { scope, room_id? }
 //     chat.unsubscribed{ scope, room_id? }
 //
 // chat.history protocol notes (kept here for single-source lookup):
-//   - `before_id` (optional): return rows with `id < before_id`. Omit to read the
-//     most recent messages (the default).
+//   - `messages` (response) is ASCENDING (oldest-first).
+//   - `before_id` (request, optional): return rows with `id < before_id`. Omit
+//     to read the most recent messages (the default).
 //   - `has_more` (response): true when the page returned `limit` rows, hinting
 //     that older messages exist.
-//   - `next_cursor` (response): the id of the last message in the page, to be
-//     passed back as `before_id` to fetch the previous page. null when the
-//     page is empty.
+//   - `next_cursor` (response): the id of the OLDEST message in the page (i.e.
+//     `messages[0].id`, since the page is ascending), to be passed back as
+//     `before_id` to fetch the previous page. null when the page is empty.
+//   - `before_id` (response): server echo of the requested `before_id`, or null
+//     when the request omitted it. The client MUST branch on this to tell a
+//     "latest N" fetch (replace the list) from a keyset page load (prepend to
+//     the list). Contract: the server always echoes this field.
+//     Debug-2026-08-12-01 P0-1/P0-2.
 //   Backwards compatibility: a client that omits `before_id` gets the original
 //     semantics, just with two extra fields in the envelope (`has_more`,
 //     `next_cursor`).
@@ -413,7 +419,7 @@ func (s *ChatService) HandleClientFrame(c *Client, env Envelope) {
 			return
 		}
 		ack, _ := json.Marshal(map[string]any{"scope": p.Scope, "room_id": p.RoomID})
-		c.send <- Envelope{Type: "chat.subscribed", Seq: env.Seq, Payload: ack}
+		s.trySend(c, Envelope{Type: "chat.subscribed", Seq: env.Seq, Payload: ack})
 
 	case "chat.unsubscribe":
 		var p struct {
@@ -426,7 +432,7 @@ func (s *ChatService) HandleClientFrame(c *Client, env Envelope) {
 		}
 		s.unsubscribe(c, p.Scope, p.RoomID)
 		ack, _ := json.Marshal(map[string]any{"scope": p.Scope, "room_id": p.RoomID})
-		c.send <- Envelope{Type: "chat.unsubscribed", Seq: env.Seq, Payload: ack}
+		s.trySend(c, Envelope{Type: "chat.unsubscribed", Seq: env.Seq, Payload: ack})
 
 	case "chat.send":
 		var p struct {
@@ -507,24 +513,13 @@ func (s *ChatService) HandleClientFrame(c *Client, env Envelope) {
 		}
 		msgs, hasMore, err := s.History(p.BeforeID, p.Scope, p.RoomID, p.Limit)
 		if err != nil {
-			s.sendError(c, 40002, err.Error())
+			// Seq lets the client clear the in-flight pagination lock for the
+			// exact request that failed (Debug-2026-08-12-01 P1-3/P1-4).
+			s.sendErrorSeq(c, env.Seq, 40002, err.Error())
 			return
 		}
-		// next_cursor is the id of the last (oldest) message in the page; the
-		// client passes it back as `before_id` to fetch the previous page.
-		var nextCursor *uint64
-		if len(msgs) > 0 {
-			last := msgs[len(msgs)-1].ID
-			nextCursor = &last
-		}
-		payload, _ := json.Marshal(map[string]any{
-			"scope":       p.Scope,
-			"room_id":     p.RoomID,
-			"messages":    msgs,
-			"has_more":    hasMore,
-			"next_cursor": nextCursor,
-		})
-		c.send <- Envelope{Type: "chat.history", Seq: env.Seq, Payload: payload}
+		payload, _ := json.Marshal(buildHistoryPayload(p.Scope, p.RoomID, p.BeforeID, msgs, hasMore))
+		s.trySend(c, Envelope{Type: "chat.history", Seq: env.Seq, Payload: payload})
 
 	default:
 		// unknown chat frame
@@ -736,6 +731,42 @@ func (s *ChatService) Whisper(c *Client, roomID, toUserID, toAccount, text strin
 		zap.Int("len", len(text)))
 
 	return msg, nil
+}
+
+// buildHistoryPayload assembles the chat.history response envelope.
+//
+// Debug-2026-08-12-01 P0-1/P0-2: this is the single source of truth for the
+// pagination cursor contract, so it can be unit-tested without a database. The
+// invariant the client relies on:
+//
+//   1. messages is ASCENDING (oldest-first) — as returned by History().
+//   2. next_cursor is the id of the OLDEST message in the page, i.e.
+//      messages[0].id. It is what the client passes back as `before_id` to fetch
+//      the previous page. (Taking messages[len-1] would be the NEWEST id and
+//      advance only one row per page.)
+//   3. before_id is the server echo of the requested before_id (null when the
+//      request omitted it). The client MUST branch on this to tell a "latest N"
+//      subscribe fetch (replace the list) from a keyset page load (prepend to
+//      the list). Contract: the server always echoes this field.
+func buildHistoryPayload(scope, roomID string, requestedBefore uint64, msgs []ChatMessage, hasMore bool) map[string]any {
+	var nextCursor *uint64
+	if len(msgs) > 0 {
+		oldest := msgs[0].ID
+		nextCursor = &oldest
+	}
+	var beforeEcho *uint64
+	if requestedBefore > 0 {
+		b := requestedBefore
+		beforeEcho = &b
+	}
+	return map[string]any{
+		"scope":       scope,
+		"room_id":     roomID,
+		"messages":    msgs,
+		"has_more":    hasMore,
+		"next_cursor": nextCursor,
+		"before_id":   beforeEcho,
+	}
 }
 
 // sendWhisperDirect is paired with BroadcastRoomIncludingSpectators to deliver
@@ -1376,12 +1407,40 @@ func (s *ChatService) DeleteMessagesBefore(t time.Time) (int64, error) {
 	return res.RowsAffected, nil
 }
 
-func (s *ChatService) sendError(c *Client, code int, msg string) {
-	payload, _ := json.Marshal(map[string]any{"code": code, "message": msg})
+// trySend delivers an envelope to a single client without blocking.
+//
+// Debug-2026-08-12-01 P2-5 FIX: the chat.subscribed / chat.unsubscribed /
+// chat.history frames used to write to c.send directly. That channel is
+// bounded (client.go sendBufSize = 64) and a 13-seat Agent room fans out
+// enough traffic to fill it, at which point HandleClientFrame blocked the
+// whole ReadPump goroutine for that connection — every subsequent frame from
+// that client (including game.*) stopped being processed. sendError already
+// used a non-blocking select; these paths now do too.
+//
+// A dropped frame is logged rather than silently swallowed (§20260812-04
+// lesson 4: degradation must leave an observable marker).
+func (s *ChatService) trySend(c *Client, env Envelope) bool {
 	select {
-	case c.send <- Envelope{Type: "chat.error", Payload: payload}:
+	case c.send <- env:
+		return true
 	default:
+		logger.L().Warn("chat: dropped frame, client send buffer full",
+			zap.String("type", env.Type),
+			zap.String("user_id", c.UserID))
+		return false
 	}
+}
+
+// sendError emits a chat.error frame. Seq echoes the offending request so the
+// client can correlate the failure with the frame that caused it
+// (Debug-2026-08-12-01 P1-4); callers with no request context pass 0.
+func (s *ChatService) sendError(c *Client, code int, msg string) {
+	s.sendErrorSeq(c, 0, code, msg)
+}
+
+func (s *ChatService) sendErrorSeq(c *Client, seq int64, code int, msg string) {
+	payload, _ := json.Marshal(map[string]any{"code": code, "message": msg})
+	s.trySend(c, Envelope{Type: "chat.error", Seq: seq, Payload: payload})
 }
 
 // Sentinel errors returned to clients in chat.error frames. The numeric code

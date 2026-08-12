@@ -629,6 +629,7 @@ const ja: Dict = {
   // R187-4: 「サーバー接続中」と「ゲーム状態同期中」を区別。
   'werewolf.connecting': '🔌 サーバーに接続中…',
   'werewolf.syncingState': '⏳ ゲーム状態を同期中…',
+  'werewolf.spectatorSyncing': '👁 観戦中 — ゲーム状態を同期中…',
   'werewolf.syncStalled': 'ゲーム状態の同期がタイムアウトしました',
   'werewolf.syncStalledHint': 'サーバーには接続していますが、部屋の状態を長時間受信できていません。サーバーが混雑しているか、この部屋に異常がある可能性があります。再試行するかロビーに戻ってください。',
   'werewolf.syncRetry': '再試行',

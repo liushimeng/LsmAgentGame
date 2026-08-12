@@ -630,6 +630,7 @@ const en: Dict = {
   // R187-4: distinguish "connecting to server" from "syncing game state".
   'werewolf.connecting': '🔌 Connecting to server…',
   'werewolf.syncingState': '⏳ Syncing game state…',
+  'werewolf.spectatorSyncing': '👁 Spectating — syncing game state…',
   'werewolf.syncStalled': 'Game state sync timed out',
   'werewolf.syncStalledHint': 'Connected to the server, but no room state has arrived for a while. The server may be busy or this room may be in a bad state. Retry or return to the lobby.',
   'werewolf.syncRetry': 'Retry',
