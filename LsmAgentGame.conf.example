@@ -72,17 +72,15 @@
     // SSE 首字/间隔空闲超时 (ms)。慢模型 thinking 首字延时 2 分钟以上是预期
     // 场景(2026-07-24: 2min → 5min);只要流持续就不中断。
     "stream_idle_timeout_ms": 300000,
-    "max_retries": 2,
-    "providers": [
-      { "agent_name": "美团 LongCat-2.0",            "model": "MeiTuan-model",   "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
-      { "agent_name": "豆包 2.0",                  "model": "DouBao-model",   "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
-      { "agent_name": "DeepSeek V4-Pro",           "model": "DeepSeek-model", "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
-      { "agent_name": "智谱 GLM-5.2",              "model": "GLM-model",      "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
-      { "agent_name": "Kimi 2.7",                  "model": "Kimi-model",     "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
-      { "agent_name": "MiniMax M3",                "model": "MinMax-model",   "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
-      { "agent_name": "Qwen 3.7-Plus-and-Max",     "model": "Qwen-model",     "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
-      { "agent_name": "Xiaomi mimo-v2.5-pro",      "model": "Xiaomi-model",   "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 }
-    ]
+    "max_retries": 2
+    // LLM providers (8 个默认模型) 现在以数据库 t_lsm_game_llm_provider 为唯一来源。
+    // 首次启动时若 DB 为空,代码会从 ServerGo/llm/defaults.go 自动 seed 8 个
+    // 占位 key 的默认模型(美团/豆包/DeepSeek/智谱/Kimi/MiniMax/Qwen/Xiaomi)。
+    // Operator 在 Web 端 /admin/models 把每个模型的 api_key 替换为真实 key。
+    //
+    // 历史字段 "providers" 已删除(2026-08-12 切走 cfg-Provider 改造)。
+    // 旧 conf 残留此字段会被 JSON 解析时接受,但运行时完全忽略;启动日志
+    // 会 WARN "cfg.LLM.Providers is deprecated and ignored"。
   },
   "werewolf": {
     // BUG Round 40 §95: 首夜强制发言阶段(扩展 PhasePreWolves)。

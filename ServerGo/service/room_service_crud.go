@@ -257,13 +257,27 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	}
 
 	// AI 填充失败提示 (Round 25 BUG-WEREWOLF-P2-NEW-8 / -NEW-9 follow-up):
-	// 当用户请求任意 agent_seats 但 cfg.LLM.Providers 全部为占位 key
-	// (API-KEY-PLACEHOLDER) 或 api_key 为空时,前端创建会"静默成功"但实际
+	// 当用户请求任意 agent_seats 但所有可用 provider 的 api_key 都是占位符
+	// (API-KEY-PLACEHOLDER) 或空时,前端创建会"静默成功"但实际
 	// 房间是 0 AI。这里在写入 DB 之前主动检测,返回 ErrLLMUnavailable
 	// (30016),让前端弹 toast 说明原因,而不是默默吞掉。
-	if len(agentSeats) > 0 && s.cfg != nil {
+	//
+	// 2026-08-12 切走 cfg-Provider 改造: the candidate universe is now
+	// llm.DefaultProviders() (the code-level default seed list) rather than
+	// s.cfg.LLM.Providers (which is deprecated and may be empty/missing after
+	// the cleanup). When the live model-availability hook is wired we still
+	// filter through it so an admin-disabled row is excluded.
+	if len(agentSeats) > 0 {
+		seeds := s.modelAvailabilitySeeds()
+		if len(seeds) == 0 {
+			// No default models at all — surface as LLM-unavailable rather
+			// than proceeding into a 0-AI room.
+			logger.L().Warn("LLM unavailable: no default providers seeded (ServerGo/llm/defaults.go empty?)",
+				zap.Int("requested_agent_seats", len(agentSeats)))
+			return nil, errcode.Code(errcode.ErrLLMUnavailable)
+		}
 		usable := 0
-		for _, p := range s.cfg.LLM.Providers {
+		for _, p := range seeds {
 			key := strings.TrimSpace(p.APIKey)
 			if key != "" && key != "API-KEY-PLACEHOLDER" {
 				usable++
@@ -272,7 +286,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		if usable == 0 {
 			logger.L().Warn("LLM unavailable: all configured providers have placeholder/empty api_key",
 				zap.Int("requested_agent_seats", len(agentSeats)),
-				zap.Int("configured_providers", len(s.cfg.LLM.Providers)))
+				zap.Int("configured_providers", len(seeds)))
 			return nil, errcode.Code(errcode.ErrLLMUnavailable)
 		}
 	}

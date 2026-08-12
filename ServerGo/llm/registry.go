@@ -236,8 +236,13 @@ func NewRegistryWithDB(cfg config.LLMConfig, gormDB *gorm.DB, botUsers BotUserPr
 				zap.Error(err))
 		}
 		r.source = "db"
+		// 2026-08-12 §清理: cfg.LLM.Providers is DEPRECATED and ignored at
+		// runtime — the DB row wins. The field is retained in config.LLMConfig
+		// only for backward-compatible JSON parsing of pre-refactor conf
+		// files. Surface a one-shot WARN so operators who still edit the conf
+		// know their changes are dropped.
 		if len(cfg.Providers) > 0 {
-			logger.L().Warn("llm registry: deprecated config_deprecated path — cfg.LLM.Providers ignored, DB rows win",
+			logger.L().Warn("llm registry: cfg.LLM.Providers is deprecated and ignored; manage providers via /api/admin/llm/providers (or wait for the next first-boot auto-seed to re-create the rows)",
 				zap.Int("cfg_count", len(cfg.Providers)),
 				zap.Int("db_count", len(r.providers)))
 		} else {
@@ -247,20 +252,23 @@ func NewRegistryWithDB(cfg config.LLMConfig, gormDB *gorm.DB, botUsers BotUserPr
 		return r
 	}
 
-	// DB-empty path: auto-seed from cfg.LLM.Providers.
-	if len(cfg.Providers) == 0 {
+	// DB-empty path: auto-seed from the code-level defaults
+	// (ServerGo/llm/defaults.go). 2026-08-12 改造前这里从 cfg.LLM.Providers
+	// 读;改造后 conf 不再带 providers 段,改用代码常量 — 任何编辑器
+	// 看不到 LLM 模型的硬编码,运营通过 Web 页面 (/admin/models) 维护。
+	if len(DefaultProviders()) == 0 {
 		// Nothing on either side. Return an empty registry so /api/llm/models
 		// returns [] and the rest of the app runs without LLM deps.
 		r.source = "empty"
-		logger.L().Info("llm registry: DB empty + cfg empty — no providers")
+		logger.L().Info("llm registry: DB empty + defaults empty — no providers")
 		return r
 	}
-	if err := r.seedFromConfigLocked(ctx, gormDB, cfg); err != nil {
-		logger.L().Fatal("llm registry: seed from config failed",
+	if err := r.seedFromDefaultsLocked(ctx, gormDB); err != nil {
+		logger.L().Fatal("llm registry: seed from defaults failed",
 			zap.Error(err))
 	}
 	r.source = "config-seed"
-	logger.L().Info("llm registry seeded from config",
+	logger.L().Info("llm registry seeded from code defaults",
 		zap.Int("providers", len(r.providers)))
 	return r
 }
@@ -337,15 +345,51 @@ func (r *Registry) loadFromConfigLocked(cfg config.LLMConfig) {
 	}
 }
 
-// seedFromConfigLocked is the DB-empty fallback. It runs in a single GORM
-// transaction: if any provider insert fails, every prior insert is rolled back
-// so DB state stays consistent. Returns the first error encountered; main.go
-// treats seed failure as fatal and refuses to boot with a half-populated DB.
+// seedFromConfigLocked is the historical cfg-driven DB-empty fallback. As of
+// 2026-08-12 切走 cfg-Provider 改造, the production path uses
+// seedFromDefaultsLocked instead; this function is retained for legacy unit
+// tests that build an LLMConfig in pure-cfg mode and want to exercise the
+// insert path without a live DB. NewRegistryWithDB does NOT call it.
+//
+// Removed from NewRegistryWithDB on 2026-08-12 because LsmAgentGame.conf no
+// longer carries the providers list — the cfg field exists for back-compat
+// JSON parsing only.
 func (r *Registry) seedFromConfigLocked(ctx context.Context, gormDB *gorm.DB, cfg config.LLMConfig) error {
+	// Translate each cfg.LLM.Providers entry into a DefaultProviderSeed so the
+	// shared insert/bot-user code path runs unchanged.
+	seeds := make([]DefaultProviderSeed, 0, len(cfg.Providers))
+	for _, p := range cfg.Providers {
+		seeds = append(seeds, DefaultProviderSeed{
+			AgentName:        p.AgentName,
+			Model:            p.Model,
+			ProviderType:     p.ProviderType,
+			APIKey:           p.APIKey,
+			ThinkingRequired: p.ThinkingRequired,
+			ThinkingBudget:   p.ThinkingBudget,
+		})
+	}
+	return r.seedFromSeedsLocked(ctx, gormDB, seeds, "seeded from LsmAgentGame.conf on first boot (legacy path)")
+}
+
+// seedFromDefaultsLocked is the production DB-empty path used by
+// NewRegistryWithDB after 2026-08-12. It walks DefaultProviders() and inserts
+// every row with api_key=PlaceholderKey (the operator replaces it via the
+// admin UI before opening a 7-AI room).
+func (r *Registry) seedFromDefaultsLocked(ctx context.Context, gormDB *gorm.DB) error {
+	return r.seedFromSeedsLocked(ctx, gormDB, DefaultProviders(), "seeded from code defaults (ServerGo/llm/defaults.go) on first boot")
+}
+
+// seedFromSeedsLocked is the shared inner loop used by both
+// seedFromConfigLocked (legacy / tests) and seedFromDefaultsLocked
+// (production). It runs in a single GORM transaction: if any provider insert
+// fails, every prior insert is rolled back so DB state stays consistent.
+// Returns the first error encountered; main.go treats seed failure as fatal
+// and refuses to boot with a half-populated DB.
+func (r *Registry) seedFromSeedsLocked(ctx context.Context, gormDB *gorm.DB, seeds []DefaultProviderSeed, remark string) error {
 	// Encrypt all api_keys BEFORE the transaction so a transient key-gen /
 	// encryption failure does not waste a DB write that we'd have to roll back.
-	encrypted := make([]models.TLsmGameLlmProvider, 0, len(cfg.Providers))
-	for _, p := range cfg.Providers {
+	encrypted := make([]models.TLsmGameLlmProvider, 0, len(seeds))
+	for _, p := range seeds {
 		model := util.SanitizeModelKey(p.Model)
 		if model == "" {
 			continue
@@ -371,13 +415,13 @@ func (r *Registry) seedFromConfigLocked(ctx context.Context, gormDB *gorm.DB, cf
 			APIKeyEnc:  enc,
 			APIKeyHint: apiKeyHint(plain),
 			Endpoint:   "",
-			// §R224 (2026-08-01) — 重新引入 thinking 配置字段。从 cfg 同步过去:
+			// §R224 (2026-08-01) — 重新引入 thinking 配置字段。
 			// §128 误删后,旧 DB 行的两列均为零值(false / 0);admin 可通过
 			// PUT /api/admin/llm/providers/:id 在线开启。
 			ThinkingEnabled:      p.ThinkingRequired,
 			ThinkingBudgetTokens: p.ThinkingBudget,
 			Enabled:          true,
-			Remark:           "seeded from LsmAgentGame.conf on first boot",
+			Remark:           remark,
 		}
 		encrypted = append(encrypted, row)
 	}

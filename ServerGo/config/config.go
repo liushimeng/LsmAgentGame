@@ -375,12 +375,18 @@ type GameConfig struct {
 // MUST come from LsmAgentGame.conf (gitignored), never from source. See
 // `docs/LLM与Agent/LLM供应商设计.md`.
 //
-// DEPRECATED (kind-skipping-moth, 2026-07-10): this struct is the
-// pre-refactor wire shape used to live in LsmAgentGame.conf. Models now live
-// in t_lsm_game_llm_provider and are managed via the admin UI. Retained so
-// the on-disk JSON tag set still parses; the registry treats
-// llm.Providers as a one-shot seed for empty DBs and ignores it once
-// t_lsm_game_llm_provider has rows.
+// DEPRECATED (2026-07-10 kind-skipping-moth, hardened 2026-08-12): the
+// runtime source of truth for LLM models is t_lsm_game_llm_provider, edited
+// via the admin UI (/api/admin/llm/providers). The Providers slice is no
+// longer read by NewRegistryWithDB — when the DB is empty the registry seeds
+// from llm.DefaultProviders() (the code-level constant in
+// ServerGo/llm/defaults.go) instead.
+//
+// This struct + the LLMConfig.Providers field are retained solely so existing
+// LsmAgentGame.conf files that still carry a `providers` block continue to
+// parse without breaking; NewRegistryWithDB will log a one-shot WARN when
+// it sees a non-empty Providers field and ignore the entries. New code MUST
+// edit t_lsm_game_llm_provider directly.
 type ProviderConfig struct {
 	AgentName    string `json:"agent_name"`    // human-readable label (UI)
 	Model        string `json:"model"`         // model id sent to the proxy
@@ -393,7 +399,8 @@ type ProviderConfig struct {
 	// (向后兼容某些不需要 thinking 的代理,如未来切换到 OpenAI 协议)。
 	//
 	// ThinkingBudget 是 budget 数值(典型 4096/8192;最小 1024)。
-	// LsmAgentGame.conf.example 已对全部 8 家默认代理设 true / 4096。
+	// 历史:LsmAgentGame.conf.example 曾对全部 8 家默认代理设 true / 4096;
+	// 该段已删除(2026-08-12),新 seed 走 llm.DefaultProviders()。
 	ThinkingRequired bool `json:"thinking_required,omitempty"`
 	ThinkingBudget   int  `json:"thinking_budget,omitempty"`
 }
@@ -425,13 +432,14 @@ type ProviderConfig struct {
 // 预期场景,不应作为"卡死"处理。运行时 LsmAgentGame.conf 显式配置优先,此
 // 处仅作缺省兜底。
 //
-// NOTE (kind-skipping-moth §3, 2026-07-10): the Providers slice is now
-// DEPRECATED as the runtime source of truth. Models live in
-// t_lsm_game_llm_provider and are loaded by llm.NewRegistryWithDB at boot.
-// The field is retained so existing LsmAgentGame.conf files don't break JSON
-// parsing; if Providers is non-empty AND the DB has rows, the DB wins and a
-// deprecation warning is logged. If the DB is empty, Providers is auto-seeded
-// into t_lsm_game_llm_provider on first boot.
+// NOTE (kind-skipping-moth §3, 2026-07-10; hardened 2026-08-12): the
+// Providers slice is now DEPRECATED as the runtime source of truth. Models
+// live in t_lsm_game_llm_provider and are loaded by llm.NewRegistryWithDB at
+// boot. The field is retained so existing LsmAgentGame.conf files don't
+// break JSON parsing; if Providers is non-empty AND the DB has rows, the DB
+// wins and a deprecation warning is logged. If the DB is empty, the registry
+// now seeds from llm.DefaultProviders() (the code-level constant in
+// ServerGo/llm/defaults.go) instead of from cfg.Providers.
 type LLMConfig struct {
 	// Endpoint is DEPRECATED as the primary source of truth — see Endpoints
 	// below. Kept so existing LsmAgentGame.conf files keep working. When both
@@ -453,8 +461,10 @@ type LLMConfig struct {
 	// shipped in LsmAgentGame.conf.example) keep behaving exactly as before.
 	Endpoints []string `json:"endpoints,omitempty"`
 	// Providers is DEPRECATED. See note above. Kept for backward compatibility
-	// with existing LsmAgentGame.conf files. New code MUST edit
-	// t_lsm_game_llm_provider (via the admin UI in Phase 5) instead of editing
+	// with existing LsmAgentGame.conf files; NewRegistryWithDB no longer
+	// reads this field — when t_lsm_game_llm_provider is empty the registry
+	// seeds from llm.DefaultProviders() instead. New code MUST edit
+	// t_lsm_game_llm_provider (via /api/admin/llm/providers) instead of editing
 	// the conf file.
 	Providers []ProviderConfig `json:"providers"`
 

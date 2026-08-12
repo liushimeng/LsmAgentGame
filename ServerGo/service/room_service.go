@@ -7,6 +7,7 @@ import (
 	"time"
 	"LsmAgentGame/config"
 	"LsmAgentGame/errcode"
+	"LsmAgentGame/llm"
 	"LsmAgentGame/models"
 	"LsmAgentGame/util"
 	"gorm.io/gorm"
@@ -340,13 +341,22 @@ func (s *RoomService) SeatsForRoom(roomID string) ([]AgentSeatInfo, error) {
 //
 // Returns an empty slice when no cfg is wired (unit tests) or when no
 // provider passes the filter.
+//
+// 2026-08-12 切走 cfg-Provider 改造: cfg.LLM.Providers is deprecated and no
+// longer read at runtime. The function now uses the live model availability
+// hook (when wired) — model keys it returns are guaranteed to be in the
+// registry AND enabled AND have a non-placeholder api_key. When the hook is
+// nil (unit tests / legacy wiring) the function falls back to
+// llm.DefaultProviders() so the seat-assignment path still has a stable
+// 8-model pool to choose from.
 func (s *RoomService) usableProviderModels() []string {
-	if s.cfg == nil || s.cfg.LLM.Providers == nil {
+	seeds := s.modelAvailabilitySeeds()
+	if len(seeds) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(s.cfg.LLM.Providers))
-	seen := make(map[string]struct{}, len(s.cfg.LLM.Providers))
-	for _, p := range s.cfg.LLM.Providers {
+	out := make([]string, 0, len(seeds))
+	seen := make(map[string]struct{}, len(seeds))
+	for _, p := range seeds {
 		// R187-2: sanitize so this pool stays consistent with the registry
 		// (which sanitizes at load) even if cfg was pasted with invisible
 		// Cf runes.
@@ -373,6 +383,73 @@ func (s *RoomService) usableProviderModels() []string {
 		}
 		seen[k] = struct{}{}
 		out = append(out, k)
+	}
+	return out
+}
+
+// modelAvailabilitySeeds returns the provider seeds used by
+// usableProviderModels. Three sources in priority order:
+//
+//  1. s.cfg.LLM.Providers when set — the historical cfg-driven path. Used by
+//     unit tests that inject a curated model subset (e.g. 3 placeholder-only
+//     rows to assert ErrLLMUnavailable fires). In production a freshly
+//     deployed LsmAgentGame.conf has no `providers` field after the
+//     2026-08-12 cleanup, so this source is empty.
+//  2. llm.DefaultProviders() when cfg is empty — the code-level default
+//     model roster (ServerGo/llm/defaults.go). This is the production path
+//     when the live DB-backed registry is wired: code defaults are
+//     pre-filtered by the live hook.
+//  3. Empty slice when both cfg and defaults are empty — caller treats this
+//     as "no LLM available" (room creation surfaces ErrLLMUnavailable).
+//
+// 2026-08-12 切走 cfg-Provider 改造: previously this iterated
+// s.cfg.LLM.Providers; now it prefers the live registry, falls back to
+// llm.DefaultProviders() when cfg is empty, and still tolerates a non-empty
+// cfg for unit tests that need to inject a curated subset. cfg.LLM.Providers
+// is retained on disk for backward-compatible JSON parsing but is no longer
+// the production runtime source of truth.
+func (s *RoomService) modelAvailabilitySeeds() []config.ProviderConfig {
+	// Source (1): cfg.LLM.Providers — historical cfg-driven path. Tests
+	// rely on this for curated subsets (e.g. "all-placeholder" or "only
+	// MeiTuan"). In production this is empty after 2026-08-12 cleanup.
+	if s.cfg != nil && len(s.cfg.LLM.Providers) > 0 {
+		return s.cfg.LLM.Providers
+	}
+	// Source (2): llm.DefaultProviders() — the production path when the
+	// live DB-backed registry is wired. The live hook filters
+	// admin-disabled rows out; the unit-test fallback (no hook wired)
+	// returns the full 8-model roster.
+	defaults := llm.DefaultProviders()
+	if len(defaults) == 0 {
+		return nil
+	}
+	if s.modelAvailability != nil {
+		out := make([]config.ProviderConfig, 0, len(defaults))
+		for _, p := range defaults {
+			if !s.modelAvailability.IsModelAvailable(p.Model) {
+				continue
+			}
+			out = append(out, config.ProviderConfig{
+				AgentName:        p.AgentName,
+				Model:            p.Model,
+				ProviderType:     p.ProviderType,
+				APIKey:           p.APIKey,
+				ThinkingRequired: p.ThinkingRequired,
+				ThinkingBudget:   p.ThinkingBudget,
+			})
+		}
+		return out
+	}
+	out := make([]config.ProviderConfig, 0, len(defaults))
+	for _, p := range defaults {
+		out = append(out, config.ProviderConfig{
+			AgentName:        p.AgentName,
+			Model:            p.Model,
+			ProviderType:     p.ProviderType,
+			APIKey:           p.APIKey,
+			ThinkingRequired: p.ThinkingRequired,
+			ThinkingBudget:   p.ThinkingBudget,
+		})
 	}
 	return out
 }
