@@ -313,20 +313,20 @@ const RoomCreateModal: React.FC<Props> = ({ open, onClose, onSubmit, submitting 
             </div>
           </div>
 
-          {/* ROW 2 — 我的角色 + 法官模式 + 法官模型。2026-08-08 §20260808-01:
-              原「我的角色」与「法官卡」是两个纵向区块,法官卡内部又把
-              标题 / radio / 模型分三行堆叠,radio 右侧约 480px 全空。
-              合并为三列后省出约 130px。列数随场景变化:
+          {/* ROW 2 — 我的角色 + 法官模式 + Agent 难度 + 右侧列(法官模型+AI解说)。
+              2026-08-12 §20260812-01: 由 3 列 4 item 改为 4 列紧凑布局,
+              Agent 难度 4 档 radio 同行,AI 解说合并到右侧列,消除右侧留白。
+              列数随场景变化:
                 agentCount === 0            → 仅我的角色      (--row--1)
-                agentCount === MAX_AI_SEATS → 仅法官(全 AI 房) (--row--2)
-                其余                        → 三列            (--row--3) */}
+                agentCount === MAX_AI_SEATS → 仅法官+难度+右侧(--row--2)
+                其余                        → 四列           (--row--4) */}
           <div
             className={
               agentCount === 0
                 ? 'ww-create-modal__row ww-create-modal__row--1'
                 : agentCount === MAX_AI_SEATS
                   ? 'ww-create-modal__row ww-create-modal__row--2'
-                  : 'ww-create-modal__row ww-create-modal__row--3'
+                  : 'ww-create-modal__row ww-create-modal__row--4'
             }
           >
             {/* 2026-08-06 §20260806-03 — 创建者(人类)角色选择。
@@ -350,56 +350,34 @@ const RoomCreateModal: React.FC<Props> = ({ open, onClose, onSubmit, submitting 
               </label>
             )}
 
-            {/* 2026-07-16 主持人 Agent 重构 — 主持人(法官)配置。
-                仅当 agentCount>0 时渲染(全人类房无法官,对齐设计 §1.2)。 */}
+            {/* 2026-07-16 主持人 Agent 重构 — 主持人(法官)模式 radio。
+                仅当 agentCount>0 时渲染(全人类房无法官,对齐设计 §1.2)。
+                2026-08-12 §20260812-01: 法官模型 select 拆到右侧列,本区块只保留 radio。 */}
             {agentCount > 0 && (
-              <>
-                <div className="ww-create-modal__judge-inline">
-                  <div className="ww-create-modal__judge-title">{t('werewolf.judge.modeLabel')}</div>
-                  <div className="ww-create-modal__judge-modes">
-                    {JUDGE_MODES.map((m) => (
-                      <label key={m.mode} className="ww-create-modal__judge-mode">
-                        <input
-                          type="radio"
-                          name="ww-judge-mode"
-                          value={m.mode}
-                          checked={judgeMode === m.mode}
-                          onChange={() => setJudgeMode(m.mode)}
-                        />
-                        {t(m.labelKey)}
-                      </label>
-                    ))}
-                  </div>
+              <div className="ww-create-modal__judge-inline">
+                <div className="ww-create-modal__judge-title">{t('werewolf.judge.modeLabel')}</div>
+                <div className="ww-create-modal__judge-modes">
+                  {JUDGE_MODES.map((m) => (
+                    <label key={m.mode} className="ww-create-modal__judge-mode">
+                      <input
+                        type="radio"
+                        name="ww-judge-mode"
+                        value={m.mode}
+                        checked={judgeMode === m.mode}
+                        onChange={() => setJudgeMode(m.mode)}
+                      />
+                      {t(m.labelKey)}
+                    </label>
+                  ))}
                 </div>
-                {/* 真人法官无需选模型,但仍渲染为 disabled 占位 —— 若直接移除,
-                    切换模式时该列消失会引起整行控件左移抖动。 */}
-                <label className="ww-create-modal__field">
-                  <span>{t('werewolf.judge.model')}</span>
-                  <select
-                    value={judgeModelKey}
-                    onChange={(e) => setJudgeModelKey(e.target.value)}
-                    aria-label={t('werewolf.judge.model')}
-                    disabled={judgeMode !== 'agent'}
-                  >
-                    <option value="">{t('werewolf.judge.modelPlaceholder')}</option>
-                    {models.map((m) => (
-                      <option key={m.model} value={m.model}>
-                        {m.agent_name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </>
+              </div>
             )}
 
             {/* §20260811-09 U2 — Agent 难度分级(easy/normal/hard/hell)。
                 仅当有 Agent 时显示;normal 是默认值不向请求体提交(后端兜底)。
-                4 档决定 LLM prompt directive + 假说表注入 + 记忆注入 + 金币倍率。 */}
+                2026-08-12 §20260812-01: 4 档 radio 同行显示,flex-wrap 窄屏折回。 */}
             {agentCount > 0 && (
               <div className="ww-create-modal__difficulty-inline">
-                <div className="ww-create-modal__difficulty-title">
-                  {t('werewolf.difficulty.title')}
-                </div>
                 <div className="ww-create-modal__difficulty-modes">
                   {(['easy', 'normal', 'hard', 'hell'] as const).map((d) => (
                     <label key={d} className="ww-create-modal__difficulty-mode">
@@ -420,33 +398,56 @@ const RoomCreateModal: React.FC<Props> = ({ open, onClose, onSubmit, submitting 
               </div>
             )}
 
-            {/* §20260811-09 U1 — AI 实时解说开关 + 风格(仅观战者可见)。
-                默认关闭:对局无影响,纯观赏增强。 */}
-            <div className="ww-create-modal__commentary-inline">
-              <label className="ww-create-modal__commentary-toggle">
-                <input
-                  type="checkbox"
-                  checked={commentaryEnabled}
-                  onChange={(e) => setCommentaryEnabled(e.target.checked)}
-                />
-                {t('werewolf.commentary.enable')}
-              </label>
-              {commentaryEnabled && (
-                <div className="ww-create-modal__commentary-styles">
-                  {(['pro', 'fun'] as const).map((s) => (
-                    <label key={s} className="ww-create-modal__commentary-style">
-                      <input
-                        type="radio"
-                        name="ww-commentary-style"
-                        value={s}
-                        checked={commentaryStyle === s}
-                        onChange={() => setCommentaryStyle(s)}
-                      />
-                      {t(`werewolf.commentary.style${s === 'pro' ? 'Pro' : 'Fun'}` as TKey)}
-                    </label>
-                  ))}
-                </div>
+            {/* 右侧列: 法官模型(select) + AI 解说(checkbox + 风格 radio)。
+                2026-08-12 §20260812-01: 把原本独占整行的 AI 解说与法官模型合并到
+                最右 1fr 列,消除右侧留白。真人法官无需选模型时 select disabled 占位。 */}
+            <div className="ww-create-modal__right-col">
+              {agentCount > 0 && (
+                <label className="ww-create-modal__field">
+                  <span>{t('werewolf.judge.model')}</span>
+                  <select
+                    value={judgeModelKey}
+                    onChange={(e) => setJudgeModelKey(e.target.value)}
+                    aria-label={t('werewolf.judge.model')}
+                    disabled={judgeMode !== 'agent'}
+                  >
+                    <option value="">{t('werewolf.judge.modelPlaceholder')}</option>
+                    {models.map((m) => (
+                      <option key={m.model} value={m.model}>
+                        {m.agent_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
+              {/* §20260811-09 U1 — AI 实时解说开关 + 风格(仅观战者可见)。
+                  默认关闭:对局无影响,纯观赏增强。 */}
+              <div className="ww-create-modal__commentary-inline">
+                <label className="ww-create-modal__commentary-toggle">
+                  <input
+                    type="checkbox"
+                    checked={commentaryEnabled}
+                    onChange={(e) => setCommentaryEnabled(e.target.checked)}
+                  />
+                  {t('werewolf.commentary.enable')}
+                </label>
+                {commentaryEnabled && (
+                  <div className="ww-create-modal__commentary-styles">
+                    {(['pro', 'fun'] as const).map((s) => (
+                      <label key={s} className="ww-create-modal__commentary-style">
+                        <input
+                          type="radio"
+                          name="ww-commentary-style"
+                          value={s}
+                          checked={commentaryStyle === s}
+                          onChange={() => setCommentaryStyle(s)}
+                        />
+                        {t(`werewolf.commentary.style${s === 'pro' ? 'Pro' : 'Fun'}` as TKey)}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

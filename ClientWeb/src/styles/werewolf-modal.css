@@ -212,20 +212,30 @@
   align-items: end;
 }
 
+/* 2026-08-12 §20260812-01 已废弃 — 原 3 列布局改为 4 列(--row--4),
+   保留此类名防止旧引用报错(无任何 JSX 再引用 --row--3)。 */
 .ww-create-modal__row--3 {
-  /* 我的角色(定宽) / 法官模式 radio(内容宽) / 法官模型(吃掉剩余空白) —
-     即用户诉求 ③「法官那行后面大量剩余空间放模型选择」。 */
-  grid-template-columns: 180px auto minmax(0, 1fr);
+  grid-template-columns: 160px auto auto minmax(0, 1fr);
 }
 
-/* 全 AI 房(无"我的角色",剩法官模式 + 模型)。 */
+/* 全 AI 房(无"我的角色",剩法官模式 + 难度 + 右侧列)。
+   2026-08-12 §20260812-01: 由 2 列改为 3 列。 */
 .ww-create-modal__row--2 {
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto auto minmax(0, 1fr);
 }
 
 /* AI=0 全人类房(无法官,只剩"我的角色")—— 保持与上方等宽,右侧留白。 */
 .ww-create-modal__row--1 {
   grid-template-columns: 180px minmax(0, 1fr);
+}
+
+/* 2026-08-12 §20260812-01 — 4 列紧凑布局: 我的角色(160px) / 法官模式(内容宽) /
+   Agent 难度(内容宽) / 右侧列(1fr,承载法官模型+AI解说)。
+   消除原 3 列布局右侧约 300px 留白。 */
+.ww-create-modal__row--4 {
+  grid-template-columns: 160px auto auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
 }
 
 /* 标签与内联 hint 同排:左标签 / 右提示,不额外占一行。 */
@@ -398,36 +408,28 @@
   flex: none;
 }
 
-/* §20260811-09 U2 — Agent 难度分级配置卡(4 档 radio)。
-   沿用 judge 卡同款 inline 排版,保证行高与上方对齐。hint 单独占行
-   (12px,opacity 0.75),不让难度说明吃掉法官区的水平空间。 */
+/* §20260811-09 U2 — Agent 难度分级配置(4 档 radio)。
+   2026-08-12 §20260812-01: 4 档 radio 同行显示,flex-wrap 允许窄屏折回。
+   hint 单独占行(12px,opacity 0.75)。 */
 .ww-create-modal__difficulty-inline {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
-  margin-top: 4px;
-}
-
-.ww-create-modal__difficulty-title {
-  font-weight: 600;
-  font-size: 12px;
-  opacity: 0.85;
 }
 
 .ww-create-modal__difficulty-modes {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
-  min-height: 27px;
   align-items: center;
 }
 
 .ww-create-modal__difficulty-mode {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12.5px;
+  gap: 4px;
+  font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -439,10 +441,10 @@
 }
 
 .ww-create-modal__difficulty-hint {
-  font-size: 12px;
+  font-size: 11.5px;
   opacity: 0.75;
-  margin: 4px 0 0;
-  line-height: 1.4;
+  margin: 2px 0 0;
+  line-height: 1.3;
 }
 
 /* 房间信息面板难度徽章(§26 状态徽章色相规约 — 难度档作为语义色)。
@@ -476,15 +478,13 @@
 }
 
 /* §20260811-09 U1 — AI 实时解说开关 + 风格 radio。
-   与法官/难度卡同款 inline 排版;checkbox + 风格 radio 复用 §26.5 三件套
-   (JSX + CSS + 选中态对比度 — .is-selected hover 仍肉眼可辨)。 */
+   2026-08-12 §20260812-01: 合并到右侧列,不再独占整行。 */
 .ww-create-modal__commentary-inline {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
-  min-height: 27px;
-  margin-top: 4px;
+  min-height: 24px;
 }
 
 .ww-create-modal__commentary-toggle {
@@ -520,6 +520,15 @@
   width: auto;
   padding: 0;
   flex: none;
+}
+
+/* 2026-08-12 §20260812-01 — 右侧列: 法官模型 select + AI 解说。
+   吃掉 ROW2 最右 1fr 列宽,消除原布局右侧留白。 */
+.ww-create-modal__right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 /* 观战模式解说席面板(右抽屉式)。
@@ -589,13 +598,13 @@
   flex: none;
 }
 
-/* ─── §20260808-01 窄屏降级(两级断点) ─────────────────────────────────────
+/* ─── §20260808-01 / §20260812-01 窄屏降级(两级断点) ───────────────────────
  * 断点值由实测反推,不取整数直觉值:
  *
  * 第一级 700px —— ROW1/ROW2 退回单列。
- *   ROW2 三列需 180(我的角色) + ~200(法官 radio) + 24(gap) = 404px,
- *   剩余留给"法官模型"。card = min(760, 100vw - 48),故 700px 视口
- *   → card 652 → 模型列仅剩 ~230px,再窄即不可用。
+ *   ROW2 四列需 160(我的角色) + ~120(法官 radio) + ~180(难度 radio) + 36(gap) = 496px,
+ *   剩余留给右侧列。card = min(760, 100vw - 48),故 700px 视口
+ *   → card 652 → 右侧列仅剩 ~156px,再窄即不可用。
  *
  * 第二级 520px —— 座位行由 4 列退回 3 列 + 角色 select 显式跨列。
  *   座位行固定开销 = 52 + 88 + 18(3 个 gap) = 158px;
@@ -605,6 +614,7 @@
  *   与本次"省高度"的目标背道而驰。 */
 @media (max-width: 700px) {
   .ww-create-modal__row,
+  .ww-create-modal__row--4,
   .ww-create-modal__row--3,
   .ww-create-modal__row--2,
   .ww-create-modal__row--1 {
