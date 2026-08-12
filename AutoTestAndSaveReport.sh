@@ -7,7 +7,7 @@
 #   AutoTestProgress 中的报告文件以中文 git 提交，全程 bypass 权限。
 #
 # 特性：
-#   - 工作目录与 Claude Code 启动目录均为 /usr/local/LsmAgentGame
+#   - 工作目录与 Claude Code 启动目录均为 /usr/local/LsmAgentGame/LsmAgentGame
 #   - 通过 nohup + setsid + & + disown 脱离调用者，**不阻塞**调用者进程
 #   - 日志输出到 ./logs/auto_test_<timestamp>.log
 #   - AutoTestAndSaveReport.md 优先取当前目录，其次仓库根；都不存在则立即报错退出
@@ -18,7 +18,7 @@
 set -u
 
 # ---------- 配置 ----------
-PROJECT_DIR="/usr/local/LsmAgentGame"
+PROJECT_DIR="/usr/local/LsmAgentGame/LsmAgentGame"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 LOG_DIR="${PROJECT_DIR}/logs"
 PROMPT_FILE_NAME="AutoTestAndSaveReport.md"
