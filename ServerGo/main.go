@@ -121,6 +121,14 @@ func main() {
 	}
 	defer logger.Sync()
 
+	// §安全:LLM endpoint 不再硬编码默认值。若 LsmAgentGame.conf 同时
+	// 缺 llm.endpoint 与 llm.endpoints,所有 LLM 调用都会失败。这里仅
+	// 输出 WARN,具体失败在 llm/anthropic.NewProvider 中按"endpoint
+	// 不能为空"严格返回错误。
+	if cfg.LLM.Endpoint == "" && len(cfg.LLM.Endpoints) == 0 {
+		logger.L().Warn("cfg.llm.endpoint 与 cfg.llm.endpoints 都为空 — 启动后任何 LLM 调用都会失败,请在 LsmAgentGame.conf 中显式配置")
+	}
+
 	logger.L().Info("LsmAgentGame starting",
 		zap.String("version", AppVersion),
 		zap.String("build_time", buildDateTime))
@@ -234,13 +242,39 @@ func main() {
 	authSvc := service.NewAuthService(gormDB, cfg, captchaStore)
 
 	// Seed a genesis root user on first run so the referrer-gated registration
-	// flow has a valid starting referrer code (service.RootInviteCode). No-op
-	// once any user exists.
+	// flow has a valid starting referrer code. No-op once any user exists.
+	//
+	// 凭据与邀请码必须从 LsmAgentGame.conf 读取,绝不在源码中硬编码。
+	// 空 DB 时若未配置 root.password,则随机生成一个强密码并仅通过 INFO 日志
+	// 输出一次(供运维首次登录后立即轮换)。RootInviteCode 同理:缺省随机生成。
+	rootAccount := cfg.Server.RootAccount
+	rootPassword := cfg.Server.RootPassword
+	if rootAccount == "" {
+		rootAccount = "lsm_root"
+	}
+	if cfg.Server.RootInviteCode != "" {
+		service.RootInviteCode = cfg.Server.RootInviteCode
+	}
+	inviteCode := service.RootInviteCode
+	if inviteCode == "" || inviteCode == "ROOT_INVITE_CODE_FROM_CONFIG_OR_RANDOM" {
+		// 一次性随机生成(开发模式兜底)。生产部署必须显式设置 cfg.server.root_invite_code。
+		inviteCode = util.RandomStrongPassword(16)
+		service.RootInviteCode = inviteCode
+	}
+	if rootPassword == "" {
+		// 一次性随机生成(开发模式兜底)。生产部署必须显式设置 cfg.server.root_password。
+		rootPassword = util.RandomStrongPassword(20)
+		logger.L().Warn("cfg.server.root_password 未配置,已随机生成并通过 INFO 日志输出一次,生产部署必须显式设置")
+	}
 	rootCtx, rootCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	if created, err := authSvc.SeedRootUserIfEmpty(rootCtx, "lsm_root", "Lsm@Root2026"); err != nil {
+	if created, err := authSvc.SeedRootUserIfEmpty(rootCtx, rootAccount, rootPassword, inviteCode); err != nil {
 		logger.L().Warn("root user seed failed", zap.Error(err))
 	} else if created {
-		logger.L().Info("root user seed created", zap.String("invite_code", service.RootInviteCode))
+		logger.L().Info("root user seed created",
+			zap.String("account", rootAccount),
+			zap.String("invite_code", inviteCode),
+			zap.String("generated_password", rootPassword),
+		)
 	}
 	rootCancel()
 

@@ -583,23 +583,28 @@ git submodule update --init --recursive
 
 ## 21. Agent 自动化测试账号
 
-AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时，**必须**使用
-[`docs/通用功能/测试账号凭证.md`](docs/通用功能/测试账号凭证.md) 中预置的账号：
+AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,**必须**使用
+[`docs/通用功能/测试账号凭证.md`](docs/通用功能/测试账号凭证.md) 中预置的账号:
 
-| account   | password             | 验证码旁路                               |
-| --------- | -------------------- | ---------------------------------------- |
-| `test_01` | `test_01_j90u656f64` | ✅ 可省略 `captcha_id` / `captcha_answer` |
-| `test_02` | `test_02_sadasdas24` | ✅ 可省略 `captcha_id` / `captcha_answer` |
-| `test_03` | `test_03_j90ddd6f64` | ✅ 可省略 `captcha_id` / `captcha_answer` |
-| `test_04` | `test_04_j90gn;p16p` | ✅ 可省略 `captcha_id` / `captcha_answer` |
+| account | 验证码旁路 | 备注 |
+| --- | --- | --- |
+| `test19082jauishf8` | ✅ 可省略 `captcha_id` / `captcha_answer` | 旧版单账号种子(§6) |
+| `test_01` | ✅ 可省略 `captcha_id` / `captcha_answer` | 批量测试套件(§7) |
+| `test_02` | ✅ 可省略 `captcha_id` / `captcha_answer` | 批量测试套件(§7) |
+| `test_03` | ✅ 可省略 `captcha_id` / `captcha_answer` | 批量测试套件(§7) |
+| `test_04` | ✅ 可省略 `captcha_id` / `captcha_answer` | 批量测试套件(§7,密码含 `;`) |
 
-> 旁路白名单定义于 `ServerGo/service/auth_service.go` 的 `AgentBypassAccounts`，
-> 同时包含旧版种子账号 `test19082jauishf8`。
-> 仅限本地/开发环境使用，**严禁**在生产环境复用。密码字段含 `;` 等特殊字符需注意转义。
+> **密码不在任何 git 跟踪的文件中**。请从仓库根目录的 `test_account.json`
+> (machine-readable,已在 `.gitignore` 排除)读取。
+>
+> 旁路白名单定义于 `ServerGo/service/auth_service.go` 的 `AgentBypassAccounts`,
+> **仅在 `cfg.Server.DevMode=true` 时生效**。生产部署必须显式设置
+> `DevMode=false`,否则 CAPTCHA 旁路会被禁用(防御深度)。
+>
+> 仅限本地/开发环境使用,**严禁**在生产环境复用。
 
-- 仓库根目录提供 **`test_account.json`**（machine-readable，已在 `.gitignore` 排除）。
-- 账号可能尚未落库：先 `GET /api/invites` 取公开邀请码，再 `POST /api/auth/register`。
-- 完整 curl 样例与验证码旁路规则见 `docs/通用功能/测试账号凭证.md`。
+- 账号可能尚未落库:先 `GET /api/invites` 取公开邀请码,再 `POST /api/auth/register`。
+- 完整 curl 样例、密码管理与验证码旁路规则见 `docs/通用功能/测试账号凭证.md`。
 
 ## 22. 自动化测试报告处理流程
 

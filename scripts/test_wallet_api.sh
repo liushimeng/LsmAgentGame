@@ -29,7 +29,16 @@ tap_fail()  { FAIL=$((FAIL+1)); FAILED_NAMES+=("$1"); echo "not ok $((PASS+FAIL)
 
 # Pick a referrer code — any existing user's my_invite_code works.
 pick_referrer() {
-    REFERRER=$(mysql -h127.0.0.1 -P3306 -u superuser -p'da=p1da@asd+12' lsmDB -N \
+    # DB 凭据全部从环境变量读取,不接受默认值,以免泄漏真实密码到 git。
+    local db_host="${WALLET_DB_HOST:-127.0.0.1}"
+    local db_port="${WALLET_DB_PORT:-3306}"
+    local db_user="${WALLET_DB_USER:-superuser}"
+    local db_name="${WALLET_DB_NAME:-lsmDB}"
+    if [ -z "${WALLET_DB_PASS:-}" ]; then
+        echo "pick_referrer: WALLET_DB_PASS 未设置,无法连接 DB" >&2
+        return 1
+    fi
+    REFERRER=$(MYSQL_PWD="$WALLET_DB_PASS" mysql -h"$db_host" -P"$db_port" -u"$db_user" "$db_name" -N \
         -e "SELECT my_invite_code FROM t_lsm_game_user ORDER BY created_at ASC LIMIT 1;" 2>/dev/null | head -1)
     if [ -z "$REFERRER" ] || [ "$REFERRER" = "NULL" ]; then
         return 1

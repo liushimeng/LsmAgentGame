@@ -10,7 +10,8 @@
 //	    dial 超时 —— 断言实际耗时(留足宽裕余量)。
 //
 // 所有测试只使用 httptest / 环回地址上的已关闭端口,绝不发起对生产上游
-// (8.130.85.252)的真实网络调用。
+// proxy 的真实网络调用(具体上游地址由 LsmAgentGame.conf 的 llm.endpoint /
+// llm.endpoints 配置,不在源码中硬编码)。
 package anthropic_test
 
 import (

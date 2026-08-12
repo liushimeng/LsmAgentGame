@@ -7,7 +7,9 @@
 #      seed amount, which the service allows to be non-1000 in edge cases).
 #   2. Daily reward uniqueness: (user_id, reward_date) must be unique.
 #
-# Reads $DB_USER / $DB_PASS / $DB_NAME, defaulting to the dev-db credentials.
+# Reads $DB_USER / $DB_PASS / $DB_NAME from environment. **No defaults** for
+# DB_PASS — fail-fast if unset, to avoid leaking real production passwords
+# into the repo. Other fields default to the dev DB endpoint.
 # TAP output. Exits 0 if both checks pass, 1 on any non-zero drift/dup.
 
 set -u
@@ -19,9 +21,14 @@ FAILED_NAMES=()
 DB_HOST="${DB_HOST:-127.0.0.1}"
 DB_PORT="${DB_PORT:-3306}"
 DB_USER="${DB_USER:-superuser}"
-DB_PASS="${DB_PASS:-da=p1da@asd+12}"
 DB_NAME="${DB_NAME:-lsmDB}"
-MYSQL="mysql -h${DB_HOST} -P${DB_PORT} -u${DB_USER} -p${DB_PASS} ${DB_NAME}"
+if [ -z "${DB_PASS:-}" ]; then
+    echo "1..0 # SKIP DB_PASS 未设置 — 必须显式提供 DB 密码环境变量(避免硬编码泄漏)" >&2
+    exit 0
+fi
+# 用 MYSQL_PWD 注入密码,避免出现在 ps 列表与脚本源码中。
+export MYSQL_PWD="$DB_PASS"
+MYSQL="mysql -h${DB_HOST} -P${DB_PORT} -u${DB_USER} ${DB_NAME}"
 
 tap_pass() { PASS=$((PASS+1)); echo "ok $PASS - $1"; }
 tap_fail() { FAIL=$((FAIL+1)); FAILED_NAMES+=("$1"); echo "not ok $((PASS+FAIL)) - $1"; }

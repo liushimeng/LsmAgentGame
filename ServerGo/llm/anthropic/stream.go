@@ -293,7 +293,7 @@ func AccumulateStream(ctx context.Context, r io.Reader, onProgress func(types.St
 		}
 		// ROUND 40 P0-1 — upstream proxy mid-flight drop classification.
 		//
-		// When the upstream Anthropic proxy (8.130.85.252:29000/Anthropic)
+		// When the upstream Anthropic proxy (configured via cfg.llm.endpoint / cfg.llm.endpoints)
 		// resets the TCP connection 1.5-4s into a stream (after auth but
 		// before any tokens arrive), the *http.Response body Read surfaces
 		// the failure as either context.Canceled (when our own ctx is the

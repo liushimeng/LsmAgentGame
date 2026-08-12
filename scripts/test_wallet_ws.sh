@@ -29,7 +29,11 @@ if ! command -v jq >/dev/null 2>&1; then echo "1..0 # SKIP jq not available"; ex
 if ! command -v curl >/dev/null 2>&1; then echo "1..0 # SKIP curl not available"; exit 0; fi
 if ! curl -sk "${HOST}/api/health" >/dev/null 2>&1; then echo "1..0 # SKIP ${HOST} unreachable"; exit 0; fi
 
-REFERRER=$(mysql -h127.0.0.1 -P3306 -u superuser -p'da=p1da@asd+12' lsmDB -N \
+# DB 凭据从环境变量读取,不接受默认值,以免泄漏真实密码到 git。
+if [ -z "${WALLET_DB_PASS:-}" ]; then echo "1..0 # SKIP WALLET_DB_PASS 未设置" >&2; exit 0; fi
+export MYSQL_PWD="$WALLET_DB_PASS"
+REFERRER=$(mysql -h"${WALLET_DB_HOST:-127.0.0.1}" -P"${WALLET_DB_PORT:-3306}" \
+    -u"${WALLET_DB_USER:-superuser}" "${WALLET_DB_NAME:-lsmDB}" -N \
     -e "SELECT my_invite_code FROM t_lsm_game_user ORDER BY created_at ASC LIMIT 1;" 2>/dev/null | head -1 | tr -d '[:space:]')
 if [ -z "$REFERRER" ] || [ "$REFERRER" = "NULL" ]; then echo "1..0 # SKIP no referrer"; exit 0; fi
 

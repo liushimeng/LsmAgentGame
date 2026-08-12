@@ -292,10 +292,14 @@ const DefaultSpeakFloorWakeIntervalSec = 20
 
 // ServerConfig holds the listener addresses and TLS material.
 type ServerConfig struct {
-	HTTPSAddr string `json:"https_addr"`
-	WSSAddr   string `json:"wss_addr"`
-	TLSCert   string `json:"tls_cert"`
-	TLSKey    string `json:"tls_key"`
+	HTTPSAddr     string `json:"https_addr"`
+	WSSAddr       string `json:"wss_addr"`
+	TLSCert       string `json:"tls_cert"`
+	TLSKey        string `json:"tls_key"`
+	DevMode       bool   `json:"dev_mode"`        // true → 启用 AgentBypassAccounts 白名单(CAPTCHA 旁路);生产必须 false
+	RootAccount   string `json:"root_account"`    // 首次启动时种子的 root 账号;默认 "lsm_root"
+	RootPassword  string `json:"root_password"`   // 首次启动时种子的 root 密码;空时由 main.go 随机生成并日志输出一次
+	RootInviteCode string `json:"root_invite_code"` // 首次启动时种子的邀请码;空时由 main.go 随机生成
 }
 
 // DBConfig holds the MariaDB / MySQL connection.
@@ -399,7 +403,7 @@ type ProviderConfig struct {
 // anthropic provider appends "/v1/messages".
 //
 // Defaults applied by applyDefaults:
-//   - Endpoint = "http://8.130.85.252:29000/Anthropic"
+//   - Endpoint = "" (空 — 必须在 LsmAgentGame.conf 显式提供)
 //   - TimeoutMs = 600000 (10 minutes)
 //   - StreamIdleTimeoutMs = 300000 (5 minutes)
 //   - MaxRetries = 2
@@ -642,9 +646,14 @@ func applyDefaults(c *Config) {
 	if c.Game.MaxRoom == 0 {
 		c.Game.MaxRoom = 50
 	}
-	if c.LLM.Endpoint == "" {
-		c.LLM.Endpoint = "http://8.130.85.252:29000/Anthropic"
-	}
+	// 不再设置默认 LLM endpoint。空配置应在启动时由 main.go 主动拒绝
+	//(避免上游 proxy 拓扑泄漏到公开仓库的默认行为)。生产部署必须在
+	// LsmAgentGame.conf 中显式提供 llm.endpoint 或 llm.endpoints[]。
+	// 旧的默认值 "<internal-proxy>:29000/Anthropic" 已移除以减少公开仓库
+	// 中的拓扑泄漏面。
+	//
+	// 此处不调用 logger(避免 config 包依赖 logger 包)。main.go 在
+	// applyDefaults 之后会主动检查 LLM 配置是否为空并输出 WARN 日志。
 	// BUG-R220: fold the legacy Endpoint into the Endpoints failover list
 	// when the operator hasn't provided an explicit list. Trimming whitespace
 	// + dropping empties keeps a copy-pasted multi-line config from

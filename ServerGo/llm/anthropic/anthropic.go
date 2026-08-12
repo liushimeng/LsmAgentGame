@@ -186,7 +186,7 @@ type Provider struct {
 
 	// BUG-R65-3.2 / BUG-R214 端点级不可用短路熔断器。
 	//
-	// When the upstream proxy (8.130.85.252:29000/Anthropic) starts returning
+	// When the upstream proxy (configured via cfg.llm.endpoint / cfg.llm.endpoints)
 	// hard 503 Service Unavailable for a specific model (e.g. Kimi 通道完全
 	// 不可用) every per-call retry wastes up to ~16s × 7 bots = 112s of agent
 	// wake time, all of which ends in the same failure. To prevent this, we

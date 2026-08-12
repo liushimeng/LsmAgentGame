@@ -50,7 +50,7 @@
     // configured model; they MUST come from LsmAgentGame.conf (gitignored) —
     // never from source. conf.example ships placeholders; operators replace
     // them with real keys. See docs/LLM供应商设计.md.
-    "endpoint": "http://8.130.85.252:29000/Anthropic",
+    "endpoint": "http://YOUR-LLM-PROXY-HOST:PORT/Anthropic",
     // BUG-R220 — endpoint failover (optional). When the primary endpoint
     // fails repeatedly (dial / network / 5xx / 503), the provider
     // automatically advances to the next endpoint in this list. Per-
@@ -59,8 +59,8 @@
     // legacy behavior. The `endpoint` field above is folded into a
     // single-element list automatically when this is unset.
     "endpoints": [
-      "http://8.130.85.252:29000/Anthropic",
-      "http://8.130.85.252:29001/Anthropic"
+      "http://YOUR-LLM-PROXY-HOST-1:PORT/Anthropic",
+      "http://YOUR-LLM-PROXY-HOST-2:PORT/Anthropic"
     ],
     // 10 minutes (2026-07-24: 5min → 10min)。慢模型(Kimi/GLM)单次响应
     // 2-5 分钟是预期场景;整体 timeout >= 5min 时非流式 Chat 自动改用

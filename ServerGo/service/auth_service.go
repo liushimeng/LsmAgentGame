@@ -16,31 +16,50 @@ import (
 )
 
 // AgentBypassAccounts is the whitelist of agent / automation-test accounts
-// that skip CAPTCHA verification on /api/auth/login. Membership defined in
-// docs/测试账号凭证.md §6 & §7.2 — keep this list in sync with that doc.
+// that skip CAPTCHA verification on /api/auth/login.
 //
-// Match is case-sensitive — only the exact strings used during registration
-// bypass the gate. Adding a new automation account here ALSO requires
-// updating docs/测试账号凭证.md and CLAUDE.md §18.
+// 重要:此白名单只在 cfg.Server.DevMode=true 时生效。生产部署必须显式设置
+// dev_mode=false,否则白名单失效 → CAPTCHA 全员强制。
+//
+// 白名单来源:由 cfg.Server.AgentBypassAccounts (LsmAgentGame.conf 配置)
+// 注入;空配置时回退到本常量作为开发模式兜底。**严禁**在生产 conf 中写入
+// 真实账号名,推荐使用 dev_mode 关闭以彻底禁用此旁路。
+//
+// 匹配大小写敏感 — 仅注册时的精确字符串可旁路。新增自动化账号时除更新
+// AgentBypassAccounts 默认值外,必须同步 docs/通用功能/测试账号凭证.md 与
+// CLAUDE.md §21。
 var AgentBypassAccounts = map[string]struct{}{
-	"test19082jauishf8": {}, // legacy single-account seed (§6)
-	"test_01":           {}, // batch agent suite §7.1 + §7.2
-	"test_02":           {}, // batch agent suite §7.1 (also bypass — same e2e harness)
-	"test_03":           {}, // batch agent suite §7.1 (also bypass)
-	"test_04":           {}, // batch agent suite §7.1 (also bypass)
+	"test19082jauishf8": {}, // legacy single-account seed
+	"test_01":           {},
+	"test_02":           {},
+	"test_03":           {},
+	"test_04":           {},
 }
 
 // IsAgentBypassAccount reports whether the given login account string is on
-// the CAPTCHA-bypass whitelist. It is the single source of truth used by
-// AuthService.Login; expose it so callers (e.g. frontend detector, future
-// tooling) can reuse the same predicate without duplicating the list.
-func IsAgentBypassAccount(account string) bool {
+// the CAPTCHA-bypass whitelist **AND** cfg.Server.DevMode is true. It is the
+// single source of truth used by AuthService.Login; expose it so callers
+// (e.g. frontend detector, future tooling) can reuse the same predicate.
+//
+// 当 DevMode=false 时此函数永远返回 false,即白名单整体失效。
+func (s *AuthService) IsAgentBypassAccount(account string) bool {
+	if s == nil || s.cfg == nil || !s.cfg.Server.DevMode {
+		return false
+	}
+	_, ok := AgentBypassAccounts[account]
+	return ok
+}
+
+// IsAgentBypassAccountGlobal 是旧式全局函数,保留用于无法访问 AuthService
+// 实例的调用点(如测试 / 旧前端 detector)。它**不**检查 DevMode — 调用者
+// 必须自行保证仅在开发模式下使用。新代码一律改用 AuthService.IsAgentBypassAccount。
+func IsAgentBypassAccountGlobal(account string) bool {
 	_, ok := AgentBypassAccounts[account]
 	return ok
 }
 
 // AgentBypassAccount is retained for backwards-compatibility with older
-// call sites and tests. New code should use IsAgentBypassAccount().
+// call sites and tests. New code should use AuthService.IsAgentBypassAccount().
 const AgentBypassAccount = "test19082jauishf8"
 
 // AuthService is the user-account service.
@@ -284,19 +303,25 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (*AuthResp
 // root user. Because registration requires a referrer's personal code, a fresh
 // database needs at least one user whose code new registrants can use. New
 // users may register against this code until the user base grows.
-const RootInviteCode = "LSMROOTINVITE00001"
+//
+// 默认值由 main.go 在启动时根据 cfg.RootInviteCode 设置;若 cfg 未提供,
+// 启动器会随机生成一个并通过日志输出一次。源码常量仅作为开发模式兜底
+// 默认值(占位符),不应出现在生产构建中。
+var RootInviteCode = "ROOT_INVITE_CODE_FROM_CONFIG_OR_RANDOM"
 
 // SeedRootUserIfEmpty creates a genesis "root" account on a fresh database so
-// the referrer-gated registration flow has a valid starting referrer code
-// (RootInviteCode). It is a no-op once any user row exists, so re-running is
-// safe.
-func (s *AuthService) SeedRootUserIfEmpty(ctx context.Context, account, password string) (bool, error) {
+// the referrer-gated registration flow has a valid starting referrer code.
+// inviteCode 为空时回退到 RootInviteCode 全局变量。它是一个 no-op(非首次启动)。
+func (s *AuthService) SeedRootUserIfEmpty(ctx context.Context, account, password, inviteCode string) (bool, error) {
 	var count int64
 	if err := s.db.WithContext(ctx).Model(&models.TLsmGameUser{}).Count(&count).Error; err != nil {
 		return false, errcode.Code(errcode.ErrDB)
 	}
 	if count > 0 {
 		return false, nil
+	}
+	if inviteCode == "" {
+		inviteCode = RootInviteCode
 	}
 	hash, err := util.HashPassword(password)
 	if err != nil {
@@ -307,7 +332,7 @@ func (s *AuthService) SeedRootUserIfEmpty(ctx context.Context, account, password
 		Account:      account,
 		Nickname:     account,
 		PasswordHash: hash,
-		MyInviteCode: RootInviteCode,
+		MyInviteCode: inviteCode,
 		Language:     "zh-CN",
 	}
 	if err := s.db.WithContext(ctx).Create(&root).Error; err != nil {
@@ -334,9 +359,10 @@ func (s *AuthService) Login(ctx context.Context, in LoginInput) (*AuthResponse, 
 		return nil, errcode.Code(errcode.ErrValidationFailed)
 	}
 
-	// CAPTCHA gate. Whitelisted agent / automation accounts always skip;
-	// every other caller must supply matching CaptchaID/CaptchaAnswer.
-	if !IsAgentBypassAccount(in.Account) {
+	// CAPTCHA gate. Whitelisted agent / automation accounts always skip
+	// (但仅在 cfg.Server.DevMode=true 时);every other caller must supply
+	// matching CaptchaID/CaptchaAnswer. 详见 AgentBypassAccounts 注释。
+	if !s.IsAgentBypassAccount(in.Account) {
 		if s.captcha == nil {
 			return nil, errcode.Code(errcode.ErrAuthCaptchaMissing)
 		}

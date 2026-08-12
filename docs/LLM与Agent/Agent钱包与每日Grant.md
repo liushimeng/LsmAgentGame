@@ -169,26 +169,27 @@ GROUP BY user_id;
 ### 6.2 curl 脚本
 
 ```bash
-# 1) 登录测试超管账号（test_01 在本地数据库已配置 user_type=3）
+# 1) 登录测试超管账号(test_01 在本地数据库已配置 user_type=3)。
+# 密码请从仓库根目录的 test_account.json 读取(不入 git),不要硬编码到脚本。
 TOKEN=$(curl -ks -X POST https://127.0.0.1:39001/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"account":"test_01","password":"test_01_j90u656f64"}' \
+  -d "{\"account\":\"test_01\",\"password\":\"$TEST_01_PASSWORD\"}" \
   | jq -r '.data.token')
 
-# 2) 批量 grant（每天只生效 1 次）
+# 2) 批量 grant(每天只生效 1 次)
 curl -ks -X POST https://127.0.0.1:39001/api/admin/llm/bots/grant-daily \
   -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"amount":500,"remark":"每日发放测试"}' \
   | jq .
 
-# 期望：granted.length = 8, skipped.length = 0
-# 再跑一次：granted.length = 0, skipped.length = 8
+# 期望:granted.length = 8, skipped.length = 0
+# 再跑一次:granted.length = 0, skipped.length = 8
 ```
 
 ### 6.3 账户信息
 
-- 测试账号: `test_01` / `test_01_j90u656f64`（已被授权超管）
+- 测试账号: `test_01`(密码从 `test_account.json` 读取,不入 git)
 - 详见 `docs/通用功能/测试账号凭证.md`
 
 ## 7. 边界与不做的事项

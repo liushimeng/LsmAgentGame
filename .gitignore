@@ -332,3 +332,33 @@ AutoTestScreenshots/hall_after_restart_20260807_125800.jpg
 TestReport/自动化测试报告_20260810_214758.md
 LsmAgentGame.conf.example
 LsmAgentGame.conf
+
+# ============ 安全：TLS 私钥 / 证书 / 凭据 ============
+# 自签 TLS 密钥对 — 必须从仓库历史中清除,本地运行时按需生成或通过配置覆盖
+server.crt
+server.key
+server.crt.new
+server.key.new
+# 后缀变体(任何 *.crt/*.key/*.pem 都不要入库)
+*.crt
+*.key
+*.pem
+
+# ============ 安全：测试账号 / 凭据文件 ============
+test_account.json
+accounts.json
+credentials.json
+.env
+.env.*
+!.env.example
+
+# ============ AI Agent 工作目录 ============
+# 仅本机使用,不提交
+tmpPlan/
+.agent_work/
+
+# ============ 旧二进制 / 日志 / PID ============
+LsmWebGame
+LsmWebGame.pid
+LsmWebGame.log
+GoWebDebugTool.conf
