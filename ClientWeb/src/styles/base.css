@@ -1,0 +1,630 @@
+:root {
+  --bg: #0e1117;
+  --panel: #161b22;
+  --card: #1c2230;
+  --border: #30363d;
+  --fg: #e6edf3;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #0a84ff;
+  --danger: #f85149;
+  --ok: #3fb950;
+  --header-h: 56px;
+  --header-h-collapsed: 32px;
+  --sidebar-w: 200px;
+  --sidebar-w-collapsed: 48px;
+  --chat-w: 320px;
+  --chat-w-collapsed: 36px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 16px;
+  transition: background 0.15s ease;
+}
+button:hover { background: #006fe6; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+input, select, textarea {
+  font: inherit;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.app-shell--fullscreen {
+  /* 进入全屏:把标题栏/侧栏/聊天全部隐藏后,内容区铺满 */
+  height: 100vh;
+  overflow: hidden;
+}
+.app-shell--fullscreen .app-body { height: 100%; }
+
+/* ---------- 顶部标题栏 + 工具栏 ---------- */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: var(--header-h);
+  flex: 0 0 var(--header-h);
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  position: relative;
+  transition: height 0.2s ease, flex-basis 0.2s ease;
+  gap: 8px;
+}
+.app-header--collapsed {
+  height: var(--header-h-collapsed);
+  flex: 0 0 var(--header-h-collapsed);
+  padding: 0 8px;
+}
+.app-header__title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.app-header__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+.app-header__hamburger {
+  padding: 4px 10px;
+  font-size: 16px;
+  min-height: 40px;
+  min-width: 40px;
+}
+.app-header__toggle {
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.2;
+  min-height: 28px;
+}
+.toolbar__user { color: var(--muted); font-size: 12px; }
+
+/* 语言切换器 —— 标题栏工具栏内的紧凑下拉,覆盖 select 的 width:100% 默认值 */
+.lang-switcher {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 12px;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 版本号 + 编译时间 */
+.build-info {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.build-info__ver {
+  color: var(--ok);
+  font-weight: 600;
+}
+.build-info__time { opacity: 0.8; }
+
+/* ---------- 主体：左侧菜单栏 + 内容区 ---------- */
+.app-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
+}
+
+.app-sidebar {
+  flex: 0 0 var(--sidebar-w);
+  width: var(--sidebar-w);
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: flex-basis 0.2s ease, width 0.2s ease, transform 0.2s ease;
+}
+.app-sidebar--collapsed {
+  flex: 0 0 var(--sidebar-w-collapsed);
+  width: var(--sidebar-w-collapsed);
+  padding: 12px 4px;
+}
+.app-sidebar--collapsed .sidebar-link__label { display: none; }
+.app-sidebar--collapsed .sidebar-link {
+  justify-content: center;
+  padding: 9px 6px;
+}
+
+.app-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 14px;
+  min-height: 40px;
+}
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.05);
+  text-decoration: none;
+}
+.sidebar-link--active {
+  background: rgba(10, 132, 255, 0.15);
+  color: var(--accent);
+}
+.sidebar-link__icon { width: 18px; text-align: center; flex: 0 0 18px; }
+
+.app-sidebar__toggle {
+  margin-top: 8px;
+  padding: 6px 8px;
+  font-size: 11px;
+  align-self: flex-end;
+}
+
+.app-sidebar__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 90;
+}
+
+/* ── 2 级分组菜单 ─────────────────────────────────────────── */
+.sidebar-group + .sidebar-group {
+  margin-top: 2px;
+}
+
+/* 分组标题按钮 */
+.sidebar-group__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  border: none;
+  background: transparent;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  text-align: left;
+}
+.sidebar-group__header:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.03);
+}
+.sidebar-group__icon {
+  width: 16px;
+  text-align: center;
+  flex: 0 0 16px;
+  font-size: 13px;
+}
+.sidebar-group__label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-group__arrow {
+  font-size: 10px;
+  transition: transform 0.2s ease;
+  flex: 0 0 auto;
+}
+.sidebar-group--collapsed .sidebar-group__arrow {
+  transform: rotate(-90deg);
+}
+
+/* 分组内容区域 */
+.sidebar-group__items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 2px;
+}
+
+/* 二级菜单项缩进 */
+.sidebar-group__items .sidebar-link {
+  padding-left: 20px;
+}
+
+/* 无标题分组（全局/其他）的分隔线 */
+.sidebar-group--plain + .sidebar-group:not(.sidebar-group--plain) .sidebar-group__header {
+  border-top: 1px solid var(--border);
+}
+
+/* ── 折叠态（桌面窄栏）─────────────────────────────────── */
+.app-sidebar--collapsed .sidebar-group__header {
+  justify-content: center;
+  padding: 8px 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+}
+.app-sidebar--collapsed .sidebar-group__label,
+.app-sidebar--collapsed .sidebar-group__arrow {
+  display: none;
+}
+.app-sidebar--collapsed .sidebar-group__items .sidebar-link {
+  padding-left: 0;
+}
+
+.content {
+  flex: 1;
+  padding: 24px;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  overflow: auto;
+  min-width: 0;
+}
+.app-shell--fullscreen .content {
+  padding: 0;
+  max-width: none;
+}
+
+/* 大屏 / 侧栏折叠时撑满整个可视区域 —— 用于管理后台类需要全宽的页面。
+ * 通过 :has() 选择器锁定根 .content 容器,避免影响游戏页与其它窄布局。 */
+.content:has(.model-admin-page),
+.content:has(.admin-users-page) {
+  max-width: none;
+  padding: 16px 24px;
+}
+
+/* ---------- 通用面板 / 键值展示 ---------- */
+.panel-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  max-width: 480px;
+}
+.kv {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.kv:last-child { border-bottom: 0; }
+.kv__k { color: var(--muted); }
+.kv__v { color: var(--text); }
+
+/* 个人中心:邀请码展示 + 复制按钮 */
+.invite-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  letter-spacing: 1px;
+  user-select: all;
+}
+.invite-copy {
+  margin-left: 8px;
+  padding: 2px 10px;
+  font-size: 12px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  /* 宽度自适应:约页面 1/3,手机上不低于 300px,大屏不超过 460px。 */
+  width: 33.333vw;
+  min-width: 300px;
+  max-width: 460px;
+  box-sizing: border-box;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+/* 极窄屏(< 360px)兜底:让弹窗几乎占满,留出小边距。 */
+@media (max-width: 360px) {
+  .modal {
+    min-width: 0;
+    width: calc(100vw - 24px);
+  }
+}
+.modal h2 { margin: 0 0 16px; font-size: 18px; }
+.field { margin-bottom: 12px; }
+.field label { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; }
+.error { color: var(--danger); font-size: 12px; margin-top: 8px; }
+.success { color: var(--ok); font-size: 12px; margin-top: 8px; }
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.tabs button {
+  background: transparent;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 8px 4px;
+}
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+
+.game-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.game-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.game-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+.game-card h3 { margin: 0 0 4px; }
+.game-card .meta { color: var(--muted); font-size: 12px; }
+
+.canvas-host { width: 100%; height: calc(100vh - 60px); }
+
+/* ---------- 右侧聊天面板 ---------- */
+.chat-panel {
+  flex: 0 0 var(--chat-w);
+  width: var(--chat-w);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  min-height: 0;
+  transition: flex-basis 0.2s ease, width 0.2s ease, transform 0.2s ease;
+  position: relative;
+}
+.chat-panel--collapsed {
+  flex: 0 0 var(--chat-w-collapsed);
+  width: var(--chat-w-collapsed);
+}
+.chat-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+  min-height: 40px;
+}
+.chat-panel--collapsed .chat-panel__header { padding: 10px 6px; }
+.chat-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+}
+.chat-panel__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: 0 0 8px;
+}
+.chat-panel__dot--on { background: var(--ok); box-shadow: 0 0 6px rgba(63, 185, 80, 0.6); }
+.chat-panel__toggle {
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.2;
+  min-height: 28px;
+}
+.chat-panel__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.chat-panel__settings {
+  padding: 2px 8px;
+  font-size: 14px;
+  line-height: 1.2;
+  min-height: 28px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+.chat-panel__settings:hover {
+  opacity: 1;
+}
+.chat-panel--collapsed .chat-panel__title { writing-mode: vertical-rl; }
+.chat-panel--collapsed .chat-panel__title > span:last-child {
+  transform: rotate(180deg);
+}
+
+.chat-panel__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.chat-panel__empty {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  margin-top: 24px;
+}
+.chat-msg {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  word-break: break-word;
+}
+.chat-msg__author {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  margin-right: 6px;
+}
+.chat-msg__time {
+  color: var(--muted);
+  font-size: 11px;
+}
+.chat-msg__text {
+  margin-top: 2px;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+.chat-panel__error {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  color: var(--danger);
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+}
+.chat-panel__form {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+.chat-panel__form input { flex: 1; }
+.chat-panel__form button { padding: 8px 14px; }
+
+.chat-panel__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 90;
+}
+
+/* =====================================================
+ * 响应式断点
+ * 与 docs/架构与协议/产品设计.md 中的规则保持一致:
+ *   - mobile : max-width 640px
+ *   - pad    : 641 ~ 1024px
+ *   - desktop: min-width 1025px
+ * ===================================================== */
+
+/* 平板端:收起聊天,只显示图标 */
+@media (max-width: 1024px) {
+  :root {
+    --chat-w: 280px;
+    --sidebar-w: 64px;
+  }
+  .app-sidebar .sidebar-link__label { display: none; }
+  .app-sidebar .sidebar-link { justify-content: center; padding: 9px 6px; }
+  .app-sidebar__toggle { display: none; }
+}
+
+/* 手机端:侧栏与聊天变成抽屉 */
+@media (max-width: 640px) {
+  :root {
+    --header-h: 48px;
+    --chat-w: 100vw;
+  }
+  .app-header { padding: 0 8px; }
+  .build-info { display: none; }
+  .toolbar__user { display: none; }
+  .content { padding: 12px; }
+
+  /* 侧栏:默认隐藏在屏幕左侧,展开时滑出 */
+  .app-sidebar--mobile {
+    position: fixed;
+    top: var(--header-h);
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    transform: translateX(-100%);
+    width: 240px;
+    flex-basis: 240px;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.5);
+  }
+  .app-sidebar--mobile .sidebar-link__label { display: inline; }
+  .app-sidebar--mobile .sidebar-link { justify-content: flex-start; padding: 9px 12px; }
+  .app-sidebar--mobile.app-sidebar--drawer-open {
+    transform: translateX(0);
+  }
+
+  /* 聊天:默认隐藏在屏幕底部,展开时上滑 */
+  .chat-panel--mobile {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: 20vh;
+    z-index: 100;
+    width: 100vw;
+    flex-basis: 100vw;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    transform: translateY(100%);
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.5);
+  }
+  .chat-panel--mobile.chat-panel--drawer-open {
+    transform: translateY(0);
+  }
+  .chat-panel--mobile .chat-panel__title { writing-mode: horizontal-tb; transform: none; }
+}
+

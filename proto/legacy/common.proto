@@ -1,0 +1,48 @@
+// LsmWebGame — 通用消息定义
+//
+// 所有 WebSocket 帧统一通过 Envelope 包装;模块化消息按功能分类到独立
+// 的 .proto 文件中(chat.proto / game.proto / room.proto 等)。
+//
+// 当前实现:Envelope.payload 使用 JSON 序列化(便于直接走现有 Hub)。
+// 此处仅作 API 契约文档;后续可通过 protoc 生成二进制 framing。
+
+syntax = "proto3";
+
+package lsm;
+
+option go_package = "LsmWebGame/proto/pb";
+option java_package = "com.lsmwebgame.proto";
+
+// ─────────────────── 通用消息 ───────────────────
+
+// Envelope —— 单一 WS 帧容器,所有客户端/服务端消息必须包装在此消息中。
+message Envelope {
+  // 消息类型(对应 .proto 中的各模块)
+  string type = 1;
+  // 客户端请求序号,用于匹配请求-响应对
+  int64 seq = 2;
+  // 消息载荷(JSON 序列化字节,具体结构由 type 决定)
+  bytes payload = 3;
+}
+
+// ErrorPayload —— 通用错误响应
+message ErrorPayload {
+  // 错误码,对应 errcode/errcode.go 中的常量
+  int32 code = 1;
+  // 错误描述
+  string message = 2;
+}
+
+// HeartbeatPayload —— 服务端周期性心跳载荷
+message HeartbeatPayload {
+  // 服务端当前时间(Unix 毫秒)
+  int64 server_ts = 1;
+}
+
+// AckPayload —— 通用确认回显
+message AckPayload {
+  // 是否成功
+  bool ok = 1;
+  // 可选消息
+  string message = 2;
+}

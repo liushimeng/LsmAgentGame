@@ -1,0 +1,163 @@
+/* === AppModal 全局弹层样式 === 2026-07-12 ===
+   与 settlement-overlay / settlement-modal 区分,使用专属 .app-modal-* 命名,
+   避免与全局 .settlement-modal 样式冲突(父组件注入的 <style> 块可能晚于
+   React Portal 渲染,导致 z-index / max-width 被旧规则覆盖)。 */
+.app-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--ww-z-drawer, 300);
+  padding: 20px;
+  animation: app-modal-fade 0.18s ease-out;
+}
+.app-modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  color: var(--text);
+  outline: none;
+  animation: app-modal-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.app-modal__header {
+  position: relative;
+  padding: 20px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.app-modal__icon {
+  font-size: 32px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+}
+.app-modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  word-break: break-word;
+}
+.app-modal__close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.app-modal__close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+.app-modal__body {
+  padding: 18px 24px;
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+.app-modal__footer {
+  padding: 14px 24px 20px;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.15);
+}
+.app-modal__spinner {
+  display: inline-block;
+  font-size: 28px;
+  animation: app-modal-spin 1.1s linear infinite;
+}
+@keyframes app-modal-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes app-modal-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes app-modal-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-modal-overlay { animation: none; }
+  .app-modal { animation: none; }
+  .app-modal__spinner { animation-duration: 3s; }
+}
+
+/* === AppModal §R135 阻塞关闭提示 ===
+   编辑型弹窗(新增/编辑表单)误点遮罩 → shake 动画 + 顶部红条提示,
+   引导用户走"取消"或"确认"按钮关闭弹窗,避免误丢输入。 */
+.app-modal--shake {
+  animation: app-modal-shake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+.app-modal__block-hint {
+  position: absolute;
+  top: -38px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--danger, #f85149);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  z-index: 1;
+  pointer-events: none;
+  animation: app-modal-block-hint-in 0.18s ease-out;
+}
+.app-modal__block-hint::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 10px;
+  height: 10px;
+  background: var(--danger, #f85149);
+}
+@keyframes app-modal-shake {
+  0%, 100% { transform: translateX(0); }
+  10%      { transform: translateX(-6px); }
+  25%      { transform: translateX(6px); }
+  40%      { transform: translateX(-5px); }
+  55%      { transform: translateX(5px); }
+  70%      { transform: translateX(-3px); }
+  85%      { transform: translateX(3px); }
+}
+@keyframes app-modal-block-hint-in {
+  from { opacity: 0; transform: translate(-50%, 4px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}

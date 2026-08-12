@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128"><defs><filter id="glow-white-rook-cyberpunk" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="2.2" result="blur"/>
+    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <radialGradient id="grad-white-rook-cyberpunk" cx="40%" cy="35%">
+    <stop offset="0%" stop-color="#e2e8f0" stop-opacity="1"/>
+    <stop offset="100%" stop-color="#e2e8f0" stop-opacity="0.85"/>
+  </radialGradient></defs><circle cx="64" cy="64" r="58" fill="url(#grad-white-rook-cyberpunk)" stroke="#22d3ee" stroke-width="2" filter="url(#glow-white-rook-cyberpunk)"/><circle cx="64" cy="64" r="50" fill="none" stroke="#22d3ee" stroke-width="1.5" opacity="0.5"/><text x="64" y="64" text-anchor="middle" dominant-baseline="central" fill="#22d3ee" font-family="monospace" font-size="83.2" font-weight="bold" filter="url(#glow-white-rook-cyberpunk)">♖</text></svg>

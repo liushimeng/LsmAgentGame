@@ -1,0 +1,70 @@
+// user.proto —— 用户列表 WebSocket 帧契约（文档）。
+//
+// 与 chat.proto / room.proto / game.proto 一致：当前实现 Envelope.payload 使用 JSON
+// 序列化（便于直接走现有 Hub）。此处仅作 API 契约文档；后续可通过 protoc 生成二进制 framing。
+//
+// 所有帧封装在 common.proto 的 Envelope 中，type 字段以 "user." 开头。
+//
+// 字段可见性按调用者 user_type 分级：
+//   普通用户(1)：仅 id / nickname / online
+//   管理员(2)：完整字段（不含密码）+ online
+//   超管(3)：同管理员 + can_delete（标记可删除的行）
+syntax = "proto3";
+
+package lsm.user;
+
+option go_package = "LsmWebGame/proto/userpb";
+
+// ───────────── client → server ─────────────
+
+// user.list —— 请求用户列表（无参数，按调用者权限裁剪字段）。
+message UserListReq {}
+
+// user.delete —— 删除用户（仅超级管理员）。删除会级联清理该用户的聊天消息、
+// 房间席位、会话，并将其邀请的下级用户的 referrer 置空。
+message UserDeleteReq {
+  string id = 1; // 目标用户 ID
+}
+
+// ───────────── server → client ─────────────
+
+// 单条用户记录。普通用户只会收到 id / nickname / online 三个字段。
+message UserItem {
+  string id               = 1;
+  string nickname         = 2;
+  bool   online           = 3;  // 是否有活跃 WS 连接
+
+  // 以下字段仅管理员/超管可见。
+  string account          = 4;
+  string phone            = 5;
+  string email            = 6;
+  int32  user_type        = 7;  // 1普通 / 2管理 / 3超管
+  string my_invite_code   = 8;
+  int32  referral_count   = 9;
+  string referrer_user_id = 10;
+  int64  created_at       = 11; // unix 秒
+  int64  last_login_at    = 12; // unix 秒，0 表示从未登录
+  bool   can_delete       = 13; // 仅超管视角下、且该行可删除时为 true
+}
+
+// user.list_resp —— 用户列表响应。
+message UserListResp {
+  repeated UserItem users = 1;
+  int32 my_user_type      = 2; // 调用者自身的 user_type，前端据此决定渲染粒度
+}
+
+// user.delete_resp —— 删除发起者收到的回执（携带请求 seq）。
+message UserDeleteResp {
+  string id = 1;
+}
+
+// user.deleted —— 广播给所有在线连接，用于实时刷新列表。
+message UserDeleted {
+  string id = 1;
+}
+
+// user.error —— 错误。
+message UserError {
+  int32  code    = 1;
+  string message = 2;
+}

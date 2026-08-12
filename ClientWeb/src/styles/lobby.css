@@ -1,0 +1,229 @@
+/* ─── Xiangqi Lobby ─── */
+.xiangqi-lobby {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+.lobby-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+.lobby-header h1 {
+  margin: 0;
+}
+.room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+.room-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.room-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.room-id {
+  font-family: monospace;
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.room-players {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+.room-status {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.room-status.open { color: #3fb950; }
+.room-status.playing { color: #d29922; }
+.room-card__hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+/* 房间卡片的「观战 / 强制解散」按钮行 —— flex 横排,gap 8。
+   显式给一个 actions 容器(目前只有超管才会用到),未来如果还有其它
+   房间级操作(例如「复制房间号」「举报」)可以塞进来。 */
+.room-card__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--muted);
+}
+.empty-state .sub {
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+/* ─── Room list table (shared RoomListTable, 5+1 款游戏大厅共用) ───
+   取代 .room-grid/.room-card 卡片网格,改为列表/表格:房间编号 / 房间名称 /
+   创建时间 / 人数 / 状态 / 操作,表头可排序,底部带分页(10/20/50/100)。 */
+.room-list-wrap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+.room-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.room-list-th {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--card);
+}
+.room-list-th--sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.12s;
+}
+.room-list-th--sortable:hover {
+  color: var(--accent);
+}
+.room-list-th--actions {
+  text-align: right;
+}
+.room-list-row {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.room-list-row:last-child {
+  border-bottom: none;
+}
+.room-list-row[role='button'] {
+  cursor: pointer;
+}
+.room-list-row[role='button']:hover {
+  background: rgba(127, 127, 127, 0.08);
+}
+.room-list-td {
+  padding: 10px 12px;
+  vertical-align: middle;
+}
+.room-list-td--id {
+  white-space: nowrap;
+}
+.room-list-id-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+.room-list-copy-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 12px;
+  border-radius: 3px;
+  margin-left: 2px;
+  transition: color 0.12s, background 0.12s;
+}
+.room-list-copy-btn:hover {
+  color: var(--accent);
+  background: rgba(127, 127, 127, 0.12);
+}
+.room-list-td--name {
+  font-weight: 500;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.room-list-muted {
+  color: var(--muted);
+}
+.room-list-td--created {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.room-list-td--players {
+  font-weight: bold;
+  white-space: nowrap;
+}
+.room-list-spec-count {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: normal;
+}
+.room-list-td--actions {
+  text-align: right;
+  white-space: nowrap;
+  /* BUG-FORCEDISBAND-LAYOUT FIX (Round 24): was `display: flex` here.
+   * Setting display:flex on a <td> element is non-conforming — Chrome
+   * falls back to display:table-cell, while the inline buttons (without a
+   * wrapper) still got horizontal-aligned, but the moment any child grew
+   * (e.g. ConfirmModal rendered inline as a fallback before portal-ising),
+   * the row height jumped. Container moved to .room-list-actions. */
+}
+.room-list-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.room-list-pagesize {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.room-list-pagesize select {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+  color: inherit;
+  font-size: 13px;
+}
+.room-list-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.room-list-pageinfo {
+  font-size: 13px;
+  color: var(--muted);
+  min-width: 90px;
+  text-align: center;
+}
+.room-list-empty {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--muted);
+}
+.room-list-empty .sub {
+  font-size: 13px;
+  margin-top: 8px;
+}
+

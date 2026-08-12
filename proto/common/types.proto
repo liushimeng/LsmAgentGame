@@ -1,0 +1,37 @@
+// LsmWebGame — 通用类型定义
+//
+// 跨模块共享的基础类型定义。各游戏/模块不应在此文件中添加游戏专属类型。
+
+syntax = "proto3";
+
+package lsm.common;
+
+option go_package = "LsmWebGame/proto/pb/common";
+
+// Position —— 棋盘坐标（棋类游戏通用）
+message Position {
+  int32 x = 1;  // 列（file），0-indexed
+  int32 y = 2;  // 行（rank），0-indexed
+}
+
+// PlayerBase —— 玩家基础信息（各模块复用）
+message PlayerBase {
+  string user_id = 1;
+  string nickname = 2;
+  string avatar = 3;
+}
+
+// RoomBase —— 房间基础信息
+message RoomBase {
+  string id = 1;
+  string game_kind = 2;
+  int32 capacity = 3;
+  string status = 4;  // "open" | "playing" | "closed" | "over"
+}
+
+// PageInfo —— 分页元数据
+message PageInfo {
+  int32 total = 1;
+  int32 skip = 2;
+  int32 limit = 3;
+}

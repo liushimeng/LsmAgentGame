@@ -1,0 +1,110 @@
+// LsmWebGame — 用户列表 WebSocket 帧契约
+//
+// 所有帧 type 字段以 "user." 开头。
+//
+// 字段可见性按调用者 user_type 分级：
+//   普通用户(1)：仅 id / nickname / online
+//   管理员(2)：完整字段（不含密码）+ online
+//   超管(3)：同管理员 + can_delete（标记可删除的行）
+
+syntax = "proto3";
+
+package lsm.user;
+
+option go_package = "LsmWebGame/proto/pb/user";
+
+// ───────────── client → server ─────────────
+
+// user.list —— 请求用户列表
+message UserListReq {
+  int32 skip = 1;
+  int32 limit = 2;
+  string sort_by = 3;       // "created_at" | "nickname" | "last_login_at"
+  string sort_order = 4;    // "asc" | "desc"
+  bool online_only = 5;     // 仅显示在线用户
+  string keyword = 6;       // 昵称/账号搜索关键词
+}
+
+// user.delete —— 删除用户（仅超级管理员）
+message UserDeleteReq {
+  string id = 1;
+}
+
+// user.batch_delete —— 批量删除（仅超级管理员）
+message UserBatchDeleteReq {
+  repeated string ids = 1;
+}
+
+// user.revoke_super —— 撤销超级管理员权限（仅超级管理员）
+message UserRevokeSuperReq {
+  string id = 1;
+}
+
+// ───────────── server → client ─────────────
+
+// 单条用户记录。普通用户只会收到 id / nickname / online 三个字段。
+message UserItem {
+  string id               = 1;
+  string nickname         = 2;
+  bool   online           = 3;  // 是否有活跃 WS 连接
+
+  // 以下字段仅管理员/超管可见
+  string account          = 4;
+  string phone            = 5;
+  string email            = 6;
+  int32  user_type        = 7;  // 1普通 / 2管理 / 3超管
+  string my_invite_code   = 8;
+  int32  referral_count   = 9;
+  string referrer_user_id = 10;
+  int64  created_at       = 11; // unix 秒
+  int64  last_login_at    = 12; // unix 秒，0 表示从未登录
+  bool   can_delete       = 13; // 仅超管视角下、且该行可删除时为 true
+}
+
+// user.list_resp —— 用户列表响应
+message UserListResp {
+  repeated UserItem users = 1;
+  int32 total             = 2;
+  int32 my_user_type      = 3; // 调用者自身的 user_type
+}
+
+// user.delete_resp —— 删除回执
+message UserDeleteResp {
+  string id = 1;
+  bool ok = 2;
+}
+
+// user.batch_delete_resp —— 批量删除回执
+message UserBatchDeleteResp {
+  int32 success_count = 1;
+  int32 fail_count = 2;
+  repeated string failed_ids = 3;
+}
+
+// user.revoke_super_resp —— 撤销超管回执
+message UserRevokeSuperResp {
+  string id = 1;
+  bool ok = 2;
+}
+
+// user.deleted —— 广播：某用户已被删除
+message UserDeleted {
+  string id = 1;
+}
+
+// user.role_changed —— 广播：用户角色变更
+message UserRoleChanged {
+  string user_id = 1;
+  int32 new_user_type = 2;
+}
+
+// user.kicked —— 踢人通知
+message UserKicked {
+  string reason = 1;
+}
+
+// user.error —— 错误
+message UserError {
+  int32  code    = 1;
+  string message = 2;
+}

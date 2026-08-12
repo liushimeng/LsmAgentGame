@@ -1,0 +1,629 @@
+/* ──────────────────────────────────────────────────────────────────────────
+ * werewolf-modal.css (2026-07-30 §R210-04)
+ *
+ * 补齐 RoomCreateModal 的弹窗样式。原代码用了 className="ww-create-modal"
+ * 但 CSS 缺失(globals.css 也没 @import),弹窗塌成普通文档流 div,
+ * 跟房间列表页重叠显示,体感"创建后卡住"。
+ *
+ * 配套 Lesson(不写进 CLAUDE.md):
+ *   - 组件加新 className 时必须 grep CSS 目录验证;否则效果等同"页面元素
+ *     存在但完全错位",截图才能发现,自动化不报。
+ *   - 弹窗的遮罩 + 居中布局不能依赖父容器的 flex/grid,必须自给自足。
+ *
+ * z-index 约定(对齐 CLAUDE.md §7.1):
+ *   GlobalToast: 1000
+ *   普通 modal:   200
+ *   ww-create-modal: 1100  (在 toast 之上,覆盖一切的"创建"交互)
+ * ────────────────────────────────────────────────────────────────────────── */
+
+.ww-create-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
+  animation: ww-create-modal-fade-in 120ms ease-out;
+}
+
+@keyframes ww-create-modal-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.ww-create-modal__card {
+  background: var(--ww-bg-card, #1f1f23);
+  color: var(--ww-text, #f5f5f7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  /* §20260808-01: 720 → 760px。多出的 40px 用于承载 ROW1/ROW2 的横向合并,
+     是"横向换纵向"的空间来源。 */
+  width: min(760px, 100%);
+  /* §20260808-01: 矮屏多拿 16px(48 → 32);高屏封顶 860px 防止弹窗被拉得过长。 */
+  max-height: min(calc(100vh - 32px), 860px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.ww-create-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* §20260808-01: 16px 20px → 10px 16px(标题栏减高,用户诉求 ②)。 */
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ww-create-modal__header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ww-create-modal__close {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  min-height: 28px;
+  min-width: 28px;
+  transition: background 120ms;
+}
+.ww-create-modal__close:hover { background: rgba(255, 255, 255, 0.08); }
+
+.ww-create-modal__body {
+  padding: 10px 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* §20260808-01: flex:1 + min-height:0 是"座位列表吃掉所有剩余高度"的前提。
+     min-height:0 不可省 —— flex item 默认 min-height:auto 会拒绝收缩,
+     导致内层 overflow-y:auto 失效、滚动条跑到 body 外层(嵌套双滚动条)。 */
+  flex: 1;
+  min-height: 0;
+}
+
+.ww-create-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* grid 子项默认 min-width:auto,长模型名会撑破列宽 → 显式复位。 */
+  min-width: 0;
+}
+
+.ww-create-modal__field > span {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.ww-create-modal__field input[type="text"],
+.ww-create-modal__field select,
+.ww-create-modal__field input[type="range"] {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: inherit;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+/* 2026-08-08 §20260808-02 — 原生 select 暗色主题 + 选中态可见。
+ *
+ * 浏览器对 `<select>` 的渲染分两段:
+ *   ① 关闭态(select 自身): 受我们自己 CSS 控制 — 上面已用暗色半透明白底。
+ *   ② 展开态(下拉弹出框 + option): 由浏览器/操作系统接管,**完全不继承**
+ *      color: inherit、background: rgba(255,255,255,0.04)。
+ *
+ * 历史缺陷:Chrome / Safari / Firefox 默认展开态是白底黑字,而我们的 select
+ * 文字色是浅色 (`color: inherit` → `#f5f5f7`),用户报告「白底白字看不见」,
+ * 鼠标悬停时 Chrome 反白选中(option 默认 :hover 高亮为浅蓝底),文字由
+ * 黑色变成白色 → 选中时反而更看不见。
+ *
+ * 修复方案 — 三管齐下:
+ *   A. `color-scheme: dark` — 告诉浏览器该表单使用暗色主题,Chrome 95+ /
+ *      Firefox 100+ / Safari 15+ 会自动用深色背景渲染下拉弹层(具体色由
+ *      UA 决定,但至少不会是白底)。
+ *   B. 显式给 `option` 设深色背景 + 浅色文字 — 即使浏览器忽略 color-scheme,
+ *      也保证所有 option 都有合理的深底浅字配色。
+ *   C. `option:checked` + `option:hover` 给强视觉反馈,选中/悬停时高亮
+ *      紫底白字,与未选中状态对比明显。
+ *   D. select 自身的「当前选中值」也加 `:checked` 高亮,关闭态即可看出
+ *      「这是已选项」,不需要展开下拉。
+ *   E. 隐藏默认的展开箭头,避免在深色 select 上显示黑色/白色三角形不一致。
+ */
+.ww-create-modal select {
+  color-scheme: dark;
+  /* 关闭态:自己的下拉箭头在 Firefox 上可能是黑色,在 Chrome 上可能是浅色,
+     强制给个 SVG 箭头保证暗色背景下可见。 */
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23d0d0d6' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
+}
+.ww-create-modal__field select:disabled {
+  /* 法官模式选「真人」时该列 disabled — 仍保留列宽,显灰。 */
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ww-create-modal select option {
+  /* option 必须显式设背景+前景 —— 不继承父 select 颜色。 */
+  background-color: #1f1f23;
+  color: #f5f5f7;
+  padding: 6px 10px;
+  font-weight: 500;
+}
+/* 选中 / 悬停:紫底白字,与未选中对比明显 */
+.ww-create-modal select option:checked,
+.ww-create-modal select option:hover,
+.ww-create-modal select option:focus {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9) !important;
+  color: #ffffff !important;
+  font-weight: 700;
+}
+/* select 关闭态:用 :has(option:checked) 不太通用,改用加粗+浅紫边
+   暗示当前已选;展开后浏览器自身会有更好的视觉反馈。 */
+.ww-create-modal select:not(:disabled) {
+  font-weight: 500;
+}
+
+.ww-create-modal__field input[type="range"] {
+  padding: 0;
+  accent-color: var(--ww-accent, #8b5cf6);
+}
+
+.ww-create-modal__hint {
+  color: var(--ww-muted, #888);
+  font-size: 13px;
+  margin: 0;
+}
+
+.ww-create-modal__error {
+  /* 内联红色错误条,按 CLAUDE.md §7.1:失败必须就地显示,弹窗不关。 */
+  background: rgba(255, 80, 80, 0.12);
+  border: 1px solid rgba(255, 80, 80, 0.45);
+  color: #ff8a8a;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  margin: 4px 0;
+}
+
+/* ─── §20260808-01 横向合并行 ─────────────────────────────────────────────
+ * ROW1 = 房间名 + AI 数量滑块;ROW2 = 我的角色 + 法官模式 + 法官模型。
+ * 把原本纵向堆叠的 5 个区块压成 2 行,省出约 200px 让给 AI 座位列表。 */
+.ww-create-modal__row {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 12px;
+  align-items: end;
+}
+
+.ww-create-modal__row--3 {
+  /* 我的角色(定宽) / 法官模式 radio(内容宽) / 法官模型(吃掉剩余空白) —
+     即用户诉求 ③「法官那行后面大量剩余空间放模型选择」。 */
+  grid-template-columns: 180px auto minmax(0, 1fr);
+}
+
+/* 全 AI 房(无"我的角色",剩法官模式 + 模型)。 */
+.ww-create-modal__row--2 {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+/* AI=0 全人类房(无法官,只剩"我的角色")—— 保持与上方等宽,右侧留白。 */
+.ww-create-modal__row--1 {
+  grid-template-columns: 180px minmax(0, 1fr);
+}
+
+/* 标签与内联 hint 同排:左标签 / 右提示,不额外占一行。 */
+.ww-create-modal__field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ww-create-modal__field-head > span:first-child {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.ww-create-modal__field-head .ww-create-modal__hint {
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* ─── §20260808-01 AI 座位弹性区 ───────────────────────────────────────── */
+.ww-create-modal__seatblock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* 弹性主体:吃掉固定块之后的全部剩余高度(替代旧的死值 max-height:280px)。 */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.ww-create-modal__seatblock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  opacity: 0.85;
+  min-height: 22px;
+}
+
+.ww-create-modal__reshuffle {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: inherit;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  min-height: 24px;
+  transition: background 120ms;
+}
+.ww-create-modal__reshuffle:hover { background: rgba(255, 255, 255, 0.08); }
+
+.ww-create-modal__seats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* §20260808-01: 旧 max-height:280px 是死值 —— 高屏浪费、矮屏挤爆并触发
+     body 外层滚动(嵌套双滚动条)。改为弹性 + 下限,滚动条只出现在列表内部。 */
+  flex: 1 1 auto;
+  min-height: 96px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 6px;
+}
+
+/* §20260808-01 缺陷 A 修复:JSX 渲染 4 个子元素(序号/座位/模型/角色),
+   旧 CSS 只声明 3 列 → 角色 select 被 grid 自动放置塞进隐式行的第 1 列,
+   宽度仅 60px 文字截断,且每个座位行高度翻倍。角色 select 于
+   2026-08-06 §20260806-03 新增时未同步本文件。此处补齐为 4 列显式。
+   minmax(0,1fr) 而非 1fr:grid item 默认 min-width:auto,长模型名
+   (如「Qwen 3.7-Plus-and-Max」)会把列撑破导致横向溢出。 */
+.ww-create-modal__seatrow {
+  display: grid;
+  grid-template-columns: 52px 88px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  font-size: 12.5px;
+}
+
+.ww-create-modal__seatrow select {
+  padding: 3px 6px;
+  font-size: 12.5px;
+  min-width: 0;
+}
+
+.ww-create-modal__seatidx {
+  font-weight: 600;
+  opacity: 0.85;
+  font-size: 12px;
+}
+
+.ww-create-modal__footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 9px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ww-create-modal__submit,
+.ww-create-modal__cancel {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.ww-create-modal__submit {
+  background: var(--ww-accent, #8b5cf6);
+  color: #fff;
+}
+.ww-create-modal__submit[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ww-create-modal__cancel {
+  background: transparent;
+  color: inherit;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* §20260808-01: 法官由独立「卡片」降级为 ROW2 的行内组 —— 去掉 border /
+   背景 / 内边距,使其能与「我的角色」「法官模型」平铺同一行。
+   原 .ww-create-modal__judge 卡片样式已不再使用。 */
+.ww-create-modal__judge-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ww-create-modal__judge-title {
+  font-weight: 600;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.ww-create-modal__judge-modes {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  /* 与同排的 select 高度对齐(select 为 5px padding + 13px 字号 ≈ 27px)。 */
+  min-height: 27px;
+  align-items: center;
+}
+
+.ww-create-modal__judge-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* BUG-R227-P3-01 (2026-08-01): 全局 input{width:100%;padding:8px 10px} 同时作用于
+   radio,导致单选按钮被撑到 41–45px 挤压同排文本成竖排。显式复位 radio 的
+   width / padding / flex,保持 label 单行 21px / radio 13px(浏览器实测验证)。
+   同模式可推广到 .ww-create-modal 内其他复用全局 input{width:100%} 的
+   radio / checkbox 场景(本次仅法官卡修复,其余排查纳入后续 P3)。 */
+.ww-create-modal__judge-mode input[type="radio"] {
+  width: auto;
+  padding: 0;
+  flex: none;
+}
+
+/* §20260811-09 U2 — Agent 难度分级配置卡(4 档 radio)。
+   沿用 judge 卡同款 inline 排版,保证行高与上方对齐。hint 单独占行
+   (12px,opacity 0.75),不让难度说明吃掉法官区的水平空间。 */
+.ww-create-modal__difficulty-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  margin-top: 4px;
+}
+
+.ww-create-modal__difficulty-title {
+  font-weight: 600;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.ww-create-modal__difficulty-modes {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 27px;
+  align-items: center;
+}
+
+.ww-create-modal__difficulty-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ww-create-modal__difficulty-mode input[type="radio"] {
+  width: auto;
+  padding: 0;
+  flex: none;
+}
+
+.ww-create-modal__difficulty-hint {
+  font-size: 12px;
+  opacity: 0.75;
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
+/* 房间信息面板难度徽章(§26 状态徽章色相规约 — 难度档作为语义色)。
+   复用「bot」色相近的青绿 family,但用饱和度区分:
+   easy=绿,normal=蓝,hard=橙,hell=红。色相相同 + 字白色,符合 WCAG AA ≥5.0:1。 */
+.ww-room-difficulty-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.ww-room-difficulty-badge--easy {
+  background: rgba(46, 160, 67, 0.6);
+}
+
+.ww-room-difficulty-badge--normal {
+  background: rgba(56, 139, 253, 0.6);
+}
+
+.ww-room-difficulty-badge--hard {
+  background: rgba(217, 119, 6, 0.7);
+}
+
+.ww-room-difficulty-badge--hell {
+  background: rgba(207, 34, 46, 0.6);
+}
+
+/* §20260811-09 U1 — AI 实时解说开关 + 风格 radio。
+   与法官/难度卡同款 inline 排版;checkbox + 风格 radio 复用 §26.5 三件套
+   (JSX + CSS + 选中态对比度 — .is-selected hover 仍肉眼可辨)。 */
+.ww-create-modal__commentary-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 27px;
+  margin-top: 4px;
+}
+
+.ww-create-modal__commentary-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ww-create-modal__commentary-toggle input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  flex: none;
+}
+
+.ww-create-modal__commentary-styles {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.ww-create-modal__commentary-style {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.ww-create-modal__commentary-style input[type="radio"] {
+  width: auto;
+  padding: 0;
+  flex: none;
+}
+
+/* 观战模式解说席面板(右抽屉式)。
+   复用 HistoryDrawer 同款色板;暗色背景下白字 + 紫蓝高亮。 */
+.ww-commentary-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(56, 139, 253, 0.06);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.ww-commentary-panel__empty {
+  font-size: 12px;
+  opacity: 0.65;
+  text-align: center;
+  padding: 14px 4px;
+}
+
+.ww-commentary-panel__line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  color: #f0f0f0;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.ww-commentary-panel__line--pro {
+  border-left: 3px solid rgba(56, 139, 253, 0.7);
+}
+
+.ww-commentary-panel__line--fun {
+  border-left: 3px solid rgba(217, 119, 6, 0.7);
+}
+
+.ww-commentary-panel__style {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ww-commentary-panel__text {
+  flex: 1;
+}
+
+/* §20260808-01: 底部合并 hint —— judge.hint 与 rolePick.hint 合成一行,
+   超出省略,全文走 title 属性。原本两条各占一行(rolePick.hint 长 40 字
+   常折 2 行),合计吃掉约 72px 却几乎不承载决策信息。 */
+.ww-create-modal__foot-hint {
+  color: var(--ww-muted, #888);
+  font-size: 11.5px;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: none;
+}
+
+/* ─── §20260808-01 窄屏降级(两级断点) ─────────────────────────────────────
+ * 断点值由实测反推,不取整数直觉值:
+ *
+ * 第一级 700px —— ROW1/ROW2 退回单列。
+ *   ROW2 三列需 180(我的角色) + ~200(法官 radio) + 24(gap) = 404px,
+ *   剩余留给"法官模型"。card = min(760, 100vw - 48),故 700px 视口
+ *   → card 652 → 模型列仅剩 ~230px,再窄即不可用。
+ *
+ * 第二级 520px —— 座位行由 4 列退回 3 列 + 角色 select 显式跨列。
+ *   座位行固定开销 = 52 + 88 + 18(3 个 gap) = 158px;
+ *   520px 视口 → card 472 → 列表内宽 ~426 → 两个 select 各 (426-158)/2 = 134px,
+ *   刚好容下最长模型名。**不要**把这级并到 700px —— 实测 760px 视口下
+ *   4 列每列仍有 259px 余量,过早降级会平白让座位行高度从 24px 翻到 54px,
+ *   与本次"省高度"的目标背道而驰。 */
+@media (max-width: 700px) {
+  .ww-create-modal__row,
+  .ww-create-modal__row--3,
+  .ww-create-modal__row--2,
+  .ww-create-modal__row--1 {
+    grid-template-columns: 1fr;
+  }
+
+  .ww-create-modal__foot-hint {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 520px) {
+  .ww-create-modal__seatrow {
+    grid-template-columns: 48px minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  /* 必须用 grid-column 显式跨列,不能依赖 grid 自动放置 —— 后者正是
+     缺陷 A(角色 select 落进隐式行被压成 52px 宽)的成因。 */
+  .ww-create-modal__seatrow > select:nth-of-type(3) {
+    grid-column: 2 / -1;
+  }
+}

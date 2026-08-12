@@ -1,0 +1,69 @@
+// LsmWebGame — 通用消息定义
+//
+// 所有 WebSocket 帧统一通过 Envelope 包装；模块化消息按功能分类到独立
+// 的 .proto 文件中（chat/ / room/ / user/ / game/*/ 等）。
+//
+// 帧格式：
+//   JSON 模式 ：websocket.TextMessage，整帧 JSON 序列化 {type, seq, payload}
+//   Proto 模式：websocket.BinaryMessage，整帧 Envelope protobuf 二进制
+
+syntax = "proto3";
+
+package lsm.common;
+
+option go_package = "LsmWebGame/proto/pb/common";
+
+// ─────────────────── Envelope ───────────────────
+
+// Envelope —— 单一 WS 帧容器，所有客户端/服务端消息必须包装在此消息中。
+// type 字段命名规范：<module>.<action>，如 "chat.send"、"game.werewolf_vote"
+message Envelope {
+  // 消息类型（对应各模块的消息名）
+  string type = 1;
+  // 客户端请求序号，用于匹配请求-响应对
+  int64 seq = 2;
+  // 消息载荷（protobuf 二进制字节，具体结构由 type 决定）
+  bytes payload = 3;
+}
+
+// ─────────────────── 通用消息 ───────────────────
+
+// ErrorPayload —— 通用错误响应
+message ErrorPayload {
+  // 错误码，对应 errcode/errcode.go 中的常量
+  int32 code = 1;
+  // 错误描述
+  string message = 2;
+}
+
+// HeartbeatPayload —— 服务端周期性心跳载荷
+message HeartbeatPayload {
+  // 服务端当前时间（Unix 毫秒）
+  int64 server_ts = 1;
+}
+
+// AckPayload —— 通用确认回显
+message AckPayload {
+  // 是否成功
+  bool ok = 1;
+  // 可选消息
+  string message = 2;
+}
+
+// ProtoCapability —— 协议协商：客户端声明支持 proto 二进制模式
+// 服务端收到后回 ProtoCapabilityAck
+// 帧类型：system.proto_capability / system.proto_ack
+message ProtoCapability {
+  // 客户端支持的最高 proto 协议版本（当前为 1）
+  int32 version = 1;
+  // 支持的编码格式列表（"binary" / "json"）
+  repeated string encodings = 2;
+}
+
+// ProtoCapabilityAck —— 服务端确认 proto 能力
+message ProtoCapabilityAck {
+  // 协商后的协议版本
+  int32 version = 1;
+  // 服务端选择的编码格式
+  string encoding = 2;
+}

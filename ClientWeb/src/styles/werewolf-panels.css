@@ -1,0 +1,1642 @@
+/* === 2026-07-09 §13 增强 — 阶段时钟 PhaseClock 组件样式 === */
+.phase-clock {
+  display: inline-flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: rgba(40, 30, 60, 0.85);
+  color: #f0e6d2;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.phase-clock.is-overdue {
+  background: rgba(120, 30, 30, 0.85);
+  animation: phase-clock-pulse 1.5s infinite;
+}
+
+.phase-clock__time {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes phase-clock-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* === §115 房间聊天 — 活动事件条 === */
+.game-chat-activity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+  padding: 4px 8px;
+  border-left: 3px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--muted, #475569);
+  transition: background 0.2s;
+}
+.game-chat-activity--info {
+  border-left-color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.10);
+}
+.game-chat-activity--success {
+  border-left-color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  font-weight: 500;
+}
+.game-chat-activity--warn {
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  font-weight: 500;
+}
+.game-chat-activity--error {
+  border-left-color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+  font-weight: 600;
+}
+/* 阶段色:夜晚=紫、黎明=橙、PK=橙、最后遗言=灰;由 game-chat-activity--<phase> 修饰 */
+.game-chat-activity--night {
+  border-left-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.10);
+}
+.game-chat-activity--day {
+  border-left-color: #eab308;
+  background: rgba(234, 179, 8, 0.10);
+}
+.game-chat-activity__icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.game-chat-activity__text {
+  flex: 1;
+  word-break: break-word;
+}
+.game-chat-activity__time {
+  font-size: 10px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+/* 2026-08-05 §Agent聊天显示优化 F4 — 遗言(death_lyric_spoken)发言体渲染。
+ * 遗言在语义上是玩家的一次真正公开发言,但后端走 chat.activity 投递
+ * (避免与 bot 500K 队列重复,见设计文档 §4「不做的事」)。
+ * 若沿用系统小灰条样式,人类在 13 人局刷屏中会完全略过一段关键信息。
+ * 这里把它升格为「发言体」:正文字号(13px)+ 💀 遗言徽章 + 暗红强调条。 */
+.game-chat-activity--speech {
+  align-items: flex-start;
+  padding: 6px 8px;
+  border-left-width: 3px;
+  border-left-color: #b45c5c;
+  background: rgba(180, 92, 92, 0.12);
+  color: var(--text, #e6ddcd);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.game-chat-activity--speech .game-chat-activity__icon {
+  font-size: 15px;
+}
+.game-chat-activity--speech .game-chat-activity__text {
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.game-chat-activity__speech-tag {
+  flex-shrink: 0;
+  font-size: 11px;
+  /* 2026-08-08 §20260808-02 — 「遗言」徽章对比度提升。原淡红字 + 暗红底
+     (都在红色色域)实测约 2.9:1。改为白字 + 更不透明暗红底,玩家一眼
+     识别为「这是遗言,不是普通系统消息」。 */
+  font-weight: 700;
+  padding: 0 5px;
+  border-radius: 3px;
+  color: #ffffff;
+  background: rgba(180, 92, 92, 0.7);
+  border: 1px solid rgba(220, 120, 120, 0.8);
+}
+
+/* ─────────────────── 2026-07-09 §13-bugfix — 500K 队列查看按钮 + 模态框 ─────────────────── */
+.werewolf-game .room-info-panel__queue-btn {
+  font-size: 11px;
+  padding: 4px 8px;
+  margin: 4px 0 6px auto;
+  display: block;
+  border-radius: 4px;
+  border: 1px solid rgba(120, 120, 120, 0.4);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.werewolf-game .room-info-panel__queue-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.chat-queue-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-queue-modal {
+  width: min(880px, 96vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-bg, #1e1e1e);
+  color: var(--surface-text, #eee);
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.chat-queue-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.chat-queue-modal__header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.chat-queue-modal__close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+}
+.chat-queue-modal__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+}
+.chat-queue-modal__toolbar input[type="number"] {
+  width: 80px;
+  margin-left: 4px;
+}
+.chat-queue-modal__error {
+  padding: 16px;
+  color: #ffb4b4;
+  font-size: 13px;
+}
+.chat-queue-modal__empty {
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  opacity: 0.7;
+}
+.chat-queue-modal__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 16px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.chat-queue-modal__stats strong {
+  margin-right: 4px;
+}
+.chat-queue-modal__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 16px 16px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.chat-queue-modal__item {
+  padding: 4px 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.chat-queue-modal__item.is-whisper {
+  background: rgba(80, 80, 200, 0.08);
+}
+.chat-queue-modal__item.is-activity {
+  background: rgba(200, 160, 60, 0.08);
+  font-style: italic;
+}
+.chat-queue-modal__seq {
+  display: inline-block;
+  min-width: 48px;
+  color: rgba(255, 255, 255, 0.45);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+.chat-queue-modal__prefix {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+}
+.chat-queue-modal__who {
+  font-weight: 600;
+}
+.chat-queue-modal__text {
+  flex: 1;
+  word-break: break-word;
+}
+
+/* ─────────────────── WerewolfRestartVotePanel (2026-07-10) ─────────────────── */
+.restart-vote {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: rgba(20, 24, 32, 0.85);
+  border-radius: 12px;
+  color: #f1f5f9;
+  margin: 16px 0;
+}
+.restart-vote__banner {
+  padding: 16px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+.restart-vote__banner--passed { background: rgba(34, 197, 94, 0.15); border-color: rgba(34, 197, 94, 0.5); }
+.restart-vote__banner--rejected { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.5); }
+.restart-vote__banner--timeout { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.5); }
+.restart-vote__title { margin: 0 0 8px; font-size: 22px; font-weight: 700; }
+.restart-vote__subtitle { margin: 4px 0; opacity: 0.9; line-height: 1.5; }
+.restart-vote__countdown {
+  margin-top: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fbbf24;
+  font-variant-numeric: tabular-nums;
+}
+.restart-vote__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.restart-vote__btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.6);
+  color: #e2e8f0;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.restart-vote__btn:hover:not(:disabled) { transform: translateY(-1px); }
+.restart-vote__btn--yes.is-active { background: rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); }
+.restart-vote__btn--no.is-active { background: rgba(239, 68, 68, 0.4); border-color: rgba(239, 68, 68, 0.8); }
+.restart-vote__btn--abstain.is-active { background: rgba(148, 163, 184, 0.4); border-color: rgba(148, 163, 184, 0.8); }
+.restart-vote__btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.restart-vote__voted {
+  margin-left: 8px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+.restart-vote__spectator {
+  font-size: 14px;
+  color: #94a3b8;
+  font-style: italic;
+}
+.restart-vote__columns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.restart-vote__col {
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+.restart-vote__col h3 { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
+.restart-vote__col--yes h3 { color: #4ade80; }
+.restart-vote__col--no h3 { color: #f87171; }
+.restart-vote__col--abstain h3 { color: #94a3b8; }
+.restart-vote__col ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  font-variant-numeric: tabular-nums;
+}
+.restart-vote__col li.is-empty { opacity: 0.4; }
+.restart-vote__spec {
+  font-size: 12px;
+  opacity: 0.6;
+  margin: 0;
+  text-align: center;
+}
+@media (max-width: 720px) {
+  .restart-vote__columns { grid-template-columns: 1fr; }
+}
+
+/* ─────────────────── 2026-07-10 12 人局 — 白痴翻牌 / 警徽流徽章 ─────────────────── */
+.werewolf-seat__idiot-badge {
+  position: absolute;
+  bottom: -6px;
+  right: -6px;
+  font-size: 14px;
+  line-height: 1;
+  background: rgba(120, 80, 200, 0.25);
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ww-agent-panel__badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+.ww-agent-panel__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.ww-agent-panel__badge--sheriff { background: rgba(255, 200, 100, 0.25); color: #ffd76b; }
+.ww-agent-panel__badge--idiot { background: rgba(120, 80, 200, 0.25); color: #d8b8ff; }
+.ww-agent-panel__sheriff-stream {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 4px 8px;
+  margin: 4px 0;
+  font-size: 12px;
+  background: rgba(255, 200, 100, 0.08);
+  border-radius: 6px;
+}
+.ww-agent-panel__stream-slot { font-weight: 600; color: #ffd76b; }
+.side-counts .value {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.side-count { font-weight: 600; padding: 0 6px; border-radius: 6px; }
+.side-count--divine { color: #ffd76b; }
+.side-count--plain { color: #9ad8ff; }
+.side-count--wolf { color: #ff8888; }
+
+/* ─────────────────── SheriffStreamPanel 警徽流声明模态框 ─────────────────── */
+/* 2026-07-24: z-index 收敛到 --ww-z-critical(1000)。这类「必须立即做决策」的
+ * 关键 modal 高于抽屉(300)与结算(200),与 GlobalToast(1000,body 级)同级。 */
+.sheriff-stream,
+.idiot-reveal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ww-z-critical, 1000);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+  animation: fadeIn 0.2s ease-out;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.sheriff-stream__card,
+.idiot-reveal__card {
+  width: min(480px, 94vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: linear-gradient(160deg, #2a2030, #1a1420);
+  border: 1px solid rgba(255, 200, 100, 0.4);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+}
+.sheriff-stream__header,
+.idiot-reveal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.sheriff-stream__header h3,
+.idiot-reveal__header h2 { margin: 0; font-size: 18px; }
+.sheriff-stream__close {
+  background: none;
+  border: none;
+  color: #ccc;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sheriff-stream__status {
+  font-size: 13px;
+  color: #cfc4e0;
+  margin: 6px 0 12px;
+}
+.sheriff-stream__readonly {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 13px;
+  color: #cfc4e0;
+  margin-bottom: 10px;
+}
+.sheriff-stream__slot {
+  border: 1px solid rgba(255, 200, 100, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+.sheriff-stream__slot-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.sheriff-stream__slot-label { color: #ffd76b; font-weight: 700; }
+.sheriff-stream__slot-current { color: #cfc4e0; }
+.sheriff-stream__grid { padding: 0; margin-bottom: 8px; }
+
+/* ─────────────────── IdiotRevealPanel 白痴翻牌全屏遮罩 ─────────────────── */
+.idiot-reveal__card {
+  width: min(440px, 94vw);
+  text-align: center;
+  border-color: rgba(160, 110, 230, 0.5);
+}
+.idiot-reveal__countdown {
+  font-size: 14px;
+  color: #d8b8ff;
+  font-weight: 600;
+}
+.idiot-reveal__prompt { font-size: 14px; color: #cfc4e0; margin: 10px 0 16px; }
+.idiot-reveal__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.idiot-reveal__outcome {
+  font-size: 16px;
+  font-weight: 700;
+  padding: 14px;
+  border-radius: 10px;
+  margin: 12px 0;
+}
+.idiot-reveal__outcome.is-reveal { background: rgba(120, 80, 200, 0.3); color: #d8b8ff; }
+.idiot-reveal__outcome.is-skip { background: rgba(120, 120, 120, 0.25); color: #cfc4e0; }
+.idiot-reveal__spectator { font-size: 13px; color: #b0a8c0; }
+
+
+/* === 2026-08-08 §20260808-02 — LastWordsStage 遗言阶段全员可见进度条 ===
+ * 修复缺陷 A/B:phase==='death_lyric' 时,存活玩家/死者/观战者在中栏顶部
+ * 看到遗言队列进度 + 当前遗言座位 + 逐座位状态 chip。
+ * 暗底白字,正文对比度 ≥ 4.5:1、徽章底透明度 ≥ 0.45(§26.4);
+ * 状态色相沿用既有库(紫=仪式性节点 / 灰=死亡灰),禁新创色相。 */
+.last-words-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  background: linear-gradient(135deg, rgba(60, 42, 84, 0.85), rgba(36, 28, 52, 0.85));
+  border: 1px solid rgba(167, 139, 250, 0.45);
+  border-radius: 10px;
+  color: #f0e8d8;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.last-words-stage__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.last-words-stage__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #e6dbff;
+}
+.last-words-stage__countdown {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 700;
+  color: #d0c890;
+}
+.last-words-stage__countdown.is-critical {
+  color: #ff9c9c;
+}
+.last-words-stage__progress {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 13px;
+}
+.last-words-stage__dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.last-words-stage__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(167, 139, 250, 0.7);
+  background: transparent;
+}
+.last-words-stage__dot.is-done {
+  background: rgba(167, 139, 250, 0.85);
+}
+.last-words-stage__dot.is-current {
+  background: linear-gradient(90deg, rgba(167, 139, 250, 0.85) 50%, transparent 50%);
+}
+.last-words-stage__dot.is-pending {
+  background: transparent;
+}
+.last-words-stage__progress-text {
+  color: #cfc4e0;
+  font-weight: 600;
+}
+.last-words-stage__now-speaking {
+  color: #efe8ff;
+  font-weight: 600;
+}
+.last-words-stage__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.last-words-stage__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+}
+.last-words-stage__chip-name {
+  font-weight: 600;
+}
+.last-words-stage__chip-status {
+  font-weight: 700;
+}
+/* 已发表 — 死亡灰(§26.4 死亡=灰,底透明度 ≥ 0.45) */
+.last-words-stage__chip--spoken {
+  background: rgba(110, 110, 118, 0.6);
+  border: 1px solid rgba(160, 160, 170, 0.7);
+}
+/* 发言中 — 仪式性紫(§26.4 白痴翻牌紫沿用) */
+.last-words-stage__chip--speaking {
+  background: rgba(126, 87, 194, 0.6);
+  border: 1px solid rgba(167, 139, 250, 0.8);
+  box-shadow: 0 0 8px rgba(167, 139, 250, 0.45);
+}
+/* 已放弃 — 死亡灰,弱一档 */
+.last-words-stage__chip--skipped {
+  background: rgba(90, 90, 96, 0.5);
+  border: 1px solid rgba(140, 140, 148, 0.6);
+}
+/* 待发表 — 中性暗底 */
+.last-words-stage__chip--pending {
+  background: rgba(52, 44, 66, 0.6);
+  border: 1px solid rgba(120, 110, 140, 0.5);
+  color: #e2daee;
+}
+
+/* 2026-08-08 §20260808-02 — 当前遗言座位格高亮(缺陷 A)。
+ * box-shadow 层叠而非替换,与既有 is-selected 光晕不冲突;
+ * box-shadow 不受 is-night brightness 滤镜衰减(§26.2 反模式 4)。
+ * 座位格样式本体在 werewolf.css;修饰类放在本文件与 Stage 同段便于维护。 */
+.werewolf-seat--last-words-speaking {
+  box-shadow:
+    0 0 0 2px rgba(167, 139, 250, 0.9),
+    0 0 14px rgba(167, 139, 250, 0.55);
+}
+.werewolf-seat--last-words-speaking::after {
+  content: '🕯';
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 14px;
+  pointer-events: none;
+  filter: none;
+}
+
+/* 2026-08-08 §20260808-02 — 死座上已发表遗言的 💀 发言徽章对比度补偿。
+ * 死座整体 grayscale(0.8) brightness(0.55) 滤镜会冲淡 last_speech 气泡,
+ * 单独提升死座内发言气泡的对比度,让「该座位说过遗言」可辨。 */
+.werewolf-seat.is-dead .werewolf-seat__speech {
+  background: rgba(30, 24, 40, 0.75);
+  border-color: rgba(167, 139, 250, 0.5);
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+ * 2026-08-09 §20260808-03 — 人类玩家死亡守卫 UI 通用样式 + PropPanel 折叠/死亡。
+ *
+ * 设计动机:
+ *   - 后端用 ErrDeadPlayerAction 40112 兜底拒收死亡玩家动作(§R196 P1 教训)。
+ *     但 UI 不显示「你已死亡」会让玩家反复点击按钮、误以为功能坏了。
+ *   - 死亡面板统一沿用 .werewolf-action-panel--dead 修饰类(暗灰底 + ☠ 角标 + 透明度),
+ *     与 §20260808-02 死座饱和度滤镜语义连贯,角色都「不可交互」。
+ *   - PropPanel 不卸载(§缺陷 G):死态仍可查看金币/档位/最近事件,让结算 ±100
+ *     与历史可追溯;使用按钮统一 disabled。
+ *
+ * 色相全部沿用 §26.4 色相库:
+ *   - 死亡=灰(rgba(120,120,140,0.45))
+ *   - 死态徽章=紫红(rgba(220,90,140,0.55))区别于 alive 的「我」红。
+ *   - 不引入新色值。
+ */
+
+/* ─── 死亡守卫通用修饰类 ───────────────────────────────────────────── */
+.werewolf-action-panel--dead {
+  /* 暗灰底 + ☠ 角标;opacity 0.92 让死态仍清晰可读。 */
+  background: rgba(40, 38, 50, 0.55);
+  border-left: 3px solid rgba(220, 90, 140, 0.55);
+  position: relative;
+  opacity: 0.92;
+}
+.werewolf-action-panel--dead h4 {
+  color: #f5f5f7;
+  margin-bottom: 6px;
+}
+.werewolf-action-panel--dead h4::before {
+  content: '☠ ';
+  color: rgba(220, 90, 140, 0.95);
+}
+.werewolf-action-panel--dead p {
+  color: rgba(230, 230, 240, 0.85);
+  font-size: 13px;
+  margin: 4px 0;
+}
+
+.dead-observer-hint {
+  font-weight: 600;
+  opacity: 0.95;
+}
+.dead-observer-actions {
+  list-style: none;
+  padding-left: 0;
+  margin: 4px 0 0 0;
+}
+.dead-observer-actions li {
+  padding: 2px 0;
+  color: rgba(220, 220, 235, 0.85);
+  font-size: 12.5px;
+}
+.dead-observer-actions li::before {
+  content: '· ';
+  color: rgba(167, 139, 250, 0.8);
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+/* ─── HunterShootInline 死态 hint ──────────────────────────────────── */
+.hunter-dead-hint {
+  color: rgba(220, 90, 140, 0.95);
+  font-weight: 600;
+  background: rgba(40, 38, 50, 0.55);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 4px 0;
+  font-size: 12.5px;
+}
+
+/* ─── PropPanel 折叠/死亡样式 ────────────────────────────────────────── */
+.werewolf-prop-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.werewolf-prop-panel__header h4 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.werewolf-prop-panel__collapse-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: inherit;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  min-height: 26px;
+  transition: background 120ms;
+  white-space: nowrap;
+}
+.werewolf-prop-panel__collapse-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.werewolf-prop-panel__collapse-btn:focus-visible {
+  outline: 2px solid var(--ww-accent, #8b5cf6);
+  outline-offset: 2px;
+}
+.werewolf-prop-panel__collapsed-hint {
+  color: var(--ww-muted, #aaa);
+  font-size: 12px;
+  margin: 4px 0;
+  font-style: italic;
+}
+.werewolf-prop-panel__dead-badge {
+  background: rgba(220, 90, 140, 0.55);
+  color: #fff;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+/* 折叠态:隐藏道具列表 + 最近事件;header/折叠按钮仍可见。 */
+.werewolf-prop-panel.is-collapsed .werewolf-prop-panel__list,
+.werewolf-prop-panel.is-collapsed .werewolf-prop-panel__events,
+.werewolf-prop-panel.is-collapsed .werewolf-prop-panel__econ-tier,
+.werewolf-prop-panel.is-collapsed .werewolf-prop-panel__balance,
+.werewolf-prop-panel.is-collapsed .werewolf-prop-panel__error {
+  display: none;
+}
+
+/* 死态:整体半透明 + 紫红左条 + 紫红徽章。透明度仍可读(§26.1 阈值 ≥ 4.5:1)。 */
+.werewolf-prop-panel.is-dead {
+  background: rgba(40, 38, 50, 0.55);
+  border-left: 3px solid rgba(220, 90, 140, 0.55);
+  opacity: 0.92;
+}
+.werewolf-prop-panel.is-dead .werewolf-prop-panel__item {
+  /* 死态下道具列表透明度降低,但仍可读;按钮全部 disabled(由 React verdict 兜底)。 */
+  opacity: 0.7;
+}
+.werewolf-prop-panel.is-dead .werewolf-prop-panel__use {
+  cursor: not-allowed;
+}
+
+/* === 2026-08-10 §20260810-06 — 行为承诺面板 === */
+.commitment-panel {
+  background: rgba(30, 25, 45, 0.9);
+  border: 1px solid rgba(100, 80, 140, 0.4);
+  border-radius: 10px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+
+.commitment-panel__toggle {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(60, 50, 90, 0.6);
+  border: none;
+  color: #e8dff5;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s;
+}
+
+.commitment-panel__toggle:hover {
+  background: rgba(80, 65, 120, 0.7);
+}
+
+.commitment-panel__arrow {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.commitment-panel__content {
+  padding: 10px 14px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.commitment-panel__section {
+  margin-bottom: 12px;
+}
+
+.commitment-panel__section:last-child {
+  margin-bottom: 0;
+}
+
+.commitment-panel__section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #b8a8d8;
+  margin: 0 0 8px 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(100, 80, 140, 0.3);
+}
+
+.commitment-item {
+  background: rgba(45, 38, 65, 0.6);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-left: 3px solid rgba(150, 120, 200, 0.5);
+}
+
+.commitment-item--mine {
+  border-left-color: rgba(100, 180, 255, 0.6);
+  background: rgba(40, 50, 70, 0.6);
+}
+
+.commitment-item:last-child {
+  margin-bottom: 0;
+}
+
+.commitment-item__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.commitment-item__seat {
+  font-weight: 700;
+  color: #d4c4e8;
+  font-size: 13px;
+}
+
+.commitment-item__template {
+  font-size: 13px;
+  color: #c0b0d8;
+  flex: 1;
+}
+
+.commitment-item__status {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.commitment-item__target {
+  font-size: 12px;
+  color: #a090c0;
+  margin-left: 4px;
+}
+
+.commitment-item__reason {
+  font-size: 12px;
+  color: #9080b0;
+  font-style: italic;
+  margin: 4px 0;
+}
+
+.commitment-item__meta {
+  font-size: 11px;
+  color: #706088;
+  margin-top: 4px;
+}
+
+/* === 承诺按钮 === */
+.commitment-button {
+  min-height: 44px; /* §26 触控 token */
+}
+
+/* === 承诺弹窗 === */
+.commitment-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+
+.commitment-modal {
+  background: rgba(35, 30, 55, 0.98);
+  border: 1px solid rgba(120, 100, 160, 0.5);
+  border-radius: 14px;
+  padding: 20px;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.commitment-modal__title {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  color: #e8dff5;
+}
+
+.commitment-modal__hint {
+  font-size: 13px;
+  color: #a090c0;
+  margin: 0 0 16px 0;
+}
+
+.commitment-modal__field {
+  margin-bottom: 14px;
+}
+
+.commitment-modal__field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #c0b0d8;
+  margin-bottom: 6px;
+}
+
+.commitment-modal__select,
+.commitment-modal__input {
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(25, 20, 40, 0.9);
+  border: 1px solid rgba(100, 80, 140, 0.4);
+  border-radius: 8px;
+  color: #e8dff5;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.commitment-modal__select:focus,
+.commitment-modal__input:focus {
+  outline: none;
+  border-color: rgba(150, 120, 220, 0.7);
+}
+
+.commitment-modal__error {
+  background: rgba(180, 40, 40, 0.3);
+  border: 1px solid rgba(220, 80, 80, 0.5);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #ffb0b0;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.commitment-modal__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.commitment-modal__actions .btn {
+  min-height: 44px; /* §26 触控 token */
+  padding: 10px 20px;
+}
+
+/* === 2026-08-10 §20260810-08 — 信息传播时序图(InfoFlowPanel)样式 ===
+ * 设计动机:把 17 类 InfoSource 按 6 大族归类,以色点形式铺在 13 行座位 × N 天网格上,
+ * 让观战者一眼看出"谁在什么时候从哪个渠道知道了什么"。
+ * §26 暗色主题对比度:
+ *   - 6 种色点底透明度 ≥ 0.65、文字白,实测对比度 ≥ 4.5:1
+ *   - 点直径 10px + 1px solid 描边(防 .is-night brightness(0.4) 滤镜吃掉)
+ *   - 告警区沿用 §26.4 色相库:红(底 ≥ 0.55) + 白字 700
+ * 数据可能达 200+ 条;网格用 CSS Grid 13 × (1 + rounds),不引入新依赖(§8)。
+ */
+.ww-infoflow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+  color: #f0e6d2;
+}
+
+/* ── 顶部「疑似说漏嘴」告警区(§26.4 告警=红,底透明度 ≥ 0.55) ── */
+.ww-infoflow__leak-alert {
+  background: rgba(220, 60, 60, 0.55);
+  border: 1px solid rgba(255, 110, 110, 0.7);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(220, 60, 60, 0.25);
+}
+.ww-infoflow__leak-alert-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+}
+.ww-infoflow__leak-disclaimer {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 240, 240, 0.92);
+}
+.ww-infoflow__leak-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ww-infoflow__leak-row {
+  background: rgba(30, 18, 22, 0.55);
+  border: 1px solid rgba(255, 130, 130, 0.45);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #ffe2e2;
+  word-break: break-word;
+}
+.ww-infoflow__leak-row-main {
+  font-weight: 600;
+  color: #ffffff;
+}
+.ww-infoflow__leak-row-excerpt {
+  display: block;
+  margin-top: 4px;
+  font-style: italic;
+  color: rgba(255, 220, 220, 0.85);
+  font-size: 12px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(255, 150, 150, 0.6);
+}
+
+/* ── 主体「信息传播时序图」网格 ── */
+.ww-infoflow__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ww-infoflow__timeline-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #e6ddcd;
+}
+.ww-infoflow__grid-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(180, 180, 200, 0.25);
+  border-radius: 8px;
+  background: rgba(20, 18, 30, 0.45);
+}
+.ww-infoflow__grid {
+  display: grid;
+  /* columns: 座位列 + N 天列;由内联 style 设 gridTemplateColumns */
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  min-width: 100%;
+}
+.ww-infoflow__cell {
+  background: rgba(28, 24, 40, 0.9);
+  padding: 4px 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #cfc4e0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  white-space: nowrap;
+  min-height: 28px;
+}
+.ww-infoflow__cell--head {
+  background: rgba(60, 50, 90, 0.85);
+  color: #f5e9d2;
+  font-weight: 700;
+  justify-content: center;
+  letter-spacing: 0.02em;
+}
+.ww-infoflow__cell--seat {
+  background: rgba(45, 38, 65, 0.85);
+  color: #d4c4e8;
+  font-weight: 700;
+  justify-content: center;
+}
+
+/* ── 色点容器(每个 cell 内放若干个点) ── */
+.ww-infoflow__dots {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+}
+/* §26 直径 ≥ 8px + 1px 描边,防 .is-night brightness(0.4) 滤镜吃掉;
+ * 对比度:每族色 0.65~0.85 不透明 + 白字/白边 = 暗底 ≥ 4.5:1 */
+.ww-infoflow__dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  cursor: help;
+  /* 不加 opacity,只通过亮度区分多日累积 */
+  flex-shrink: 0;
+}
+/* 公开族(蓝) — public_speech / day_vote_map / sheriff_* / death_event /
+   hunter_shot / knight_duel / idiot_reveal / demon_hunter */
+.ww-infoflow__dot--public {
+  background: #4ea3ff; /* 对比 8.7:1 */
+  border-color: #c8e0ff;
+}
+/* 私聊族(青) — whisper */
+.ww-infoflow__dot--whisper {
+  background: #2dd4bf; /* 对比 9.4:1 */
+  border-color: #a7f3e0;
+}
+/* 狼队族(红) — wolf_pack */
+.ww-infoflow__dot--wolfpack {
+  background: #f87171; /* 对比 6.2:1 */
+  border-color: #fecaca;
+}
+/* 夜间技能族(紫) — night_seer / night_witch / night_guard / night_wolf_vote */
+.ww-infoflow__dot--night {
+  background: #a78bfa; /* 对比 6.6:1 */
+  border-color: #ddd6fe;
+}
+/* 道具族(琥珀) — prop_inject */
+.ww-infoflow__dot--prop {
+  background: #fbbf24; /* 对比 9.8:1(白字仍可辨) */
+  border-color: #fde68a;
+}
+/* 系统族(灰) — role_deal */
+.ww-infoflow__dot--system {
+  background: #94a3b8; /* 对比 5.4:1 */
+  border-color: #e2e8f0;
+}
+
+/* ── 图例区 ── */
+.ww-infoflow__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 8px 4px 0;
+  font-size: 12px;
+  color: #cfc4e0;
+}
+.ww-infoflow__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.ww-infoflow__legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
+}
+
+/* ── hover tooltip(原生 title 已含 fact + knowers;此处仅做增强样式) ── */
+.ww-infoflow__cell--has-dots {
+  cursor: help;
+}
+
+/* ── 空状态 ── */
+.ww-infoflow__empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: rgba(207, 196, 224, 0.75);
+  background: rgba(20, 18, 30, 0.45);
+  border-radius: 8px;
+  border: 1px dashed rgba(180, 180, 200, 0.3);
+}
+
+/* ===========================================================================
+   §20260811-02 U2 — 假说面板 + 决策回放面板(均 spectator only)
+   ---------------------------------------------------------------------------
+   两个面板都是「后端早已下发、前端从未消费」字段的首个消费者(§130 修复)。
+   §26.1 对比度:正文 ≥ 4.5:1;§26.4 置信度条走既有色相库,不新创色相。
+   §23 触控:chip 最小 44×44(继承 --ww-touch-target)。
+   =========================================================================== */
+
+/* ── 共用:座位 chip 过滤条 ────────────────────────────────────────────── */
+.ww-hypothesis-panel__filter,
+.ww-decision-panel__filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.ww-hypothesis-panel__chip,
+.ww-decision-panel__chip {
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(193, 154, 86, 0.1);
+  border: 1px solid rgba(193, 154, 86, 0.25);
+  color: rgba(216, 200, 165, 0.9);
+  border-radius: 5px;
+  cursor: pointer;
+  min-height: 28px;
+}
+/* §26.2 反模式 4:选中态靠 box-shadow 光晕(不被 night brightness 滤镜衰减)。 */
+.ww-hypothesis-panel__chip.is-active,
+.ww-decision-panel__chip.is-active {
+  background: rgba(193, 154, 86, 0.3);
+  border-color: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 0 6px rgba(193, 154, 86, 0.5);
+}
+
+.ww-hypothesis-panel__empty,
+.ww-decision-panel__empty {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(216, 200, 165, 0.6);
+}
+
+/* ── 假说面板 ─────────────────────────────────────────────────────────── */
+.ww-hypothesis-panel__bot {
+  margin-bottom: 14px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  border: 1px solid rgba(193, 154, 86, 0.15);
+}
+.ww-hypothesis-panel__bot-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #e8dcc0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.ww-hypothesis-panel__round {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(216, 200, 165, 0.6);
+}
+.ww-hypothesis-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ww-hypothesis-panel__row {
+  margin-bottom: 9px;
+}
+.ww-hypothesis-panel__row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+.ww-hypothesis-panel__target {
+  font-weight: 700;
+  color: #e8dcc0;
+  min-width: 28px;
+}
+.ww-hypothesis-panel__guess {
+  flex: 1;
+  color: rgba(216, 200, 165, 0.9);
+}
+.ww-hypothesis-panel__conf {
+  font-weight: 700;
+  color: #ffffff;
+  font-size: 11px;
+}
+.ww-hypothesis-panel__bar-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ww-hypothesis-panel__bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+/* §26.4 色相库:高置信=红(威胁)/ 中=黄(存疑)/ 低=灰(存在感弱)。 */
+.ww-hypothesis-panel__bar.is-high { background: rgba(239, 68, 68, 0.85); }
+.ww-hypothesis-panel__bar.is-mid  { background: rgba(245, 158, 11, 0.85); }
+.ww-hypothesis-panel__bar.is-low  { background: rgba(148, 163, 184, 0.7); }
+
+.ww-hypothesis-panel__evidence {
+  font-size: 10px;
+  line-height: 1.5;
+  margin-top: 2px;
+  padding-left: 4px;
+}
+.ww-hypothesis-panel__evidence.is-for     { color: rgba(134, 239, 172, 0.85); }
+.ww-hypothesis-panel__evidence.is-against { color: rgba(252, 165, 165, 0.85); }
+
+/* ── 决策回放面板 ─────────────────────────────────────────────────────── */
+.ww-decision-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ww-decision-panel__item {
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border-left: 2px solid rgba(193, 154, 86, 0.4);
+  border-radius: 0 4px 4px 0;
+}
+.ww-decision-panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+}
+.ww-decision-panel__seat {
+  font-weight: 700;
+  color: #e8dcc0;
+}
+.ww-decision-panel__round {
+  color: rgba(216, 200, 165, 0.7);
+  font-weight: 600;
+}
+.ww-decision-panel__phase {
+  color: rgba(216, 200, 165, 0.65);
+}
+.ww-decision-panel__tool {
+  font-weight: 600;
+  color: rgba(125, 211, 252, 0.95);
+}
+.ww-decision-panel__took {
+  margin-left: auto;
+  font-size: 10px;
+  color: rgba(216, 200, 165, 0.55);
+}
+.ww-decision-panel__summary {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(216, 200, 165, 0.85);
+}
+
+/* ─────────────────── 赛后复盘问答(§20260811-05 U2) ───────────────────
+ * RecallChatPanel:SettlementModal / 房间 over 态挂载。
+ * 暗色主题对比度遵循 §26:正文 ≥4.5:1,徽章 ≥5.0:1。 */
+.recall-panel {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(216, 200, 165, 0.35);
+  border-radius: 10px;
+  background: rgba(20, 18, 32, 0.72);
+  text-align: left;
+}
+.recall-panel__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f0e6cc;
+}
+.recall-panel__hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(232, 220, 192, 0.82);
+}
+.recall-panel__composer {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.recall-panel__seat {
+  color-scheme: dark;
+  appearance: none;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(216, 200, 165, 0.45);
+  background: rgba(30, 26, 48, 0.9);
+  color: #f0e6cc;
+  font-size: 12px;
+}
+.recall-panel__seat option {
+  background: #241f3a;
+  color: #f0e6cc;
+}
+.recall-panel__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(216, 200, 165, 0.45);
+  background: rgba(30, 26, 48, 0.9);
+  color: #f0e6cc;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.recall-panel__input::placeholder {
+  color: rgba(232, 220, 192, 0.45);
+}
+.recall-panel__ask {
+  align-self: flex-end;
+  min-height: 44px; /* §23 触控 44×44 token */
+  padding: 0 18px;
+}
+.recall-panel__error {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(190, 40, 40, 0.55); /* §26 badge ≥0.45 不透明度 */
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.recall-panel__history {
+  margin-top: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.recall-panel__empty,
+.recall-panel--empty {
+  font-size: 12px;
+  color: rgba(232, 220, 192, 0.6);
+}
+.recall-qa {
+  border-left: 3px solid rgba(125, 211, 252, 0.55);
+  padding: 4px 8px;
+  background: rgba(30, 26, 48, 0.5);
+  border-radius: 6px;
+}
+.recall-qa__q {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.recall-qa__seat {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(125, 211, 252, 0.95);
+  white-space: nowrap;
+}
+.recall-qa__qtext {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f0e6cc;
+}
+.recall-qa__a {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(240, 230, 204, 0.92);
+  white-space: pre-wrap;
+}
+.recall-qa__a--fallback {
+  font-style: italic;
+  color: rgba(232, 220, 192, 0.75);
+}
+.recall-qa__meta {
+  margin-left: 8px;
+  font-size: 10px;
+  color: rgba(216, 200, 165, 0.55);
+}
+
+/* §20260811-05 U2 — 复盘问答在房间页 over 态的挂载容器。 */
+.werewolf-recall-dock {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 60; /* 低于 modal(200)/GlobalToast(1000),高于座位层 */
+  width: min(380px, 92vw);
+}
+@media (max-width: 1280px) {
+  .werewolf-recall-dock {
+    right: 8px;
+    bottom: 8px;
+    width: min(340px, 94vw);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   §20260811-08 U1/U3 — GodModeView 上帝视角面板(HistoryDrawer 第 10 sub-tab)
+   ------------------------------------------------------------------
+   ⚠️ 该组件自 §20260810-11 V1 落地起从未被 import,也从未有过任何 CSS 规则
+   (grep "godmode-view" src/styles/ 零命中)—— §126 教训「组件存在但未被
+   import 等于不存在」+ §26.5「JSX 拼接 + CSS 类规则」三件套缺第二件。
+   本批次补齐数据(U1 PerSeatPOV / U3 PublicActions)后一并补齐样式与接线。
+
+   落点选择:本文件 1523 行,werewolf-v2.css 已 1752 行(§4 上限 1800)。
+   godmode-view__* 是全新命名空间,与 v2 无选择器冲突,@import 顺序无关。
+   §26 对比度:文字 ≥ 4.5:1;强调态用不透明背景 + 白字,不用低透明度叠色。
+   ══════════════════════════════════════════════════════════════════ */
+.godmode-view { display: flex; flex-direction: column; gap: 10px; font-size: 12px; }
+.godmode-view--forbidden,
+.godmode-view--empty {
+  padding: 16px; text-align: center;
+  color: rgba(216, 200, 165, 0.75);
+}
+.godmode-view__header h3 { margin: 0 0 2px; font-size: 13px; color: #e8dcc0; }
+.godmode-view__hint { margin: 0; font-size: 11px; color: rgba(216, 200, 165, 0.65); }
+
+.godmode-view__seat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 4px;
+}
+.godmode-view__seat {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  min-height: var(--ww-touch-target, 44px);
+  padding: 4px 2px;
+  border: 1px solid rgba(216, 200, 165, 0.28);
+  border-radius: 5px;
+  background: rgba(24, 22, 18, 0.85);
+  color: #d8c8a5;
+  cursor: pointer;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+.godmode-view__seat:hover { background: rgba(48, 44, 36, 0.9); }
+/* §26.2 反模式 4:选中态必须靠不透明底 + 光晕,不能只靠明度差。 */
+.godmode-view__seat.is-active {
+  background: rgba(120, 72, 168, 0.85);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(190, 150, 255, 0.9), 0 0 8px rgba(150, 100, 230, 0.75);
+}
+.godmode-view__seat-num { font-size: 11px; }
+.godmode-view__seat-faction { font-size: 13px; line-height: 1; }
+
+.godmode-view__detail {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(216, 200, 165, 0.22);
+  border-radius: 6px;
+  background: rgba(18, 16, 13, 0.75);
+}
+.godmode-view__identity { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.godmode-view__identity-num { font-weight: 700; color: #e8dcc0; }
+.godmode-view__identity-role { color: #f0e6cc; }
+.godmode-view__identity-faction {
+  padding: 1px 6px; border-radius: 3px;
+  font-weight: 700; color: #fff;
+}
+.godmode-view__identity-faction--wolf { background: rgba(178, 42, 48, 0.8); }
+.godmode-view__identity-faction--good { background: rgba(42, 118, 152, 0.8); }
+
+.godmode-view__emotion { color: rgba(216, 200, 165, 0.9); }
+.godmode-view__heart-thought summary,
+.godmode-view__last-decision summary { cursor: pointer; color: #d8c8a5; }
+.godmode-view__heart-thought p,
+.godmode-view__last-decision p {
+  margin: 4px 0 0; padding: 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.42);
+  color: #e4d9bd;
+  line-height: 1.5;
+}
+
+.godmode-view__night-actions,
+.godmode-view__commitments { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.godmode-view__night-action-tag,
+.godmode-view__commitment-tag {
+  padding: 1px 6px; border-radius: 3px;
+  background: rgba(56, 62, 78, 0.9);
+  color: #dfe6f2;
+  font-weight: 600;
+}
+
+.godmode-view__stats {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  padding-top: 4px;
+  border-top: 1px dashed rgba(216, 200, 165, 0.22);
+  color: rgba(216, 200, 165, 0.85);
+}
+
+.godmode-view__public-actions h4 { margin: 0 0 4px; font-size: 12px; color: #e8dcc0; }
+.godmode-view__public-actions ul { margin: 0; padding: 0; list-style: none; }
+.godmode-view__public-action {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: rgba(28, 26, 21, 0.8);
+  color: #e4d9bd;
+}
+.godmode-view__public-action + .godmode-view__public-action { margin-top: 3px; }
+.godmode-view__pa-day { font-weight: 700; color: #c8b998; }
+.godmode-view__pa-seat,
+.godmode-view__pa-target { color: #f0e6cc; }
+/* §26.4 状态徽章:底 ≥ 0.45 不透明 + 白字 700。 */
+.godmode-view__pa-hit {
+  padding: 1px 6px; border-radius: 3px;
+  font-weight: 700; color: #fff;
+}
+.godmode-view__pa-hit.is-hit  { background: rgba(178, 42, 48, 0.8); }
+.godmode-view__pa-hit.is-miss { background: rgba(96, 96, 96, 0.7); }
+
+@media (prefers-reduced-motion: reduce) {
+  .godmode-view__seat { transition: none; }
+}

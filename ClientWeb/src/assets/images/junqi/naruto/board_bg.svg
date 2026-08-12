@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="384" height="832" viewBox="0 0 384 832">
+  <rect width="384" height="832" fill="#fffbeb"/>
+  <line x1="32" y1="32" x2="288" y2="32"
+                   stroke="#92400e" stroke-width="1.5"/>
+  <line x1="32" y1="96" x2="288" y2="96"
+                   stroke="#92400e" stroke-width="1"/>
+  <line x1="32" y1="160" x2="288" y2="160"
+                   stroke="#92400e" stroke-width="1"/>
+  <line x1="32" y1="224" x2="288" y2="224"
+                   stroke="#92400e" stroke-width="1"/>
+  <line x1="32" y1="288" x2="288" y2="288"
+                   stroke="#92400e" stroke-width="1"/>
+  <line x1="32" y1="352" x2="288" y2="352"
+                   stroke="#92400e" stroke-width="1.5"/>
+  <line x1="32" y1="416" x2="288" y2="416"
+                   stroke="#92400e" stroke-width="1.5"/>
+  <line x1="32" y1="480" x2="288" y2="480"
+                   stroke="#92400e" stroke-width="1"/>
+  <line x1="32" y1="544" x2="288" y2="544"
+                   stroke="#92400e" stroke-width="1"/>
+  <line x1="32" y1="608" x2="288" y2="608"
+                   stroke="#92400e" stroke-width="1"/>
+  <line x1="32" y1="672" x2="288" y2="672"
+                   stroke="#92400e" stroke-width="1"/>
+  <line x1="32" y1="736" x2="288" y2="736"
+                   stroke="#92400e" stroke-width="1.5"/>
+  <line x1="32" y1="32" x2="32" y2="736"
+                   stroke="#92400e" stroke-width="1"/>
+  <line x1="96" y1="32" x2="96" y2="736"
+                   stroke="#92400e" stroke-width="1"/>
+  <line x1="160" y1="32" x2="160" y2="736"
+                   stroke="#92400e" stroke-width="1"/>
+  <line x1="224" y1="32" x2="224" y2="736"
+                   stroke="#92400e" stroke-width="1"/>
+  <line x1="288" y1="32" x2="288" y2="736"
+                   stroke="#92400e" stroke-width="1"/>
+  <line x1="32" y1="96" x2="288" y2="96"
+                   stroke="#451a03" stroke-width="2.5"/>
+  <line x1="32" y1="224" x2="288" y2="224"
+                   stroke="#451a03" stroke-width="2.5"/>
+  <line x1="32" y1="352" x2="288" y2="352"
+                   stroke="#451a03" stroke-width="2.5"/>
+  <line x1="32" y1="416" x2="288" y2="416"
+                   stroke="#451a03" stroke-width="2.5"/>
+  <line x1="32" y1="544" x2="288" y2="544"
+                   stroke="#451a03" stroke-width="2.5"/>
+  <line x1="32" y1="672" x2="288" y2="672"
+                   stroke="#451a03" stroke-width="2.5"/>
+  <rect x="74.66666666666667" y="138.66666666666666" width="42.666666666666664" height="42.666666666666664"
+                  fill="#fbbf24" fill-opacity="0.6" stroke="#92400e" stroke-width="1.5" rx="10.666666666666666"/>
+  <rect x="202.66666666666666" y="138.66666666666666" width="42.666666666666664" height="42.666666666666664"
+                  fill="#fbbf24" fill-opacity="0.6" stroke="#92400e" stroke-width="1.5" rx="10.666666666666666"/>
+  <rect x="74.66666666666667" y="266.6666666666667" width="42.666666666666664" height="42.666666666666664"
+                  fill="#fbbf24" fill-opacity="0.6" stroke="#92400e" stroke-width="1.5" rx="10.666666666666666"/>
+  <rect x="202.66666666666666" y="266.6666666666667" width="42.666666666666664" height="42.666666666666664"
+                  fill="#fbbf24" fill-opacity="0.6" stroke="#92400e" stroke-width="1.5" rx="10.666666666666666"/>
+  <rect x="74.66666666666667" y="458.6666666666667" width="42.666666666666664" height="42.666666666666664"
+                  fill="#fbbf24" fill-opacity="0.6" stroke="#92400e" stroke-width="1.5" rx="10.666666666666666"/>
+  <rect x="202.66666666666666" y="458.6666666666667" width="42.666666666666664" height="42.666666666666664"
+                  fill="#fbbf24" fill-opacity="0.6" stroke="#92400e" stroke-width="1.5" rx="10.666666666666666"/>
+  <rect x="74.66666666666667" y="586.6666666666666" width="42.666666666666664" height="42.666666666666664"
+                  fill="#fbbf24" fill-opacity="0.6" stroke="#92400e" stroke-width="1.5" rx="10.666666666666666"/>
+  <rect x="202.66666666666666" y="586.6666666666666" width="42.666666666666664" height="42.666666666666664"
+                  fill="#fbbf24" fill-opacity="0.6" stroke="#92400e" stroke-width="1.5" rx="10.666666666666666"/>
+  <polygon points="0,0 64,0 32,32"
+                  fill="#dc2626" fill-opacity="0.85" stroke="#92400e" stroke-width="1.5"/>
+  <polygon points="256,0 320,0 288,32"
+                  fill="#dc2626" fill-opacity="0.85" stroke="#92400e" stroke-width="1.5"/>
+  <polygon points="0,704 64,704 32,736"
+                  fill="#dc2626" fill-opacity="0.85" stroke="#92400e" stroke-width="1.5"/>
+  <polygon points="256,704 320,704 288,736"
+                  fill="#dc2626" fill-opacity="0.85" stroke="#92400e" stroke-width="1.5"/>
+  <rect x="32" y="372" width="256" height="24"
+                fill="#fb923c" fill-opacity="0.85"/>
+  <text x="160" y="389" text-anchor="middle"
+                font-size="16" font-weight="bold" fill="#fff" stroke="#92400e" stroke-width="0.5">楚河 · 汉界</text>
+</svg>

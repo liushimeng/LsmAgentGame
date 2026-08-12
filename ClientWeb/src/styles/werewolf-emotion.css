@@ -1,0 +1,393 @@
+/* ══════════════════════════════════════════════════════════════════════
+ * werewolf-emotion.css (2026-08-07 §前端结构优化 20260807-03 · S5)
+ *
+ * 从 werewolf-v2.css 拆出的 EmotionAvatar(Agent 拟人化表情头像)特效样式。
+ *
+ * 拆分原因:CLAUDE.md §4 硬上限「单文件 ≤ 1800 行」—— werewolf-v2.css
+ * 拆分前 1940 行已超限;本段(原 :1634-1940)自带 keyframes、边界干净,
+ * 是最自然的拆分缝。拆分后 werewolf-v2.css 降至 ~1633 行达标。
+ *
+ * 级联约束(globals.css 中的 @import 位置不可改动):
+ *   werewolf-v2.css  →  **werewolf-emotion.css(本文件)**  →  werewolf-speech.css
+ * 本文件只做整段搬移,未改动任何选择器、属性与相对顺序。
+ * ══════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════════════
+   §表情特效 2026-08-04-02 — EmotionAvatar(Agent 拟人化表情头像 + CSS 动态特效)
+   设计文档: docs/Agent拟人化和表情特效-解决和设计方案-20260804-02.md §6.3
+   硬约束: .ww-fx pointer-events:none(§124);transform/opacity only(合成层);
+   粒子 ≤3 个/座位;特效窗口外零定时器(组件侧保证)。
+   ══════════════════════════════════════════════════════════════════════ */
+
+.ww-emotion-avatar {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ww-emotion-avatar__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* 素材未生成 / 加载失败时的 emoji 降级徽章 */
+.ww-emotion-avatar__emoji {
+  font-size: 26px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+
+/* ── 特效基座 ─────────────────────────────────────────────────────── */
+.ww-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* §124 硬约束:绝不拦截点击 */
+  border-radius: inherit;
+}
+/* 强度分档:--fx-amp(幅度)/--fx-dur(周期) 两变量驱动所有 keyframes */
+.ww-fx--low  { --fx-amp: 0.6; --fx-dur: 1.4; }
+.ww-fx--mid  { --fx-amp: 1;   --fx-dur: 1;   }
+.ww-fx--high { --fx-amp: 1.6; --fx-dur: 0.7; }
+/* 未标强度时按 mid */
+.ww-fx { --fx-amp: 1; --fx-dur: 1; }
+
+/* ── 8 组特效 keyframes ───────────────────────────────────────────── */
+
+/* pulse — 光晕脉动 + 微缩放(confident/calm) */
+@keyframes wwFxPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(140, 190, 255, 0.0); transform: scale(1); }
+  50%      { box-shadow: 0 0 calc(10px * var(--fx-amp)) calc(2px * var(--fx-amp)) rgba(140, 190, 255, 0.55);
+             transform: scale(calc(1 + 0.025 * var(--fx-amp))); }
+}
+.ww-fx--pulse { animation: wwFxPulse calc(1.6s * var(--fx-dur)) ease-in-out infinite; }
+
+/* shake — 高频小幅抖动(panic/wary) */
+@keyframes wwFxShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(calc(-2px * var(--fx-amp))); }
+  40% { transform: translateX(calc(2px * var(--fx-amp))); }
+  60% { transform: translateX(calc(-1.5px * var(--fx-amp))); }
+  80% { transform: translateX(calc(1.5px * var(--fx-amp))); }
+}
+.ww-fx--shake { animation: wwFxShake calc(0.45s * var(--fx-dur)) linear infinite; }
+
+/* sweat — 汗珠粒子下落 + 微抖(panic/guilty)。粒子 = 蓝色水滴 */
+.ww-fx--sweat { animation: wwFxShake calc(0.9s * var(--fx-dur)) ease-in-out infinite; }
+.ww-fx--sweat .ww-fx-particle {
+  position: absolute;
+  top: 8%;
+  width: 5px; height: 7px;
+  background: #7ec8ff;
+  border-radius: 50% 50% 60% 60%;
+  opacity: 0;
+  animation: wwFxDrop calc(1.4s * var(--fx-dur)) ease-in infinite;
+}
+.ww-fx--sweat .ww-fx-particle--1 { left: 12%; animation-delay: 0s; }
+.ww-fx--sweat .ww-fx-particle--2 { left: 82%; animation-delay: calc(0.5s * var(--fx-dur)); }
+.ww-fx--sweat .ww-fx-particle--3 { left: 48%; animation-delay: calc(0.9s * var(--fx-dur)); }
+
+/* rage — 红描边闪烁 + 震动(irritated) */
+@keyframes wwFxRage {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255, 60, 60, 0.25); transform: translate(0, 0); }
+  25%      { box-shadow: 0 0 calc(8px * var(--fx-amp)) 1px rgba(255, 60, 60, 0.85);
+             transform: translate(calc(-1px * var(--fx-amp)), calc(1px * var(--fx-amp))); }
+  50%      { box-shadow: 0 0 0 1px rgba(255, 60, 60, 0.3);
+             transform: translate(calc(1px * var(--fx-amp)), calc(-1px * var(--fx-amp))); }
+  75%      { box-shadow: 0 0 calc(10px * var(--fx-amp)) 1px rgba(255, 80, 80, 0.9);
+             transform: translate(calc(-1px * var(--fx-amp)), 0); }
+}
+.ww-fx--rage { animation: wwFxRage calc(0.7s * var(--fx-dur)) linear infinite; }
+
+/* tears — 泪珠粒子 + 下垂摆动(grievance)。粒子 = 较大的泪滴 */
+@keyframes wwFxSway {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  50%      { transform: rotate(calc(1.5deg * var(--fx-amp))) translateY(calc(1px * var(--fx-amp))); }
+}
+.ww-fx--tears { animation: wwFxSway calc(2.2s * var(--fx-dur)) ease-in-out infinite; }
+.ww-fx--tears .ww-fx-particle {
+  position: absolute;
+  top: 30%;
+  width: 4px; height: 8px;
+  background: #9fd4ff;
+  border-radius: 50% 50% 70% 70%;
+  opacity: 0;
+  animation: wwFxDrop calc(1.8s * var(--fx-dur)) ease-in infinite;
+}
+.ww-fx--tears .ww-fx-particle--1 { left: 22%; animation-delay: 0s; }
+.ww-fx--tears .ww-fx-particle--2 { left: 72%; animation-delay: calc(0.7s * var(--fx-dur)); }
+.ww-fx--tears .ww-fx-particle--3 { left: 47%; animation-delay: calc(1.2s * var(--fx-dur)); }
+
+/* 汗/泪共用下落动画(起始位/颜色由容器类区分) */
+@keyframes wwFxDrop {
+  0%   { opacity: 0; transform: translateY(0) scale(0.7); }
+  15%  { opacity: 0.95; }
+  100% { opacity: 0; transform: translateY(calc(52px * var(--fx-amp))) scale(1); }
+}
+
+/* spin_question — 问号环绕 + 头部摇摆(confused) */
+.ww-fx--spin_question { animation: wwFxSway calc(1.6s * var(--fx-dur)) ease-in-out infinite; }
+@keyframes wwFxOrbit {
+  0%   { transform: rotate(0deg)   translateX(calc(20px * var(--fx-amp))) rotate(0deg);   opacity: 0.9; }
+  50%  { opacity: 0.5; }
+  100% { transform: rotate(360deg) translateX(calc(20px * var(--fx-amp))) rotate(-360deg); opacity: 0.9; }
+}
+.ww-fx--spin_question .ww-fx-particle {
+  position: absolute;
+  top: 2%;
+  left: calc(50% - 6px);
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffd76b;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  animation: wwFxOrbit calc(2.4s * var(--fx-dur)) linear infinite;
+}
+.ww-fx--spin_question .ww-fx-particle--q2 { animation-delay: calc(-1.2s * var(--fx-dur)); }
+
+/* glow — 金色辉光渐强渐弱(excited) */
+@keyframes wwFxGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 107, 0.0); }
+  50%      { box-shadow: 0 0 calc(14px * var(--fx-amp)) calc(3px * var(--fx-amp)) rgba(255, 215, 107, 0.7); }
+}
+.ww-fx--glow { animation: wwFxGlow calc(1.8s * var(--fx-dur)) ease-in-out infinite; }
+
+/* drowsy — Zzz 粒子上升 + 缓慢沉浮(tired) */
+@keyframes wwFxFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(calc(2px * var(--fx-amp))); }
+}
+.ww-fx--drowsy { animation: wwFxFloat calc(3s * var(--fx-dur)) ease-in-out infinite; }
+@keyframes wwFxRise {
+  0%   { opacity: 0; transform: translateY(0) scale(0.7); }
+  20%  { opacity: 0.9; }
+  100% { opacity: 0; transform: translateY(calc(-30px * var(--fx-amp))) scale(1.15); }
+}
+.ww-fx--drowsy .ww-fx-particle {
+  position: absolute;
+  top: 10%;
+  font-weight: 700;
+  color: #b8cbe0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  opacity: 0;
+  animation: wwFxRise calc(2.6s * var(--fx-dur)) ease-out infinite;
+}
+.ww-fx--drowsy .ww-fx-particle--z1 { right: 18%; font-size: 13px; animation-delay: 0s; }
+.ww-fx--drowsy .ww-fx-particle--z2 { right: 30%; font-size: 11px; animation-delay: calc(0.8s * var(--fx-dur)); }
+.ww-fx--drowsy .ww-fx-particle--z3 { right: 10%; font-size: 9px;  animation-delay: calc(1.6s * var(--fx-dur)); }
+
+/* ── caption 气泡(渐显 → 常驻 → 随特效卸载渐隐) ───────────────────── */
+@keyframes wwFxCaptionIn {
+  from { opacity: 0; transform: translate(-50%, 4px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.ww-fx-caption {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translate(-50%, 0);
+  /* §表情特效(20260804-01 修复):max-width 从 140→92,避免气泡水平溢出到相邻座位卡
+     (座位卡间距仅 8px,140px 宽会跨越 ~38px 盖住邻座)。92px = 64px avatar + 28px,
+     与移动端兜底一致。 */
+  max-width: 92px;
+  padding: 2px 7px;
+  background: rgba(12, 10, 8, 0.88);
+  color: #ffe9c9;
+  font-size: 10px;
+  line-height: 1.35;
+  border: 1px solid rgba(255, 215, 107, 0.45);
+  border-radius: 6px;
+  white-space: normal;
+  word-break: break-all;
+  text-align: center;
+  pointer-events: none;
+  z-index: 3;
+  animation: wwFxCaptionIn 0.3s ease-out both;
+}
+
+/* ── 余韵态(特效到期/无 fx):呼吸 ±2% + 情绪色描边 ─────────────────── */
+@keyframes wwFxBreathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.02); }
+}
+.ww-fx--breathe {
+  animation: wwFxBreathe 2.8s ease-in-out infinite;
+  box-shadow: 0 0 0 2px var(--emotion-color, transparent);
+  opacity: 0.98;
+}
+
+/* ── compact(≤768px):幅度 ×0.6 ───────────────────────────────────── */
+@media (max-width: 768px) {
+  .ww-fx--low  { --fx-amp: 0.36; }
+  .ww-fx--mid  { --fx-amp: 0.6;  }
+  .ww-fx--high { --fx-amp: 0.96; }
+  .ww-fx { --fx-amp: 0.6; }
+  .ww-fx-caption { max-width: 96px; font-size: 9px; }
+}
+
+/* ── a11y: prefers-reduced-motion → 全部降级为静态描边 ────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .ww-fx,
+  .ww-fx .ww-fx-particle {
+    animation: none !important;
+  }
+  .ww-fx { box-shadow: 0 0 0 2px var(--emotion-color, rgba(140, 190, 255, 0.4)); }
+  .ww-fx-caption { animation: none !important; }
+}
+
+/* ── 2026-08-05 §hover popover — 座位卡头像悬停情绪信息卡片 ───────────
+   设计约束:
+   - 容器 .ww-emotion-avatar 已是 position:relative(FX 基座),popover 绝对定位到
+     头像右侧,垂直居中(translateY(-50%))。
+   - 仅当 .ww-emotion-avatar:hover 或 [data-open] 时显示(JS hover 状态用于
+     关闭延迟,让鼠标移入 popover 时不闪断)。
+   - pointer-events:auto(popover 本身接收 hover),但外层基座仍为 pointer-events:none
+     不影响座位卡点击(投票/动作)。
+   - z-index 高于 caption 粒子(3)与座位卡徽章。 */
+.ww-emotion-popover {
+  position: absolute;
+  /* §20260811-06 U2 — 默认 placement 在 avatar 下方居中。
+     上方 / 左贴 / 右贴 由 JS 测 getBoundingClientRect() 动态添加 .ww-emotion-popover--above/--left/--right 修饰类决定。*/
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.96);
+  min-width: 132px;
+  max-width: 280px;
+  padding: 7px 9px;
+  background: rgba(15, 12, 10, 0.94);
+  border: 1px solid rgba(255, 215, 107, 0.4);
+  border-radius: 7px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  color: #f0e2cc;
+  font-size: 11px;
+  line-height: 1.45;
+  pointer-events: auto;
+  z-index: 5;
+  opacity: 0;
+  visibility: hidden;
+  transform-origin: top center;
+  transition: opacity 0.14s ease-out, transform 0.14s ease-out, visibility 0.14s;
+}
+/* §20260811-06 U2 — 垂直翻转:13 人局最上 2 行头像 hover 时 popover 向上展开。 */
+.ww-emotion-popover.ww-emotion-popover--above {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform-origin: bottom center;
+}
+/* §20260811-06 U2 — 水平贴左:13 人局最左列头像 hover 时 popover 贴左避免越界。 */
+.ww-emotion-popover.ww-emotion-popover--left {
+  left: 0;
+  right: auto;
+  transform: translateX(0) scale(0.96);
+  transform-origin: top left;
+}
+.ww-emotion-popover.ww-emotion-popover--above.ww-emotion-popover--left {
+  transform-origin: bottom left;
+}
+/* §20260811-06 U2 — 水平贴右:13 人局最右列头像 hover 时 popover 贴右避免越界。 */
+.ww-emotion-popover.ww-emotion-popover--right {
+  left: auto;
+  right: 0;
+  transform: translateX(0) scale(0.96);
+  transform-origin: top right;
+}
+.ww-emotion-popover.ww-emotion-popover--above.ww-emotion-popover--right {
+  transform-origin: bottom right;
+}
+/* 显示条件:JS 状态驱动(.is-open) + 纯 CSS 兜底(:hover,不依赖 JS 也能看)。 */
+.ww-emotion-popover.is-open,
+.ww-emotion-avatar:hover .ww-emotion-popover {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) scale(1);
+}
+.ww-emotion-popover.is-open.ww-emotion-popover--left,
+.ww-emotion-popover.is-open.ww-emotion-popover--right,
+.ww-emotion-avatar:hover .ww-emotion-popover.ww-emotion-popover--left,
+.ww-emotion-avatar:hover .ww-emotion-popover.ww-emotion-popover--right {
+  transform: translateX(0) scale(1);
+}
+.ww-emotion-popover__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.ww-emotion-popover__emoji { font-size: 16px; line-height: 1; }
+.ww-emotion-popover__label { font-weight: 600; color: #ffe9c9; }
+.ww-emotion-popover__reason {
+  color: #c9b89a;
+  font-size: 10.5px;
+  font-style: italic;
+  max-height: 48px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.ww-emotion-popover__time { color: #9b8b72; font-size: 9.5px; margin-top: 3px; }
+.ww-emotion-popover__history {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ww-emotion-popover__history-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  font-size: 10px;
+}
+.ww-emotion-popover__history-item > span:first-child { font-size: 12px; }
+.ww-emotion-popover__history-label { flex: 1; color: #d8c8a8; }
+.ww-emotion-popover__history-time { color: #8a7a62; font-size: 9.5px; white-space: nowrap; }
+
+/* ── compact / 窄屏:popover 改到头像左侧,避免溢出视口 ──────────────── */
+@media (max-width: 768px) {
+  .ww-emotion-popover {
+    left: auto;
+    right: calc(100% + 6px);
+    transform-origin: right center;
+    max-width: 168px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   §20260811-08 U5 — 模型风格标识符(M3 §5 P2)
+   ------------------------------------------------------------------
+   放在本文件而非 werewolf-v2.css:后者 1752 行,距 §4 硬上限 1800 仅剩
+   48 行;本文件与「座位卡视觉标识」主题同族,且 @import 顺序已在
+   globals.css 中位于 v2 之后 —— 可安全覆盖 .werewolf-seat__model。
+
+   §26 对比度:emoji 字形不受 .is-night brightness(0.4) 衰减;色相走
+   box-shadow 光晕(§26.2 反模式 4),不用低透明度背景(反模式 2)。
+   ══════════════════════════════════════════════════════════════════ */
+.ww-model-style {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  /* --ww-model-glow 由 JSX inline style 按模型注入;此处兜底为中性灰,
+     避免变量缺失时 box-shadow 解析失败(§26.5 三件套:JSX + CSS + 兜底)。 */
+  box-shadow: 0 0 0 1px var(--ww-model-glow, rgba(160, 160, 160, 0.45)) inset,
+              0 0 5px var(--ww-model-glow, rgba(160, 160, 160, 0.45));
+  transition: box-shadow 160ms ease;
+}
+.ww-model-style__emoji {
+  font-size: 11px;
+  line-height: 1;
+  flex-shrink: 0;
+  /* 关键:emoji 不参与 ellipsis 截断,始终可见 —— 13 人局密集布局下
+     模型名会被 max-width:70% 截断,emoji 是唯一稳定的区分信号。 */
+}
+
+/* 夜晚滤镜下加强光晕,保证 §26.1「selected/强调态 ≥ 6.0:1」可辨。 */
+.is-night .ww-model-style {
+  box-shadow: 0 0 0 1px var(--ww-model-glow, rgba(160, 160, 160, 0.45)) inset,
+              0 0 8px var(--ww-model-glow, rgba(160, 160, 160, 0.45));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ww-model-style { transition: none; }
+}

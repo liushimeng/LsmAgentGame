@@ -1,0 +1,30 @@
+@import './base.css';
+@import './lobby.css';
+@import './xiangqi.css';
+@import './chat.css';
+@import './doudizhu.css';
+@import './texasholdem.css';
+@import './werewolf.css';
+@import './werewolf-agent.css';
+@import './common.css';
+@import './werewolf-panels.css';
+@import './wiki.css';
+@import './sourcestats.css';
+@import './werewolf-v2.css';
+/* 2026-08-07 §前端结构优化 20260807-03 — EmotionAvatar 表情特效样式。
+   从 werewolf-v2.css(拆分前 1940 行)拆出以满足 CLAUDE.md §4「单文件 ≤ 1800 行」,
+   拆分后 werewolf-v2.css 降至 1631 行。**必须**紧随 werewolf-v2.css 之后、
+   werewolf-speech.css 之前 —— 即该段样式在拆分前的原始级联位置,纯搬移不改顺序。 */
+@import './werewolf-emotion.css';
+/* 2026-08-12 §20260812-01 U1/U2/U3/U4 — 个人复盘 / MindMirror / 情绪传染 / 信任度轨迹 4 项新组件样式 */
+@import './werewolf-20260812.css';
+/* 2026-08-12 §20260812-03 U1 — 阵营胜率热力图面板(WinRateHeatmap)。
+   独立成文件,保持 CLAUDE.md §4「单文件 ≤ 1800 行」;插入位置紧随 §20260812-01 之后。 */
+@import './werewolf-20260812-03.css';
+/* 2026-08-05 §Agent聊天显示优化 — 座位卡发言气泡样式。
+   必须排在 werewolf-v2.css **之后**:本文件覆盖 .werewolf-seat 的 min-height
+   断点值与 .werewolf-seat__metrics 的降权规则(同优先级靠级联顺序取胜)。
+   独立成文件的原因见 CLAUDE.md §4(werewolf-v2.css 已超 1800 行上限)。 */
+@import './werewolf-speech.css';
+@import './appmodal.css';
+@import './werewolf-modal.css';

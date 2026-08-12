@@ -1,0 +1,155 @@
+// LsmWebGame — 聊天模块消息定义
+//
+// 帧类型（type 字段以 "chat." 开头）：
+//
+//   client → server
+//     chat.subscribe    ChatSubscribe
+//     chat.unsubscribe  ChatUnsubscribe
+//     chat.send         ChatSend
+//     chat.whisper      ChatWhisperSend
+//     chat.history      ChatHistoryReq
+//
+//   server → client
+//     chat.message      ChatMessage
+//     chat.whisper      ChatWhisperMessage
+//     chat.history      ChatHistoryResp
+//     chat.subscribed   ChatSubscribeAck
+//     chat.unsubscribed ChatSubscribeAck
+//     chat.error        ErrorPayload（common）
+//     chat.stream_start ChatStreamStart
+//     chat.stream_delta ChatStreamDelta
+//     chat.stream_end   ChatStreamEnd
+
+syntax = "proto3";
+
+package lsm.chat;
+
+option go_package = "LsmWebGame/proto/pb/chat";
+
+// ─────────────────── 枚举 ───────────────────
+
+// 聊天作用域
+enum ChatScope {
+  CHAT_SCOPE_UNSPECIFIED = 0;
+  LOBBY = 1;  // 大厅聊天
+  ROOM = 2;   // 房间内聊天
+}
+
+// ─────────────────── 客户端请求 ───────────────────
+
+// 订阅请求
+message ChatSubscribe {
+  ChatScope scope = 1;
+  // ROOM 作用域必填，LOBBY 忽略
+  string room_id = 2;
+}
+
+// 取消订阅请求
+message ChatUnsubscribe {
+  ChatScope scope = 1;
+  string room_id = 2;
+}
+
+// 发送消息请求
+message ChatSend {
+  ChatScope scope = 1;
+  string room_id = 2;
+  // 消息正文，最长 1024 rune
+  string text = 3;
+}
+
+// 私聊/耳语发送请求
+message ChatWhisperSend {
+  ChatScope scope = 1;
+  string room_id = 2;
+  string to_user_id = 3;
+  string text = 4;
+}
+
+// 历史消息拉取请求
+message ChatHistoryReq {
+  ChatScope scope = 1;
+  string room_id = 2;
+  // 拉取条数（默认 50，最大 200）
+  int32 limit = 3;
+  // 游标：拉取此 ID 之前的消息（0 = 最新）
+  uint64 before_id = 4;
+}
+
+// ─────────────────── 服务端响应 ───────────────────
+
+// 订阅/取消订阅确认
+message ChatSubscribeAck {
+  ChatScope scope = 1;
+  string room_id = 2;
+}
+
+// 单条聊天消息（广播载荷）
+message ChatMessage {
+  uint64 id = 1;
+  ChatScope scope = 2;
+  string room_id = 3;
+  string from_user_id = 4;
+  string from_account = 5;
+  string from_nickname = 6;
+  string text = 7;
+  int64 ts = 8;  // Unix 毫秒
+  // 是否是活动事件消息
+  bool is_activity = 9;
+  // 发言者角色标签（狼人杀房间内使用）
+  string from_role = 10;
+  // 发言者是否为 Agent
+  bool from_agent = 11;
+  // Agent 模型名称
+  string from_agent_name = 12;
+  // 是否为插话
+  bool is_interject = 13;
+  // 座位号（房间内）
+  int32 seat = 14;
+}
+
+// 私聊消息
+message ChatWhisperMessage {
+  uint64 id = 1;
+  ChatScope scope = 2;
+  string room_id = 3;
+  string from_user_id = 4;
+  string from_nickname = 5;
+  string to_user_id = 6;
+  string text = 7;
+  int64 ts = 8;
+}
+
+// 历史消息响应
+message ChatHistoryResp {
+  ChatScope scope = 1;
+  string room_id = 2;
+  repeated ChatMessage messages = 3;
+  // 是否还有更多
+  bool has_more = 4;
+}
+
+// ─────────────────── 流式发言 ───────────────────
+
+// 流式发言开始
+message ChatStreamStart {
+  string stream_id = 1;
+  string from_user_id = 2;
+  string from_nickname = 3;
+  string room_id = 4;
+  ChatScope scope = 5;
+  int64 ts = 6;
+}
+
+// 流式发言增量
+message ChatStreamDelta {
+  string stream_id = 1;
+  string delta = 2;
+}
+
+// 流式发言结束
+message ChatStreamEnd {
+  string stream_id = 1;
+  string final_text = 2;
+  uint64 message_id = 3;
+}

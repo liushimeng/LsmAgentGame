@@ -1,0 +1,148 @@
+{
+  "server": {
+    "https_addr": "0.0.0.0:39001",
+    "wss_addr":   "0.0.0.0:39002",
+    "tls_cert":   "./server.crt",
+    "tls_key":    "./server.key"
+  },
+  "db": {
+    "host":            "127.0.0.1",
+    "port":            3306,
+    "name":            "lsmDB",
+    "user":            "superuser",
+    "password":        "CHANGE_ME_BEFORE_RUNNING",
+    "max_open_conns":  20,
+    "max_idle_conns":  5,
+    "conn_max_lifetime_seconds": 3600
+  },
+  "jwt": {
+    "secret":      "CHANGE_ME_BASE64_RANDOM_32B",
+    "ttl_seconds": 7200,
+    "issuer":      "LsmWebGame"
+  },
+  "cookie": {
+    // Default falls back to jwt.secret — kept in one place for rotation.
+    "secret":      "CHANGE_ME_BASE64_RANDOM_32B",
+    "ttl_seconds": 172800,   // 48 hours — encrypted auth cookie lifetime
+    "name":        "lsm_auth",
+    "secure":      true
+  },
+  "captcha": {
+    "ttl_seconds": 180,      // 3 minutes — captcha validity
+    "length":      5
+  },
+  "game": {
+    "max_room": 50
+  },
+  "log": {
+    "level": "info",
+    "file":  "./LsmWebGame.log"
+  },
+  "cors": {
+    "allowed_origins": [
+      "https://localhost:39001",
+      "https://127.0.0.1:39001"
+    ]
+  },
+  "llm": {
+    // Anthropic wire-format proxy. Base endpoint — the anthropic provider
+    // appends "/v1/messages". api_key values here are BEARER tokens for each
+    // configured model; they MUST come from LsmWebGame.conf (gitignored) —
+    // never from source. conf.example ships placeholders; operators replace
+    // them with real keys. See docs/LLM供应商设计.md.
+    "endpoint": "http://8.130.85.252:29000/Anthropic",
+    // BUG-R220 — endpoint failover (optional). When the primary endpoint
+    // fails repeatedly (dial / network / 5xx / 503), the provider
+    // automatically advances to the next endpoint in this list. Per-
+    // endpoint 503 breakers still apply — a tripped primary doesn't
+    // poison the secondary. Leave empty to keep the single-endpoint
+    // legacy behavior. The `endpoint` field above is folded into a
+    // single-element list automatically when this is unset.
+    "endpoints": [
+      "http://8.130.85.252:29000/Anthropic",
+      "http://8.130.85.252:29001/Anthropic"
+    ],
+    // 10 minutes (2026-07-24: 5min → 10min)。慢模型(Kimi/GLM)单次响应
+    // 2-5 分钟是预期场景;整体 timeout >= 5min 时非流式 Chat 自动改用
+    // 无整体 deadline 的 stream Transport,由 stream_idle_timeout_ms 控制
+    // 停滞检测(见 ServerGo/llm/anthropic/anthropic.go doRequest)。
+    // The phase-deadline floor in engine.cfgPhaseDeadlineSec guarantees the
+    // watchdog never force-skips shorter than this + 30s.
+    "timeout_ms": 600000,
+    // SSE 首字/间隔空闲超时 (ms)。慢模型 thinking 首字延时 2 分钟以上是预期
+    // 场景(2026-07-24: 2min → 5min);只要流持续就不中断。
+    "stream_idle_timeout_ms": 300000,
+    "max_retries": 2,
+    "providers": [
+      { "agent_name": "美团 LongCat-2.0",            "model": "MeiTuan-model",   "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
+      { "agent_name": "豆包 2.0",                  "model": "DouBao-model",   "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
+      { "agent_name": "DeepSeek V4-Pro",           "model": "DeepSeek-model", "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
+      { "agent_name": "智谱 GLM-5.2",              "model": "GLM-model",      "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
+      { "agent_name": "Kimi 2.7",                  "model": "Kimi-model",     "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
+      { "agent_name": "MiniMax M3",                "model": "MinMax-model",   "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
+      { "agent_name": "Qwen 3.7-Plus-and-Max",     "model": "Qwen-model",     "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 },
+      { "agent_name": "Xiaomi mimo-v2.5-pro",      "model": "Xiaomi-model",   "api_key": "API-KEY-PLACEHOLDER", "provider_type": "anthropic", "thinking_required": true, "thinking_budget": 4096 }
+    ]
+  },
+  "werewolf": {
+    // BUG Round 40 §95: 首夜强制发言阶段(扩展 PhasePreWolves)。
+    // 阶段名不变,语义升级为"每名存活玩家在开局身份确认后必须至少发 N 轮公开发言"。
+    "first_night_grace_sec": 120,            // 缓冲期长度(秒,60~300)
+    "first_night_forced_speak_rounds": 3,    // 每名玩家至少发言轮次(1~3,clamp;2026-07-10 §116 从 1 提到 3)
+    "first_night_speak_min_interval_sec": 30,// 强制发言阶段 SpeakLimiter 间隔(秒)
+    // §130 重构(2026-07-13):first_night_llm_call_min_interval_sec 已删除 — 每个 bot 按模型自身响应速率自由调用 LLM。
+
+    // 2026-07-09 §13 增强 — 思考与决策合并 + 时钟机制 + 500K 聊天历史队列
+    "min_speaks_per_minute": 2,              // 白天发言阶段每分钟发言下限(speak/sheriff/vote/hunter_shoot/dawn)
+    "chat_history_bytes": 512000,            // 每 Agent 聊天历史队列字节上限(500K = 500*1024)
+    "speak_max_runes": 80,                   // 单条发言最大字符数(speak_dedup 截断阈值)
+    "spectator_full_wake": true,             // 观众消息全阶段全频唤醒(移除 15s 节流)
+    // BUG-R242-P1-01: 房间级 LLM HTTP 调用并发上限。13 bot fully concurrent ×
+    // 内层重试会打满上游代理 → 级联失败(实测 27min 66% 失败率)。默认 4 个槽位;
+    // 槽位满时 bot 短暂等待后 reWake(瞬态,不计入 consecutiveFailures),既限制
+    // 在途调用数,又不让慢模型无限阻塞快模型。0 / 负值 = 禁用(§130 完全并发,仅调试)。
+    "room_llm_concurrency": 4,
+    // 等待窗口秒数(有人类玩家或观察者 + 有 Agent 时,StartGame 前等待该时长)。
+    // = 0 时禁用等待窗口(全 AI 房间默认行为)。
+    "human_wait_sec": 60,
+    // 2026-07-15 R131: 单次 LLM 调用总超时(秒)。默认 300s(2026-07-24 由 120s
+    // 上调,慢模型 2-5min 响应是预期场景);13 人局启用 lenient 缩放(150%)=>450s,
+    // 上限 480s,仍在 timeout_ms=600s 预算内。
+    "llm_call_timeout_sec": 300,
+    // 2026-07-24 §流式续命:首字节到达后作为最终兜底的总超时(秒)。与
+    // llm_call_timeout_sec 叠加作为整次 LLM 调用的总预算(默认 300+900=1200s)。
+    // 解决 13 人局慢模型(Kimi/GLM/DeepSeek)首字节 1-3min + 长 thinking +
+    // tool_use 总耗时经常逼近上限被外层 ctx 误杀 → consecutiveFailures++ → 误 quarantine。
+    // 用户硬约束:一旦 LLM 响应开始,最少 15 分钟(900s)。0 = 走代码内常量 900。
+    "llm_stream_extended_timeout_sec": 900,
+    "lenient_mode_for_seat_count": 13,
+    "llm_timeout_scale_percent": 150,
+    // Acting-phase deadlines MUST be >= llm timeout + buffer (300s + 30~60s)
+    // so the watchdog never force-skips a phase shorter than a single LLM
+    // call. cfgPhaseDeadlineSec enforces a runtime floor of llm_timeout+30s
+    // on all acting phases even if these values are too small.
+    "phase_deadline_sec": {
+      "pre_wolves":   360,
+      "speak":         360,
+      "vote":          360,
+      "sheriff":       240,
+      "idiot_reveal":  240,
+      "hunter_shoot":  240,
+      "dawn":           8,
+      "night_wolves":  240,
+      "night_seer":    240,
+      "night_witch":   240
+    },
+    // 2026-08-11 §20260811-05 U1 — Agent 玩家行为画像(PlayerProfile)。
+    // true(默认)每局结束后对每个 (bot model_key × 人类 user_id) 组合异步迭代
+    // t_lsm_game_agent_player_profile,下一局经房间级预取缓存注入 prompt。
+    "player_profile_enabled": true,
+    "player_profile_max_tokens": 1024,
+    // 2026-08-11 §20260811-05 U2 — 赛后复盘问答(RecallChat)。
+    // true(默认)终局后开放 POST /api/games/werewolf/rooms/:roomId/recall_chat。
+    "recall_chat_enabled": true,
+    "recall_chat_max_tokens": 1024,
+    "recall_chat_per_user_limit": 10
+    // §130 重构(2026-07-13):agent_parallel 块已删除 (§128 已移除 ParallelThink 机制)。
+  }
+}

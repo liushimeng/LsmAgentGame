@@ -1,0 +1,122 @@
+// LsmWebGame — 狼人杀核心枚举与通用类型
+//
+// 定义角色、阵营、阶段等核心枚举，供其他 proto 文件引用。
+
+syntax = "proto3";
+
+package lsm.game.werewolf;
+
+option go_package = "LsmWebGame/proto/pb/game/werewolf";
+
+// ─────────────────── 核心枚举 ───────────────────
+
+// 角色（13 人局）
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_VILLAGER = 1;       // 平民
+  ROLE_WEREWOLF = 2;       // 狼人
+  ROLE_SEER = 3;           // 预言家
+  ROLE_WITCH = 4;          // 女巫
+  ROLE_HUNTER = 5;         // 猎人
+  ROLE_IDIOT = 6;          // 白痴
+  ROLE_GUARD = 7;          // 守卫
+  ROLE_KNIGHT = 8;         // 骑士
+  ROLE_DEMON_HUNTER = 9;   // 猎魔人
+}
+
+// 阵营
+enum Faction {
+  FACTION_UNSPECIFIED = 0;
+  FACTION_GOOD = 1;     // 好人阵营
+  FACTION_WOLF = 2;     // 狼人阵营
+  FACTION_NEUTRAL = 3;  // 第三方（预留）
+}
+
+// 游戏阶段
+enum Phase {
+  PHASE_UNSPECIFIED = 0;
+  PHASE_WAITING = 1;          // 等待玩家
+  PHASE_NIGHT_START = 2;      // 入夜
+  PHASE_NIGHT_GUARD = 3;      // 守卫行动
+  PHASE_NIGHT_WOLVES = 4;     // 狼人行动
+  PHASE_NIGHT_SEER = 5;       // 预言家查验
+  PHASE_NIGHT_WITCH = 6;      // 女巫用药
+  PHASE_DAWN = 7;             // 黎明（公布死亡 + 遗言）
+  PHASE_DAY_SPEAK = 8;        // 白天发言
+  PHASE_DAY_VOTE = 9;         // 白天投票
+  PHASE_SHERIFF_ELECT = 10;   // 警长竞选
+  PHASE_SHERIFF_VOTE = 11;    // 警长投票
+  PHASE_WOLF_SUICIDE = 12;    // 狼人自爆
+  PHASE_HUNTER_SHOOT = 13;    // 猎人开枪
+  PHASE_IDIOT_REVEAL = 14;    // 白痴翻牌
+  PHASE_LAST_WORDS = 15;      // 遗言
+  PHASE_GAME_OVER = 16;       // 游戏结束
+  PHASE_RESTART_VOTE = 17;    // 重开局投票
+  PHASE_KNIGHT_DUEL = 18;     // 骑士决斗
+  PHASE_DEMON_HUNTER_HUNT = 19; // 猎魔人狩猎
+  PHASE_PAUSED = 20;          // 暂停
+}
+
+// 死亡原因
+enum DeathCause {
+  DEATH_CAUSE_UNSPECIFIED = 0;
+  DEATH_CAUSE_WOLF_KILL = 1;        // 狼刀
+  DEATH_CAUSE_VOTE_EXECUTION = 2;   // 投票处决
+  DEATH_CAUSE_WITCH_POISON = 3;     // 女巫毒
+  DEATH_CAUSE_HUNTER_SHOT = 4;      // 猎人枪
+  DEATH_CAUSE_SUICIDE = 5;          // 自爆
+  DEATH_CAUSE_GUARD_SAVE = 6;       // 守卫守护（未死亡，标记用）
+  DEATH_CAUSE_WITCH_SAVE = 7;       // 女巫解药（未死亡，标记用）
+  DEATH_CAUSE_KNIGHT_DUEL = 8;      // 骑士决斗死亡
+  DEATH_CAUSE_DEMON_HUNTER_HUNT = 9; // 猎魔人狩猎死亡
+}
+
+// 死亡裁决（execution = 处决 / death = 死亡）
+enum DeathVerdict {
+  DEATH_VERDICT_UNSPECIFIED = 0;
+  DEATH_VERDICT_EXECUTION = 1;  // 处决（公开身份）
+  DEATH_VERDICT_DEATH = 2;      // 死亡（不公开身份）
+}
+
+// ─────────────────── 通用类型 ───────────────────
+
+// 玩家信息（座位视图）
+message PlayerInfo {
+  int32 seat = 1;
+  string user_id = 2;
+  string nickname = 3;
+  bool alive = 4;
+  // 角色（仅自己/观察者/死亡后可见）
+  Role role = 5;
+  // 阵营（仅自己/观察者/死亡后可见）
+  Faction faction = 6;
+  bool is_bot = 7;
+  string bot_model_key = 8;
+  // 是否为警长
+  bool is_sheriff = 9;
+  // 死亡原因
+  DeathCause death_cause = 10;
+  // 死亡裁决
+  DeathVerdict death_verdict = 11;
+  // 是否身份已公开
+  bool role_revealed = 12;
+}
+
+// 投票记录
+message VoteRecord {
+  int32 voter_seat = 1;
+  int32 target_seat = 2;  // -1 = 弃权
+  int64 ts = 3;
+}
+
+// 死亡玩家详细信息
+message DeadPlayerInfo {
+  int32 seat = 1;
+  string nickname = 2;
+  Role role = 3;
+  Faction faction = 4;
+  DeathCause cause = 5;
+  DeathVerdict verdict = 6;
+  int32 round = 7;  // 死于第几天
+  bool role_revealed = 8;
+}

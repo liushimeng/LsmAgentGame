@@ -1,0 +1,91 @@
+// LsmWebGame — 聊天模块消息定义
+//
+// 帧类型(所有消息封装在 common.Envelope 中,type 字段以 "chat." 开头):
+//
+//   client → server
+//     chat.subscribe    ChatSubscribe
+//     chat.unsubscribe  ChatUnsubscribe
+//     chat.send         ChatSend
+//     chat.history      ChatHistoryReq
+//
+//   server → client
+//     chat.message      ChatMessagePayload
+//     chat.history      ChatHistoryResp
+//     chat.subscribed   ChatSubscribeAck
+//     chat.unsubscribed ChatSubscribeAck
+//     chat.error        ErrorPayload
+
+syntax = "proto3";
+
+package lsm;
+
+import "common.proto";
+
+option go_package = "LsmWebGame/proto/pb";
+option java_package = "com.lsmwebgame.proto";
+
+// ─────────────────── 枚举 ───────────────────
+
+// 聊天作用域
+enum ChatScope {
+  CHAT_SCOPE_UNSPECIFIED = 0;
+  LOBBY = 1;  // 大厅聊天
+  ROOM = 2;   // 房间内聊天
+}
+
+// ─────────────────── 客户端请求 ───────────────────
+
+// 订阅请求
+message ChatSubscribe {
+  ChatScope scope = 1;
+  // ROOM 作用域必填,LOBBY 忽略
+  string room_id = 2;
+}
+
+// 取消订阅请求
+message ChatUnsubscribe {
+  ChatScope scope = 1;
+  string room_id = 2;
+}
+
+// 发送消息请求
+message ChatSend {
+  ChatScope scope = 1;
+  string room_id = 2;
+  // 消息正文,最长 1024 rune
+  string text = 3;
+}
+
+// 历史消息拉取请求
+message ChatHistoryReq {
+  ChatScope scope = 1;
+  string room_id = 2;
+  // 拉取条数(默认 50,最大 200)
+  int32 limit = 3;
+}
+
+// ─────────────────── 服务端响应 ───────────────────
+
+// 订阅确认
+message ChatSubscribeAck {
+  ChatScope scope = 1;
+  string room_id = 2;
+}
+
+// 单条聊天消息(广播载荷)
+message ChatMessagePayload {
+  uint64 id = 1;
+  ChatScope scope = 2;
+  string room_id = 3;
+  string from_user_id = 4;
+  string from_account = 5;
+  string text = 6;
+  int64 ts = 7;  // Unix 毫秒
+}
+
+// 历史消息响应
+message ChatHistoryResp {
+  ChatScope scope = 1;
+  string room_id = 2;
+  repeated ChatMessagePayload messages = 3;
+}

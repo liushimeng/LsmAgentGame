@@ -1,0 +1,888 @@
+
+/* ---------- Git 提交记录弹窗 ---------- */
+.gitlog-modal {
+  width: min(960px, 96vw);
+  max-width: 960px;
+  min-width: 320px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 22px 16px;
+}
+.gitlog-modal h2 {
+  margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.gitlog-modal__close {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+.gitlog-modal__close:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.gitlog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.gitlog-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.gitlog-toolbar__label {
+  color: var(--muted);
+  font-size: 12px;
+}
+.gitlog-toolbar__pagesize {
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.gitlog-toolbar__pagesize:hover,
+.gitlog-toolbar__pagesize:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.gitlog-toolbar__search {
+  flex: 1;
+  min-width: 180px;
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  transition: border-color 0.15s;
+}
+.gitlog-toolbar__search:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.gitlog-toolbar__btn {
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.gitlog-toolbar__btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.gitlog-toolbar__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.gitlog-toolbar__btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.gitlog-toolbar__btn--primary:hover {
+  background: #0770d9;
+  color: #fff;
+}
+.gitlog-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  background: linear-gradient(90deg, rgba(10,132,255,0.08) 0%, transparent 100%);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.gitlog-summary__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.gitlog-summary__chip strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+.gitlog-summary__chip--ok strong {
+  color: var(--ok);
+}
+.gitlog-summary__chip--danger strong {
+  color: var(--danger);
+}
+.gitlog-body {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  min-height: 200px;
+  max-height: 56vh;
+}
+.gitlog-body--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 40px 20px;
+}
+.gitlog-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+.gitlog-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--card);
+}
+.gitlog-table thead th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.gitlog-table tbody tr {
+  border-top: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.gitlog-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.015);
+}
+.gitlog-table tbody tr:hover {
+  background: rgba(10, 132, 255, 0.06);
+}
+.gitlog-table tbody tr.is-expanded {
+  background: rgba(10, 132, 255, 0.08);
+}
+.gitlog-col-id {
+  width: 70px;
+}
+.gitlog-col-time {
+  width: 130px;
+}
+.gitlog-col-files {
+  width: 60px;
+  text-align: right;
+}
+.gitlog-col-add {
+  width: 80px;
+  text-align: right;
+}
+.gitlog-col-del {
+  width: 80px;
+  text-align: right;
+}
+.gitlog-col-expand {
+  width: 32px;
+  text-align: center;
+}
+.gitlog-cell-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.gitlog-cell-time {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.gitlog-cell-msg {
+  word-break: break-word;
+}
+.gitlog-cell-msg__subject {
+  font-weight: 500;
+  color: var(--fg);
+  margin-bottom: 2px;
+  line-height: 1.4;
+}
+.gitlog-cell-msg__author {
+  font-size: 11px;
+  color: var(--muted);
+}
+.gitlog-cell-num {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+.gitlog-cell-num--ok {
+  color: var(--ok);
+}
+.gitlog-cell-num--danger {
+  color: var(--danger);
+}
+.gitlog-cell-num--zero {
+  color: var(--muted);
+}
+.gitlog-cell-expand {
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.2s, color 0.15s;
+}
+.gitlog-cell-expand:hover {
+  color: var(--accent);
+}
+.gitlog-cell-expand.is-open {
+  transform: rotate(90deg);
+  color: var(--accent);
+}
+.gitlog-detail {
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding: 10px 16px 14px;
+}
+.gitlog-detail__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.gitlog-detail__files {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.gitlog-detail__files th {
+  text-align: left;
+  padding: 4px 6px;
+  color: var(--muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.gitlog-detail__files td {
+  padding: 4px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  vertical-align: top;
+}
+.gitlog-detail__files .gitlog-cell-num {
+  text-align: right;
+}
+.gitlog-detail__path {
+  word-break: break-all;
+  color: var(--fg);
+  max-width: 0; /* 配合 table-layout: fixed 让 path 列自动撑开 */
+}
+.gitlog-detail__path-deleted {
+  color: var(--danger);
+  text-decoration: line-through;
+  opacity: 0.85;
+}
+.gitlog-detail__path-added {
+  color: var(--ok);
+  font-weight: 500;
+}
+.gitlog-detail__empty {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 8px 0;
+}
+.gitlog-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding: 12px 0 4px;
+  margin-top: 10px;
+}
+.gitlog-pagination__info {
+  color: var(--muted);
+  font-size: 12px;
+}
+.gitlog-pagination__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gitlog-pagination__pagebtn {
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  min-width: 32px;
+  transition: all 0.15s;
+}
+.gitlog-pagination__pagebtn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.gitlog-pagination__pagebtn.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  cursor: default;
+}
+.gitlog-pagination__pagebtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.gitlog-pagination__ellipsis {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 0 4px;
+}
+.gitlog-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: gitlog-spin 0.7s linear infinite;
+  vertical-align: -2px;
+}
+@keyframes gitlog-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 全局 ErrorBoundary 兜底：隔离子组件 render 异常,避免整页黑屏。
+   AppLayout 在 <main className="content"> 外层包裹 ErrorBoundary,
+   当任意页面组件抛错时只显示兜底卡片,顶部 nav / 左侧 sidebar / WS lifecycle
+   仍然存活,便于用户点击「重试渲染」或「刷新页面」。 */
+.page-fatal-error {
+  padding: 60px 20px;
+  text-align: center;
+  color: #e7e9f0;
+  background: #1c1f2b;
+  min-height: 50vh;
+}
+.page-fatal-error h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+.page-fatal-error p {
+  margin: 0 0 16px;
+  color: #a0a4b0;
+}
+.page-fatal-error__actions {
+  display: inline-flex;
+  gap: 12px;
+}
+.page-fatal-error button {
+  margin-top: 8px;
+  padding: 8px 24px;
+  background: #4f46e5;
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.page-fatal-error button:hover {
+  background: #4338ca;
+}
+
+/* ---------- SettlementModal / ConfirmModal 共享弹层外观 ----------
+   BUG-FORCEDISBAND-NO-CONFIRM FIX (Round 24): 这两个 class 是在
+   feat(wallet) (c52eeb9) 引入 SettlementModal 时新增的,但配套 CSS
+   一直未补,导致 ConfirmModal("⛔ 强制解散")和 SettlementModal 都渲染
+   成不可见 div,看起来「没弹出确认框」。补齐与 .modal-backdrop / .modal
+   同源的样式(同样的色板、圆角、z-index=200 高于普通 modal=100)。 */
+.settlement-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--ww-z-modal, 200);
+  animation: settlement-fade 0.15s ease-out;
+}
+.settlement-modal {
+  position: relative;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 24px;
+  min-width: 320px;
+  max-width: 480px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  color: var(--text);
+  /* 三态主题变量 —— 由变体类覆盖，默认取中性值。 */
+  --settle-accent: var(--border);
+  --settle-glow: rgba(0, 0, 0, 0);
+  /* 2026-07-24 修正:z-index 必须高于 settlement-modal__overlay(200),
+   * 让弹层始终盖住遮罩。旧版隐式继承 stacking context 有视觉错位风险。 */
+  z-index: 1;
+}
+.settlement-modal__header {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  margin-bottom: 12px;
+}
+.settlement-modal__body {
+  position: relative;
+  z-index: 1;
+  font-size: 14px;
+  line-height: 1.5;
+}
+@keyframes settlement-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ============================================================
+   SettlementModal 三态变体 + 特效（docs/狼人杀13人局金币系统设计.md §11）
+   win = 金色庆祝 / lose = 暗红克制 / draw = 中性蓝灰。
+   跨 5 款游戏共用；棋类无 ante 时相关行按 0 值隐藏，变体样式仅是加法。
+   ============================================================ */
+
+/* ---- win：金色 + 暖光 + 弹入 ---- */
+.settlement-modal--win {
+  --settle-accent: #ffcf40;
+  --settle-glow: rgba(255, 207, 64, 0.35);
+  border-color: var(--settle-accent);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 207, 64, 0.4),
+    0 0 34px 2px var(--settle-glow);
+  animation:
+    settlement-fade 0.15s ease-out,
+    settle-pop-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+/* header 背后的光晕脉冲（仅 win，2 个周期后停）。 */
+.settlement-modal--win::before {
+  content: '';
+  position: absolute;
+  top: -40%;
+  left: 50%;
+  width: 320px;
+  height: 320px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, var(--settle-glow) 0%, transparent 62%);
+  pointer-events: none;
+  z-index: 0;
+  animation: settle-glow-pulse 1.5s ease-in-out 2;
+}
+
+/* ---- lose：暗红 / 低饱和 + 轻微抖动 ---- */
+.settlement-modal--lose {
+  --settle-accent: #b23b3b;
+  --settle-glow: rgba(178, 59, 59, 0.18);
+  border-color: var(--settle-accent);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(178, 59, 59, 0.3);
+  filter: saturate(0.9);
+  animation:
+    settlement-fade 0.15s ease-out,
+    settle-shake 0.4s ease-in-out;
+}
+
+/* ---- draw：中性蓝灰 ---- */
+.settlement-modal--draw {
+  --settle-accent: #6b7a8f;
+  border-color: var(--settle-accent);
+}
+
+/* 顶部大字标题 —— 主题着色。 */
+.settlement-result {
+  display: block;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.settlement-result--win {
+  color: #ffcf40;
+  text-shadow: 0 1px 10px var(--settle-glow);
+}
+.settlement-result--lose {
+  color: #e07575;
+}
+.settlement-result--draw {
+  color: #9aa8ba;
+}
+
+/* 狼人杀阵营胜负标语。 */
+.settlement-faction {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--settle-accent);
+  opacity: 0.92;
+}
+
+.settlement-game {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* ---- 视觉焦点：本局净收益 ---- */
+.settlement-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 16px;
+  padding: 14px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+}
+.settlement-hero--win {
+  background: rgba(255, 207, 64, 0.08);
+  border-color: rgba(255, 207, 64, 0.35);
+}
+.settlement-hero--lose {
+  background: rgba(178, 59, 59, 0.08);
+  border-color: rgba(178, 59, 59, 0.3);
+}
+.settlement-hero__label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+}
+.settlement-hero__amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.1;
+  animation: settle-balance-bump 0.5s ease-out 0.12s both;
+}
+.settlement-hero__coin {
+  font-size: 26px;
+}
+
+/* 金额符号色（复用既有 amount--gain/loss/zero 命名）。 */
+.amount--gain { color: #3ecf7a; }
+.amount--loss { color: #e07575; }
+.amount--zero { color: #9aa8ba; }
+
+.settlement-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 5px 2px;
+}
+.settlement-row__k { opacity: 0.75; }
+.settlement-row__v { font-weight: 600; font-variant-numeric: tabular-nums; }
+.settlement-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 0;
+}
+.settlement-row--balance .settlement-row__k { opacity: 0.85; }
+
+/* 结算后余额高亮 —— 随 result 着色 + 轻微 bump。 */
+.settlement-balance {
+  font-size: 16px;
+  animation: settle-balance-bump 0.5s ease-out 0.28s both;
+}
+.settlement-balance--win { color: #3ecf7a; }
+.settlement-balance--lose { color: #e07575; }
+.settlement-balance--draw { color: var(--text); }
+
+.settlement-continue {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  margin-top: 16px;
+}
+
+/* ---- 金币 fly-in 装饰层（仅 win）---- */
+.settlement-coins {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+}
+.settlement-coin {
+  position: absolute;
+  top: 12%;
+  left: 50%;
+  font-size: 24px;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: settle-coin-fly 1.1s ease-out forwards;
+}
+.settlement-coin--0 { animation-delay: 0.05s; --cx: -140px; --cr: -30deg; }
+.settlement-coin--1 { animation-delay: 0.15s; --cx: 130px;  --cr: 26deg; }
+.settlement-coin--2 { animation-delay: 0.25s; --cx: -80px;  --cr: -18deg; }
+.settlement-coin--3 { animation-delay: 0.35s; --cx: 90px;   --cr: 20deg; }
+.settlement-coin--4 { animation-delay: 0.20s; --cx: -30px;  --cr: -10deg; }
+.settlement-coin--5 { animation-delay: 0.30s; --cx: 40px;   --cr: 12deg; }
+
+@keyframes settle-coin-fly {
+  0% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--cx, 0px)), -60px) scale(0.6) rotate(var(--cr, 0deg));
+  }
+  25% { opacity: 1; }
+  70% {
+    opacity: 1;
+    transform: translate(-50%, 70px) scale(1.05) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 90px) scale(1) rotate(0deg);
+  }
+}
+@keyframes settle-glow-pulse {
+  0%, 100% { opacity: 0.25; transform: translateX(-50%) scale(0.9); }
+  50%      { opacity: 0.75; transform: translateX(-50%) scale(1.08); }
+}
+@keyframes settle-balance-bump {
+  0%   { transform: scale(0.85); }
+  55%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+@keyframes settle-pop-in {
+  0%   { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes settle-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+
+/* ---- 钱包余额变化高亮（AppHeader）---- */
+.wallet-trigger__balance--flash-gain {
+  animation: wallet-balance-flash-gain 1.1s ease-out;
+}
+.wallet-trigger__balance--flash-loss {
+  animation: wallet-balance-flash-loss 1.1s ease-out;
+}
+@keyframes wallet-balance-flash-gain {
+  0%   { color: inherit; transform: scale(1); }
+  25%  { color: #3ecf7a; transform: scale(1.28); text-shadow: 0 0 12px rgba(62, 207, 122, 0.7); }
+  100% { color: inherit; transform: scale(1); text-shadow: none; }
+}
+@keyframes wallet-balance-flash-loss {
+  0%   { color: inherit; transform: scale(1); }
+  25%  { color: #e07575; transform: scale(1.18); text-shadow: 0 0 12px rgba(224, 117, 117, 0.6); }
+  100% { color: inherit; transform: scale(1); text-shadow: none; }
+}
+
+/* ---- 无障碍：尊重 prefers-reduced-motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .settlement-modal--win,
+  .settlement-modal--lose,
+  .settlement-modal--draw {
+    animation: settlement-fade 0.15s ease-out;
+  }
+  .settlement-modal--win::before { animation: none; opacity: 0.35; }
+  .settlement-coins { display: none; }
+  .settlement-hero__amount,
+  .settlement-balance,
+  .wallet-trigger__balance--flash-gain,
+  .wallet-trigger__balance--flash-loss {
+    animation: none !important;
+  }
+}
+
+/* ---------- RoomListTable 操作列内层容器 ----------
+   BUG-FORCEDISBAND-LAYOUT FIX (Round 24): .room-list-td--actions 在
+   <td> 上写 display:flex 在 Chrome 下行为不一致;改为右对齐 td +
+   内层 .room-list-actions (inline-flex) 容器,把按钮收纳其中,
+   避免 ConfirmModal Portal 之前内嵌在 td 内把行高撑爆。 */
+.room-list-actions {
+  display: inline-flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+
+/* §20260811-02 U2 — 结算弹层「死者身份延时揭晓」倒计时条。
+   §26.1 对比度:纯白字 + 0.5 不透明紫底,实测 ≥ 5.0:1。
+   §26.4 色相:紫(与「白痴翻牌」同色相族,语义都是「身份相关的悬念揭晓」)。 */
+.settlement-reveal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: rgba(139, 92, 246, 0.5);
+  border: 1px solid rgba(139, 92, 246, 0.8);
+  border-radius: 6px;
+}
+.settlement-reveal__text {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+}
+.settlement-reveal__now {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(139, 92, 246, 0.75);
+  border: 1px solid rgba(196, 181, 253, 0.9);
+  border-radius: 4px;
+  cursor: pointer;
+  min-height: 28px;
+}
+.settlement-reveal__now:hover {
+  background: rgba(139, 92, 246, 0.95);
+}
+
+/* §20260812-02 U1 — 模型能力雷达图 */
+.model-radar-chart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.model-radar-chart svg {
+  display: block;
+}
+.model-radar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: center;
+  max-width: 480px;
+}
+.model-radar-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+}
+.model-radar-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.model-radar-legend-name {
+  font-weight: 600;
+}
+.model-radar-legend-sample {
+  color: #ffa726;
+  margin-left: 2px;
+  font-size: 11px;
+}
+.model-radar-legend-games {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+}
+.model-admin-radar-section {
+  margin: 16px 0;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+}
+
+/* §20260812-02 U4 — 音效开关 */
+.sound-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.sound-toggle__btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 2px 4px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: background 0.15s;
+  min-height: 44px;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sound-toggle__btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.sound-toggle__slider {
+  width: 60px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.sound-toggle__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #4fc3f7;
+  cursor: pointer;
+}
+.sound-toggle__slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #4fc3f7;
+  border: none;
+  cursor: pointer;
+}

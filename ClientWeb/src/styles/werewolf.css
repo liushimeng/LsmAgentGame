@@ -1,0 +1,1174 @@
+/* ============================================================
+   狼人杀 7 人标准局 (欧式暗黑中世纪桌游风)
+   §12.5 "我方在底部" 布局:7 座位环绕椭圆桌,我方固定底部
+   ============================================================ */
+.werewolf-game {
+  --card: #23201b;
+  --fg: #d8c8a5;
+  --accent: #c19a56;
+  --accent-warm: #a0352f;
+  --accent-cool: #4a6ea5;
+  /* 紧凑布局全局间距:所有间距统一为 10px 网格 */
+  --ww-gap: 10px;
+  --ww-pad: 10px;
+  --ww-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  /* 使用 flex: 1 撑满 .content 容器,避免 calc(100vh - 60px) 硬编码 */
+  flex: 1 1 auto;
+  min-height: 0;
+  /* 2026-07-23 §道具特效:作为 PropUseOverlay(position:absolute; inset:0) 的定位上下文。 */
+  position: relative;
+
+  /* ── 2026-07-24 z-index 层级 token(狼人杀页面统一层级约定)────────────
+   * 由低到高(数值即 CSS z-index 字面值,全页统一收敛到以下变量):
+   *   --ww-z-bg            0     桌面背景 .werewolf-table__bg
+   *   --ww-z-content       1     面板/徽章等常规内容
+   *   --ww-z-overlay       5     filling-overlay 等轻量覆盖(pointer-events:none)
+   *   --ww-z-seat          7     座位卡
+   *   --ww-z-board-label   10    桌面阶段标签 .werewolf-table__phase
+   *   --ww-z-seat-badge    12    道具目标高亮徽章 .werewolf-seat.is-prop-target
+   *   --ww-z-action        50    人类操作面板 / sticky 主 header
+   *   --ww-z-popover       60    身份猜测弹层 / JudgeActionBar
+   *   --ww-z-fx           100    昼夜特效 DayNightOverlay(pointer-events:none)
+   *   --ww-z-modal        200    结算 settlement-overlay 级 modal
+   *   --ww-z-drawer       300    抽屉 FactionDrawer / HistoryDrawer / app-modal
+   *   --ww-z-drawer-panel 301    抽屉面板本体(略高于抽屉遮罩)
+   *   --ww-z-critical    1000    警徽流 sheriff-stream / 白痴揭示 idiot-reveal
+   *   --ww-z-prop-fx     1100    道具特效 PropUseOverlay(pointer-events:none,高于一切游戏内层)
+   * GlobalToast(1000,全局 .global-toast)不属于本作用域,但约定其永远 ≥ 游戏内 modal。
+   * ──────────────────────────────────────────────────────────────────── */
+  --ww-z-bg: 0;
+  --ww-z-content: 1;
+  --ww-z-overlay: 5;
+  --ww-z-seat: 7;
+  --ww-z-board-label: 10;
+  --ww-z-seat-badge: 12;
+  --ww-z-action: 50;
+  --ww-z-popover: 60;
+  --ww-z-fx: 100;
+  --ww-z-modal: 200;
+  --ww-z-drawer: 300;
+  --ww-z-drawer-panel: 301;
+  --ww-z-critical: 1000;
+  --ww-z-prop-fx: 1100;
+
+  /* 2026-07-26 房间聊天滚动修复: .content/.app-body/.app-shell 祖先链上
+   * 没有任何硬高度约束(app-shell 仅 min-height:100vh),因此这里的
+   * height:100% 会解析成 auto,整个 .werewolf-game 随内容无限增高,
+   * 聊天列表永远 scrollHeight==clientHeight → 内嵌滚轮/滑块永不出现。
+   * 修复:给 .content:has(.werewolf-game) 一个确定的视口高度(100dvh,
+   * 扣除全局 app-header 高度),此处 height:100% 即可解析到该值;
+   * inset:0 消除 sticky header / 全局顶栏 造成的垂直偏移。
+   * 最终 .werewolf-game 成为"不可超高"的容器,内嵌聊天列表
+   * (.game-chat__list)成为唯一滚动容器。 */
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  inset: 0;
+  margin: 0;
+}
+
+/* 狼人杀游戏页:覆写 .content 默认约束(padding 24px + max-width 1280px),
+ * 让三栏布局撑满整个可用视口,四周无多余边距。
+ * :has() 选择器在 2024+ 浏览器中全面支持。 */
+.content:has(.werewolf-game) {
+  padding: 0;
+  max-width: none;
+  /* 给 .werewolf-game 的 height:100% 一个确定锚点:视口高度扣除全局
+   * app-header(56px)。该容器本身不允许超高 → 页面级滚动消失。 */
+  height: calc(100dvh - var(--header-h, 56px));
+  max-height: calc(100dvh - var(--header-h, 56px));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 三栏布局: §127 — [房间信息 0.6fr] | [棋牌 1.8fr] | [房间聊天 1fr]
+ * 房间信息列宽度减半,棋牌区获得更大可视空间;聊天保持原宽度。
+ * 所有间距统一 10px,响应式断点覆盖 720p / 1080p / 2K / 4K。
+ * §2026-08-06:transition 让列折叠/展开动画平滑;
+ * data-*-folded 属性在 JS 里由 fold state 驱动,列宽切换让中栏可扩张。 */
+.werewolf-game .game-area {
+  display: grid;
+  /* §127: 房间信息 0.6fr(原 1fr 的一半),棋牌 1.8fr(占据中间放大区),聊天 1fr 不变 */
+  grid-template-columns: minmax(0, 0.6fr) minmax(0, 1.8fr) minmax(0, 1fr);
+  grid-template-rows: 1fr;
+  /* 2026-07-26 房间聊天滚动修复: 基类 .game-area 带 align-items:flex-start,
+   * grid 模式下会让聊天列高度=内容高度而非撑满行高,聊天面板随消息无限
+   * 增高 → 内嵌滚轮失效。stretch 让三列都占满 grid 行,聊天列表在列内
+   * 自行 overflow。 */
+  align-items: stretch;
+  gap: var(--ww-gap);
+  padding: var(--ww-pad);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  transition: grid-template-columns 0.25s ease;
+}
+/* §2026-08-06 折叠态网格:折叠的列变为 0fr(由内部 36px min-width 控制),
+ * 中栏系数累加到剩余宽度,让 13 人局座位网格获得更多列。 */
+.werewolf-game .game-area[data-chat-folded="1"] {
+  grid-template-columns: minmax(0, 0.6fr) minmax(0, 2.8fr) minmax(0, 0fr);
+}
+.werewolf-game .game-area[data-info-folded="1"] {
+  grid-template-columns: minmax(0, 0fr) minmax(0, 2.4fr) minmax(0, 1fr);
+}
+.werewolf-game .game-area[data-chat-folded="1"][data-info-folded="1"] {
+  grid-template-columns: minmax(0, 0fr) minmax(0, 3.4fr) minmax(0, 0fr);
+}
+
+.werewolf-game .board-container {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: var(--ww-radius);
+  overflow: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* 内部子元素之间也使用 10px 间距 */
+  gap: var(--ww-gap);
+  padding: var(--ww-pad);
+}
+
+/* Chat column overrides — make the chat panel breathe.
+ * The default .game-chat inside the sidebar caps at 300px; here we let it
+ * consume the whole third column. */
+.werewolf-game .game-chat {
+  height: 100%;
+  max-height: none;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.werewolf-game .game-chat__list {
+  flex: 1;
+  min-height: 200px;
+  overflow-y: auto;
+}
+
+/* Info column stretches with the layout; internal sections keep their
+ * default sizes but the column itself never collapses.
+ * width: 100% overrides the base .game-sidebar { width: 240px } so the
+ * grid column sizing controls the actual width. */
+.werewolf-game .game-sidebar {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Right column hosts the chat as a full-height standalone panel. */
+.werewolf-game .game-chat-column {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ww-gap);
+}
+
+/* 2K 显示器断点 (~2560×1440):保持 §127 比例 0.6:1.8:1,加 max-width 让大屏不撑爆 */
+@media (min-width: 2000px) {
+  .werewolf-game .game-area {
+    grid-template-columns: minmax(0, 0.6fr) minmax(0, 1.8fr) minmax(0, 1fr);
+    max-width: 2560px;
+    margin: 0 auto;
+  }
+}
+
+/* 4K 显示器断点 (~3840×2160):保持 §127 比例,居中显示并加 max-width */
+@media (min-width: 3000px) {
+  .werewolf-game .game-area {
+    grid-template-columns: minmax(0, 0.6fr) minmax(0, 1.8fr) minmax(0, 1fr);
+    max-width: 3200px;
+    margin: 0 auto;
+  }
+}
+
+/* 1080p 断点 (≤1600px):保持 §127 比例,压缩内边距 */
+@media (max-width: 1600px) {
+  .werewolf-game .game-area {
+    grid-template-columns: minmax(0, 0.6fr) minmax(0, 1.8fr) minmax(0, 1fr);
+  }
+}
+
+/* 720p 断点 (≤1280px):保持 §127 比例,压缩 padding 与 gap */
+@media (max-width: 1280px) {
+  .werewolf-game .game-area {
+    grid-template-columns: minmax(0, 0.6fr) minmax(0, 1.8fr) minmax(0, 1fr);
+    --ww-gap: 8px;
+    --ww-pad: 8px;
+  }
+}
+
+/* 窄屏 (≤1024px):三栏垂直堆叠,各自独立滚动;
+ * 折叠功能在此断点以下隐藏(垂直堆叠模式无需折叠) */
+@media (max-width: 1024px) {
+  .werewolf-game .game-area {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: minmax(420px, auto) auto auto;
+    overflow: auto;
+  }
+  .werewolf-game .game-sidebar,
+  .werewolf-game .game-chat-column {
+    height: auto;
+    max-height: 320px;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    overflow: visible !important;
+  }
+  .werewolf-game .game-chat {
+    height: 320px;
+    max-height: 320px;
+  }
+  /* 隐藏所有折叠按钮与折叠态 handle(垂直堆叠模式下无意义)
+   * 2026-08-07 §房间聊天优化:werewolf-chat-wrap__fold-btn 已删除
+   * (外层冗余 header + 折叠按钮移除),其余保留。 */
+  .werewolf-game .room-info-panel__fold-btn,
+  .werewolf-game .game-chat__toggle,
+  .werewolf-game .room-info-fold-handle,
+  .werewolf-game .room-chat-fold-handle {
+    display: none !important;
+  }
+}
+
+.werewolf-table {
+  position: relative;
+  width: 100%;
+  /* 高度使用 10px 网格 — 三栏 1:1:1 等宽下,中栏占 1.1fr,可视空间收紧,
+   * 牌桌高度按视口分级,大屏下放大 */
+  flex: 1 1 auto;
+  min-height: 320px;
+  display: block;
+}
+/* 紧凑模式(<1600px):三栏等宽下,中栏仅占 1/3 视口宽度,牌桌高度降低以适应 */
+@media (max-width: 1599px) {
+  .werewolf-table { height: 460px; }
+}
+/* 2026-07-26 房间聊天滚动修复: 13 人局 4 行座位卡(4×243px+gap)在 1080p
+ * 视口下会把 .werewolf-table 撑到 ~1100px,进而撑破整行 grid 高度 → 聊天列
+ * 随之变高,内嵌滚轮失效(页面级滚动回归)。根因:原 display:block 让
+ * 内部 __grid 的 flex:1 1 auto 失效,table 高度永远 = 内容高度。修复:
+ *   1. table 改 flex column — 让 __grid 在 table 受限时正确收缩;
+ *   2. __grid overflow-y:auto — 高度不足时座位网格自行滚动;
+ *   3. table min-height:0 — 允许 flex 压缩到视口可用高度之下;
+ *   4. action-panel flex-shrink:0 — 夜间操作面板不被压缩变形。
+ * 原有 media query 的固定高度保持不变,overflow 只作为兜底。 */
+.werewolf-table {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  min-height: 0;
+}
+.werewolf-table__grid {
+  overflow-y: auto;
+}
+.werewolf-game .werewolf-action-panel {
+  flex-shrink: 0;
+}
+@media (min-width: 1600px) and (max-width: 1999px) {
+  .werewolf-table { height: 560px; }
+}
+@media (min-width: 2000px) and (max-width: 2999px) {
+  .werewolf-table { height: 680px; }
+}
+@media (min-width: 3000px) {
+  .werewolf-table { height: 840px; }
+}
+.werewolf-table__bg {
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, #1a160e 0%, #0a0805 100%);
+  background-size: cover;
+  background-position: center;
+  opacity: 0.7;
+  z-index: var(--ww-z-bg, 0);
+}
+.werewolf-table.is-night .werewolf-table__bg {
+  filter: brightness(0.4) saturate(0.6);
+}
+
+/* ─────────────────── 2026-07-10 天黑请闭眼 / 天亮了 视觉特效 ─────────────────── */
+
+.ww-daynight-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--ww-z-fx, 100);
+  pointer-events: none;
+  animation: wwDayNightFadeIn 0.5s ease-out;
+}
+.ww-daynight-overlay__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 48px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  text-align: center;
+}
+.ww-daynight-overlay__emoji {
+  font-size: 96px;
+  line-height: 1;
+  animation: wwDayNightEmojiPulse 1.4s ease-in-out infinite;
+}
+.ww-daynight-overlay__title {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: var(--fg);
+  text-shadow: 0 0 16px rgba(0, 0, 0, 0.7);
+}
+.ww-daynight-overlay__subtitle {
+  font-size: 13px;
+  color: var(--fg-muted, #c0c0c0);
+  letter-spacing: 1px;
+}
+
+/* Night — 蓝黑背景 + 月光晕 */
+.ww-daynight-overlay--night {
+  background: radial-gradient(circle at 50% 40%, rgba(20, 30, 60, 0.55) 0%, rgba(5, 5, 15, 0.85) 70%);
+  animation: wwDayNightFadeIn 0.5s ease-out, wwDayNightFadeOut 0.6s ease-in 2.0s forwards;
+}
+.ww-daynight-overlay--night .ww-daynight-overlay__inner {
+  border: 1px solid rgba(120, 160, 255, 0.4);
+  box-shadow: 0 0 40px rgba(80, 120, 255, 0.25) inset;
+}
+
+/* Dawn — 暖橙背景 + 太阳光 */
+.ww-daynight-overlay--dawn {
+  background: radial-gradient(circle at 50% 60%, rgba(255, 180, 100, 0.45) 0%, rgba(80, 40, 20, 0.7) 70%);
+  animation: wwDayNightFadeIn 0.5s ease-out, wwDayNightFadeOut 0.6s ease-in 1.4s forwards;
+}
+.ww-daynight-overlay--dawn .ww-daynight-overlay__inner {
+  border: 1px solid rgba(255, 200, 120, 0.5);
+  box-shadow: 0 0 50px rgba(255, 180, 80, 0.3) inset;
+}
+
+/* Day — 浅蓝柔光,持续时间短 */
+.ww-daynight-overlay--day {
+  background: radial-gradient(circle at 50% 50%, rgba(150, 200, 255, 0.25) 0%, rgba(30, 50, 80, 0.5) 70%);
+  animation: wwDayNightFadeIn 0.4s ease-out, wwDayNightFadeOut 0.4s ease-in 0.9s forwards;
+}
+.ww-daynight-overlay--day .ww-daynight-overlay__inner {
+  border: 1px solid rgba(180, 220, 255, 0.35);
+}
+
+/* Sheriff elected — 金色光辉 + 星光,2.5s 后淡出 */
+.ww-daynight-overlay--sheriff {
+  background: radial-gradient(circle at 50% 50%, rgba(255, 215, 80, 0.35) 0%, rgba(40, 30, 10, 0.75) 70%);
+  animation: wwDayNightFadeIn 0.5s ease-out, wwDayNightFadeOut 0.6s ease-in 2.0s forwards;
+}
+.ww-daynight-overlay--sheriff .ww-daynight-overlay__inner {
+  border: 1px solid rgba(255, 215, 80, 0.55);
+  box-shadow: 0 0 50px rgba(255, 200, 60, 0.3) inset;
+}
+.ww-daynight-overlay--sheriff .ww-daynight-overlay__title {
+  color: #ffd700;
+  text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+}
+
+@keyframes wwDayNightFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes wwDayNightFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; visibility: hidden; }
+}
+@keyframes wwDayNightEmojiPulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.08); filter: brightness(1.18); }
+}
+
+@media (max-width: 1599px) {
+  .ww-daynight-overlay__emoji { font-size: 72px; }
+  .ww-daynight-overlay__title { font-size: 24px; }
+}
+@media (min-width: 2000px) {
+  .ww-daynight-overlay__emoji { font-size: 120px; }
+  .ww-daynight-overlay__title { font-size: 40px; }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   2026-07-23 §道具特效 — PropUseOverlay 道具使用视觉特效叠加层。
+   每种道具独立配色(由 --ww-prop-r/g/b CSS 变量驱动,JS 按 prop_key 设置),
+   独立进场/保持/退场时序;最少展示 12 秒,明确表达"谁→谁 用了什么 是否中招"。
+   对齐 docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md 六类 LLM 注入攻击手法视觉化。
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* 根:覆盖整个 game-area(绝对定位),不阻塞交互。
+ * 2026-07-24: z-index 收敛到 --ww-z-prop-fx(1100),高于一切游戏内层(含
+ * sheriff-stream/idiot-reveal 的 --ww-z-critical=1000),且 pointer-events:none
+ * 保证 12s 展示期间不拦截任何点击。 */
+.ww-prop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: var(--ww-z-prop-fx, 1100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  /* 进场 + 退场由具体 motion 类控制;这里仅设默认 --ww-prop-* 默认值 */
+  --ww-prop-r: 160;
+  --ww-prop-g: 160;
+  --ww-prop-b: 160;
+  --ww-prop-c: rgb(var(--ww-prop-r) var(--ww-prop-g) var(--ww-prop-b));
+  --ww-prop-c-dim: rgba(var(--ww-prop-r) var(--ww-prop-g) var(--ww-prop-b) / 0.18);
+  --ww-prop-c-soft: rgba(var(--ww-prop-r) var(--ww-prop-g) var(--ww-prop-b) / 0.45);
+  --ww-prop-c-strong: rgba(var(--ww-prop-r) var(--ww-prop-g) var(--ww-prop-b) / 0.85);
+  overflow: hidden;
+}
+
+/* 半透明暗化背板(弱化背景内容让主体突出)。 */
+.ww-prop-overlay__dim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center,
+    rgba(var(--ww-prop-r) var(--ww-prop-g) var(--ww-prop-b) / 0.10) 0%,
+    rgba(0 0 0 / 0.35) 70%);
+  animation: wwPropDimIn 0.5s ease-out both;
+}
+
+/* 主体容器:emoji + 名称 + 方向 + 标记。 */
+.ww-prop-overlay__center {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: min(90vw, 720px);
+  padding: 0 24px;
+  text-align: center;
+}
+
+/* 扩散光环(从 emoji 背后向外扩散消失 ×3)。 */
+.ww-prop-overlay__ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 220px;
+  height: 220px;
+  margin: -110px 0 0 -110px;
+  border-radius: 50%;
+  border: 3px solid var(--ww-prop-c-soft);
+  box-shadow: 0 0 50px 12px var(--ww-prop-c-dim);
+  animation: wwPropRingExpand 2.4s ease-out infinite;
+  pointer-events: none;
+}
+.ww-prop-overlay__ring:nth-child(2) { animation-delay: 0.8s; }
+.ww-prop-overlay__ring:nth-child(3) { animation-delay: 1.6s; }
+
+/* 主色圆盘 + emoji。 */
+.ww-prop-overlay__disc {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%,
+    var(--ww-prop-c) 0%,
+    var(--ww-prop-c-strong) 60%,
+    var(--ww-prop-c-dim) 100%);
+  box-shadow:
+    0 0 60px 16px var(--ww-prop-c-soft),
+    inset 0 0 28px rgba(255 255 255 / 0.20);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: wwPropDiscIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.ww-prop-overlay__emoji {
+  font-size: 96px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(0 0 0 / 0.35));
+  animation: wwPropEmojiReveal 0.7s 0.15s ease-out both;
+}
+
+/* 文字内容区。 */
+.ww-prop-overlay__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: wwPropContentIn 0.5s 0.25s ease-out both;
+}
+
+.ww-prop-overlay__name {
+  font-size: clamp(28px, 5vw, 48px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0 0 0 / 0.5), 0 0 30px var(--ww-prop-c-soft);
+}
+
+/* 方向:来源 → 目标。 */
+.ww-prop-overlay__arrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: clamp(16px, 2.6vw, 22px);
+  font-weight: 600;
+  color: rgba(255 255 255 / 0.92);
+  text-shadow: 0 1px 4px rgba(0 0 0 / 0.4);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.ww-prop-overlay__seat {
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: rgba(255 255 255 / 0.14);
+  border: 1px solid rgba(255 255 255 / 0.25);
+}
+.ww-prop-overlay__arrow-glyph {
+  font-size: 1.2em;
+  color: var(--ww-prop-c);
+  text-shadow: 0 0 12px var(--ww-prop-c-strong);
+  animation: wwPropArrowPulse 1.4s ease-in-out infinite;
+}
+
+/* 中招/未中招 标记。 */
+.ww-prop-overlay__badge {
+  margin-top: 4px;
+  padding: 6px 22px;
+  border-radius: 999px;
+  font-size: clamp(16px, 2.8vw, 22px);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  animation: wwPropBadgeIn 0.4s 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.ww-prop-overlay__badge.is-hit {
+  color: #fff;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  box-shadow: 0 0 24px rgba(34 197 94 / 0.6);
+}
+.ww-prop-overlay__badge.is-miss {
+  color: rgba(255 255 255 / 0.85);
+  background: rgba(120 120 120 / 0.5);
+  border: 1px solid rgba(255 255 255 / 0.3);
+}
+
+/* 效果摘要(可选,≤200 字)。 */
+.ww-prop-overlay__effect {
+  margin-top: 6px;
+  max-width: 90vw;
+  font-size: clamp(13px, 2vw, 16px);
+  line-height: 1.5;
+  color: rgba(255 255 255 / 0.78);
+  background: rgba(0 0 0 / 0.30);
+  border-radius: 10px;
+  padding: 8px 16px;
+  border-left: 3px solid var(--ww-prop-c);
+  text-align: left;
+}
+
+/* ── 各道具独特动效(以 [data-prop-key] 选择器挂载) ──────────────────────── */
+
+/* markdown_bomb:爆炸进场 + 抖动。 */
+.ww-prop-motion--burst .ww-prop-overlay__disc {
+  animation: wwPropBurstIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+             wwPropBurstShake 0.5s 0.6s ease-in-out 1;
+}
+
+/* nested_maze:旋转进场 + 反向自转。 */
+.ww-prop-motion--spin .ww-prop-overlay__disc {
+  animation: wwPropSpinIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.ww-prop-motion--spin .ww-prop-overlay__emoji {
+  animation: wwPropSpinReverse 4s linear infinite;
+}
+
+/* char_confuse:故障抖动。 */
+.ww-prop-motion--glitch .ww-prop-overlay__emoji {
+  animation: wwPropGlitch 0.4s steps(2, end) 3, wwPropEmojiReveal 0.5s 0.2s both;
+}
+.ww-prop-motion--glitch .ww-prop-overlay__name {
+  animation: wwPropGlitchText 0.3s 2;
+}
+
+/* long_swear:卷轴展开(水平缩放)。 */
+.ww-prop-motion--unfurl .ww-prop-overlay__disc {
+  animation: wwPropUnfurl 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* task_disguise:马戏团摇摆 + 彩带。 */
+.ww-prop-motion--theater .ww-prop-overlay__disc {
+  animation: wwPropTheaterSway 1.6s ease-in-out infinite;
+}
+
+/* task_disguise_v3:影视闪烁(闪白)。 */
+.ww-prop-motion--cinema .ww-prop-overlay__center {
+  animation: wwPropCinemaFlash 0.6s 1;
+}
+
+/* emotion_plea:心跳脉动。 */
+.ww-prop-motion--heartbeat .ww-prop-overlay__disc {
+  animation: wwPropHeartbeat 1.4s ease-in-out infinite;
+}
+
+/* ── 基础 keyframes ─────────────────────────────────────────────────────── */
+
+@keyframes wwPropDimIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes wwPropRingExpand {
+  0%   { transform: scale(0.4); opacity: 0.8; border-color: var(--ww-prop-c); }
+  100% { transform: scale(2.6); opacity: 0; border-color: transparent; }
+}
+
+@keyframes wwPropDiscIn {
+  0%   { transform: scale(0.2); opacity: 0; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+@keyframes wwPropEmojiReveal {
+  0%   { transform: scale(0.5) rotate(-12deg); opacity: 0; }
+  60%  { transform: scale(1.15) rotate(4deg);  opacity: 1; }
+  100% { transform: scale(1) rotate(0);       opacity: 1; }
+}
+
+@keyframes wwPropContentIn {
+  from { transform: translateY(18px); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+
+@keyframes wwPropArrowPulse {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%      { transform: scale(1.25); opacity: 0.7; }
+}
+
+@keyframes wwPropBadgeIn {
+  0%   { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+/* 各道具专属 keyframes */
+
+@keyframes wwPropBurstIn {
+  0%   { transform: scale(0);    opacity: 0; filter: brightness(2); }
+  60%  { transform: scale(1.25); opacity: 1; filter: brightness(1.4); }
+  100% { transform: scale(1);    opacity: 1; filter: brightness(1); }
+}
+@keyframes wwPropBurstShake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-8px) rotate(-3deg); }
+  40%      { transform: translateX(8px)  rotate(3deg); }
+  60%      { transform: translateX(-5px) rotate(-2deg); }
+  80%      { transform: translateX(5px)  rotate(2deg); }
+}
+
+@keyframes wwPropSpinIn {
+  0%   { transform: scale(0.3) rotate(-540deg); opacity: 0; }
+  100% { transform: scale(1)   rotate(0);      opacity: 1; }
+}
+@keyframes wwPropSpinReverse {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
+
+@keyframes wwPropGlitch {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(-3px, 2px); filter: hue-rotate(90deg); }
+  50%  { transform: translate(3px, -2px);  filter: hue-rotate(-90deg); }
+  75%  { transform: translate(-2px, -1px); filter: hue-rotate(45deg); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes wwPropGlitchText {
+  0%, 100% { text-shadow: 0 2px 10px rgba(0 0 0 / 0.5), 0 0 30px var(--ww-prop-c-soft); }
+  33%      { text-shadow: -3px 0 #f0f, 3px 0 #0ff, 0 2px 10px rgba(0 0 0 / 0.5); }
+  66%      { text-shadow: 3px 0 #f0f, -3px 0 #0ff, 0 2px 10px rgba(0 0 0 / 0.5); }
+}
+
+@keyframes wwPropUnfurl {
+  0%   { transform: scaleX(0.05); opacity: 0; }
+  60%  { transform: scaleX(1.08); opacity: 1; }
+  100% { transform: scaleX(1);    opacity: 1; }
+}
+
+@keyframes wwPropTheaterSway {
+  0%, 100% { transform: rotate(-4deg) translateY(0); }
+  50%      { transform: rotate(4deg)  translateY(-6px); }
+}
+
+@keyframes wwPropCinemaFlash {
+  0%   { filter: brightness(1); }
+  30%  { filter: brightness(2.4); }
+  60%  { filter: brightness(0.7); }
+  100% { filter: brightness(1); }
+}
+
+@keyframes wwPropHeartbeat {
+  0%, 100% { transform: scale(1); }
+  14%      { transform: scale(1.12); }
+  28%      { transform: scale(1); }
+  42%      { transform: scale(1.08); }
+  56%      { transform: scale(1); }
+}
+
+/* 退场动画(覆盖层消失;由 JS 在 DISPLAY_MS 到期后卸载,自然无退场;
+   若需 CSS 退场,可加 .is-leaving — 保留 hook)。 */
+.ww-prop-overlay.is-leaving {
+  animation: wwPropFadeOut 0.5s ease-in forwards;
+}
+@keyframes wwPropFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* 响应式:小屏缩小 emoji / 圆盘。 */
+@media (max-width: 768px) {
+  .ww-prop-overlay__disc {
+    width: 120px;
+    height: 120px;
+  }
+  .ww-prop-overlay__emoji {
+    font-size: 68px;
+  }
+  .ww-prop-overlay__ring {
+    width: 160px;
+    height: 160px;
+    margin: -80px 0 0 -80px;
+  }
+}
+
+/* 无障碍:尊重 prefers-reduced-motion,保留进场但取消循环动效。 */
+@media (prefers-reduced-motion: reduce) {
+  .ww-prop-overlay__ring,
+  .ww-prop-motion--spin .ww-prop-overlay__emoji,
+  .ww-prop-motion--heartbeat .ww-prop-overlay__disc,
+  .ww-prop-motion--theater .ww-prop-overlay__disc {
+    animation-duration: 0.001s;
+    animation-iteration-count: 1;
+  }
+}
+
+.werewolf-table__phase {
+  position: absolute;
+  top: var(--ww-pad); left: var(--ww-pad);
+  z-index: var(--ww-z-board-label, 10);
+  /* 2026-08-08 §20260808-02 — 阶段徽章对比度提升。原 55% 黑底 + 暖黄字
+     (#d8c8a5 默认 var(--fg)) 实测约 4.0:1,低于 WCAG AA。提到 75% 黑底
+     + 更亮暖色字,13 人局顶部阶段徽章全天可见,边缘可读性必须稳定。 */
+  background: rgba(0,0,0,0.75);
+  color: #f0e2c8;
+  padding: 6px var(--ww-pad);
+  border-radius: 6px;
+  font-size: 13px;
+  border: 1px solid var(--accent);
+  font-weight: 600;
+}
+/* BUG-R232-P2-01 (2026-08-02): phase badge (.werewolf-table__phase, position:absolute,
+ * top:10px left:10px z-index:10) 与 1 号座位卡 (.werewolf-seat, z-index:7) 在
+ * 13 人局顶部座位行重叠 ~74px × 15px,挡住座位卡左上角内容。实测座位卡宽 437px
+ * /高 130px,内嵌 5 行指标(情绪/延迟/调用/token/模型名)零重叠,本缺陷是独立
+ * 的浮层 z-index 问题,非布局回归。
+ *
+ * 修复: 给 .werewolf-table__grid 顶部留出 44px 净空,让座位网格从徽标下方开始,
+ * 既不动绝对定位(保持视觉位置稳定),也不提高座位卡 z-index(那会反过来遮挡
+ * 徽标,违背 §23 「徽标独立行」语义)。 padding-top 用 var(--ww-pad)=10px 作为
+ * 基线 + 30px 徽标高度 + 4px 净距 = 44px,与原报告建议完全一致。 */
+.werewolf-table__grid {
+  padding-top: 44px;
+}
+
+/* §127 — 棋牌区顶部标题(已废弃,保留样式供兼容性回退)
+ * 标题重复bug修复后,board-title 不再渲染;样式保留避免热更新异常。 */
+.werewolf-table__board-title {
+  display: none;
+}
+.werewolf-table__board-title-icon {
+  font-size: 22px;
+  filter: drop-shadow(0 0 6px rgba(193, 154, 86, 0.5));
+}
+.werewolf-table__board-title-text {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--accent);
+  text-shadow: 0 0 10px rgba(193, 154, 86, 0.4);
+}
+.werewolf-table__ring {
+  position: absolute; inset: 0;
+  z-index: var(--ww-z-overlay, 5);
+}
+.werewolf-table__center-info {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: calc(var(--ww-z-overlay, 5) + 1);
+  text-align: center;
+  pointer-events: none;
+}
+.werewolf-table__center-info .hint {
+  background: rgba(0,0,0,0.6);
+  color: var(--fg);
+  border: 1px dashed var(--accent);
+  padding: var(--ww-pad);
+  border-radius: var(--ww-radius);
+  font-size: 13px;
+  pointer-events: auto;
+}
+
+.werewolf-seat {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  z-index: var(--ww-z-seat, 7);
+}
+.werewolf-seat__avatar {
+  position: relative;
+  /* 基线紧凑 48x68,大屏放大 */
+  width: 48px;
+  height: 68px;
+  background: var(--card);
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+@media (min-width: 2000px) {
+  .werewolf-seat__avatar { width: 60px; height: 84px; }
+}
+@media (min-width: 3000px) {
+  .werewolf-seat__avatar { width: 76px; height: 108px; }
+}
+.werewolf-seat__avatar img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.werewolf-seat__silhouette {
+  color: var(--accent);
+  font-size: 28px;
+  font-weight: bold;
+}
+.werewolf-seat.is-dead .werewolf-seat__avatar {
+  filter: grayscale(0.8) brightness(0.55);
+  border-color: #555;
+}
+.werewolf-seat__dead-mask {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.5);
+  color: #ff5050;
+  font-size: 24px;
+  font-weight: bold;
+}
+.werewolf-seat.is-self .werewolf-seat__avatar {
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 8px 2px var(--accent-warm);
+}
+.werewolf-seat__num {
+  font-size: 11px;
+  color: var(--fg);
+  background: rgba(0,0,0,0.5);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.werewolf-seat__sheriff-badge,
+.werewolf-seat__self-badge {
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.werewolf-seat__sheriff-badge { color: #ffd76b; background: rgba(255,200,100,0.2); }
+.werewolf-seat__self-badge { color: #ff8888; background: rgba(255,80,80,0.2); }
+.werewolf-seat__agent-name {
+  font-size: 9px;
+  color: rgba(216, 200, 165, 0.7);
+  background: rgba(0,0,0,0.4);
+  padding: 1px 4px;
+  border-radius: 3px;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* §123: 死亡 verdict 徽章(处决⚖️ / 死亡💀) */
+.werewolf-seat__verdict-badge {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.werewolf-seat__verdict-badge--execution {
+  color: #ffb347;
+  background: rgba(255,150,50,0.25);
+}
+.werewolf-seat__verdict-badge--death {
+  color: #aaa;
+  background: rgba(120,120,120,0.25);
+}
+
+/* §123: 死亡名牌面板(桌面下方,紧贴 table ring) */
+.werewolf-table__dead-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  margin-top: 4px;
+}
+.werewolf-table__dead-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.35);
+  color: rgba(216,200,165,0.85);
+}
+.werewolf-table__dead-entry--execution {
+  border-left: 2px solid #ffb347;
+}
+.werewolf-table__dead-entry--death {
+  border-left: 2px solid #888;
+}
+.werewolf-table__dead-seat {
+  font-weight: 600;
+  color: rgba(255,120,120,0.9);
+}
+.werewolf-table__dead-role {
+  color: rgba(216,200,165,0.7);
+}
+.werewolf-table__dead-verdict {
+  font-size: 10px;
+}
+
+/* ────────────────────────────────────────────────────────
+ * 2026-07-22 §任务2 — 身份猜测徽章 + 死亡揭示差异化
+ *
+ * 死亡玩家显示「服务端真实身份」(亮黄 + 边框),与活着的「我方猜测」徽章
+ * (蓝紫 + 虚线边框)严格区分。猜测仅本地 localStorage 持久化,不入服务端状态。
+ * ──────────────────────────────────────────────────────── */
+.werewolf-seat__guess-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 8px;
+  background: rgba(120, 100, 200, 0.35);
+  color: #d8b8ff;
+  border: 1px dashed rgba(180, 160, 255, 0.55);
+  letter-spacing: 0.2px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: calc(var(--ww-z-content, 1) + 3);
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.werewolf-seat__guess-badge.is-wrong {
+  /* 2026-08-08 §20260808-02 — 「猜错」徽章对比度提升。原淡粉字 + 30% 透明红底
+     实测约 2.9:1,13 人局终局复盘玩家最关注的视觉信号。改为白字 + 55% 透明
+     红底 + 加粗 + 强化边框。 */
+  background: rgba(220, 80, 80, 0.6);
+  color: #ffffff;
+  border-color: rgba(255, 120, 120, 0.85);
+  font-weight: 700;
+}
+.werewolf-seat__role.is-revealed-truth {
+  color: #ffd76b;
+  font-weight: 700;
+  text-shadow: 0 0 4px rgba(255, 200, 80, 0.4);
+}
+/* 死亡后服务端揭示身份徽章(独立于猜测徽章) */
+.werewolf-seat__reveal-badge {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 8px;
+  background: rgba(255, 200, 80, 0.2);
+  color: #ffd76b;
+  border: 1px solid rgba(255, 200, 80, 0.55);
+  letter-spacing: 0.2px;
+  z-index: calc(var(--ww-z-content, 1) + 3);
+}
+/* 身份猜测弹出层(在座位卡上) */
+.werewolf-guess-popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  z-index: var(--ww-z-popover, 60);
+  background: linear-gradient(160deg, #2a2030, #1a1420);
+  border: 1px solid rgba(180, 160, 255, 0.55);
+  border-radius: 10px;
+  padding: 8px;
+  min-width: 160px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.werewolf-guess-popover__title {
+  font-size: 11px;
+  color: #cfc4e0;
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+.werewolf-guess-popover__btn {
+  background: rgba(60, 50, 80, 0.6);
+  border: 1px solid rgba(180, 160, 255, 0.3);
+  color: #e8e0ff;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  min-height: var(--ww-touch-target, 36px);
+}
+.werewolf-guess-popover__btn:hover { background: rgba(100, 80, 160, 0.5); }
+.werewolf-guess-popover__btn.is-active {
+  background: rgba(180, 160, 255, 0.5);
+  border-color: rgba(220, 200, 255, 0.9);
+  color: #fff;
+}
+.werewolf-guess-popover__clear {
+  font-size: 11px;
+  color: #b0a8c0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: right;
+  padding: 2px 4px;
+}
+.werewolf-guess-popover__clear:hover { color: #ffd0d0; }
+
+/* §20260812-02 U4 — 顶部栏(GamStatusHeader + 音效开关同行) */
+.werewolf-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.werewolf-top-bar > *:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* §20260812-02 U3 — 观众押注竞猜面板 */
+.spectator-bet-panel {
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  margin: 8px 0;
+}
+.spectator-bet-panel--disabled {
+  opacity: 0.5;
+}
+.spectator-bet-panel__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffa726;
+  margin-bottom: 10px;
+}
+.spectator-bet-panel__seats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.spectator-bet-panel__seat {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  min-height: 32px;
+  min-width: 40px;
+  transition: all 0.15s;
+}
+.spectator-bet-panel__seat:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.spectator-bet-panel__seat.is-selected {
+  background: rgba(255, 167, 38, 0.3);
+  border-color: #ffa726;
+  color: #fff;
+  font-weight: 700;
+}
+.spectator-bet-panel__amounts {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.spectator-bet-panel__amount {
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  min-height: 32px;
+  transition: all 0.15s;
+}
+.spectator-bet-panel__amount:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.spectator-bet-panel__amount.is-selected {
+  background: rgba(76, 175, 80, 0.3);
+  border-color: #66bb6a;
+  color: #fff;
+  font-weight: 700;
+}
+.spectator-bet-panel__confirm {
+  width: 100%;
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.spectator-bet-panel__placed,
+.spectator-bet-panel__result {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+}
+.spectator-bet-panel__win {
+  color: #66bb6a;
+  font-weight: 700;
+  margin-left: 8px;
+}
+.spectator-bet-panel__lose {
+  color: #ef5350;
+  margin-left: 8px;
+}
+.spectator-bet-panel__refund {
+  color: #ffa726;
+  margin-left: 8px;
+}
+.spectator-bet-panel__hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}

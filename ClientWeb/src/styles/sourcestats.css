@@ -1,0 +1,230 @@
+/* SourceStatsModal —— 标题栏「源码统计」按钮触发的弹窗。
+ * 布局:
+ *   - 顶部 1 行 4 张卡片(3 张数据卡片 + 总计卡片加粗)
+ *   - 主体 1 张扩展名分布表,附相对柱状条
+ *   - 工具栏:刷新按钮 + 启动期时间戳
+ */
+
+.sourcestats-modal {
+  width: min(960px, 96vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.sourcestats-modal__close {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+.sourcestats-modal__close:hover:not(:disabled) {
+  background: var(--danger, #d9534f);
+  border-color: var(--danger, #d9534f);
+  color: #fff;
+}
+.sourcestats-modal__close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- 工具栏 ---- */
+.sourcestats-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.sourcestats-toolbar__hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+.sourcestats-toolbar__btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.sourcestats-toolbar__btn:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.sourcestats-toolbar__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- 加载态 ---- */
+.sourcestats-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 32px;
+  justify-content: center;
+  color: var(--muted);
+}
+
+/* ---- 顶部卡片 ---- */
+.sourcestats-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.sourcestats-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sourcestats-card--total {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--bg) 0%, color-mix(in srgb, var(--accent) 8%, var(--bg)) 100%);
+}
+.sourcestats-card__title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.sourcestats-card--total .sourcestats-card__title {
+  color: var(--accent);
+}
+.sourcestats-card__row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.sourcestats-card__num {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+.sourcestats-card__label {
+  font-size: 11px;
+  color: var(--muted);
+}
+.sourcestats-card__error {
+  color: var(--danger, #d9534f);
+  font-size: 13px;
+  padding: 4px 0;
+}
+
+/* ---- 主体表格 ---- */
+.sourcestats-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.sourcestats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.sourcestats-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  z-index: 1;
+}
+.sourcestats-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s ease;
+}
+.sourcestats-table tbody tr:hover {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.sourcestats-table tbody tr:last-child {
+  border-bottom: none;
+}
+.sourcestats-table td {
+  padding: 8px 10px;
+}
+
+/* 列宽 */
+.sourcestats-col-ext { width: 90px; }
+.sourcestats-col-num { width: 110px; }
+.sourcestats-col-bar { width: auto; min-width: 140px; }
+
+/* 单元格 */
+.sourcestats-cell-ext { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.sourcestats-cell-num {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* 扩展名 badge */
+.sourcestats-ext-badge {
+  display: inline-block;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--fg);
+}
+.sourcestats-card--total ~ * .sourcestats-ext-badge {
+  /* 无意义但保留可读性 */
+}
+
+/* 柱状条 */
+.sourcestats-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.sourcestats-bar__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 70%, white) 100%);
+  transition: width 0.3s ease;
+  border-radius: 4px;
+}
+
+/* 移动端适配:窄屏下卡片堆叠为 2 列,表格列变紧凑 */
+@media (max-width: 640px) {
+  .sourcestats-modal {
+    width: 96vw;
+    max-height: 92vh;
+  }
+  .sourcestats-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .sourcestats-col-bar {
+    display: none;
+  }
+  .sourcestats-cell-bar {
+    display: none;
+  }
+}

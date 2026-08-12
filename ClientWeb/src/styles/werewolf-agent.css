@@ -1,0 +1,1232 @@
+
+/* 操作面板(通用) — 紧凑 10px 间距。
+ *
+ * 2026-07-22 §任务1:人类选择界面置顶 + 触控目标强化。
+ *   - `position: relative; z-index: 50` 防止 .werewolf-table__bg / .werewolf-seat
+ *     等较高叠加层(z=0/7/10)在多层 modal 下意外覆盖操作按钮区。
+ *   - 该 z-index 仍低于 sheriff-stream/idiot-reveal(1000)、settlement-modal(200)、
+ *     GlobalToast(1000),让真正全屏的决策 modal 继续吃事件。
+ *   - 所有 seat-chip / 投票按钮强制 44px 最小高度(对齐 §23 触控 token)。 */
+.werewolf-action-panel {
+  position: relative;
+  z-index: var(--ww-z-action, 50);
+  margin-top: 0; /* 父容器已使用 10px gap */
+  background: rgba(20,16,8,0.85);
+  border: 1px solid var(--accent);
+  border-radius: var(--ww-radius);
+  padding: var(--ww-pad);
+  color: var(--fg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ww-gap);
+}
+.werewolf-action-panel h4 {
+  margin: 0;
+  color: var(--accent);
+  font-size: 14px;
+  letter-spacing: 0.3px;
+}
+.werewolf-action-panel .sub {
+  font-size: 12px;
+  color: #a39881;
+  margin: 0;
+}
+.werewolf-action-panel.muted { opacity: 0.7; }
+
+.werewolf-action-panel .seat-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--ww-gap);
+  margin: 0;
+}
+.werewolf-action-panel .seat-chip {
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--accent);
+  padding: 6px 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  position: relative;
+  font-size: 12px;
+  min-height: var(--ww-touch-target, 36px);
+  transition: all 0.15s ease;
+}
+.werewolf-action-panel .seat-chip:hover:not(:disabled) {
+  background: rgba(193,154,86,0.2);
+}
+.werewolf-action-panel .seat-chip.is-selected {
+  /* 2026-08-08 §20260808-02 — 座位 chip 选中态对比度提升。原 40% 金 + 红橙边
+     在 .is-night brightness(0.4) 滤镜下被压到几乎与未选态同色,玩家误以为
+     没选上。提高背景不透明度 + 加宽边 + 加光晕,夜间模式也明显可见。 */
+  background: rgba(255, 180, 90, 0.55);
+  border-color: var(--accent-warm);
+  border-width: 2px;
+  box-shadow: 0 0 8px rgba(255, 180, 90, 0.6);
+  font-weight: 700;
+}
+.werewolf-action-panel .seat-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+/* BUG-HUNTER2-P1-01 (2026-08-07): 警长竞选 — 人类自身已参选时,渲染一个
+ * 禁用态的「#N(你)」chip 占位,让投票 chips 与候选文本完全对称,
+ * 并通过 title 属性明示「你已参选,不可投自己」规则。视觉上与普通
+ * disabled chip 区别:用虚线边框 + 灰色背景暗示「自己」语义,而非
+ * 「已选/已投」状态。 */
+.werewolf-action-panel .seat-chip.is-self.is-disabled {
+  border-style: dashed;
+  background: rgba(120, 120, 120, 0.15);
+  color: var(--fg-dim, rgba(255, 255, 255, 0.6));
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.werewolf-action-panel .knife-icon {
+  width: 14px; height: 14px;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+.werewolf-action-panel .action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ww-gap);
+  align-items: center;
+}
+.werewolf-action-panel .action-row .btn {
+  min-height: var(--ww-touch-target, 36px);
+}
+.werewolf-action-panel .tally {
+  font-size: 13px;
+}
+.werewolf-action-panel .tally ul {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+
+/* §20260811-01 U3 — 投票悬念动画 */
+.werewolf-action-panel .tally .vote-suspense {
+  list-style: none;
+  padding: 0;
+}
+.werewolf-action-panel .tally .vote-suspense li {
+  padding: 2px 0;
+  opacity: 0;
+  animation: voteSuspenseReveal 0.6s ease forwards;
+  animation-delay: calc(var(--reveal-idx, 0) * 0.15s);
+}
+.werewolf-action-panel .tally .vote-suspense li::after {
+  content: '';
+  display: inline-block;
+  width: 18px;
+  height: 14px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: voteSuspenseShimmer 1.5s ease infinite;
+  margin-left: 6px;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.werewolf-action-panel .tally .vote-suspense-hint {
+  color: #f0c040;
+  font-size: 12px;
+  margin: 4px 0 0;
+  animation: voteSuspensePulse 1.2s ease-in-out infinite;
+}
+@keyframes voteSuspenseReveal {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes voteSuspenseShimmer {
+  0% { opacity: 0.3; }
+  50% { opacity: 1; }
+  100% { opacity: 0.3; }
+}
+@keyframes voteSuspensePulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* ────────────────────────────────────────────────────────
+ * §问题描述报告-20260804-03 警长竞选面板。
+ *   - .sheriff-hint:阶段机制说明(本阶段无发言顺序)
+ *   - .sheriff-candidates:候选人名单块
+ *   - .sheriff-empty-hint:无人参选时的提示
+ *   - .seat-chip.is-voted:我已投票的目标座位(绿色描边,区别于 is-selected)
+ *   - .dead-observer-hint:死亡观战提示(此前引用了但从未定义样式)
+ * ──────────────────────────────────────────────────────── */
+.werewolf-action-panel .sheriff-hint {
+  color: #b8c8e8;
+  font-size: 12px;
+  margin: 0 0 4px;
+}
+.werewolf-action-panel .sheriff-candidates {
+  padding: 6px 8px;
+  background: rgba(40, 50, 70, 0.45);
+  border-radius: 4px;
+  border: 1px solid rgba(120, 160, 255, 0.18);
+  font-size: 13px;
+}
+.werewolf-action-panel .sheriff-candidates h5 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--accent);
+}
+.werewolf-action-panel .sheriff-candidates p {
+  margin: 0;
+}
+.werewolf-action-panel .sheriff-empty-hint {
+  color: #d8c07a;
+  font-size: 12px;
+}
+.werewolf-action-panel .seat-chip.is-voted {
+  border-color: #16a34a;
+  box-shadow: inset 0 0 0 1px rgba(22, 163, 74, 0.6);
+}
+.werewolf-action-panel .dead-observer-hint {
+  color: #d88a8a;
+  font-size: 12px;
+  margin: 0 0 4px;
+}
+
+/* ────────────────────────────────────────────────────────
+ * 2026-07-29 §134 守卫角色 — NightActionPanel 第四形态。
+ *   - .guard-hints 容器:集中放置两条盲守 / 连守提示
+ *   - .guard-blind-hint:浅蓝色调,提示是「机制说明」
+ *   - .guard-consecutive-hint:黄色调,提示是「硬约束」
+ *   - .is-last-guarded:上晚已守座位,加 ⏳ 角标 + 微暗背景
+ *   - .last-guard-mark:座位右下角 ⏳ 标记
+ * ──────────────────────────────────────────────────────── */
+.werewolf-action-panel .guard-hints {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  background: rgba(40, 50, 70, 0.45);
+  border-radius: 4px;
+  border: 1px solid rgba(120, 160, 255, 0.18);
+}
+.werewolf-action-panel .guard-blind-hint {
+  color: #b8c8e8;
+  font-size: 12px;
+  margin: 0;
+}
+.werewolf-action-panel .guard-consecutive-hint {
+  color: #d8c07a;
+  font-size: 12px;
+  margin: 0;
+}
+.werewolf-action-panel .seat-chip.is-last-guarded {
+  background: rgba(80, 70, 50, 0.45);
+  border-color: rgba(216, 192, 122, 0.5);
+  position: relative;
+}
+.werewolf-action-panel .seat-chip.is-last-guarded:hover:not(:disabled) {
+  /* 上晚已守座位不可点,hover 不变色 */
+  background: rgba(80, 70, 50, 0.45);
+}
+.werewolf-action-panel .seat-chip .last-guard-mark {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: 10px;
+  opacity: 0.85;
+  line-height: 1;
+}
+
+.suicide-btn {
+  background: rgba(160,53,47,0.7) !important;
+  border-color: var(--accent-warm) !important;
+}
+
+/* ────────────────────────────────────────────────────────
+ * 2026-07-21 §人类玩家操作重构 — MyTurnIndicator 样式
+ * 浅蓝底 + 醒目"轮到 #N 行动";剩余 ≤10s 变红 + pulse;
+ * 剩余 ≤5s 加"5 秒后自动跳过"徽章。
+ * ──────────────────────────────────────────────────────── */
+.my-turn-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  background: linear-gradient(90deg, rgba(80,140,255,0.16), rgba(80,140,255,0.06));
+  border: 1px solid rgba(120,160,255,0.5);
+  border-radius: 8px;
+  font-size: 15px;
+  color: #c8d8ff;
+  transition: background 0.3s, border-color 0.3s;
+}
+.my-turn-indicator.is-warning {
+  background: linear-gradient(90deg, rgba(255,140,80,0.18), rgba(255,140,80,0.06));
+  border-color: rgba(255,160,80,0.7);
+  color: #ffd9b3;
+}
+.my-turn-indicator.is-critical {
+  background: linear-gradient(90deg, rgba(255,60,60,0.22), rgba(255,60,60,0.08));
+  border-color: rgba(255,80,80,0.8);
+  color: #ffd0d0;
+  animation: my-turn-pulse 0.8s infinite;
+}
+.my-turn-indicator.is-expired {
+  background: rgba(60,60,60,0.5);
+  color: #aaa;
+  animation: none;
+}
+.my-turn-indicator__seat {
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.my-turn-indicator__countdown {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+  font-weight: 700;
+}
+.my-turn-indicator__badge {
+  font-size: 13px;
+  background: rgba(255,80,80,0.25);
+  border: 1px solid rgba(255,80,80,0.6);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+@keyframes my-turn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,60,60,0); }
+  50% { box-shadow: 0 0 0 6px rgba(255,60,60,0.25); }
+}
+
+/* ────────────────────────────────────────────────────────
+ * 2026-07-21 §人类玩家操作重构 — LastWordsPanel 样式
+ * 死亡遗言面板,深色 + 金边 + 紫色 emissive,呼应遗言"最后一句"氛围。
+ * ──────────────────────────────────────────────────────── */
+.last-words-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  margin: 12px 0;
+  background: linear-gradient(135deg, rgba(70,40,90,0.85), rgba(40,30,60,0.85));
+  border: 2px solid rgba(220,180,120,0.7);
+  border-radius: 10px;
+  color: #f0e8d0;
+  box-shadow: 0 0 24px rgba(220,180,120,0.25);
+}
+.last-words-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.last-words-panel__header h4 {
+  margin: 0;
+  font-size: 17px;
+  color: #f5d896;
+}
+.last-words-panel__countdown {
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+  font-weight: 700;
+  color: #d0c890;
+}
+.last-words-panel__countdown.is-critical {
+  color: #ff8c8c;
+  animation: my-turn-pulse 0.8s infinite;
+}
+.last-words-panel__textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 10px 12px;
+  background: rgba(20,15,25,0.6);
+  border: 1px solid rgba(220,180,120,0.5);
+  border-radius: 6px;
+  color: #f0e8d0;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+}
+.last-words-panel__textarea:focus {
+  outline: none;
+  border-color: rgba(255,210,140,0.9);
+  box-shadow: 0 0 0 2px rgba(255,210,140,0.2);
+}
+.last-words-panel__textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.last-words-panel__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.last-words-panel__hint {
+  font-size: 12px;
+  color: #b0a890;
+}
+.last-words-panel__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.werewolf-info-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ww-gap);
+}
+.werewolf-info-panel .info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px var(--ww-pad);
+  background: rgba(0,0,0,0.3);
+  border-radius: 4px;
+  font-size: 13px;
+}
+.werewolf-info-panel .label { color: var(--accent); }
+.werewolf-info-panel .value { color: var(--fg); font-weight: bold; }
+.werewolf-info-panel .info-actions {
+  display: flex; gap: var(--ww-gap);
+  flex-wrap: wrap;
+}
+
+.werewolf-game.waiting-board,
+.werewolf-game .waiting-board {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  color: var(--fg);
+}
+
+/* BUG-R212-P1-03 (2026-07-30): 状态同步超时的可操作错误态。
+ * 替代「⏳ 正在同步游戏状态…」的无限 spinner —— 20s 未收到 game.state 后
+ * 渲染本块(标题 + 说明 + 重试/返回大厅按钮),符合 §7.1「失败必须在当前页
+ * 最高层级可见且可操作」。 */
+.werewolf-game .waiting-board__stalled {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 460px;
+  padding: 24px;
+  text-align: center;
+  border: 1px solid var(--danger, #e5484d);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger, #e5484d) 8%, transparent);
+}
+
+.werewolf-game .waiting-board__stalled-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--danger, #e5484d);
+}
+
+.werewolf-game .waiting-board__stalled-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  opacity: 0.85;
+}
+
+.werewolf-game .waiting-board__stalled-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.werewolf-game .waiting-board__stalled-actions .btn {
+  min-height: var(--ww-touch-target, 44px);
+}
+
+/* filling 阶段 spectator 也能看到 WerewolfTable 上的轻量覆盖提示,
+ * 而不是 spinner 黑屏;按钮区不出现在覆盖层之上。 */
+.werewolf-game .filling-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ww-gap);
+  background: rgba(35, 32, 27, 0.78);
+  color: var(--fg);
+  pointer-events: none;
+  z-index: var(--ww-z-overlay, 5);
+  font-size: 16px;
+  letter-spacing: 0.5px;
+}
+.werewolf-game .filling-overlay p { margin: 0; }
+
+/* §130:房间信息面板 — padding 从 8px 减到 6px,去掉边框(由内部 info-block
+ * 各自 border-left 提供视觉分隔),适配 0.6fr 窄列 */
+.werewolf-game .room-info-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 6px 4px;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* §130:room-info-panel header 改为水平两行(标题+按钮并排 / sub 单独一行) */
+.werewolf-game .room-info-panel__header {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-bottom: 1px solid rgba(193, 154, 86, 0.25);
+  padding-bottom: 5px;
+}
+.werewolf-game .room-info-panel__header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+}
+.werewolf-game .room-info-panel__fold-btn {
+  margin: 0;
+  font-size: 12px;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+.werewolf-game .room-info-panel__fold-btn:hover {
+  background: rgba(193, 154, 86, 0.15);
+}
+.werewolf-game .room-info-panel__header .room-info-panel__queue-btn {
+  font-size: 10px;
+  padding: 3px 6px;
+  flex-shrink: 1;
+  min-width: 0;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.werewolf-game .room-info-panel__sub {
+  font-size: 10px;
+  color: rgba(216, 200, 165, 0.65);
+  font-family: ui-monospace, monospace;
+  word-break: break-all;
+  /* §130:sub 阶段名称太长时单行省略 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.werewolf-game .room-info-panel .werewolf-info-panel {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+/* §128 — v2 布局下,room-info-panel 不再加 border/padding,
+ * 因为内部 .info-block 已经各自是卡片 */
+.werewolf-game .room-info-panel .werewolf-info-panel--v2 {
+  gap: 6px;
+  width: 100%;
+}
+/* §2026-08-06 所有 info-block 占满列宽,不留空白(列宽由 grid/fr 控制,
+ * info-block 本身不设 max-width,由容器约束实际宽度) */
+.werewolf-game .room-info-panel .info-block {
+  width: 100%;
+  box-sizing: border-box;
+}
+.werewolf-game .room-info-panel__agents {
+  background: rgba(35, 32, 27, 0.55);
+  border: 1px solid rgba(193, 154, 86, 0.2);
+  border-radius: var(--ww-radius);
+  padding: 6px var(--ww-pad);
+}
+.werewolf-game .room-info-panel__agents > summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--accent);
+  list-style: none;
+  user-select: none;
+  padding: 4px 0;
+}
+.werewolf-game .room-info-panel__agents > summary::marker,
+.werewolf-game .room-info-panel__agents > summary::-webkit-details-marker {
+  display: none;
+}
+.werewolf-game .room-info-panel__agents > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 0.15s ease;
+}
+.werewolf-game .room-info-panel__agents[open] > summary::before {
+  transform: rotate(90deg);
+}
+.werewolf-game .room-info-panel__agents .ww-agent-panel {
+  margin: var(--ww-gap) 0 0 0;
+  background: transparent;
+  border: none;
+}
+
+/* 2026-08-07 §房间聊天优化 — 删除外层 werewolf-chat-wrap__header / __title /
+ * __day / __fold-btn / .werewolf-chat-wrap 全部样式(冗余双层 header 已移除),
+ * 现在右栏聊天由内层 GameChatPanel 自带 header 直接担当(单标题 + 单 ▼/▲)。
+ *
+ * 视觉效果:让 .game-chat-column .game-chat 自己的 header 顶端圆角与右栏
+ * 36px 列外折叠 handle 视觉对齐,内部消息区继续占满剩余高度。
+ */
+.werewolf-game .room-chat-panel__sub {
+  font-size: 11px;
+  color: rgba(216, 200, 165, 0.65);
+  font-family: ui-monospace, monospace;
+}
+.werewolf-game .game-chat-column .game-chat {
+  border-radius: var(--ww-radius);
+  flex: 1 1 auto;
+}
+.werewolf-game .game-chat-column .game-chat .game-chat__header {
+  background: rgba(35, 32, 27, 0.6);
+  border-bottom: 1px solid rgba(193, 154, 86, 0.25);
+  border-radius: var(--ww-radius) var(--ww-radius) 0 0;
+  padding: 6px var(--ww-pad);
+  min-height: 32px;
+}
+.werewolf-game .game-chat-column .game-chat .game-chat__title {
+  color: var(--accent);
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  gap: 6px;
+}
+.werewolf-game .game-chat-column .game-chat .game-chat__title-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+/* Day N 副信息 — 与左栏 room-info-panel__sub 视觉一致 */
+.werewolf-game .game-chat-column .game-chat .game-chat__day {
+  font-size: 11px;
+  color: rgba(216, 200, 165, 0.65);
+  font-family: ui-monospace, monospace;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.werewolf-game .game-chat-column .game-chat .game-chat__toggle {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+.werewolf-game .game-chat-column .game-chat .game-chat__toggle:hover {
+  background: rgba(193, 154, 86, 0.2);
+}
+/* 内层列表底部圆角与右栏容器贴合(当 game-chat 容器自身有圆角时,list 不需要再圆角) */
+.werewolf-game .game-chat-column .game-chat .game-chat__list {
+  border-radius: 0 0 var(--ww-radius) var(--ww-radius);
+}
+.werewolf-game .room-info-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* §2026-08-06 折叠态 handle — 列收起后的唯一可见元素 */
+.werewolf-game .room-info-fold-handle,
+.werewolf-game .room-chat-fold-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(35, 32, 27, 0.6);
+  border: 1px solid rgba(193, 154, 86, 0.25);
+  border-radius: var(--ww-radius);
+  cursor: pointer;
+  writing-mode: vertical-rl;
+  letter-spacing: 2px;
+  transition: background 0.15s ease;
+  min-height: 0;
+}
+.werewolf-game .room-info-fold-handle:hover,
+.werewolf-game .room-chat-fold-handle:hover {
+  background: rgba(193, 154, 86, 0.18);
+}
+/* 折叠态的列本身:缩小到 36px 宽 */
+.werewolf-game .game-sidebar.game-sidebar--folded {
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  overflow: hidden;
+}
+.werewolf-game .game-chat-column.game-chat-column--folded {
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  overflow: hidden;
+}
+
+/* 2026-08-05 §02 — 「发言时间线」组件及其全部样式已删除(与右栏房间聊天
+   信息重复)。发言展示统一走座位卡气泡,样式见 werewolf-speech.css 的
+   .werewolf-seat__speech*。 */
+
+.lobby-hint {
+  color: var(--accent);
+  font-size: 13px;
+  margin: 4px 0 12px 0;
+  padding: 6px 12px;
+  background: rgba(193,154,86,0.1);
+  border-left: 3px solid var(--accent);
+  border-radius: 3px;
+}
+
+/* ====== Werewolf AgentThoughtPanel (P3-H) — 10px 紧凑 ====== */
+.ww-agent-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--ww-radius);
+  font-size: 13px;
+}
+.ww-agent-panel__toggle {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  padding: var(--ww-gap);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-size: 13px;
+}
+.ww-agent-panel__title { font-weight: 600; }
+.ww-agent-panel__chevron { color: var(--muted); }
+.ww-agent-panel__body {
+  padding: var(--ww-gap) var(--ww-pad);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ww-gap);
+}
+.ww-agent-panel__empty {
+  color: var(--muted);
+  font-style: italic;
+  padding: var(--ww-gap) 4px;
+  text-align: center;
+}
+/* 2026-07-08 §13.5 观战者互动 summary 行 */
+.ww-agent-panel__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  background: rgba(255, 247, 230, 0.5);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: var(--fg);
+}
+.ww-agent-panel__summary-item { display: inline-flex; gap: 4px; align-items: center; }
+.ww-agent-panel__summary-item strong { color: var(--accent, #d97706); font-weight: 700; }
+.ww-agent-panel__summary-sep { color: var(--muted); opacity: 0.6; }
+/* 观众消息行高亮(2026-07-08 §13.5) */
+.ww-agent-panel__msgs li.is-spectator {
+  background: rgba(255, 247, 230, 0.4);
+  border-left: 2px solid #f59e0b;
+  padding-left: 6px;
+}
+/* BUG-WEREWOLF-P1-NEW-46 (Round 39): quarantine 徽章 — 当 bot 被永久
+   禁用时,顶部展示"已禁用 / 5连失败"+ 最近一次错误。让观众与自动化
+   测试一眼看出该 bot 不再参与决策(以前是空白面板)。 */
+.ww-agent-panel__quarantined {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin: 0 0 var(--ww-gap, 8px) 0;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  border-radius: 6px;
+  color: #b91c1c;
+  font-size: 12px;
+}
+.ww-agent-panel__quarantined-icon { font-size: 14px; }
+.ww-agent-panel__quarantined-label { font-weight: 700; }
+.ww-agent-panel__quarantined-reason {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #7f1d1d;
+  word-break: break-all;
+}
+/* R86-P1-3 §120 LLM 调用耗时徽章 — 让观战者看到 🐇 上次/平均/已调 三段。 */
+.ww-agent-panel__llm-latency {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: rgba(125, 211, 252, 0.08);
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  color: #cbd5f5;
+  margin: 0 0 var(--ww-gap, 8px) 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* 2026-07-10 §124 增强 — 情绪徽章(走 wire 公开)。
+   真人玩家 + 其它 Agent + 观众都能看到 bot 当前情绪。
+   背景色由 emotion.go 的 Color 字段决定(10 色),文字色根据背景自动对比。
+   Tab 上的 mini 情绪 emoji 同样用此色系。 */
+.ww-agent-panel__emotion {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin: 0 0 var(--ww-gap, 8px) 0;
+  color: #1f2937;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+.ww-agent-panel__emotion-emoji {
+  font-size: 16px;
+  line-height: 1;
+}
+.ww-agent-panel__emotion-label {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.ww-agent-panel__emotion-ts {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.7;
+  margin-left: 2px;
+}
+.ww-agent-panel__emotion-reason {
+  font-size: 12px;
+  font-style: italic;
+  opacity: 0.85;
+  word-break: break-all;
+}
+.ww-agent-panel__tab-emotion {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  margin-left: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+/* R86-P1-2 §119 内心独白块 — 让观战者在 Agent 交互面板看到 BotTranscript.HeartThought,
+   兑现"心口不一"机制的产品价值。 */
+.ww-agent-interaction__heart-thought {
+  border-left: 3px solid #f472b6;
+  padding: 6px 10px;
+  margin: 4px 0;
+  background: rgba(244, 114, 182, 0.06);
+  border-radius: 0 4px 4px 0;
+  font-style: italic;
+  color: #f9a8d4;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.heart-thought__time {
+  display: block;
+  text-align: right;
+  opacity: 0.7;
+  margin-top: 4px;
+  font-style: normal;
+  font-size: 11px;
+}
+.ww-agent-panel__tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.ww-agent-panel__tab {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px var(--ww-gap);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--fg);
+}
+.ww-agent-panel__tab.is-active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.ww-agent-panel__tab-model {
+  margin-left: 4px;
+  opacity: 0.7;
+  font-size: 11px;
+}
+.ww-agent-panel__content {
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ww-gap);
+}
+.ww-agent-panel__section h4 {
+  margin: 0 0 4px 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.ww-agent-panel__thinking,
+.ww-agent-panel__lasttool {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* BUG-R70-P3 (2026-07-09): last_thinking 空白时的降级视图。
+   显示最近 5 条 tool_calls + 最近 3 条 assistant 消息,
+   让观察者能看到 LLM 决策链(典型: DouBao 在 LLM 失败时 last_thinking 空
+   但 tool_calls 仍在更新)。 */
+.ww-agent-panel__thinking-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text, #ddd);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 10px;
+  border-left: 2px solid rgba(255, 200, 80, 0.5);
+  border-radius: 0 4px 4px 0;
+}
+.ww-agent-panel__fallback-row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.ww-agent-panel__fallback-label {
+  color: var(--muted, #888);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.ww-agent-panel__fallback-value {
+  color: var(--text, #ddd);
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 11px;
+}
+.ww-agent-panel__fallback-list {
+  margin: 0;
+  padding-left: 16px;
+  list-style: disc;
+  color: var(--text, #ddd);
+}
+.ww-agent-panel__fallback-list li {
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ww-agent-panel__thinking-empty {
+  color: var(--muted, #888);
+  font-style: italic;
+  font-size: 12px;
+}
+.ww-agent-panel__msgs,
+.ww-agent-panel__tools {
+  margin: 0;
+  padding-left: 16px;
+}
+.ww-agent-panel__updated {
+  margin: 8px 0 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* 2026-07-09 §13 增强 - LLM 调用实时指示器:
+   后端默认超时已改为 5 分钟,期间 bot_contexts 空白易被误认为卡 bug。
+   此指示器让用户实时知道是在等 LLM 而非 bug,带脉冲动画 + 已等待秒数。 */
+.ww-agent-panel__llm-calling {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin: 0 0 var(--ww-gap, 8px) 0;
+  background: rgba(59, 130, 246, 0.10);
+  border: 1px solid rgba(59, 130, 246, 0.40);
+  border-radius: 6px;
+  color: #60a5fa;
+  font-size: 12px;
+}
+.ww-agent-panel__llm-calling-icon { font-size: 14px; }
+.ww-agent-panel__llm-calling-text strong {
+  color: #93c5fd;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* tab 上的「调用中」脉冲小圆点 - 让用户一眼看到哪些 bot 正在思考 */
+.ww-agent-panel__tab-calling {
+  display: inline-block;
+  margin-left: 2px;
+  color: #60a5fa;
+  font-size: 10px;
+  line-height: 1;
+  vertical-align: middle;
+}
+/* LLM 正在调用且 last_thinking 为空时的等待提示小字 */
+.ww-agent-panel__thinking-waiting {
+  margin: 0;
+  color: var(--muted, #888);
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* ========== 2026-07-09 §重构 - "Agent 思考 → Agent 交互" 新样式 ========== */
+/* ww-agent-interaction-* — 决策可观测性主区(决策输入 + 决策输出 + 工具调用) */
+.ww-agent-interaction__section {
+  margin: 8px 0 6px 0;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid var(--accent, #d97706);
+  border-radius: 3px;
+}
+.ww-agent-interaction__section h4 {
+  margin: 0 0 4px 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent, #d97706);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.ww-agent-interaction__inputs {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--fg, #ddd);
+  word-break: break-word;
+}
+.ww-agent-interaction__input-text {
+  margin: 0;
+}
+.ww-agent-interaction__input-empty {
+  margin: 0;
+  color: var(--muted, #888);
+  font-style: italic;
+}
+.ww-agent-interaction__output {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.ww-agent-interaction__output-row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.ww-agent-interaction__output-label {
+  font-weight: 700;
+  color: var(--muted, #aaa);
+  min-width: 32px;
+  font-size: 11px;
+}
+.ww-agent-interaction__output-summary {
+  flex: 1;
+  color: var(--fg, #eee);
+  font-weight: 500;
+  word-break: break-word;
+}
+.ww-agent-interaction__output-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 11px;
+  color: #c7d2fe;
+  word-break: break-all;
+}
+.ww-agent-interaction__kv {
+  display: inline-block;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+.ww-agent-interaction__output-result {
+  flex: 1;
+  color: var(--muted, #aaa);
+  font-size: 11px;
+  word-break: break-word;
+  font-style: italic;
+}
+.ww-agent-interaction__output-empty {
+  margin: 0;
+  color: var(--muted, #888);
+  font-style: italic;
+  font-size: 12px;
+}
+.ww-agent-interaction__tools {
+  margin: 0;
+  padding: 0 0 0 16px;
+  font-size: 11px;
+  line-height: 1.4;
+  list-style: square;
+}
+.ww-agent-interaction__tools li {
+  margin: 2px 0;
+  color: var(--fg, #ddd);
+  word-break: break-word;
+}
+.ww-agent-interaction__tools li code {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 10px;
+  color: #c7d2fe;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 2px;
+  padding: 1px 4px;
+}
+.ww-agent-interaction__tools-empty {
+  margin: 0;
+  color: var(--muted, #888);
+  font-style: italic;
+  font-size: 12px;
+}
+/* 决策结果分类徽章 */
+.ww-agent-panel__outcome {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+.ww-agent-panel__outcome.is-ok { background: #16a34a; color: #fff; }
+.ww-agent-panel__outcome.is-fail { background: #dc2626; color: #fff; }
+.ww-agent-panel__outcome.is-skip { background: #6b7280; color: #fff; }
+.ww-agent-panel__outcome.is-idle { background: #6366f1; color: #fff; }
+.ww-agent-panel__outcome.is-quarantine { background: #1f2937; color: #f87171; }
+.ww-agent-panel__outcome.is-unknown { background: #4b5563; color: #d1d5db; }
+/* ww-agent-interaction 容器与旧 ww-agent-panel 共享同套 toggle / tabs 样式 */
+/* 脉冲动画 - 「思考中」视觉反馈,与 phase-clock-pulse 风格一致 */
+.is-pulsing {
+  animation: ww-llm-pulse 1.2s ease-in-out infinite;
+}
+@keyframes ww-llm-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .is-pulsing { animation: none; }
+}
+
+/* 2026-08-08 §20260808-02 — PropPanel 经济档位徽章(EconTier v5)。
+ * PropPanel.tsx:230 渲染 `econ-tier-${econTier}` 类(econTier ∈
+ * {health, caution, danger}),但此前**全部 src/styles 中零规则**,导致
+ * 5 档经济档位无视觉差异、销毁率隐藏在文本中。补齐三档配色:
+ *   health   = 健康  → 绿底白字
+ *   caution  = 警戒  → 黄底白字
+ *   danger   = 危险  → 红底白字
+ * 白字 + 加粗 + 不透明度 ≥ 0.45 的背景,确保 WCAG AA 通过。 */
+.werewolf-prop-panel__econ-tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  border: 1px solid transparent;
+}
+.econ-tier-health {
+  background: rgba(34, 197, 94, 0.45);
+  color: #ffffff;
+  border-color: rgba(34, 197, 94, 0.75);
+}
+.econ-tier-caution {
+  background: rgba(245, 158, 11, 0.5);
+  color: #ffffff;
+  border-color: rgba(245, 158, 11, 0.8);
+}
+.econ-tier-danger {
+  background: rgba(239, 68, 68, 0.55);
+  color: #ffffff;
+  border-color: rgba(239, 68, 68, 0.85);
+  /* 危险档增加轻微脉动提示,但尊重 prefers-reduced-motion。 */
+  animation: ww-econ-danger-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ww-econ-danger-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45); }
+  50%      { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .econ-tier-danger { animation: none; }
+}
+
+/* ===========================================================================
+   §20260811-02 U1 — 发言影响力生态徽章
+   ---------------------------------------------------------------------------
+   座位卡首行 ⭐/◉/○ + 分数徽章。**全员可见**(分数只由公开信息计算,
+   不含角色信息 —— §135 无关)。
+
+   §26.4 徽章色相规约:三档走既有色相库,不新创色相 ——
+     high(⭐≥60) = 金(与「警长」同色相族,语义都是「场上分量重」)
+     mid (◉30~59) = 青绿(与「Bot AI」同色相族,中性状态)
+     low (○<30)  = 灰(与「死亡」同色相族,语义都是「存在感弱」)
+   §26.1 对比度:三档底色透明度均 ≥ 0.45,字色纯白 + font-weight 700,
+   实测 ≥ 5.0:1(徽章类硬阈值)。
+   §26.2 反模式 4:选中态差异靠 box-shadow 光晕而非亮度 —— 本徽章无选中态,
+   但 high 档加 box-shadow 确保在 .is-night brightness(0.4) 滤镜下仍可辨。
+   =========================================================================== */
+.werewolf-seat__influence {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+  padding: 0 5px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* ⭐ 高影响力 ≥60 — 金色 + 光晕(night 滤镜下 box-shadow 不衰减) */
+.werewolf-seat__influence.is-high {
+  background: rgba(250, 190, 60, 0.55);
+  border-color: rgba(250, 190, 60, 0.85);
+  box-shadow: 0 0 6px rgba(250, 190, 60, 0.5);
+}
+
+/* ◉ 中影响力 30~59 — 青绿 */
+.werewolf-seat__influence.is-mid {
+  background: rgba(45, 190, 175, 0.5);
+  border-color: rgba(45, 190, 175, 0.8);
+}
+
+/* ○ 低影响力 <30 — 灰 */
+.werewolf-seat__influence.is-low {
+  background: rgba(148, 163, 184, 0.45);
+  border-color: rgba(148, 163, 184, 0.7);
+}
+
+/* 紧凑模式(<1280px 2 列网格)下缩小,避免与警长/白痴徽章挤占首行。 */
+@media (max-width: 1279px) {
+  .werewolf-seat__influence {
+    font-size: 9px;
+    padding: 0 3px;
+  }
+}

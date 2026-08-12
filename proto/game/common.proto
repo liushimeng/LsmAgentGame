@@ -1,0 +1,154 @@
+// LsmWebGame — 游戏通用消息定义
+//
+// 所有游戏共享的基础帧。各游戏专属帧定义在 game/<game>/ 子目录中。
+//
+// 帧类型（type 字段以 "game." 开头）：
+//
+//   client → server
+//     game.join     GameJoinReq
+//     game.leave    GameLeaveReq
+//     game.resign   GameResignReq
+//     game.state    GameStateReq
+//     game.spectate  SpectateReq
+//     game.unspectate UnspectateReq
+//     game.spectators SpectatorsReq
+//
+//   server → client
+//     game.joined       GameJoined
+//     game.left         GameLeft
+//     game.started      GameStarted
+//     game.over         GameOver
+//     game.state        GameStatePayload（各游戏扩展）
+//     game.error        ErrorPayload（common）
+//     game.peer_joined  GamePeerJoined
+//     game.removed      GameRemoved
+//     game.spectated    Spectated
+//     game.unspectated  Unspectated
+//     game.spectators_resp SpectatorsResp
+
+syntax = "proto3";
+
+package lsm.game.common;
+
+option go_package = "LsmWebGame/proto/pb/game/common";
+
+// ─────────────────── 客户端请求 ───────────────────
+
+// 加入游戏
+message GameJoinReq {
+  string room_id = 1;
+  // 可选：密码
+  string password = 2;
+}
+
+// 离开游戏
+message GameLeaveReq {
+  string room_id = 1;
+}
+
+// 认输
+message GameResignReq {
+  string room_id = 1;
+}
+
+// 拉取当前游戏状态
+message GameStateReq {
+  string room_id = 1;
+}
+
+// 观战请求
+message SpectateReq {
+  string room_id = 1;
+}
+
+// 取消观战
+message UnspectateReq {
+  string room_id = 1;
+}
+
+// 观战者列表请求
+message SpectatorsReq {
+  string room_id = 1;
+}
+
+// ─────────────────── 服务端响应 ───────────────────
+
+// 成功加入（等待对手）
+message GameJoined {
+  string room_id = 1;
+  // 玩家颜色/阵营（棋类："red"/"black"；卡牌/狼人杀：座位号）
+  string my_role = 2;
+  bool ready = 3;
+}
+
+// 玩家离开确认
+message GameLeft {
+  string room_id = 1;
+}
+
+// 游戏开始（双方就位）
+message GameStarted {
+  string room_id = 1;
+  string status = 2;   // "playing"
+  int64 started_at = 3;
+}
+
+// 游戏结束
+message GameOver {
+  string room_id = 1;
+  string winner = 2;   // 胜方标识（""=平局）
+  string reason = 3;   // "checkmate" | "resign" | "stalemate" | ...
+  string status = 4;   // "over"
+}
+
+// 对手加入
+message GamePeerJoined {
+  string room_id = 1;
+  string peer_user_id = 2;
+  string peer_nickname = 3;
+  string peer_role = 4;
+}
+
+// 房间被移除（管理员解散/系统清理）
+message GameRemoved {
+  string room_id = 1;
+  string reason = 2;
+}
+
+// 游戏状态基类（各游戏通过 payload 扩展）
+message GameStatePayload {
+  string room_id = 1;
+  string status = 2;    // "waiting" | "playing" | "over"
+  string my_role = 3;
+  bool ready = 4;
+  int32 move_count = 5;
+  string turn = 6;      // 当前行动方
+  int64 updated_at = 7;
+}
+
+// ─────────────────── 观战 ───────────────────
+
+// 观战确认
+message Spectated {
+  string room_id = 1;
+  bool ok = 2;
+}
+
+// 取消观战确认
+message Unspectated {
+  string room_id = 1;
+}
+
+// 观战者信息
+message SpectatorInfo {
+  string user_id = 1;
+  string nickname = 2;
+  bool is_bot = 3;
+}
+
+// 观战者列表响应
+message SpectatorsResp {
+  string room_id = 1;
+  repeated SpectatorInfo spectators = 2;
+  int32 total = 3;
+}

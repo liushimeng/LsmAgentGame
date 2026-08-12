@@ -1,0 +1,126 @@
+// LsmWebGame — 房间管理消息定义
+//
+// 帧类型（type 字段以 "room." 开头）：
+//
+//   client → server
+//     room.list     RoomListReq
+//     room.create   RoomCreateReq
+//     room.join     RoomJoinReq
+//     room.leave    RoomLeaveReq
+//
+//   server → client
+//     room.list_resp    RoomListResp
+//     room.create_resp  RoomDetail
+//     room.join_resp    RoomDetail
+//     room.leave_resp   RoomLeaveResp
+//     room.error        ErrorPayload（common）
+//     room.state        RoomStateEvent
+//     room.player_status RoomPlayerStatusEvent
+
+syntax = "proto3";
+
+package lsm.room;
+
+option go_package = "LsmWebGame/proto/pb/room";
+
+// ─────────────────── 客户端请求 ───────────────────
+
+// 列出某游戏的开放房间
+message RoomListReq {
+  string game_kind = 1;
+  int32 skip = 2;
+  int32 limit = 3;
+}
+
+// 创建房间
+message RoomCreateReq {
+  string game_kind = 1;
+  // 可选：房间名称
+  string name = 2;
+  // 可选：密码
+  string password = 3;
+}
+
+// 加入房间（幂等：已在此房间时返回当前详情）
+message RoomJoinReq {
+  string room_id = 1;
+  // 可选：密码
+  string password = 2;
+  // 可选：座位偏好
+  int32 preferred_seat = 3;
+}
+
+// 离开房间
+message RoomLeaveReq {
+  string room_id = 1;
+}
+
+// ─────────────────── 服务端响应 ───────────────────
+
+// 房间简要信息（列表项）
+message RoomInfo {
+  string id = 1;
+  string game_kind = 2;
+  int32 capacity = 3;
+  int32 current_count = 4;
+  string status = 5;  // "open" | "playing" | "closed"
+  string name = 6;
+  bool has_password = 7;
+  // 房主昵称
+  string host_nickname = 8;
+}
+
+// 玩家信息
+message RoomPlayerInfo {
+  string user_id = 1;
+  string nickname = 2;
+  int32 seat = 3;
+  bool online = 4;
+  // 玩家在房间中的角色（"host" | "player" | "spectator"）
+  string role = 5;
+}
+
+// 房间详情（包含玩家列表）
+message RoomDetail {
+  string id = 1;
+  string game_kind = 2;
+  int32 capacity = 3;
+  int32 current_count = 4;
+  string status = 5;
+  repeated RoomPlayerInfo players = 6;
+  string name = 7;
+  int64 created_at = 8;
+  // 调用者在房间中的角色
+  string my_role = 9;
+}
+
+// 房间列表响应
+message RoomListResp {
+  repeated RoomInfo rooms = 1;
+  int32 total = 2;
+}
+
+// 离开房间确认
+message RoomLeaveResp {
+  string room_id = 1;
+  bool ok = 2;
+}
+
+// ─────────────────── 推送事件 ───────────────────
+
+// 房间状态变更事件（大厅广播）
+message RoomStateEvent {
+  string event_type = 1;  // "room_created" | "room_deleted" | "player_joined" | "player_left"
+  string room_id = 2;
+  string game_kind = 3;
+  int32 current_count = 4;
+  string status = 5;
+}
+
+// 房间内玩家状态变更事件
+message RoomPlayerStatusEvent {
+  string room_id = 1;
+  string user_id = 2;
+  string status = 3;  // "disconnecting" | "reconnected" | "removed"
+  int32 seat = 4;
+}

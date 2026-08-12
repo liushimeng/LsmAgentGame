@@ -1,0 +1,88 @@
+// LsmWebGame — 房间管理消息定义
+//
+// 帧类型(所有消息封装在 common.Envelope 中,type 字段以 "room." 开头):
+//
+//   client → server
+//     room.list    RoomListReq
+//     room.create  RoomCreateReq
+//     room.join    RoomJoinReq
+//     room.leave   RoomLeaveReq
+//
+//   server → client
+//     room.list_resp    RoomListResp
+//     room.create_resp  RoomDetail
+//     room.join_resp    RoomDetail
+//     room.leave_resp   RoomLeaveResp
+//     room.error        ErrorPayload
+//
+// 注:当前 REST HTTP 端点(/api/games/:kind/rooms 等)继续保留用于无 WS
+// 场景;WS 通道提供低延迟替代路径。两者最终一致。
+
+syntax = "proto3";
+
+package lsm;
+
+import "common.proto";
+
+option go_package = "LsmWebGame/proto/pb";
+option java_package = "com.lsmwebgame.proto";
+
+// ─────────────────── 客户端请求 ───────────────────
+
+// 列出某游戏的开放房间
+message RoomListReq {
+  string game_kind = 1;  // "xiangqi" 等
+}
+
+// 创建房间
+message RoomCreateReq {
+  string game_kind = 1;
+}
+
+// 加入房间(幂等:已在此房间时返回当前详情)
+message RoomJoinReq {
+  string room_id = 1;
+}
+
+// 离开房间
+message RoomLeaveReq {
+  string room_id = 1;
+}
+
+// ─────────────────── 服务端响应 ───────────────────
+
+// 房间简要信息(列表项)
+message RoomInfo {
+  string id = 1;
+  string game_kind = 2;
+  int32 capacity = 3;
+  int32 current_count = 4;
+  string status = 5;  // "open" | "playing" | "closed"
+}
+
+// 玩家信息
+message RoomPlayerInfo {
+  string user_id = 1;
+  int32 seat = 2;
+}
+
+// 房间详情(包含玩家列表)
+message RoomDetail {
+  string id = 1;
+  string game_kind = 2;
+  int32 capacity = 3;
+  int32 current_count = 4;
+  string status = 5;
+  repeated RoomPlayerInfo players = 6;
+}
+
+// 房间列表响应
+message RoomListResp {
+  repeated RoomInfo rooms = 1;
+}
+
+// 离开房间确认
+message RoomLeaveResp {
+  string room_id = 1;
+  bool ok = 2;
+}

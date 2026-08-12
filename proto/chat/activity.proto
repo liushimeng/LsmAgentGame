@@ -1,0 +1,56 @@
+// LsmWebGame — 聊天活动事件
+//
+// 活动事件通过 chat.activity 帧广播，作为聊天流中的系统消息。
+// 用于展示游戏阶段变化、死亡、投票结果等事件。
+
+syntax = "proto3";
+
+package lsm.chat;
+
+option go_package = "LsmWebGame/proto/pb/chat";
+
+// 活动事件类型
+enum ActivityKind {
+  ACTIVITY_KIND_UNSPECIFIED = 0;
+
+  // 阶段变化
+  PHASE_CHANGED = 1;
+
+  // 玩家死亡
+  PLAYER_DIED = 2;
+
+  // 投票结果
+  VOTE_RESULT = 3;
+
+  // 警长变更
+  SHERIFF_CHANGED = 4;
+
+  // 游戏开始
+  GAME_STARTED = 5;
+
+  // 游戏结束
+  GAME_OVER = 6;
+
+  // 玩家加入
+  PLAYER_JOINED = 7;
+
+  // 玩家离开
+  PLAYER_LEFT = 8;
+
+  // 道具使用
+  PROP_USED = 9;
+}
+
+// 活动事件
+message ActivityEvent {
+  ActivityKind kind = 1;
+  // 事件标题（i18n key 或纯文本）
+  string title = 2;
+  // 事件详情（JSON 字符串，结构由 kind 决定）
+  string detail = 3;
+  int64 ts = 4;
+  // 关联的房间 ID
+  string room_id = 5;
+  // 关联的座位号（可选）
+  int32 seat = 6;
+}

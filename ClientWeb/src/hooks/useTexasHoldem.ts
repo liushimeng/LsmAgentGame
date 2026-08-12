@@ -1,0 +1,98 @@
+import { useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { wsClient, type WsEnvelope } from '@/services/ws';
+import { useTexasHoldemStore } from '@/store/texasholdem.store';
+import type { TexasActionType, TexasHoldemGameState } from '@/types/texasholdem';
+
+export function useTexasHoldem(roomId: string) {
+  const { setGameState, setMySeat, setGameOver } = useTexasHoldemStore();
+  const roomIdRef = useRef(roomId);
+  roomIdRef.current = roomId;
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const unsub = wsClient.on((env: WsEnvelope) => {
+      if (!env.type.startsWith('game.')) return;
+      const p = env.payload as Record<string, unknown>;
+      if (p.room_id && p.room_id !== roomIdRef.current) return;
+
+      switch (env.type) {
+        case 'game.joined': {
+          const seat = typeof p.my_seat === 'number' ? p.my_seat : 0;
+          setMySeat(seat);
+          break;
+        }
+        case 'game.state': {
+          const gs = p as unknown as TexasHoldemGameState;
+          setGameState(gs);
+          // 观察者的 my_seat 为 -1；只在合法座位上写 store，避免覆盖本会话的座位。
+          if (typeof gs.my_seat === 'number' && gs.my_seat >= 0) {
+            setMySeat(gs.my_seat);
+          }
+          break;
+        }
+        case 'game.over': {
+          const o = p as unknown as { winners: number[]; reason: string };
+          setGameOver({ winners: o.winners, reason: o.reason });
+          break;
+        }
+        case 'game.error': {
+          const e = p as { code: number; message: string };
+          console.error('texasholdem game error:', e.code, e.message);
+          break;
+        }
+        case 'game.removed': {
+          // 房间被管理员强制解散 / 系统清理 → 跳回大厅。
+          // eslint-disable-next-line no-console
+          console.warn('texasholdem: room removed by admin', {
+            room_id: roomIdRef.current,
+            reason: p.reason,
+          });
+          navigate('/texasholdem');
+          break;
+        }
+      }
+    });
+    return () => unsub();
+  }, [setGameState, setMySeat, setGameOver, navigate]);
+
+  const joinGame = useCallback(() => {
+    wsClient.send('game.join', { room_id: roomId, game_kind: 'texasholdem' });
+  }, [roomId]);
+
+  // Subscribe as a spectator — server returns the sanitized view (no my_hole).
+  const spectate = useCallback(() => {
+    wsClient.send('game.spectate', { room_id: roomId, game_kind: 'texasholdem' });
+  }, [roomId]);
+
+  // Unsubscribe as a spectator.
+  const unspectate = useCallback(() => {
+    wsClient.send('game.unspectate', { room_id: roomId, game_kind: 'texasholdem' });
+  }, [roomId]);
+
+  const sendAction = useCallback(
+    (type: TexasActionType, amount?: number) => {
+      wsClient.send('game.action', {
+        room_id: roomId,
+        game_kind: 'texasholdem',
+        type,
+        ...(amount !== undefined ? { amount } : {}),
+      });
+    },
+    [roomId],
+  );
+
+  const resign = useCallback(() => {
+    wsClient.send('game.resign', { room_id: roomId, game_kind: 'texasholdem' });
+  }, [roomId]);
+
+  const leaveGame = useCallback(() => {
+    wsClient.send('game.leave', { room_id: roomId, game_kind: 'texasholdem' });
+  }, [roomId]);
+
+  const requestState = useCallback(() => {
+    wsClient.send('game.state', { room_id: roomId, game_kind: 'texasholdem' });
+  }, [roomId]);
+
+  return { joinGame, spectate, unspectate, sendAction, resign, leaveGame, requestState };
+}

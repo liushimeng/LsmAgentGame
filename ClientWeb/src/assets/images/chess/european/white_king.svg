@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128"><defs><filter id="glow-white-king-european" x="-50%" y="-50%" width="200%" height="200%">
+    
+  </filter>
+  <radialGradient id="grad-white-king-european" cx="40%" cy="35%">
+    <stop offset="0%" stop-color="#fdfbf3" stop-opacity="1"/>
+    <stop offset="100%" stop-color="#fdfbf3" stop-opacity="0.95"/>
+  </radialGradient></defs><circle cx="64" cy="64" r="58" fill="url(#grad-white-king-european)" stroke="#3d2817" stroke-width="3" /><text x="64" y="64" text-anchor="middle" dominant-baseline="central" fill="#3d2817" font-family="serif" font-size="83.2" font-weight="bold" >♔</text></svg>

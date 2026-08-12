@@ -1,0 +1,124 @@
+// LsmWebGame — 游戏模块消息定义(当前支持中国象棋)
+//
+// 帧类型(所有消息封装在 common.Envelope 中,type 字段以 "game." 开头):
+//
+//   client → server
+//     game.join    GameJoin
+//     game.leave   GameLeave
+//     game.move    GameMove
+//     game.resign  GameResign
+//     game.state   GameStateReq
+//
+//   server → client
+//     game.joined  GameJoined
+//     game.started GameStarted
+//     game.moved   GameMoved
+//     game.over    GameOver
+//     game.left    GameLeft
+//     game.state   GameStatePayload
+//     game.error   ErrorPayload
+
+syntax = "proto3";
+
+package lsm;
+
+import "common.proto";
+
+option go_package = "LsmWebGame/proto/pb";
+option java_package = "com.lsmwebgame.proto";
+
+// ─────────────────── 通用类型 ───────────────────
+
+// 棋盘坐标(0~8 列 × 0~9 行)
+message Position {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+// ─────────────────── 客户端请求 ───────────────────
+
+// 加入游戏(创建或加入现有房间)
+message GameJoin {
+  string room_id = 1;
+}
+
+// 离开游戏
+message GameLeave {
+  string room_id = 1;
+}
+
+// 走子
+message GameMove {
+  string room_id = 1;
+  Position from = 2;
+  Position to = 3;
+}
+
+// 认输
+message GameResign {
+  string room_id = 1;
+}
+
+// 拉取当前游戏状态
+message GameStateReq {
+  string room_id = 1;
+}
+
+// ─────────────────── 服务端响应 ───────────────────
+
+// 成功加入(等待对手)
+message GameJoined {
+  string room_id = 1;
+  string my_color = 2;  // "red" | "black"
+  bool ready = 3;
+}
+
+// 游戏开始(双方就位)
+message GameStarted {
+  string room_id = 1;
+  string my_color = 2;
+  bool ready = 3;
+  string red_id = 4;
+  string black_id = 5;
+  // 棋盘 JSON 表示(二维数组,见前端 XiangqiBoard 类型)
+  string board = 6;
+  string turn = 7;     // "red" | "black"
+  string status = 8;   // "playing" | "red_win" | "black_win" | "draw"
+}
+
+// 一手棋完成
+message GameMoved {
+  string room_id = 1;
+  string move = 2;     // Move 对象的 JSON
+  string turn = 3;
+  string status = 4;
+  bool check = 5;
+  string board = 6;
+}
+
+// 游戏结束
+message GameOver {
+  string room_id = 1;
+  string winner = 2;   // "red" | "black" | ""
+  string reason = 3;   // "checkmate" | "resign" | "stalemate"
+  string status = 4;
+}
+
+// 玩家离开
+message GameLeft {
+  string room_id = 1;
+}
+
+// 游戏状态(响应 game.state 请求或断线重连)
+message GameStatePayload {
+  string room_id = 1;
+  string red_id = 2;
+  string black_id = 3;
+  bool ready = 4;
+  string board = 5;
+  string turn = 6;
+  string my_color = 7;
+  string status = 8;
+  bool check = 9;
+  int32 move_count = 10;
+}

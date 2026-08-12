@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <radialGradient id="gblackmine" cx="35%" cy="35%">
+      <stop offset="0%" stop-color="#1e293b" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#1e293b" stop-opacity="0.85"/>
+    </radialGradient>
+  </defs>
+  <circle cx="64" cy="64" r="60" fill="url(#gblackmine)" stroke="#0ea5e9" stroke-width="3"/>
+  
+      <circle cx="64" cy="6" r="6" fill="#f59e0b" opacity="0.85"/>
+      <circle cx="64" cy="122" r="6" fill="#f59e0b" opacity="0.85"/>
+      <circle cx="6" cy="64" r="6" fill="#f59e0b" opacity="0.85"/>
+      <circle cx="122" cy="64" r="6" fill="#f59e0b" opacity="0.85"/>
+      <path d="M52 6 Q 64 0, 76 6" fill="#f59e0b" opacity="0.7"/>
+      <path d="M52 122 Q 64 128, 76 122" fill="#f59e0b" opacity="0.7"/>
+    
+  <text x="64" y="6" text-anchor="middle"
+        font-size="43.52" font-weight="bold" fill="#fef3c7"
+        font-family='"KaiTi", "STKaiti", "Microsoft YaHei", serif'>地雷</text>
+  <g transform="translate(64,102)">
+               <polygon points="0,-9 9,0 0,9 -9,0" fill="#1f2937" stroke="#fef3c7" stroke-width="1.5"/>
+               <circle cx="0" cy="0" r="3" fill="#fef3c7"/>
+             </g>
+</svg>

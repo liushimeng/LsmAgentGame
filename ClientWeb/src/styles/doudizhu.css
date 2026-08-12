@@ -1,0 +1,313 @@
+/* ═══════════════════════════════════════════════
+   斗地主 (Doudizhu) — card game
+   ═══════════════════════════════════════════════ */
+
+.doudizhu-lobby {
+  padding: 24px;
+}
+.doudizhu-lobby .lobby-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.doudizhu-lobby h1 {
+  font-size: 24px;
+  margin: 0;
+}
+
+/* ---- Game page ---- */
+.doudizhu-game {
+  display: flex;
+  flex: 1;
+  height: 100%;
+}
+.doudizhu-game .game-area {
+  display: flex;
+  flex: 1;
+  gap: 16px;
+  padding: 12px;
+}
+.doudizhu-game .board-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.doudizhu-game .game-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.doudizhu-game .waiting-board {
+  text-align: center;
+  padding: 60px;
+  font-size: 18px;
+  color: var(--muted);
+}
+
+/* ---- Table ---- */
+.doudizhu-table {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  height: 620px;
+  min-height: 620px;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* 底牌 */
+.doudizhu-bottom-cards {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  z-index: 2;
+}
+.doudizhu-bottom-cards .bottom-label {
+  font-size: 12px;
+  color: rgba(255,255,255,0.85);
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.doudizhu-bottom-cards .bottom-row {
+  display: flex;
+  gap: 4px;
+}
+
+/* 座位标记 */
+.seat-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+.seat-card-count {
+  font-size: 12px;
+  color: rgba(255,255,255,0.85);
+  margin-top: 2px;
+}
+
+/* 左座/右座 */
+.seat-left, .seat-right {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 1;
+  max-width: 180px;
+}
+.seat-left { left: 20px; }
+.seat-right { right: 20px; }
+.last-play-cards {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 160px;
+}
+
+/* 出牌区（自己） */
+.last-play-mine {
+  position: absolute;
+  bottom: 200px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  z-index: 2;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 90%;
+}
+
+/* 自己手牌（屏幕底部） */
+.seat-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  z-index: 3;
+}
+
+/* ---- 手牌 ---- */
+.doudizhu-hand {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0;
+  overflow-x: auto;
+  padding: 8px 12px 12px;
+  justify-content: center;
+  align-items: flex-end;
+  min-height: 124px;
+  scrollbar-width: thin;
+}
+.doudizhu-hand .card-slot {
+  margin-left: -22px;
+  transition: transform 0.15s ease, margin-top 0.15s ease;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.doudizhu-hand .card-slot:first-child { margin-left: 0; }
+.doudizhu-hand .card-slot.selected-slot {
+  margin-top: -16px;
+}
+
+/* ---- 单张牌 ---- */
+.doudizhu-card {
+  width: 70px;
+  height: 100px;
+  border-radius: 8px;
+  border: 2px solid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+  transition: border-color 0.15s;
+}
+.doudizhu-card.selected {
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 0 2px #f59e0b;
+}
+.doudizhu-card.card-small {
+  width: 50px;
+  height: 72px;
+  font-size: 12px;
+}
+.doudizhu-card.face-down {
+  border: none;
+}
+.card-back-pattern {
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255,255,255,0.06) 0 4px,
+    transparent 4px 8px
+  );
+  border-radius: 6px;
+}
+.doudizhu-card .card-png {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.card-css {
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.card-css .card-rank {
+  font-size: 20px;
+}
+.card-css .card-suit {
+  font-size: 18px;
+}
+.card-small .card-css .card-rank { font-size: 14px; }
+.card-small .card-css .card-suit { font-size: 13px; }
+
+/* ---- 叫地主面板 ---- */
+.doudizhu-bid-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(0,0,0,0.04);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 600px;
+}
+.bid-status {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  color: var(--text);
+}
+.bid-record { opacity: 0.85; }
+.bid-buttons {
+  display: flex;
+  gap: 10px;
+}
+.bid-waiting {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* ---- 出牌控件 ---- */
+.doudizhu-play-controls {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 12px 0;
+}
+.doudizhu-play-controls .turn-hint {
+  font-size: 14px;
+  color: var(--muted);
+}
+.doudizhu-play-controls.game-over {
+  flex-direction: column;
+  align-items: center;
+}
+.result-banner {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f59e0b;
+  padding: 12px 24px;
+  background: rgba(245,158,11,0.1);
+  border-radius: 12px;
+}
+
+/* ---- 风格切换 ---- */
+.style-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.style-switcher .label {
+  font-size: 13px;
+  color: var(--muted);
+  min-width: 40px;
+}
+
+/* Responsive: stack sidebar below board on small screens */
+@media (max-width: 768px) {
+  .game-sidebar {
+    width: 100%;
+    max-width: 560px;
+    max-height: none;
+  }
+}
+

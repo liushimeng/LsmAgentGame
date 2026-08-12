@@ -1,0 +1,141 @@
+/* WalletModal —— 工具栏 💰 按钮触发的「钱包管理」弹出式窗口样式。
+ *
+ * 设计要点:
+ *  - 复用 .modal-backdrop / .modal 基础样式,只覆盖本组件特有部分。
+ *  - 流水表头与行使用 CSS Grid 三等分布局,避免长类型文案挤压时间字段。
+ *  - 每日奖励区:label + 按钮 + 提示消息,响应式换行。
+ *  - 颜色变量沿用 :root 中的 --ok / --danger / --muted,主题切换兼容。
+ */
+
+.wallet-modal h2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wallet-modal__close {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.wallet-modal__close:hover {
+  background: var(--bg);
+}
+
+/* 每日奖励区 */
+.wallet-modal__claim {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.wallet-modal__claim-label {
+  color: var(--muted);
+  font-size: 13px;
+  flex: 0 1 auto;
+}
+.wallet-modal__claim-msg {
+  font-size: 0.9em;
+}
+.wallet-modal__claim-msg--success { color: var(--ok, #4caf50); }
+.wallet-modal__claim-msg--info { color: var(--muted); }
+.wallet-modal__claim-msg--error { color: var(--danger, #f44336); }
+.wallet-claimed {
+  background: var(--bg);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* 余额 / 累计 */
+.wallet-modal__stats {
+  margin-bottom: 16px;
+}
+.wallet-balance {
+  font-weight: 600;
+  font-size: 1.05em;
+}
+.amount--gain { color: var(--ok, #4caf50); }
+.amount--loss { color: var(--danger, #f44336); }
+.amount--zero { color: var(--muted); }
+
+/* 流水区 */
+.wallet-modal__tx-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.wallet-modal__empty {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 8px 0;
+}
+.wallet-modal__tx-panel {
+  max-width: none;
+  padding: 0;
+  overflow: hidden;
+}
+
+.wallet-tx {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.wallet-tx:last-child { border-bottom: 0; }
+.wallet-tx--header {
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.wallet-tx__reason {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wallet-tx__amount {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-weight: 500;
+}
+.wallet-tx__time {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 工具栏触发按钮（沿用旧 wallet-trigger 命名） */
+.wallet-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+.wallet-trigger:hover { background: var(--bg); }
+.wallet-trigger__icon { font-size: 14px; }
+.wallet-trigger__balance { font-variant-numeric: tabular-nums; }
+
+/* 弹窗底部按钮 */
+.wallet-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}

@@ -1,0 +1,172 @@
+/* ═══════════════════════════════════════════════════════════════════════
+ * 2026-08-05 §Agent聊天显示优化 — 狼人杀座位卡「最后一次发言」气泡样式
+ *
+ * 为什么单独成文件(而不是继续写进 werewolf-v2.css):
+ *   CLAUDE.md §4 硬上限「单文件 ≤ 1800 行」—— werewolf-v2.css 已 1966 行,
+ *   本次新增样式若继续追加只会让超限更严重。因此拆出本文件,并在
+ *   styles/globals.css 中放在 `@import './werewolf-v2.css';` **之后**,
+ *   保证同优先级选择器可正常覆盖 werewolf-v2.css 的既有规则(级联顺序)。
+ *
+ * 设计依据:Agent聊天显示优化-解决和设计方案-20260805-01.md §3.3
+ *   - 行3【主区】发言气泡:13px / 2 行钳位 / title 挂全文 / 左侧强调条
+ *   - .is-fresh    → 新发言 3s 金色描边 + 背景渐亮淡出(人眼定位「谁刚说话」)
+ *   - .is-streaming→ ▍ 闪烁光标(LLM 正在生成)
+ *   - 指标行合并后整体降权(10px + var(--muted)),信息不丢、视觉权重下降
+ *   - prefers-reduced-motion:reduce → 关闭全部动画,仅保留静态描边
+ *
+ * 数据可见性:last_speech 是**已经广播的公开发言**(公屏本就看得到),
+ * 无需 spectator 守卫;§119/§128 的 heart_thought 依旧不在座位卡渲染。
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── 发言气泡容器 ─────────────────────────────────────────────── */
+.werewolf-seat__speech {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 1px 0;
+  padding: 4px 6px 3px 7px;
+  border-radius: 5px;
+  border-left: 3px solid rgba(193, 154, 86, 0.55);
+  background: rgba(12, 10, 6, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(193, 154, 86, 0.16);
+  overflow: hidden;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 气泡正文行:kind 徽章 + 可选光标 + 文本(2 行钳位) */
+.werewolf-seat__speech-body {
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(240, 231, 212, 0.96);
+  word-break: break-word;
+  /* 2 行钳位 —— 全文挂在容器 title 上,不丢信息。 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.werewolf-seat__speech-kind {
+  margin-right: 3px;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.werewolf-seat__speech-text {
+  white-space: pre-wrap;
+}
+
+/* whisper:后端只记事件不记原文(私聊仅收发双方可见),渲染静音占位。 */
+.werewolf-seat__speech-text.is-placeholder {
+  color: rgba(200, 190, 170, 0.5);
+  font-style: italic;
+}
+
+/* 气泡底部 meta:相对时间 + kind 标签,右对齐 10px 弱化。 */
+.werewolf-seat__speech-meta {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--muted, rgba(200, 190, 170, 0.55));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ─── .is-fresh:新发言 3s 金色高亮(与 SPEECH_FRESH_MS 常量一致) ─── */
+.werewolf-seat__speech.is-fresh {
+  border-left-color: #f5c96b;
+  animation: ww-speech-fresh 3s ease-out 1;
+}
+
+@keyframes ww-speech-fresh {
+  0% {
+    background: rgba(245, 201, 107, 0.28);
+    box-shadow: 0 0 10px 1px rgba(245, 201, 107, 0.5),
+                inset 0 0 0 1px rgba(245, 201, 107, 0.6);
+  }
+  35% {
+    background: rgba(245, 201, 107, 0.16);
+    box-shadow: 0 0 6px 0 rgba(245, 201, 107, 0.32),
+                inset 0 0 0 1px rgba(245, 201, 107, 0.4);
+  }
+  100% {
+    background: rgba(12, 10, 6, 0.55);
+    box-shadow: inset 0 0 0 1px rgba(193, 154, 86, 0.16);
+  }
+}
+
+/* ─── .is-streaming:LLM 正在生成 → ▍ 闪烁光标 ─────────────────── */
+.werewolf-seat__speech.is-streaming {
+  border-left-color: rgba(125, 216, 160, 0.85);
+}
+
+.werewolf-seat__speech-cursor {
+  display: inline-block;
+  margin-right: 2px;
+  color: #7dd8a0;
+  font-weight: 700;
+  animation: ww-speech-cursor-blink 0.9s steps(2, start) infinite;
+}
+
+@keyframes ww-speech-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+
+/* ─── 合并后的指标行整体降权(§3.3.1「降噪优先于加信息」) ────────
+ * .werewolf-seat__metrics 现同时承载 latency / calls / api / token / cache,
+ * 完整数据仍在 title tooltip 中,视觉上退居次要层级。 */
+.werewolf-seat__metrics {
+  flex-wrap: wrap;
+  row-gap: 2px;
+  font-size: 10px;
+  color: var(--muted, rgba(200, 190, 170, 0.6));
+  opacity: 0.85;
+}
+.werewolf-seat__metrics .werewolf-seat__metric,
+.werewolf-seat__metrics .werewolf-seat__token {
+  font-size: 10px;
+  opacity: 0.92;
+}
+.werewolf-seat__metrics:hover {
+  opacity: 1;
+}
+
+/* ─── 卡片高度:与 werewolf-v2.css 的断点覆盖保持一致(+30px) ──── */
+@media (max-width: 1280px) {
+  /* werewolf-v2.css 原值 195px;气泡 2 行需要额外空间。 */
+  .werewolf-seat { min-height: 225px; }
+}
+
+@media (max-width: 1024px) {
+  /* werewolf-v2.css 原值 170px。 */
+  .werewolf-seat { min-height: 200px; }
+}
+
+/* ─── compact 模式(≤768px 单列):气泡钳为 1 行,保持卡片紧凑 ──── */
+@media (max-width: 768px) {
+  .werewolf-seat__speech-body {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    font-size: 12.5px;
+  }
+  .werewolf-seat { min-height: 180px; }
+}
+
+/* ─── 无障碍:reduce motion 下关闭 fresh 渐亮与光标闪烁 ─────────── */
+@media (prefers-reduced-motion: reduce) {
+  .werewolf-seat__speech.is-fresh {
+    animation: none;
+    /* 仅保留静态金色描边作为「新发言」提示。 */
+    box-shadow: inset 0 0 0 1px rgba(245, 201, 107, 0.55);
+  }
+  .werewolf-seat__speech-cursor {
+    animation: none;
+    opacity: 1;
+  }
+}

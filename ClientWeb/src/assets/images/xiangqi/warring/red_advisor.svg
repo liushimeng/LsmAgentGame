@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+<defs>
+  <radialGradient id="pg" cx="40%" cy="35%">
+    <stop offset="0%" stop-color="#8b2020" stop-opacity="0.9"/>
+    <stop offset="100%" stop-color="#8b2020"/>
+  </radialGradient>
+  <filter id="shadow"><feDropShadow dx="2" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.35"/></filter>
+</defs>
+<circle cx="128" cy="128" r="107.52" fill="url(#pg)" stroke="#d4a030" stroke-width="5" filter="url(#shadow)"/>
+<circle cx="128" cy="128" r="88.1664" fill="none" stroke="#d4a030" stroke-width="2.5" opacity="0.7"/>
+<circle cx="128" cy="128" r="69.888" fill="none" stroke="#d4a030" stroke-width="1.5" opacity="0.4"/>
+<text x="128" y="130" text-anchor="middle" dominant-baseline="central" fill="#f5e6c8" font-size="107.52" font-family="KaiTi, STKaiti, STSong, serif" font-weight="bold" style="text-shadow: 1px 1px 3px rgba(0,0,0,0.5)">仕</text>
+</svg>

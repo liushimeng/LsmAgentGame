@@ -1,0 +1,293 @@
+/* 2026-08-12 §20260812-01 U1/U2/U3/U4 — 4 项新组件样式。
+   颜色 / 透明度严格遵循 §26.4 状态徽章色板:
+   - 背景 ≥ 0.45 透明度,文字 #fff,字重 700。
+   - 选中态另加 box-shadow 光晕(不被 night brightness 0.4 衰减)。
+   - 行高 ≥ 1.4,确保鼠标悬停目标 ≥ 44×44px(§23 触控 token)。
+*/
+
+/* ----------------------------------------------------------------------------
+ * U1 — PersonalReviewPanel
+ * -------------------------------------------------------------------------- */
+.personal-review-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+}
+
+.personal-review-panel__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.personal-review-panel__body {
+  position: relative;
+  width: min(480px, 92vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: rgba(28, 28, 32, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 16px 20px;
+  color: #fff;
+}
+
+.personal-review-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.personal-review-panel__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.personal-review-panel__close {
+  background: transparent;
+  border: 0;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 6px;
+}
+
+.personal-review-panel__close:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.personal-review-panel__error {
+  background: rgba(231, 76, 60, 0.55);
+  color: #fff;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.personal-review-panel__loading {
+  color: rgba(255, 255, 255, 0.7);
+  padding: 12px 0;
+}
+
+.personal-review-panel__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.personal-review-panel__card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.personal-review-panel__card-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 6px;
+}
+
+.personal-review-panel__card-score {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.personal-review-panel__card-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 6px;
+}
+
+.personal-review-panel__overall {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(46, 204, 113, 0.15);
+  border: 1px solid rgba(46, 204, 113, 0.35);
+  padding: 10px 14px;
+  border-radius: 8px;
+}
+
+.personal-review-panel__overall-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.personal-review-panel__overall-score {
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.personal-review-panel__highlights {
+  grid-column: 1 / -1;
+  background: rgba(241, 196, 15, 0.12);
+  border: 1px solid rgba(241, 196, 15, 0.35);
+  padding: 10px 14px;
+  border-radius: 8px;
+}
+
+.personal-review-panel__highlights h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: #fff;
+}
+
+.personal-review-panel__highlights ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ----------------------------------------------------------------------------
+ * U2 — MindMirrorPanel
+ * -------------------------------------------------------------------------- */
+.mindmirror-panel {
+  background: rgba(28, 28, 32, 0.96);
+  border: 1px solid rgba(155, 89, 182, 0.35);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: #fff;
+}
+
+.mindmirror-panel--disabled {
+  opacity: 0.6;
+}
+
+.mindmirror-panel__title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.mindmirror-panel__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.mindmirror-panel__table th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 700;
+}
+
+.mindmirror-panel__table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.mindmirror-panel__table tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mindmirror-panel__table select {
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  padding: 4px 6px;
+  margin-right: 4px;
+  min-height: 32px;
+}
+
+.mindmirror-panel__table input[type="range"] {
+  width: 80px;
+  vertical-align: middle;
+}
+
+.mindmirror-panel__pct {
+  margin-left: 4px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+}
+
+.mindmirror-panel__tone {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #fff;
+  font-weight: 700;
+}
+
+.mindmirror-panel__tone--opposite {
+  background: rgba(231, 76, 60, 0.6);
+}
+
+.mindmirror-panel__tone--near {
+  background: rgba(241, 196, 15, 0.6);
+}
+
+.mindmirror-panel__tone--match {
+  background: rgba(46, 204, 113, 0.6);
+}
+
+.mindmirror-panel__empty {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.55);
+  padding: 12px 0;
+}
+
+/* ----------------------------------------------------------------------------
+ * U3 — ContagionBadge
+ * -------------------------------------------------------------------------- */
+.contagion-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  user-select: none;
+}
+
+/* ----------------------------------------------------------------------------
+ * U4 — TrustTraceChart
+ * -------------------------------------------------------------------------- */
+.trust-trace-chart {
+  background: rgba(28, 28, 32, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: #fff;
+}
+
+.trust-trace-chart--empty {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.trust-trace-chart__title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.trust-trace-chart__svg {
+  width: 100%;
+  height: auto;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+}
+
+.trust-trace-chart__legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+}
