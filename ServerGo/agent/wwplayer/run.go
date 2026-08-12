@@ -382,6 +382,13 @@ func SkipPhaseAction(phase, role string) (string, int) {
 	case "sheriff", "PhaseSheriff":
 		// Sheriff elect (driver-only) advances even if no one campaigned.
 		return "sheriff_elect", 0
+	case "sheriff_order", "PhaseSheriffOrder":
+		// §20260810-09 — 警长定序兜底:watchdog 代打,使用默认值
+		//(顺时针 + 警长先发言)。与 room_agent.go:634 的 agent 路径
+		//及 dispatchQuarantinedSkipLocked 同源。
+		//§97 六处同步表:此处为 SkipPhaseAction 的遗漏项;缺失时警长
+		//被 quarantine 阶段会卡 90s 且永不推进到 PhaseSpeak。
+		return "sheriff_set_speak_order", 0
 	case "dawn", "PhaseDawn":
 		// BUG-WEREWOLF-P1-NEW-1: dawn is a structural phase that only the
 		// driver bot advances by calling start_day. If the driver is

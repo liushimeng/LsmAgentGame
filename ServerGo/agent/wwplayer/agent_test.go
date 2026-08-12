@@ -101,6 +101,10 @@ func (f *fakeRunner) SheriffElect() (string, error) {
 	f.calls = append(f.calls, "sheriff_elect")
 	return "ok", nil
 }
+func (f *fakeRunner) SheriffSetSpeakOrder(direction, selfPos string) (string, error) {
+	f.calls = append(f.calls, "sheriff_set_speak_order")
+	return "ok", nil
+}
 func (f *fakeRunner) HunterShoot(target int) (string, error) {
 	f.calls = append(f.calls, "hunter_shoot")
 	return "ok", nil
@@ -605,6 +609,34 @@ func TestSkipPhaseAction_DawnPhase(t *testing.T) {
 		{"PhaseNightGuard", "guard_protect_skip", 0},
 		// unknown phase still yields no skip (caller falls through).
 		{"unknown_phase", "", 0},
+	}
+	for _, c := range cases {
+		name, arg := wwplayer.SkipPhaseAction(c.phase, "villager")
+		if name != c.wantName || arg != c.wantArg {
+			t.Errorf("SkipPhaseAction(%q) = (%q, %d), want (%q, %d)",
+				c.phase, name, arg, c.wantName, c.wantArg)
+		}
+	}
+}
+
+// TestSkipPhaseAction_SheriffOrder 验证 §20260810-09 警长定序兜底:
+// 第 3 轮自动化测试(R212)发现警长定序阶段永久卡死,根因是 SkipPhaseAction
+// 缺少 sheriff_order / PhaseSheriffOrder case,watchdog 拿到的 skipName
+// 为空、dispatchQuarantinedSkipLocked 永不派发,阶段无限循环。
+//
+// 修复后两种字符串拼写都必须映射到 sheriff_set_speak_order,确保
+// dispatchQuarantinedSkipLocked(room_agent.go:634) 的派发表 case 能命中,
+// 默认值(顺时针 + 警长先发言)走 sheriffSetSpeakOrderLocked。
+func TestSkipPhaseAction_SheriffOrder(t *testing.T) {
+	cases := []struct {
+		phase    string
+		wantName string
+		wantArg  int
+	}{
+		// canonical 字符串拼写(§20260810-09 在 engine_state.go:168 注册)
+		{"sheriff_order", "sheriff_set_speak_order", 0},
+		// 引擎 enum 字符串
+		{"PhaseSheriffOrder", "sheriff_set_speak_order", 0},
 	}
 	for _, c := range cases {
 		name, arg := wwplayer.SkipPhaseAction(c.phase, "villager")

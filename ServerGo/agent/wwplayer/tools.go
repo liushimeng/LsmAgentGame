@@ -86,6 +86,12 @@ type ToolRunner interface {
 	StartDay() (string, error)
 	SheriffCandidate(target int) (string, error)
 	SheriffElect() (string, error)
+	// SheriffSetSpeakOrder §20260810-09 — 警长定序工具。仅警长在
+	// PhaseSheriffOrder 可调。direction ∈ {CW, CCW} 表示顺/逆时针;
+	// selfPos ∈ {First, Last} 表示警长自身排在首/末发言。引擎
+	// Action_SheriffSetSpeakOrder → sheriffSetSpeakOrderLocked → applySheriffOrderLocked
+	// → startSpeakPhaseWithOrder,完整链路一站到底。
+	SheriffSetSpeakOrder(direction, selfPos string) (string, error)
 	HunterShoot(target int) (string, error)
 	// LastWords 是 death_lyric 阶段的遗言提交工具。
 	// runner 实现 → WerewolfManager.Action_LastWords(广播遗言 + 活动事件 +
@@ -1085,6 +1091,15 @@ func dispatchToolInner(name string, input map[string]any, runner ToolRunner) (st
 		return runner.SheriffCandidate(intInput(input, "target"))
 	case "sheriff_elect":
 		return runner.SheriffElect()
+	case "sheriff_set_speak_order":
+		// §20260810-09 — 警长定序。SkipPhaseAction("sheriff_order") 兜底
+		// 返回 "sheriff_set_speak_order",auto-skip 三路径(quarantine /
+		// 成功但无动作 / speak_floor)必须能派发。direction/selfPos 由
+		// SkipPhaseAction 自动路径触发,不读 input;默认值(CW + First)
+		// 在 runner.SheriffSetSpeakOrder 内部硬编码(对齐 manager 路径
+		// dispatchQuarantinedSkipLocked 的 SheriffOrderDefaultDirection /
+		// SheriffOrderDefaultSelfPos)。
+		return runner.SheriffSetSpeakOrder("", "")
 	case "hunter_shoot":
 		return runner.HunterShoot(intInput(input, "target"))
 	// 2026-07-10 §7 / §12:警徽流声明工具。

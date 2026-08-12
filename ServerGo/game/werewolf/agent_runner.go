@@ -1043,6 +1043,36 @@ func (r *agentRunner) SheriffElect() (string, error) {
 	return "ok", nil
 }
 
+// SheriffSetSpeakOrder 是 §20260810-09 警长定序工具实现。
+// 警长在 PhaseSheriffOrder 阶段选择发言方向(CW/CCW)与自身位置
+// (First/Last),引擎按其选择生成 SpeakOrder 并启动 PhaseSpeak。
+//
+// 与 §92a 的关系:Action_SheriffSetSpeakOrder 是公开方法,内部已经走
+// sheriffSetSpeakOrderLocked(持锁),所以本方法不再触发 r.mu 二次加锁,
+// 与 Action_SheriffElect / Action_SheriffStream 等对称。
+//
+// agent 路径(auto-skip 兜底时 SkipPhaseAction → dispatchToolInner)
+// 走本入口;manager/watchdog 路径走 dispatchQuarantinedSkipLocked 直调
+// sheriffSetSpeakOrderLocked(带默认值,见 room_agent.go:634)。
+func (r *agentRunner) SheriffSetSpeakOrder(direction, selfPos string) (string, error) {
+	// §20260810-09 — auto-skip 路径以空字符串进入时,使用默认值(顺时针 +
+	// 警长先发言),与 manager 路径 dispatchQuarantinedSkipLocked 兜底
+	// 行为一致。LLM 真·调用应该填入合法取值。
+	if direction == "" {
+		direction = SheriffOrderDefaultDirection
+	}
+	if selfPos == "" {
+		selfPos = SheriffOrderDefaultSelfPos
+	}
+	// 引擎入口会做白名单校验(direction ∈ {CW,CCW} / selfPos ∈ {First,Last})。
+	_, e := r.mgr.Action_SheriffSetSpeakOrder(r.roomID, r.botUserID, direction, selfPos)
+	if e != nil {
+		return r.errStr(e), e
+	}
+	r.wakeAll()
+	return "ok", nil
+}
+
 func (r *agentRunner) HunterShoot(target int) (string, error) {
 	_, e := r.mgr.Action_HunterShoot(r.roomID, r.botUserID, Seat(target))
 	if e != nil {
