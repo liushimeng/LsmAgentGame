@@ -16,7 +16,7 @@
 ### 1. 核心测试工具(MCP)
 
 主工具是 `go-web-debug-tool`(MCP 服务,默认 `http://localhost:28999`),接口定义以
-`/usr/local/LsmAgentGame/go-web-debug-tool/MCP_Proc_Def.md` 为唯一事实来源。提供两类能力:
+`/usr/local/LsmAgentGame/LsmAgentGame/go-web-debug-tool/MCP_Proc_Def.md` 为唯一事实来源。提供两类能力:
 
 1. **Web 端操作模拟**: 模拟真实人类点击/滚动/截图,问题即停。
 2. **协议层诊断**: Agent 调 LLM 失败 ≥ 2 次时,**必须**走该接口下探协议抓包,再下结论。
