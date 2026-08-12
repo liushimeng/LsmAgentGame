@@ -10,6 +10,8 @@
 #   - 通过 nohup + setsid + & + disown 脱离调用者，**不阻塞**调用者进程
 #   - 日志输出到 ./logs/auto_debug_<timestamp>.log
 #   - AutoDebugTestReport.md 优先取当前目录，其次仓库根；都不存在则立即报错退出
+#   - 启动前预检：无待处理报告时直接退出，不空跑 Claude 会话
+#   - flock 防重入：同一时刻只允许一个自动修复实例（锁由 claude 所在进程持有）
 #   - 脚本本身赋予 755 权限
 # ---------------------------------------------------------------
 
@@ -22,6 +24,7 @@ LOG_DIR="${PROJECT_DIR}/logs"
 PROMPT_FILE_NAME="AutoDebugTestReport.md"
 TS="$(date +%Y%m%d_%H%M%S)"
 LOG_FILE="${LOG_DIR}/auto_debug_${TS}.log"
+LOCK_FILE="${LOG_DIR}/auto_debug.lock"
 
 mkdir -p "${LOG_DIR}"
 
@@ -60,6 +63,16 @@ if ! grep -q "绝对禁止修改 \`CLAUDE\.md\`、\`KILO\.md\`、\`AGENT\.md\`" 
     exit 2
 fi
 
+# ---------- 待处理报告预检 ----------
+# 无待处理报告（全部已删除或已加 _无问题 后缀）时直接退出，避免空跑一个 Claude 会话。
+# 与 AutoDebugTestReport.md §1「无任何待处理报告 → 静默结束」同语义，但省掉会话开销。
+PENDING_MAIN="$(find "${PROJECT_DIR}/TestReport" -maxdepth 1 -name '自动化测试报告_*.md' ! -name '*_无问题.md' 2>/dev/null | head -1)"
+PENDING_SUB="$(find "${PROJECT_DIR}/go-web-debug-tool/UseReport" -maxdepth 1 -name '测试工具使用报告_*.md' ! -name '*_无问题.md' 2>/dev/null | head -1)"
+if [[ -z "${PENDING_MAIN}${PENDING_SUB}" ]]; then
+    echo "[AutoDebugTestReport] 无待处理报告（TestReport/ 与 UseReport/ 均为空或已归档），静默结束。"
+    exit 0
+fi
+
 cd "${PROJECT_DIR}" || { echo "[ERROR] 无法进入 ${PROJECT_DIR}"; exit 1; }
 
 {
@@ -78,6 +91,12 @@ cd "${PROJECT_DIR}" || { echo "[ERROR] 无法进入 ${PROJECT_DIR}"; exit 1; }
 # & + disown: 与当前 shell 解除关系
 # stdout/stderr → 日志文件
 nohup setsid bash -c "
+    # 防重入：锁由本进程持有至 claude 退出；接力/手动重复触发时多余实例直接退出
+    exec 9>>'${LOCK_FILE}'
+    if ! flock -n 9; then
+        echo '[AutoDebugTestReport] 已有自动修复实例在运行，本次退出(防重入)。'
+        exit 0
+    fi
     cd '${PROJECT_DIR}'
     ${CLAUDE_BIN} --dangerously-skip-permissions -p \"\$(cat '${PROMPT_FILE}')\"
     echo '[AutoDebugTestReport] claude 退出码 : '\$?
