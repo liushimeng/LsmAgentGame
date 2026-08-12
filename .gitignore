@@ -357,6 +357,9 @@ credentials.json
 tmpPlan/
 .agent_work/
 
+# ============ 项目资源(含个人收款二维码,不入库) ============
+ProjectPic/
+
 # ============ 旧二进制 / 日志 / PID ============
 LsmWebGame
 LsmWebGame.pid

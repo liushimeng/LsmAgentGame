@@ -34,6 +34,7 @@ var AgentBypassAccounts = map[string]struct{}{
 	"test_02":           {},
 	"test_03":           {},
 	"test_04":           {},
+	"autowork2026":      {}, // 自动化截图/回归测试账号（DevMode 本地开发用）
 }
 
 // IsAgentBypassAccount reports whether the given login account string is on

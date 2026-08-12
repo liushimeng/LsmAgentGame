@@ -237,13 +237,22 @@ func (s *GameService) RegisterAgentSeats(gameKind, roomID string, seats []servic
 	}
 	// 2026-07-10: 13 人标准竞技局兼容。按 game_kind 设置本局人数(默认 13;
 	// werewolf_12 走 12 人;werewolf_7 走 7 人),驱动发牌 / IsReady 选择。
+	//
+	// §20260812-04 自动化补充:当 game_kind="werewolf"(默认 13 人)但恰好只注册了
+	// 7 个 Agent 座位时,自动降级为 7 人局,否则 7 个 Agent 永远填不满 13 座、
+	// ForceStartIfReady 永不触发,房间卡在 filling 阶段(自动化测试/截图 P0)。
+	// 用户若想开 13 人局,请显式注册 ≥8 个 Agent 或让人类玩家补足。
 	switch gameKind {
 	case "werewolf_7":
 		s.werewolfMgr.SetSeatCount(roomID, 7)
 	case "werewolf_12":
 		s.werewolfMgr.SetSeatCount(roomID, 12)
 	default: // "werewolf" / "werewolf_13"
-		s.werewolfMgr.SetSeatCount(roomID, 13)
+		if len(seats) == 7 {
+			s.werewolfMgr.SetSeatCount(roomID, 7)
+		} else {
+			s.werewolfMgr.SetSeatCount(roomID, 13)
+		}
 	}
 	// BUG-WEREWOLF-P0-1 FIX: when the agents collectively fill all 7 seats
 	// (creator was downgraded to spectator), ManagerAddPlayerAt doesn't
