@@ -180,30 +180,59 @@ func (r *WerewolfRoom) triggerCommentaryEventLocked(kind string, extra map[strin
 	}
 }
 
-// startCommentatorGoroutine —— §130 真实生产注入点。
+// startCommentatorGoroutine —— §130 真实生产注入点(公开变体)。
+//
 // 必须在 RegisterAgentSeats 之后调用(同 SetJudgeConfig 时序)。
 // onBroadcastSpectator 回调由调用方注入,内部走 Hub.BroadcastRoomSpectators。
 // 当前 onBroadcastSpectator 由 main.go 经 SetCommentarySpectatorHook 注入 manager。
+//
+// 锁约束(§92a / §BUG-20260812-04-B):本函数的公开变体必须在调用方持锁态被调用,
+// 实现交给 *Locked 变体。本函数自身只做「不需持锁的轻量早退」,绝不二次 r.mu.Lock,
+// 否则 sync.Mutex 不可重入会让开局 100% 永久死锁。
+//
+// 不需要 r.mu 即可判断的早退:
+//   - m.registry == nil:全局 LLM 注册表不可用,与具体房间无关。
+//   - r.commentaryDesired == false:房间级开关未开启(本房间即如此)。
+//   - r.commentator != nil:已启动过(幂等)。
 func (m *WerewolfManager) startCommentatorGoroutine(r *WerewolfRoom, onBroadcastSpectator func(roomID string, payload []byte)) {
 	if m.registry == nil {
 		return
 	}
-	r.mu.Lock()
+	// §92a 修复:这三项早退守卫必须在 r.mu 之外 —— 原版位于 r.mu.Lock() 之后,
+	// 等价于「无条件 Lock 再判断」,在 commentaryDesired=false 时依然触发
+	// sync.Mutex 不可重入死锁(BUG-20260812-04-B,§92a 第 N 次复现)。
+	// 字段为 WerewolfRoom.commentaryDesired / WerewolfRoom.commentator,
+	// 单独读不会与其他持锁路径冲突(无中间状态机依赖)。
 	if !r.commentaryDesired || r.commentator != nil {
-		r.mu.Unlock()
+		return
+	}
+	m.startCommentatorGoroutineLocked(r, onBroadcastSpectator)
+}
+
+// startCommentatorGoroutineLocked —— §92a / §BUG-20260812-04-B 锁内变体。
+// 调用方**必须**已持有 r.mu,本函数不获取/释放锁;早退守卫(registry/model/style/key)
+// 全部迁移至本函数**首行**,确保任何早退路径都不会留下半初始化状态。
+func (m *WerewolfManager) startCommentatorGoroutineLocked(r *WerewolfRoom, onBroadcastSpectator func(roomID string, payload []byte)) {
+	// 早退 1:session 内已启动过(幂等)。
+	if r.commentator != nil {
+		return
+	}
+	// 早退 2:switch 未开启。即便公开变体已检查,这里再守一次防御未来重入。
+	if !r.commentaryDesired {
 		return
 	}
 	modelKey := r.commentaryModelKeyLocked()
 	if modelKey == "" {
-		r.mu.Unlock()
 		logger.L().Warn("commentary: no model key available, skip",
 			zap.String("room_id", r.RoomID))
 		return
 	}
 	style := r.commentaryStyleLocked()
+	// registry.Get 不能再持锁态调用上游服务,本仓库实践是同步获取 provider 元信息
+	// (已在 main.go 启动时塞进 registry),这里简短阻塞完成。等价于 §130 法官 goroutine
+	// provider 注入路径,同样无 IO 锁竞争。
 	prov, apiKey, err := m.registry.Get(modelKey)
 	if err != nil || prov == nil || apiKey == "" {
-		r.mu.Unlock()
 		logger.L().Warn("commentary: registry.Get failed, skip",
 			zap.String("room_id", r.RoomID),
 			zap.String("model_key", modelKey),
@@ -244,7 +273,6 @@ func (m *WerewolfManager) startCommentatorGoroutine(r *WerewolfRoom, onBroadcast
 		defer rr.mu.Unlock()
 		return rr.buildCommentarySnapshotLocked()
 	}
-	r.mu.Unlock()
 
 	// 桥接:manager 持有 events channel,ca 持有自己的内部 channel。
 	// 一个轻量级 goroutine 做转发(避免双重 buffer)。

@@ -267,6 +267,15 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	// s.cfg.LLM.Providers (which is deprecated and may be empty/missing after
 	// the cleanup). When the live model-availability hook is wired we still
 	// filter through it so an admin-disabled row is excluded.
+	//
+	// BUG-20260812-04-A FIX(§TestReport/20260812_203948):原实现直接数
+	// seed.APIKey 是否等于占位符,但 8e68b81 切到 llm.DefaultProviders() 后
+	// seed.APIKey 恒为 types.PlaceholderKey,与 DB 注册表是否已注入真实密钥
+	// 完全无关 —— 100% 误判 ErrLLMUnavailable(30016),建房即拒。
+	//
+	// 修复策略(单一事实来源):live registry hook 存在时,30016 预检直接以
+	// IsModelAvailable(modelKey) 计数;hook 不存在(单测 / 老装配)才回退
+	// 检查 seed.APIKey(原行为,保留作为最后防线)。
 	if len(agentSeats) > 0 {
 		seeds := s.modelAvailabilitySeeds()
 		if len(seeds) == 0 {
@@ -277,16 +286,35 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 			return nil, errcode.Code(errcode.ErrLLMUnavailable)
 		}
 		usable := 0
-		for _, p := range seeds {
-			key := strings.TrimSpace(p.APIKey)
-			if key != "" && key != "API-KEY-PLACEHOLDER" {
-				usable++
+		if s.modelAvailability != nil {
+			// 正常生产路径:逐个 seed.model 喂给 live hook,只看 hook 的判定结果。
+			// hook 内部已对接 registry 的真实密钥 + enabled 开关 +
+			// api_key_hint(§118),不再读 seed.APIKey 这种已被占位符化的字段。
+			for _, p := range seeds {
+				if s.modelAvailability.IsModelAvailable(p.Model) {
+					usable++
+				}
+			}
+		} else {
+			// 兜底路径:hook 未接线(单元测试 / 老装配)。原行为保留,
+			// 用 seed.APIKey 是否为占位符判定 — 在该路径下 config 字段
+			// 与运行时数据同源,判定有效。
+			for _, p := range seeds {
+				key := strings.TrimSpace(p.APIKey)
+				if key != "" && key != "API-KEY-PLACEHOLDER" {
+					usable++
+				}
 			}
 		}
 		if usable == 0 {
-			logger.L().Warn("LLM unavailable: all configured providers have placeholder/empty api_key",
+			source := "seed.APIKey"
+			if s.modelAvailability != nil {
+				source = "live ModelAvailabilityHook"
+			}
+			logger.L().Warn("LLM unavailable: no usable provider per LLM availability probe",
 				zap.Int("requested_agent_seats", len(agentSeats)),
-				zap.Int("configured_providers", len(seeds)))
+				zap.Int("configured_providers", len(seeds)),
+				zap.String("source", source))
 			return nil, errcode.Code(errcode.ErrLLMUnavailable)
 		}
 	}
