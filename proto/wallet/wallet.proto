@@ -1,4 +1,4 @@
-// LsmWebGame — 钱包模块消息定义
+// LsmAgentGame — 钱包模块消息定义
 //
 // 帧类型：
 //   server → client
@@ -8,7 +8,7 @@ syntax = "proto3";
 
 package lsm.wallet;
 
-option go_package = "LsmWebGame/proto/pb/wallet";
+option go_package = "LsmAgentGame/proto/pb/wallet";
 
 // 钱包余额变动推送
 message WalletBalanceUpdate {

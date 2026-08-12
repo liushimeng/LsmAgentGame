@@ -1,4 +1,4 @@
-// LsmWebGame — 游戏模块消息定义(当前支持中国象棋)
+// LsmAgentGame — 游戏模块消息定义(当前支持中国象棋)
 //
 // 帧类型(所有消息封装在 common.Envelope 中,type 字段以 "game." 开头):
 //
@@ -24,7 +24,7 @@ package lsm;
 
 import "common.proto";
 
-option go_package = "LsmWebGame/proto/pb";
+option go_package = "LsmAgentGame/proto/pb";
 option java_package = "com.lsmwebgame.proto";
 
 // ─────────────────── 通用类型 ───────────────────

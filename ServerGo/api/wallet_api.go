@@ -16,9 +16,9 @@ import (
 	"strconv"
 	"time"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
-	"LsmWebGame/service"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/service"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
 	"go.uber.org/zap"
 )
 

@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"time"
 
-	"LsmWebGame/config"
-	"LsmWebGame/errcode"
-	"LsmWebGame/util"
+	"LsmAgentGame/config"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/util"
 
 	"github.com/gin-gonic/gin"
 )

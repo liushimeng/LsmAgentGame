@@ -9,7 +9,7 @@
 package wwjudge
 
 import (
-	"LsmWebGame/llm"
+	"LsmAgentGame/llm"
 )
 
 // BuildJudgeTools 返回法官 LLM 的工具集(announce / declare_cause /

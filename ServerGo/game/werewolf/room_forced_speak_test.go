@@ -49,7 +49,7 @@ func TestPreWolvesStartGameInit(t *testing.T) {
 	if r.State.PreWolvesSpeakRoundsPerPlayer < 1 || r.State.PreWolvesSpeakRoundsPerPlayer > 3 {
 		t.Errorf("PreWolvesSpeakRoundsPerPlayer out of clamp range [1,3]: %d (2026-07-10 §116 default=3)", r.State.PreWolvesSpeakRoundsPerPlayer)
 	}
-	// 进一步断言:在 LsmWebGame.conf.example 已存在(且其中 default=3)的环境下,
+	// 进一步断言:在 LsmAgentGame.conf.example 已存在(且其中 default=3)的环境下,
 	// PreWolvesSpeakRoundsPerPlayer 必须等于 3;否则说明配置默认值修改未生效。
 	if r.State.PreWolvesSpeakRoundsPerPlayer != 3 {
 		t.Logf("WARN: PreWolvesSpeakRoundsPerPlayer=%d != 3 (expected §116 default). likely test env loads default=1 from upstream code; verify config.go FirstNightForcedSpeakRounds default.",

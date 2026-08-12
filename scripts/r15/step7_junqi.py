@@ -5,7 +5,7 @@ import ssl
 import time
 import websocket
 import sys
-sys.path.insert(0, "/usr/local/LsmWebGame/scripts/r15")
+sys.path.insert(0, "/usr/local/LsmAgentGame/scripts/r15")
 
 with open("/tmp/r15_accounts.json") as f:
     accounts = json.load(f)

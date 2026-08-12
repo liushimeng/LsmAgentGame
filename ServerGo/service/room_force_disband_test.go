@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // fakeGameSvc records every (RemoveRoomState, BroadcastRoomRemoved) call

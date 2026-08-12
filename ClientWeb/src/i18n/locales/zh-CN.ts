@@ -2,7 +2,7 @@ import type { Dict } from '../types';
 
 // 中文 (默认) — zh-CN
 const zhCN: Dict = {
-  'common.appName': 'LsmWebGame',
+  'common.appName': 'LsmAgentGame',
   'common.loading': '加载中…',
 
   'header.openMenu': '打开菜单',
@@ -122,7 +122,7 @@ const zhCN: Dict = {
   'profile.referralsTitle': '使用我邀请码注册的用户',
   'profile.referralsEmpty': '还没有人使用你的邀请码。',
   'profile.loginRequired': '请先登录以查看个人信息。',
-  'about.title': '关于 LsmWebGame',
+  'about.title': '关于 LsmAgentGame',
   'about.version': '程序版本',
   'about.gitSha': 'Git 提交',
   'about.buildTime': '编译时间',

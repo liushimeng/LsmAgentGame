@@ -138,7 +138,7 @@ def page_url(page_id):
 
 def login_all_accounts():
     """Load test_account.json, login first 3, return list of dicts."""
-    with open("/usr/local/LsmWebGame/test_account.json") as f:
+    with open("/usr/local/LsmAgentGame/test_account.json") as f:
         cfg = json.load(f)
     out = []
     for a in cfg["accounts"][:3]:

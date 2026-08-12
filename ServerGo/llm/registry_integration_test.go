@@ -14,7 +14,7 @@
 //
 // The DSN is taken from $LSM_CONF (env var the config loader honors) so
 // operators can point the suite at a clean schema. When neither LSM_CONF nor
-// ./LsmWebGame.conf.example is reachable, the whole file is short-circuited
+// ./LsmAgentGame.conf.example is reachable, the whole file is short-circuited
 // via TestMain's t.Skip.
 package llm
 
@@ -26,10 +26,10 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/config"
-	"LsmWebGame/db"
-	"LsmWebGame/models"
-	"LsmWebGame/util"
+	"LsmAgentGame/config"
+	"LsmAgentGame/db"
+	"LsmAgentGame/models"
+	"LsmAgentGame/util"
 
 	"gorm.io/gorm"
 )
@@ -82,11 +82,11 @@ func (f *fakeProvisioner) Models() []string {
 	return out
 }
 
-// ensureChdirProjectRoot walks up until it finds LsmWebGame.conf.example so
+// ensureChdirProjectRoot walks up until it finds LsmAgentGame.conf.example so
 // config.Load() can find its fallback target.
 func ensureChdirProjectRoot() {
 	for i := 0; i < 4; i++ {
-		if _, err := os.Stat("./LsmWebGame.conf.example"); err == nil {
+		if _, err := os.Stat("./LsmAgentGame.conf.example"); err == nil {
 			return
 		}
 		if err := os.Chdir(".."); err != nil {

@@ -1,4 +1,4 @@
-// LsmWebGame — 通用消息定义
+// LsmAgentGame — 通用消息定义
 //
 // 所有 WebSocket 帧统一通过 Envelope 包装;模块化消息按功能分类到独立
 // 的 .proto 文件中(chat.proto / game.proto / room.proto 等)。
@@ -10,7 +10,7 @@ syntax = "proto3";
 
 package lsm;
 
-option go_package = "LsmWebGame/proto/pb";
+option go_package = "LsmAgentGame/proto/pb";
 option java_package = "com.lsmwebgame.proto";
 
 // ─────────────────── 通用消息 ───────────────────

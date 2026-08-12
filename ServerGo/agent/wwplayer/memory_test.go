@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"LsmWebGame/llm"
+	"LsmAgentGame/llm"
 )
 
 // TestPickWolfTeammateHint_NonWolf 验证非狼人 bot 永远不会被注入(返回 -1)。

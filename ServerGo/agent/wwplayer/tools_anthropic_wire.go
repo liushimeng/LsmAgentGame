@@ -18,10 +18,10 @@
 // 2026-07-21 道具系统 v5 重构。
 package wwplayer
 
-import "LsmWebGame/agent/wwtypes"
+import "LsmAgentGame/agent/wwtypes"
 
 import (
-	"LsmWebGame/llm/types"
+	"LsmAgentGame/llm/types"
 )
 
 // BuildAnthropicToolDefs 把 agent 包 ToolRegistry 的 spec 列表转换为 Anthropic

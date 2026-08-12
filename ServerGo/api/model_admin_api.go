@@ -2,7 +2,7 @@
 // t_lsm_game_llm_provider rows, plus the lightweight "test" and "reload"
 // helpers. These endpoints back the React ModelAdminPage (Phase 5) and let
 // operators add / disable / remove LLM providers without editing
-// LsmWebGame.conf + restarting the server.
+// LsmAgentGame.conf + restarting the server.
 //
 // Endpoints (all require admin role; reload also requires super admin so a
 // non-super admin can't trigger a registry-wide reload that might race with
@@ -34,14 +34,14 @@ import (
 	"strings"
 	"time"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/llm"
-	"LsmWebGame/llm/anthropic"
-	types "LsmWebGame/llm/types"
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
-	"LsmWebGame/service"
-	"LsmWebGame/util"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/llm/anthropic"
+	types "LsmAgentGame/llm/types"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
+	"LsmAgentGame/service"
+	"LsmAgentGame/util"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -888,7 +888,7 @@ func headProbe(parent context.Context, endpoint string) (*http.Response, error) 
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
-	req.Header.Set("User-Agent", "LsmWebGame-HealthCheck/1.0")
+	req.Header.Set("User-Agent", "LsmAgentGame-HealthCheck/1.0")
 	client := &http.Client{}
 	return client.Do(req)
 }

@@ -1,7 +1,7 @@
 package junqi
 
 import (
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // Direction offsets for adjacent (公路线) cells.

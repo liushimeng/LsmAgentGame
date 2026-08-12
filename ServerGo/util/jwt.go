@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 
 	"github.com/golang-jwt/jwt/v5"
 )

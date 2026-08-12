@@ -37,7 +37,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // TestForceTally_ReleasesLock_AllWolvesQuarantined pins the all-wolves-quarantined

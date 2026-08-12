@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	wwplayer "LsmWebGame/agent/wwplayer"
+	wwplayer "LsmAgentGame/agent/wwplayer"
 )
 
 // TestHypothesis_ParseSummary_VoteCase: T1 — LLM 输出 vote + 📊 JSON 段时,

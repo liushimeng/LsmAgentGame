@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 // TestEmotionConstants_AllTen 是 §124 情绪模块基础不变量测试:

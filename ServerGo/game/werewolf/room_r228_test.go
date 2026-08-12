@@ -27,7 +27,7 @@ package werewolf
 import (
 	"testing"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // TestAutoVoteStuckWolvesLocked_QuarantinedSibling pins path (a): when the

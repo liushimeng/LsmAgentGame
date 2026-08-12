@@ -1,4 +1,4 @@
-// LsmWebGame — 房间管理消息定义
+// LsmAgentGame — 房间管理消息定义
 //
 // 帧类型（type 字段以 "room." 开头）：
 //
@@ -21,7 +21,7 @@ syntax = "proto3";
 
 package lsm.room;
 
-option go_package = "LsmWebGame/proto/pb/room";
+option go_package = "LsmAgentGame/proto/pb/room";
 
 // ─────────────────── 客户端请求 ───────────────────
 

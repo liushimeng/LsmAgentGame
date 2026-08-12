@@ -15,7 +15,7 @@ import (
 	"strings"
 	"sync"
 
-	"LsmWebGame/models"
+	"LsmAgentGame/models"
 )
 
 // PropCatalogEntry 是道具目录的单条记录（已解析的运行时形态）。

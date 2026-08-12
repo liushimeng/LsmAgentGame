@@ -3,8 +3,8 @@ package wwplayer
 import (
 	"testing"
 
-	"LsmWebGame/llm"
-	llmtypes "LsmWebGame/llm/types"
+	"LsmAgentGame/llm"
+	llmtypes "LsmAgentGame/llm/types"
 )
 
 // TestApproxSystemToolsBytes 验证 system + tools 字节估算的准确性。

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/errcode"
-	"LsmWebGame/llm"
-	"LsmWebGame/logger"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

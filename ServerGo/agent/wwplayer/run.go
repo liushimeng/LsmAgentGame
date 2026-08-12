@@ -11,14 +11,14 @@
 package wwplayer
 
 import (
-	"LsmWebGame/config"
-	agentroot "LsmWebGame/agent"
-	"LsmWebGame/agent/core"
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/llm"
-	"LsmWebGame/llm/anthropic"
-	llmtypes "LsmWebGame/llm/types"
-	"LsmWebGame/logger"
+	"LsmAgentGame/config"
+	agentroot "LsmAgentGame/agent"
+	"LsmAgentGame/agent/core"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/llm/anthropic"
+	llmtypes "LsmAgentGame/llm/types"
+	"LsmAgentGame/logger"
 	"context"
 	"errors"
 	"fmt"
@@ -853,7 +853,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 			// proxies / observability use this for traffic attribution and
 			// abuse detection. Format parallels the reference payload in
 			// `CluadeCode请求RequestBody的Anthropic协议定义数据用例.json`:
-			// device_id + session_id, plus LsmWebGame-specific room/seat.
+			// device_id + session_id, plus LsmAgentGame-specific room/seat.
 			Metadata: llmtypes.Metadata{
 				UserID: buildMetadataUserID(a),
 			},
@@ -1971,7 +1971,7 @@ alive:
 // buildMetadataUserID produces the stringified JSON `metadata.user_id` blob
 // for an outbound LLM call. Mirrors ClaudeCode's wire shape (see
 // `CluadeCode请求RequestBody的Anthropic协议定义数据用例.json`) so proxies
-// that expect that exact field layout still recognize LsmWebGame traffic.
+// that expect that exact field layout still recognize LsmAgentGame traffic.
 //
 // Layout:
 //

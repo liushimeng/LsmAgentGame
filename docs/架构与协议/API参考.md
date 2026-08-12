@@ -98,7 +98,7 @@
 Set-Cookie: lsm_auth=<base64url(nonce‖AES-256-GCM(plaintext))>; Path=/; Max-Age=172800; HttpOnly; Secure; SameSite=Strict
 ```
 
-负载格式：`v1|<user_id>|<issued_at>|<expires_at>`，使用 `LsmWebGame.conf → cookie.secret`（缺省回退到 `jwt.secret`）进行 AES-256-GCM 加密。默认 48 小时有效。`/api/auth/logout` 通过 `Max-Age=0` 清除。
+负载格式：`v1|<user_id>|<issued_at>|<expires_at>`，使用 `LsmAgentGame.conf → cookie.secret`（缺省回退到 `jwt.secret`）进行 AES-256-GCM 加密。默认 48 小时有效。`/api/auth/logout` 通过 `Max-Age=0` 清除。
 
 ## 钱包 API（游戏金币系统）
 

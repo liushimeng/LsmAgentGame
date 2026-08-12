@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

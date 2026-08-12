@@ -4,7 +4,7 @@ import json
 import time
 import sys
 import os
-sys.path.insert(0, "/usr/local/LsmWebGame/scripts/r15")
+sys.path.insert(0, "/usr/local/LsmAgentGame/scripts/r15")
 from common import dbg_eval, dbg_call, dbg_click, dbg_look, dbg_screenshot
 
 PAGES = {
@@ -46,8 +46,8 @@ for k, v in PAGES.items():
     print(f"  {k}: turn={'MINE' if s['my_turn'] else 'OPP' if s['opp_turn'] else '?'} hand={s['hand']} landlord={s['landlord']} btns={[b for b in s['btns'] if any(k in b for k in ['出牌','要不起','不叫','分'])]}")
 
 # Save starting screenshot
-os.makedirs("/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500", exist_ok=True)
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/ddz_play_01_start.png")
+os.makedirs("/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500", exist_ok=True)
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/ddz_play_01_start.png")
 
 # Play loop: 3 players take turns
 print("\n=== Playing ===")
@@ -97,9 +97,9 @@ for k, v in PAGES.items():
     print(txt[:400])
 
 # Save final screenshots
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/ddz_play_final_01.png")
-dbg_screenshot(PAGES["test_02"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/ddz_play_final_02.png")
-dbg_screenshot(PAGES["test_03"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/ddz_play_final_03.png")
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/ddz_play_final_01.png")
+dbg_screenshot(PAGES["test_02"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/ddz_play_final_02.png")
+dbg_screenshot(PAGES["test_03"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/ddz_play_final_03.png")
 
 # Send chat from test_01
 print("\n=== test_01 sends chat ===")

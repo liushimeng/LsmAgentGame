@@ -9,7 +9,7 @@ package api
 import (
 	"net/http"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 
 	"github.com/gin-gonic/gin"
 )

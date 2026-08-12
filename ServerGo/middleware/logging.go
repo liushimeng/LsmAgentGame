@@ -3,7 +3,7 @@ package middleware
 import (
 	"time"
 
-	"LsmWebGame/logger"
+	"LsmAgentGame/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

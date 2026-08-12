@@ -1,4 +1,4 @@
-// LsmWebGame — 房间管理消息定义
+// LsmAgentGame — 房间管理消息定义
 //
 // 帧类型(所有消息封装在 common.Envelope 中,type 字段以 "room." 开头):
 //
@@ -24,7 +24,7 @@ package lsm;
 
 import "common.proto";
 
-option go_package = "LsmWebGame/proto/pb";
+option go_package = "LsmAgentGame/proto/pb";
 option java_package = "com.lsmwebgame.proto";
 
 // ─────────────────── 客户端请求 ───────────────────

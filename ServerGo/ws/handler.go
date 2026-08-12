@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"LsmWebGame/config"
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
-	"LsmWebGame/util"
+	"LsmAgentGame/config"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/util"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"

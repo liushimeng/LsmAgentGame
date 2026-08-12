@@ -14,12 +14,12 @@
 
 ### 1.1 背景与定位
 
-LsmWebGame 平台已上线 8 个 LLM 模型（豆包 / 智谱 / Kimi / MiniMax 等），统一通过
+LsmAgentGame 平台已上线 8 个 LLM 模型（豆包 / 智谱 / Kimi / MiniMax 等），统一通过
 `ServerGo/llm/registry.go` 加载供狼人杀 Agent 调度。原实现存在三大短板：
 
 | 短板 | 现象 | 影响 |
 |------|------|------|
-| 配置入口单一 | 增删改必须 SSH 改 `LsmWebGame.conf` + 重启 | 运维门槛高、变更不可追溯、误改风险大 |
+| 配置入口单一 | 增删改必须 SSH 改 `LsmAgentGame.conf` + 重启 | 运维门槛高、变更不可追溯、误改风险大 |
 | 模型是「临时算力」 | 7 个 bot 调 LLM 后无任何持久化数据 | 无法复盘 / 调优 prompt / 分析决策 |
 | 模型无法参与金币 | 5 款游戏的金币体系无法结算到模型 | 模型不是「玩家」 |
 
@@ -367,7 +367,7 @@ WARN: cfg.LLM.Providers is deprecated since v1.0; please use /api/admin/llm/prov
       DB has been auto-seeded with N models.
 ```
 
-`LsmWebGame.conf.example` 中 `providers[]` 留空数组 `[]` + 注释「deprecated since v1.0」。
+`LsmAgentGame.conf.example` 中 `providers[]` 留空数组 `[]` + 注释「deprecated since v1.0」。
 
 ---
 

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // makeChallengeTestState 创建 7 座位全存活 + 全 PhaseSpeak 的测试用 GameState。

@@ -30,7 +30,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // itoa is a convenience helper for building phase/actingSeat keys in tests.

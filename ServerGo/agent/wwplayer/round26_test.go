@@ -25,8 +25,8 @@ import (
 	"strings"
 	"testing"
 
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/llm"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/llm"
 )
 
 // TestIdentityPrompt_OneIndexedPlayerNumber asserts the identity turn for

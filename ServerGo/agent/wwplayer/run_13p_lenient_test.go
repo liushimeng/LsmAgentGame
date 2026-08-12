@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/llm/anthropic"
-	llmtypes "LsmWebGame/llm/types"
+	"LsmAgentGame/llm/anthropic"
+	llmtypes "LsmAgentGame/llm/types"
 )
 
 // r131LenientFailProvider 模拟 context deadline exceeded / network 错误。

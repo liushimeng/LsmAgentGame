@@ -20,10 +20,10 @@ import (
 	"strings"
 	"time"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
-	"LsmWebGame/service"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
+	"LsmAgentGame/service"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

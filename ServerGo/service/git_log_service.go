@@ -8,7 +8,7 @@
 //   - 文件行数通过 `--shortstat` + `--pretty=tformat:` 一次性取出,每个
 //     commit 对应 3 行(shortstat + 空行),由 service 在内存里分组,无
 //     需遍历大量 git call。
-//   - 默认仓库根目录为执行时的工作目录(CWD),与 LsmWebGame 服务运行
+//   - 默认仓库根目录为执行时的工作目录(CWD),与 LsmAgentGame 服务运行
 //     时的项目根一致 —— `rebuild_restart_app.sh` 会在项目根启动。
 package service
 
@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"LsmWebGame/logger"
+	"LsmAgentGame/logger"
 )
 
 // CommitEntry 表示一次提交的可摘要信息。

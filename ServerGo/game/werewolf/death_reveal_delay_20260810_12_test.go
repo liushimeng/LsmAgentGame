@@ -9,7 +9,7 @@ package werewolf
 import (
 	"testing"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 func TestSetDeathRevealDelayMin_ValidValues(t *testing.T) {

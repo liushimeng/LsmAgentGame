@@ -32,7 +32,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 func TestHunterActingSeat_R1_NightWolfKill(t *testing.T) {

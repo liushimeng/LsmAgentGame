@@ -14,9 +14,9 @@ package wwplayer_test
 import (
 	"testing"
 
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/llm"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/llm"
 )
 
 // toolByName returns the tool with the given name from a list, or nil.

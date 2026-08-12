@@ -1,7 +1,7 @@
 package xiangqi
 
 import (
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // ─────────────────── Public API ───────────────────

@@ -17,7 +17,7 @@ package werewolf
 import (
 	"testing"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // TestGetPublicState_UnknownRoomReturnsFalse ensures the no-room branch

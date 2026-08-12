@@ -1,9 +1,9 @@
 
 GoWebDebugTool.log
-LsmWebGame
-LsmWebGame.conf
-LsmWebGame.log
-LsmWebGame.pid
+LsmAgentGame
+LsmAgentGame.conf
+LsmAgentGame.log
+LsmAgentGame.pid
 ClientWeb/dist/
 ClientWeb/node_modules/
 ServerGo/static/
@@ -330,3 +330,5 @@ AutoTestScreenshots/D1_sheriff_20260807_123640.jpg
 AutoTestScreenshots/lobby_20260807_122530.jpg
 AutoTestScreenshots/hall_after_restart_20260807_125800.jpg
 TestReport/自动化测试报告_20260810_214758.md
+LsmAgentGame.conf.example
+LsmAgentGame.conf

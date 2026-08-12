@@ -31,7 +31,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // stubBotWithChannel is declared in room_round29_test.go (same package).

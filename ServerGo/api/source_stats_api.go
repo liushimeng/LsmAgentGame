@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

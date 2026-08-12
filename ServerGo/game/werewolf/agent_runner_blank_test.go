@@ -33,7 +33,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // fakeChatSender 记录所有 send 调用次数与最后一次文本。

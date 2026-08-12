@@ -12,7 +12,7 @@
 package werewolf
 
 import (
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 // EffectApplyContext 是效果落地时传入的上下文（引擎侧持有，便于按规则计算引导座位）。

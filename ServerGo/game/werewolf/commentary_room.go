@@ -15,8 +15,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"LsmWebGame/agent/wwcommentator"
-	"LsmWebGame/logger"
+	"LsmAgentGame/agent/wwcommentator"
+	"LsmAgentGame/logger"
 	"go.uber.org/zap"
 )
 

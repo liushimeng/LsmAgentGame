@@ -14,8 +14,8 @@ package wwplayer
 import (
 	"testing"
 
-	"LsmWebGame/config"
-	"LsmWebGame/llm"
+	"LsmAgentGame/config"
+	"LsmAgentGame/llm"
 )
 
 // newStubRegistry 构造一个包含已知 model 的 stub registry,让 NewWithRoom

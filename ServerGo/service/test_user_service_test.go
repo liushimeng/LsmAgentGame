@@ -7,7 +7,7 @@ import (
 	"context"
 	"testing"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // TestUpdateLanguage_RejectsUnsupported verifies the language validation gate

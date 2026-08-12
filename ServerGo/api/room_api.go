@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/service"
-	"LsmWebGame/ws"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/service"
+	"LsmAgentGame/ws"
 
 	"github.com/gin-gonic/gin"
 )

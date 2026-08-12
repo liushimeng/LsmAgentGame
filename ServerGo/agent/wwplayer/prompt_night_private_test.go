@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 // §20260812-04 U1 (P0-1) 回归测试。

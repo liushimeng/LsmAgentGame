@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 // §20260812-04 U2 回归测试 —— user prompt 块预算与优先级降级。

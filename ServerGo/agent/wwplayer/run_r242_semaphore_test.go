@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // BUG-R242-P1-01: 房间级 LLM 并发信号量回归测试。

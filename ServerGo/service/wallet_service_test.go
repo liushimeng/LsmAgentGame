@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/config"
-	"LsmWebGame/db"
-	"LsmWebGame/errcode"
-	"LsmWebGame/models"
-	"LsmWebGame/util"
+	"LsmAgentGame/config"
+	"LsmAgentGame/db"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/models"
+	"LsmAgentGame/util"
 
 	"gorm.io/gorm"
 )

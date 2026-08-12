@@ -1,4 +1,4 @@
-// LsmWebGame — 狼人杀核心枚举与通用类型
+// LsmAgentGame — 狼人杀核心枚举与通用类型
 //
 // 定义角色、阵营、阶段等核心枚举，供其他 proto 文件引用。
 
@@ -6,7 +6,7 @@ syntax = "proto3";
 
 package lsm.game.werewolf;
 
-option go_package = "LsmWebGame/proto/pb/game/werewolf";
+option go_package = "LsmAgentGame/proto/pb/game/werewolf";
 
 // ─────────────────── 核心枚举 ───────────────────
 

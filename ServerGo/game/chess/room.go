@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"sync"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

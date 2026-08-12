@@ -12,7 +12,7 @@
 package wwplayer
 
 import (
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 // init — 注册 public_commit 工具到全局 registry。

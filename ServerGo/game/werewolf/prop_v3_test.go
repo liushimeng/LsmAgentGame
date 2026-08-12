@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 // TestPropDisguiseV3_DefaultCatalog 验证 v3 任务马甲示范道具在默认目录中。

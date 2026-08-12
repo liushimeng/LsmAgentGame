@@ -18,7 +18,7 @@
 //	      2. 锁外构造请求: system = BuildRecallSystemPrompt(角色/阵营/胜负/天数)
 //	         messages = memory 快照(PruneByBytes 截断到预算) + [user: 提问]
 //	      3. registry.Get(modelKey).Chat(parentCtx + extendedTimeout)  // §197
-//	         AgentClassName = LsmWebGame-Werewolf-Recall               // §24
+//	         AgentClassName = LsmAgentGame-Werewolf-Recall               // §24
 //	      4. 失败 → 返回降级文案(bot「太累不想复盘」),不报 500
 //
 // 关键设计决策:
@@ -41,11 +41,11 @@ import (
 	"sync"
 	"time"
 
-	agentroot "LsmWebGame/agent"
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/config"
-	"LsmWebGame/llm"
-	"LsmWebGame/logger"
+	agentroot "LsmAgentGame/agent"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/config"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

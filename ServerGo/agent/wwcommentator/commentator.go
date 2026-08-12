@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
-	agentcore "LsmWebGame/agent/core"
-	"LsmWebGame/llm"
+	agentcore "LsmAgentGame/agent/core"
+	"LsmAgentGame/llm"
 )
 
 // 事件触发 kind。复用与法官同构的事件常量,但只用于触发解说上下文,
@@ -257,7 +257,7 @@ func (c *CommentatorAgent) chatOrFallback(
 		System:        []llm.SystemBlock{{Type: "text", Text: system}},
 		Messages:      []llm.Message{{Role: "user", Content: []llm.ContentBlock{{Type: "text", Text: user}}}},
 		MaxTokens:     300,
-		AgentClassName: "LsmWebGame-Werewolf-Commentator",
+		AgentClassName: "LsmAgentGame-Werewolf-Commentator",
 	}
 	resp, err := provider.Chat(ctx, apiKey, req)
 	if err != nil {

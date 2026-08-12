@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"LsmWebGame/agent/wwcommentator"
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/logger"
+	"LsmAgentGame/agent/wwcommentator"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

@@ -1,5 +1,5 @@
 // Package api — llm_api.go serves GET /api/llm/models: the safe, key-free list
-// of models configured under llm.providers[] in LsmWebGame.conf. Used by the
+// of models configured under llm.providers[] in LsmAgentGame.conf. Used by the
 // werewolf room-create modal to populate the AI-model picker. Requires auth
 // (logged-in user) but no admin role.
 package api
@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"time"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/llm"
-	"LsmWebGame/service"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/service"
 
 	"github.com/gin-gonic/gin"
 )

@@ -4,7 +4,7 @@ import json
 import time
 import sys
 import os
-sys.path.insert(0, "/usr/local/LsmWebGame/scripts/r15")
+sys.path.insert(0, "/usr/local/LsmAgentGame/scripts/r15")
 from common import dbg_call, dbg_eval, dbg_click, dbg_look, dbg_screenshot
 
 PAGES = {
@@ -29,7 +29,7 @@ print("=== test_01 switches style to 荒野逃生 ===")
 r = dbg_eval(PAGES["test_01"], "Array.from(document.querySelectorAll('button')).find(b=>b.innerText.includes('荒野逃生'))?.click();'ok'")
 print(f"  click: {r}")
 time.sleep(2)
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/texas_style_switch.png")
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/texas_style_switch.png")
 
 # Step B: Send chat from test_01
 print("\n=== test_01 sends chat message ===")
@@ -52,7 +52,7 @@ for k, v in PAGES.items():
     has = "AutoTest-R15 texas chat test" in txt
     print(f"  {k} chat contains message: {has}")
 
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/texas_chat.png")
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/texas_chat.png")
 
 # Step C: Test 规则说明 modal
 print("\n=== test_01 clicks 规则说明 ===")
@@ -61,7 +61,7 @@ print(f"  click: {r}")
 time.sleep(2)
 modal_txt = dbg_eval(PAGES["test_01"], "document.querySelector('.modal')?.innerText || document.body.innerText.substring(0,500)")
 print(f"  modal content: {modal_txt[:300]}")
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/texas_rules.png")
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/texas_rules.png")
 
 # Close modal (Esc)
 r = dbg_call("key_press", PAGES["test_01"], {"key": "Escape"})
@@ -93,7 +93,7 @@ url_02 = dbg_look(PAGES["test_02"], "page_meta")["data"]["data"]["url"]
 print(f"  test_02 URL after leave: {url_02}")
 
 # Save final state
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/texas_after_leave_01.png")
-dbg_screenshot(PAGES["test_02"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/texas_after_leave_02.png")
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/texas_after_leave_01.png")
+dbg_screenshot(PAGES["test_02"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/texas_after_leave_02.png")
 
 print("\n=== Texas full test done ===")

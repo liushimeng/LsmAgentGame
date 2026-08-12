@@ -20,8 +20,8 @@ import (
 	"strings"
 	"testing"
 
-	"LsmWebGame/config"
-	"LsmWebGame/errcode"
+	"LsmAgentGame/config"
+	"LsmAgentGame/errcode"
 )
 
 // makeJudgesCfg mirrors makeCfg but is named for the new test file. Kept

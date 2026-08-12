@@ -1,4 +1,4 @@
-// LsmWebGame — 用户列表 WebSocket 帧契约
+// LsmAgentGame — 用户列表 WebSocket 帧契约
 //
 // 所有帧 type 字段以 "user." 开头。
 //
@@ -11,7 +11,7 @@ syntax = "proto3";
 
 package lsm.user;
 
-option go_package = "LsmWebGame/proto/pb/user";
+option go_package = "LsmAgentGame/proto/pb/user";
 
 // ───────────── client → server ─────────────
 

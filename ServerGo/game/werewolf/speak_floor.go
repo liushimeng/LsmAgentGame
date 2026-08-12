@@ -23,8 +23,8 @@ import (
 	"sync"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/logger"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

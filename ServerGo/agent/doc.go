@@ -28,10 +28,10 @@
 // 本目录**不**承载任何可执行代码;下游 import 必须用具体子包路径:
 //
 //	import (
-//	    agentcore "LsmWebGame/agent/core"
-//	    wwtypes   "LsmWebGame/agent/wwtypes"
-//	    wwplayer  "LsmWebGame/agent/wwplayer"
-//	    wwjudge   "LsmWebGame/agent/wwjudge"
+//	    agentcore "LsmAgentGame/agent/core"
+//	    wwtypes   "LsmAgentGame/agent/wwtypes"
+//	    wwplayer  "LsmAgentGame/agent/wwplayer"
+//	    wwjudge   "LsmAgentGame/agent/wwjudge"
 //	)
 //
 // 未来接入新游戏 Agent 时,在同一目录下加 agent/<game>/{types,player,...}

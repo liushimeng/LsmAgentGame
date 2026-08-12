@@ -4,7 +4,7 @@ import json
 import time
 import sys
 import os
-sys.path.insert(0, "/usr/local/LsmWebGame/scripts/r15")
+sys.path.insert(0, "/usr/local/LsmAgentGame/scripts/r15")
 from common import dbg_eval, dbg_call, dbg_click, dbg_navigate, dbg_screenshot, dbg_look
 
 PAGES = {
@@ -130,9 +130,9 @@ print(f"  move to f4: {r}")
 time.sleep(2)
 
 # Save screenshots
-os.makedirs("/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500", exist_ok=True)
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/chess_after_moves.png")
-dbg_screenshot(PAGES["test_02"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/chess_after_moves_black.png")
+os.makedirs("/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500", exist_ok=True)
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/chess_after_moves.png")
+dbg_screenshot(PAGES["test_02"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/chess_after_moves_black.png")
 
 print("\n=== State after 5 moves ===")
 for k, v in PAGES.items():
@@ -175,8 +175,8 @@ for k, v in PAGES.items():
     print(txt[:500])
 
 # Save final screenshots
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/chess_final_01.png")
-dbg_screenshot(PAGES["test_02"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/chess_final_02.png")
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/chess_final_01.png")
+dbg_screenshot(PAGES["test_02"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/chess_final_02.png")
 
 # Both leave
 print("\n=== Both leave ===")

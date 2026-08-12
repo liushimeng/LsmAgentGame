@@ -1,14 +1,14 @@
-# LsmWebGame — AI 代理项目规则
+# LsmAgentGame — AI 代理项目规则
 
 > 规范规则文件。`KILO.md` 和 `AGENT.md` 是指向此文件的符号链接。
 > 唯一事实来源。请在此处更新，切勿在符号链接中修改。
 
 ## 1. 技术栈
 
-- **后端**：Go（模块名 `LsmWebGame`）、Gin、GORM + MySQL/MariaDB、gorilla/websocket、JWT (HS256)、bcrypt、zap 日志。
+- **后端**：Go（模块名 `LsmAgentGame`）、Gin、GORM + MySQL/MariaDB、gorilla/websocket、JWT (HS256)、bcrypt、zap 日志。
 - **前端**：React 18 + TypeScript、Vite（生产构建内部使用 Rollup）、`@react-three/fiber` + `@react-three/drei`、zustand、react-router-dom v6。
 - **通信协议**：HTTP API 使用 JSON over HTTPS；实时游戏流量使用 Protobuf (proto3) over WSS。
-- **数据库**：MariaDB，地址 `127.0.0.1:3306`，schema `lsmDB`，账号 `superuser`。密码从 `LsmWebGame.conf` 加载——**切勿硬编码**。
+- **数据库**：MariaDB，地址 `127.0.0.1:3306`，schema `lsmDB`，账号 `superuser`。密码从 `LsmAgentGame.conf` 加载——**切勿硬编码**。
 
 ## 2. 目录结构
 
@@ -65,17 +65,17 @@ ClientWeb/src/
   - **TS/TSX**：按职责拆为独立模块/组件文件，通过 `import` 聚合。
   - **CSS**：按主题拆为多个 `.css` 文件，入口文件仅保留 `@import` 列表且**顺序必须与原文件级联顺序完全一致**。
   - 拆分后必须通过对应编译与测试（Go: `go build` + `go test`；前端: `tsc --noEmit` + `npm run build`）。
-- 在 `ServerGo/` 目录下执行 `go build -o LsmWebGame main.go` 进行编译。
+- 在 `ServerGo/` 目录下执行 `go build -o LsmAgentGame main.go` 进行编译。
 - 任何涉及 `ServerGo/` 的提交前，`go test ./...` 必须通过。
 - 任何涉及 `ClientWeb/` 的提交前，前端类型检查（`tsc --noEmit`）和 `npm run build` 必须成功。
 
 ## 5. 安全
 
-- **禁止硬编码密钥。** 数据库密码、JWT 密钥等存放在 `LsmWebGame.conf`（已加入 gitignore）。发布时仅提供 `LsmWebGame.conf.example`，其中为占位符值。
+- **禁止硬编码密钥。** 数据库密码、JWT 密钥等存放在 `LsmAgentGame.conf`（已加入 gitignore）。发布时仅提供 `LsmAgentGame.conf.example`，其中为占位符值。
 - **强制 HTTPS。** 所有 HTTP 端点运行在 HTTPS 监听器上。不回退到 HTTP。
-- **CORS** 白名单配置在 `LsmWebGame.conf` → `cors.allowed_origins`。新增来源请在此处配置，切勿在中间件中硬编码。
+- **CORS** 白名单配置在 `LsmAgentGame.conf` → `cors.allowed_origins`。新增来源请在此处配置，切勿在中间件中硬编码。
 - **密码**使用 bcrypt 存储（`util/password.go`）。
-- **JWT** 使用 HS256 签名；密钥从配置读取；默认有效期 7200 秒；签发者 `LsmWebGame`。
+- **JWT** 使用 HS256 签名；密钥从配置读取；默认有效期 7200 秒；签发者 `LsmAgentGame`。
 
 ## 6. 网络
 
@@ -148,7 +148,7 @@ git submodule update --init --recursive
 1. 从计划中选取一个阶段，将其任务标记为 `in_progress`。
 2. 编译 → 测试 → 小步提交。尽可能每个逻辑阶段对应一次提交。
 3. 进行任何非琐碎更改前，重新阅读相关的 `docs/` 文件。如有结构性变更，请同步更新文档。
-4. 切勿在提交中重写 `LsmWebGame.conf`、`server.crt` 或 `server.key`。
+4. 切勿在提交中重写 `LsmAgentGame.conf`、`server.crt` 或 `server.key`。
 
 ### 10.1 所有改动保持在 `main` 分支
 
@@ -261,10 +261,10 @@ git submodule update --init --recursive
 - **`ServerGo/llm/types/`** —— leaf 包：Anthropic wire 类型 + `LLMProvider` 接口 + `PlaceholderKey` + `ModelInfo`。
 - **`ServerGo/llm/anthropic/`** —— 真实 provider 实现：`Authorization: Bearer <key>` + `anthropic-version: 2023-06-01`，5xx/429 重试。
 - **`ServerGo/llm/registry.go`** —— `NewRegistry` / `Get` / `List`（key-free）/ `SetUserAgent` / `SetBillingHeader`。
-- **`config.LLMConfig`** —— 顶级 `llm{}` 段：`endpoint/timeout_ms/max_retries/providers[]`。**真实 key 仅入 `LsmWebGame.conf`；`LsmWebGame.conf.example` 用 `API-KEY-PLACEHOLDER` 占位**。
+- **`config.LLMConfig`** —— 顶级 `llm{}` 段：`endpoint/timeout_ms/max_retries/providers[]`。**真实 key 仅入 `LsmAgentGame.conf`；`LsmAgentGame.conf.example` 用 `API-KEY-PLACEHOLDER` 占位**。
 - **预留 OpenAI 协议** —— `provider_type` 字段已留 `"openai"`。
 - **API** —— `GET /api/llm/models`（需登录），返回 `[{agent_name, model, provider_type}]`，**不含 api_key**。
-- **8 个默认模型**（运行时 `LsmWebGame.conf`）：
+- **8 个默认模型**（运行时 `LsmAgentGame.conf`）：
 
   | AgentName | Model | ProviderType |
   |---|---|---|
@@ -472,8 +472,8 @@ git submodule update --init --recursive
 | 131 | **Agent 持久化记忆(MEMORY.md)跨局迭代学习(§131)**: 新增 `t_lsm_game_agent_memory` 表(一模型一行,`model_key` UNIQUE + `version` 乐观锁 + `memory_md` mediumtext ≤100KB);每局结束法官总结落地后(`PersistSummary` 成功路径),由 `IterateAgentMemoriesAsync` 对每个 bot 模型异步发起一次自我迭代(读旧记忆 → `BuildIterationPrompt`(旧记忆 + 本局座位事实/角色/胜负 + 法官总结;>80K 加压缩指令) → 该模型自己的 provider.Chat → `ValidateMemorySections` 校验 4 段标题,不全则 `FallbackMerge` 规则兜底 → >100K 则 `HardTruncateMemory` rune 安全硬截断 → `SaveIterated` version 乐观锁写回,冲突重试 1 次);下一局 `StartAgentsLocked` 时按 modelKey 从 DB 读 `memory_md` 赋给 `a.MemoryMD`,每次 LLM 调用前 `InjectBlock` 注入 user prompt 末尾(截断到 `MemoryInjectMaxRunes=4000` 字 ≈ 2K token)。**4 段固定标题**(战绩与趋势 / 我的失误与教训 / 其他模型特点分析 / 决策策略迭代),空段写"暂无"。**角色差异化学习**:迭代 prompt 注入"本局角色 X",LLM 在"失误与教训"中按角色分类记录(如"作为女巫首夜救人浪费解药"),实现同模型不同角色的经验分化。**开关**:`werewolf.agent_memory_enabled`(默认 true),`agent_memory_max_tokens`(默认 2048)。管理接口:`GET/DELETE /api/admin/llm/providers/:id/memory`(查看/清空)。详见 [`docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md`](docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md)。**教训**:(1) 记忆按 `model_key` 不按座位 —— 同一模型坐几号位共享一份记忆,正是"迭代学习"语义;(2) 压缩主路径是"LLM 迭代时主动瘦身"(compress 指令),硬截断(`HardTruncateMemory`)只是最后兜底,避免关键信息被硬切;(3) 异步迭代不阻塞游戏流(对齐 §118),失败仅 `logger.Warn`;(4) 注入走 user prompt 末尾而非 system,避免 system 膨胀且天然享受"最新消息优先";(5) 乐观锁 + per-model `sync.Mutex` 单飞双保险,防重开局相邻触发并发覆盖 | agent-persistent-memory |
 | 132 | **道具系统(LLM 注入攻击游戏化)v1.1 补缺 + §130 死代码回归(§132)**: 道具系统把 6 类 LLM 注入攻击(Markdown 注入/**提示词套娃 `nested_maze`=首个身份暴露道具**/字符欺骗/长上下文失焦/任务马甲/情绪操控)封装为可购买的心理战道具。经济:`prop_engine.go` 扣款后 **50% 回彩池(`r.propPotBonus`,结算 `PropDistributePotBonus` 分给胜方)/ 30% 系统销毁 / 20% 中招补偿被击中者**;`use_prop` Agent 工具 + 人类 WS 帧 `game.werewolf_use_prop`(严格 JSON,字段 `target` **非** `target_seat`)共用 `WerewolfManager.Action_UseProp` 单一真相源;中招服务端权威骰点(不替 LLM 决策,只在目标 GameContext 注入"干扰信号");注入文本入 `propInjectQueue` → 目标下一轮 user prompt(`PropInjectPromptBlock`);公开广播走 `broadcastPropUseLocked`→`emitActivity(kind=prop_used)` 复用活动流(**不新增 game.state 字段/独立帧** — 与 WolfKill/VoteResult 一致,前端 GameChatPanel 自动可见);REST `GET /api/games/werewolf/props`(+admin CRUD)。狼人开局 30% 互知:`StartAgentsLocked` 调 `PickWolfTeammateHint`(rate=`werewolf.wolf_teammate_hint_rate` 默认 30,≥2 狼才触发)→`SetWolfTeammateSeat`→`Memory.ReplaceIdentity` 注入身份 prompt。**教训**:(1) **§130 回归**:`WolfTeammateHint` 曾"定义了却从未被调用"= 功能静默失效,凡新增 helper 必须 grep 确认真实接线(本次修复即在 `StartAgentsLocked` 补接线);(2) **前后端契约字段名**:后端严格 JSON(DisallowUnknownFields)下前端字段名拼错(`target_seat` vs `target`)= 静默全量拒收,新增 WS 帧必须 curl/核对后端 struct tag;(3) **子 Agent worktree 陷阱**:子 Agent 在独立 worktree 跑 `gofmt -w` 会污染 120+ 无关文件,合并回 main 时必须**按 gofmt-归一化 diff 甄别真实语义改动**(9 改+4 新),只 `git apply` 意图文件,禁止整树合并(§10.1 main-only 也要求最小 diff);(4) 公开广播复用既有活动流优于造独立帧,前端零改动即可见 | prop-system-v1.1 | 
 | 133 | **道具系统 v4 重构(狼小队交流 + 经济档位 + 效果链)(§133)**: v3 道具系统(v3 commit a8014d4)已实现 7 种道具 + 可扩展注册表 + 任务马甲 v3 示范 + 30% 狼人互知。v4 补齐 3 项缺口:(a) **`WolfPackRoom` + `wolf_whisper` 工具**(`wolfpack_room.go`)—— 狼人小队内部广播通道,FIFO ≤50 条 ≤80 字/条;`addWolfWhisperTool` 仅在 `faction=="wolf" 且 WolfTeammateSeat>=0` 时挂载,留言**不**进入 `chat_message`/`chat_history`/`HeartThought`(协议层隔离,§119);`EmitPlayerDied` 在持锁态调 `PurgeByDeath` 清理死亡狼的留言(防止死人继续影响队友);`buildAgentContextLocked` 把快照拼入狼 bot `WolfPackPromptBlock`。(b) **经济档位 `EconTier`**(`econ_tier.go`)—— 3 档(Health≥50K 销毁30%/Caution≥10K 销毁40%/Danger<10K 销毁50%)按房间总金币存量动态切档,反通胀 + 防无限刷道具;`ComputeEconTier` 调 `r.roomTotalCoin()`(`propEngine.walletSvc.GetBalance` 累加存活玩家),`PropEngine.UseProp` 按档位计算 `potReturn/systemAbsorb/targetCompens`;Agent `EconTierFeedbackBlock` 把档位+销毁率拼入 user prompt 末尾。(c) **可选**:效果链 `EffectStep[]`(后续追加,不影响 v3 字符串格式)。详见 [`docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md`](狼人杀13人局道具系统设计.md) §13。**教训**:(1) **协议层隔离 vs UI 隐藏**:与 §119 HeartThought 一致,wolfpack 留言必须**不入** chat 表/队列/BotTranscript,纯靠 GameContext 在狼 bot user prompt 渲染——若写入聊天表则破坏「狼队内沟通不可见」的核心博弈价值;(2) **经济模型档位化**:硬切 50/30/20 在通胀房间无法抑制道具刷屏;档位化让"销毁比例"成为可调的反通胀工具,且 Agent prompt 同步显示档位让其感知经济压力;(3) **死亡清理路径**:`EmitPlayerDied` 已在 `phaseWatchdogTick` 持锁态被调用,直接接 `PurgeByDeath` 不需要新加锁;(4) **双重防御**:wolf_whisper 在 tool 层校验 `faction=="wolf"` + 服务端 `WolfWhisper` 再次校验 `State.Roles[seat]==RoleWerewolf`,防止身份未确认狼 Agent 误用;(5) **GameContext vs Agent 字段对称**:为避免 agent→werewolf 循环导入,agent 包定义本地 `WolfPackMsg` 镜像结构,`buildAgentContextLocked` 负责 werewolf→agent 的转换 | prop-system-v4 |
-| 197 | **流式续命 — "接收到字节即刷新超时"(§197)**: 13 人局慢模型(Kimi/GLM/DeepSeek 典型首字节 1-3min + 长 thinking + tool_use 总耗时 5-15min)经常逼近 `cfgLLMCallTimeoutSec` 上限(300s 基础 / 480s cap)被外层 ctx cancel → `consecutiveFailures++` → 误 quarantine。修复:新增常量 `defaultStreamExtendedTimeoutSec = 900` (15 min) + `cfgStreamExtendedTimeoutSec()` 读取 config `Werewolf.LLMStreamExtendedTimeoutSec`(默认 900,代码内常量兜底);`run.go` 调用层把 ctx 从单层 `WithTimeout(parent, callTimeout)` 改为 `parentCtx = WithTimeout(parent, callTimeout + extendedTimeout)` + `streamProgress._first_token` 触发时打 Debug 日志记录"extended timeout active";`idleTimeoutReader` 已配置 `streamIdleTimeout = 0`(首字节后无 idle 计时器),实际"接收到字节即刷新"由外层总预算实现。`callProvider` / 重试循环的 `select<-ctx.Done()` 全部切到 `parentCtx` 保留长预算语义。详见 §流式续命 测试 `ServerGo/agent/run_stream_extend_test.go` 4 项不变式。**教训**:(1) **分阶段预算优于硬上限**:旧"单层 WithTimeout(callTimeout)"在慢模型场景下频繁误杀;拆为"首字节前 callTimeout + 首字节后 (callTimeout+extendedTimeout)"后,慢模型响应不再被外层 deadline 误杀,但极端卡死场景仍有 parentCtx 总预算兜底(默认 1200s);(2) **不要 ctx.Cancel 后再复用 ctx**:我曾尝试"双层 ctx + streamCancel() 释放短超时",但 `CancelFunc` 一旦调用 ctx 即 Done,无法再"延长";最终选择"单层 parentCtx + idleTimeoutReader 已有 first-byte 熔断"是最简方案;(3) **测试环境 config 可能 panic**:`config.Load()` 在 `ServerGo/` 子目录测试时找不到 `./LsmWebGame.conf.example` 会 panic,`defer recover()` 兜底返回 0 — 测试不应假设 config 加载成功,而应直接断言常量值(见 `TestStreamExtend_001_DefaultConstant`);(4) **每个活跃 Agent 调用必须走同一套 parentCtx**:含初始 `callProvider` + retry 路径的 `callProvider` + retry backoff 的 `select<-ctx.Done()`,任何一处仍用旧 `ctx` 都会让长预算失效,这是必须 3 处同步修改的关键 | stream-extended-timeout |
-| 198 | **法官模式三选项→两选项重构(§198)**: UI 上「主持人 Agent (法官)」「AI 法官」「真人法官」「关闭」四个标签其实只是两件事 —— 「主持人 Agent (法官)」是卡片标题的全称,「AI 法官」是它的简称(同一概念),真人法官后端无实现路径(等同 AI 法官,§130 跟踪项),「关闭」是运维级 kill switch。重构合并为两选项:**Agent 法官** + **真人法官**。改动面 15 个文件:前端 `JUDGE_MODES` 常量、`CreateRoomOptions.judge.mode` 类型联合(`'ai'\|'human'\|'off'` → `'agent'\|'human'`)、三语 i18n(`werewolf.judge.mode.{ai,off}` 删除,新增 `werewolf.judge.mode.agent`,标题文案 `⚖️ 主持人 Agent (法官)` → `⚖️ 法官`);后端 `JudgeConfig.Mode` 注释+`room_service_crud.go:113` 的 `judgeDesired` 判定改为 `judge.Mode == "" \|\| == "agent" \|\| == "human"`、`WerewolfRoom` 加 `JudgeMode` 字段、`SetJudgeConfig` 接口签名加 `mode` 参数、`cfgWerewolfJudgeMode()` 归一化旧 `"ai"` → `"agent"`、测试 fake seater 同步。**教训**:(1) **UI 冗余选项 = 设计未完成** —— 同一概念两个 radio(`AI 法官` vs `主持人 Agent (法官)`)是设计师最初没意识到"全称 vs 简称"造成的迷惑;**新建产品选项前必须先 grep 看是否已有同义选项**;(2) **后端「声明了却从不接线」(§130 三次复现)+ 前端 UI「同义三选项」= 双重失真** —— 真人法官在 `room_service_crud.go:113` 的 `judgeDesired := judge == nil \|\| judge.Mode != "off"` 实际会让 `mode:"human"` 走 AI 法官 goroutine,UI 看着是"请真人来管",后端实际跑的还是 LLM,**UI 占位必须配明确 hint** 或后端必须真实现,二者不可兼得;(3) **跨端字符串契约修改必须同步 7 处**:`JudgeConfig.Mode`(后端注释)/ `cfgWerewolfJudgeMode()` 默认值 / `CreateRoomOptions.judge.mode`(TS 类型)/ `JUDGE_MODES` 常量 / 三语 i18n 键 / 三语 i18n 文案 / 测试 fake seater 签名 —— 漏一处即 silent failure(R118 / R121 同源问题);(4) **旧值归一化是契约兼容最低成本**:`cfgWerewolfJudgeMode()` 把旧 `"ai"` 归一化为 `"agent"` 后,部署中残留的旧 `LsmWebGame.conf` 不会报错;同理 `room_service_crud.go:113` 接受 `"ai"`/`"off"`/`"human"`/`"agent"`/`""` 五种值,确保 §198 上线后存量房间 + 老客户端不会立刻 400;(5) **「关闭」从房间级 mode 提升为运维级 cfg**:旧 `"off"` 既在 UI 也在 cfg,概念混淆;重构后 UI 不再暴露,但 `cfg.Werewolf.JudgeMode="off"` 仍是全局 kill switch,语义清晰 | judge-mode-three-to-two | 
+| 197 | **流式续命 — "接收到字节即刷新超时"(§197)**: 13 人局慢模型(Kimi/GLM/DeepSeek 典型首字节 1-3min + 长 thinking + tool_use 总耗时 5-15min)经常逼近 `cfgLLMCallTimeoutSec` 上限(300s 基础 / 480s cap)被外层 ctx cancel → `consecutiveFailures++` → 误 quarantine。修复:新增常量 `defaultStreamExtendedTimeoutSec = 900` (15 min) + `cfgStreamExtendedTimeoutSec()` 读取 config `Werewolf.LLMStreamExtendedTimeoutSec`(默认 900,代码内常量兜底);`run.go` 调用层把 ctx 从单层 `WithTimeout(parent, callTimeout)` 改为 `parentCtx = WithTimeout(parent, callTimeout + extendedTimeout)` + `streamProgress._first_token` 触发时打 Debug 日志记录"extended timeout active";`idleTimeoutReader` 已配置 `streamIdleTimeout = 0`(首字节后无 idle 计时器),实际"接收到字节即刷新"由外层总预算实现。`callProvider` / 重试循环的 `select<-ctx.Done()` 全部切到 `parentCtx` 保留长预算语义。详见 §流式续命 测试 `ServerGo/agent/run_stream_extend_test.go` 4 项不变式。**教训**:(1) **分阶段预算优于硬上限**:旧"单层 WithTimeout(callTimeout)"在慢模型场景下频繁误杀;拆为"首字节前 callTimeout + 首字节后 (callTimeout+extendedTimeout)"后,慢模型响应不再被外层 deadline 误杀,但极端卡死场景仍有 parentCtx 总预算兜底(默认 1200s);(2) **不要 ctx.Cancel 后再复用 ctx**:我曾尝试"双层 ctx + streamCancel() 释放短超时",但 `CancelFunc` 一旦调用 ctx 即 Done,无法再"延长";最终选择"单层 parentCtx + idleTimeoutReader 已有 first-byte 熔断"是最简方案;(3) **测试环境 config 可能 panic**:`config.Load()` 在 `ServerGo/` 子目录测试时找不到 `./LsmAgentGame.conf.example` 会 panic,`defer recover()` 兜底返回 0 — 测试不应假设 config 加载成功,而应直接断言常量值(见 `TestStreamExtend_001_DefaultConstant`);(4) **每个活跃 Agent 调用必须走同一套 parentCtx**:含初始 `callProvider` + retry 路径的 `callProvider` + retry backoff 的 `select<-ctx.Done()`,任何一处仍用旧 `ctx` 都会让长预算失效,这是必须 3 处同步修改的关键 | stream-extended-timeout |
+| 198 | **法官模式三选项→两选项重构(§198)**: UI 上「主持人 Agent (法官)」「AI 法官」「真人法官」「关闭」四个标签其实只是两件事 —— 「主持人 Agent (法官)」是卡片标题的全称,「AI 法官」是它的简称(同一概念),真人法官后端无实现路径(等同 AI 法官,§130 跟踪项),「关闭」是运维级 kill switch。重构合并为两选项:**Agent 法官** + **真人法官**。改动面 15 个文件:前端 `JUDGE_MODES` 常量、`CreateRoomOptions.judge.mode` 类型联合(`'ai'\|'human'\|'off'` → `'agent'\|'human'`)、三语 i18n(`werewolf.judge.mode.{ai,off}` 删除,新增 `werewolf.judge.mode.agent`,标题文案 `⚖️ 主持人 Agent (法官)` → `⚖️ 法官`);后端 `JudgeConfig.Mode` 注释+`room_service_crud.go:113` 的 `judgeDesired` 判定改为 `judge.Mode == "" \|\| == "agent" \|\| == "human"`、`WerewolfRoom` 加 `JudgeMode` 字段、`SetJudgeConfig` 接口签名加 `mode` 参数、`cfgWerewolfJudgeMode()` 归一化旧 `"ai"` → `"agent"`、测试 fake seater 同步。**教训**:(1) **UI 冗余选项 = 设计未完成** —— 同一概念两个 radio(`AI 法官` vs `主持人 Agent (法官)`)是设计师最初没意识到"全称 vs 简称"造成的迷惑;**新建产品选项前必须先 grep 看是否已有同义选项**;(2) **后端「声明了却从不接线」(§130 三次复现)+ 前端 UI「同义三选项」= 双重失真** —— 真人法官在 `room_service_crud.go:113` 的 `judgeDesired := judge == nil \|\| judge.Mode != "off"` 实际会让 `mode:"human"` 走 AI 法官 goroutine,UI 看着是"请真人来管",后端实际跑的还是 LLM,**UI 占位必须配明确 hint** 或后端必须真实现,二者不可兼得;(3) **跨端字符串契约修改必须同步 7 处**:`JudgeConfig.Mode`(后端注释)/ `cfgWerewolfJudgeMode()` 默认值 / `CreateRoomOptions.judge.mode`(TS 类型)/ `JUDGE_MODES` 常量 / 三语 i18n 键 / 三语 i18n 文案 / 测试 fake seater 签名 —— 漏一处即 silent failure(R118 / R121 同源问题);(4) **旧值归一化是契约兼容最低成本**:`cfgWerewolfJudgeMode()` 把旧 `"ai"` 归一化为 `"agent"` 后,部署中残留的旧 `LsmAgentGame.conf` 不会报错;同理 `room_service_crud.go:113` 接受 `"ai"`/`"off"`/`"human"`/`"agent"`/`""` 五种值,确保 §198 上线后存量房间 + 老客户端不会立刻 400;(5) **「关闭」从房间级 mode 提升为运维级 cfg**:旧 `"off"` 既在 UI 也在 cfg,概念混淆;重构后 UI 不再暴露,但 `cfg.Werewolf.JudgeMode="off"` 仍是全局 kill switch,语义清晰 | judge-mode-three-to-two | 
 
 
 | 212 | **§92a 自死锁致「创建房间弹窗卡死 + 永久正在同步游戏状态…」(R212)**: 两个 P0。**(A) `AggregateAgentStats` 二次加锁** —— `ec4e71d`「§统计增强」新增的 `func (r *WerewolfRoom) AggregateAgentStats()` 内部 `r.mu.Lock()`,却被 `BuildClientStateWithRoom`(`view.go:997`)直接调用,而后者**全部 4 个调用点**(`GetState` / `StateForSeat` / `SpectatorState` / `SpectatorView`)都已持有 `r.mu`。Go `sync.Mutex` 不可重入 → 第二次 `Lock()` 永久阻塞**且不释放**。表现三连:`CreateRoomWithAgents → SyncSeat → broadcastWerewolfState → StateForSeat` 死锁使 `POST /api/games/werewolf/rooms` **永不返回**(前端 `await` 不 resolve → 弹窗卡死、不导航,但房间列表已能刷出新房间,因为 DB commit 与 `room.state` 广播都发生在死锁**之前**);刷新后 `requestState → GetState` 撞同一死锁 → `game.state` 永不下发 → 永久 `⏳ 正在同步游戏状态…`;该房间所有 REST 快照退化为 `lockRoomBriefly` 200ms 超时兜底。修复:拆 `aggregateAgentStatsLocked()` 锁内变体,公开变体包一层加锁后委托。**(B) `completeHumanWaitAndStart` 双重解锁** —— R211(`03f7c38`)把 `ForceStartIfReady`(**纯显式解锁、无 defer**)的「锁内快照 → 解锁 → onGameStarted + 种 publicStateCache」两段式范式搬过来时,漏删了本函数开头的 `defer r.mu.Unlock()`,末尾显式 `Unlock()` 后 defer 再解一次 → `fatal error: sync: unlock of unlocked mutex`(**不可 recover,直接杀进程**);被 (A) 掩盖故从未跑到。修复:删 defer,两条提前 return 分支补显式解锁。前端韧性:`http()` 加可选 `timeoutMs`(`AbortController`,未设置则完全保持原行为)、`roomService.create` 用 30s、`WerewolfGamePage` 同步超 20s 从无限 spinner 升级为「重试 / 返回大厅」可操作错误态 + `reportGlobalError`(§7.1)。回归测试 `room_r212_deadlock_test.go` R212-A01..A05/B01..B02,**全部经过「还原缺陷代码 → 测试失败 → 恢复修复 → 测试通过」双向验证**。**教训**:(1) **§92a 第 N 次复现,且这次是「新增只读 getter」引入的** —— 凡新增 `WerewolfRoom` 方法,必须先 grep 调用链上游是否已持 `r.mu`;被 `BuildClientState*` 家族调用的方法**默认必须是 `*Locked` 锁内变体**,需对外暴露时再包公开变体;(2) **「纯内存态、不进 DB」的注释会掩盖锁风险** —— `ec4e71d` 反复强调统计不进 DB、随房间 GC 回收,唯独没说它加了一把上游已持有的锁;**评审新代码时锁的获取比 I/O 更值得追问**;(3) **搬运锁相关范式时,第一件事是核对目标函数的解锁风格**(defer vs 显式),只搬后半段必出双重解锁;(4) **定位挂起的三步法**:`gin` 无 HTTP 完成日志 = handler 未返回 → 所有 REST 恒等于 `lockRoomBriefly` 超时值 = 锁竞争 → `kill -QUIT <pid>` 抓 goroutine dump 定位到精确行号;(5) **回归测试必须持锁调用 + 超时守卫**,否则在未持锁的宽松环境下会假通过;并且**新写的回归测试必须先在缺陷代码上验证它确实失败** | werewolf-r212-self-deadlock |
@@ -633,17 +633,17 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时，**必须*
 
 | AgentClassName | 实现 | 调用 LLM 的场景 |
 |---|---|---|
-| `LsmWebGame-Werewolf-Player` | `ServerGo/agent/wwplayer.Agent` | 玩家 Bot 主对话 + speak_floor_tick 自救路径 |
-| `LsmWebGame-Werewolf-Judge` | `ServerGo/agent/wwjudge.AgentJudge` | 法官宣告 / prompt_actor / summary / declare_cause |
-| `LsmWebGame-Werewolf-MemoryIter` | `game/werewolf/agent_memory_bridge.go::IterateAgentMemoriesAsync` | 整局总结后异步自我迭代 MEMORY.md |
+| `LsmAgentGame-Werewolf-Player` | `ServerGo/agent/wwplayer.Agent` | 玩家 Bot 主对话 + speak_floor_tick 自救路径 |
+| `LsmAgentGame-Werewolf-Judge` | `ServerGo/agent/wwjudge.AgentJudge` | 法官宣告 / prompt_actor / summary / declare_cause |
+| `LsmAgentGame-Werewolf-MemoryIter` | `game/werewolf/agent_memory_bridge.go::IterateAgentMemoriesAsync` | 整局总结后异步自我迭代 MEMORY.md |
 
 ### 24.2 命名规则
 
-- 狼人杀玩家 Bot → `LsmWebGame-Werewolf-Player`
-- 狼人杀法官 Bot → `LsmWebGame-Werewolf-Judge`
-- 其他游戏玩家 Bot → `LsmWebGame-<Game>-Player`（例：未来 `LsmWebGame-Doudizhu-Player`）
-- 其他游戏法官/裁判 Bot → `LsmWebGame-<Game>-Judge`
-- 工具型 Agent（记忆迭代） → `LsmWebGame-<Game>-MemoryIter`
+- 狼人杀玩家 Bot → `LsmAgentGame-Werewolf-Player`
+- 狼人杀法官 Bot → `LsmAgentGame-Werewolf-Judge`
+- 其他游戏玩家 Bot → `LsmAgentGame-<Game>-Player`（例：未来 `LsmAgentGame-Doudizhu-Player`）
+- 其他游戏法官/裁判 Bot → `LsmAgentGame-<Game>-Judge`
+- 工具型 Agent（记忆迭代） → `LsmAgentGame-<Game>-MemoryIter`
 
 ### 24.3 User-Agent 出站拼装
 
@@ -651,20 +651,20 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时，**必须*
 
 - `AppVersion` 与 `buildDateTime` 来自 `ServerGo/main.go`（ldflags `-X main.AppVersion=...` / `-X main.buildDateTime=...` 注入；rebuild_restart_app.sh 强制覆盖）。
 - 版本+时间注入仍走 `llm.Registry.SetUserAgent(...)`（main.go 一次性注入），**拼装的"程序名前缀"由 `LLMRequest.AgentClassName` 在出站前覆盖**（`llm/anthropic/anthropic.go::userAgentFor`）。
-- 例：`p.userAgent = "LsmWebGame/v1.0.0-7740495 Aug  6 2026 11:37:43"` + `req.AgentClassName = "LsmWebGame-Werewolf-Player"` → 出站 `User-Agent: LsmWebGame-Werewolf-Player/v1.0.0-7740495 Aug  6 2026 11:37:43`。
+- 例：`p.userAgent = "LsmAgentGame/v1.0.0-7740495 Aug  6 2026 11:37:43"` + `req.AgentClassName = "LsmAgentGame-Werewolf-Player"` → 出站 `User-Agent: LsmAgentGame-Werewolf-Player/v1.0.0-7740495 Aug  6 2026 11:37:43`。
 
 ### 24.4 接入新 Agent 的 4 步
 
 1. 在 `ServerGo/agent/class_names.go` 追加 `AgentClass<Game><Role>` 常量 + `AllAgentClassNames()` 切片。
 2. 在 Agent 实现的 `llm.LLMRequest{...}` 构造点填 `AgentClassName: string(agentroot.AgentClass<Game><Role>)`。
-3. `import agentroot "LsmWebGame/agent"`（用别名避免与本包符号冲突）。
+3. `import agentroot "LsmAgentGame/agent"`（用别名避免与本包符号冲突）。
 4. 单元测试断言 `LLMRequest.AgentClassName != ""`，让"忘记设置"立即失败。
 
 ### 24.5 设计动机
 
 - **同一 LLM Provider 被多类 Agent 复用**（如法官与玩家共用同一 model_key），上游/网关需要通过 UA 区分调用方做计费/限流/审计。
 - **`AgentClassName` 与 `ModelKey` 正交**：前者决定**是哪一类调用方**（业务身份），后者决定**用哪个 LLM 模型**（推理引擎）。
-- 不修改 `SetUserAgent` 全局调用避免破坏向后兼容（默认 `LsmWebGame/<ver> <time>`）；per-request 覆盖通过 `LLMRequest.AgentClassName` 透传，空值回退默认。
+- 不修改 `SetUserAgent` 全局调用避免破坏向后兼容（默认 `LsmAgentGame/<ver> <time>`）；per-request 覆盖通过 `LLMRequest.AgentClassName` 透传，空值回退默认。
 
 ## 25. Agent 道具与 LLM 注入攻击对齐（§20260807-04）
 

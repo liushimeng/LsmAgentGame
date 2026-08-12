@@ -216,7 +216,7 @@ Judge *struct {
 ### 4.3 构建验证
 
 ```bash
-go build -o LsmWebGame main.go
+go build -o LsmAgentGame main.go
 go test ./...
 cd ClientWeb && tsc --noEmit && npm run build
 ```

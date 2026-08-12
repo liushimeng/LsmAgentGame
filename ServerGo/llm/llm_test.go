@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/config"
-	"LsmWebGame/llm"
-	"LsmWebGame/llm/anthropic"
+	"LsmAgentGame/config"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/llm/anthropic"
 )
 
 // TestProviderChat_WireFormat verifies the provider sends the Anthropic wire
@@ -37,7 +37,7 @@ func TestProviderChat_WireFormat(t *testing.T) {
 	defer srv.Close()
 
 	p := anthropic.New([]string{srv.URL}, 5*time.Second, 0)
-	p.SetUserAgent("LsmWebGame/v1.0.0 Jul  7 2026 10:00:00")
+	p.SetUserAgent("LsmAgentGame/v1.0.0 Jul  7 2026 10:00:00")
 	req := llm.LLMRequest{
 		Model:     "MeiTuan-model",
 		System:    []llm.SystemBlock{{Type: "text", Text: "you are a werewolf player"}},
@@ -60,8 +60,8 @@ func TestProviderChat_WireFormat(t *testing.T) {
 	if !strings.HasPrefix(gotCT, "application/json") {
 		t.Errorf("Content-Type header = %q", gotCT)
 	}
-	if gotUA != "LsmWebGame/v1.0.0 Jul  7 2026 10:00:00" {
-		t.Errorf("User-Agent header = %q, want %q", gotUA, "LsmWebGame/v1.0.0 Jul  7 2026 10:00:00")
+	if gotUA != "LsmAgentGame/v1.0.0 Jul  7 2026 10:00:00" {
+		t.Errorf("User-Agent header = %q, want %q", gotUA, "LsmAgentGame/v1.0.0 Jul  7 2026 10:00:00")
 	}
 	if gotBody["model"] != "MeiTuan-model" {
 		t.Errorf("body.model = %v", gotBody["model"])
@@ -107,15 +107,15 @@ func TestProvider_UserAgent(t *testing.T) {
 
 	// With User-Agent set.
 	p := anthropic.New([]string{srv.URL}, 5*time.Second, 0)
-	p.SetUserAgent("LsmWebGame/v1.2.3 Jan  1 2026 00:00:00")
+	p.SetUserAgent("LsmAgentGame/v1.2.3 Jan  1 2026 00:00:00")
 	_, err := p.Chat(context.Background(), "sk-x", llm.LLMRequest{
 		Model: "X", Messages: []llm.Message{{Role: "user", Content: []llm.ContentBlock{{Type: "text", Text: "hi"}}}}, MaxTokens: 10,
 	})
 	if err != nil {
 		t.Fatalf("Chat err: %v", err)
 	}
-	if gotUA != "LsmWebGame/v1.2.3 Jan  1 2026 00:00:00" {
-		t.Errorf("User-Agent = %q, want LsmWebGame/v1.2.3 ...", gotUA)
+	if gotUA != "LsmAgentGame/v1.2.3 Jan  1 2026 00:00:00" {
+		t.Errorf("User-Agent = %q, want LsmAgentGame/v1.2.3 ...", gotUA)
 	}
 }
 
@@ -134,7 +134,7 @@ func TestRegistry_SetUserAgent(t *testing.T) {
 			{AgentName: "A", Model: "MeiTuan-model", APIKey: "sk-real"},
 		},
 	})
-	r.SetUserAgent("LsmWebGame/v9.9.9 TestBuild")
+	r.SetUserAgent("LsmAgentGame/v9.9.9 TestBuild")
 
 	provider, key, err := r.Get("MeiTuan-model")
 	if err != nil {
@@ -146,8 +146,8 @@ func TestRegistry_SetUserAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Chat err: %v", err)
 	}
-	if gotUA != "LsmWebGame/v9.9.9 TestBuild" {
-		t.Errorf("User-Agent = %q, want LsmWebGame/v9.9.9 TestBuild", gotUA)
+	if gotUA != "LsmAgentGame/v9.9.9 TestBuild" {
+		t.Errorf("User-Agent = %q, want LsmAgentGame/v9.9.9 TestBuild", gotUA)
 	}
 }
 

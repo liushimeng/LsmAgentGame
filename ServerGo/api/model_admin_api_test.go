@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"LsmWebGame/models"
+	"LsmAgentGame/models"
 
 	"github.com/gin-gonic/gin"
 )

@@ -193,10 +193,10 @@ type LLMRequest struct {
 	//
 	// 设计:由 registry.GetThinkingEnabled(modelKey) 决定每模型是否需要
 	// thinking,agent.callProvider 统一注入;典型 budget=4096
-	// (LsmWebGame.conf.example 默认值)。
+	// (LsmAgentGame.conf.example 默认值)。
 	Thinking *ThinkingConfig `json:"thinking,omitempty" yaml:"thinking,omitempty"`
 	// AgentClassName 2026-08-06 §AgentClassName 增强:调用方 Agent 类别标识
-	// (例 "LsmWebGame-Werewolf-Player" / "LsmWebGame-Werewolf-Judge")。
+	// (例 "LsmAgentGame-Werewolf-Player" / "LsmAgentGame-Werewolf-Judge")。
 	// 非空时 anthropic provider 用它拼装 User-Agent:
 	//   User-Agent: <AgentClassName>/<AppVersion> <buildDateTime>
 	// 空时回退到 provider 的全局 p.userAgent(由 llm.Registry.SetUserAgent

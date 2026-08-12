@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )
@@ -739,7 +739,7 @@ func (gs *GameState) StartGame() *errcode.Error {
 	return nil
 }
 
-// defaultFirstNightGrace 默认首夜发言缓冲期;从 LsmWebGame.conf.werewolf.first_night_grace_sec 读取,
+// defaultFirstNightGrace 默认首夜发言缓冲期;从 LsmAgentGame.conf.werewolf.first_night_grace_sec 读取,
 // 兜底 120 秒(Round 40 §95 新增配置可调,留作兼容)。
 func defaultFirstNightGrace() time.Duration {
 	// 避免 import cycle(config→... 不可被 werewolf 反向 import),延迟初始化一次。
@@ -1070,7 +1070,7 @@ func (gs *GameState) killPlayer(seat Seat, cause string) *errcode.Error {
 // 必须在 cap 内生效;< llm.timeout_ms=600s 预算)。
 
 // cfgPhaseDeadlineSec 安全读取 config.PhaseDeadlineSec(phase)。
-// 在测试或 bootstrap 早期 config.Load() 可能 panic(nil cfg / 缺 LsmWebGame.conf);
+// 在测试或 bootstrap 早期 config.Load() 可能 panic(nil cfg / 缺 LsmAgentGame.conf);
 // 此时使用 built-in defaultPhaseDeadlineSec 表兜底,与 Config.PhaseDeadlineSec
 // 兜底表保持一致,保证 setPhaseAndDeadline 在任何上下文都能挂上正确 deadline。
 //

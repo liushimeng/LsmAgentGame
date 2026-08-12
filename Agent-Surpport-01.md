@@ -82,7 +82,7 @@
 
 - **设计**：新手房间可配置一名中立导师 Agent（不参与对局），实时推送操作提示、局势解读、规则讲解，支持三档难度。
 - **核心价值**：降低入门门槛 + 个性化教学 + 提升新用户留存。
-- **风险**：§24 AgentClassName — 注册 `LsmWebGame-Werewolf-Tutor`；§134 「完整实现或移出卡池」。
+- **风险**：§24 AgentClassName — 注册 `LsmAgentGame-Werewolf-Tutor`；§134 「完整实现或移出卡池」。
 
 ### 4.5 人类联盟指挥 — Mimo §7.2
 

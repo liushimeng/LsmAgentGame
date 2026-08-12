@@ -22,8 +22,8 @@
 package werewolf
 
 import (
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwtypes"
 	"sort"
 	"strconv"
 	"strings"

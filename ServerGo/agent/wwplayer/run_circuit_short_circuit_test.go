@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/llm/anthropic"
-	llmtypes "LsmWebGame/llm/types"
+	"LsmAgentGame/llm/anthropic"
+	llmtypes "LsmAgentGame/llm/types"
 )
 
 // TestIsModel429CircuitErr_SourceDetection §20260810-15

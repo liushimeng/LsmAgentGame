@@ -1,4 +1,4 @@
-module LsmWebGame
+module LsmAgentGame
 
 go 1.25.0
 

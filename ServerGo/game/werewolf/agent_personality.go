@@ -23,7 +23,7 @@ package werewolf
 import (
 	"context"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // PersonalityAssignmentMode 是房间级人设分配模式(对应 RoomConfig.PersonalityMode)。
@@ -74,7 +74,7 @@ func resolvePersonalityForSeatLocked(r *WerewolfRoom, seat int) (wwplayer.Person
 // cfgWerewolfAgentPersonalityEnabled 是开关(默认 true)。与 §20260810-10 U2
 // cfgWerewolfModelSelfPortraitEnabled 同款模式:运维级 kill switch。
 //
-// 实现:配置来源 LsmWebGame.conf 的 werewolf.agent_personality_enabled。
+// 实现:配置来源 LsmAgentGame.conf 的 werewolf.agent_personality_enabled。
 // 此处用占位常量,真正读取走 config 包;若 config 未配置则默认 true。
 var cfgWerewolfAgentPersonalityEnabledCache = true
 

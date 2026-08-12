@@ -12,7 +12,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // validMemoryMD 是一份含全部 4 段标题的合法记忆。

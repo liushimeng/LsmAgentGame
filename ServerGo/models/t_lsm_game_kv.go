@@ -3,7 +3,7 @@
 // Per the "模型管理 + 模型玩家持久化 + 模型金币" plan (kind-skipping-moth §2.1),
 // this table backs persistent server-side secrets and small configuration
 // blobs that must survive across restarts but are not appropriate for the
-// human-editable LsmWebGame.conf file. The primary use today is storing the
+// human-editable LsmAgentGame.conf file. The primary use today is storing the
 // 32-byte master AES key (base64-encoded) used to encrypt per-provider API
 // keys via util.EncryptAPIKey.
 //

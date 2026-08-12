@@ -18,7 +18,7 @@
   "jwt": {
     "secret":      "CHANGE_ME_BASE64_RANDOM_32B",
     "ttl_seconds": 7200,
-    "issuer":      "LsmWebGame"
+    "issuer":      "LsmAgentGame"
   },
   "cookie": {
     // Default falls back to jwt.secret — kept in one place for rotation.
@@ -36,7 +36,7 @@
   },
   "log": {
     "level": "info",
-    "file":  "./LsmWebGame.log"
+    "file":  "./LsmAgentGame.log"
   },
   "cors": {
     "allowed_origins": [
@@ -47,7 +47,7 @@
   "llm": {
     // Anthropic wire-format proxy. Base endpoint — the anthropic provider
     // appends "/v1/messages". api_key values here are BEARER tokens for each
-    // configured model; they MUST come from LsmWebGame.conf (gitignored) —
+    // configured model; they MUST come from LsmAgentGame.conf (gitignored) —
     // never from source. conf.example ships placeholders; operators replace
     // them with real keys. See docs/LLM供应商设计.md.
     "endpoint": "http://8.130.85.252:29000/Anthropic",

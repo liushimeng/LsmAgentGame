@@ -1,4 +1,4 @@
-// LsmWebGame — entrypoint.
+// LsmAgentGame — entrypoint.
 //
 // Boots config → logger → DB → WS hub → HTTP and WSS listeners, then waits
 // for SIGTERM/SIGINT to shut down gracefully.
@@ -31,19 +31,19 @@ import (
 	"syscall"
 	"time"
 
-	"LsmWebGame/agent/wwjudge"
-	"LsmWebGame/api"
-	"LsmWebGame/config"
-	"LsmWebGame/db"
-	"LsmWebGame/errcode"
-	"LsmWebGame/game/werewolf"
-	"LsmWebGame/llm"
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
-	"LsmWebGame/router"
-	"LsmWebGame/service"
-	"LsmWebGame/util"
-	"LsmWebGame/ws"
+	"LsmAgentGame/agent/wwjudge"
+	"LsmAgentGame/api"
+	"LsmAgentGame/config"
+	"LsmAgentGame/db"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/game/werewolf"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
+	"LsmAgentGame/router"
+	"LsmAgentGame/service"
+	"LsmAgentGame/util"
+	"LsmAgentGame/ws"
 
 	"go.uber.org/zap"
 )
@@ -121,7 +121,7 @@ func main() {
 	}
 	defer logger.Sync()
 
-	logger.L().Info("LsmWebGame starting",
+	logger.L().Info("LsmAgentGame starting",
 		zap.String("version", AppVersion),
 		zap.String("build_time", buildDateTime))
 
@@ -147,13 +147,13 @@ func main() {
 		logger.L().Info("llm: no providers configured, disabling LLM features")
 	} else {
 		// Inject User-Agent so every outbound LLM HTTP request identifies this
-		// server instance. Format: "LsmWebGame/<version> <build_time>".
-		llmRegistry.SetUserAgent(fmt.Sprintf("LsmWebGame/%s %s", AppVersion, buildDateTime))
+		// server instance. Format: "LsmAgentGame/<version> <build_time>".
+		llmRegistry.SetUserAgent(fmt.Sprintf("LsmAgentGame/%s %s", AppVersion, buildDateTime))
 		// Inject the `x-anthropic-billing-header` value so Anthropic-side
 		// proxies / Datadog attribute traffic to this call site. Mirrors the
 		// ClaudeCode reference (`cc_version=2.1.195.58c; cc_entrypoint=cli;`)
 		// — see CluadeCode请求RequestBody的Anthropic协议定义数据用例.json.
-		llmRegistry.SetBillingHeader(fmt.Sprintf("LsmWebGame/%s %s; entrypoint=server;",
+		llmRegistry.SetBillingHeader(fmt.Sprintf("LsmAgentGame/%s %s; entrypoint=server;",
 			AppVersion, buildDateTime))
 		logger.L().Info("llm registry loaded",
 			zap.String("source", llmRegistry.Source()),
@@ -185,7 +185,7 @@ func main() {
 				zap.Int("placeholder_or_empty", placeholderCount),
 				zap.Strings("models", models),
 				zap.String("fix_docs", "docs/LLM与Agent/LLM供应商设计.md"),
-				zap.String("fix_ui", "/api/admin/llm/providers (or set real api_key in LsmWebGame.conf)"))
+				zap.String("fix_ui", "/api/admin/llm/providers (or set real api_key in LsmAgentGame.conf)"))
 		}
 
 		// ROUND 25 BUG-WEREWOLF-P0-NEW-7 follow-up: do a one-shot HEAD probe of
@@ -366,7 +366,7 @@ func main() {
 	gameSvcWs.WerewolfManager().SetPropCatalog(propCatalog)
 	gameSvcWs.WerewolfManager().SetPropEngine(propEngine)
 
-	// 2026-07-21 v5 重构 — EconTier 5 档阈值(从 LsmWebGame.conf 注入)。
+	// 2026-07-21 v5 重构 — EconTier 5 档阈值(从 LsmAgentGame.conf 注入)。
 	// 4 个字段全部显式非零时调 werewolf.ConfigureEconTier;任意字段为 0 走
 	// werewolf 包常量默认值。配置错误(非单调)由 werewolf 包 panic 兜底。
 	if cfg != nil {

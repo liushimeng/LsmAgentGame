@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/config"
-	"LsmWebGame/service"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/config"
+	"LsmAgentGame/service"
 )
 
 type PropHistoryRecord struct {

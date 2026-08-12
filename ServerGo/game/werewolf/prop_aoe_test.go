@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 // newAOETestRoom 构造一个带 5 个座位的测试房间：

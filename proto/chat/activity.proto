@@ -1,4 +1,4 @@
-// LsmWebGame — 聊天活动事件
+// LsmAgentGame — 聊天活动事件
 //
 // 活动事件通过 chat.activity 帧广播，作为聊天流中的系统消息。
 // 用于展示游戏阶段变化、死亡、投票结果等事件。
@@ -7,7 +7,7 @@ syntax = "proto3";
 
 package lsm.chat;
 
-option go_package = "LsmWebGame/proto/pb/chat";
+option go_package = "LsmAgentGame/proto/pb/chat";
 
 // 活动事件类型
 enum ActivityKind {

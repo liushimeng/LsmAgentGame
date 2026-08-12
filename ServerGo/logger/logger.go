@@ -1,13 +1,13 @@
 // Package logger wraps zap to give the rest of the project a tiny, stable API.
 //
 // Use L() to obtain the global *zap.Logger. Init() is called once from main
-// and configures the underlying core based on LsmWebGame.conf.
+// and configures the underlying core based on LsmAgentGame.conf.
 package logger
 
 import (
 	"os"
 
-	"LsmWebGame/config"
+	"LsmAgentGame/config"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -19,7 +19,7 @@ var global *zap.Logger
 //
 // BUG-WEREWOLF-P2-NEW-6 (Round 24): the previous version Tee'd every log
 // line to BOTH stdout AND the configured file. Combined with the
-// `nohup ... >> LsmWebGame.log 2>&1` startup wrapper in
+// `nohup ... >> LsmAgentGame.log 2>&1` startup wrapper in
 // `rebuild_restart_app.sh`, this caused every WARN/INFO line to be written
 // twice (once as JSON via the Tee file sink, once as plain text via the
 // stdout sink captured into the same log file). The fix keeps the stdout
@@ -27,7 +27,7 @@ var global *zap.Logger
 // it points to a DIFFERENT file than stdout — i.e. only when the operator
 // explicitly wants a separate side-channel log. Setting `log.file` to a
 // dedicated path like `/var/log/lsmwebgame.log` keeps the file Tee; leaving
-// it at the default `./LsmWebGame.log` (same as the wrapper's redirect)
+// it at the default `./LsmAgentGame.log` (same as the wrapper's redirect)
 // skips the file Tee and avoids the duplication.
 func Init(cfg *config.Config) error {
 	level := zapcore.InfoLevel

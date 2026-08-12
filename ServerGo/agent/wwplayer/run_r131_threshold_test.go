@@ -22,9 +22,9 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/config"
-	"LsmWebGame/llm"
-	llmtypes "LsmWebGame/llm/types"
+	"LsmAgentGame/config"
+	"LsmAgentGame/llm"
+	llmtypes "LsmAgentGame/llm/types"
 )
 
 // r131AlwaysFailProvider 模拟永久 403。R131 测试套件共用。

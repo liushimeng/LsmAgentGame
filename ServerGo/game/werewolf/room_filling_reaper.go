@@ -21,7 +21,7 @@ package werewolf
 import (
 	"time"
 
-	"LsmWebGame/logger"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

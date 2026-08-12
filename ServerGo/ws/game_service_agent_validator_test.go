@@ -12,11 +12,11 @@ package ws
 import (
 	"testing"
 
-	"LsmWebGame/config"
-	"LsmWebGame/errcode"
-	"LsmWebGame/game/werewolf"
-	"LsmWebGame/llm"
-	"LsmWebGame/service"
+	"LsmAgentGame/config"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/game/werewolf"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/service"
 )
 
 // stubRegistry builds a registry with the listed models, each flagged

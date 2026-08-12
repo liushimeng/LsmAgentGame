@@ -28,12 +28,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"LsmWebGame/config"
-	"LsmWebGame/llm/anthropic"
-	types "LsmWebGame/llm/types"
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
-	"LsmWebGame/util"
+	"LsmAgentGame/config"
+	"LsmAgentGame/llm/anthropic"
+	types "LsmAgentGame/llm/types"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
+	"LsmAgentGame/util"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -319,7 +319,7 @@ func (r *Registry) loadFromConfigLocked(cfg config.LLMConfig) {
 		available := usableKey(key)
 		// §R224 (2026-08-01) — 从 cfg.LLM.Providers[].ThinkingRequired/Budget
 		// 读取;若未设置(零值)则默认 false(向后兼容 §128 后的配置)。
-		// LsmWebGame.conf.example 已给全部 8 家代理打开(实测 100% 失败时 100%
+		// LsmAgentGame.conf.example 已给全部 8 家代理打开(实测 100% 失败时 100%
 		// 报 messages.content.thinking missing)。
 		r.providers[model] = registeredProvider{
 			info: types.ModelInfo{
@@ -377,7 +377,7 @@ func (r *Registry) seedFromConfigLocked(ctx context.Context, gormDB *gorm.DB, cf
 			ThinkingEnabled:      p.ThinkingRequired,
 			ThinkingBudgetTokens: p.ThinkingBudget,
 			Enabled:          true,
-			Remark:           "seeded from LsmWebGame.conf on first boot",
+			Remark:           "seeded from LsmAgentGame.conf on first boot",
 		}
 		encrypted = append(encrypted, row)
 	}
@@ -1020,7 +1020,7 @@ func probeEndpoint(ctx context.Context, endpoint string) EndpointHealth {
 		out.LastError = fmt.Sprintf("build request: %v", err)
 		return out
 	}
-	req.Header.Set("User-Agent", "LsmWebGame-HealthCheck/1.0")
+	req.Header.Set("User-Agent", "LsmAgentGame-HealthCheck/1.0")
 
 	resp, err := client.Do(req)
 	out.LatencyMs = time.Since(start).Milliseconds()

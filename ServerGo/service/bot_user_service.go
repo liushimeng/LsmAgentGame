@@ -34,10 +34,10 @@ import (
 	"strings"
 	"unicode"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
-	"LsmWebGame/util"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
+	"LsmAgentGame/util"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"

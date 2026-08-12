@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"LsmWebGame/agent/core"
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/llm"
+	"LsmAgentGame/agent/core"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/llm"
 )
 
 // ToolRunner is the callback surface the engine exposes to the agent driver.

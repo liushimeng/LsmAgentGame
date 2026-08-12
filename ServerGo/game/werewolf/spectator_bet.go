@@ -10,8 +10,8 @@
 package werewolf
 
 import (
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"

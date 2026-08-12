@@ -1,7 +1,7 @@
 package wwplayer
 
 import (
-	"LsmWebGame/agent/core"
+	"LsmAgentGame/agent/core"
 	"sync"
 	"testing"
 	"time"

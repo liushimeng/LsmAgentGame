@@ -27,7 +27,7 @@ package wwplayer
 import (
 	"strings"
 
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 // roleSubsectionPrefix 是角色子段的标题前缀。

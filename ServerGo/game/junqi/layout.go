@@ -1,7 +1,7 @@
 package junqi
 
 import (
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // RequiredPieceCounts is the canonical composition of one side's 25-piece army.

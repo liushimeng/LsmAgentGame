@@ -13,7 +13,7 @@ syntax = "proto3";
 
 package lsm.user;
 
-option go_package = "LsmWebGame/proto/userpb";
+option go_package = "LsmAgentGame/proto/userpb";
 
 // ───────────── client → server ─────────────
 

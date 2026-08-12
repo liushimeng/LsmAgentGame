@@ -13,7 +13,7 @@ package api
 import (
 	"context"
 
-	"LsmWebGame/models"
+	"LsmAgentGame/models"
 )
 
 // UserRoleChecker is the auth-side surface every admin handler depends on.

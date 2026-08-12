@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/core"
-	"LsmWebGame/logger"
+	"LsmAgentGame/agent/core"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

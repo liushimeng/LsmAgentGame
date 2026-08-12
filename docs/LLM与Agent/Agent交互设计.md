@@ -395,7 +395,7 @@ var sensitiveToolInputs = map[string]map[string]bool{
 
 ## 9. 验收清单
 
-- [ ] `go build -o LsmWebGame main.go` 通过
+- [ ] `go build -o LsmAgentGame main.go` 通过
 - [ ] `go test ./...` 通过(包含新增 `agent_interaction_test.go` + `room_sanitize_interaction_test.go`)
 - [ ] `tsc --noEmit` 通过
 - [ ] `npm run build` 通过

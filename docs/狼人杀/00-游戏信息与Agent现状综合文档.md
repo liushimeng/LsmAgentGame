@@ -305,9 +305,9 @@ ServerGo/agent/
 
 | AgentClassName | 实现 | 场景 |
 |---|---|---|
-| `LsmWebGame-Werewolf-Player` | `wwplayer.Agent` | 玩家 Bot 主对话 + speak_floor_tick |
-| `LsmWebGame-Werewolf-Judge` | `wwjudge.AgentJudge` | 法官宣告/prompt_actor/summary/declare_cause |
-| `LsmWebGame-Werewolf-MemoryIter` | `agent_memory_bridge.go` | 整局总结后异步自我迭代 MEMORY.md |
+| `LsmAgentGame-Werewolf-Player` | `wwplayer.Agent` | 玩家 Bot 主对话 + speak_floor_tick |
+| `LsmAgentGame-Werewolf-Judge` | `wwjudge.AgentJudge` | 法官宣告/prompt_actor/summary/declare_cause |
+| `LsmAgentGame-Werewolf-MemoryIter` | `agent_memory_bridge.go` | 整局总结后异步自我迭代 MEMORY.md |
 
 **User-Agent 出站格式**：`<AgentClassName>/<AppVersion> <buildDateTime>`
 
@@ -717,7 +717,7 @@ ServerGo/agent/
 
 ---
 
-## 16. 配置项（`LsmWebGame.conf` werewolf 段）
+## 16. 配置项（`LsmAgentGame.conf` werewolf 段）
 
 | 配置项 | 默认值 | 用途 |
 |---|---|---|

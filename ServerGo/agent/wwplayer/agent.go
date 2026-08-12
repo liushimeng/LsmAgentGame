@@ -17,12 +17,12 @@ import (
 	"sync"
 	"time"
 
-	"LsmWebGame/agent/core"
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/llm"
-	"LsmWebGame/llm/anthropic"
-	llmtypes "LsmWebGame/llm/types"
-	"LsmWebGame/logger"
+	"LsmAgentGame/agent/core"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/llm/anthropic"
+	llmtypes "LsmAgentGame/llm/types"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

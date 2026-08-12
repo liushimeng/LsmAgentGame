@@ -19,9 +19,9 @@ import (
 	"net/http"
 	"time"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/game/werewolf"
-	"LsmWebGame/logger"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/game/werewolf"
+	"LsmAgentGame/logger"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

@@ -26,11 +26,11 @@ import (
 	"net/http"
 	"strconv"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/game/werewolf"
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
-	"LsmWebGame/service"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/game/werewolf"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
+	"LsmAgentGame/service"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

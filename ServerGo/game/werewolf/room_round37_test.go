@@ -32,8 +32,8 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/errcode"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/errcode"
 )
 
 // deadlockTimeout caps how long we wait for a dispatchQuarantinedSkipLocked

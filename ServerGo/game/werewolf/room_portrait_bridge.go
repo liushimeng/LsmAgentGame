@@ -6,7 +6,7 @@
 package werewolf
 
 import (
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // buildSelfPortraitTextFor 生成指定 modelKey 的自画像注入文本。

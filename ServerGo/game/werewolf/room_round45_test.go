@@ -31,7 +31,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // TestPhaseWatchdogTick_FiresOnHunterShoot verifies the full causal chain the

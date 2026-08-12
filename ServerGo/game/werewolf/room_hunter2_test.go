@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // R-H2-S01: 当 PhaseDeadlineAt 已武装(默认值由 setPhaseAndDeadline 写入),

@@ -8,8 +8,8 @@ package api
 import (
 	"context"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/models"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/models"
 
 	"github.com/gin-gonic/gin"
 )

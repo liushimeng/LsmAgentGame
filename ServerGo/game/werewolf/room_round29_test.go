@@ -32,9 +32,9 @@ package werewolf
 import (
 	"testing"
 
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/errcode"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/errcode"
 )
 
 // stubBotWithChannel builds a minimal *wwplayer.Agent with a fresh buffered

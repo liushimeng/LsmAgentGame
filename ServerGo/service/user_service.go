@@ -5,8 +5,8 @@ import (
 	"errors"
 	"strings"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/models"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/models"
 
 	"gorm.io/gorm"
 )

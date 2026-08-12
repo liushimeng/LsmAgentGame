@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/util"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/util"
 
 	"gorm.io/gorm"
 )

@@ -25,7 +25,7 @@ import (
 	"fmt"
 	"testing"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // stubWWMgr builds a WerewolfManager with seedFn = func() int64 { return 1 }

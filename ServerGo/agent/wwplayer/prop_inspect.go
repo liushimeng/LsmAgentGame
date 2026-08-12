@@ -10,7 +10,7 @@
 package wwplayer
 
 import (
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 	"encoding/json"
 	"fmt"
 	"strings"

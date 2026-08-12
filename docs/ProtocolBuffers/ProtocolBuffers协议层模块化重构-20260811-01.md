@@ -151,18 +151,18 @@ lsm.game.werewolf — 狼人杀
 
 | Proto 包 | Go 包路径 | 说明 |
 |----------|----------|------|
-| lsm.common | `LsmWebGame/proto/pb/common` | 通用类型 |
-| lsm.chat | `LsmWebGame/proto/pb/chat` | 聊天 |
-| lsm.room | `LsmWebGame/proto/pb/room` | 房间 |
-| lsm.user | `LsmWebGame/proto/pb/user` | 用户 |
-| lsm.wallet | `LsmWebGame/proto/pb/wallet` | 钱包 |
-| lsm.game.common | `LsmWebGame/proto/pb/game/common` | 游戏通用 |
-| lsm.game.xiangqi | `LsmWebGame/proto/pb/game/xiangqi` | 象棋 |
-| lsm.game.chess | `LsmWebGame/proto/pb/game/chess` | 国际象棋 |
-| lsm.game.junqi | `LsmWebGame/proto/pb/game/junqi` | 军棋 |
-| lsm.game.doudizhu | `LsmWebGame/proto/pb/game/doudizhu` | 斗地主 |
-| lsm.game.texas | `LsmWebGame/proto/pb/game/texas` | 德州扑克 |
-| lsm.game.werewolf | `LsmWebGame/proto/pb/game/werewolf` | 狼人杀 |
+| lsm.common | `LsmAgentGame/proto/pb/common` | 通用类型 |
+| lsm.chat | `LsmAgentGame/proto/pb/chat` | 聊天 |
+| lsm.room | `LsmAgentGame/proto/pb/room` | 房间 |
+| lsm.user | `LsmAgentGame/proto/pb/user` | 用户 |
+| lsm.wallet | `LsmAgentGame/proto/pb/wallet` | 钱包 |
+| lsm.game.common | `LsmAgentGame/proto/pb/game/common` | 游戏通用 |
+| lsm.game.xiangqi | `LsmAgentGame/proto/pb/game/xiangqi` | 象棋 |
+| lsm.game.chess | `LsmAgentGame/proto/pb/game/chess` | 国际象棋 |
+| lsm.game.junqi | `LsmAgentGame/proto/pb/game/junqi` | 军棋 |
+| lsm.game.doudizhu | `LsmAgentGame/proto/pb/game/doudizhu` | 斗地主 |
+| lsm.game.texas | `LsmAgentGame/proto/pb/game/texas` | 德州扑克 |
+| lsm.game.werewolf | `LsmAgentGame/proto/pb/game/werewolf` | 狼人杀 |
 
 ### 3.4 TS 命名空间映射
 
@@ -220,7 +220,7 @@ syntax = "proto3";
 
 package lsm.common;
 
-option go_package = "LsmWebGame/proto/pb/common";
+option go_package = "LsmAgentGame/proto/pb/common";
 
 // WebSocket 帧信封 —— 所有消息的统一容器
 message Envelope {

@@ -16,9 +16,9 @@
 package werewolf
 
 import (
-	"LsmWebGame/config"
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
+	"LsmAgentGame/config"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
 	"go.uber.org/zap"
 )
 
@@ -77,7 +77,7 @@ func restartVoteMinPlayersFromConfig() int {
 //
 // 配置读取容错:config.Load() 在配置文件缺失时会 panic,由 defer recover()
 // 兜底。此时视为 config=nil,即 RestartVote Enabled(与生产默认一致)。这保证
-// 单元测试在任意 cwd 下都能正常运行,不依赖 LsmWebGame.conf 的物理位置。
+// 单元测试在任意 cwd 下都能正常运行,不依赖 LsmAgentGame.conf 的物理位置。
 func shouldEnterRestartVoteLocked(r *WerewolfRoom) bool {
 	if r == nil || r.State == nil {
 		return false

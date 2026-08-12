@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 // TestWolfpackAssign_Registration 验证工具已注册且 schema 合法。

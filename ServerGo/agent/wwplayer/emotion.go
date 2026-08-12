@@ -17,7 +17,7 @@
 package wwplayer
 
 import (
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 	"math/rand"
 	"sync"
 	"time"

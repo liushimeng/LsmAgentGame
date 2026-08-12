@@ -1,7 +1,7 @@
 package werewolf
 
 import (
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 func (gs *GameState) startNight() {

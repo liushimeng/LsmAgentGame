@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	anthropic "LsmWebGame/llm/anthropic"
-	llmtypes "LsmWebGame/llm/types"
+	anthropic "LsmAgentGame/llm/anthropic"
+	llmtypes "LsmAgentGame/llm/types"
 )
 
 // runAccumulate drives one SSE body through AccumulateStream and returns

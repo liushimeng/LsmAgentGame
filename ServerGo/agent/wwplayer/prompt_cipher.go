@@ -12,7 +12,7 @@ package wwplayer
 import (
 	"strings"
 
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 // BuildCipherProtocolBlock 把 WolfPackCipherBundle 渲染为注入狼 bot user prompt

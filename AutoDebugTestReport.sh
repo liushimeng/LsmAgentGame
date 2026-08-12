@@ -6,7 +6,7 @@
 #   作为提示词执行，全程 bypass 权限，运行结束后自动退出。
 #
 # 特性：
-#   - 工作目录与 Claude Code 启动目录均为 /usr/local/LsmWebGame
+#   - 工作目录与 Claude Code 启动目录均为 /usr/local/LsmAgentGame
 #   - 通过 nohup + setsid + & + disown 脱离调用者，**不阻塞**调用者进程
 #   - 日志输出到 ./logs/auto_debug_<timestamp>.log
 #   - AutoDebugTestReport.md 优先取当前目录，其次仓库根；都不存在则立即报错退出
@@ -16,7 +16,7 @@
 set -u
 
 # ---------- 配置 ----------
-PROJECT_DIR="/usr/local/LsmWebGame"
+PROJECT_DIR="/usr/local/LsmAgentGame"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 LOG_DIR="${PROJECT_DIR}/logs"
 PROMPT_FILE_NAME="AutoDebugTestReport.md"

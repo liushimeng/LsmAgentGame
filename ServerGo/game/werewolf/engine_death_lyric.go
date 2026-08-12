@@ -1,8 +1,8 @@
 package werewolf
 
 import (
-	"LsmWebGame/config"
-	"LsmWebGame/errcode"
+	"LsmAgentGame/config"
+	"LsmAgentGame/errcode"
 )
 
 func DeathLyricDeadlineSeconds() int {

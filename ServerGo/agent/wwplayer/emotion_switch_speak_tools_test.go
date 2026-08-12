@@ -24,10 +24,10 @@ package wwplayer_test
 import (
 	"testing"
 
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/config"
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/llm"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/config"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/llm"
 )
 
 // esToolNames2 把 BuildTools 结果压成名字切片,方便断言。

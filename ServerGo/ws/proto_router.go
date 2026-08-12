@@ -15,7 +15,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	commonpb "LsmWebGame/proto/pb/common"
+	commonpb "LsmAgentGame/proto/pb/common"
 )
 
 // ProtoRouter proto 消息路由器

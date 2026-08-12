@@ -3,11 +3,11 @@
 import json
 import time
 import sys
-sys.path.insert(0, "/usr/local/LsmWebGame/scripts/r15")
+sys.path.insert(0, "/usr/local/LsmAgentGame/scripts/r15")
 from common import login, balance, new_page, login_in_page, page_url, dbg_eval, dbg_look
 
 print("=== STEP 1: Login all accounts ===")
-with open("/usr/local/LsmWebGame/test_account.json") as f:
+with open("/usr/local/LsmAgentGame/test_account.json") as f:
     cfg = json.load(f)
 accounts = []
 for a in cfg["accounts"]:

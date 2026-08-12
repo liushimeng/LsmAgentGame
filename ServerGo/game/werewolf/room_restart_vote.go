@@ -10,9 +10,9 @@ package werewolf
 import (
 	"time"
 
-	"LsmWebGame/config"
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
+	"LsmAgentGame/config"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

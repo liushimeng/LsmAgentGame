@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"LsmWebGame/llm/anthropic"
+	"LsmAgentGame/llm/anthropic"
 )
 
 func resolveModelName(modelKey string) string {

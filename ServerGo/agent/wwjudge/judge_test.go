@@ -14,8 +14,8 @@ import (
 	"sync"
 	"testing"
 
-	"LsmWebGame/llm"
-	"LsmWebGame/llm/types"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/llm/types"
 )
 
 // fakeProvider 是 llm.LLMProvider 的最小替身,用于验证 Provider 注入后

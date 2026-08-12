@@ -1,6 +1,6 @@
 // Package llm is the parent of the LLM subsystem. It re-exports the leaf wire
 // types from llm/types so callers (api/, agent/, main.go) only need to import
-// "LsmWebGame/llm":
+// "LsmAgentGame/llm":
 //
 //	- llm.LLMProvider  — unified provider interface
 //	- llm.LLMRequest / llm.LLMResponse / llm.LLMUsage  — wire format
@@ -13,7 +13,7 @@
 package llm
 
 import (
-	"LsmWebGame/llm/types"
+	"LsmAgentGame/llm/types"
 )
 
 // Re-exports — see llm/types for full docs.
@@ -31,6 +31,6 @@ type (
 )
 
 // PlaceholderKey is the api_key sentinel used in conf.example. Operators MUST
-// replace it with a real key in the gitignored LsmWebGame.conf before any model
+// replace it with a real key in the gitignored LsmAgentGame.conf before any model
 // becomes usable.
 const PlaceholderKey = types.PlaceholderKey

@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // TestPhaseWatchdogTick_DeadlineLastWake verifies the 2026-07-11 §13-R91

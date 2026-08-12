@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"strings"
 
-	"LsmWebGame/llm"
+	"LsmAgentGame/llm"
 )
 
 // judgeSystemBase 是法官 LLM 的 system prompt 基础段。所有法官工具调用都共享。

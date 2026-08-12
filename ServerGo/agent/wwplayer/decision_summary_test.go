@@ -10,8 +10,8 @@ package wwplayer
 
 import (
 	"encoding/json"
-	"LsmWebGame/agent/core"
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/core"
+	"LsmAgentGame/agent/wwtypes"
 	"strings"
 	"testing"
 )

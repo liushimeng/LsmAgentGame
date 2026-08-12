@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"LsmWebGame/util"
+	"LsmAgentGame/util"
 )
 
 // PropInjectType 是道具的注入类型标识。

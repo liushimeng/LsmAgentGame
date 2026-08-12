@@ -9,7 +9,7 @@
 package wwplayer
 
 import (
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 	"strings"
 	"testing"
 )

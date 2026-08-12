@@ -16,7 +16,7 @@
 // 2026-07-21 道具系统 v5 重构。
 package wwplayer
 
-import "LsmWebGame/agent/wwtypes"
+import "LsmAgentGame/agent/wwtypes"
 
 // init — 注册狼人小队工具。
 func init() {

@@ -16,7 +16,7 @@
 package wwplayer
 
 import (
-	"LsmWebGame/config"
+	"LsmAgentGame/config"
 	"time"
 )
 

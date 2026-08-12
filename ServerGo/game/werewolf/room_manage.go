@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

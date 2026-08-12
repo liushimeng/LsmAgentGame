@@ -3,8 +3,8 @@ package ws
 import (
 	"encoding/json"
 
-	"LsmWebGame/game/junqi"
-	"LsmWebGame/logger"
+	"LsmAgentGame/game/junqi"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

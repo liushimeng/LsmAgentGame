@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/agent/core"
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/config"
-	"LsmWebGame/llm"
-	llmtypes "LsmWebGame/llm/types"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/agent/core"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/config"
+	"LsmAgentGame/llm"
+	llmtypes "LsmAgentGame/llm/types"
 )
 
 // fakeRunner records tool calls for assertions.

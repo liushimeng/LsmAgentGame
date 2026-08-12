@@ -1,4 +1,4 @@
-# LsmWebGame
+# LsmAgentGame
 
 Web 游戏平台 —— 后端 Go（HTTPS + WSS），前端 React + TypeScript + Three.js，WebSocket 之上使用 Protobuf 协议，MySQL（通过 GORM）作为持久化。
 
@@ -6,8 +6,8 @@ Web 游戏平台 —— 后端 Go（HTTPS + WSS），前端 React + TypeScript +
 
 ```bash
 # 1. 复制并编辑运行时配置（数据库 lsmDB 与 superuser 账号已存在，无需初始化）
-cp LsmWebGame.conf.example LsmWebGame.conf
-# 编辑 LsmWebGame.conf —— 设置 db.password、jwt.secret 等
+cp LsmAgentGame.conf.example LsmAgentGame.conf
+# 编辑 LsmAgentGame.conf —— 设置 db.password、jwt.secret 等
 
 # 2. 编译前端 + 后端，然后运行
 ./rebuild_restart_app.sh
@@ -30,7 +30,7 @@ go-web-debug-tool/              子模块 —— Chrome CDP 自动化调试服�
 ## 约定
 
 - 所有 Go 文件使用 `snake_case.go` 命名。**唯一例外**：`ServerGo/models/` 目录下的 GORM 模型文件使用 `t_lsm_game_*.go` 前缀（按规范要求）。
-- 任何涉及基础设施的提交都应保持 `.gitignore` 的完整性（不得提交 `LsmWebGame.conf`、`node_modules/`、生成的 proto 代码）。
+- 任何涉及基础设施的提交都应保持 `.gitignore` 的完整性（不得提交 `LsmAgentGame.conf`、`node_modules/`、生成的 proto 代码）。
 - 任何贡献者在克隆后必须执行 `git submodule update --init --recursive`。
 
 ## 协议

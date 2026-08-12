@@ -44,7 +44,7 @@ func TestIterateAgentMemoriesAsync_ConfigDisabledNoop(t *testing.T) {
 	stub := &stubAgentMemoryStore{}
 	m.SetAgentMemoryStore(stub)
 	r := &WerewolfRoom{RoomID: "test-room-cfg-off"}
-	// 测试环境无 LsmWebGame.conf → cfgAgentMemoryEnabled recover 兜底 false → no-op。
+	// 测试环境无 LsmAgentGame.conf → cfgAgentMemoryEnabled recover 兜底 false → no-op。
 	m.IterateAgentMemoriesAsync(r, "法官总结")
 	if stub.loadCalls != 0 || stub.saveCalls != 0 {
 		t.Fatalf("config-disabled path must not touch store, got load=%d save=%d",

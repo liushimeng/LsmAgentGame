@@ -21,10 +21,10 @@ import (
 	"math/rand"
 	"time"
 
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
-	"LsmWebGame/service"
-	"LsmWebGame/util"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
+	"LsmAgentGame/service"
+	"LsmAgentGame/util"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"

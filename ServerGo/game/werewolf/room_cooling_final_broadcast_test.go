@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwjudge"
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/agent/core"
+	"LsmAgentGame/agent/wwjudge"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/agent/core"
 )
 
 // newCoolingTestRoom 创建一局 status=over + phase=game_over 的房间,

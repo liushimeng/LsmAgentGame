@@ -24,7 +24,7 @@ package werewolf
 import (
 	"testing"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // TestBUG_R193_001_AllActiveVoted_ExcludesQuarantined verifies the core

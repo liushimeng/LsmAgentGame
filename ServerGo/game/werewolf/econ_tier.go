@@ -11,7 +11,7 @@
 //     - Danger   (5K-10K) → 销毁 45% / 彩池 30%（v4 微调）
 //     - Critical (< 5K)    → 销毁 60% / 彩池 20%（极端反通胀）
 //
-// 阈值可由 LsmWebGame.conf 配置(5 个常量均为变量;ConfigureEconTier 注入);
+// 阈值可由 LsmAgentGame.conf 配置(5 个常量均为变量;ConfigureEconTier 注入);
 // 默认值与常量一致。
 //
 // 2026-07-21 v5 重构（docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.3）。
@@ -37,7 +37,7 @@ const (
 	EconCritical EconTier = "critical"
 )
 
-// EconTier 阈值常量（v5 §16.3 配置；可由 LsmWebGame.conf + ConfigureEconTier 注入）。
+// EconTier 阈值常量（v5 §16.3 配置；可由 LsmAgentGame.conf + ConfigureEconTier 注入）。
 // 默认值与 docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.3 表一致。
 const (
 	EconBoomThreshold     int64 = 100000 // ≥ 此值 → Boom
@@ -57,7 +57,7 @@ type EconTierSpec struct {
 }
 
 // EconTierSpecs 是档位 → 比例的查找表（v5 5 档）。
-// 与配置 LsmWebGame.conf 中 werewolf.econ_tier_* 字段同步。
+// 与配置 LsmAgentGame.conf 中 werewolf.econ_tier_* 字段同步。
 var EconTierSpecs = map[EconTier]EconTierSpec{
 	EconBoom:     {SystemAbsorbPct: 20, PotReturnPct: 60},
 	EconHealth:   {SystemAbsorbPct: 30, PotReturnPct: 50},
@@ -67,7 +67,7 @@ var EconTierSpecs = map[EconTier]EconTierSpec{
 }
 
 // EconTierThresholds 当前生效的阈值（可由 ConfigureEconTier 覆盖）。
-// 默认值与常量一致;运维可通过 LsmWebGame.conf 调整。
+// 默认值与常量一致;运维可通过 LsmAgentGame.conf 调整。
 var EconTierThresholds = struct {
 	Boom     int64
 	Caution  int64
@@ -80,7 +80,7 @@ var EconTierThresholds = struct {
 	Critical: EconCriticalThreshold,
 }
 
-// ConfigureEconTier 注入自定义阈值(由 config.LsmWebGame.conf 加载)。
+// ConfigureEconTier 注入自定义阈值(由 config.LsmAgentGame.conf 加载)。
 // 四个值必须单调：Boom > Caution > Danger > Critical。
 // 非法输入 → panic(启动期配置错误应当致命)。
 func ConfigureEconTier(boom, caution, danger, critical int64) {

@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/errcode"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/errcode"
 )
 
 // stubBotForWatchdog builds a minimal bot registered in r.BotAgents. We do NOT

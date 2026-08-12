@@ -33,7 +33,7 @@ import (
 	"io"
 	"strings"
 
-	types "LsmWebGame/llm/types"
+	types "LsmAgentGame/llm/types"
 )
 
 // providerCtxKey is the unexported context key used to pass the active

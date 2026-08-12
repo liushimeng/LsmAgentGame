@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"LsmWebGame/logger"
-	types "LsmWebGame/llm/types"
+	"LsmAgentGame/logger"
+	types "LsmAgentGame/llm/types"
 
 	"go.uber.org/zap"
 )
@@ -287,7 +287,7 @@ const (
 //
 // BUG-WEREWOLF-P0-NEW-1 (revised 2026-07-09): the fallback timeout was 8s,
 // which killed real LLM calls (especially extended-thinking, 30-120s) before
-// the model could respond. Raised to 300s (5min); the running LsmWebGame.conf
+// the model could respond. Raised to 300s (5min); the running LsmAgentGame.conf
 // normally supplies the real value (2026-07-24: 默认升至 600000ms = 10min)。
 // The stream idle/total timeouts are now propagated from config via
 // registry.SetStreamTimeouts, overriding the 15s/90s defaults below.
@@ -406,9 +406,9 @@ func (p *Provider) SetUserAgent(ua string) { p.userAgent = ua }
 // p.userAgent 的"程序名前缀"(第一个 "/" 之前的部分)替换为 AgentClassName,
 // 保留版本号 + 编译时间。例:
 //
-//	p.userAgent      = "LsmWebGame/v1.0.0-7740495 Aug  6 2026 11:37:43"
-//	agentClassName   = "LsmWebGame-Werewolf-Player"
-//	→ 出站 UA         = "LsmWebGame-Werewolf-Player/v1.0.0-7740495 Aug  6 2026 11:37:43"
+//	p.userAgent      = "LsmAgentGame/v1.0.0-7740495 Aug  6 2026 11:37:43"
+//	agentClassName   = "LsmAgentGame-Werewolf-Player"
+//	→ 出站 UA         = "LsmAgentGame-Werewolf-Player/v1.0.0-7740495 Aug  6 2026 11:37:43"
 //
 // agentClassName 为空时回退 p.userAgent(向后兼容旧调用方)。
 // p.userAgent 为空或不含 "/" 时,直接返回 agentClassName(无版本可拼)。
@@ -681,7 +681,7 @@ func (p *Provider) ForceOpenEndpointBreaker(cooldown time.Duration) {
 // that every outbound request carries. Anthropic-side proxies / datadog use it
 // to attribute traffic to a call site; ClaudeCode ships the literal
 // "cc_version=2.1.195.58c; cc_entrypoint=cli;" prefix in their reference
-// payload — we use a similar format to identify LsmWebGame calls.
+// payload — we use a similar format to identify LsmAgentGame calls.
 func (p *Provider) SetBillingHeader(bh string) { p.billingHeader = bh }
 
 // BillingHeader exposes the currently-set billing header (for diagnostics).

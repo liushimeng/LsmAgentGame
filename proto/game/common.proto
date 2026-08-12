@@ -1,4 +1,4 @@
-// LsmWebGame — 游戏通用消息定义
+// LsmAgentGame — 游戏通用消息定义
 //
 // 所有游戏共享的基础帧。各游戏专属帧定义在 game/<game>/ 子目录中。
 //
@@ -30,7 +30,7 @@ syntax = "proto3";
 
 package lsm.game.common;
 
-option go_package = "LsmWebGame/proto/pb/game/common";
+option go_package = "LsmAgentGame/proto/pb/game/common";
 
 // ─────────────────── 客户端请求 ───────────────────
 

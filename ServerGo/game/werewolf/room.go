@@ -5,12 +5,12 @@ import (
 	"sync"
 	"time"
 
-	"LsmWebGame/agent/core"
-	"LsmWebGame/agent/wwcommentator"
-	"LsmWebGame/agent/wwjudge"
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/logger"
+	"LsmAgentGame/agent/core"
+	"LsmAgentGame/agent/wwcommentator"
+	"LsmAgentGame/agent/wwjudge"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"

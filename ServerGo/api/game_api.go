@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/service"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/service"
 
 	"github.com/gin-gonic/gin"
 )

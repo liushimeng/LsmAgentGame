@@ -11,7 +11,7 @@ package werewolf
 import (
 	"testing"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 func newTestRoomForPersonality() *WerewolfRoom {

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"LsmWebGame/llm"
-	llmtypes "LsmWebGame/llm/types"
+	"LsmAgentGame/llm"
+	llmtypes "LsmAgentGame/llm/types"
 )
 
 // ToolRecord is one executed tool call, kept for UI display and for feeding

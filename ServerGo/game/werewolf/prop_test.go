@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 // TestGenerateInjectText_MarkdownBomb 验证 Markdown 注入弹生成。

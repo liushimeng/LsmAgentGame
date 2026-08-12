@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 func TestKnowledgeDigestBlock_L2_12_NilOrEmpty(t *testing.T) {

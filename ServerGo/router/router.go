@@ -18,9 +18,9 @@ package router
 import (
 	"strings"
 
-	"LsmWebGame/api"
-	"LsmWebGame/config"
-	"LsmWebGame/middleware"
+	"LsmAgentGame/api"
+	"LsmAgentGame/config"
+	"LsmAgentGame/middleware"
 
 	"github.com/gin-gonic/gin"
 )

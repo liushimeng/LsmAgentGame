@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"LsmWebGame/logger"
-	commonpb "LsmWebGame/proto/pb/common"
+	"LsmAgentGame/logger"
+	commonpb "LsmAgentGame/proto/pb/common"
 
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"

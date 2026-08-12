@@ -266,7 +266,7 @@ A: 对于 React 受控组件，如果 `use_js=false` 失败（输入后值被清
 
 ---
 
-## 15. 集成到 LsmWebGame
+## 15. 集成到 LsmAgentGame
 
 GoWebDebugTool 可用于：
 

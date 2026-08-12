@@ -19,7 +19,7 @@ import (
 	"errors"
 	"strings"
 
-	"LsmWebGame/llm/anthropic"
+	"LsmAgentGame/llm/anthropic"
 )
 
 // LLMErrorIsAnthropic429 报告 err 是否代表上游 429/限流。

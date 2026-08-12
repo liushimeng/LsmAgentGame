@@ -2,7 +2,7 @@ import type { Dict } from '../types';
 
 // English — en
 const en: Dict = {
-  'common.appName': 'LsmWebGame',
+  'common.appName': 'LsmAgentGame',
   'common.loading': 'Loading…',
 
   'header.openMenu': 'Open menu',
@@ -121,7 +121,7 @@ const en: Dict = {
   'profile.referralsTitle': 'Users who registered with my code',
   'profile.referralsEmpty': 'No one has used your invite code yet.',
   'profile.loginRequired': 'Please sign in to view your profile.',
-  'about.title': 'About LsmWebGame',
+  'about.title': 'About LsmAgentGame',
   'about.version': 'Version',
   'about.gitSha': 'Git commit',
   'about.buildTime': 'Build time',

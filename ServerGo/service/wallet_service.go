@@ -16,10 +16,10 @@ import (
 	"errors"
 	"time"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
-	"LsmWebGame/util"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
+	"LsmAgentGame/util"
 
 	"github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"

@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/models"
+	"LsmAgentGame/models"
 )
 
 // zombieRuleForOldPredicate 复刻**修复前**的判定(updated_at + 相同 cutoff

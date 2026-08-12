@@ -23,7 +23,7 @@ package werewolf
 import (
 	"testing"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // testHookFromMgr adapts a WerewolfManager into the service.WerewolfStateHook

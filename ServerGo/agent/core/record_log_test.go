@@ -8,7 +8,7 @@
 //
 //   go test -tags recordlogintegration ./agent/...
 //
-// DB DSN 与 wallet_service_integration_test 共享 LsmWebGame.conf 加载逻辑;
+// DB DSN 与 wallet_service_integration_test 共享 LsmAgentGame.conf 加载逻辑;
 // DB 不可达时 t.Skip,CI 干净通过。
 //
 //go:build recordlogintegration
@@ -25,11 +25,11 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/core"
-	"LsmWebGame/config"
-	"LsmWebGame/db"
-	"LsmWebGame/models"
-	"LsmWebGame/service"
+	"LsmAgentGame/agent/core"
+	"LsmAgentGame/config"
+	"LsmAgentGame/db"
+	"LsmAgentGame/models"
+	"LsmAgentGame/service"
 
 	"gorm.io/gorm"
 )
@@ -39,10 +39,10 @@ import (
 // sharedRLDB is the integration suite's gorm handle (one per process).
 var sharedRLDB *gorm.DB
 
-// chdirProjectRoot walks up to find LsmWebGame.conf.
+// chdirProjectRoot walks up to find LsmAgentGame.conf.
 func chdirProjectRoot() {
 	for i := 0; i < 4; i++ {
-		if _, err := os.Stat("./LsmWebGame.conf"); err == nil {
+		if _, err := os.Stat("./LsmAgentGame.conf"); err == nil {
 			return
 		}
 		if err := os.Chdir(".."); err != nil {

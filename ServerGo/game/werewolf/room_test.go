@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // rawBotContext is a minimal projection of ClientGameState.bot_contexts[],

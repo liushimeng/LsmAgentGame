@@ -10,11 +10,11 @@ import (
 	"net/http"
 	"time"
 
-	"LsmWebGame/config"
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
-	"LsmWebGame/service"
-	"LsmWebGame/util"
+	"LsmAgentGame/config"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/service"
+	"LsmAgentGame/util"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

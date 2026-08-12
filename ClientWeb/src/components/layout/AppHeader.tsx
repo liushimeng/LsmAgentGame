@@ -83,7 +83,7 @@ export function AppHeader() {
             ☰
           </button>
         )}
-        <Link to="/" className="brand">🎮 LsmWebGame</Link>
+        <Link to="/" className="brand">🎮 LsmAgentGame</Link>
         {!collapsed && ver && (
           <span className="build-info" title={t('header.buildTime', { time: ver.build_time })}>
             <span className="build-info__ver">{ver.version}</span>

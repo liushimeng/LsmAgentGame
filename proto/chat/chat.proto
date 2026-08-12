@@ -1,4 +1,4 @@
-// LsmWebGame — 聊天模块消息定义
+// LsmAgentGame — 聊天模块消息定义
 //
 // 帧类型（type 字段以 "chat." 开头）：
 //
@@ -24,7 +24,7 @@ syntax = "proto3";
 
 package lsm.chat;
 
-option go_package = "LsmWebGame/proto/pb/chat";
+option go_package = "LsmAgentGame/proto/pb/chat";
 
 // ─────────────────── 枚举 ───────────────────
 

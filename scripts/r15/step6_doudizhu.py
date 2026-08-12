@@ -5,7 +5,7 @@ import time
 import re
 import sys
 import os
-sys.path.insert(0, "/usr/local/LsmWebGame/scripts/r15")
+sys.path.insert(0, "/usr/local/LsmAgentGame/scripts/r15")
 from common import dbg_eval, dbg_call, dbg_click, dbg_navigate, dbg_screenshot, dbg_look
 
 # test_01 (p_d55b494a), test_02 (p_3d1b51c0), test_03 (p_3026edca)
@@ -53,10 +53,10 @@ time.sleep(2)
 dbg_navigate(PAGES["test_03"], f"https://127.0.0.1:39001/doudizhu/{ROOM}")
 time.sleep(4)
 
-os.makedirs("/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500", exist_ok=True)
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/ddz_start_01.png")
-dbg_screenshot(PAGES["test_02"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/ddz_start_02.png")
-dbg_screenshot(PAGES["test_03"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/ddz_start_03.png")
+os.makedirs("/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500", exist_ok=True)
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/ddz_start_01.png")
+dbg_screenshot(PAGES["test_02"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/ddz_start_02.png")
+dbg_screenshot(PAGES["test_03"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/ddz_start_03.png")
 
 # State check
 for k, v in PAGES.items():
@@ -182,9 +182,9 @@ for k, v in PAGES.items():
     print(txt[:500])
 
 # Save final screenshots
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/ddz_final_01.png")
-dbg_screenshot(PAGES["test_02"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/ddz_final_02.png")
-dbg_screenshot(PAGES["test_03"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/ddz_final_03.png")
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/ddz_final_01.png")
+dbg_screenshot(PAGES["test_02"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/ddz_final_02.png")
+dbg_screenshot(PAGES["test_03"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/ddz_final_03.png")
 
 # Send chat from test_01
 print("\n=== test_01 sends chat ===")

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // helpers

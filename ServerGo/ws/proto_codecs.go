@@ -19,7 +19,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	commonpb "LsmWebGame/proto/pb/common"
+	commonpb "LsmAgentGame/proto/pb/common"
 )
 
 // ProtoHandler 处理单个 proto 消息的函数

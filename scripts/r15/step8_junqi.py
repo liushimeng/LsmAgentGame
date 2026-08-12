@@ -5,7 +5,7 @@ import time
 import re
 import sys
 import os
-sys.path.insert(0, "/usr/local/LsmWebGame/scripts/r15")
+sys.path.insert(0, "/usr/local/LsmAgentGame/scripts/r15")
 from common import dbg_eval, dbg_call, dbg_click, dbg_navigate, dbg_screenshot, dbg_look
 
 # test_01 = Red, test_02 = Black
@@ -55,9 +55,9 @@ for k, v in PAGES.items():
     print(f"  btns: {btns}")
     print(f"  txt: {txt[:400]}")
 
-os.makedirs("/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500", exist_ok=True)
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/junqi_01.png")
-dbg_screenshot(PAGES["test_02"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/junqi_02.png")
+os.makedirs("/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500", exist_ok=True)
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/junqi_01.png")
+dbg_screenshot(PAGES["test_02"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/junqi_02.png")
 
 # Check layout mode (need to place pieces)
 # Look for board cells

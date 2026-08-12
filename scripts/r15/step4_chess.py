@@ -7,7 +7,7 @@ import time
 import re
 import sys
 import os
-sys.path.insert(0, "/usr/local/LsmWebGame/scripts/r15")
+sys.path.insert(0, "/usr/local/LsmAgentGame/scripts/r15")
 from common import dbg_eval, dbg_call, dbg_click, dbg_navigate, dbg_screenshot, dbg_look
 
 PAGES = {
@@ -58,9 +58,9 @@ print(f"  ROOM: {ROOM}")
 dbg_navigate(PAGES["test_02"], f"https://127.0.0.1:39001/chess/{ROOM}")
 time.sleep(4)
 
-os.makedirs("/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500", exist_ok=True)
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/chess_01_start.png")
-dbg_screenshot(PAGES["test_02"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/chess_02_join.png")
+os.makedirs("/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500", exist_ok=True)
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/chess_01_start.png")
+dbg_screenshot(PAGES["test_02"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/chess_02_join.png")
 
 for k, v in PAGES.items():
     txt = dbg_eval(v, "document.body.innerText.substring(0,800)")

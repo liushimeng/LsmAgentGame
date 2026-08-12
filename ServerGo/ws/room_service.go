@@ -21,8 +21,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"LsmWebGame/logger"
-	"LsmWebGame/service"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/service"
 
 	"go.uber.org/zap"
 )

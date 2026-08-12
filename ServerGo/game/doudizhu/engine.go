@@ -3,7 +3,7 @@ package doudizhu
 import (
 	"math/rand"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // Phase 游戏阶段。

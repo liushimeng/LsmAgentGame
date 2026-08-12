@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // TestPhaseWatchdogTick_NightWolves_HumanActingWolf_EarlyForceTally 验证

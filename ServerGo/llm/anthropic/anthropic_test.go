@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	anthropic "LsmWebGame/llm/anthropic"
-	llmtypes "LsmWebGame/llm/types"
+	anthropic "LsmAgentGame/llm/anthropic"
+	llmtypes "LsmAgentGame/llm/types"
 )
 
 // TestDoStream_BillingHeaderPresent verifies that the streaming dial path
@@ -33,8 +33,8 @@ func TestDoStream_BillingHeaderPresent(t *testing.T) {
 	defer srv.Close()
 
 	p := anthropic.New([]string{srv.URL}, 5*time.Second, 0)
-	p.SetUserAgent("LsmWebGame/test")
-	p.SetBillingHeader("LsmWebGame/test-build; entrypoint=cli;")
+	p.SetUserAgent("LsmAgentGame/test")
+	p.SetBillingHeader("LsmAgentGame/test-build; entrypoint=cli;")
 	body, err := p.ChatStream(context.Background(), "k", llmtypes.LLMRequest{Model: "m", Messages: []llmtypes.Message{{Role: "user", Content: []llmtypes.ContentBlock{{Type: "text", Text: "hi"}}}}})
 	if err != nil {
 		t.Fatalf("ChatStream err: %v", err)
@@ -47,8 +47,8 @@ func TestDoStream_BillingHeaderPresent(t *testing.T) {
 		"Anthropic-Version":          "2023-06-01",
 		"Content-Type":               "application/json",
 		"Accept":                     "text/event-stream",
-		"User-Agent":                 "LsmWebGame/test",
-		"X-Anthropic-Billing-Header": "LsmWebGame/test-build; entrypoint=cli;",
+		"User-Agent":                 "LsmAgentGame/test",
+		"X-Anthropic-Billing-Header": "LsmAgentGame/test-build; entrypoint=cli;",
 	}
 	for k, want := range wantHeaders {
 		if got := seen.Get(k); got != want {

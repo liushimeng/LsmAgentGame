@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 func TestModelLogService_NilDB(t *testing.T) {

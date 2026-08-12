@@ -16,10 +16,10 @@ import (
 	"sort"
 	"time"
 
-	"LsmWebGame/agent/wwjudge"
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/config"
+	"LsmAgentGame/agent/wwjudge"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/config"
 )
 
 // PlayerJSON 单个座位对客户端可见的信息。

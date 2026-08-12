@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""AutoTest helper for LsmWebGame GoWebDebugTool.
+"""AutoTest helper for LsmAgentGame GoWebDebugTool.
 
-Thin wrapper over the REST API exposed by /usr/local/LsmWebGame/go-web-debug-tool.
+Thin wrapper over the REST API exposed by /usr/local/LsmAgentGame/go-web-debug-tool.
 """
 import json
 import os

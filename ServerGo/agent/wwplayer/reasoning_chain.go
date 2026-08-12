@@ -21,7 +21,7 @@ package wwplayer
 import (
 	"time"
 
-	"LsmWebGame/config"
+	"LsmAgentGame/config"
 )
 
 // reasoningChainMaxEntries 推理链最大保留条数。

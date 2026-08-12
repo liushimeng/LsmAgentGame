@@ -14,7 +14,7 @@ package ws
 import (
 	"encoding/json"
 
-	"LsmWebGame/logger"
+	"LsmAgentGame/logger"
 	"go.uber.org/zap"
 )
 

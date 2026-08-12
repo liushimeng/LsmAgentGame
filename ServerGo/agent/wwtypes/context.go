@@ -11,7 +11,7 @@
 package wwtypes
 
 import (
-	agentcore "LsmWebGame/agent/core"
+	agentcore "LsmAgentGame/agent/core"
 )
 type GameContext struct {
 	Round           int

@@ -4,7 +4,7 @@ import json
 import time
 import sys
 import os
-sys.path.insert(0, "/usr/local/LsmWebGame/scripts/r15")
+sys.path.insert(0, "/usr/local/LsmAgentGame/scripts/r15")
 from common import dbg_eval, dbg_click, dbg_look, dbg_screenshot
 
 PAGES = {
@@ -50,8 +50,8 @@ for k, v in PAGES.items():
     print(f"  {k}: txt={s['txt'][:200]}...")
 
 # Save intermediate screenshots
-os.makedirs("/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500", exist_ok=True)
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/texas_after_preflop.png")
+os.makedirs("/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500", exist_ok=True)
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/texas_after_preflop.png")
 
 # Flop betting round - test_01 (SB) acts first post-flop
 print("\n=== Flop betting round ===")
@@ -142,6 +142,6 @@ for k, v in PAGES.items():
     print()
 
 # Save final screenshots
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/texas_final_01.png")
-dbg_screenshot(PAGES["test_02"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/texas_final_02.png")
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/texas_final_01.png")
+dbg_screenshot(PAGES["test_02"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/texas_final_02.png")
 print(f"\nTexas play done.")

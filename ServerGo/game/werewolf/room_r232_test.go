@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // TestForceTally_ReleasesLock_360sFallbackPath pins the night_wolves

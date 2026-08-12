@@ -24,8 +24,8 @@
 package werewolf
 
 import (
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 	"unicode/utf8"

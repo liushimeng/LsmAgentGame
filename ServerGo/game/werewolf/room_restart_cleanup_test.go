@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // helper: create a 7-bot full-AI room ready to start (no agents).

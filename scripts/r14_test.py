@@ -107,7 +107,7 @@ def screenshot(page_id, out_path):
 def main():
     # Step 1: Login all 4 test accounts
     accounts = []
-    with open("/usr/local/LsmWebGame/test_account.json") as f:
+    with open("/usr/local/LsmAgentGame/test_account.json") as f:
         cfg = json.load(f)
     
     for a in cfg["accounts"]:

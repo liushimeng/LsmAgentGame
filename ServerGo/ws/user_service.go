@@ -39,10 +39,10 @@ import (
 	"strings"
 	"time"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
-	"LsmWebGame/service"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
+	"LsmAgentGame/service"
 
 	"go.uber.org/zap"
 )

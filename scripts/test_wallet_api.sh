@@ -4,7 +4,7 @@
 # TAP-style output (test lines, plan at the end).
 # Exits 0 on success, 1 on any uncaught failure.
 #
-# Requires the LsmWebGame HTTPS/WSS server running at https://127.0.0.1:39001 /
+# Requires the LsmAgentGame HTTPS/WSS server running at https://127.0.0.1:39001 /
 # wss://127.0.0.1:39002, and curl, jq on $PATH.
 #
 # Token strategy: GET /api/login requires CAPTCHA. We instead register a fresh

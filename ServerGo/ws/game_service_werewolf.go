@@ -3,10 +3,10 @@ package ws
 import (
 	"encoding/json"
 
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/errcode"
-	"LsmWebGame/game/werewolf"
-	"LsmWebGame/logger"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/game/werewolf"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

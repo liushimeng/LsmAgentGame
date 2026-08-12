@@ -3,7 +3,7 @@ package junqi
 import (
 	"testing"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // standardLayout returns a valid 25-piece layout for the given color.

@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"LsmWebGame/models"
-	"LsmWebGame/util"
+	"LsmAgentGame/models"
+	"LsmAgentGame/util"
 
 	"gorm.io/gorm"
 )

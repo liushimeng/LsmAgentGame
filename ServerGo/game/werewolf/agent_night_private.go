@@ -31,7 +31,7 @@
 // `room_agent.go` 已 1903 行、超过 CLAUDE.md §4 的 1800 行硬上限，不再往里加。
 package werewolf
 
-import "LsmWebGame/agent/wwtypes"
+import "LsmAgentGame/agent/wwtypes"
 
 // buildSeerCheckHistoryLocked 聚合某预言家座位本局的全部查验历史。
 //

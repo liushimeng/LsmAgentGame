@@ -8,7 +8,7 @@ package werewolf
 import (
 	"testing"
 
-	wwtypes "LsmWebGame/agent/wwtypes"
+	wwtypes "LsmAgentGame/agent/wwtypes"
 )
 
 // newInfluenceTestRoom 构造一个 n 人存活的最小房间(不启动引擎)。

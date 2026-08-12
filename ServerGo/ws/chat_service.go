@@ -38,12 +38,12 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/agent/core"
-	"LsmWebGame/llm"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/agent/core"
+	"LsmAgentGame/llm"
 
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -51,7 +51,7 @@ import (
 	// §20260810-03 F1:狼人杀 whisper 阵营守卫需要查询 game_kind 与阵营。
 	// chat_service.go 不能 import werewolf 包(循环依赖),由注入的
 	// roomSvc + factionLookup 间接完成。
-	"LsmWebGame/service"
+	"LsmAgentGame/service"
 )
 
 const (

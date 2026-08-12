@@ -7,7 +7,7 @@ import time
 import re
 import sys
 import os
-sys.path.insert(0, "/usr/local/LsmWebGame/scripts/r15")
+sys.path.insert(0, "/usr/local/LsmAgentGame/scripts/r15")
 from common import dbg_call, dbg_eval, dbg_click, dbg_navigate, dbg_screenshot, dbg_look, dbg_reload
 
 PAGES = {
@@ -85,9 +85,9 @@ dbg_navigate(PAGES["test_02"], f"https://127.0.0.1:39001/texasholdem/{ROOM}")
 time.sleep(4)
 
 # Save screenshots
-os.makedirs("/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500", exist_ok=True)
-dbg_screenshot(PAGES["test_01"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/texas_01_creator.png")
-dbg_screenshot(PAGES["test_02"], "/usr/local/LsmWebGame/TestReport/screenshots/20260704_170500/texas_02_joiner.png")
+os.makedirs("/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500", exist_ok=True)
+dbg_screenshot(PAGES["test_01"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/texas_01_creator.png")
+dbg_screenshot(PAGES["test_02"], "/usr/local/LsmAgentGame/TestReport/screenshots/20260704_170500/texas_02_joiner.png")
 
 # Print states
 for k, v in PAGES.items():

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"LsmWebGame/config"
-	"LsmWebGame/errcode"
-	"LsmWebGame/models"
-	"LsmWebGame/util"
+	"LsmAgentGame/config"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/models"
+	"LsmAgentGame/util"
 
 	"gorm.io/gorm"
 )

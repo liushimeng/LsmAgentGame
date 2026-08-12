@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	anthropic "LsmWebGame/llm/anthropic"
-	llmtypes "LsmWebGame/llm/types"
+	anthropic "LsmAgentGame/llm/anthropic"
+	llmtypes "LsmAgentGame/llm/types"
 )
 
 // deadEndpoint 返回一个"曾经监听、现已彻底关闭"的 http:// 端点 URL。

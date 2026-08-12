@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/core"
+	"LsmAgentGame/agent/core"
 
 	"go.uber.org/zap"
 )
@@ -52,7 +52,7 @@ func TestHumanWait_Skipped_For_FullAI_Room(t *testing.T) {
 
 // TestHumanWait_Active_For_Hybrid_Room 混合房间(有人类玩家)启用等待。
 //
-// 注:此测试假定 cfgWerewolfHumanWaitSec() > 0;实际行为依赖 LsmWebGame.conf
+// 注:此测试假定 cfgWerewolfHumanWaitSec() > 0;实际行为依赖 LsmAgentGame.conf
 // 是否加载了 human_wait_sec。测试若只跑 standalone(无 conf) → cfg=0 →
 // shouldHumanWaitLocked 永远返回 false,本断言自然通过(降级行为)。
 func TestHumanWait_Active_For_Hybrid_Room(t *testing.T) {
@@ -76,7 +76,7 @@ func TestHumanWait_Active_For_Hybrid_Room(t *testing.T) {
 
 // TestHumanWait_Active_For_Human_Spectator_Only 仅有观察者(无真人玩家)也启用等待。
 //
-// 同上:cfg 依赖 LsmWebGame.conf 加载。
+// 同上:cfg 依赖 LsmAgentGame.conf 加载。
 func TestHumanWait_Active_For_Human_Spectator_Only(t *testing.T) {
 	m := NewWerewolfManager()
 	r := &WerewolfRoom{

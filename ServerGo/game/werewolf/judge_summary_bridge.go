@@ -19,10 +19,10 @@ import (
 	"sync"
 	"time"
 
-	"LsmWebGame/agent/wwjudge"
-	"LsmWebGame/agent/core"
-	"LsmWebGame/llm"
-	"LsmWebGame/logger"
+	"LsmAgentGame/agent/wwjudge"
+	"LsmAgentGame/agent/core"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/logger"
 	"go.uber.org/zap"
 )
 
@@ -51,7 +51,7 @@ func GetSummaryManagerInstance() *WerewolfManager {
 //
 // 模型解析优先级(R137 / 2026-07-22):
 //  1. r.JudgeModelKey(房间级显式,创建者从 UI 选定或 service 随机填入);
-//  2. cfgWerewolfJudgeModelKey()(LsmWebGame.conf 全局兜底);
+//  2. cfgWerewolfJudgeModelKey()(LsmAgentGame.conf 全局兜底);
 //  3. **recovery only**:遍历 r.seatModelKeys 取首个非空 key —— 仅当 1+2
 //     都没填时触发(典型场景:老房间从磁盘恢复,rooms[roomID].JudgeModelKey
 //     字段为零值)。正常 CreateRoomWithAgents 路径下,service 已经在 SetJudgeConfig

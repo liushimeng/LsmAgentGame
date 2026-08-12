@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // TestHumanSnapshotSetOnStartGame 验证 StartGame 时填充 hasHumanSnapshot。

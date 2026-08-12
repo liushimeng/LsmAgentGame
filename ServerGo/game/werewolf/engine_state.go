@@ -3,7 +3,7 @@ package werewolf
 import (
 	"time"
 
-	"LsmWebGame/config"
+	"LsmAgentGame/config"
 )
 
 func (gs *GameState) LastNightDeathsCopy() []Seat {

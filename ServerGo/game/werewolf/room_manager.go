@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/agent/core"
-	"LsmWebGame/config"
-	"LsmWebGame/llm"
-	"LsmWebGame/logger"
-	"LsmWebGame/service"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/agent/core"
+	"LsmAgentGame/config"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/service"
 	"go.uber.org/zap"
 )
 
@@ -386,7 +386,7 @@ func (m *WerewolfManager) SetCoolingHumanPresence(fn func(roomID string) bool) {
 
 func cfgWerewolfCoolingSec() (n int) {
 	// 2026-07-30 方案-20260730-03: 命名返回值 — 此前 config.Load() 在测试环境
-	// panic(找不到 ./LsmWebGame.conf*),defer recover 后函数返回零值 0,
+	// panic(找不到 ./LsmAgentGame.conf*),defer recover 后函数返回零值 0,
 	// 冷却期被静默禁用(首次调用 false、第二次调用起 1800,行为不可重现)。
 	// 默认值 1800 必须在 panic 路径也生效。
 	n = 1800

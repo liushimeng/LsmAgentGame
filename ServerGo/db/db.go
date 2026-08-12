@@ -4,10 +4,10 @@ package db
 import (
 	"time"
 
-	"LsmWebGame/config"
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
-	"LsmWebGame/util"
+	"LsmAgentGame/config"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
+	"LsmAgentGame/util"
 
 	"go.uber.org/zap"
 	"gorm.io/driver/mysql"

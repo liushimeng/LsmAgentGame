@@ -22,12 +22,12 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/config"
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/llm"
-	"LsmWebGame/llm/anthropic"
-	llmtypes "LsmWebGame/llm/types"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/config"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/llm/anthropic"
+	llmtypes "LsmAgentGame/llm/types"
 )
 
 // alwaysFailProvider returns a permanent 403 from every Chat call. Used to

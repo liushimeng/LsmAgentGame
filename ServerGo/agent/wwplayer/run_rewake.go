@@ -1,11 +1,11 @@
 package wwplayer
 
 import (
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 	"context"
 	"time"
 
-	"LsmWebGame/logger"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

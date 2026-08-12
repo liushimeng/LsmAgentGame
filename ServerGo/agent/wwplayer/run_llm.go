@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"LsmWebGame/llm"
-	"LsmWebGame/llm/anthropic"
-	llmtypes "LsmWebGame/llm/types"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/llm/anthropic"
+	llmtypes "LsmAgentGame/llm/types"
 )
 
 // circuitShortCircuitMinElapsedTime §20260810-15: 仅在 bot 已尝试调用 ≥1 次 LLM 后

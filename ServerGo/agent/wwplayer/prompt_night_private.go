@@ -27,7 +27,7 @@ package wwplayer
 import (
 	"strings"
 
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 // NightPrivateInfoBlock 渲染本 Agent 的夜间私有信息（查验历史 / 狼刀目标 /

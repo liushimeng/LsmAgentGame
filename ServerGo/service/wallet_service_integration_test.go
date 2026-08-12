@@ -9,7 +9,7 @@
 //   go test -tags walletintegration ./...
 //
 // The DSN is taken from $DB_DSN if set, otherwise from the project's
-// LsmWebGame.conf (via config.Load). When neither is reachable the whole file
+// LsmAgentGame.conf (via config.Load). When neither is reachable the whole file
 // is short-circuited via TestMain's t.Skip.
 package service
 
@@ -21,11 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/config"
-	"LsmWebGame/db"
-	"LsmWebGame/errcode"
-	"LsmWebGame/models"
-	"LsmWebGame/util"
+	"LsmAgentGame/config"
+	"LsmAgentGame/db"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/models"
+	"LsmAgentGame/util"
 
 	"gorm.io/gorm"
 )
@@ -34,11 +34,11 @@ import (
 var integrationDB *gorm.DB
 
 // ensureChdirProjectRoot walks up until it finds a directory containing
-// LsmWebGame.conf so config.Load() finds its config. `go test ./package/`
-// runs with CWD=package/ but LsmWebGame.conf sits at the module root.
+// LsmAgentGame.conf so config.Load() finds its config. `go test ./package/`
+// runs with CWD=package/ but LsmAgentGame.conf sits at the module root.
 func ensureChdirProjectRoot() {
 	for i := 0; i < 4; i++ {
-		if _, err := os.Stat("./LsmWebGame.conf"); err == nil {
+		if _, err := os.Stat("./LsmAgentGame.conf"); err == nil {
 			return
 		}
 		if err := os.Chdir(".."); err != nil {

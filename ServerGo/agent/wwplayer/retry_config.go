@@ -5,8 +5,8 @@
 package wwplayer
 
 import (
-	"LsmWebGame/config"
-	"LsmWebGame/logger"
+	"LsmAgentGame/config"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

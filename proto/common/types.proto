@@ -1,4 +1,4 @@
-// LsmWebGame — 通用类型定义
+// LsmAgentGame — 通用类型定义
 //
 // 跨模块共享的基础类型定义。各游戏/模块不应在此文件中添加游戏专属类型。
 
@@ -6,7 +6,7 @@ syntax = "proto3";
 
 package lsm.common;
 
-option go_package = "LsmWebGame/proto/pb/common";
+option go_package = "LsmAgentGame/proto/pb/common";
 
 // Position —— 棋盘坐标（棋类游戏通用）
 message Position {

@@ -29,11 +29,11 @@ import (
 	"strings"
 	"time"
 
-	"LsmWebGame/errcode"
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
-	"LsmWebGame/service"
-	"LsmWebGame/util"
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
+	"LsmAgentGame/service"
+	"LsmAgentGame/util"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-sql-driver/mysql"

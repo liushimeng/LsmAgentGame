@@ -2,7 +2,7 @@ import type { Dict } from '../types';
 
 // 日本語 — ja
 const ja: Dict = {
-  'common.appName': 'LsmWebGame',
+  'common.appName': 'LsmAgentGame',
   'common.loading': '読み込み中…',
 
   'header.openMenu': 'メニューを開く',
@@ -121,7 +121,7 @@ const ja: Dict = {
   'profile.referralsTitle': '自分の招待コードで登録したユーザー',
   'profile.referralsEmpty': 'まだ誰もあなたの招待コードを使用していません。',
   'profile.loginRequired': 'プロフィールを表示するにはログインしてください。',
-  'about.title': 'LsmWebGame について',
+  'about.title': 'LsmAgentGame について',
   'about.version': 'バージョン',
   'about.gitSha': 'Git コミット',
   'about.buildTime': 'ビルド時刻',

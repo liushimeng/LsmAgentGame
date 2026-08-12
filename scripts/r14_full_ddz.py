@@ -119,7 +119,7 @@ def whose_turn(page_id):
 
 # === MAIN ===
 print("=== STEP 1: Login all accounts ===")
-with open("/usr/local/LsmWebGame/test_account.json") as f:
+with open("/usr/local/LsmAgentGame/test_account.json") as f:
     cfg = json.load(f)
 accounts = []
 for a in cfg["accounts"][:3]:  # test_01, test_02, test_03

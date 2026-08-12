@@ -2,8 +2,8 @@ package werewolf
 
 import (
 	"time"
-	"LsmWebGame/agent/wwjudge"
-	"LsmWebGame/config"
+	"LsmAgentGame/agent/wwjudge"
+	"LsmAgentGame/config"
 )
 
 func cfgWerewolfHumanWaitSec() int {

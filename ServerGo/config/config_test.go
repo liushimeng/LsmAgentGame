@@ -21,7 +21,7 @@ func TestWerewolfConfig_DefaultFirstNightForcedSpeakRounds(t *testing.T) {
 }
 
 // TestWerewolfConfig_ExplicitZeroStillDefaultsToThree 验证"显式置零"也被兜底:
-// 即使 LsmWebGame.conf 显式写 0(老用户的 conf.example 在升级前是 0 兜底为 1),
+// 即使 LsmAgentGame.conf 显式写 0(老用户的 conf.example 在升级前是 0 兜底为 1),
 // 我们 §116 之后应该兜底为 3,而不是回到旧 1 默认。
 func TestWerewolfConfig_ExplicitZeroStillDefaultsToThree(t *testing.T) {
 	c := &Config{Werewolf: WerewolfConfig{FirstNightForcedSpeakRounds: 0}}
@@ -32,7 +32,7 @@ func TestWerewolfConfig_ExplicitZeroStillDefaultsToThree(t *testing.T) {
 }
 
 // TestWerewolfConfig_NonZeroRespected 验证非零显式配置不被覆写。
-// 如果用户在 LsmWebGame.conf 里写了 2,applyDefaults 必须保留(用户的显式选择优先)。
+// 如果用户在 LsmAgentGame.conf 里写了 2,applyDefaults 必须保留(用户的显式选择优先)。
 func TestWerewolfConfig_NonZeroRespected(t *testing.T) {
 	c := &Config{Werewolf: WerewolfConfig{FirstNightForcedSpeakRounds: 2}}
 	applyDefaults(c)

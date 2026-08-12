@@ -5,8 +5,8 @@ package ws
 import (
 	"testing"
 
-	"LsmWebGame/models"
-	"LsmWebGame/service"
+	"LsmAgentGame/models"
+	"LsmAgentGame/service"
 )
 
 // sampleView 构造一条用户视图用于裁剪测试。

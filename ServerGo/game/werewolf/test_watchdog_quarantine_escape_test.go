@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // setupAllQuarantinedVoteRoom 构造一个 7 人全 AI 房间:全部存活、全部 bot、

@@ -1,8 +1,8 @@
-// Package config loads LsmWebGame.conf (JSON) and exposes a typed view of it.
+// Package config loads LsmAgentGame.conf (JSON) and exposes a typed view of it.
 //
 // Behavior:
-//   - The runtime config is loaded from ./LsmWebGame.conf.
-//   - If the real file is missing, the loader falls back to ./LsmWebGame.conf.example
+//   - The runtime config is loaded from ./LsmAgentGame.conf.
+//   - If the real file is missing, the loader falls back to ./LsmAgentGame.conf.example
 //     so first-run onboarding is smooth (the example ships with placeholder secrets;
 //     the operator must replace them before going live).
 //   - Sensible defaults are applied for any field that is left blank.
@@ -16,7 +16,7 @@ import (
 	"sync"
 )
 
-// Config is the root of LsmWebGame.conf.
+// Config is the root of LsmAgentGame.conf.
 type Config struct {
 	Server   ServerConfig   `json:"server"`
 	DB       DBConfig       `json:"db"`
@@ -70,7 +70,7 @@ type Config struct {
 //   - DeathLyricDeadlineSec           = 30   遗言每座位截止秒数
 //   - HumanWaitSec                    = 60   §130 人类等待窗口秒数;0 = 禁用
 //
-// 全部为 0 时 applyDefaults 会填默认值。运行时修改 LsmWebGame.conf 后
+// 全部为 0 时 applyDefaults 会填默认值。运行时修改 LsmAgentGame.conf 后
 // 需要重启服务才能生效(config 是 sync.Once 加载的)。
 type WerewolfConfig struct {
 	FirstNightGraceSec            int `json:"first_night_grace_sec"`
@@ -164,7 +164,7 @@ type WerewolfConfig struct {
 	// docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §5.2。
 	RoomPropBudget int64 `json:"room_prop_budget"`
 
-	// 2026-07-21 v5 重构 — EconTier 5 档阈值(可由 LsmWebGame.conf 覆盖)。
+	// 2026-07-21 v5 重构 — EconTier 5 档阈值(可由 LsmAgentGame.conf 覆盖)。
 	// 必须单调：EconTierBoomThreshold > EconTierCautionThreshold > EconTierDangerThreshold > EconTierCriticalThreshold >= 0。
 	// 默认值与 docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.3 表一致。
 	// = 0 走 werewolf 包常量默认值。
@@ -368,11 +368,11 @@ type GameConfig struct {
 }
 
 // ProviderConfig describes one model entry under llm.providers[]. The API key
-// MUST come from LsmWebGame.conf (gitignored), never from source. See
+// MUST come from LsmAgentGame.conf (gitignored), never from source. See
 // `docs/LLM与Agent/LLM供应商设计.md`.
 //
 // DEPRECATED (kind-skipping-moth, 2026-07-10): this struct is the
-// pre-refactor wire shape used to live in LsmWebGame.conf. Models now live
+// pre-refactor wire shape used to live in LsmAgentGame.conf. Models now live
 // in t_lsm_game_llm_provider and are managed via the admin UI. Retained so
 // the on-disk JSON tag set still parses; the registry treats
 // llm.Providers as a one-shot seed for empty DBs and ignores it once
@@ -389,12 +389,12 @@ type ProviderConfig struct {
 	// (向后兼容某些不需要 thinking 的代理,如未来切换到 OpenAI 协议)。
 	//
 	// ThinkingBudget 是 budget 数值(典型 4096/8192;最小 1024)。
-	// LsmWebGame.conf.example 已对全部 8 家默认代理设 true / 4096。
+	// LsmAgentGame.conf.example 已对全部 8 家默认代理设 true / 4096。
 	ThinkingRequired bool `json:"thinking_required,omitempty"`
 	ThinkingBudget   int  `json:"thinking_budget,omitempty"`
 }
 
-// LLMConfig holds the llm{} section of LsmWebGame.conf — the shared proxy
+// LLMConfig holds the llm{} section of LsmAgentGame.conf — the shared proxy
 // endpoint plus the list of available models. The endpoint is a base URL; the
 // anthropic provider appends "/v1/messages".
 //
@@ -418,19 +418,19 @@ type ProviderConfig struct {
 // 2026-07-24 优化: 默认 5min → 10min。生产日志显示慢模型(Kimi/GLM)单次
 // 响应 2-5 分钟,300s 预算叠加 7 次外层重试后仍触发 werewolf.llm_call_timeout
 // cancel 推入 quarantine 路径。2 分钟以上、最长 5 分钟的首字/间隔延时是
-// 预期场景,不应作为"卡死"处理。运行时 LsmWebGame.conf 显式配置优先,此
+// 预期场景,不应作为"卡死"处理。运行时 LsmAgentGame.conf 显式配置优先,此
 // 处仅作缺省兜底。
 //
 // NOTE (kind-skipping-moth §3, 2026-07-10): the Providers slice is now
 // DEPRECATED as the runtime source of truth. Models live in
 // t_lsm_game_llm_provider and are loaded by llm.NewRegistryWithDB at boot.
-// The field is retained so existing LsmWebGame.conf files don't break JSON
+// The field is retained so existing LsmAgentGame.conf files don't break JSON
 // parsing; if Providers is non-empty AND the DB has rows, the DB wins and a
 // deprecation warning is logged. If the DB is empty, Providers is auto-seeded
 // into t_lsm_game_llm_provider on first boot.
 type LLMConfig struct {
 	// Endpoint is DEPRECATED as the primary source of truth — see Endpoints
-	// below. Kept so existing LsmWebGame.conf files keep working. When both
+	// below. Kept so existing LsmAgentGame.conf files keep working. When both
 	// fields are present Endpoints wins; when only Endpoint is set the
 	// registry constructs a single-element Endpoints slice so existing
 	// behavior is preserved.
@@ -446,10 +446,10 @@ type LLMConfig struct {
 	//
 	// When this list is empty the registry falls back to a single-element
 	// slice built from `Endpoint`, so existing configs (and the example
-	// shipped in LsmWebGame.conf.example) keep behaving exactly as before.
+	// shipped in LsmAgentGame.conf.example) keep behaving exactly as before.
 	Endpoints []string `json:"endpoints,omitempty"`
 	// Providers is DEPRECATED. See note above. Kept for backward compatibility
-	// with existing LsmWebGame.conf files. New code MUST edit
+	// with existing LsmAgentGame.conf files. New code MUST edit
 	// t_lsm_game_llm_provider (via the admin UI in Phase 5) instead of editing
 	// the conf file.
 	Providers []ProviderConfig `json:"providers"`
@@ -473,14 +473,14 @@ var (
 //
 // Config resolution order:
 //  1. $LSM_CONF  (absolute path — used by tests/CI to bypass cwd quirks)
-//  2. ./LsmWebGame.conf
-//  3. ./LsmWebGame.conf.example
+//  2. ./LsmAgentGame.conf
+//  3. ./LsmAgentGame.conf.example
 func Load() *Config {
 	once.Do(func() {
 		candidates := []string{
 			os.Getenv("LSM_CONF"),
-			"./LsmWebGame.conf",
-			"./LsmWebGame.conf.example",
+			"./LsmAgentGame.conf",
+			"./LsmAgentGame.conf.example",
 		}
 		var (
 			raw []byte
@@ -496,11 +496,11 @@ func Load() *Config {
 			}
 		}
 		if err != nil {
-			panic(fmt.Errorf("config: cannot read LsmWebGame.conf or .example: %w", err))
+			panic(fmt.Errorf("config: cannot read LsmAgentGame.conf or .example: %w", err))
 		}
 		parsed := Config{}
 		if err := json.Unmarshal(raw, &parsed); err != nil {
-			panic(fmt.Errorf("config: parse LsmWebGame.conf: %w", err))
+			panic(fmt.Errorf("config: parse LsmAgentGame.conf: %w", err))
 		}
 		applyDefaults(&parsed)
 		cfg = &parsed
@@ -604,7 +604,7 @@ func applyDefaults(c *Config) {
 		c.JWT.TTLSeconds = 7200
 	}
 	if c.JWT.Issuer == "" {
-		c.JWT.Issuer = "LsmWebGame"
+		c.JWT.Issuer = "LsmAgentGame"
 	}
 	// Cookie: reuse the JWT secret so operators only rotate one key.
 	if c.Cookie.Secret == "" {
@@ -631,7 +631,7 @@ func applyDefaults(c *Config) {
 		c.Log.Level = "info"
 	}
 	if c.Log.File == "" {
-		c.Log.File = "./LsmWebGame.log"
+		c.Log.File = "./LsmAgentGame.log"
 	}
 	if len(c.CORS.AllowedOrigins) == 0 {
 		c.CORS.AllowedOrigins = []string{
@@ -685,7 +685,7 @@ func applyDefaults(c *Config) {
 	// thinking_required=true / thinking_budget=4096。上游代理(LsmHttpAgent → 真实
 	// 厂商 API)的 anthropic 协议转换层要求所有模型请求体都带顶层 thinking 块,否则
 	// 400 "missing messages.content.thinking parameter"。实测 8 家代理全部需要 thinking。
-	// 历史缺陷:LsmWebGame.conf 中只有 2 家配了 thinking_required=true,其余 6 家
+	// 历史缺陷:LsmAgentGame.conf 中只有 2 家配了 thinking_required=true,其余 6 家
 	// Agent 首夜即被永久 quarantine → 对局卡死。修复:applyDefaults 把 anthropic 协议
 	// provider 的零值(false / budget=0)改写为 true / 4096,DB 空行 seed 路径读 cfg,
 	// 所以也会被改写;存量 DB 行在 registry.Reload 时自愈(见 registry.go)。

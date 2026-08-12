@@ -16,9 +16,9 @@ import (
 	"context"
 	"strconv"
 
-	"LsmWebGame/agent/wwcommentator"
-	"LsmWebGame/config"
-	"LsmWebGame/logger"
+	"LsmAgentGame/agent/wwcommentator"
+	"LsmAgentGame/config"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

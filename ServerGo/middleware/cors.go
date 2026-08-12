@@ -4,14 +4,14 @@ package middleware
 import (
 	"time"
 
-	"LsmWebGame/config"
+	"LsmAgentGame/config"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
 // CORS builds the CORS middleware from config. The allow-list is read from
-// LsmWebGame.conf → cors.allowed_origins. Do not hardcode origins here.
+// LsmAgentGame.conf → cors.allowed_origins. Do not hardcode origins here.
 func CORS(cfg *config.Config) gin.HandlerFunc {
 	return cors.New(cors.Config{
 		AllowOrigins:     cfg.CORS.AllowedOrigins,

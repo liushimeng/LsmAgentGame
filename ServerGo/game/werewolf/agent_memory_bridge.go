@@ -33,11 +33,11 @@ import (
 	"sync"
 	"time"
 
-	agentroot "LsmWebGame/agent"
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/config"
-	"LsmWebGame/llm"
-	"LsmWebGame/logger"
+	agentroot "LsmAgentGame/agent"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/config"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )

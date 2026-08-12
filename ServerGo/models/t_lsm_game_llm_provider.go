@@ -2,7 +2,7 @@
 //
 // Per the "模型管理 + 模型玩家持久化 + 模型金币" plan (kind-skipping-moth §1.1),
 // each row represents one configured LLM model whose metadata is editable from
-// the admin UI (no longer requires editing LsmWebGame.conf + restart).
+// the admin UI (no longer requires editing LsmAgentGame.conf + restart).
 //
 // API keys are NEVER stored in plaintext: APIKeyEnc holds the AES-256-GCM
 // ciphertext produced by util.EncryptAPIKey, and APIKeyHint stores a short

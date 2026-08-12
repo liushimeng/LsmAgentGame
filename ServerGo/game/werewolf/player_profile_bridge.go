@@ -42,12 +42,12 @@ import (
 	"strings"
 	"time"
 
-	agentroot "LsmWebGame/agent"
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/config"
-	"LsmWebGame/llm"
-	"LsmWebGame/logger"
-	"LsmWebGame/models"
+	agentroot "LsmAgentGame/agent"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/config"
+	"LsmAgentGame/llm"
+	"LsmAgentGame/logger"
+	"LsmAgentGame/models"
 
 	"go.uber.org/zap"
 )

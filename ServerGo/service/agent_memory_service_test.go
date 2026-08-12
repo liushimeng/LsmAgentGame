@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/models"
+	"LsmAgentGame/models"
 )
 
 // cleanupAgentMemory 删除测试遗留的记忆行(按 model_key 前缀)。

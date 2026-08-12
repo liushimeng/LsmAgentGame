@@ -3,7 +3,7 @@ package werewolf
 import (
 	"time"
 
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 func (gs *GameState) StartDay() *errcode.Error {

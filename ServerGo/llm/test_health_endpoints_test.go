@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"LsmWebGame/config"
-	"LsmWebGame/llm"
+	"LsmAgentGame/config"
+	"LsmAgentGame/llm"
 )
 
 // deadURL 起一个 httptest server 再立刻关闭,拿到一个"曾经监听、现已关闭"

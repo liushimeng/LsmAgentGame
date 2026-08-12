@@ -12,8 +12,8 @@ import (
 	"sync"
 	"testing"
 
-	"LsmWebGame/agent/wwplayer"
-	"LsmWebGame/errcode"
+	"LsmAgentGame/agent/wwplayer"
+	"LsmAgentGame/errcode"
 )
 
 // helper: 构造一个最小可用的 GameState + WerewolfRoom 用于幽灵语音测试。

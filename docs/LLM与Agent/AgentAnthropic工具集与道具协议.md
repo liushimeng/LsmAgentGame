@@ -1,7 +1,7 @@
 # Agent Anthropic 工具集与道具协议契约
 
 > 版本：v5  |
-> 适用：LsmWebGame 平台所有 Agent 通过 Anthropic 协议调用 LLM 的工具暴露契约  |
+> 适用：LsmAgentGame 平台所有 Agent 通过 Anthropic 协议调用 LLM 的工具暴露契约  |
 > 配套：`docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md` §16（v5 增量）
 >
 > **核心目标**：补全 Agent 工具在 Anthropic wire 协议层的字段、命名、顺序约束，

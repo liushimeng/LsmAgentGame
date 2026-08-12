@@ -1,8 +1,8 @@
 package service
 
 import (
-	"LsmWebGame/config"
-	"LsmWebGame/models"
+	"LsmAgentGame/config"
+	"LsmAgentGame/models"
 
 	"gorm.io/gorm"
 )

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"LsmWebGame/agent/wwplayer"
+	"LsmAgentGame/agent/wwplayer"
 )
 
 // TestR213_SanitizeBotTranscript_NightRoleToolNameMasked 验证 guard_protect /

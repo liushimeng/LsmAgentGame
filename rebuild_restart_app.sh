@@ -18,9 +18,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
-PIDFILE="${ROOT}/LsmWebGame.pid"
-LOGFILE="${ROOT}/LsmWebGame.log"
-BIN="${ROOT}/LsmWebGame"
+PIDFILE="${ROOT}/LsmAgentGame.pid"
+LOGFILE="${ROOT}/LsmAgentGame.log"
+BIN="${ROOT}/LsmAgentGame"
 SERVERGO="${ROOT}/ServerGo"
 
 # ---------- 1. 颜色与日志 ----------
@@ -34,7 +34,7 @@ log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 
 # ---------- 2. 自检 ----------
-[[ -f LsmWebGame.conf ]] || log_warn "LsmWebGame.conf 不存在，将回退到 LsmWebGame.conf.example（开发模式）"
+[[ -f LsmAgentGame.conf ]] || log_warn "LsmAgentGame.conf 不存在，将回退到 LsmAgentGame.conf.example（开发模式）"
 [[ -f server.crt && -f server.key ]] || { log_error "缺少 server.crt / server.key"; exit 1; }
 command -v go >/dev/null  || { log_error "未找到 go"; exit 1; }
 command -v npm >/dev/null || { log_error "未找到 npm"; exit 1; }
@@ -71,7 +71,7 @@ log_info "构建后端 (Go)…"
 ( cd "${SERVERGO}" && go mod tidy && go build -ldflags "${LDFLAGS}" -o "${BIN}" main.go )
 
 # ---------- 7. 杀掉旧进程（PID 文件 + 端口双保险） ----------
-log_info "停止旧的 LsmWebGame 实例…"
+log_info "停止旧的 LsmAgentGame/LsmWebGame 实例…"
 kill_pid() {
   local pid="$1"
   [[ -z "${pid}" ]] && return 0
@@ -94,14 +94,14 @@ if [[ -f "${PIDFILE}" ]]; then
   rm -f "${PIDFILE}"
 fi
 
-# (b) 端口兜底：kill 任何占用 39001/39002 的 LsmWebGame
+# (b) 端口兜底：kill 任何占用 39001/39002 的 LsmAgentGame（兼容旧名 LsmWebGame）
 if command -v fuser >/dev/null 2>&1; then
   for port in 39001 39002; do
     pids="$(fuser -n tcp "${port}" 2>/dev/null | tr -d ' ' || true)"
     for p in ${pids}; do
       cmd="$(cat /proc/${p}/comm 2>/dev/null || true)"
-      if [[ "${cmd}" == "LsmWebGame" ]]; then
-        log_warn "端口 ${port} 上有遗留进程 ${p}，强制 kill"
+      if [[ "${cmd}" == "LsmAgentGame" || "${cmd}" == "LsmWebGame" ]]; then
+        log_warn "端口 ${port} 上有遗留进程 ${p}(${cmd})，强制 kill"
         kill_pid "${p}"
       fi
     done
@@ -111,8 +111,8 @@ elif command -v lsof >/dev/null 2>&1; then
     pids="$(lsof -ti tcp:"${port}" 2>/dev/null || true)"
     for p in ${pids}; do
       cmd="$(cat /proc/${p}/comm 2>/dev/null || true)"
-      if [[ "${cmd}" == "LsmWebGame" ]]; then
-        log_warn "端口 ${port} 上有遗留进程 ${p}，强制 kill"
+      if [[ "${cmd}" == "LsmAgentGame" || "${cmd}" == "LsmWebGame" ]]; then
+        log_warn "端口 ${port} 上有遗留进程 ${p}(${cmd})，强制 kill"
         kill_pid "${p}"
       fi
     done

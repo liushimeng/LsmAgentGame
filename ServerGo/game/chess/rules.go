@@ -1,7 +1,7 @@
 package chess
 
 import (
-	"LsmWebGame/errcode"
+	"LsmAgentGame/errcode"
 )
 
 // ─────────────────── Public API ───────────────────

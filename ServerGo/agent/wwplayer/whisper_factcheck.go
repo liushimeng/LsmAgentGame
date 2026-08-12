@@ -38,7 +38,7 @@
 //     重新组织发言(不要在公屏引用未收到的私聊)。
 package wwplayer
 
-import "LsmWebGame/agent/wwtypes"
+import "LsmAgentGame/agent/wwtypes"
 
 import (
 	"regexp"

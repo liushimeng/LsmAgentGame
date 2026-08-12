@@ -22,7 +22,7 @@ import (
 	"math/rand"
 	"strconv"
 
-	"LsmWebGame/agent/wwtypes"
+	"LsmAgentGame/agent/wwtypes"
 )
 
 // rumorMaxEntries 保留最近多少条流言(超过则 FIFO 淘汰最早一条)。

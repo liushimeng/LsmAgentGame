@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"LsmWebGame/agent/wwtypes"
-	"LsmWebGame/llm"
+	"LsmAgentGame/agent/wwtypes"
+	"LsmAgentGame/llm"
 )
 
 // BuildSystemPrompt 返回每次 LLM 调用都带上的 system 指令块。

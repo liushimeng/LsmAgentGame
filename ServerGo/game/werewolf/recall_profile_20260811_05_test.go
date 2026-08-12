@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"LsmWebGame/llm"
+	"LsmAgentGame/llm"
 )
 
 // ─────────────────── U1 玩家行为画像 ───────────────────
@@ -77,7 +77,7 @@ func TestIteratePlayerProfiles_ConfigDisabledNoop(t *testing.T) {
 	stub := &stubPlayerProfileStore{}
 	m.SetPlayerProfileStore(stub)
 	r := &WerewolfRoom{RoomID: "pp-cfg-off"}
-	// 测试环境无 LsmWebGame.conf → cfgPlayerProfileEnabled 兜底 false → no-op。
+	// 测试环境无 LsmAgentGame.conf → cfgPlayerProfileEnabled 兜底 false → no-op。
 	m.IteratePlayerProfilesAsync(r)
 	if stub.loadCalls != 0 || stub.saveCalls != 0 {
 		t.Fatalf("config-disabled path must not touch store, got load=%d save=%d",

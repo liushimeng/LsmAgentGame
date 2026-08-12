@@ -1,4 +1,4 @@
-// LsmWebGame — 狼人杀 WS 帧定义
+// LsmAgentGame — 狼人杀 WS 帧定义
 //
 // 狼人杀专用帧类型（type 字段以 "game.werewolf_" 开头）
 //
@@ -33,7 +33,7 @@ package lsm.game.werewolf;
 
 import "game/werewolf/roles.proto";
 
-option go_package = "LsmWebGame/proto/pb/game/werewolf";
+option go_package = "LsmAgentGame/proto/pb/game/werewolf";
 
 // ─────────────────── 客户端请求 ───────────────────
 
