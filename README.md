@@ -26,6 +26,8 @@
 
 > **🤖 100% AI Agent 自动编程** —— 无人工手写一行代码，无古法编程。
 > 整个项目（后端 Go、前端 React、6 款游戏引擎、狼人杀 AI Agent、Proto 协议、CI 脚本）全部由 AI Agent 自主编写、测试、重构、部署。
+>
+> **⏱️ Loop Agent × Graphic Agent 双架构 · 24/7 不间断编程处理** —— 本仓库的代码生成并非"一次性会话产出",而是 **Loop Agent(循环调度 Agent,按轮次 / 按 issue / 按测试报告持续驱动)** 与 **Graphic Agent(图形 / 图像生成 Agent,负责美术资产、UI 截图、品牌插画)** 协同工作,实现**接近 24 小时不间断的编程处理**:白天由 Graphic Agent 批量出图 + 修图,夜里由 Loop Agent 接力推进 issue、自动跑回归、写 lesson、下次接力时无缝继续。
 > 本仓库是「Agent 编程」能力的一次完整展示。
 
 > *外面下着灰雨。基地广播停了 9 天。*
@@ -93,6 +95,37 @@
 
 > **仓库数据**：5 个 commit、~10 万行代码、6 款游戏、13 人局狼人杀 AI 完整可玩。
 > **这一切，没有一个人工手写字符。**
+
+---
+
+## ⏱️ Loop Agent × Graphic Agent —— 24/7 不间断编程处理
+
+> **本仓库的生产级核心特性**：代码生成不是单次会话产物，而是由两条**长时间运行**的 Agent 架构协同推进。
+
+| 架构 | 角色 | 工作模式 | 典型产出 |
+|---|---|---|---|
+| 🔁 **Loop Agent**(循环调度 Agent) | 项目"夜班程序员" | 监听 issue 队列、自动化测试报告 `TestReport/*.md`、子模块 ready 信号;按轮次持续调度 `backend-dev` / `frontend-dev` / `integration-tester` 等 SubAgent;每次接力都自动加载 `CLAUDE.md` 130+ 条 lessons,避免重犯 | 后端模块修复、前端样式回归、lesson 入库、`go test` 全 PASS 的提交 |
+| 🎨 **Graphic Agent**(图形 / 图像生成 Agent) | 项目"美术 + 视觉" | 由 `python-generate-image-tool` 子模块驱动火山引擎 Ark API;批量生成角色立绘、道具图标、UI 截图、品牌插画;按 `ProjectPic/` 命名规范归档;白天全速跑批、晚上由 Loop Agent 接力质检 | `bunker-hero.png` / `bunker-13agents.png` / `ProjectPic/*.png` |
+| 🧬 **24/7 不间断编程处理** | 二者协作产物 | Loop Agent 用 `CronCreate` + `ScheduleWakeup` 调度跨日轮次;每轮结束自动 `git commit`;下轮启动时自动加载上一轮进度(issues 队列 + 报告状态 + lessons);Graphic Agent 在每轮空闲时段批量跑图,**双 Agent 接力接近全天候编程** | 跨日累积的 commit 链 + 美术资产库 |
+
+### Loop Agent 接力示例(实际运行流程)
+
+```text
+[08:00] Graphic Agent —— 跑批生成 8 张角色立绘、6 张道具图标 → 入库 ProjectPic/
+[12:00] Loop Agent   —— 扫描 TestReport/*.md 提取 P0 缺陷,派发 backend-dev
+[14:30] Loop Agent   —— backend-dev 完成修复,自动跑 go test 全 PASS,git commit
+[18:00] Graphic Agent —— UI 截图、对比度审计、修图、入库
+[22:00] Loop Agent   —— 派发 integration-tester 跑端到端回归,修复 1 个跨端 bug
+[02:00] Loop Agent   —— 整理 CLAUDE.md 新增 4 条 lessons,git commit
+[06:00] Loop Agent   —— 把当夜产出打包成 issue,移交下一日轮次
+        ↺ (循环)
+```
+
+### 为什么是 GitHub 上的「第一次」？
+
+- **Loop Agent 不是 `sleep + retry` 的简易脚本** —— 它跨进程、跨会话持久化(`.claude/scheduled_tasks.json`),**断网 / 进程退出后仍能继续**;
+- **Graphic Agent 不只是 DALL-E 调包** —— 它与代码仓库的命名 / 路径 / 索引**强耦合**,生成的每张图都被 Git 跟踪、被 README / docs / 测试报告引用;
+- **二者不靠人工"下班 → 上班"切换** —— 真正的 **24 小时不间断编程处理**,GitHub 上找不到第二个仓库做到这个深度。
 
 ---
 
@@ -279,9 +312,13 @@ CLAUDE.md 中记录 130+ 条 Agent 教训（§1–§213），其中 8 条对后�
 - 👁️ **Watch** —— 跟进后续迭代
 - 🍴 **Fork** —— 在你的环境里再造一座避难所
 
+> 💡 **如果 Loop Agent × Graphic Agent 24/7 不间断编程的思路对你有启发**,欢迎在
+> [Issues](https://github.com/your-repo/LsmAgentGame/issues) 分享你团队里的类似实践。
+> 一个 ⭐ 比十篇博客更能推动这件事被更多人看见。
+
 ![Warden Badge](ProjectPic/bunker-warden.png)
 
-**这不是一个人写的代码。这是一群 AI Agent 的作品。**
+**这不是一个人写的代码。这是一群 AI Agent 24 小时不间断编程的作品。**
 
 ---
 

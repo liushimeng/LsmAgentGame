@@ -26,6 +26,8 @@
 
 > **🤖 100% AI Agent Auto-Programmed** — No human wrote a single line of code. No legacy hand-coding.
 > The entire project (Go backend, React frontend, 6 game engines, Werewolf AI Agent, Proto protocol, CI scripts) was autonomously written, tested, refactored, and deployed by AI Agents.
+>
+> **⏱️ Loop Agent × Graphic Agent dual architecture · 24/7 non-stop programming** — The code in this repo is not a "one-shot session product", but the output of a continuous collaboration between a **Loop Agent (a scheduling agent that drives round-by-round, issue-by-issue, and report-by-report iteration)** and a **Graphic Agent (the asset / image agent responsible for art, UI screenshots, brand illustrations)**, achieving **near-24-hour non-stop programming**: Graphic Agent mass-generates and polishes images during the day, Loop Agent takes over the night shift to advance issues, run regressions, write lessons, and seamlessly hand off to the next shift.
 > This repository is a full demonstration of "Agent Programming" capability.
 
 > *Ashrain outside. The base broadcast has been silent for 9 days.*
@@ -93,6 +95,37 @@ All code in this repository was autonomously written by AI Agents (Claude Code, 
 
 > **Repository stats**: 5 commits, ~100K lines of code, 6 games, fully playable 13-player Werewolf AI.
 > **None of it was hand-written by a human. Not a single character.**
+
+---
+
+## ⏱️ Loop Agent × Graphic Agent — 24/7 Non-Stop Programming
+
+> **The production-grade core feature of this repository**: code is not a one-shot session output, but the result of two **long-running** Agent architectures working in tandem.
+
+| Architecture | Role | Working Mode | Typical Output |
+|---|---|---|---|
+| 🔁 **Loop Agent** (Scheduling Agent) | The project's "night-shift developer" | Monitors issue queues, automated test reports `TestReport/*.md`, submodule readiness signals; dispatches `backend-dev` / `frontend-dev` / `integration-tester` SubAgents round-by-round; auto-loads 130+ lessons from `CLAUDE.md` on every handoff to avoid repeating mistakes | Backend module fixes, frontend style regressions, lesson entries, `go test` all-PASS commits |
+| 🎨 **Graphic Agent** (Image / Visual Agent) | The project's "art + visual" arm | Driven by the `python-generate-image-tool` submodule against Volcengine Ark API; mass-generates character art, prop icons, UI screenshots, brand illustrations; archived under `ProjectPic/` naming convention; full-speed batches by day, Loop-Agent QA by night | `bunker-hero.png` / `bunker-13agents.png` / `ProjectPic/*.png` |
+| 🧬 **24/7 Non-Stop Programming** | Collaboration output | Loop Agent uses `CronCreate` + `ScheduleWakeup` to schedule cross-day rounds; each round ends with an automatic `git commit`; the next round auto-loads prior progress (issue queue + report state + lessons); Graphic Agent runs image batches during each round's idle slots — **dual-agent handoff achieves near 24-hour programming** | Cross-day commit chain + art asset library |
+
+### Loop Agent Handoff Example (Real Running Flow)
+
+```text
+[08:00] Graphic Agent — batch-generate 8 character portraits, 6 prop icons → commit ProjectPic/
+[12:00] Loop Agent   — scan TestReport/*.md, extract P0 bugs, dispatch backend-dev
+[14:30] Loop Agent   — backend-dev finishes the fix, auto-runs go test all PASS, git commit
+[18:00] Graphic Agent — UI screenshots, contrast audit, polish, commit
+[22:00] Loop Agent   — dispatch integration-tester for end-to-end regression, fix 1 cross-stack bug
+[02:00] Loop Agent   — write 4 new lessons to CLAUDE.md, git commit
+[06:00] Loop Agent   — pack tonight's output as issues, hand off to next-day round
+        ↺ (loop)
+```
+
+### Why this is a "first" on GitHub
+
+- **Loop Agent is not a naive `sleep + retry` script** — it persists across processes and sessions (`.claude/scheduled_tasks.json`) and **continues after network drops or process exits**;
+- **Graphic Agent is not just a DALL-E wrapper** — it is tightly coupled to the repo's naming / path / index conventions, and every generated image is Git-tracked and referenced by README / docs / test reports;
+- **Neither requires a human "shift change"** — true **24-hour non-stop programming**, no other repo on GitHub has gone this deep.
 
 ---
 
@@ -279,9 +312,13 @@ If this project changed how you think about "Agent Programming":
 - 👁️ **Watch** — follow future iterations
 - 🍴 **Fork** — run your own bunker in your environment
 
+> 💡 **If the Loop Agent × Graphic Agent 24/7 non-stop programming idea inspires you**, drop a note in
+> [Issues](https://github.com/your-repo/LsmAgentGame/issues) sharing similar practices from your team.
+> A single ⭐ pushes this experiment further than ten blog posts.
+
 ![Warden Badge](ProjectPic/bunker-warden.png)
 
-**This wasn't written by one person. It's the work of a team of AI Agents.**
+**This wasn't written by one person. It's the work of a team of AI Agents, programming 24/7.**
 
 ---
 

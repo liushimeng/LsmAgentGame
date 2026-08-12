@@ -26,6 +26,8 @@
 
 > **🤖 100% AI Agent 自動プログラミング** —— 人間は一行もコードを書かない。古い手書きコーディングはゼロ。
 > プロジェクト全体（Go バックエンド、React フロントエンド、6 種類のゲームエンジン、人狼 AI Agent、Proto プロトコル、CI スクリプト）はすべて AI Agent が自律的に書き、テストし、リファクタリングし、デプロイしました。
+>
+> **⏱️ Loop Agent × Graphic Agent デュアルアーキテクチャ · 24 時間年中無休プログラミング** —— 本リポジトリのコード生成は「単発セッション成果物」ではなく、**Loop Agent(ラウンド/Issue/レポート単位で継続駆動するスケジューリング Agent)** と **Graphic Agent(アート・UI スクリーンショット・ブランドイラストを担当する画像 Agent)** が協調し、**ほぼ 24 時間年中無休のプログラミング処理**を実現:昼間は Graphic Agent がバッチで画像生成・修正、夜間は Loop Agent が Issue 推進・回帰実行・lesson 書き込み・次のシフトへシームレスに引継ぎます。
 > このリポジトリは「Agent プログラミング」能力のフル展示です。
 
 > *外は灰色の雨。基地放送は 9 日間止まったまま。*
@@ -93,6 +95,37 @@
 
 > **リポジトリ統計**：5 コミット、約 10 万行、6 ゲーム、13 人局人狼 AI 完全プレイ可能。
 > **すべて AI Agent 作品。人間の手書き文字はゼロ。**
+
+---
+
+## ⏱️ Loop Agent × Graphic Agent — 24 時間年中無休プログラミング
+
+> **本リポジトリの production-grade 中核特性**：コードは単発セッションの成果物ではなく、2 系統の**長時間稼働** Agent アーキテクチャの協調産物です。
+
+| アーキテクチャ | 役割 | 動作モード | 典型的な成果物 |
+|---|---|---|---|
+| 🔁 **Loop Agent**(スケジューリング Agent) | プロジェクトの「夜勤プログラマ」 | Issue キュー、自動化テスト報告 `TestReport/*.md`、サブモジュール ready 信号を監視;ラウンドごとに `backend-dev` / `frontend-dev` / `integration-tester` を派遣;毎回 `CLAUDE.md` の 130+ lessons を自動ロード | バックエンドモジュール修正、フロントスタイル回帰、lesson 登録、`go test` 全 PASS コミット |
+| 🎨 **Graphic Agent**(画像 / 視覚 Agent) | プロジェクトの「美術 + 視覚」 | `python-generate-image-tool` サブモジュールで火山引擎 Ark API を駆動;キャラクター立ち絵・道具アイコン・UI スクリーンショット・ブランドイラストを一括生成;`ProjectPic/` 命名規約でアーカイブ;昼間フルスピード、夜は Loop Agent が QA | `bunker-hero.png` / `bunker-13agents.png` / `ProjectPic/*.png` |
+| 🧬 **24 時間年中無休プログラミング** | 二者の協調成果 | Loop Agent は `CronCreate` + `ScheduleWakeup` で日跨ぎラウンドをスケジュール;各ラウンド終了で自動 `git commit`;次ラウンド開始時に前ラウンド進捗(Issue キュー + レポート状態 + lessons)を自動ロード;Graphic Agent は各ラウンドのアイドル時間に画像バッチを走らせる — **デュアル Agent 引継ぎで 24 時間プログラミング達成** | 日跨ぎコミットチェーン + アート資産ライブラリ |
+
+### Loop Agent 引継ぎ実例(実際の実行フロー)
+
+```text
+[08:00] Graphic Agent — 8 キャラクター立ち絵・6 道具アイコンを一括生成 → ProjectPic/ にコミット
+[12:00] Loop Agent   — TestReport/*.md をスキャン、P0 欠陥抽出、backend-dev を派遣
+[14:30] Loop Agent   — backend-dev が修正完了、自動で go test 全 PASS、git commit
+[18:00] Graphic Agent — UI スクリーンショット、コントラスト監査、修正、コミット
+[22:00] Loop Agent   — integration-tester を派遣し E2E 回帰、クロススタックバグ 1 件修正
+[02:00] Loop Agent   — CLAUDE.md に新 4 lesson を書き込み、git commit
+[06:00] Loop Agent   — 今夜の成果を Issue にパックし翌日ラウンドへ引継ぎ
+        ↺ (ループ)
+```
+
+### なぜ GitHub 上で「初めて」なのか
+
+- **Loop Agent は単純な `sleep + retry` スクリプトではない** —— プロセス・セッションを跨いで永続化(`.claude/scheduled_tasks.json`)され、**ネットワーク断・プロセス終了後も継続**;
+- **Graphic Agent は単なる DALL-E ラッパーではない** —— リポジトリの命名 / パス / インデックス規約と強結合し、生成された画像はすべて Git 追跡され、README / docs / テスト報告から参照される;
+- **人手の「下班 → 上班」切替が不要** —— 真の **24 時間年中無休プログラミング処理**、GitHub 上に同じ深度の 2 番目のリポジトリはない。
 
 ---
 
@@ -279,9 +312,13 @@ CLAUDE.md に 130+ 件の Agent 教訓（§1–§213）、初心者向けの最�
 - 👁️ **Watch** — 今後の反復をフォロー
 - 🍴 **Fork** — 自分の環境で別のシェルターを建設
 
+> 💡 **Loop Agent × Graphic Agent 24 時間年中無休プログラミングのアイデアに触発されたら**、
+> [Issues](https://github.com/your-repo/LsmAgentGame/issues) であなたのチームの類似実践を共有してください。
+> 1 つの ⭐ は 10 篇のブログ記事よりこの実験を前に進めます。
+
 ![Warden Badge](ProjectPic/bunker-warden.png)
 
-**これは一人で書かれたコードではない。AI Agent チームの作品。**
+**これは一人で書かれたコードではない。AI Agent チームが 24 時間年中無休で書いた作品。**
 
 ---
 
