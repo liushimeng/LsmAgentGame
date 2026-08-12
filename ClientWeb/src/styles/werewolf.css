@@ -172,25 +172,181 @@
   gap: var(--ww-gap);
 }
 
-/* §20260812-02 — 观战者专属底栏：解说席 + 押注面板水平并排。
+/* §20260812-02 v2 — 观战者紧凑底栏: 解说席 + 观众押注合并为单一组件。
    放在 .game-area grid 第 2 行，跨越中栏+右栏(col 2-4)，消除右侧留白。 */
 .spectator-bottom-row {
   grid-column: 2 / 4;
   grid-row: 2;
-  display: flex;
-  gap: var(--ww-gap);
   min-height: 0;
-  max-height: 240px;
   overflow: hidden;
 }
-.spectator-bottom-row__commentary {
-  flex: 1 1 50%;
+
+/* 紧凑底栏主体 */
+.spectator-compact-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(56, 139, 253, 0.06);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* 共享 header: 左右分列标题 */
+.spectator-compact-bar__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  padding-bottom: 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.spectator-compact-bar__title-left {
+  color: #90caf9;
+}
+.spectator-compact-bar__title-right {
+  color: #ffa726;
+  font-weight: 600;
+}
+
+/* 内容区: 解说 + 押注水平并排 */
+.spectator-compact-bar__body {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-height: 0;
+}
+
+/* 左侧: 解说 feed */
+.spectator-compact-bar__commentary {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.75);
+}
+.spectator-compact-bar__empty {
+  opacity: 0.5;
+  font-size: 12px;
+}
+.spectator-compact-bar__line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+.spectator-compact-bar__line--pro {
+  border-left: 2px solid rgba(56, 139, 253, 0.7);
+}
+.spectator-compact-bar__line--fun {
+  border-left: 2px solid rgba(217, 119, 6, 0.7);
+}
+.spectator-compact-bar__style-tag {
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.spectator-compact-bar__text {
+  flex: 1;
   min-width: 0;
 }
-.spectator-bottom-row .spectator-bet-panel {
-  flex: 1 1 50%;
-  min-width: 0;
-  margin: 0; /* 覆盖原 margin: 8px 0，避免 flex 间隙 */
+
+/* 右侧: 押注交互区 */
+.spectator-compact-bar__bet {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.spectator-compact-bar__seats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.spectator-compact-bar__seat {
+  padding: 2px 6px;
+  font-size: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  min-height: 24px;
+  min-width: 24px;
+  transition: all 0.15s;
+}
+.spectator-compact-bar__seat:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.spectator-compact-bar__seat.is-selected {
+  background: rgba(255, 167, 38, 0.3);
+  border-color: #ffa726;
+  color: #fff;
+  font-weight: 700;
+}
+.spectator-compact-bar__amounts {
+  display: flex;
+  gap: 4px;
+}
+.spectator-compact-bar__amount {
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  min-height: 24px;
+  transition: all 0.15s;
+}
+.spectator-compact-bar__amount:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.spectator-compact-bar__amount.is-selected {
+  background: rgba(76, 175, 80, 0.3);
+  border-color: #66bb6a;
+  color: #fff;
+  font-weight: 700;
+}
+.spectator-compact-bar__confirm {
+  padding: 2px 10px;
+  min-height: 24px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+}
+.spectator-compact-bar__bet-result,
+.spectator-compact-bar__bet-placed {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+.spectator-compact-bar__win {
+  color: #66bb6a;
+  font-weight: 700;
+  margin-left: 4px;
+}
+.spectator-compact-bar__lose {
+  color: #ef5350;
+  margin-left: 4px;
+}
+.spectator-compact-bar__refund {
+  color: #ffa726;
+  margin-left: 4px;
 }
 
 /* 2K 显示器断点 (~2560×1440):保持 §127 比例 0.6:1.8:1,加 max-width 让大屏不撑爆 */
@@ -251,12 +407,16 @@
   /* 隐藏所有折叠按钮与折叠态 handle(垂直堆叠模式下无意义)
    * 2026-08-07 §房间聊天优化:werewolf-chat-wrap__fold-btn 已删除
    * (外层冗余 header + 折叠按钮移除),其余保留。 */
-  /* 观战者底栏：窄屏垂直堆叠，全宽，自动排到最后 */
+  /* 观战者底栏：窄屏全宽，内容区垂直堆叠 */
   .spectator-bottom-row {
     grid-column: 1 / -1;
     grid-row: auto;
-    flex-direction: column;
+  }
+  .spectator-compact-bar {
     max-height: none;
+  }
+  .spectator-compact-bar__body {
+    flex-direction: column;
   }
   .werewolf-game .room-info-panel__fold-btn,
   .werewolf-game .game-chat__toggle,

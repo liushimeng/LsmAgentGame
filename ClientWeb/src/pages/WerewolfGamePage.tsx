@@ -38,7 +38,7 @@ import { IdiotRevealPanel } from '@/components/werewolf/IdiotRevealPanel';
 import { GameStatusHeader } from '@/components/werewolf/GameStatusHeader';
 import { SettlementModal } from '@/components/ui/SettlementModal';
 import { HistoryDrawer } from '@/components/werewolf/HistoryDrawer';
-import { CommentaryPanel } from '@/components/werewolf/CommentaryPanel';
+import { SpectatorCompactBar } from '@/components/werewolf/SpectatorCompactBar';
 // 2026-08-11 §20260811-05 U2 — 赛后复盘问答面板(终局后向 bot 座位提问)。
 import { RecallChatPanel, type BotSeatOption } from '@/components/werewolf/RecallChatPanel';
 import { MyTurnIndicator } from '@/components/werewolf/MyTurnIndicator';
@@ -50,8 +50,6 @@ import { CommitmentPanel } from '@/components/werewolf/CommitmentPanel';
 // §20260812-02 U4 — 音效反馈系统
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { SoundToggle } from '@/components/common/SoundToggle';
-// §20260812-02 U3 — 观众押注竞猜
-import { SpectatorBetPanel } from '@/components/werewolf/SpectatorBetPanel';
 import { CommitmentButton } from '@/components/werewolf/CommitmentButton';
 // 2026-07-23 §道具特效 — 道具使用视觉特效叠加层(监听 lastPropEvent 触发动画)。
 import { PropUseOverlay } from '@/components/werewolf/PropUseOverlay';
@@ -829,29 +827,26 @@ export function WerewolfGamePage() {
             />
           )}
         </div>
-        {/* §20260812-02 — 观战者专属底栏：解说席 + 押注面板水平并排。
-            放在 grid 内部(.game-area)，跨越中栏+右栏，消除右侧留白。 */}
+        {/* §20260812-02 v2 — 观战者紧凑底栏: 解说席 + 观众押注合并为单一组件,
+            共享 header 行,内容区水平并排,空态高度压缩到单行。 */}
         {spectator && (
           <div className="spectator-bottom-row">
-            <CommentaryPanel className="spectator-bottom-row__commentary" />
-            {gameState && (
-              <SpectatorBetPanel
-                roomId={roomId ?? ''}
-                phase={gameState.phase}
-                seatCount={(gameState as any).max_seat ?? 13}
-                playerNames={Object.fromEntries(
-                  (gameState.players ?? []).map((p: any) => [p.seat, p.account ?? `${p.seat + 1}号`])
-                )}
-                onPlaceBet={async (targetSeat, amount) => {
-                  const { wsClient } = await import('@/services/ws');
-                  wsClient.send('game.werewolf_bet', {
-                    room_id: roomId,
-                    target_seat: targetSeat,
-                    amount,
-                  });
-                }}
-              />
-            )}
+            <SpectatorCompactBar
+              roomId={roomId ?? ''}
+              phase={gameState?.phase ?? ''}
+              seatCount={(gameState as any)?.max_seat ?? 13}
+              playerNames={Object.fromEntries(
+                (gameState?.players ?? []).map((p: any) => [p.seat, p.account ?? `${p.seat + 1}号`])
+              )}
+              onPlaceBet={async (targetSeat, amount) => {
+                const { wsClient } = await import('@/services/ws');
+                wsClient.send('game.werewolf_bet', {
+                  room_id: roomId,
+                  target_seat: targetSeat,
+                  amount,
+                });
+              }}
+            />
           </div>
         )}
       </div>
