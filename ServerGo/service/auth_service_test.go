@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"LsmAgentGame/config"
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/util"
 
@@ -36,7 +37,10 @@ func TestLogin_AgentBypassesCaptcha(t *testing.T) {
 	// panic in DB code (proving the captcha gate was traversed).
 	store := util.NewCaptchaStore()
 	id, _, _ := store.Issue(5, time.Minute)
-	s2 := NewAuthService(stubDB(), nil, store)
+	// 测试 bypass 行为需要 DevMode=true(§安全修复:仅 dev 模式放行)。
+	devCfg := &config.Config{}
+	devCfg.Server.DevMode = true
+	s2 := NewAuthService(stubDB(), devCfg, store)
 
 	gotCode := -1
 	func() {
