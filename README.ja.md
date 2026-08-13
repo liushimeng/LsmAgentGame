@@ -62,6 +62,35 @@
 
 ---
 
+## 📸 実機プレイスクショ — 人間 1 名 + 12 Agent · 86 分の頂上決戦
+
+> 2026-08-13 の実対局：人間プレイヤー（1 番席）が**人狼**を引き、**10 社の LLM**
+> （DeepSeek / Kimi / Qwen / GLM / 豆包 / MiniMax / 小米 / 美团 / 快手 / 腾讯）が駆動する 12 体の Agent と対戦。
+> **開始 11 分、AI が座席バブルに「1 号は落ち着きすぎ、ずっと黙っている、好人に見えない」と書き込み。
+> 第 2 夜、AI 占い師が人間を査験 —— 查殺（人狼判定）命中。第 4 日、複数モデルの証拠チェーンが人間への投票を完了。**
+> 4 回の昼夜サイクル、1,115 回の LLM 呼び出し、95.3M Token。全解説は
+> [`ProjectPic/werewolf-highlights.md`](ProjectPic/werewolf-highlights.md)。
+
+![狼人杀 13 人局ハイライト GIF](ProjectPic/werewolf-highlights.gif)
+
+| 開局 13 座全景 · 沈黙の人間に注目する AI | 心理戦アイテム · LLM 注入攻撃のゲーム化 |
+|---|---|
+| ![開局全景](ProjectPic/werewolf-01-full-room.png) | ![心理戦アイテム](ProjectPic/werewolf-02-props.png) |
+| **初日の追放投票 + 観客ベット** | **遺言フェーズ · Kimi k3 の最後の演説** |
+| ![初日投票](ProjectPic/werewolf-03-vote-bet-day1.png) | ![遺言フェーズ](ProjectPic/werewolf-04-lastwords.png) |
+| **人間の人狼が夜に襲撃 · 狼投票 2/4** | **第 2 夜・占い師フェーズ · 神視点** |
+| ![人間狼の夜襲](ProjectPic/werewolf-05-wolf-night-player.png) | ![占い師の夜](ProjectPic/werewolf-06-seer-night.png) |
+| **偽占い師の対決 · 8 号カミングアウト vs 5 号反撃** | **第 3 夜の人狼 · 9/13 生存** |
+| ![偽占い師対決](ProjectPic/werewolf-07-counter-claim.png) | ![第 3 夜の人狼](ProjectPic/werewolf-08-night-wolves-d3.png) |
+| **第 3 日投票 · 8/13 生存 · 82.9M Token** | **猜疑チェーン完成 · 95.3M Token で人間に投票** |
+| ![第 3 日投票](ProjectPic/werewolf-09-vote-day3.png) | ![猜疑チェーン](ProjectPic/werewolf-10-suspicion-chain.png) |
+
+> 💬 **実際の対話** —— Kimi k3（13 号）：「5 号の査験は 2 夜連続で一貫、9 号の金水は検証済み、1 号は查殺、論理チェーンは完璧。
+> 8 号が以前公開チャットで『屠辺成功』『今夜は 5 号を殺さない』と言った —— 本物の占い師が言うはずがない。」
+> Qwen（4 号）はゲーム理論で反論：「2 人の占い師が対立すれば 5 号の『1 号查殺』は相殺され、1 号が白くなる —— だからこそ 5 号が怪しい。」
+
+---
+
 ## 🎮 6 つのゲーム — 丸テーブル、盤、ポーカー
 
 | ゲーム | 人数 | 特徴 | ステータス |
@@ -298,7 +327,7 @@ CLAUDE.md に 130+ 件の Agent 教訓（§1–§213）、初心者向けの最�
 |:--------:|:----------:|
 | ![WeChat QR](ProjectPic/wechat_qr.jpg) | ![Alipay QR](ProjectPic/alipay_qr.jpg) |
 
-> 画像はローカル閲覧時表示；GitHub では `ProjectPic/` 未入库のため表示されない可能性、クローン後ローカル閲覧してください。
+> `ProjectPic/` はリポジトリにコミット済み —— GitHub 上で全実機スクショ・イラストを直接表示できます。
 
 **連絡先**：
 

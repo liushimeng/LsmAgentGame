@@ -62,6 +62,35 @@
 
 ---
 
+## 📸 实机精彩截图 —— 1 名人类 + 12 Agent · 86 分钟巅峰局
+
+> 2026-08-13 实机对局：真人玩家 1 号抽到**狼人**，12 个 Agent 来自 **10 家厂商大模型**
+> （DeepSeek / Kimi / Qwen / GLM / 豆包 / MiniMax / 小米 / 美团 / 快手 / 腾讯）。
+> **开局 11 分钟，AI 就在座位气泡里写下「1 号真沉得住气，一直不说话，感觉不像好人」；
+> 第 2 夜，AI 预言家查验真人 —— 查杀命中；第 4 天，多模型证据链闭环归票真人。**
+> 全程 4 昼夜、1,115 次 LLM 调用、95.3M Token。完整解说见
+> [`ProjectPic/werewolf-highlights.md`](ProjectPic/werewolf-highlights.md)。
+
+![狼人杀 13 人局精彩瞬间动图](ProjectPic/werewolf-highlights.gif)
+
+| 开局 13 座全景 · Agent 已盯上沉默真人 | 道具心理战 · LLM 注入攻击游戏化 |
+|---|---|
+| ![开局全景](ProjectPic/werewolf-01-full-room.png) | ![道具心理战](ProjectPic/werewolf-02-props.png) |
+| **首日投票放逐 + 观众押注** | **遗言阶段 · Kimi k3 谢幕演说** |
+| ![首日投票](ProjectPic/werewolf-03-vote-bet-day1.png) | ![遗言阶段](ProjectPic/werewolf-04-lastwords.png) |
+| **真人狼人夜间刀人 · 狼队投票 2/4** | **第 2 夜预言家睁眼 · 上帝视角** |
+| ![真人狼人夜刀](ProjectPic/werewolf-05-wolf-night-player.png) | ![预言家睁眼](ProjectPic/werewolf-06-seer-night.png) |
+| **悍跳对跳名场面 · 8 号摊牌 vs 5 号反杀** | **第 3 夜狼人睁眼 · 9/13 存活** |
+| ![悍跳对跳](ProjectPic/werewolf-07-counter-claim.png) | ![第三夜狼人](ProjectPic/werewolf-08-night-wolves-d3.png) |
+| **第 3 天投票 · 8/13 存活 · 82.9M Token** | **猜疑链完全体 · 95.3M Token 归票真人** |
+| ![第三天投票](ProjectPic/werewolf-09-vote-day3.png) | ![猜疑链完全体](ProjectPic/werewolf-10-suspicion-chain.png) |
+
+> 💬 **真实对话实录** —— 13 号 Kimi k3：「5 号两晚查验一致，9 号金水已验证、1 号查杀，逻辑链完整。
+> 8 号之前公屏『屠边成功』『今晚不刀 5 号』是真预言家不可能说的话。」
+> 4 号 Qwen 反手一记博弈论：「两个预言家对跳，对冲 5 号的『1 查杀』结论，等于给 1 号洗白——这反而让我更怀疑 5 号。」
+
+---
+
 ## 🎮 6 款游戏 —— 圆桌、棋盘、扑克
 
 | 游戏 | 人数 | 特色 | 状态 |
@@ -298,7 +327,7 @@ CLAUDE.md 中记录 130+ 条 Agent 教训（§1–§213），其中 8 条对后�
 |:--------:|:----------:|
 | ![微信收款码](ProjectPic/wechat_qr.jpg) | ![支付宝收款码](ProjectPic/alipay_qr.jpg) |
 
-> 图片在本地浏览时显示；GitHub 上因 `ProjectPic/` 未入库可能无法显示，请 clone 后本地查看。
+> `ProjectPic/` 已随仓库入库，GitHub 上可直接查看全部实机截图与插画。
 
 **联系方式**：
 

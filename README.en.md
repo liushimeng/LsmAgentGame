@@ -62,6 +62,36 @@
 
 ---
 
+## 📸 Real Gameplay Screenshots — 1 Human + 12 Agents · An 86-Minute Epic Match
+
+> Live match on 2026-08-13: the human player (Seat #1) drew the **Werewolf**, facing 12 Agents
+> powered by **10 different LLM vendors** (DeepSeek / Kimi / Qwen / GLM / DouBao / MiniMax /
+> Xiaomi / MeiTuan / Kwail / Tencent).
+> **11 minutes in, an AI wrote in its seat bubble: "No.1 is too calm, hasn't said a word — doesn't feel like a good guy."
+> On Night 2, the AI Seer checked the human — a kill verdict. On Day 4, a multi-model evidence chain voted the human out.**
+> 4 day-night cycles, 1,115 LLM calls, 95.3M tokens. Full commentary:
+> [`ProjectPic/werewolf-highlights.md`](ProjectPic/werewolf-highlights.md).
+
+![Werewolf 13-player highlight reel](ProjectPic/werewolf-highlights.gif)
+
+| Opening: 13 seats · AIs already eyeing the silent human | Prop Mind-Games · LLM injection attacks as items |
+|---|---|
+| ![Opening full room](ProjectPic/werewolf-01-full-room.png) | ![Prop mind-games](ProjectPic/werewolf-02-props.png) |
+| **Day-1 exile vote + spectator betting** | **Last words · Kimi k3's farewell speech** |
+| ![Day-1 vote](ProjectPic/werewolf-03-vote-bet-day1.png) | ![Last words](ProjectPic/werewolf-04-lastwords.png) |
+| **Human werewolf's night kill · wolf vote 2/4** | **Night 2 Seer phase · god's-eye view** |
+| ![Human wolf night kill](ProjectPic/werewolf-05-wolf-night-player.png) | ![Seer night](ProjectPic/werewolf-06-seer-night.png) |
+| **Counter-claim showdown · No.8 vs No.5** | **Night 3 wolves · 9/13 alive** |
+| ![Counter-claim](ProjectPic/werewolf-07-counter-claim.png) | ![Night 3 wolves](ProjectPic/werewolf-08-night-wolves-d3.png) |
+| **Day-3 vote · 8/13 alive · 82.9M tokens** | **Suspicion chain complete · 95.3M tokens, voting out the human** |
+| ![Day-3 vote](ProjectPic/werewolf-09-vote-day3.png) | ![Suspicion chain](ProjectPic/werewolf-10-suspicion-chain.png) |
+
+> 💬 **Real dialogue** — Kimi k3 (No.13): "No.5's checks are consistent across two nights: No.9 golden-water verified, No.1 kill verdict — the logic chain is complete.
+> No.8 said 'wolf side wins' and 'won't kill No.5 tonight' in public chat — things a real Seer would never say."
+> Qwen (No.4) counters with game theory: "Two Seers counter-claiming cancels out No.5's 'No.1 kill' verdict and whitewashes No.1 — which makes me suspect No.5 even more."
+
+---
+
 ## 🎮 6 Games — Round Tables, Boards, and Poker
 
 | Game | Players | Highlights | Status |
@@ -298,7 +328,7 @@ The project incurs ongoing costs for servers, LLM API calls, and image generatio
 |:----------:|:----------:|
 | ![WeChat QR](ProjectPic/wechat_qr.jpg) | ![Alipay QR](ProjectPic/alipay_qr.jpg) |
 
-> Images display when browsing locally; may not render on GitHub since `ProjectPic/` is not committed — clone and view locally.
+> `ProjectPic/` is committed to the repository — all gameplay screenshots and illustrations render directly on GitHub.
 
 **Contact**:
 

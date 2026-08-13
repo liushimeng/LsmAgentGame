@@ -27,21 +27,37 @@
 
 ### 2. 截图脚本
 
-主入口:`scripts/werewolf_screenshot.py`(Python,封装 go-web-debug-tool REST)
+主入口:`scripts/werewolf_highlight_capture.py`(2026-08-13 起,双页采集器,复用 `scripts/auto3/atx.py`)
 
-**单次截图**:
+**核心特性**:
+- **双页同采**: 玩家页 `/werewolf/<room>` + 观战页 `/werewolf/spectate/<room>` 每 60s 各截 1 张
+- **认证注入**: `localStorage` 写 `lsm.token` + `lsm.auth`(zustand persist 形状 `{"state":{...},"version":0}`)
+- **emoji Web 字体注入**: headless Chrome(root 进程)无 emoji 字体 → 豆腐块;
+  把 `NotoColorEmoji.ttf` 放到 `ServerGo/static/assets/`(gitignored 构建产物),页面注入
+  `@font-face` + `font-family:system-ui,-apple-system,sans-serif,'EmojiWeb'`(**EmojiWeb 必须垫底**,
+  否则数字会走 emoji 字体的宽字形);同时 `.werewolf-table{zoom:0.78}` 让 13 座位一屏全收
+- **phase 切换补抓**: 每轮轮询 REST `GET /api/rooms/:id`,phase 变化时 3s 后补抓过渡特效
+- **崩溃自愈**: 连续 3 次双页截图失败自动重建页面;终止条件 = 游戏 over + 180s  settle / 75min 硬超时
+
 ```bash
-python3 scripts/werewolf_screenshot.py \
-    --url "https://127.0.0.1:39001/werewolf" \
-    --output ProjectPic/werewolf-01-room.png
+python3 scripts/werewolf_highlight_capture.py --room-id <uuid> --interval 60
 ```
 
-**批量截图(推荐)**:
+**旧版单页脚本**(保留兼容): `scripts/werewolf_screenshot.py`
 ```bash
 python3 scripts/werewolf_screenshot.py --batch \
     --output-dir ProjectPic --count 12 --interval 60 \
     --token "$JWT" --close
 ```
+
+**GIF 合成(ffmpeg)**:
+```bash
+ffmpeg -y -framerate 1 -i frames%02d.png \
+  -vf "scale=1152:-2:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=192[p];[s1][p]paletteuse=dither=bayer" \
+  ProjectPic/werewolf-highlights.gif
+```
+> ⚠️ go-web-debug-tool 的 `screenshot(format:"png")` 实际返回 **JPEG 字节**(签名 `FFD8FFE0`),
+> 精选后需 `ffmpeg -i in.png -frames:v 1 out.png` 转码为真 PNG 再入库,否则 ffmpeg 按扩展名走 png demuxer 会报错。
 
 ### 3. 截图清单(12 张目标)
 
@@ -116,14 +132,15 @@ python3 scripts/werewolf_screenshot.py --batch \
 ### 9. 注意事项
 
 - **数据安全**: 截图严禁明文显示 API Key / Token / Cookie,脱敏后再上传。
-- **ProjectPic/ 入库策略**: `.gitignore` 已配置,README 中相对路径引用,本地浏览正常;GitHub 显示 broken image 可接受。
+- **ProjectPic/ 入库策略**: `ProjectPic/` **已加入 git 跟踪**(README 相对路径引用,GitHub 可直接渲染);
+  仅 `ProjectPic/raw/` 过程产物不入库(采集结束即删除)。单张 PNG 控制在 ~1.5MB 以内,GIF ≤ 5MB。
 - **1 人 + 12 Agent 优先**: 全 AI 模式作为补充,主推人类玩家与 AI 同场。
 - **截图脚本复用**: 复用 `scripts/auto3/atx.py` 已有封装,不重复造轮子。
 
 ### 10. 验收清单
 
 - [ ] `ProjectPic/werewolf-*.png` 至少 8 张,每张 ≥ 50KB
-- [ ] `scripts/werewolf_screenshot.py` 可重复运行(`python3 --help` 无错)
+- [ ] `scripts/werewolf_highlight_capture.py` 可重复运行(`python3 --help` 无错)
 - [ ] `AutoScreenshotWerewolf.md` 提示词文件存在
 - [ ] `README.md` / `README.en.md` / `README.ja.md` 全部新增「实机截图」板块
 - [ ] `go build ./...` 通过
