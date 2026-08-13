@@ -217,9 +217,12 @@ git clone <your-repo-url> LsmAgentGame
 cd LsmAgentGame
 git submodule update --init --recursive
 
-# 2. 复制并编辑运行时配置
-cp LsmAgentGame.conf.example LsmAgentGame.conf
-# 编辑 LsmAgentGame.conf —— 设置 db.password、jwt.secret、llm.providers[].api_key 等
+# 2. 编辑运行时配置 —— 首次启动会自动生成
+# 2026-08-13 §config-auto-bootstrap: 无需手动 `cp .example .conf`。
+# 首次启动时如果 ./LsmAgentGame.conf 缺失:
+#   - 若 LsmAgentGame.conf.example 存在 → 自动复制为 LsmAgentGame.conf
+#   - 若两者都不存在 → 用代码内默认值同时生成两份
+# 编辑 LsmAgentGame.conf —— 设置 db.password、jwt.secret、llm.endpoint 等
 # 真实密钥仅入 LsmAgentGame.conf（已在 .gitignore 中排除）
 
 # 3. 安装前端依赖
@@ -231,6 +234,16 @@ cd ClientWeb && npm install && cd ..
 # 5. 打开浏览器访问
 # https://127.0.0.1:39001
 ```
+
+> **首次启动流程细节**(2026-08-13 §config-auto-bootstrap):
+> 1. 服务读取 `./LsmAgentGame.conf`(或 `.example` 兜底),自动套用 `applyDefaults`
+>    补全所有未填字段(`llm.timeout_ms`、`db.max_open_conns` 等)。
+> 2. 如果 `LsmAgentGame.conf` 里的 `llm.providers[]` 段非空(老用户从旧版
+>    升级),启动时会自动 upsert 到 `t_lsm_game_llm_provider` 表(AES-256-GCM
+>    加密 api_key),然后把这一段从 `.conf` 文件里剥掉再回写磁盘。
+>    之后 Operator 通过 Web `/admin/models` 管理模型,不再需要编辑 `.conf`。
+> 3. `LsmAgentGame.conf` 已加入 `.gitignore` 不会入库;
+>    `LsmAgentGame.conf.example` 仍可提交(只含占位符)。
 
 服务监听地址：
 

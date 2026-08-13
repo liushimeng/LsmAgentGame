@@ -217,9 +217,12 @@ git clone <your-repo-url> LsmAgentGame
 cd LsmAgentGame
 git submodule update --init --recursive
 
-# 2. 実行時設定をコピーして編集
-cp LsmAgentGame.conf.example LsmAgentGame.conf
-# LsmAgentGame.conf を編集 — db.password、jwt.secret、llm.providers[].api_key 等を設定
+# 2. 実行時設定を編集 — 初回起動時に自動生成
+# 2026-08-13 §config-auto-bootstrap: 手動で `cp .example .conf` する必要はありません。
+# 初回起動時に ./LsmAgentGame.conf が存在しない場合:
+#   - LsmAgentGame.conf.example が存在すれば → 自動的に LsmAgentGame.conf にコピー
+#   - どちらも存在しなければ → コード内デフォルトから両方を生成
+# LsmAgentGame.conf を編集 — db.password、jwt.secret、llm.endpoint 等を設定
 # 実秘钥は LsmAgentGame.conf のみ（.gitignore で除外）
 
 # 3. フロントエンド依存をインストール
@@ -231,6 +234,17 @@ cd ClientWeb && npm install && cd ..
 # 5. ブラウザで開く
 # https://127.0.0.1:39001
 ```
+
+> **初回起動フロー詳細** (2026-08-13 §config-auto-bootstrap):
+> 1. サービスは `./LsmAgentGame.conf`（または `.example` フォールバック）を読み込み、
+>    自動的に `applyDefaults` で欠落フィールド（`llm.timeout_ms`、`db.max_open_conns` 等）を補完。
+> 2. もし `llm.providers[]` ブロックが空でなければ（旧バージョンからのアップグレード経路）、
+>    起動シーケンスは各行を `t_lsm_game_llm_provider` に upsert し
+>    （api_key は AES-256-GCM 暗号化）、その後 `.conf` ファイルから該当ブロックを除去して
+>    ディスクに書き戻します。以後、Operator は Web UI `/admin/models` でモデルを管理
+>    でき、`.conf` を編集する必要はありません。
+> 3. `LsmAgentGame.conf` は `.gitignore` に含まれており、コミットされません；
+>    `LsmAgentGame.conf.example` は追跡対象（プレースホルダーのみ）。
 
 サービスリスニングアドレス：
 

@@ -869,6 +869,143 @@ func (r *Registry) SyncFromConfig(ctx context.Context, cfg config.LLMConfig) err
 	return nil
 }
 
+// MigrateConfigProvidersToDB is the package-level entry point for the
+// 2026-08-13 "auto-migrate LLM providers from LsmAgentGame.conf to MySQL"
+// bootstrap flow. It is intentionally a free function (not a Registry method)
+// so main.go can call it BEFORE NewRegistryWithDB has built the shared
+// anthropic.Provider / master-key cache — the encrypt step needs the master
+// key to be lazy-initialized on first use, which util.EncryptAPIKey does
+// transparently against the supplied gormDB.
+//
+// Semantics (per-row):
+//   - If cfg.LLM.Providers is empty → no-op, returns (0, 0, nil).
+//   - For each provider:
+//       * DB has a row with the same Model key:
+//         - PRESERVE the existing APIKeyEnc / APIKeyHint / Endpoint / Enabled
+//           fields. Operators edit secrets through the admin UI; the conf
+//           file is the source for non-sensitive metadata only.
+//         - UPDATE non-secret metadata fields: AgentName / ProviderType /
+//           ThinkingEnabled / ThinkingBudgetTokens. So an operator who adds
+//           a new model to conf still gets its friendly name refreshed.
+//       * DB has no row with that Model key:
+//         - INSERT a new row, encrypting cfg.api_key with the master AES key.
+//         - Set Enabled=true, Endpoint="", Remark="migrated from LsmAgentGame.conf".
+//
+// Returns (inserted, updated, error). Errors encrypting individual keys
+// fail-fast (we don't want to leave a row with a half-encrypted key);
+// errors updating metadata for an existing row are logged but not returned
+// (the row is still usable).
+func MigrateConfigProvidersToDB(ctx context.Context, gormDB *gorm.DB, cfg config.LLMConfig) (inserted int, updated int, err error) {
+	if gormDB == nil {
+		return 0, 0, errors.New("llm: MigrateConfigProvidersToDB unavailable without a DB handle")
+	}
+	if len(cfg.Providers) == 0 {
+		return 0, 0, nil
+	}
+
+	// Pre-fetch the existing rows once so we can decide per-row whether to
+	// insert or update without a SELECT-inside-loop. Map key is the
+	// sanitized model key (matches the unique index in the DB).
+	var existing []models.TLsmGameLlmProvider
+	if err := gormDB.WithContext(ctx).
+		Order("created_at ASC").
+		Find(&existing).Error; err != nil {
+		return 0, 0, fmt.Errorf("llm migrate: read existing rows: %w", err)
+	}
+	byModel := make(map[string]models.TLsmGameLlmProvider, len(existing))
+	for _, row := range existing {
+		m := util.SanitizeModelKey(row.Model)
+		if m == "" {
+			continue
+		}
+		byModel[m] = row
+	}
+
+	for _, p := range cfg.Providers {
+		model := util.SanitizeModelKey(p.Model)
+		if model == "" {
+			continue
+		}
+		plain := strings.TrimSpace(p.APIKey)
+
+		if row, ok := byModel[model]; ok {
+			// Existing row → metadata-only update. Never overwrite api_key.
+			updates := map[string]any{
+				"agent_name":             strings.TrimSpace(p.AgentName),
+				"provider_type":          nonEmptyOr(p.ProviderType, "anthropic"),
+				"thinking_enabled":       p.ThinkingRequired,
+				"thinking_budget_tokens": p.ThinkingBudget,
+				"remark":                 "metadata-only update from LsmAgentGame.conf (api_key preserved from DB)",
+			}
+			if err := gormDB.WithContext(ctx).
+				Model(&models.TLsmGameLlmProvider{}).
+				Where("id = ?", row.ID).
+				Updates(updates).Error; err != nil {
+				logger.L().Warn("llm migrate: update existing row failed",
+					zap.String("model", model),
+					zap.Error(err))
+				continue
+			}
+			updated++
+			continue
+		}
+
+		// No existing row → insert a fresh one. Encrypt the api_key (or leave
+		// it empty if the conf carried a literal placeholder).
+		var enc string
+		if plain != "" && plain != types.PlaceholderKey {
+			e, eerr := util.EncryptAPIKey(ctx, gormDB, plain)
+			if eerr != nil {
+				return inserted, updated,
+					fmt.Errorf("llm migrate: encrypt api_key for %q: %w", model, eerr)
+			}
+			enc = e
+		}
+		providerType := strings.TrimSpace(p.ProviderType)
+		if providerType == "" {
+			providerType = "anthropic"
+		}
+		newRow := models.TLsmGameLlmProvider{
+			ID:                   util.NewUUID(),
+			AgentName:            strings.TrimSpace(p.AgentName),
+			Model:                model,
+			ProviderType:         providerType,
+			APIKeyEnc:            enc,
+			APIKeyHint:           apiKeyHint(plain),
+			Endpoint:             "",
+			ThinkingEnabled:      p.ThinkingRequired,
+			ThinkingBudgetTokens: p.ThinkingBudget,
+			Enabled:              true,
+			Remark:               "migrated from LsmAgentGame.conf on 2026-08-13 bootstrap",
+		}
+		if err := gormDB.WithContext(ctx).Create(&newRow).Error; err != nil {
+			// Unique-key collision (race with another boot? seed path?)
+			// should be a one-line INFO, not a fatal — the row is already
+			// there, which is the correct end state.
+			logger.L().Info("llm migrate: insert skipped (existing row)",
+				zap.String("model", model),
+				zap.Error(err))
+			continue
+		}
+		inserted++
+	}
+
+	logger.L().Info("llm migrate: cfg → DB done",
+		zap.Int("inserted", inserted),
+		zap.Int("updated", updated),
+		zap.Int("cfg_total", len(cfg.Providers)))
+	return inserted, updated, nil
+}
+
+// nonEmptyOr returns s if non-empty, otherwise fallback. Tiny helper to keep
+// the migrate-update loop readable.
+func nonEmptyOr(s, fallback string) string {
+	if strings.TrimSpace(s) == "" {
+		return fallback
+	}
+	return s
+}
+
 // populateLocked is the shared inner loop used by both the initial load from
 // DB rows and the Reload refresh. Caller MUST hold r.mu for writing; the
 // destination map is filled in place — initial load passes r.providers

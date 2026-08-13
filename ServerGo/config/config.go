@@ -488,9 +488,37 @@ var (
 // Config resolution order:
 //  1. $LSM_CONF  (absolute path — used by tests/CI to bypass cwd quirks)
 //  2. ./LsmAgentGame.conf
-//  3. ./LsmAgentGame.conf.example
+//  3. ./LsmAgentGame.conf.example  (development-only fallback; placeholder secrets)
+//
+// First-run onboarding (2026-08-13 §config-auto-bootstrap):
+//   When neither LsmAgentGame.conf nor the .example are present (e.g. a fresh
+//   git clone without copying the example), Load() refuses to panic — it
+//   regenerates LsmAgentGame.conf.example from the in-process defaults and
+//   then writes a fully-populated LsmAgentGame.conf so the user has a real
+//   file to edit before the first production launch. A one-shot INFO message
+//   is printed to stderr telling the operator to replace the placeholder
+//   secrets and rerun.
+//
+//   When LsmAgentGame.conf is missing but the .example exists (the common
+//   case), Load() copies the .example verbatim to LsmAgentGame.conf first so
+//   the operator has a working runtime config out of the box (no manual `cp`
+//   step required). The copy preserves comments because we copy bytes — the
+//   JSON parser is only used for in-memory defaults, never for the on-disk
+//   artifact the operator will edit.
 func Load() *Config {
 	once.Do(func() {
+		// (1) Ensure a writable LsmAgentGame.conf exists. We may have just
+		// cloned the repo (no conf) or be running fresh in a CI sandbox. Try
+		// to bootstrap before the read loop so Load() never panics on a
+		// missing file. Bootstrap failures are non-fatal: we still proceed
+		// to the read loop, and if all candidates are missing we panic with
+		// a clearer message than "no such file".
+		if err := ensureRuntimeConfigFile(); err != nil {
+			fmt.Fprintf(os.Stderr,
+				"[config] WARN: failed to bootstrap LsmAgentGame.conf: %v\n",
+				err)
+		}
+
 		candidates := []string{
 			os.Getenv("LSM_CONF"),
 			"./LsmAgentGame.conf",
@@ -520,6 +548,59 @@ func Load() *Config {
 		cfg = &parsed
 	})
 	return cfg
+}
+
+// ensureRuntimeConfigFile makes sure ./LsmAgentGame.conf exists on disk. If
+// only the .example is present we copy it byte-for-byte (preserving comments)
+// into LsmAgentGame.conf; if neither is present we materialize both from the
+// in-process Default* constants so a fresh clone is one `./rebuild_restart_app.sh`
+// away from a working deployment.
+//
+// This is intentionally idempotent: if LsmAgentGame.conf already exists we
+// do nothing. Operators can hand-edit the file freely and we will not
+// overwrite their work.
+func ensureRuntimeConfigFile() error {
+	if _, err := os.Stat("./LsmAgentGame.conf"); err == nil {
+		// Already present — leave operator edits alone.
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat LsmAgentGame.conf: %w", err)
+	}
+
+	// Missing — try the .example first (the most common path).
+	if data, err := os.ReadFile("./LsmAgentGame.conf.example"); err == nil {
+		if err := os.WriteFile("./LsmAgentGame.conf", data, 0o600); err != nil {
+			return fmt.Errorf("write LsmAgentGame.conf from .example: %w", err)
+		}
+		fmt.Fprintf(os.Stderr,
+			"[config] INFO: LsmAgentGame.conf was missing — copied from LsmAgentGame.conf.example. "+
+				"Edit it (db.password, jwt.secret, llm.endpoint) before going live.\n")
+		return nil
+	}
+
+	// No .example either — synthesize a minimal but valid config from the
+	// defaults. This handles the truly-empty repo state (e.g. test sandbox
+	// where we did not vendor the example file).
+	synth := synthesizeDefaultConfig()
+	if err := writeConfigFile("./LsmAgentGame.conf.example", synth); err != nil {
+		return fmt.Errorf("write synthetic .example: %w", err)
+	}
+	if err := writeConfigFile("./LsmAgentGame.conf", synth); err != nil {
+		return fmt.Errorf("write synthetic LsmAgentGame.conf: %w", err)
+	}
+	fmt.Fprintf(os.Stderr,
+		"[config] INFO: no LsmAgentGame.conf and no .example found — generated both from code defaults. "+
+			"Replace placeholder secrets (db.password, jwt.secret) before going live.\n")
+	return nil
+}
+
+// synthesizeDefaultConfig returns the minimum-viable Config that satisfies
+// applyDefaults' contract (every non-zero field is its default). Used as a
+// last-resort bootstrap when neither conf file is present.
+func synthesizeDefaultConfig() Config {
+	c := Config{}
+	applyDefaults(&c)
+	return c
 }
 
 // readConfigFile returns the bytes of a config file or an error.
@@ -974,4 +1055,97 @@ func (c *Config) PhaseDeadlineSec(phase string) int {
 	default:
 		return 90
 	}
+}
+
+// =============================================================================
+// 持久化与 LLM 敏感字段剥离辅助函数(2026-08-13 §config-auto-bootstrap)
+// =============================================================================
+
+// writeConfigFile serializes c as a JSON file with two-space indentation. We
+// deliberately drop the runtime-only `omitempty` semantics on sensitive fields
+// so the operator always sees explicit placeholders to edit (rather than
+// silently inheriting defaults).
+//
+// Security note: callers MUST strip sensitive fields before persisting if
+// they want the on-disk artifact to be safe to commit. The function below,
+// writeConfigFileStrippedLLM, does that automatically.
+func writeConfigFile(path string, c Config) error {
+	raw, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	if err := os.WriteFile(path, append(raw, '\n'), 0o600); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+// writeConfigFileStrippedLLM writes c to path with the LLM section's
+// per-provider api_key stripped out and the entire `providers` array
+// removed. Non-sensitive LLM fields (endpoint / endpoints / timeout_ms /
+// stream_idle_timeout_ms / max_retries) are preserved so the on-disk
+// artifact is still editable.
+//
+// The intent is the post-migration state of the 2026-08-13 bootstrap flow:
+// once the providers[] block has been upserted into t_lsm_game_llm_provider,
+// it has no business living in LsmAgentGame.conf any more (operators edit
+// the DB via the admin UI; the conf file would only ever drift out of sync).
+func writeConfigFileStrippedLLM(path string, c Config) error {
+	// Drop all provider entries; their api_key + endpoint rows now live in DB.
+	c.LLM.Providers = nil
+	raw, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	if err := os.WriteFile(path, append(raw, '\n'), 0o600); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+// stripLLMSensitiveFields mutates c in place to remove any field that
+// contains an LLM provider API key. Returns the count of stripped providers
+// so callers can log the migration outcome.
+//
+// Why we keep this separate from writeConfigFileStrippedLLM:
+//   - Pure mutation (no I/O) keeps it testable in isolation.
+//   - Future callers (e.g. an admin "export config without secrets" endpoint)
+//     may want to reuse the mutation without immediately writing to disk.
+func stripLLMSensitiveFields(c *Config) int {
+	if c == nil {
+		return 0
+	}
+	n := len(c.LLM.Providers)
+	c.LLM.Providers = nil
+	return n
+}
+
+// PersistToFile writes c (with the LLM providers block stripped) back to the
+// given path. Used by main.go after the LLM registry has finished seeding
+// t_lsm_game_llm_provider from the conf file — we want the on-disk artifact
+// to drop the secrets so a future accidental `git add LsmAgentGame.conf`
+// cannot leak them.
+//
+// If path is empty we default to ./LsmAgentGame.conf. Returns the number of
+// providers stripped (always ≥ 0) and any I/O error.
+func (c *Config) PersistToFile(path string) (strippedProviders int, err error) {
+	if path == "" {
+		path = "./LsmAgentGame.conf"
+	}
+	strippedProviders = stripLLMSensitiveFields(c)
+	if err := writeConfigFileStrippedLLM(path, *c); err != nil {
+		return strippedProviders, err
+	}
+	return strippedProviders, nil
+}
+
+// PersistFull writes c back to disk WITHOUT stripping — used during the very
+// first bootstrap when we have nothing to migrate yet. Useful for tests that
+// want to materialize a synthesized default config. Operators should normally
+// use PersistToFile.
+func (c *Config) PersistFull(path string) error {
+	if path == "" {
+		path = "./LsmAgentGame.conf"
+	}
+	return writeConfigFile(path, *c)
 }

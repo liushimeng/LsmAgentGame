@@ -218,9 +218,12 @@ git clone <your-repo-url> LsmAgentGame
 cd LsmAgentGame
 git submodule update --init --recursive
 
-# 2. Copy and edit runtime config
-cp LsmAgentGame.conf.example LsmAgentGame.conf
-# Edit LsmAgentGame.conf — set db.password, jwt.secret, llm.providers[].api_key, etc.
+# 2. Edit runtime config — auto-generated on first boot
+# 2026-08-13 §config-auto-bootstrap: no manual `cp .example .conf` needed.
+# On first boot, if ./LsmAgentGame.conf is missing:
+#   - If LsmAgentGame.conf.example exists → automatically copy it to LsmAgentGame.conf
+#   - If neither file exists → synthesize both from the in-process defaults
+# Edit LsmAgentGame.conf — set db.password, jwt.secret, llm.endpoint, etc.
 # Real secrets go only in LsmAgentGame.conf (excluded via .gitignore)
 
 # 3. Install frontend dependencies
@@ -232,6 +235,18 @@ cd ClientWeb && npm install && cd ..
 # 5. Open your browser
 # https://127.0.0.1:39001
 ```
+
+> **First-boot flow details** (2026-08-13 §config-auto-bootstrap):
+> 1. The service reads `./LsmAgentGame.conf` (or `.example` as a fallback)
+>    and automatically applies `applyDefaults` to fill in any missing
+>    fields (`llm.timeout_ms`, `db.max_open_conns`, etc.).
+> 2. If the `llm.providers[]` block is non-empty (legacy upgrade path),
+>    the boot sequence upserts every row into `t_lsm_game_llm_provider`
+>    (api_key is AES-256-GCM encrypted) and then strips the block from
+>    the on-disk `.conf` file. After that, operators manage models through
+>    the Web UI at `/admin/models` — no need to edit `.conf` anymore.
+> 3. `LsmAgentGame.conf` is in `.gitignore` and is never committed;
+>    `LsmAgentGame.conf.example` is tracked (placeholders only).
 
 Service endpoints:
 

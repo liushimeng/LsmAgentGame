@@ -145,6 +145,40 @@ func main() {
 	walletSvc := service.NewWalletService(gormDB)
 	botUserSvc := service.NewBotUserService(gormDB, walletSvc)
 
+	// 2026-08-13 §config-auto-bootstrap — 在构造 Registry 之前,先把
+	// cfg.LLM.Providers 同步到 t_lsm_game_llm_provider(去重 upsert):
+	//   - DB 已有同 model 行 → 只更新元数据(agent_name / thinking_*),
+	//     保留 DB 里的 api_key_enc 与 endpoint(operator 走 admin UI 改 key);
+	//   - DB 没有 → 加密 api_key 后插入新行。
+	// 这一步是「配置 → DB 迁移」的核心;若 cfg.LLM.Providers 为空则 no-op,
+	// 不影响 §118 之后的纯 DB 模式(operator 已通过 /admin/models 管理)。
+	migCtx, migCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	if inserted, updated, err := llm.MigrateConfigProvidersToDB(migCtx, gormDB, cfg.LLM); err != nil {
+		// 迁移失败不致命:Registry 构造时仍会走「DB 空就 seed」回退到
+		// llm.DefaultProviders() 兜底,系统可用,只是失去 conf 里的旧 key。
+		logger.L().Warn("llm cfg → DB migrate failed (registry will fall back to defaults)",
+			zap.Error(err))
+	} else if inserted > 0 || updated > 0 {
+		logger.L().Info("llm cfg → DB migrate",
+			zap.Int("inserted", inserted),
+			zap.Int("updated", updated))
+	}
+	migCancel()
+
+	// 2026-08-13 §config-auto-bootstrap — 迁移完成后,把 cfg.LLM.Providers
+	// 段从 LsmAgentGame.conf 里剔除并写回磁盘,避免敏感 api_key 长期
+	// 以明文形式躺在仓库根目录(万一运维误 `git add` 即泄漏)。非敏感
+	// 字段(endpoint / endpoints / timeout_ms / max_retries 等)保留。
+	if cfg.LLM.Providers != nil {
+		stripped, perr := cfg.PersistToFile("./LsmAgentGame.conf")
+		if perr != nil {
+			logger.L().Warn("write stripped LsmAgentGame.conf failed", zap.Error(perr))
+		} else {
+			logger.L().Info("llm: stripped LLM providers from LsmAgentGame.conf (migrated to DB)",
+				zap.Int("stripped_providers", stripped))
+		}
+	}
+
 	// Build the LLM provider registry (DB-first; auto-seed from cfg when the
 	// table is empty). The pure-cfg fallback path is preserved when gormDB is
 	// nil so unit tests in agent/ don't need to change. The adapter strips
