@@ -719,6 +719,101 @@ func syncQuarantinedLocked(r *WerewolfRoom) {
 	r.State.QuarantinedSeats = qs
 }
 
+// ─── 2026-08-13 §20260813-01 U2 — GameContext 分层缓存 ───
+//
+// getStaticContext 获取 seat 的静态上下文缓存。未命中时调用 builder 构建并缓存。
+// 静态上下文一局只构建一次(座位/角色/玩家列表等整局不变信息)。
+func getStaticContext(r *WerewolfRoom, seat int, builder func() *wwtypes.StaticContext) *wwtypes.StaticContext {
+	if r.staticContextCache == nil {
+		r.staticContextCache = make(map[int]*wwtypes.StaticContext)
+	}
+	if sc, ok := r.staticContextCache[seat]; ok {
+		return sc
+	}
+	sc := builder()
+	r.staticContextCache[seat] = sc
+	return sc
+}
+
+// getPhaseStateContext 获取 seat 的阶段状态缓存。phase 变化时自动失效重建。
+// 阶段状态在阶段内不变(警长/屠边计数等),阶段切换时重建。
+func getPhaseStateContext(r *WerewolfRoom, seat int, currentPhase string, builder func() *wwtypes.PhaseStateContext) *wwtypes.PhaseStateContext {
+	if r.phaseStatePhase != currentPhase {
+		// 阶段变化,失效旧缓存
+		r.phaseStateCache = make(map[int]*wwtypes.PhaseStateContext)
+		r.phaseStatePhase = currentPhase
+	}
+	if r.phaseStateCache == nil {
+		r.phaseStateCache = make(map[int]*wwtypes.PhaseStateContext)
+	}
+	if psc, ok := r.phaseStateCache[seat]; ok {
+		return psc
+	}
+	psc := builder()
+	r.phaseStateCache[seat] = psc
+	return psc
+}
+
+// invalidateContextCaches 失效所有上下文缓存(游戏重开时调用)。
+func invalidateContextCaches(r *WerewolfRoom) {
+	r.staticContextCache = make(map[int]*wwtypes.StaticContext)
+	r.phaseStateCache = make(map[int]*wwtypes.PhaseStateContext)
+	r.phaseStatePhase = ""
+}
+
+// winConditionFor 返回角色+阵营对应的胜利条件描述。
+func winConditionFor(role Role, faction Faction) string {
+	switch faction {
+	case FactionWolf:
+		return "狼人屠边(杀光全部神职或杀光全部平民)"
+	case FactionGood:
+		if role == RoleWerewolf {
+			return "放逐全部 4 狼人(你被发到狼人身份但阵营为好人,这是异常状态)"
+		}
+		return "放逐全部 4 狼人"
+	default:
+		return "存活到最后"
+	}
+}
+
+// buildGodRolePoolLocked 返回本局实际发牌的神职池(中文名称列表)。
+// 从 GameState.Roles 中提取所有实际发牌的神职角色(去重),
+// 转换为中文名称供 Agent prompt 使用。
+func buildGodRolePoolLocked(r *WerewolfRoom) []string {
+	if r.State == nil {
+		return nil
+	}
+	// 角色名映射(英文 → 中文)
+	roleNameCN := map[string]string{
+		"seer":         "预言家",
+		"witch":        "女巫",
+		"hunter":       "猎人",
+		"idiot":        "白痴",
+		"guard":        "守卫",
+		"knight":       "骑士",
+		"demon_hunter": "猎魔人",
+	}
+	seen := make(map[string]bool)
+	var pool []string
+	for i := 0; i < r.State.SeatCount; i++ {
+		role := r.State.Roles[i]
+		if !IsGodRole(role) {
+			continue
+		}
+		name := role.String()
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		if cn, ok := roleNameCN[name]; ok {
+			pool = append(pool, cn)
+		} else {
+			pool = append(pool, name)
+		}
+	}
+	return pool
+}
+
 func buildAgentContextLocked(r *WerewolfRoom, seat int, driverSeat int) wwtypes.GameContext {
 	if r.State == nil || seat < 0 || seat >= MaxPlayers {
 		return wwtypes.GameContext{}
@@ -737,6 +832,41 @@ func buildAgentContextLocked(r *WerewolfRoom, seat int, driverSeat int) wwtypes.
 		// 2026-07-10 §13: 本局实际人数(13/12/7),prompt.go 据此选择对应规则摘要渲染。
 		SeatCount: gs.SeatCount,
 	}
+
+	// 2026-08-13 §20260813-01 U2 — 分层缓存:静态层一局构建一次,
+	// 阶段层阶段切换时重建。减少每轮重复计算 ~3-5KB。
+	gc.Static = getStaticContext(r, seat, func() *wwtypes.StaticContext {
+		return &wwtypes.StaticContext{
+			SeatCount:    gs.SeatCount,
+			MySeat:       seat,
+			Role:         gs.Roles[seat].String(),
+			Faction:      FactionOf(gs.Roles[seat]).String(),
+			WinCondition: winConditionFor(gs.Roles[seat], FactionOf(gs.Roles[seat])),
+			AllPlayers:   buildAllPlayersLocked(r),
+			GodRolePool:  buildGodRolePoolLocked(r),
+		}
+	})
+	gc.PhaseState = getPhaseStateContext(r, seat, gs.Phase.String(), func() *wwtypes.PhaseStateContext {
+		cands := gs.SheriffCandidates()
+		sc := &wwtypes.PhaseStateContext{
+			Phase:            gs.Phase.String(),
+			SheriffSeat:      int(gs.SheriffSeat),
+			SheriffStream:    [2]int{int(gs.SheriffStreams[0]), int(gs.SheriffStreams[1])},
+			IdiotRevealedSeats: gs.idiotRevealedSeats(),
+			DivineCnt:        gs.DivineCnt,
+			PlainCnt:         gs.PlainCnt,
+			WolfAliveCnt:     gs.WolfAliveCnt,
+			VoteProposed:     gs.VoteProposed,
+			VoteProposer:     int(gs.VoteProposer),
+		}
+		if len(cands) > 0 {
+			sc.SheriffCandidates = make([]int, len(cands))
+			for i, s := range cands {
+				sc.SheriffCandidates[i] = int(s)
+			}
+		}
+		return sc
+	})
 	if gs.SpeakTurnSeat != NoSeat {
 		gc.SpeakTurn = int(gs.SpeakTurnSeat)
 	}
@@ -928,7 +1058,8 @@ func buildAgentContextLocked(r *WerewolfRoom, seat int, driverSeat int) wwtypes.
 	// 玩家昵称从 r.recentSpeeches 最近的同 seat speech 中取;bot 玩家
 	// 昵称统一为 "Bot N号" + AgentName 来自 r.seatModelKeys(由 manager
 	// 启动 Agent 时写入)。空座位显示 "(空)"。
-	gc.AllPlayers = buildAllPlayersLocked(r)
+	// 2026-08-13 §20260813-01 U2: 从静态缓存读取,避免每轮重复构建。
+	gc.AllPlayers = gc.Static.AllPlayers
 
 	// BUG 2026-07-08: 缓冲期剩余秒数,仅在 pre_wolves 阶段 > 0。
 	if gs.Phase == PhasePreWolves && !gs.FirstNightGraceEnd.IsZero() {
@@ -1006,30 +1137,20 @@ func buildAgentContextLocked(r *WerewolfRoom, seat int, driverSeat int) wwtypes.
 	gc.RoomPaused = r.paused
 
 	// 2026-07-10: 12 人标准竞技局字段注入。
-	gc.SheriffSeat = int(gs.SheriffSeat)
-	gc.SheriffStream = [2]int{int(gs.SheriffStreams[0]), int(gs.SheriffStreams[1])}
-	// §报告-20260804-03 BUG-07: 警长竞选参选名单注入,供 BuildTools 收敛
-	// vote 工具的 target enum(只能投给已参选者)。SheriffCandidates() 内部
-	// 已做 Phase==PhaseSheriff 守卫,其它阶段返回 nil。
-	if cands := gs.SheriffCandidates(); len(cands) > 0 {
-		gc.SheriffCandidates = make([]int, 0, len(cands))
-		for _, s := range cands {
-			gc.SheriffCandidates = append(gc.SheriffCandidates, int(s))
-		}
-	}
+	// 2026-08-13 §20260813-01 U2: 从阶段状态缓存读取,避免每轮重复计算。
+	gc.SheriffSeat = gc.PhaseState.SheriffSeat
+	gc.SheriffStream = gc.PhaseState.SheriffStream
+	gc.SheriffCandidates = gc.PhaseState.SheriffCandidates
+	gc.IdiotRevealedSeats = gc.PhaseState.IdiotRevealedSeats
+	gc.DivineCnt = gc.PhaseState.DivineCnt
+	gc.PlainCnt = gc.PhaseState.PlainCnt
+	gc.WolfAliveCnt = gc.PhaseState.WolfAliveCnt
+	gc.VoteProposed = gc.PhaseState.VoteProposed
+	gc.VoteProposer = gc.PhaseState.VoteProposer
+	// MyCandidate 是 per-seat 字段,不在阶段状态缓存中。
 	if gs.Phase == PhaseSheriff {
 		gc.MyCandidate = gs.Players[seat].HasSpoken
 	}
-	if idSeats := gs.idiotRevealedSeats(); len(idSeats) > 0 {
-		gc.IdiotRevealedSeats = idSeats
-	}
-	gc.DivineCnt = gs.DivineCnt
-	gc.PlainCnt = gs.PlainCnt
-	gc.WolfAliveCnt = gs.WolfAliveCnt
-
-	// 2026-07-11: 预言家发起投票状态
-	gc.VoteProposed = gs.VoteProposed
-	gc.VoteProposer = int(gs.VoteProposer)
 
 	// 2026-07-10 §124 增强 — 情绪字段填充。
 	// 1. 当前 bot 自己的情绪:从 r.BotAgents[seat] 取得 Agent,调 getter。

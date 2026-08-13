@@ -25,6 +25,11 @@ type GameContext struct {
 	MySeerCheck     int // -1 = N/A (only meaningful for seer)
 	WolfTarget      int // -1 = N/A (witch view)
 
+	// 2026-08-13 §20260813-01 U2 — 分层缓存:静态层(整局不变) + 阶段层(阶段内不变)。
+	// 由 buildAgentContextLocked 填充,供 prompt 构建器读取。
+	Static      *StaticContext      `json:"static,omitempty"`
+	PhaseState  *PhaseStateContext  `json:"phase_state,omitempty"`
+
 	// 2026-08-12 §20260812-04 U1 (P0-1) — 夜间私有信息进 prompt。
 	//
 	// 缺陷背景:MySeerCheck / WolfTarget 自落地起就由引擎填充(room_agent.go:766/770),
@@ -459,3 +464,62 @@ type RumorJSON struct {
 
 // WolfPackMsg 是狼小队内部单条留言（v4 §13.1）。
 // 本结构是 werewolf.WolfPackMsg 的 agent 包本地镜像（避免 agent→werewolf 循环导入）。
+
+// ─── 2026-08-13 §20260813-01 U2 — GameContext 分层缓存 ───
+//
+// 背景:buildAgentContextLocked 每轮为每个 bot 重建完整 GameContext,
+// 但其中大量字段整局不变(座位/角色/玩家列表)或阶段内不变(警长/屠边计数)。
+// 13 人局 7 bot × 50 轮 = 350 次重建,每次 ~5-8KB 重复信息,一局浪费 ~2MB
+// token。引入分层缓存后,静态层一局构建一次,阶段层阶段切换时重建,
+// 动态层每轮重建——预期每轮减少 3-5KB token。
+//
+// 缓存由 room_agent.go 的 staticContextCache / phaseStateCache 管理,
+// buildAgentContextLocked 通过 getStaticContext / getPhaseStateContext
+// 获取,不修改 GameContext 现有字段(保持 wire 兼容)。
+
+// StaticContext 整局不变的静态信息(一局构建一次,缓存到游戏结束)。
+// §20260813-01 U2: 从 buildAgentContextLocked 的重复计算中提取。
+type StaticContext struct {
+	// SeatCount 本局人数(13/12/7)。
+	SeatCount int `json:"seat_count"`
+	// MySeat 本 bot 座位号(0-indexed)。
+	MySeat int `json:"my_seat"`
+	// Role 本 bot 身份。
+	Role string `json:"role"`
+	// Faction 本 bot 阵营("wolf"/"good")。
+	Faction string `json:"faction"`
+	// WinCondition 胜利条件描述。
+	WinCondition string `json:"win_condition"`
+	// AllPlayers 本局所有座位的玩家简报(顺序稳定 0..N-1)。
+	// 仅含不变信息(ID/昵称/AgentName),不含存活状态(存活状态每轮变化)。
+	AllPlayers []PlayerBrief `json:"all_players"`
+	// GodRolePool 本局实际发牌的神职池(例 ["女巫","猎人","白痴"])。
+	// 让 Agent 知道本局有哪些神职,避免引用已退役角色。
+	GodRolePool []string `json:"god_role_pool"`
+}
+
+// PhaseStateContext 阶段内不变的信息(阶段切换时重建)。
+// §20260813-01 U2: 从 buildAgentContextLocked 的重复计算中提取。
+// 阶段内不变的字段:警长/警徽流/白痴翻牌/屠边计数/预言家发起投票状态。
+type PhaseStateContext struct {
+	// Phase 当前阶段。
+	Phase string `json:"phase"`
+	// SheriffSeat 当前警长座位(-1=无)。
+	SheriffSeat int `json:"sheriff_seat"`
+	// SheriffStream 第一/第二警徽流目标。
+	SheriffStream [2]int `json:"sheriff_stream"`
+	// SheriffCandidates 警长竞选参选座位(仅 PhaseSheriff 有意义)。
+	SheriffCandidates []int `json:"sheriff_candidates"`
+	// IdiotRevealedSeats 已翻牌白痴座位。
+	IdiotRevealedSeats []int `json:"idiot_revealed_seats"`
+	// DivineCnt 存活神职数。
+	DivineCnt int `json:"divine_cnt"`
+	// PlainCnt 存活平民数。
+	PlainCnt int `json:"plain_cnt"`
+	// WolfAliveCnt 存活狼人屠边参考。
+	WolfAliveCnt int `json:"wolf_alive_cnt"`
+	// VoteProposed 是否已由预言家发起投票。
+	VoteProposed bool `json:"vote_proposed"`
+	// VoteProposer 发起投票的座位号(-1=未发起)。
+	VoteProposer int `json:"vote_proposer"`
+}

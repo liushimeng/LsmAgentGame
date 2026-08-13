@@ -176,6 +176,15 @@ type WerewolfRoom struct {
 	// restartGameLocked 原地重开时保留(与 seatModelKeys 同级)。
 	playerProfileCache map[string]map[string]playerProfileCacheEntry
 
+	// 2026-08-13 §20260813-01 U2 — GameContext 分层缓存。
+	// staticContextCache[seat] 缓存整局不变的静态信息(座位/角色/玩家列表),
+	// 一局构建一次,游戏结束 GC 回收。phaseStateCache[seat] 缓存阶段内不变的
+	// 信息(警长/屠边计数),阶段切换时失效重建。
+	// 目的:减少 buildAgentContextLocked 每轮重复计算,每轮节省 3-5KB token。
+	staticContextCache map[int]*wwtypes.StaticContext
+	phaseStateCache    map[int]*wwtypes.PhaseStateContext
+	phaseStatePhase    string // 当前缓存的阶段,phase 变化时失效
+
 	// recentSpeeches is the room-wide rolling buffer of recent chat.message
 	// events. Each entry projects the on-wire ChatMessage into an
 	// wwtypes.SpeechEvent with seat / account / AgentName / IsBot / IsSpectator

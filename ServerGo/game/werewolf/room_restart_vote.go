@@ -296,6 +296,8 @@ func (m *WerewolfManager) restartGameLocked(r *WerewolfRoom) *errcode.Error {
 	newState.RestartLastWinner = prevWinner
 	newState.RestartCount = prevRestartCount + 1
 	r.State = newState
+	// 2026-08-13 §20260813-01 U2 — 重开时失效上下文缓存(角色/玩家列表已变)。
+	invalidateContextCaches(r)
 	// 2026-08-06 §20260806-03: 重开局沿用创建房间时的座位角色偏好
 	// (seatPreferredRoles 生命周期与 seatModelKeys 同级,跨局保留)。
 	syncPreferredRolesLocked(r)
