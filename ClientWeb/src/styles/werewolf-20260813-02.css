@@ -1,0 +1,260 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   §20260813-02 批次样式:
+     U1/U2  ModelAnalyticsPanels(模型管理页运营数据分析:胜率趋势 + 道具经济)
+     U4     NightBloodMap(HistoryDrawer 第 12 sub-tab「🩸 血迹图」)
+
+   独立成文件:werewolf-v2.css 已 1752 行,逼近 CLAUDE.md §4 的 1800 行硬上限,
+   命名沿用 §20260812-03 的「批次日期」惯例。globals.css 中的 @import 位置
+   紧随 werewolf-20260812-03.css(不触碰 werewolf.css → werewolf-v2.css →
+   werewolf-emotion.css → werewolf-speech.css 的 .werewolf-seat 覆盖链)。
+   §26 对比度:暗色主题文字 ≥ 4.5:1,badge ≥ 5:1。
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ═══════════════ U1/U2 — ModelAnalyticsPanels ═══════════════ */
+
+.model-analytics-section {
+  margin: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.model-analytics-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.model-analytics-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.model-analytics-h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg, #e8e8f0);
+  letter-spacing: 0.5px;
+}
+.model-analytics-empty {
+  padding: 18px;
+  text-align: center;
+  color: var(--fg-muted, #b8b8c4);
+  font-size: 13px;
+}
+.model-analytics-muted {
+  color: var(--fg-muted, #b8b8c4);
+}
+.model-analytics-table {
+  font-size: 13px;
+}
+.model-analytics-badge--warn {
+  margin-left: 6px;
+  color: #ffd54f;
+  cursor: help;
+}
+.model-analytics-details {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.model-analytics-details summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--fg, #e8e8f0);
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+}
+.model-analytics-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 8px 4px 4px;
+}
+.model-analytics-details-grid h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--fg-muted, #b8b8c4);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.model-analytics-details-grid ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--fg, #e0e0ea);
+  line-height: 1.7;
+}
+
+/* U2 — 金币四流向条 */
+.model-analytics-flowbar {
+  display: flex;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+.model-analytics-flowbar__seg { height: 100%; }
+.model-analytics-flowbar__seg--pot    { background: linear-gradient(90deg, #3f9d6b, #57c785); }
+.model-analytics-flowbar__seg--absorb { background: linear-gradient(90deg, #8a5cf0, #a97cf5); }
+.model-analytics-flowbar__seg--comp   { background: linear-gradient(90deg, #d98a2b, #f0ab55); }
+.model-analytics-flowlegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--fg, #e0e0ea);
+  align-items: center;
+}
+.model-analytics-flowlegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.model-analytics-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.model-analytics-dot--pot    { background: #57c785; }
+.model-analytics-dot--absorb { background: #a97cf5; }
+.model-analytics-dot--comp   { background: #f0ab55; }
+/* 实测中招率 vs 基础中招率:超模(红)/弱势(蓝),§26 对比度 ≥ 4.5:1 */
+.model-analytics-over  { color: #ff8a80; font-weight: 600; }
+.model-analytics-under { color: #82b1ff; font-weight: 600; }
+
+/* ═══════════════ U4 — NightBloodMap(夜间血迹图) ═══════════════ */
+
+.ww-bloodmap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+.ww-bloodmap-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ww-bloodmap-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg, #e8e8f0);
+}
+.ww-bloodmap-select {
+  background: rgba(20, 20, 32, 0.9);
+  color: #f0f0f6;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  min-height: 34px;
+  color-scheme: dark;
+}
+.ww-bloodmap-select option {
+  background: #16161f;
+  color: #f0f0f6;
+}
+.ww-bloodmap-svg {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  display: block;
+  background: radial-gradient(circle at 50% 50%, rgba(30, 20, 40, 0.35) 0%, rgba(8, 8, 14, 0.55) 80%);
+  border-radius: 12px;
+}
+.ww-bloodmap-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--fg-muted, #b8b8c4);
+  font-size: 13px;
+}
+
+/* 座位圆点:狼=红调 / 好人=蓝调 / 死亡=灰化(§26 badge ≥ 5:1) */
+.ww-bloodmap-seat {
+  fill: rgba(90, 120, 180, 0.35);
+  stroke: #9db4e0;
+  stroke-width: 1.5;
+}
+.ww-bloodmap-seat.is-wolf {
+  fill: rgba(200, 60, 60, 0.42);
+  stroke: #ff8a80;
+}
+.ww-bloodmap-seat.is-dead {
+  fill: rgba(120, 120, 120, 0.25);
+  stroke: rgba(180, 180, 180, 0.5);
+}
+.ww-bloodmap-seat-label {
+  fill: #f4f4fa;
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* 行动连线 */
+.ww-bloodmap-line { stroke-width: 2; fill: none; }
+.ww-bloodmap-line--wolf {
+  stroke: #ff5252;
+  stroke-opacity: 0.85;
+}
+.ww-bloodmap-line--seer {
+  stroke-dasharray: 5 4;
+  stroke-width: 1.8;
+}
+.ww-bloodmap-line--seer.is-good { stroke: #66d98a; }
+.ww-bloodmap-line--seer.is-wolf { stroke: #ff6e6e; }
+.ww-bloodmap-line--antidote { stroke: #57c785; stroke-width: 2.2; }
+.ww-bloodmap-line--poison   { stroke: #b07cf5; stroke-width: 2.2; }
+.ww-bloodmap-line--guard {
+  stroke: #ffd75e;
+  stroke-dasharray: 3 3;
+  stroke-width: 1.8;
+}
+.ww-bloodmap-line--demon { stroke: #ffa040; stroke-opacity: 0.9; }
+.ww-bloodmap-shield {
+  fill: none;
+  stroke: #ffd75e;
+  stroke-width: 1.6;
+  stroke-dasharray: 4 3;
+  opacity: 0.85;
+}
+
+/* 图例 */
+.ww-bloodmap-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--fg, #e0e0ea);
+}
+.ww-bloodmap-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.ww-bloodmap-key {
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.ww-bloodmap-key--wolf  { background: #ff5252; }
+.ww-bloodmap-key--seer  { background: repeating-linear-gradient(90deg, #66d98a 0 4px, transparent 4px 7px); }
+.ww-bloodmap-key--witch { background: linear-gradient(90deg, #57c785 0 50%, #b07cf5 50% 100%); }
+.ww-bloodmap-key--guard { background: #ffd75e; }
+.ww-bloodmap-key--demon { background: #ffa040; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ww-bloodmap-line,
+  .ww-bloodmap-shield {
+    animation: none !important;
+  }
+}

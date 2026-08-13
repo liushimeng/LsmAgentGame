@@ -491,6 +491,8 @@
   justify-content: center;
   z-index: var(--ww-z-fx, 100);
   pointer-events: none;
+  /* §20260813-02 U3:进场背景视差 —— scale(1.06)→1 轻微「呼吸」拉近,
+     增强阶段切换仪式感(不改 §124 的 pointer-events/自动消失约束)。 */
   animation: wwDayNightFadeIn 0.5s ease-out;
 }
 .ww-daynight-overlay__inner {
@@ -505,10 +507,14 @@
   -webkit-backdrop-filter: blur(6px);
   text-align: center;
 }
+/* §20260813-02 U3:文字层次进场(stagger)—— emoji → title → subtitle
+   依次 0/120/240ms 延迟淡入上浮;emoji 与既有 pulse 共存(comma 列表)。 */
 .ww-daynight-overlay__emoji {
   font-size: 96px;
   line-height: 1;
-  animation: wwDayNightEmojiPulse 1.4s ease-in-out infinite;
+  animation:
+    wwDayNightEmojiPulse 1.4s ease-in-out infinite,
+    wwDayNightStaggerIn 0.45s ease-out backwards;
 }
 .ww-daynight-overlay__title {
   font-size: 32px;
@@ -516,43 +522,53 @@
   letter-spacing: 4px;
   color: var(--fg);
   text-shadow: 0 0 16px rgba(0, 0, 0, 0.7);
+  animation: wwDayNightStaggerIn 0.45s ease-out 0.12s backwards;
 }
 .ww-daynight-overlay__subtitle {
   font-size: 13px;
   color: var(--fg-muted, #c0c0c0);
   letter-spacing: 1px;
+  animation: wwDayNightStaggerIn 0.45s ease-out 0.24s backwards;
 }
 
-/* Night — 蓝黑背景 + 月光晕 */
+/* Night — 蓝黑背景 + 月光晕
+   §20260813-02 U3:卡片自上方沉降(夜幕降临),退场向下沉出;
+   各类型时长分级保持 §124 原值(night 2.5s > dawn 1.8s > day 1.2s)。 */
 .ww-daynight-overlay--night {
   background: radial-gradient(circle at 50% 40%, rgba(20, 30, 60, 0.55) 0%, rgba(5, 5, 15, 0.85) 70%);
-  animation: wwDayNightFadeIn 0.5s ease-out, wwDayNightFadeOut 0.6s ease-in 2.0s forwards;
+  animation: wwDayNightFadeIn 0.5s ease-out, wwDayNightFadeOutDown 0.6s ease-in 2.0s forwards;
 }
 .ww-daynight-overlay--night .ww-daynight-overlay__inner {
   border: 1px solid rgba(120, 160, 255, 0.4);
   box-shadow: 0 0 40px rgba(80, 120, 255, 0.25) inset;
+  animation: wwDayNightSlideDown 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Dawn — 暖橙背景 + 太阳光 */
+/* Dawn — 暖橙背景 + 太阳光
+   §20260813-02 U3:卡片自下方升起(日出),退场向上飘出。 */
 .ww-daynight-overlay--dawn {
   background: radial-gradient(circle at 50% 60%, rgba(255, 180, 100, 0.45) 0%, rgba(80, 40, 20, 0.7) 70%);
-  animation: wwDayNightFadeIn 0.5s ease-out, wwDayNightFadeOut 0.6s ease-in 1.4s forwards;
+  animation: wwDayNightFadeIn 0.5s ease-out, wwDayNightFadeOutUp 0.6s ease-in 1.4s forwards;
 }
 .ww-daynight-overlay--dawn .ww-daynight-overlay__inner {
   border: 1px solid rgba(255, 200, 120, 0.5);
   box-shadow: 0 0 50px rgba(255, 180, 80, 0.3) inset;
+  animation: wwDayNightSlideUp 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Day — 浅蓝柔光,持续时间短 */
+/* Day — 浅蓝柔光,持续时间短
+   §20260813-02 U3:卡片自左侧轻滑入,退场向右滑出。 */
 .ww-daynight-overlay--day {
   background: radial-gradient(circle at 50% 50%, rgba(150, 200, 255, 0.25) 0%, rgba(30, 50, 80, 0.5) 70%);
-  animation: wwDayNightFadeIn 0.4s ease-out, wwDayNightFadeOut 0.4s ease-in 0.9s forwards;
+  animation: wwDayNightFadeIn 0.4s ease-out, wwDayNightFadeOutRight 0.4s ease-in 0.9s forwards;
 }
 .ww-daynight-overlay--day .ww-daynight-overlay__inner {
   border: 1px solid rgba(180, 220, 255, 0.35);
+  animation: wwDayNightSlideLeft 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Sheriff elected — 金色光辉 + 星光,2.5s 后淡出 */
+/* Sheriff elected — 金色光辉 + 星光,2.5s 后淡出
+   §20260813-02 U3:与 dawn 同用升起进场(加冕仪式感),退场保持纯淡出。 */
 .ww-daynight-overlay--sheriff {
   background: radial-gradient(circle at 50% 50%, rgba(255, 215, 80, 0.35) 0%, rgba(40, 30, 10, 0.75) 70%);
   animation: wwDayNightFadeIn 0.5s ease-out, wwDayNightFadeOut 0.6s ease-in 2.0s forwards;
@@ -560,23 +576,79 @@
 .ww-daynight-overlay--sheriff .ww-daynight-overlay__inner {
   border: 1px solid rgba(255, 215, 80, 0.55);
   box-shadow: 0 0 50px rgba(255, 200, 60, 0.3) inset;
+  animation: wwDayNightSlideUp 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .ww-daynight-overlay--sheriff .ww-daynight-overlay__title {
   color: #ffd700;
   text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
 }
 
+/* §20260813-02 U3:进场背景视差(1.06 呼吸拉近)。 */
 @keyframes wwDayNightFadeIn {
-  from { opacity: 0; transform: scale(0.96); }
+  from { opacity: 0; transform: scale(1.06); }
   to { opacity: 1; transform: scale(1); }
 }
 @keyframes wwDayNightFadeOut {
   from { opacity: 1; }
   to { opacity: 0; visibility: hidden; }
 }
+/* §20260813-02 U3:方向性退场(night 沉出 / dawn 飘出 / day 右滑出)。 */
+@keyframes wwDayNightFadeOutDown {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; visibility: hidden; transform: translateY(18px); }
+}
+@keyframes wwDayNightFadeOutUp {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; visibility: hidden; transform: translateY(-18px); }
+}
+@keyframes wwDayNightFadeOutRight {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; visibility: hidden; transform: translateX(16px); }
+}
+/* §20260813-02 U3:卡片方向性进场(night 上→下 / dawn、sheriff 下→上 / day 左→右)。 */
+@keyframes wwDayNightSlideDown {
+  from { opacity: 0; transform: translateY(-24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes wwDayNightSlideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes wwDayNightSlideLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+/* §20260813-02 U3:文字层次进场(stagger 由 animation-delay 控制)。 */
+@keyframes wwDayNightStaggerIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 @keyframes wwDayNightEmojiPulse {
   0%, 100% { transform: scale(1); filter: brightness(1); }
   50% { transform: scale(1.08); filter: brightness(1.18); }
+}
+
+/* §20260813-02 U3 + §26.5:prefers-reduced-motion 下所有滑动/视差/stagger
+   退化为纯 opacity 淡入淡出(保留 §124 各类型时长分级)。 */
+@media (prefers-reduced-motion: reduce) {
+  .ww-daynight-overlay__inner,
+  .ww-daynight-overlay__emoji,
+  .ww-daynight-overlay__title,
+  .ww-daynight-overlay__subtitle {
+    animation: none !important;
+  }
+  .ww-daynight-overlay--night {
+    animation: wwDayNightFadeIn 0.5s ease-out, wwDayNightFadeOut 0.6s ease-in 2.0s forwards;
+  }
+  .ww-daynight-overlay--dawn {
+    animation: wwDayNightFadeIn 0.5s ease-out, wwDayNightFadeOut 0.6s ease-in 1.4s forwards;
+  }
+  .ww-daynight-overlay--day {
+    animation: wwDayNightFadeIn 0.4s ease-out, wwDayNightFadeOut 0.4s ease-in 0.9s forwards;
+  }
+  .ww-daynight-overlay--sheriff {
+    animation: wwDayNightFadeIn 0.5s ease-out, wwDayNightFadeOut 0.6s ease-in 2.0s forwards;
+  }
 }
 
 @media (max-width: 1599px) {

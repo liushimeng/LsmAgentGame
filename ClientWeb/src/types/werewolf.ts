@@ -385,10 +385,27 @@ export interface GodModeSnapshot {
   seer_checks: SeerCheckEntry[];
   witch_decisions: WitchDecision[];
   guard_protects: number[];
+  /** §20260813-02 U4 — 狼刀历史(每夜最终刀口,夜间血迹图 S2)。 */
+  wolf_kills?: WolfKillEntry[];
+  /** §20260813-02 U4 — 守卫守护结构版(Day+Seat+Target,血迹图渲染)。 */
+  guard_protect_entries?: GuardProtectEntry[];
   // §20260810-11 V1 — PerSeatPOV(spectator 视角切换面板)
   per_seat_pov?: Record<number, PerSeatPOV>;
   // §20260811-08 U3 — 已公开的技能行动(猎人开枪/骑士决斗/猎魔人狩猎/白痴翻牌)。
   public_actions?: PublicActionEntry[];
+}
+
+/** §20260813-02 U4 — 单夜狼队最终刀口(夜间血迹图 S2)。 */
+export interface WolfKillEntry {
+  day: number;
+  target: number;
+}
+
+/** §20260813-02 U4 — 守卫守护结构版条目(夜间血迹图 S2)。 */
+export interface GuardProtectEntry {
+  day: number;
+  seat: number;
+  target: number;
 }
 
 /**

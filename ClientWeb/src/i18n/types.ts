@@ -279,6 +279,8 @@ export interface Dict {
   'werewolf.history.subtab.godmode': string;
   // §20260812-03 U1 — 阵营胜率热力图 sub-tab(spectator only)
   'werewolf.history.subtab.heatmap': string;
+  // §20260813-02 U4 — 夜间血迹图 sub-tab(spectator only)
+  'werewolf.history.subtab.bloodmap': string;
   'werewolf.history.reasoning.empty': string;
   'werewolf.history.reasoning.filterAll': string;
   // §20260811-06 U5 — 黎明流言系统(5 类模板,活动流自动渲染,本键预留扩展)。
@@ -295,6 +297,15 @@ export interface Dict {
   'werewolf.heatmap.title': string;
   'werewolf.heatmap.subtitle': string;
   'werewolf.heatmap.empty': string;
+  // §20260813-02 U4 — 夜间血迹图(spectator only,HistoryDrawer 第 12 sub-tab)
+  'werewolf.bloodmap.title': string;
+  'werewolf.bloodmap.night': string;
+  'werewolf.bloodmap.empty': string;
+  'werewolf.bloodmap.legend.wolfKill': string;
+  'werewolf.bloodmap.legend.seerCheck': string;
+  'werewolf.bloodmap.legend.witch': string;
+  'werewolf.bloodmap.legend.guard': string;
+  'werewolf.bloodmap.legend.demonHunt': string;
   // §20260812-03 U2 — 私下通道(白天 speak→vote 窗口)
   'werewolf.letter.title': string;
   'werewolf.letter.inbox_empty': string;
@@ -1182,6 +1193,28 @@ export interface Dict {
   'modelAdmin.game.empty': string;
   'modelAdmin.game.loading': string;
   'modelAdmin.game.errorLoad': string;
+  // §20260813-02 U1/U2 — 运营数据分析面板(胜率趋势 + 道具经济)
+  'modelAdmin.analytics.toggle': string;
+  'modelAdmin.analytics.empty': string;
+  'modelAdmin.analytics.winTrendTitle': string;
+  'modelAdmin.analytics.last30d': string;
+  'modelAdmin.analytics.winRate': string;
+  'modelAdmin.analytics.games': string;
+  'modelAdmin.analytics.bestRole': string;
+  'modelAdmin.analytics.bestSeat': string;
+  'modelAdmin.analytics.sampleLow': string;
+  'modelAdmin.analytics.byRole': string;
+  'modelAdmin.analytics.bySeat': string;
+  'modelAdmin.analytics.propEconTitle': string;
+  'modelAdmin.analytics.potReturn': string;
+  'modelAdmin.analytics.systemAbsorb': string;
+  'modelAdmin.analytics.targetCompens': string;
+  'modelAdmin.analytics.totalSpent': string;
+  'modelAdmin.analytics.hitRate': string;
+  'modelAdmin.analytics.baseHitRate': string;
+  'modelAdmin.analytics.propName': string;
+  'modelAdmin.analytics.price': string;
+  'modelAdmin.analytics.uses': string;
 
   // 2026-08-10 §20260810-06 — 行为承诺系统
   'werewolf.commitment.title': string;

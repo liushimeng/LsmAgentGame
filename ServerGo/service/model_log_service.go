@@ -17,6 +17,8 @@ import (
 	"context"
 	"errors"
 	"math"
+	"sort"
+	"strconv"
 	"time"
 
 	"LsmAgentGame/errcode"
@@ -556,4 +558,354 @@ func (s *ModelLogService) SelfPortraits(
 		out[r.ProviderID] = p
 	}
 	return out, nil
+}
+
+// ─────────────────── win rate trends (§20260813-02 U1, T12) ───────────────────
+
+const (
+	// winTrendMaxDays 是趋势切片保留的最大天数(裁剪长尾,防响应膨胀)。
+	winTrendMaxDays = 30
+	// winTrendMaxRoles 是每模型按角色切片保留的最大行数(按局数降序)。
+	winTrendMaxRoles = 8
+)
+
+// WinTrendDayPoint 是单模型单日(按 started_at 的 DATE)的胜负聚合。
+type WinTrendDayPoint struct {
+	Day     string  `json:"day"`      // "2006-01-02"
+	Games   int64   `json:"games"`
+	Wins    int64   `json:"wins"`
+	WinRate float64 `json:"win_rate"` // 0..100
+}
+
+// WinTrendSlice 是单一维度(角色或座位)的胜率聚合。
+type WinTrendSlice struct {
+	Key     string  `json:"key"`      // role_key,或座位号十进制字符串
+	Games   int64   `json:"games"`
+	Wins    int64   `json:"wins"`
+	WinRate float64 `json:"win_rate"` // 0..100
+}
+
+// ModelWinTrend 是单模型的胜率趋势聚合(§20260813-02 U1,T12 胜率趋势追踪)。
+//
+// 数据源:t_lsm_game_model_game_log(§118 起逐局写入)。与 RadarStats 一样
+// 是**全期/分期只读聚合**,不调 LLM、不触碰游戏流。
+type ModelWinTrend struct {
+	ProviderID string             `json:"provider_id"`
+	AgentName  string             `json:"agent_name"`
+	Games      int64              `json:"games"`
+	Wins       int64              `json:"wins"`
+	WinRate    float64            `json:"win_rate"` // 总胜率 0..100
+	Trend      []WinTrendDayPoint `json:"trend"`    // 最近 winTrendMaxDays 天,日期升序
+	ByRole     []WinTrendSlice    `json:"by_role"`  // 按角色,局数降序,≤ winTrendMaxRoles
+	BySeat     []WinTrendSlice    `json:"by_seat"`  // 按座位,seat 升序
+	SampleOK   bool               `json:"sample_ok"`
+}
+
+// winTrendDayRow / winTrendSliceRow / propEconomyRow 是聚合查询的行形状。
+// 提为包级类型(而非函数内局部类型)是为了让 buildWinTrends / buildPropEconomy
+// 纯转换层可被单测直接构造输入(§20260811-08 教训 (5))。
+type winTrendDayRow struct {
+	ProviderID string
+	Day        string
+	Games      int64
+	Wins       int64
+}
+
+// winTrendSliceRow 的 DB 列别名用 slice_key 而非 key —— `key` 是 MariaDB
+// 保留字,`role AS key` 触发 Error 1064(2026-08-13 冒烟实测)。
+type winTrendSliceRow struct {
+	ProviderID string
+	SliceKey   string
+	Games      int64
+	Wins       int64
+}
+
+// WinRateTrends 返回所有有对局记录模型的胜率趋势聚合,
+// map[provider_id]*ModelWinTrend(与 RadarStats 同形状,§121 直解)。
+//
+// 三段 GROUP BY(日均/角色/座位)+ 一次轻量 provider 名查询。
+// 查询计划命中 idx_provider_created。nil gormDB → ErrInternal(与其它方法一致)。
+func (s *ModelLogService) WinRateTrends(
+	ctx context.Context,
+) (map[string]*ModelWinTrend, error) {
+	if s.gormDB == nil {
+		return nil, errcode.Code(errcode.ErrInternal)
+	}
+	var days []winTrendDayRow
+	err := s.gormDB.WithContext(ctx).
+		Table("t_lsm_game_model_game_log").
+		Select(`provider_id,
+			DATE_FORMAT(started_at, '%Y-%m-%d') AS day,
+			COUNT(*) AS games,
+			SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) AS wins`).
+		Group("provider_id, DATE_FORMAT(started_at, '%Y-%m-%d')").
+		Order("day ASC").
+		Scan(&days).Error
+	if err != nil {
+		logger.L().Error("model_log win trend daily aggregate failed", zap.Error(err))
+		return nil, errcode.Code(errcode.ErrDB)
+	}
+	var roles []winTrendSliceRow
+	err = s.gormDB.WithContext(ctx).
+		Table("t_lsm_game_model_game_log").
+		Select(`provider_id,
+			role AS slice_key,
+			COUNT(*) AS games,
+			SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) AS wins`).
+		Where("role <> ''").
+		Group("provider_id, role").
+		Scan(&roles).Error
+	if err != nil {
+		logger.L().Error("model_log win trend by-role aggregate failed", zap.Error(err))
+		return nil, errcode.Code(errcode.ErrDB)
+	}
+	var seats []winTrendSliceRow
+	err = s.gormDB.WithContext(ctx).
+		Table("t_lsm_game_model_game_log").
+		Select(`provider_id,
+			CAST(seat AS CHAR) AS slice_key,
+			COUNT(*) AS games,
+			SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) AS wins`).
+		Group("provider_id, seat").
+		Scan(&seats).Error
+	if err != nil {
+		logger.L().Error("model_log win trend by-seat aggregate failed", zap.Error(err))
+		return nil, errcode.Code(errcode.ErrDB)
+	}
+	// agent_name 显示名:轻量全表(≤ 数十行);缺失时回退 provider_id 本身
+	// (provider_id 列实际以 modelKey 写入,见 SelfPortraits 注释)。
+	names := map[string]string{}
+	{
+		var rows []struct {
+			ID        string
+			AgentName string
+		}
+		if e := s.gormDB.WithContext(ctx).
+			Table("t_lsm_game_llm_provider").
+			Select("id, agent_name").
+			Scan(&rows).Error; e == nil {
+			for _, r := range rows {
+				names[r.ID] = r.AgentName
+			}
+		}
+	}
+	return buildWinTrends(days, roles, seats, names), nil
+}
+
+// buildWinTrends 是 WinRateTrends 的纯转换层(不触 DB,可单测)。
+// §20260811-08 教训 (5):转换函数与转换结果都必须有端到端断言。
+func buildWinTrends(
+	days []winTrendDayRow,
+	roles []winTrendSliceRow,
+	seats []winTrendSliceRow,
+	names map[string]string,
+) map[string]*ModelWinTrend {
+	out := map[string]*ModelWinTrend{}
+	get := func(pid string) *ModelWinTrend {
+		if out[pid] == nil {
+			name := names[pid]
+			if name == "" {
+				name = pid
+			}
+			out[pid] = &ModelWinTrend{
+				ProviderID: pid,
+				AgentName:  name,
+				Trend:      []WinTrendDayPoint{},
+				ByRole:     []WinTrendSlice{},
+				BySeat:     []WinTrendSlice{},
+			}
+		}
+		return out[pid]
+	}
+	pct := func(wins, games int64) float64 {
+		if games <= 0 {
+			return 0
+		}
+		return math.Round(float64(wins)/float64(games)*1000) / 10
+	}
+	// 每日趋势:输入已按 day ASC;每 provider 只保留最后 winTrendMaxDays 天。
+	byProviderDays := map[string][]WinTrendDayPoint{}
+	for _, r := range days {
+		if r.Games <= 0 {
+			continue
+		}
+		byProviderDays[r.ProviderID] = append(byProviderDays[r.ProviderID], WinTrendDayPoint{
+			Day:     r.Day,
+			Games:   r.Games,
+			Wins:    r.Wins,
+			WinRate: pct(r.Wins, r.Games),
+		})
+	}
+	for pid, pts := range byProviderDays {
+		m := get(pid)
+		if len(pts) > winTrendMaxDays {
+			pts = pts[len(pts)-winTrendMaxDays:]
+		}
+		m.Trend = pts
+		for _, p := range pts {
+			m.Games += p.Games
+			m.Wins += p.Wins
+		}
+	}
+	for _, r := range roles {
+		if r.Games <= 0 {
+			continue
+		}
+		m := get(r.ProviderID)
+		m.ByRole = append(m.ByRole, WinTrendSlice{
+			Key: r.SliceKey, Games: r.Games, Wins: r.Wins, WinRate: pct(r.Wins, r.Games),
+		})
+	}
+	for _, r := range seats {
+		if r.Games <= 0 {
+			continue
+		}
+		m := get(r.ProviderID)
+		m.BySeat = append(m.BySeat, WinTrendSlice{
+			Key: r.SliceKey, Games: r.Games, Wins: r.Wins, WinRate: pct(r.Wins, r.Games),
+		})
+	}
+	// 排序 + 裁剪 + 汇总字段。
+	for _, m := range out {
+		m.WinRate = pct(m.Wins, m.Games)
+		m.SampleOK = m.Games >= SelfPortraitMinGames
+		sort.Slice(m.ByRole, func(i, j int) bool {
+			return m.ByRole[i].Games > m.ByRole[j].Games
+		})
+		if len(m.ByRole) > winTrendMaxRoles {
+			m.ByRole = m.ByRole[:winTrendMaxRoles]
+		}
+		sort.Slice(m.BySeat, func(i, j int) bool {
+			ki, _ := strconv.Atoi(m.BySeat[i].Key)
+			kj, _ := strconv.Atoi(m.BySeat[j].Key)
+			return ki < kj
+		})
+	}
+	return out
+}
+
+// ─────────────────── prop economy stats (§20260813-02 U2, T13) ───────────────────
+
+// PropEconomySummary 是道具经济顶层汇总(金币四流向 + 总命中率)。
+type PropEconomySummary struct {
+	TotalUses          int64   `json:"total_uses"`
+	TotalHits          int64   `json:"total_hits"`
+	OverallHitRate     float64 `json:"overall_hit_rate"` // 0..100
+	TotalSpent         int64   `json:"total_spent"`
+	TotalPotReturn     int64   `json:"total_pot_return"`
+	TotalSystemAbsorb  int64   `json:"total_system_absorb"`
+	TotalTargetCompens int64   `json:"total_target_compens"`
+}
+
+// PropEconomyEntry 是单道具的使用/命中/金币流向聚合行。
+type PropEconomyEntry struct {
+	PropID        string  `json:"prop_id"`
+	PropKey       string  `json:"prop_key"`
+	NameZh        string  `json:"name_zh"`
+	Price         int64   `json:"price"`
+	BaseHitRate   int     `json:"base_hit_rate"` // 目录基础中招率(%)
+	Uses          int64   `json:"uses"`
+	Hits          int64   `json:"hits"`
+	HitRate       float64 `json:"hit_rate"` // 实测中招率 0..100
+	TotalSpent    int64   `json:"total_spent"`
+	PotReturn     int64   `json:"pot_return"`
+	SystemAbsorb  int64   `json:"system_absorb"`
+	TargetCompens int64   `json:"target_compens"`
+}
+
+// PropEconomyResponse 是道具经济分析的 wrapper 响应形状。
+// §121 教训:http<T> 直接展开 data —— 前端必须显式声明本 wrapper 类型,
+// 不能按数组直解(同 R121 ListProvidersResponse 事故)。
+type PropEconomyResponse struct {
+	Summary PropEconomySummary `json:"summary"`
+	Entries []PropEconomyEntry `json:"entries"`
+}
+
+// PropEconomyStats 聚合 t_lsm_game_prop_usage_log(§132 起 append-only 逐条写入)
+// 的使用次数/命中率/金币四流向,LEFT JOIN t_lsm_game_prop 取目录元数据。
+//
+// 这是该日志表**第一个聚合消费点** —— 此前只有写入没有读取(§130 高危信号)。
+// 只读分析,不改任何 EconTier / 销毁率常量(§133 独立常量原则)。
+func (s *ModelLogService) PropEconomyStats(
+	ctx context.Context,
+) (*PropEconomyResponse, error) {
+	if s.gormDB == nil {
+		return nil, errcode.Code(errcode.ErrInternal)
+	}
+	var rows []propEconomyRow
+	err := s.gormDB.WithContext(ctx).
+		Table("t_lsm_game_prop_usage_log l").
+		Joins("LEFT JOIN t_lsm_game_prop p ON p.id = l.prop_id").
+		Select(`l.prop_id,
+			COALESCE(p.prop_key, l.prop_id) AS prop_key,
+			COALESCE(p.name_zh, '') AS name_zh,
+			COALESCE(p.price, 0) AS price,
+			COALESCE(p.base_hit_rate, 0) AS base_hit_rate,
+			COUNT(*) AS uses,
+			SUM(CASE WHEN l.hit THEN 1 ELSE 0 END) AS hits,
+			COALESCE(SUM(l.price_paid), 0) AS total_spent,
+			COALESCE(SUM(l.pot_return), 0) AS pot_return,
+			COALESCE(SUM(l.system_absorb), 0) AS system_absorb,
+			COALESCE(SUM(l.target_compens), 0) AS target_compens`).
+		Group("l.prop_id, p.prop_key, p.name_zh, p.price, p.base_hit_rate").
+		Order("uses DESC").
+		Scan(&rows).Error
+	if err != nil {
+		logger.L().Error("prop economy aggregate failed", zap.Error(err))
+		return nil, errcode.Code(errcode.ErrDB)
+	}
+	return buildPropEconomy(rows), nil
+}
+
+// propEconomyRow 是道具经济聚合查询的行形状(包级,供单测构造)。
+type propEconomyRow struct {
+	PropID        string
+	PropKey       string
+	NameZh        string
+	Price         int64
+	BaseHitRate   int
+	Uses          int64
+	Hits          int64
+	TotalSpent    int64
+	PotReturn     int64
+	SystemAbsorb  int64
+	TargetCompens int64
+}
+
+// buildPropEconomy 是 PropEconomyStats 的纯转换层(不触 DB,可单测)。
+func buildPropEconomy(rows []propEconomyRow) *PropEconomyResponse {
+	out := &PropEconomyResponse{Entries: []PropEconomyEntry{}}
+	pct := func(hits, uses int64) float64 {
+		if uses <= 0 {
+			return 0
+		}
+		return math.Round(float64(hits)/float64(uses)*1000) / 10
+	}
+	for _, r := range rows {
+		if r.Uses <= 0 {
+			continue
+		}
+		out.Entries = append(out.Entries, PropEconomyEntry{
+			PropID:        r.PropID,
+			PropKey:       r.PropKey,
+			NameZh:        r.NameZh,
+			Price:         r.Price,
+			BaseHitRate:   r.BaseHitRate,
+			Uses:          r.Uses,
+			Hits:          r.Hits,
+			HitRate:       pct(r.Hits, r.Uses),
+			TotalSpent:    r.TotalSpent,
+			PotReturn:     r.PotReturn,
+			SystemAbsorb:  r.SystemAbsorb,
+			TargetCompens: r.TargetCompens,
+		})
+		out.Summary.TotalUses += r.Uses
+		out.Summary.TotalHits += r.Hits
+		out.Summary.TotalSpent += r.TotalSpent
+		out.Summary.TotalPotReturn += r.PotReturn
+		out.Summary.TotalSystemAbsorb += r.SystemAbsorb
+		out.Summary.TotalTargetCompens += r.TargetCompens
+	}
+	out.Summary.OverallHitRate = pct(out.Summary.TotalHits, out.Summary.TotalUses)
+	return out
 }

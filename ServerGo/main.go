@@ -416,7 +416,9 @@ func main() {
 	// 2026-07-21 §道具系统 — PropAPI 暴露 /api/games/werewolf/props 和
 	// /api/admin/werewolf/props(/usage)路由,与 WS `game.werewolf_use_prop`
 	// 共用 WerewolfManager.Action_UseProp + PropService。
-	propAPI := api.NewPropAPI(gameSvcWs.WerewolfManager(), propSvc, userSvc, walletSvc)
+	// §20260813-02 U2 — 注入 modelLogSvc 供 GET /api/games/werewolf/prop-economy
+	// 聚合 t_lsm_game_prop_usage_log(该日志表此前只写不读,§130 高危信号)。
+	propAPI := api.NewPropAPI(gameSvcWs.WerewolfManager(), propSvc, userSvc, modelLogSvc, walletSvc)
 
 	// 2026-08-11 §20260811-05 U2 — 赛后复盘问答 REST 入口。
 	// POST /api/games/werewolf/rooms/:roomId/recall_chat,终局后玩家/观战者

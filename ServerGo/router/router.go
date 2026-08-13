@@ -178,6 +178,8 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		werewolfGames.GET("/props", propAPI.ListProps)
 		werewolfGames.POST("/props/use", propAPI.UseProp)
 		werewolfGames.GET("/rooms/:roomId/prop_history", propAPI.GetPropHistory)
+		// §20260813-02 U2 (T13) — 道具经济分析(使用/命中率/金币四流向聚合)。
+		werewolfGames.GET("/prop-economy", propAPI.GetPropEconomy)
 		// 2026-08-11 §20260811-05 U2 — 赛后复盘问答:终局后玩家/观战者
 		// 向本局 bot 座位提问(冻结 Memory 快照单轮问答,不写回 Memory)。
 		werewolfGames.POST("/rooms/:roomId/recall_chat", recallChatAPI.RecallChat)
@@ -216,6 +218,8 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		// banner when the proxy is unreachable. Cheap (3s HEAD), no admin
 		// role required — every logged-in user benefits.
 		llm.GET("/health", llmAPI.Health)
+		// §20260813-02 U1 (T12) — 胜率趋势追踪:按模型/角色/座位 + 按日趋势。
+		llm.GET("/win-trends", llmAPI.WinTrends)
 	}
 
 	// Admin management — all protected, requires admin or super admin role.

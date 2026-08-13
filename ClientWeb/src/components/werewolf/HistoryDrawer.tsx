@@ -47,6 +47,8 @@ import ReasoningChainsPanel from '@/components/werewolf/ReasoningChainsPanel';
 import GodModeView from '@/components/werewolf/GodModeView';
 // §20260812-03 U1 — 阵营胜率热力图面板。仅观战者可见,§132 隐私隔离。
 import { WinRateHeatmapPanel } from '@/components/werewolf/WinRateHeatmap';
+// §20260813-02 U4 — 夜间血迹图(S2)。spectator-only 夜间行动空间可视化。
+import { NightBloodMap } from '@/components/werewolf/NightBloodMap';
 import { useAuthStore } from '@/store/auth.store';
 
 interface HistoryDrawerProps {
@@ -65,10 +67,12 @@ type SubTab =
   // §20260811-08 U1/U3 — 上帝视角(全视角读心 + 公开技能行动)。
   | 'godmode'
   // §20260812-03 U1 — 阵营胜率热力图(仅观战者,§132 隐私隔离)。
-  | 'heatmap';
+  | 'heatmap'
+  // §20260813-02 U4 — 夜间血迹图(S2,仅观战者)。
+  | 'bloodmap';
 
-/** §20260811-02 U2 + §20260811-06 U3 + §20260812-03 U1 — spectator 专属 sub-tab 白名单。 */
-const SPECTATOR_ONLY_TABS: SubTab[] = ['infoflow', 'hypothesis', 'decision', 'reasoning', 'godmode', 'heatmap'];
+/** §20260811-02 U2 + §20260811-06 U3 + §20260812-03 U1 + §20260813-02 U4 — spectator 专属 sub-tab 白名单。 */
+const SPECTATOR_ONLY_TABS: SubTab[] = ['infoflow', 'hypothesis', 'decision', 'reasoning', 'godmode', 'heatmap', 'bloodmap'];
 
 interface TimelineEntry {
   /** 内部 key */
@@ -394,6 +398,8 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
     { key: 'godmode',    label: t('werewolf.history.subtab.godmode') },
     // §20260812-03 U1 — 阵营胜率热力图(spectator only,§132 隐私隔离)。
     { key: 'heatmap',    label: t('werewolf.history.subtab.heatmap') },
+    // §20260813-02 U4 — 夜间血迹图(S2,spectator only)。
+    { key: 'bloodmap',   label: t('werewolf.history.subtab.bloodmap') },
   ];
   const tabs = spectator
     ? allTabs
@@ -465,6 +471,15 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
               probabilities={gameState.win_rate_probability}
               players={gameState.players}
               t={t}
+            />
+          )}
+          {/* §20260813-02 U4 — 夜间血迹图(S2)。后端仅在 viewer<0 分支填充
+              god_mode(含 wolf_kills / guard_protect_entries 增量字段),
+              此处 spectator 守卫是纵深防御第二道(§135)。 */}
+          {sub === 'bloodmap'   && spectator && gameState.god_mode && (
+            <NightBloodMap
+              snapshot={gameState.god_mode}
+              players={gameState.players}
             />
           )}
         </div>

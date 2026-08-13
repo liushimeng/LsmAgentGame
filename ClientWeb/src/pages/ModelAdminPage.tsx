@@ -47,6 +47,9 @@ import { formatBalance } from '@/shared/utils/balance';
 import { AppModal } from '@/components/ui/AppModal';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { ModelRadarChart } from '@/components/common/ModelRadarChart';
+// §20260813-02 U1/U2 — 胜率趋势 + 道具经济分析(自包含组件,页内仅 1 行接线,
+// 避免本页突破 §4 1800 行上限)。
+import { ModelAnalyticsSection } from '@/components/common/ModelAnalyticsPanels';
 import type { LlmProvider, LlmProviderCreate } from '@/types/model';
 import type { TKey } from '@/i18n';
 
@@ -533,6 +536,9 @@ export function ModelAdminPage() {
           <ModelRadarChart data={radarData} width={420} />
         </div>
       )}
+
+      {/* §20260813-02 U1/U2 — 胜率趋势 + 道具经济(自包含:toggle + fetch) */}
+      <ModelAnalyticsSection show={isAdmin} />
 
       <div className="model-admin-table-wrapper">
         {loading && <div className="admin-users-loading-overlay">{t('common.loading')}</div>}

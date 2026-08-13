@@ -624,6 +624,28 @@ const zhCN: Dict = {
   'modelAdmin.game.empty': '暂无消息/动作',
   'modelAdmin.game.loading': '加载中…',
   'modelAdmin.game.errorLoad': '加载失败',
+  // §20260813-02 U1/U2 — 运营数据分析面板
+  'modelAdmin.analytics.toggle': '数据分析',
+  'modelAdmin.analytics.empty': '暂无数据(需要先完成对局)',
+  'modelAdmin.analytics.winTrendTitle': '📈 胜率趋势(近 30 天)',
+  'modelAdmin.analytics.last30d': '近 30 天趋势',
+  'modelAdmin.analytics.winRate': '总胜率',
+  'modelAdmin.analytics.games': '局数',
+  'modelAdmin.analytics.bestRole': '最佳角色',
+  'modelAdmin.analytics.bestSeat': '最佳座位',
+  'modelAdmin.analytics.sampleLow': '样本不足 8 局,仅供参考',
+  'modelAdmin.analytics.byRole': '按角色',
+  'modelAdmin.analytics.bySeat': '按座位',
+  'modelAdmin.analytics.propEconTitle': '🎭 道具经济分析',
+  'modelAdmin.analytics.potReturn': '回彩池',
+  'modelAdmin.analytics.systemAbsorb': '系统销毁',
+  'modelAdmin.analytics.targetCompens': '目标补偿',
+  'modelAdmin.analytics.totalSpent': '总支出',
+  'modelAdmin.analytics.hitRate': '实测中招率',
+  'modelAdmin.analytics.baseHitRate': '基础中招率',
+  'modelAdmin.analytics.propName': '道具',
+  'modelAdmin.analytics.price': '单价',
+  'modelAdmin.analytics.uses': '使用次数',
 
   // 狼人杀 13 人标准竞技局 — werewolf (第 6 款游戏,2026-07-10 从 7 人升级,2026-07-11 从 12 人扩展到 13 人)
   'nav.werewolf': '狼人杀 13 人局',
@@ -857,6 +879,8 @@ const zhCN: Dict = {
   'werewolf.history.subtab.godmode': '👁️ 上帝视角',
   // §20260812-03 U1 — 阵营胜率热力图 sub-tab
   'werewolf.history.subtab.heatmap': '🔥 胜率',
+  // §20260813-02 U4 — 夜间血迹图(spectator only)
+  'werewolf.history.subtab.bloodmap': '🩸 血迹图',
   'werewolf.history.reasoning.empty': '本局暂未公开任何推理链',
   'werewolf.history.reasoning.filterAll': '全部',
   // §20260811-06 U5 — 黎明流言(活动流自动渲染,本键预留扩展)
@@ -873,6 +897,15 @@ const zhCN: Dict = {
   'werewolf.heatmap.title': '阵营胜率热力图',
   'werewolf.heatmap.subtitle': '基于存活率 / 投票集中度 / 发言密度的启发式估算(仅观战者可见)',
   'werewolf.heatmap.empty': '本局暂未生成胜率数据(等待游戏开始)',
+  // §20260813-02 U4 — 夜间血迹图
+  'werewolf.bloodmap.title': '夜间血迹图',
+  'werewolf.bloodmap.night': '第 {n} 夜',
+  'werewolf.bloodmap.empty': '该夜无夜间行动记录',
+  'werewolf.bloodmap.legend.wolfKill': '狼刀',
+  'werewolf.bloodmap.legend.seerCheck': '查验',
+  'werewolf.bloodmap.legend.witch': '用药',
+  'werewolf.bloodmap.legend.guard': '守护',
+  'werewolf.bloodmap.legend.demonHunt': '猎魔',
   // §20260812-03 U2 — 私下通道文案
   'werewolf.letter.title': '私下通道',
   'werewolf.letter.inbox_empty': '暂无私下信件',

@@ -621,6 +621,28 @@ const ja: Dict = {
   'modelAdmin.game.empty': 'メッセージ/アクションなし',
   'modelAdmin.game.loading': '読込中…',
   'modelAdmin.game.errorLoad': '読込失敗',
+  // §20260813-02 U1/U2 — 運営データ分析パネル
+  'modelAdmin.analytics.toggle': 'データ分析',
+  'modelAdmin.analytics.empty': 'データなし(先に対局を完了してください)',
+  'modelAdmin.analytics.winTrendTitle': '📈 勝率推移(直近 30 日)',
+  'modelAdmin.analytics.last30d': '直近 30 日',
+  'modelAdmin.analytics.winRate': '総勝率',
+  'modelAdmin.analytics.games': '対局数',
+  'modelAdmin.analytics.bestRole': '最強役職',
+  'modelAdmin.analytics.bestSeat': '最強シート',
+  'modelAdmin.analytics.sampleLow': 'サンプル 8 局未満、参考値',
+  'modelAdmin.analytics.byRole': '役職別',
+  'modelAdmin.analytics.bySeat': 'シート別',
+  'modelAdmin.analytics.propEconTitle': '🎭 道具経済分析',
+  'modelAdmin.analytics.potReturn': '賞金プール還元',
+  'modelAdmin.analytics.systemAbsorb': 'システム焼却',
+  'modelAdmin.analytics.targetCompens': '対象補償',
+  'modelAdmin.analytics.totalSpent': '総支出',
+  'modelAdmin.analytics.hitRate': '実測命中率',
+  'modelAdmin.analytics.baseHitRate': '基本命中率',
+  'modelAdmin.analytics.propName': '道具',
+  'modelAdmin.analytics.price': '単価',
+  'modelAdmin.analytics.uses': '使用回数',
 
   // 狼人殺13人標準(2026-07-10 に 7 人から升级、2026-07-11 に 13 人へ拡張;werewolf_12/werewolf_7 は残存)
   'nav.werewolf': '人狼 13人',
@@ -854,6 +876,8 @@ const ja: Dict = {
   'werewolf.history.subtab.godmode': '👁️ 神視点',
   // §20260812-03 U1 — 陣営勝率ヒートマップ sub-tab
   'werewolf.history.subtab.heatmap': '🔥 勝率',
+  // §20260813-02 U4 — 夜間血痕マップ(spectator only)
+  'werewolf.history.subtab.bloodmap': '🩸 血痕図',
   'werewolf.history.reasoning.empty': 'まだ公開された推論チェーンはありません',
   'werewolf.history.reasoning.filterAll': '全て',
   // §20260811-06 U5 — 黎明の噂システム
@@ -870,6 +894,15 @@ const ja: Dict = {
   'werewolf.heatmap.title': '陣営勝率ヒートマップ',
   'werewolf.heatmap.subtitle': '生存率 / 投票集中度 / 発言密度に基づくヒューリスティック推定(観戦者のみ)',
   'werewolf.heatmap.empty': '勝率データがまだ生成されていません(ゲーム開始待ち)',
+  // §20260813-02 U4 — 夜間血痕マップ
+  'werewolf.bloodmap.title': '夜間血痕マップ',
+  'werewolf.bloodmap.night': '第 {n} 夜',
+  'werewolf.bloodmap.empty': 'この夜の行動記録はありません',
+  'werewolf.bloodmap.legend.wolfKill': '狼の襲撃',
+  'werewolf.bloodmap.legend.seerCheck': '占い',
+  'werewolf.bloodmap.legend.witch': '薬の使用',
+  'werewolf.bloodmap.legend.guard': '守護',
+  'werewolf.bloodmap.legend.demonHunt': '悪魔狩り',
   // §20260812-03 U2 — プライベートレターパネル
   'werewolf.letter.title': 'プライベートチャネル',
   'werewolf.letter.inbox_empty': 'プライベートレターはありません',

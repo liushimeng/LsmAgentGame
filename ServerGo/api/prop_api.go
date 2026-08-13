@@ -44,17 +44,21 @@ type PropAPI struct {
 	propSvc   *werewolf.PropService
 	userSvc   UserRoleChecker
 	walletSvc *service.WalletService
+	// modelLogs 可选(nil-safe):§20260813-02 U2 — GET prop-economy 聚合
+	// t_lsm_game_prop_usage_log。未注入时返回空 wrapper(前端按空态渲染)。
+	modelLogs *service.ModelLogService
 }
 
 // NewPropAPI wires the handler with its dependencies.
 // walletSvc 可选(nil-safe):用于 GET /api/games/werewolf/props 回填 my_balance;
 // 未注入时 my_balance 返回 -1(前端按"未知"处理,不阻塞道具目录渲染)。
-func NewPropAPI(manager *werewolf.WerewolfManager, propSvc *werewolf.PropService, userSvc UserRoleChecker, walletSvc ...*service.WalletService) *PropAPI {
+// modelLogs 可选(nil-safe):§20260813-02 U2 — 道具经济聚合数据源。
+func NewPropAPI(manager *werewolf.WerewolfManager, propSvc *werewolf.PropService, userSvc UserRoleChecker, modelLogs *service.ModelLogService, walletSvc ...*service.WalletService) *PropAPI {
 	var ws *service.WalletService
 	if len(walletSvc) > 0 {
 		ws = walletSvc[0]
 	}
-	return &PropAPI{manager: manager, propSvc: propSvc, userSvc: userSvc, walletSvc: ws}
+	return &PropAPI{manager: manager, propSvc: propSvc, userSvc: userSvc, walletSvc: ws, modelLogs: modelLogs}
 }
 
 // ─────────────────── 用户侧:列出/使用 ───────────────────
@@ -260,6 +264,50 @@ func (h *PropAPI) GetPropHistory(c *gin.Context) {
 			"count":   len(out),
 			"history": out,
 		},
+	})
+}
+
+// GetPropEconomy GET /api/games/werewolf/prop-economy — 道具经济分析聚合
+// (§20260813-02 U2,T13)。使用次数/命中率/金币四流向,数据源是
+// append-only 的 t_lsm_game_prop_usage_log。需登录,任意角色。
+//
+// §121 数据形状:data 是 wrapper 对象 {summary, entries},前端必须显式
+// 声明 PropEconomyResponse 类型(R121 教训)。
+func (h *PropAPI) GetPropEconomy(c *gin.Context) {
+	if h.modelLogs == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    errcode.OK,
+			"message": errcode.DefaultMessages[errcode.OK],
+			"data": service.PropEconomyResponse{
+				Summary: service.PropEconomySummary{},
+				Entries: []service.PropEconomyEntry{},
+			},
+		})
+		return
+	}
+	resp, err := h.modelLogs.PropEconomyStats(c.Request.Context())
+	if err != nil {
+		ce := errcode.AsError(err)
+		c.JSON(http.StatusOK, gin.H{
+			"code":    ce.Code,
+			"message": ce.Message,
+			"data": service.PropEconomyResponse{
+				Summary: service.PropEconomySummary{},
+				Entries: []service.PropEconomyEntry{},
+			},
+		})
+		return
+	}
+	if resp == nil {
+		resp = &service.PropEconomyResponse{Entries: []service.PropEconomyEntry{}}
+	}
+	if resp.Entries == nil {
+		resp.Entries = []service.PropEconomyEntry{}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    errcode.OK,
+		"message": errcode.DefaultMessages[errcode.OK],
+		"data":    resp,
 	})
 }
 

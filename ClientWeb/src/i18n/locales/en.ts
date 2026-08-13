@@ -622,6 +622,28 @@ const en: Dict = {
   'modelAdmin.game.empty': 'No messages/actions',
   'modelAdmin.game.loading': 'Loading…',
   'modelAdmin.game.errorLoad': 'Failed to load',
+  // §20260813-02 U1/U2 — operations analytics panels
+  'modelAdmin.analytics.toggle': 'Analytics',
+  'modelAdmin.analytics.empty': 'No data yet (finish some games first)',
+  'modelAdmin.analytics.winTrendTitle': '📈 Win-rate trend (last 30 days)',
+  'modelAdmin.analytics.last30d': 'Last 30 days',
+  'modelAdmin.analytics.winRate': 'Win rate',
+  'modelAdmin.analytics.games': 'Games',
+  'modelAdmin.analytics.bestRole': 'Best role',
+  'modelAdmin.analytics.bestSeat': 'Best seat',
+  'modelAdmin.analytics.sampleLow': 'Fewer than 8 games — indicative only',
+  'modelAdmin.analytics.byRole': 'By role',
+  'modelAdmin.analytics.bySeat': 'By seat',
+  'modelAdmin.analytics.propEconTitle': '🎭 Prop economy analysis',
+  'modelAdmin.analytics.potReturn': 'Pot return',
+  'modelAdmin.analytics.systemAbsorb': 'System absorb',
+  'modelAdmin.analytics.targetCompens': 'Target compensation',
+  'modelAdmin.analytics.totalSpent': 'Total spent',
+  'modelAdmin.analytics.hitRate': 'Actual hit rate',
+  'modelAdmin.analytics.baseHitRate': 'Base hit rate',
+  'modelAdmin.analytics.propName': 'Prop',
+  'modelAdmin.analytics.price': 'Price',
+  'modelAdmin.analytics.uses': 'Uses',
 
   // Werewolf 13-player standard (2026-07-10 upgraded from 7-player, 2026-07-11 extended to 13 players; werewolf_12/werewolf_7 preserved)
   'nav.werewolf': 'Werewolf 13P',
@@ -855,6 +877,8 @@ const en: Dict = {
   'werewolf.history.subtab.godmode': '👁️ God View',
   // §20260812-03 U1 — faction win-rate heatmap sub-tab
   'werewolf.history.subtab.heatmap': '🔥 Win Rate',
+  // §20260813-02 U4 — Night Blood Map (spectator only)
+  'werewolf.history.subtab.bloodmap': '🩸 Blood Map',
   'werewolf.history.reasoning.empty': 'No reasoning chains disclosed yet',
   'werewolf.history.reasoning.filterAll': 'All',
   // §20260811-06 U5 — dawn rumor system
@@ -871,6 +895,15 @@ const en: Dict = {
   'werewolf.heatmap.title': 'Faction Win-Rate Heatmap',
   'werewolf.heatmap.subtitle': 'Heuristic estimate based on alive rate / vote share / speech density (spectator only)',
   'werewolf.heatmap.empty': 'No win-rate data yet (waiting for game to start)',
+  // §20260813-02 U4 — Night Blood Map
+  'werewolf.bloodmap.title': 'Night Blood Map',
+  'werewolf.bloodmap.night': 'Night {n}',
+  'werewolf.bloodmap.empty': 'No night actions recorded for this night',
+  'werewolf.bloodmap.legend.wolfKill': 'Wolf kill',
+  'werewolf.bloodmap.legend.seerCheck': 'Seer check',
+  'werewolf.bloodmap.legend.witch': 'Witch potion',
+  'werewolf.bloodmap.legend.guard': 'Guard',
+  'werewolf.bloodmap.legend.demonHunt': 'Demon hunt',
   // §20260812-03 U2 — secret letter panel
   'werewolf.letter.title': 'Private Channel',
   'werewolf.letter.inbox_empty': 'No private letters yet',

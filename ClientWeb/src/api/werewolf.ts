@@ -22,3 +22,48 @@ export async function fetchProps(): Promise<PropListResponse | null> {
     return null;
   }
 }
+
+/** §20260813-02 U2 (T13) — 单道具经济聚合行(与后端 PropEconomyEntry 对齐)。 */
+export interface PropEconomyEntry {
+  prop_id: string;
+  prop_key: string;
+  name_zh: string;
+  price: number;
+  base_hit_rate: number; // 目录基础中招率(%)
+  uses: number;
+  hits: number;
+  hit_rate: number;      // 实测中招率 0..100
+  total_spent: number;
+  pot_return: number;
+  system_absorb: number;
+  target_compens: number;
+}
+
+/** §20260813-02 U2 — 道具经济顶层汇总。 */
+export interface PropEconomySummary {
+  total_uses: number;
+  total_hits: number;
+  overall_hit_rate: number; // 0..100
+  total_spent: number;
+  total_pot_return: number;
+  total_system_absorb: number;
+  total_target_compens: number;
+}
+
+/**
+ * §20260813-02 U2 — wrapper 响应形状(§121:http<T> 直接展开 data,
+ * 后端 data 是 {summary, entries} wrapper 对象,必须显式声明本类型)。
+ */
+export interface PropEconomyResponse {
+  summary: PropEconomySummary;
+  entries: PropEconomyEntry[];
+}
+
+/** GET /api/games/werewolf/prop-economy — 道具经济分析聚合。 */
+export async function fetchPropEconomy(): Promise<PropEconomyResponse | null> {
+  try {
+    return await http<PropEconomyResponse>('/api/games/werewolf/prop-economy');
+  } catch {
+    return null;
+  }
+}

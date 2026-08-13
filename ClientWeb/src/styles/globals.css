@@ -21,6 +21,11 @@
 /* 2026-08-12 §20260812-03 U1 — 阵营胜率热力图面板(WinRateHeatmap)。
    独立成文件,保持 CLAUDE.md §4「单文件 ≤ 1800 行」;插入位置紧随 §20260812-01 之后。 */
 @import './werewolf-20260812-03.css';
+/* 2026-08-13 §20260813-02 U1/U2/U4 — 运营数据分析面板(ModelAnalyticsPanels)+
+   夜间血迹图(NightBloodMap)。独立成文件(werewolf-v2.css 已逼近 §4 上限),
+   插入位置紧随 §20260812-03 之后,不触碰 werewolf.css → werewolf-v2.css →
+   werewolf-emotion.css → werewolf-speech.css 的 .werewolf-seat 覆盖链。 */
+@import './werewolf-20260813-02.css';
 /* 2026-08-05 §Agent聊天显示优化 — 座位卡发言气泡样式。
    必须排在 werewolf-v2.css **之后**:本文件覆盖 .werewolf-seat 的 min-height
    断点值与 .werewolf-seat__metrics 的降权规则(同优先级靠级联顺序取胜)。

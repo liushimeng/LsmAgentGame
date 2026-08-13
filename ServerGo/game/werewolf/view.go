@@ -1520,6 +1520,19 @@ type GodModeSnapshot struct {
 	WitchDecisions []WitchDecision  `json:"witch_decisions"` // 女巫用药历史(从 InformationLedger 聚合)
 	GuardProtects  []int            `json:"guard_protects"`  // 守卫守护历史(从 InformationLedger 聚合)
 
+	// §20260813-02 U4 — 夜间血迹图(S2)增量字段。**纯增量**,不改动上方既有
+	// 字段的形状(GuardProtects []int 仍被 GodModeView 消费,§121 契约不破坏)。
+	//
+	// WolfKills:每夜狼队最终刀口(从 InfoSourceNightWolfVote 账本聚合,
+	// 每 Round 取 Seq 最大的 wolf_vote 条目的 target;全狼弃权的夜跳过)。
+	// GuardProtectEntries:守卫守护的 {Day, Seat, Target} 结构版
+	// (guard_protect fact 本就含双座位,此处补齐 Day+Seat 供血迹图渲染)。
+	//
+	// §135:两字段只含座位号不含身份明文;下发通道仍是 spectator-only 的
+	// GodModeSnapshot(玩家视图 / REST 永不下发,populateGodModeLocked 单点保证)。
+	WolfKills           []WolfKillEntry      `json:"wolf_kills"`
+	GuardProtectEntries []GuardProtectEntry  `json:"guard_protect_entries"`
+
 	// §20260810-11 V1 — 全视角读心观战(spectator 视角切换面板)
 	// PerSeatPOV 是 13 座位的「第一视角」快照,前端 GodModeView 切换时取对应 seat 的快照渲染。
 	// §119 协议层隔离:仅 spectator 视图下发,玩家视图不含;前端按 user_id !== player.user_id
@@ -1581,6 +1594,21 @@ type SeerCheckEntry struct {
 	Seat   int    `json:"seat"`   // 预言家座位
 	Target int    `json:"target"` // 被查验座位
 	Result string `json:"result"` // "good" / "werewolf"(原始身份,不脱敏)
+}
+
+// WolfKillEntry 单夜狼队最终刀口(§20260813-02 U4,夜间血迹图 S2)。
+// Day 为夜晚序号(与账本 Round 一致);Target 为刀口座位。
+type WolfKillEntry struct {
+	Day    int `json:"day"`
+	Target int `json:"target"`
+}
+
+// GuardProtectEntry 守卫守护条目结构版(§20260813-02 U4,夜间血迹图 S2)。
+// 与既有 GuardProtects []int 并存(不破坏 §121 既有契约)。
+type GuardProtectEntry struct {
+	Day    int `json:"day"`
+	Seat   int `json:"seat"`   // 守卫座位
+	Target int `json:"target"` // 被守护座位
 }
 
 // WitchDecision 女巫用药决策(spectator 上帝视角专用)。

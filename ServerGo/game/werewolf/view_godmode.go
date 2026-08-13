@@ -2,6 +2,7 @@ package werewolf
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -35,15 +36,17 @@ func (r *WerewolfRoom) populateGodModeLocked() *GodModeSnapshot {
 	}
 	gs := r.State
 	snap := &GodModeSnapshot{
-		Enabled:        true, // 字段恒为 true;前端 localStorage 控制是否渲染
-		Roles:          make(map[int]string, MaxPlayers),
-		Factions:       make(map[int]string, MaxPlayers),
-		WolfKillTarget: int(gs.WolfKillTarget),
-		WolfVotes:      make(map[int]int, MaxPlayers),
-		SeerChecks:     []SeerCheckEntry{},
-		WitchDecisions: []WitchDecision{},
-		GuardProtects:  []int{},
-		PublicActions:  []PublicActionEntry{}, // §20260811-08 U3
+		Enabled:             true, // 字段恒为 true;前端 localStorage 控制是否渲染
+		Roles:               make(map[int]string, MaxPlayers),
+		Factions:            make(map[int]string, MaxPlayers),
+		WolfKillTarget:      int(gs.WolfKillTarget),
+		WolfVotes:           make(map[int]int, MaxPlayers),
+		SeerChecks:          []SeerCheckEntry{},
+		WitchDecisions:      []WitchDecision{},
+		GuardProtects:       []int{},
+		WolfKills:           []WolfKillEntry{},     // §20260813-02 U4
+		GuardProtectEntries: []GuardProtectEntry{}, // §20260813-02 U4
+		PublicActions:       []PublicActionEntry{}, // §20260811-08 U3
 	}
 	// 全量身份 + 阵营(§135 spectator-only)
 	for i := 0; i < MaxPlayers; i++ {
@@ -59,6 +62,13 @@ func (r *WerewolfRoom) populateGodModeLocked() *GodModeSnapshot {
 			snap.WolfVotes[i] = int(gs.WolfVotes[i])
 		}
 	}
+	// §20260813-02 U4 — 狼刀历史聚合容器(loop 后按 Day 升序 flush)。
+	type wolfKillAgg struct {
+		seq    int64
+		target int
+	}
+	wolfKillByDay := map[int]wolfKillAgg{}
+
 	// §20260810-09 历史聚合 —— 直接走 InformationLedger(§20260810-05/08 已落地)。
 	// InformationLedger 是当前唯一事实来源,不在此新增镜像字段(避免 §130 接线漂移)。
 	if r.infoLedger != nil {
@@ -93,9 +103,27 @@ func (r *WerewolfRoom) populateGodModeLocked() *GodModeSnapshot {
 					})
 				}
 			case InfoSourceNightGuard:
-				_, target := parseSeatTargetPair(e.Fact, "guard_protect")
+				gseat, target := parseSeatTargetPair(e.Fact, "guard_protect")
 				if target >= 0 {
 					snap.GuardProtects = append(snap.GuardProtects, target)
+					// §20260813-02 U4 — 结构版(Day+Seat+Target)供血迹图渲染;
+					// fact 本就含双座位(buildNightActionsBySeatLocked 已在用)。
+					if gseat >= 0 {
+						snap.GuardProtectEntries = append(snap.GuardProtectEntries,
+							GuardProtectEntry{Day: e.Round, Seat: gseat, Target: target})
+					}
+				}
+
+			// §20260813-02 U4 — 狼刀历史(夜间血迹图 S2)。
+			// fact 格式 "wolf_vote seat=S target=T reason=R"(room_action.go);
+			// 同一夜多狼多票,取该 Round 中 Seq 最大条目的 target 为最终刀口
+			// (最后一票即定刀,与引擎 NightWolfKill 计票语义一致)。
+			case InfoSourceNightWolfVote:
+				_, target := parseSeatTargetPair(e.Fact, "wolf_vote")
+				if target >= 0 {
+					if prev, ok := wolfKillByDay[e.Round]; !ok || e.Seq >= prev.seq {
+						wolfKillByDay[e.Round] = wolfKillAgg{seq: e.Seq, target: target}
+					}
 				}
 
 			// §20260811-08 U3 — 4 类已公开技能行动。写入点早已存在
@@ -128,6 +156,22 @@ func (r *WerewolfRoom) populateGodModeLocked() *GodModeSnapshot {
 					})
 				}
 			}
+		}
+	}
+
+	// §20260813-02 U4 — flush 狼刀历史:按 Day 升序,弃权夜(target<0 已在
+	// case 内过滤)不出现。
+	if len(wolfKillByDay) > 0 {
+		daysSorted := make([]int, 0, len(wolfKillByDay))
+		for d := range wolfKillByDay {
+			daysSorted = append(daysSorted, d)
+		}
+		sort.Ints(daysSorted)
+		for _, d := range daysSorted {
+			snap.WolfKills = append(snap.WolfKills, WolfKillEntry{
+				Day:    d,
+				Target: wolfKillByDay[d].target,
+			})
 		}
 	}
 

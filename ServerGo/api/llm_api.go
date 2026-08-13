@@ -95,6 +95,38 @@ func (h *LlmAPI) Radar(c *gin.Context) {
 	})
 }
 
+// WinTrends handles GET /api/llm/win-trends. Returns per-model win-rate trend
+// aggregates (daily trend / by-role / by-seat) over t_lsm_game_model_game_log.
+// §20260813-02 U1 (T12 胜率趋势追踪). Auth: logged-in user (any role).
+// Returns map[provider_id]*ModelWinTrend (§121: 前端直解 map,非 wrapper)。
+func (h *LlmAPI) WinTrends(c *gin.Context) {
+	if h.modelLogs == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    errcode.OK,
+			"message": errcode.DefaultMessages[errcode.OK],
+			"data":    map[string]*service.ModelWinTrend{},
+		})
+		return
+	}
+	rows, err := h.modelLogs.WinRateTrends(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    errcode.Code(errcode.ErrDB),
+			"message": err.Error(),
+			"data":    map[string]*service.ModelWinTrend{},
+		})
+		return
+	}
+	if rows == nil {
+		rows = map[string]*service.ModelWinTrend{}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    errcode.OK,
+		"message": errcode.DefaultMessages[errcode.OK],
+		"data":    rows,
+	})
+}
+
 // List handles GET /api/llm/models. Returns {agent_name, model, provider_type}
 // for every configured model (including placeholder ones — callers decide how
 // to surface those). API keys are NEVER returned.
