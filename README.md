@@ -22,6 +22,15 @@
 </div>
 <!-- markdownlint-restore -->
 
+<div align="center">
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![AI Agent Coded](https://img.shields.io/badge/AI--Agent-100%25-ff6b6b)](CLAUDE.md)
+[![Chinese](https://img.shields.io/badge/lang-中文-red)](README.md) [![English](https://img.shields.io/badge/lang-English-blue)](README.en.md) [![日本語](https://img.shields.io/badge/lang-日本語-green)](README.ja.md)
+
+</div>
+
 ---
 
 > **🤖 100% AI Agent 自动编程** —— 无人工手写一行代码，无古法编程。
@@ -300,7 +309,19 @@ CLAUDE.md 中记录 130+ 条 Agent 教训（§1–§213），其中 8 条对后�
 
 ## 📜 协议
 
-私有 / 内部项目。所有代码由 AI Agent 自动编写。
+本项目以 **MIT License** 开放源代码 —— 详见 [`LICENSE`](LICENSE) 文件。
+所有代码由 AI Agent 自动编写，人工 review 后入库。
+
+---
+
+## 🤝 贡献
+
+欢迎通过 [Pull Request](CONTRIBUTING.md) 提交改进，并请先阅读 [行为准则](CODE_OF_CONDUCT.md) 与 [安全策略](SECURITY.md)。
+
+- 🐛 [报告 Bug](.github/ISSUE_TEMPLATE/bug_report.md)
+- ✨ [提出建议](.github/ISSUE_TEMPLATE/feature_request.md)
+- 📝 [改进文档](.github/ISSUE_TEMPLATE/documentation.md)
+- 🔒 [私下上报安全问题](SECURITY.md)
 
 ---
 
@@ -311,6 +332,14 @@ CLAUDE.md 中记录 130+ 条 Agent 教训（§1–§213），其中 8 条对后�
 - ⭐ **Star** 本仓库 —— 让更多人看到 Agent 编程的力量
 - 👁️ **Watch** —— 跟进后续迭代
 - 🍴 **Fork** —— 在你的环境里再造一座避难所
+
+本仓库在三平台同步托管：
+
+| 平台 | 链接 |
+|------|------|
+| GitHub | `https://github.com/<your-org>/LsmAgentGame` |
+| Gitee | `https://gitee.com/<your-org>/LsmAgentGame` |
+| GitCode | `https://gitcode.com/<your-org>/LsmAgentGame` |
 
 > 💡 **如果 Loop Agent × Graphic Agent 24/7 不间断编程的思路对你有启发**,欢迎在
 > [Issues](https://github.com/your-repo/LsmAgentGame/issues) 分享你团队里的类似实践。

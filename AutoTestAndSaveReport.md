@@ -1,5 +1,7 @@
 ## 自动化 Web 游戏测试任务：狼人杀 13 人局 Agent 专项
 
+> 本项目按 [MIT License](LICENSE) 开源。测试任务面向维护者，参与前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [AutoDebugTestReport.md](AutoDebugTestReport.md)。
+
 - **工作目录**: `/usr/local/LsmAgentGame/LsmAgentGame`
 - **产物路径**:
   - 测试报告: `TestReport/自动化测试报告_YYYYMMDD_HHMMSS.md`

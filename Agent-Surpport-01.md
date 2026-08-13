@@ -1,5 +1,8 @@
 # 狼人杀 13 人局 Agent 优化与功能建议（Agent-Surpport-01）
 
+> 本项目按 [MIT License](LICENSE) 开源。反馈与建议欢迎通过 [Issue](.github/ISSUE_TEMPLATE/feature_request.md) / [PR](CONTRIBUTING.md) 提交。
+> **§编号**（`§20260812-03` 等）为内部 lesson 标记，对应 `CLAUDE.md` 中的历史决策档案，开源版本按要求保留。
+
 > **文档版本**：2026-08-12（§20260812-03 后精简版）
 > **定位**：**第七份（合并版）**第三方 LLM 视角建议，由以下 7 份独立审计建议合并而成：
 > - [`DeepSeek-Surpport-01.md`](DeepSeek-Surpport-01.md) — 推理深度 + 社交网络 + 群体动力学（13 条）

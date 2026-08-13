@@ -1,5 +1,7 @@
 ## 自动化截图任务：狼人杀 13 人局 Agent 实机画面
 
+> 本项目按 [MIT License](LICENSE) 开源。截图主目录与命名规则详见下方。
+
 - **工作目录**: `/usr/local/LsmAgentGame/LsmAgentGame`
 - **产物路径**:
   - 截图 PNG: `ProjectPic/werewolf-{NN}-{phase}.png`（NN 序号 01-12）

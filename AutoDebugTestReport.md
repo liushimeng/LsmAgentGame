@@ -1,5 +1,7 @@
 ## 自动修复代码任务规范
 
+> 本项目按 [MIT License](LICENSE) 开源。自动修复流程面向维护者，参与前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
+
 ### 顶层硬约束(不可违反)
 
 1. **绝对禁止修改 `CLAUDE.md`、`KILO.md`、`AGENT.md` 这三个规则文件。**

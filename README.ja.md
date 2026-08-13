@@ -22,6 +22,15 @@
 </div>
 <!-- markdownlint-restore -->
 
+<div align="center">
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![AI Agent Coded](https://img.shields.io/badge/AI--Agent-100%25-ff6b6b)](CLAUDE.md)
+[![Chinese](https://img.shields.io/badge/lang-中文-red)](README.md) [![English](https://img.shields.io/badge/lang-English-blue)](README.en.md) [![日本語](https://img.shields.io/badge/lang-日本語-green)](README.ja.md)
+
+</div>
+
 ---
 
 > **🤖 100% AI Agent 自動プログラミング** —— 人間は一行もコードを書かない。古い手書きコーディングはゼロ。
@@ -300,7 +309,19 @@ CLAUDE.md に 130+ 件の Agent 教訓（§1–§213）、初心者向けの最�
 
 ## 📜 ライセンス
 
-プライベート / 内部プロジェクト。すべてのコードは AI Agent 自動記述。
+本プロジェクトは **MIT License** のもとで公開 — 詳細は [`LICENSE`](LICENSE) ファイル参照。
+すべてのコードは AI Agent が自動生成し、人間のレビューを経た上でリポジトリにマージされています。
+
+---
+
+## 🤝 コントリビューション
+
+[コントリビューションガイド](CONTRIBUTING.md) ・ [行動規範](CODE_OF_CONDUCT.md) ・ [セキュリティポリシー](SECURITY.md) をご一読の上、PR をお寄せください。
+
+- 🐛 [バグ報告](.github/ISSUE_TEMPLATE/bug_report.md)
+- ✨ [機能要望](.github/ISSUE_TEMPLATE/feature_request.md)
+- 📝 [ドキュメント改善](.github/ISSUE_TEMPLATE/documentation.md)
+- 🔒 [セキュリティ問題を非公開報告](SECURITY.md)
 
 ---
 
@@ -311,6 +332,14 @@ CLAUDE.md に 130+ 件の Agent 教訓（§1–§213）、初心者向けの最�
 - ⭐ **Star** このリポジトリ — 一人でも多くの人に Agent プログラミングの力を
 - 👁️ **Watch** — 今後の反復をフォロー
 - 🍴 **Fork** — 自分の環境で別のシェルターを建設
+
+本リポジトリは 3 つのプラットフォームで同時ホスティング：
+
+| プラットフォーム | リンク |
+|------------------|--------|
+| GitHub | `https://github.com/<your-org>/LsmAgentGame` |
+| Gitee | `https://gitee.com/<your-org>/LsmAgentGame` |
+| GitCode | `https://gitcode.com/<your-org>/LsmAgentGame` |
 
 > 💡 **Loop Agent × Graphic Agent 24 時間年中無休プログラミングのアイデアに触発されたら**、
 > [Issues](https://github.com/your-repo/LsmAgentGame/issues) であなたのチームの類似実践を共有してください。

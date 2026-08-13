@@ -1,0 +1,49 @@
+version: 2
+updates:
+  # Go 模块依赖
+  - package-ecosystem: "gomod"
+    directory: "/ServerGo"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+      - "go"
+
+  # npm / 前端依赖
+  - package-ecosystem: "npm"
+    directory: "/ClientWeb"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+      - "frontend"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+      - "ci"
+
+  # Python 子模块（图像生成工具）
+  - package-ecosystem: "pip"
+    directory: "/python-generate-image-tool"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"
+      - "python"

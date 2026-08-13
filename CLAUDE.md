@@ -3,6 +3,26 @@
 > 规范规则文件。`KILO.md` 和 `AGENT.md` 是指向此文件的符号链接。
 > 唯一事实来源。请在此处更新，切勿在符号链接中修改。
 
+## 0. 开源工程说明
+
+本仓库为开源项目 —— 在 GitHub / Gitee / GitCode 三平台同步托管，按 **MIT License** 发布。
+
+| 文档 | 用途 |
+|------|------|
+| [`LICENSE`](LICENSE) | MIT 协议全文 |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) · [EN](CONTRIBUTING.en.md) · [JA](CONTRIBUTING.ja.md) | 贡献流程与 PR 规范 |
+| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | 行为准则（含 AI Agent 特别约定） |
+| [`SECURITY.md`](SECURITY.md) | 安全漏洞私下上报通道 |
+| [`.github/`](.github/) | Issue / PR 模板、Dependabot、FUNDING |
+
+**给贡献者的提示**：
+
+- 本规则文件由 AI Agent 持续维护，所有 §编号（`§1` / `§20260812-04` 等）均为内部 **lesson 标记**，
+  引用它时用 `CLAUDE.md §<编号>` 即可。**这些是项目独有的历史决策档案，按要求保留**——
+  外部贡献者无需理解全部 §编号即可参与贡献（参见 `CONTRIBUTING.md`）。
+- 任何文档/注释改动必须遵循 §3 文件命名规约、§4 单文件 ≤ 1800 行硬上限。
+- 跨端联调（前后端同时改）请走集成测试 SubAgent（CLAUDE.md §13.1 职责线 5）。
+
 ## 1. 技术栈
 
 - **后端**：Go（模块名 `LsmAgentGame`）、Gin、GORM + MySQL/MariaDB、gorilla/websocket、JWT (HS256)、bcrypt、zap 日志。

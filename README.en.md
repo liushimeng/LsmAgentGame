@@ -22,6 +22,15 @@
 </div>
 <!-- markdownlint-restore -->
 
+<div align="center">
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![AI Agent Coded](https://img.shields.io/badge/AI--Agent-100%25-ff6b6b)](CLAUDE.md)
+[![Chinese](https://img.shields.io/badge/lang-中文-red)](README.md) [![English](https://img.shields.io/badge/lang-English-blue)](README.en.md) [![日本語](https://img.shields.io/badge/lang-日本語-green)](README.ja.md)
+
+</div>
+
 ---
 
 > **🤖 100% AI Agent Auto-Programmed** — No human wrote a single line of code. No legacy hand-coding.
@@ -300,7 +309,19 @@ The project incurs ongoing costs for servers, LLM API calls, and image generatio
 
 ## 📜 License
 
-Private / internal project. All code auto-written by AI Agents.
+Released under the **MIT License** — see the [`LICENSE`](LICENSE) file.
+All code is auto-written by AI Agents and merged after human review.
+
+---
+
+## 🤝 Contributing
+
+PRs are welcome. Please read the [Contributing Guide](CONTRIBUTING.md), [Code of Conduct](CODE_OF_CONDUCT.md) and [Security Policy](SECURITY.md) first.
+
+- 🐛 [Report a Bug](.github/ISSUE_TEMPLATE/bug_report.md)
+- ✨ [Request a Feature](.github/ISSUE_TEMPLATE/feature_request.md)
+- 📝 [Improve Docs](.github/ISSUE_TEMPLATE/documentation.md)
+- 🔒 [Report a Security Issue privately](SECURITY.md)
 
 ---
 
@@ -311,6 +332,14 @@ If this project changed how you think about "Agent Programming":
 - ⭐ **Star** this repo — help more people see the power of Agent programming
 - 👁️ **Watch** — follow future iterations
 - 🍴 **Fork** — run your own bunker in your environment
+
+This repo is mirrored on three platforms:
+
+| Platform | Link |
+|----------|------|
+| GitHub | `https://github.com/<your-org>/LsmAgentGame` |
+| Gitee | `https://gitee.com/<your-org>/LsmAgentGame` |
+| GitCode | `https://gitcode.com/<your-org>/LsmAgentGame` |
 
 > 💡 **If the Loop Agent × Graphic Agent 24/7 non-stop programming idea inspires you**, drop a note in
 > [Issues](https://github.com/your-repo/LsmAgentGame/issues) sharing similar practices from your team.

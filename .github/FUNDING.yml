@@ -1,0 +1,13 @@
+# GitHub Sponsors / Open Collective 资助配置
+# 详见 https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+github: []           # 替换为你的 GitHub 用户名（启用 GitHub Sponsors）
+opencollective: ""   # 替换为你的 Open Collective 链接
+patreon: ""          # 替换为你的 Patreon 用户名
+ko_fi: ""            # 替换为你的 Ko-fi 用户名
+tidelift: ""         # 替换为你的 Tidelift 订阅 ID
+community_bridge: "" # 替换为你的 Community Bridge 用户名
+liberapay: ""        # 替换为你的 Liberapay 用户名
+issuehunt: ""        # 替换为你的 IssueHunt 用户名
+polar: ""            # 替换为你的 Polar 链接
+custom: []           # 自定义链接列表
