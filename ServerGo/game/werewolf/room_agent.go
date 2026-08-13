@@ -273,6 +273,11 @@ func (m *WerewolfManager) StartAgentsLocked(r *WerewolfRoom) {
 		}
 		ag.SetLLMSemaphore(r.llmSema)
 
+		// 2026-08-13 §20260813-02 U1 — 注入局内 LLM 语义压缩配置。
+		// 此前 compactConfig 无 setter(Enabled 恒 false,§130 第六次复现);
+		// 开关关闭时 Enabled=false,run_compact.go 整链 no-op(旧行为零回归)。
+		ag.SetCompactConfig(cfgAgentCompactConfig())
+
 		// 2026-07-09 §13-bugfix 改造 — 注入**房间共享** 500K 聊天历史队列。
 		// 第一个 bot 启动时分配,后续 bot 共用同一队列引用;
 		// 每 bot 通过 ReadPointer 跟踪消费进度,appendRoomMessage / RecordRoomActivity

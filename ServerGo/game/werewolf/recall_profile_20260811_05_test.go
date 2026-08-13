@@ -10,7 +10,7 @@
 //	  - BuildPlayerProfilePrompt 纯函数包含 3 段固定小标题。
 //
 //	U2 赛后复盘问答:
-//	  - config 关闭(测试环境兜底 false)→ ErrRecallDisabled;
+//	  - config 关闭(config.SetForTest 显式注入 disabled)→ ErrRecallDisabled;
 //	  - 房间不存在 → ErrRecallNotOver;
 //	  - 限流器 Allow 达到上限后拒绝 + ResetRoom 清理;
 //	  - BuildRecallSystemPrompt 包含复盘人格指令;
@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 
+	"LsmAgentGame/config"
 	"LsmAgentGame/llm"
 )
 
@@ -171,8 +172,14 @@ func TestBuildPlayerProfilePrompt(t *testing.T) {
 // ─────────────────── U2 赛后复盘问答 ───────────────────
 
 func TestRecallChat_ConfigDisabled(t *testing.T) {
+	// §20260813-03 配置自动生成后,测试环境 config.Load() 不再 panic
+	// (auto-bootstrap 兜底 true),原「无 conf → 兜底 false」假设失效。
+	// 改用 config.SetForTest 显式注入 disabled 状态,保持原断言语义。
+	disabled := *config.Load()
+	disabled.Werewolf.RecallChatEnabled = false
+	defer config.SetForTest(&disabled)()
+
 	m := NewWerewolfManager()
-	// 测试环境无 conf → cfgRecallChatEnabled 兜底 false → ErrRecallDisabled。
 	_, err := m.RecallChat(context.Background(), "any-room", 0, "你为什么跳预言家?")
 	if err != ErrRecallDisabled {
 		t.Fatalf("expect ErrRecallDisabled, got %v", err)
@@ -238,9 +245,9 @@ func TestPruneRecallMessages(t *testing.T) {
 		return llm.Message{Role: "user", Content: []llm.ContentBlock{{Type: "text", Text: text}}}
 	}
 	msgs := []llm.Message{
-		mk("identity"),                    // 首条保留
-		mk(strings.Repeat("a", 500)),      // 最老,先裁
-		mk(strings.Repeat("b", 500)),      // 次老,必要时裁
+		mk("identity"),               // 首条保留
+		mk(strings.Repeat("a", 500)), // 最老,先裁
+		mk(strings.Repeat("b", 500)), // 次老,必要时裁
 		mk("recent-1"),
 		mk("recent-2"),
 	}

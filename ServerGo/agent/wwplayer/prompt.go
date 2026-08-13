@@ -460,6 +460,12 @@ func BuildUserPrompt(ctx wwtypes.GameContext) string {
 	}
 	if ctx.MyTurn {
 		s += "\n请根据当前局面调用合适的工具。"
+		// 2026-08-13 §20260813-02 U3 — chat_recall 主动检索提示。
+		// 早期关键发言(如 R1 谁跳过预言家)可能被 500K 队列 4 级压缩折叠出
+		// 渲染窗口,LLM 可用 chat_recall 主动检索(OpenClaw Lane-1 memory_search)。
+		if ctx.Phase == "speak" || ctx.Phase == "PhaseSpeak" || ctx.Phase == "vote" || ctx.Phase == "PhaseVote" {
+			s += "\n💡 若需引用早期发言(如「R1 谁跳过预言家」「3号 之前投过谁」),可调 chat_recall(query 关键词必填≤50字, seat/day 可选) 检索,60 秒冷却。"
+		}
 	} else {
 		// BUG-WEREWOLF-AGENT-INTERJECT: 非发言轮次不再写"保持沉默"。Agent
 		// 现在可以调用 interject(插话)主动追问/补充/闲聊，或调用 whisper

@@ -214,6 +214,18 @@ type WerewolfConfig struct {
 	AgentMemoryEnabled   bool `json:"agent_memory_enabled"`
 	AgentMemoryMaxTokens int  `json:"agent_memory_max_tokens"`
 
+	// 2026-08-13 §20260813-02 U4 — 记忆迭代单次 LLM 调用总超时(秒)。
+	// 旧版硬编码 90s,慢模型(Kimi/GLM)迭代经常超时被 cut → 走 FallbackMerge。
+	// 改走 §197 长预算思想:默认 480s(流式累积,与主对话一致)。0 = 代码内常量兜底。
+	AgentMemoryIterTimeoutSec int `json:"agent_memory_iter_timeout_sec"`
+
+	// 2026-08-13 §20260813-02 U1 — 局内 LLM 语义压缩(CompactWithLLM)开关与预算。
+	// AgentCompactEnabled: true(默认)消息数超阈值时用 bot 自己的 provider
+	//   把最早 1/3 消息压缩为结构化摘要;false 退回纯规则式压缩。
+	// AgentCompactMaxTokens: 压缩调用 max_tokens 预算,默认 1200。
+	AgentCompactEnabled   bool `json:"agent_compact_enabled"`
+	AgentCompactMaxTokens int  `json:"agent_compact_max_tokens"`
+
 	// 2026-08-10 §20260810-10 U2 新增 — 模型自画像注入开关。
 	// true(默认)开局时按 modelKey 聚合 t_lsm_game_model_game_log 生成
 	// 「🪞 模型自画像」段注入 Agent system prompt 末尾;false 整链 no-op
@@ -292,13 +304,13 @@ const DefaultSpeakFloorWakeIntervalSec = 20
 
 // ServerConfig holds the listener addresses and TLS material.
 type ServerConfig struct {
-	HTTPSAddr     string `json:"https_addr"`
-	WSSAddr       string `json:"wss_addr"`
-	TLSCert       string `json:"tls_cert"`
-	TLSKey        string `json:"tls_key"`
-	DevMode       bool   `json:"dev_mode"`        // true → 启用 AgentBypassAccounts 白名单(CAPTCHA 旁路);生产必须 false
-	RootAccount   string `json:"root_account"`    // 首次启动时种子的 root 账号;默认 "lsm_root"
-	RootPassword  string `json:"root_password"`   // 首次启动时种子的 root 密码;空时由 main.go 随机生成并日志输出一次
+	HTTPSAddr      string `json:"https_addr"`
+	WSSAddr        string `json:"wss_addr"`
+	TLSCert        string `json:"tls_cert"`
+	TLSKey         string `json:"tls_key"`
+	DevMode        bool   `json:"dev_mode"`         // true → 启用 AgentBypassAccounts 白名单(CAPTCHA 旁路);生产必须 false
+	RootAccount    string `json:"root_account"`     // 首次启动时种子的 root 账号;默认 "lsm_root"
+	RootPassword   string `json:"root_password"`    // 首次启动时种子的 root 密码;空时由 main.go 随机生成并日志输出一次
 	RootInviteCode string `json:"root_invite_code"` // 首次启动时种子的邀请码;空时由 main.go 随机生成
 }
 
@@ -491,20 +503,21 @@ var (
 //  3. ./LsmAgentGame.conf.example  (development-only fallback; placeholder secrets)
 //
 // First-run onboarding (2026-08-13 §config-auto-bootstrap):
-//   When neither LsmAgentGame.conf nor the .example are present (e.g. a fresh
-//   git clone without copying the example), Load() refuses to panic — it
-//   regenerates LsmAgentGame.conf.example from the in-process defaults and
-//   then writes a fully-populated LsmAgentGame.conf so the user has a real
-//   file to edit before the first production launch. A one-shot INFO message
-//   is printed to stderr telling the operator to replace the placeholder
-//   secrets and rerun.
 //
-//   When LsmAgentGame.conf is missing but the .example exists (the common
-//   case), Load() copies the .example verbatim to LsmAgentGame.conf first so
-//   the operator has a working runtime config out of the box (no manual `cp`
-//   step required). The copy preserves comments because we copy bytes — the
-//   JSON parser is only used for in-memory defaults, never for the on-disk
-//   artifact the operator will edit.
+//	When neither LsmAgentGame.conf nor the .example are present (e.g. a fresh
+//	git clone without copying the example), Load() refuses to panic — it
+//	regenerates LsmAgentGame.conf.example from the in-process defaults and
+//	then writes a fully-populated LsmAgentGame.conf so the user has a real
+//	file to edit before the first production launch. A one-shot INFO message
+//	is printed to stderr telling the operator to replace the placeholder
+//	secrets and rerun.
+//
+//	When LsmAgentGame.conf is missing but the .example exists (the common
+//	case), Load() copies the .example verbatim to LsmAgentGame.conf first so
+//	the operator has a working runtime config out of the box (no manual `cp`
+//	step required). The copy preserves comments because we copy bytes — the
+//	JSON parser is only used for in-memory defaults, never for the on-disk
+//	artifact the operator will edit.
 func Load() *Config {
 	once.Do(func() {
 		// (1) Ensure a writable LsmAgentGame.conf exists. We may have just
@@ -548,6 +561,18 @@ func Load() *Config {
 		cfg = &parsed
 	})
 	return cfg
+}
+
+// SetForTest overrides the singleton Config for tests and returns a restore
+// function. It exists because §20260813-03 (config auto-bootstrap) made
+// Load() succeed even without an operator-provided LsmAgentGame.conf, so
+// tests can no longer rely on "Load panics → recover fallback" to reach
+// config-disabled code paths. Callers must not run in parallel with other
+// config consumers (no t.Parallel).
+func SetForTest(c *Config) (restore func()) {
+	prev := Load()
+	cfg = c
+	return func() { cfg = prev }
 }
 
 // ensureRuntimeConfigFile makes sure ./LsmAgentGame.conf exists on disk. If
@@ -954,6 +979,20 @@ func applyDefaults(c *Config) {
 	}
 	if c.Werewolf.AgentMemoryMaxTokens <= 0 {
 		c.Werewolf.AgentMemoryMaxTokens = 2048
+	}
+
+	// 2026-08-13 §20260813-02 U4 — 记忆迭代超时默认 480s(流式长预算)。
+	if c.Werewolf.AgentMemoryIterTimeoutSec <= 0 {
+		c.Werewolf.AgentMemoryIterTimeoutSec = 480
+	}
+
+	// 2026-08-13 §20260813-02 U1 — 局内 LLM 语义压缩默认启用。
+	// 与 AgentMemoryEnabled 同模式:bool 默认 true,operator 需显式设 false 关闭。
+	if !c.Werewolf.AgentCompactEnabled {
+		c.Werewolf.AgentCompactEnabled = true
+	}
+	if c.Werewolf.AgentCompactMaxTokens <= 0 {
+		c.Werewolf.AgentCompactMaxTokens = 1200
 	}
 
 	// 2026-08-10 §20260810-10 U2 — 模型自画像默认启用。

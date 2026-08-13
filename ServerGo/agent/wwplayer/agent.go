@@ -264,13 +264,30 @@ type Agent struct {
 	// 不设置时为 nil (DispatchTool 走原路径)。
 	toolHooks *ToolHooks
 
+	// 2026-08-13 §20260813-02 U2 — per-Agent 工具定义缓存。
+	// seat 在 Agent 生命周期内固定,缓存实例不跨 bot 共享;run.go 内层循环
+	// 与 speak_floor 路径经 BuildToolsCached 命中,避免每轮全量重建 ~30 个
+	// 工具定义(prompt cache 前缀字节稳定的前提)。
+	toolsCache *ToolsCache
+
 	// §20260811-01 新增: compactConfig 控制 LLM 记忆压缩行为。
 	// 灵感来源: PI Agent 的 compaction/compaction.ts。
 	// 每局第 N 轮 LLM 调用前检查消息数,超过阈值时用 LLM 压缩旧消息。
+	// 2026-08-13 §20260813-02 U1: 新增 SetCompactConfig setter 接线
+	// (此前无任何 setter,Enabled 恒 false,run.go 触发判断永不生效 —— §130)。
 	compactConfig CompactConfig
 
 	// compactDone 标记本轮是否已执行过 LLM 压缩 (每局最多一次)。
 	compactDone bool
+
+	// 2026-08-13 §20260813-02 U1 — 压缩结果可观测标记(禁止假成功)。
+	// 由 run_compact.go 的 maybeCompactMemory 写入,经 BotTranscript() 透出:
+	//   - compactAt:        最近一次压缩尝试的 unix 毫秒(0 = 未尝试)
+	//   - compactFallback:  true = LLM 压缩失败,已显式回退规则式压缩
+	//   - compactNote:      一行说明(成功: N→M 条 [增量];失败: 回退原因)
+	compactAt       int64
+	compactFallback bool
+	compactNote     string
 
 	// mu guards events-channel swap (Lock/Unlock are exported so the manager
 	// can stop an in-flight Run cleanly).
@@ -672,6 +689,14 @@ type BotTranscript struct {
 	// 前端据此渲染「Xs 前」相对时间 + 实时脉冲。
 	LastLLMCallAtMs int64 `json:"last_llm_call_at_ms,omitempty"`
 
+	// 2026-08-13 §20260813-02 U1 — 局内 LLM 语义压缩可观测标记(禁止假成功)。
+	// LastCompactAt: 最近一次压缩尝试 unix 毫秒(0=未尝试);
+	// LastCompactFallback: true = LLM 压缩失败已显式回退规则式压缩;
+	// LastCompactNote: 一行说明(≤120 字)。全部 omitempty,旧客户端零感知。
+	LastCompactAt       int64  `json:"last_compact_at,omitempty"`
+	LastCompactFallback bool   `json:"last_compact_fallback,omitempty"`
+	LastCompactNote     string `json:"last_compact_note,omitempty"`
+
 	// §20260810-15 P2: 熔断器状态 wire 字段。前端 BotPhaseIndicator 据此渲染
 	// "🔌 限流中"徽章(open_429) / "⚠️ 模型错误"徽章(open_400),与"已禁用"并列。
 	// closed/open_400/open_429 三态;空 = closed(避免历史客户端解析报错)。
@@ -800,6 +825,8 @@ func NewWithRoom(seat int, modelKey string, role, faction, win string, registry 
 		InterjectLimiter: agentcore.NewSpeakLimiter(60 * time.Second),
 		MaxToolUse:       0, // §130 重构:0 表示无硬上限,LLM 输出 end_turn 即退出循环
 		now:              time.Now,
+		// 2026-08-13 §20260813-02 U2 — per-Agent 工具缓存(seat 固定,不共享)。
+		toolsCache: NewToolsCache(),
 		// BUG FIX 2026-07-09 §13.6: stamp creation time so the spectator
 		// AgentThoughtPanel can show "started at HH:MM:SS" for bots that
 		// haven't spoken yet (placeholder branch in populateBotContexts).
@@ -938,6 +965,10 @@ func (a *Agent) BotTranscript() *BotTranscript {
 	bt.RetryMaxAttempts = a.retryMaxAttempts
 	bt.NextRetryAtMs = a.nextRetryAtMs
 	bt.LastErrorClass = a.lastErrorClass
+	// 2026-08-13 §20260813-02 U1 — 压缩可观测标记从 live 字段透出。
+	bt.LastCompactAt = a.compactAt
+	bt.LastCompactFallback = a.compactFallback
+	bt.LastCompactNote = a.compactNote
 	// §20260810-15 P2: 透传熔断器状态。前端据此外显显示 "🔌 限流中" /
 	// "⚠️ 模型错误"徽章,避免用户在 Tencent-model 16:32 这类场景下只能
 	// 看到"该 bot 停了"而无任何原因提示。
@@ -1348,6 +1379,12 @@ func (a *Agent) recordTranscript() {
 		bt.LastSpeechKind = a.lastTranscript.LastSpeechKind
 		bt.LastSpeechRound = a.lastTranscript.LastSpeechRound
 	}
+	// 2026-08-13 §20260813-02 U1 — 与 LastSpeech 同源:压缩标记由
+	// maybeCompactMemory 在 LLM 调用之外的 goroutine 写入,recordTranscript
+	// 重建快照时直接从 live 字段透传,避免被整体替换抹掉。
+	bt.LastCompactAt = a.compactAt
+	bt.LastCompactFallback = a.compactFallback
+	bt.LastCompactNote = a.compactNote
 	// 2026-08-04 §表情特效 — fx 字段与 live emotion 状态同源,recordTranscript
 	// 作为每次 LLM 响应后的快照也一并透传(与 BotTranscript() 的实时读取
 	// 保持一致的 wire 形状)。

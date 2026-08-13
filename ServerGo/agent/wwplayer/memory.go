@@ -46,6 +46,12 @@ type Memory struct {
 	// totalSystemToolsBytes 由 SetSystemTools 在每次构建 LLMRequest 前注入,
 	// enforceByteBudgetLocked 使用 "messages + system + tools" 作为剪枝基准。
 	totalSystemToolsBytes int
+
+	// lastCompactSummary 2026-08-13 §20260813-02 U1 — 上一次 LLM 语义压缩
+	// (CompactWithLLM)产出的摘要。非空时下一次压缩走增量更新模式
+	// (PRESERVE 旧要点 + ADD 新增内容,OpenClaw 迭代式摘要),不全量重来。
+	// 仅成功路径写入;失败路径保持旧值(下次仍基于最近一次成功摘要增量)。
+	lastCompactSummary string
 }
 
 // NewMemory seeds the conversation with the opening user turn that fixes the

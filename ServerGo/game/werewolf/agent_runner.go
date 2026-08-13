@@ -75,6 +75,10 @@ type agentRunner struct {
 	// 与 lastMysteryHint 同样是纯 per-seat 字段:agentRunner 只被该 bot 的
 	// 单条 agent goroutine 串行驱动,无需加锁。
 	lastSpeechText string
+
+	// lastChatRecallAt 2026-08-13 §20260813-02 U3 — chat_recall 工具的
+	// per-bot 60s 冷却计时(chat_recall.go::ChatRecall 读写,单 goroutine 驱动)。
+	lastChatRecallAt time.Time
 }
 
 func newAgentRunner(mgr *WerewolfManager, roomID string, seat Seat, botUserID, botAccount, modelKey string, chatSvc BotChatSender) *agentRunner {

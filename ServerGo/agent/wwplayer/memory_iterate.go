@@ -99,6 +99,41 @@ func ValidateMemorySections(md string) bool {
 	return true
 }
 
+// 保留率下限(2026-08-13 §20260813-02 U4,对齐 OpenClaw maxPriorEntryLossFraction):
+//   - 常规场景:新记忆 rune 数不得少于旧记忆的 50%;
+//   - 压缩场景(旧记忆 > 80K,迭代 prompt 已带压缩指令):放宽到 30%。
+//
+// 低于下限视为 LLM 截断事故(输出被 max_tokens 切断 / 模型擅自大段删除),
+// 调用方必须回退 FallbackMerge(显式失败,禁止假成功)。
+const (
+	memoryRetentionMinRatio         = 0.5
+	memoryRetentionMinRatioCompress = 0.3
+)
+
+// ValidateMemoryRetention 校验新记忆相比旧记忆的内容保留率(2026-08-13
+// §20260813-02 U4)。ValidateMemorySections 只保证 4 段标题存在,无法识别
+// 「标题都在但正文被 LLM 截掉大半」的截断事故 —— 本函数补这一层。
+//
+// 返回 nil = 通过;非 nil error 描述保留率违规详情(供日志与 FallbackMerge note)。
+// 旧记忆为空(首局)时恒通过(无内容可丢)。
+func ValidateMemoryRetention(oldMD, newMD string) error {
+	oldRunes := len([]rune(oldMD))
+	if oldRunes == 0 {
+		return nil
+	}
+	newRunes := len([]rune(newMD))
+	minRatio := memoryRetentionMinRatio
+	if len(oldMD) > MemoryCompressThresholdBytes {
+		// 旧记忆超 80K 时迭代 prompt 带压缩指令,主动瘦身是预期行为,放宽下限。
+		minRatio = memoryRetentionMinRatioCompress
+	}
+	if float64(newRunes) < float64(oldRunes)*minRatio {
+		return fmt.Errorf("memory retention violation: new %d runes < old %d runes × %.2f (min ratio, compress=%t)",
+			newRunes, oldRunes, minRatio, len(oldMD) > MemoryCompressThresholdBytes)
+	}
+	return nil
+}
+
 // HardTruncateMemory 把 md 硬截断到 maxBytes 字节以内,rune 边界安全
 // (绝不切断一个 UTF-8 字符),保留头部 —— 段落顺序即重要性
 // (标题 + 战绩在最前)。已在字节上限内时原样返回。

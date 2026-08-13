@@ -45,6 +45,25 @@ const COMPACT_PROMPT = `以下是狼人杀游戏第 %d 局、座位 %d 号(%s/%s
 3. 关键决策及其理由
 4. 需要继续关注的疑点`
 
+// COMPACT_UPDATE_PROMPT 2026-08-13 §20260813-02 U1 — 增量更新模式。
+// 借鉴 OpenClaw UPDATE_SUMMARIZATION_PROMPT:已有上次摘要时不全量重来,
+// 而是「PRESERVE 旧摘要要点 + ADD 新增内容」,避免每次压缩丢失早期结论。
+const COMPACT_UPDATE_PROMPT = `以下是狼人杀游戏第 %d 局、座位 %d 号(%s/%s)的对话历史,以及你上一次压缩得到的摘要。
+
+<previous_summary>
+%s
+</previous_summary>
+
+<conversation>
+%s
+</conversation>
+
+请输出一份**更新后**的结构化摘要(格式同 system prompt),要求:
+1. PRESERVE — 保留上一次摘要中仍然有效的要点(已确认信息、关键决策);
+2. ADD — 把 <conversation> 中的新事实追加到对应段落;
+3. 仅在旧要点被新事实明确推翻时才删除/改写它;
+4. 保留具体的座位号、角色名、行动时间点,保持简洁。`
+
 // CompactConfig 控制记忆压缩行为。
 type CompactConfig struct {
 	// Enabled 是否启用 LLM 压缩。
@@ -75,7 +94,36 @@ type CompactResult struct {
 	MessagesAfter  int
 	TokensUsed     int
 	DurationMs     int64
+	// Incremental 2026-08-13 §20260813-02 U1 — 本次是否走了增量更新模式
+	// (上次摘要非空 → PRESERVE+ADD);供测试断言与日志观测。
+	Incremental    bool
 	Error          error
+}
+
+// ─── 2026-08-13 §20260813-02 U1 — 上次摘要存取(Memory 字段的访问方法) ───
+
+// LastCompactSummary 返回上一次 LLM 压缩产出的摘要(空 = 从未成功压缩)。
+// 供 CompactWithLLM 决定走全量还是增量更新 prompt。
+func (m *Memory) LastCompactSummary() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.lastCompactSummary
+}
+
+// setLastCompactSummary 写入最近一次成功压缩的摘要(仅成功路径调用)。
+func (m *Memory) setLastCompactSummary(s string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lastCompactSummary = s
+}
+
+// buildCompactUserPrompt 构造压缩 user prompt(纯函数,便于单测直接断言)。
+// prevSummary 非空 → 增量更新模式(PRESERVE+ADD);空 → 全量模式。
+func buildCompactUserPrompt(prevSummary string, round, seat int, role, faction, conversationText string) string {
+	if prevSummary != "" {
+		return fmt.Sprintf(COMPACT_UPDATE_PROMPT, round, seat, role, faction, prevSummary, conversationText)
+	}
+	return fmt.Sprintf(COMPACT_PROMPT, round, seat, role, faction, conversationText)
 }
 
 // CompactWithLLM 使用 LLM 将旧消息压缩为结构化游戏摘要。
@@ -148,7 +196,12 @@ func (m *Memory) CompactWithLLM(
 			faction = gc.Faction
 		}
 	}
-	userPrompt := fmt.Sprintf(COMPACT_PROMPT, round, seat, role, faction, conversationText)
+	// 2026-08-13 §20260813-02 U1 — 增量更新:已有上次摘要时切换为
+	// PRESERVE+ADD 模式(OpenClaw UPDATE_SUMMARIZATION_PROMPT 思想),
+	// 避免全量重来丢失早期已确认结论。
+	prevSummary := m.LastCompactSummary()
+	incremental := prevSummary != ""
+	userPrompt := buildCompactUserPrompt(prevSummary, round, seat, role, faction, conversationText)
 
 	// 4. LLM 调用
 	compactCtx, cancel := context.WithTimeout(ctx, time.Duration(cfg.TimeoutSec)*time.Second)
@@ -193,10 +246,18 @@ func (m *Memory) CompactWithLLM(
 	}
 
 	// 7. 替换: identity + compact + recent
+	// 2026-08-13 §20260813-02 U1 — 配对原子:压缩裁剪以 tool_use/tool_result
+	// 配对为原子单位(OpenClaw Context §6.4)。recentMsgs 的头部可能是悬空的
+	// tool_result(user 消息,其配对 tool_use 落在了被压缩的 oldMsgs 里),
+	// 直接拼回会让严格代理(DouBao/DeepSeek)400 拒绝(§82b)。强制
+	// dropLeadingOrphans 保证配对完整。
+	recentMsgs = dropLeadingOrphans(recentMsgs)
 	m.mu.Lock()
 	m.messages = append([]llm.Message{msgs[0], compactMsg}, recentMsgs...)
 	newCount := len(m.messages)
 	m.mu.Unlock()
+	// 成功路径记录摘要,供下一次增量更新(OpenClaw 迭代式摘要)。
+	m.setLastCompactSummary(summary)
 
 	duration := time.Since(startTime).Milliseconds()
 
@@ -207,6 +268,7 @@ func (m *Memory) CompactWithLLM(
 		MessagesAfter:  newCount,
 		TokensUsed:     resp.Usage.InputTokens + resp.Usage.OutputTokens,
 		DurationMs:     duration,
+		Incremental:    incremental,
 	}
 }
 

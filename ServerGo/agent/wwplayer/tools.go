@@ -537,11 +537,33 @@ func BuildTools(phase, role string, seat int, alive []int, speakTurn int, gc *ww
 		// 这里 1 次遍历 MountTools(PhaseSpeak, gc) 代替 5 次手工 add* 调用 —
 		// 新增工具只需在对应分类文件的 init() 注册,无需改 BuildTools。
 		mountFromRegistry(add, ToolPhaseSpeak, gc)
+		// 2026-08-13 §20260813-02 U3 — chat_recall 主动检索工具(白天 speak 挂载)。
+		// 早期关键发言被 500K 队列压缩折叠后不可召回,LLM 可按关键词/座位/天数
+		// 主动检索(OpenClaw Lane-1 memory_search)。夜间不挂载 —— 夜间行动靠
+		// 私有信息块,检索无意义且拖慢节奏。60s per-bot 冷却由 runner 强制。
+		add("chat_recall",
+			"🔍 检索早期发言/事件(被 500K 队列折叠出最近窗口的历史)。query=关键词(必填,≤50字,如「预言家」「投给」);seat=可选,只看该座位的发言;day=可选,只看第几天(自动钳到当前天数)。返回分数最高的前 5 条(每条≤120字)。60 秒冷却,单响应最多调 1 次。\n"+
+				"典型用法:① 「R1 谁跳过预言家」→ query=\"预言家\", day=1;② 「3号 之前投过谁」→ query=\"投\", seat=2(0 起);③ 「谁说过要跟票」→ query=\"跟票\"。\n"+
+				"⚠️ 只能检索你本来就能看到的内容(公开发言 + 发给你的私聊 + 公开活动事件),不会返回任何新信息面。",
+			schema(map[string]any{
+				"query": map[string]any{"type": "string", "description": "检索关键词(必填,≤50字)"},
+				"seat":  map[string]any{"type": "integer", "description": "可选:只看该座位(0 起)的发言,越界自动忽略"},
+				"day":   map[string]any{"type": "integer", "description": "可选:只看第几天(≥1,自动钳到当前天数)"},
+			}, "query"))
 	case "PhaseVote", "vote":
 		add("vote", "投票放逐。选择一名当前还活着、且不是你自己的玩家（座位号 ≠ MySeat）进行放逐投票。R86-P1-5：严禁投自己或已死亡玩家，系统会返回 errcode=20001 cannot vote self。每名玩家只能投一次票，得票最多者将被放逐出局。",
 			schema(map[string]any{"target": map[string]any{"type": "integer", "description": "要放逐的玩家座位号（不能投自己；必须存活）", "enum": filterSelf(alive, seat)}}, "target"))
 		add("finish_vote", "由主持人调用，结束投票并结算放逐结果。全员投完后调用。若平票则传入 tied_round 表示第几轮平票。",
 			schema(map[string]any{"tied_round": map[string]any{"type": "integer", "description": "平票轮次（第几轮投票平票，可选）"}}))
+		// 2026-08-13 §20260813-02 U3 — chat_recall 在投票阶段同样挂载
+		// (投票前检索历史票型/发言是最高价值场景)。与 speak 阶段同一定义。
+		add("chat_recall",
+			"🔍 检索早期发言/事件(被 500K 队列折叠出最近窗口的历史)。query=关键词(必填,≤50字);seat=可选,只看该座位的发言;day=可选,只看第几天。返回分数最高的前 5 条。60 秒冷却,单响应最多调 1 次。投票前可用来核对历史票型与跳身份记录。",
+			schema(map[string]any{
+				"query": map[string]any{"type": "string", "description": "检索关键词(必填,≤50字)"},
+				"seat":  map[string]any{"type": "integer", "description": "可选:只看该座位(0 起)的发言,越界自动忽略"},
+				"day":   map[string]any{"type": "integer", "description": "可选:只看第几天(≥1,自动钳到当前天数)"},
+			}, "query"))
 	case "PhaseHunterShoot", "hunter_shoot":
 		if role == "hunter" {
 			add("hunter_shoot", "猎人开枪。猎人死亡时可以选择带走一名存活玩家。选择 target=-1 表示放弃开枪（被毒杀时不能开枪）。",
@@ -1286,6 +1308,17 @@ func dispatchToolInner(name string, input map[string]any, runner ToolRunner) (st
 	case "prop_history":
 		limit := intInput(input, "limit")
 		return formatPropHistory(limit), nil
+	// 2026-08-13 §20260813-02 U3 — chat_recall 主动检索工具派发。
+	// 纯查询,无副作用;runner 未实现(测试桩/老代码路径)时返回降级提示。
+	// 冷却/闭集钳制/隐私过滤全部在服务端(game/werewolf/chat_recall.go)完成,
+	// 模型自撰参数不能扩大召回边界;rate-limited 以字符串返回,不计失败。
+	case "chat_recall":
+		query, _ := input["query"].(string)
+		// seat/day 缺失时 intInput 返回 -1(= 未提供),由服务端闭集钳制。
+		if r, ok := runner.(ChatRecallRunner); ok {
+			return r.ChatRecall(query, intInput(input, "seat"), intInput(input, "day")), nil
+		}
+		return "chat_recall unavailable: runner does not support recall", nil
 	default:
 		return "", fmt.Errorf("unknown tool: %s", name)
 	}
@@ -1304,6 +1337,18 @@ type PropUserRunner interface {
 // nil-safe：未实现时查询工具返回 "no game context" 提示。
 type PropInspectRunner interface {
 	CurrentGC() *wwtypes.GameContext
+}
+
+// ChatRecallRunner 2026-08-13 §20260813-02 U3 — chat_recall 工具的可选扩展接口。
+// 实现位置：werewolf.agentRunner(chat_recall.go)。
+// 采用扩展接口而非 ToolRunner 新方法是刻意的:ToolRunner 被大量测试桩实现,
+// 加方法会让所有桩编译失败(§130 防御);扩展接口 nil-safe,未实现时 dispatch
+// 返回降级提示让 LLM 收敛。
+//
+// 返回 (string, nil) 语义:查询结果或一行降级说明(rate-limited / 无命中),
+// 永不返回 error —— 检索失败不是游戏失败,不计入 consecutiveFailures(§112)。
+type ChatRecallRunner interface {
+	ChatRecall(query string, seat int, day int) string
 }
 
 // intInput reads a key that must be present as an int (float64 on the wire).

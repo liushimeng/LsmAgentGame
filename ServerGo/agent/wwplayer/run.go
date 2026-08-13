@@ -690,26 +690,9 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 	// §20260811-01 新增: LLM 记忆压缩 (每局最多一次)。
 	// 灵感来源: PI Agent 的 compaction/compaction.ts — 结构化摘要。
 	// 在第 40 条消息后的首次 LLM 调用前触发,将旧消息压缩为结构化游戏摘要。
-	if !a.compactDone && a.compactConfig.Enabled && a.Provider != nil {
-		if count := a.Memory.Len(); count >= a.compactConfig.MinMessages {
-			a.compactDone = true
-			go func() {
-				rp2 := rp
-				_, _, _, _, _, _, done2 := rp2()
-				if done2 {
-					return
-				}
-				result := a.Memory.CompactWithLLM(ctx, a.Provider, a.apiKey, a.ModelKey, &evt.Context, a.compactConfig)
-				if result.Success {
-					logger.L().Info("agent: memory compacted",
-						zap.Int("seat", a.Seat),
-						zap.Int("before", result.MessagesBefore),
-						zap.Int("after", result.MessagesAfter),
-						zap.Int64("ms", result.DurationMs))
-				}
-			}()
-		}
-	}
+	// 2026-08-13 §20260813-02 U1: 触发逻辑搬移到 run_compact.go::maybeCompactMemory
+	// (新增 llmSema 排队 + 失败显式回退规则式压缩 + BotTranscript 可观测标记)。
+	a.maybeCompactMemory(ctx, rp, &evt.Context)
 
 	a.Memory.Push(llm.Message{
 		Role:    "user",
@@ -796,7 +779,10 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 			break
 		}
 
-		tools := BuildTools(phase, role, seat, alive, evt.Context.SpeakTurn, &evt.Context)
+		// 2026-08-13 §20260813-02 U2 — 工具定义走 per-Agent 缓存。
+		// key 覆盖 phase/role/aliveHash/shapeExtra(seat+speakTurn+gc 形状字段),
+		// 命中结果与直调 BuildTools 字节一致(tools_cache_wiring_test.go 断言)。
+		tools := BuildToolsCached(a.toolsCache, phase, role, seat, alive, evt.Context.SpeakTurn, &evt.Context)
 		if len(tools) == 0 {
 			// No legal tools (e.g. wrong turn). Yield to next event.
 			logger.L().Debug("agent: no tools for phase, yielding",
@@ -1768,7 +1754,8 @@ alive:
 
 	// §14: 复述段落已压缩 — git blame 与 docs/ 索引可还原
 
-	tools := BuildTools(phase, role, seat, alive, evt.Context.SpeakTurn, &evt.Context)
+	// 2026-08-13 §20260813-02 U2 — 与主路径同源,走 per-Agent 工具缓存。
+	tools := BuildToolsCached(a.toolsCache, phase, role, seat, alive, evt.Context.SpeakTurn, &evt.Context)
 	if len(tools) == 0 {
 		logger.L().Debug("agent: speak_floor_tick no tools; yielding",
 			zap.Int("seat", seat), zap.String("phase", phase))

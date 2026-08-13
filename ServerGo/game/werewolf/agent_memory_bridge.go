@@ -9,8 +9,11 @@
 //	    goroutine:
 //	      1. store.Load 读旧 memory_md(无则空)
 //	      2. BuildIterationPrompt(旧记忆 + 本局该座位事实 + 法官总结;>80K 加压缩指令)
-//	      3. registry.Get(modelKey) → provider.Chat(90s timeout,MaxTokens 取 config)
-//	      4. ValidateMemorySections 不通过 → FallbackMerge 规则兜底
+//	      3. registry.Get(modelKey) → ChatStreamAccumulate(流式,超时走
+//	         cfgAgentMemoryIterTimeoutSec 默认 480s,§20260813-02 U4;
+//	         transient 失败 5s 后重试 1 次,permanent 直接放弃)
+//	      4. ValidateMemorySections + ValidateMemoryRetention(保留率,
+//	         §20260813-02 U4)任一不通过 → FallbackMerge 规则兜底
 //	      5. >100K → HardTruncateMemory 硬截断
 //	      6. store.SaveIterated(version 乐观锁写回)
 //
@@ -28,6 +31,7 @@ package werewolf
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -37,6 +41,8 @@ import (
 	"LsmAgentGame/agent/wwplayer"
 	"LsmAgentGame/config"
 	"LsmAgentGame/llm"
+	"LsmAgentGame/llm/anthropic"
+	llmtypes "LsmAgentGame/llm/types"
 	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
@@ -94,6 +100,28 @@ func cfgAgentMemoryMaxTokens() (n int) {
 		n = c.Werewolf.AgentMemoryMaxTokens
 	}
 	return n
+}
+
+// defaultAgentMemoryIterTimeoutSec 2026-08-13 §20260813-02 U4 — 记忆迭代
+// 单次 LLM 调用的总超时兜底(秒)。旧版硬编码 90s,慢模型(Kimi/GLM 首字节
+// 1-3min)迭代频繁被 cut → 被迫走 FallbackMerge,跨局学习实际失效。
+// 改走 §197 长预算思想:默认 480s(8 min),流式累积与主对话一致。
+const defaultAgentMemoryIterTimeoutSec = 480
+
+// cfgAgentMemoryIterTimeoutSec 安全读取
+// config.WerewolfConfig.AgentMemoryIterTimeoutSec。默认 480;
+// 测试环境 config.Load() panic 时按默认值兜底(具名返回值,§197 教训 3)。
+func cfgAgentMemoryIterTimeoutSec() (out int) {
+	out = defaultAgentMemoryIterTimeoutSec
+	defer func() { _ = recover() }()
+	c := config.Load()
+	if c == nil {
+		return defaultAgentMemoryIterTimeoutSec
+	}
+	if c.Werewolf.AgentMemoryIterTimeoutSec > 0 {
+		out = c.Werewolf.AgentMemoryIterTimeoutSec
+	}
+	return out
 }
 
 // IterateAgentMemoriesAsync 在法官整局总结落地后,对本局每个 bot 模型
@@ -167,7 +195,8 @@ func (m *WerewolfManager) iterateOneModelMemory(
 	mu.Lock()
 	defer mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(),
+		time.Duration(cfgAgentMemoryIterTimeoutSec())*time.Second)
 	defer cancel()
 
 	// 1. 读旧记忆(行不存在返回 "")。
@@ -205,27 +234,47 @@ func (m *WerewolfManager) iterateOneModelMemory(
 		// 法官调用分开计费/归因。常量集中在 ServerGo/agent/class_names.go。
 		AgentClassName: string(agentroot.AgentClassWerewolfMemoryIter),
 	}
-	resp, err := provider.Chat(ctx, key, req)
+	// 2026-08-13 §20260813-02 U4 — 流式 + transient 重试 1 次。
+	// 与主对话同一管线(ChatStreamAccumulate,§197 长预算思想);
+	// transient(网络/超时/5xx/429)等 5s 重试一次,permanent(401/403)
+	// 直接放弃走 FallbackMerge(不重试浪费配额)。
+	respText, llmErr := callMemoryIterLLM(ctx, provider, key, req)
 	var newMD string
 	switch {
-	case err != nil:
+	case llmErr != nil:
 		// LLM 调用失败 → 规则兜底:旧记忆 + 追加一行本局 note。
 		logger.L().Warn("werewolf: agent memory LLM iterate failed, fallback merge",
 			zap.String("room_id", roomID),
 			zap.String("model_key", modelKey),
-			zap.Error(err))
+			zap.Error(llmErr))
 		newMD = wwplayer.FallbackMerge(oldMD, fmt.Sprintf("本局(%s)自我迭代 LLM 调用失败,仅保留旧记忆", roomID))
 	default:
-		text := strings.TrimSpace(resp.Text())
-		if text == "" || !wwplayer.ValidateMemorySections(text) {
+		text := strings.TrimSpace(respText)
+		switch {
+		case text == "" || !wwplayer.ValidateMemorySections(text):
 			// 输出不合格(空 / 4 段标题不全) → 规则兜底,不丢旧记忆。
 			logger.L().Warn("werewolf: agent memory LLM output invalid, fallback merge",
 				zap.String("room_id", roomID),
 				zap.String("model_key", modelKey),
 				zap.Bool("empty", text == ""))
 			newMD = wwplayer.FallbackMerge(oldMD, fmt.Sprintf("本局(%s)自我迭代输出不合格,仅保留旧记忆", roomID))
-		} else {
-			newMD = text
+		default:
+			// 2026-08-13 §20260813-02 U4 — 保留率校验(OpenClaw
+			// maxPriorEntryLossFraction):标题齐全但正文被 LLM 截掉大半
+			// (新记忆 < 旧记忆 50%;旧记忆 >80K 的压缩场景放宽到 30%)
+			// 视为截断事故,显式回退 FallbackMerge(禁止假成功)。
+			if retErr := wwplayer.ValidateMemoryRetention(oldMD, text); retErr != nil {
+				logger.L().Warn("werewolf: agent memory retention check failed, fallback merge",
+					zap.String("room_id", roomID),
+					zap.String("model_key", modelKey),
+					zap.Int("old_runes", len([]rune(oldMD))),
+					zap.Int("new_runes", len([]rune(text))),
+					zap.Error(retErr))
+				newMD = wwplayer.FallbackMerge(oldMD,
+					fmt.Sprintf("本局(%s)自我迭代输出保留率不足(疑似截断),仅保留旧记忆", roomID))
+			} else {
+				newMD = text
+			}
 		}
 	}
 
@@ -251,6 +300,65 @@ func (m *WerewolfManager) iterateOneModelMemory(
 		zap.String("model_key", modelKey),
 		zap.Int("old_bytes", len(oldMD)),
 		zap.Int("new_bytes", len(newMD)))
+}
+
+// callMemoryIterLLM 2026-08-13 §20260813-02 U4 — 记忆迭代的 LLM 调用助手。
+//
+// 三个职责:
+//  1. **流式**:provider 实现 ChatStreamAccumulate 时走 SSE 流式累积
+//     (与主对话 run_llm.go 同一 duck-type 模式,§197 慢模型友好);
+//     否则回退非流式 Chat。
+//  2. **transient 重试 1 次**:网络/超时/5xx/429 等可恢复错误等 5s 重试;
+//     permanent(401/403,anthropic.Error.Retryable=false)直接返回不重试。
+//  3. 返回聚合文本(resp.Text()),调用方再做段落/保留率校验。
+func callMemoryIterLLM(ctx context.Context, provider llm.LLMProvider, key string, req llm.LLMRequest) (string, error) {
+	call := func() (llm.LLMResponse, error) {
+		type streamingProvider interface {
+			ChatStreamAccumulate(context.Context, string, llm.LLMRequest, func(llmtypes.StreamEvent) error) (llm.LLMResponse, error)
+		}
+		if sp, ok := provider.(streamingProvider); ok {
+			return sp.ChatStreamAccumulate(ctx, key, req, nil)
+		}
+		return provider.Chat(ctx, key, req)
+	}
+	resp, err := call()
+	if err == nil {
+		return resp.Text(), nil
+	}
+	if !isMemoryIterTransient(err) {
+		return "", err
+	}
+	logger.L().Warn("werewolf: agent memory iterate transient failure, retrying once in 5s",
+		zap.String("model", req.Model), zap.Error(err))
+	select {
+	case <-ctx.Done():
+		return "", err
+	case <-time.After(5 * time.Second):
+	}
+	resp, err = call()
+	if err != nil {
+		return "", err
+	}
+	return resp.Text(), nil
+}
+
+// isMemoryIterTransient 判定记忆迭代 LLM 失败是否可恢复(值得重试 1 次)。
+// 与 run.go 的 transient 语义对齐:网络瞬断 / 超时 / 5xx / 429 / 熔断快速失败
+// 都是「等待恢复」类;401/403 等永久错误不重试。
+func isMemoryIterTransient(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var ae *anthropic.Error
+	if errors.As(err, &ae) {
+		return ae.Retryable
+	}
+	// 未类型化的错误(网络层包裹等)按 transient 处理 —— 重试 1 次的代价
+	// 远低于直接 FallbackMerge 丢失一局学习成果。
+	return true
 }
 
 // buildSeatMemoryFacts 在 lockRoomBriefly 快照下构造"本局该座位事实"简短文本。

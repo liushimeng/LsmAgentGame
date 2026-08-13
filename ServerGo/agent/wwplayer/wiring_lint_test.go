@@ -195,6 +195,175 @@ func TestWiring_U6_L3_NightPrivateFieldsAreRead(t *testing.T) {
 	}
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// §20260813-02 U5 — wiring lint 扩展(机制化防 §130 第七次复发)。
+//
+// 三条新断言覆盖「新增缓存 / 新增缓冲 / 新增配置 / 新增工具」四类死代码形态:
+//
+//	U7-A  Build*Cached / New*Buffer 导出构造函数必须有非测试生产调用点
+//	U7-B  Agent 死字段(compactConfig 等)必须有 setter 且 setter 有生产调用点;
+//	      已知死代码(steeringQueue/toolHooks)白名单豁免,截止 2026-09-13
+//	U7-C  BuildTools 挂载的每个工具名必须同时有派发路径(switch case 或 registry)
+// ─────────────────────────────────────────────────────────────────────────────
+
+var cachedCtorDeclRe = regexp.MustCompile(`(?m)^func (Build[A-Za-z0-9]*Cached|New[A-Za-z0-9]*Buffer)\(`)
+
+// TestWiring_U7_A_CachedCtorsHaveProductionCaller 断言:
+// agent/ 与 game/werewolf/ 中所有 Build*Cached / New*Buffer 导出构造函数,
+// 必须有 ≥1 个非测试生产调用点 —— ToolsCache(BuildToolsCached)就是靠这条
+// 防止「缓存写好了但 run.go 从不调用」再次潜伏一个版本。
+func TestWiring_U7_A_CachedCtorsHaveProductionCaller(t *testing.T) {
+	src := repoFiles(t, "agent", "game/werewolf")
+
+	declared := map[string]string{}
+	for path, body := range src {
+		for _, m := range cachedCtorDeclRe.FindAllStringSubmatch(body, -1) {
+			declared[m[1]] = path
+		}
+	}
+	if len(declared) == 0 {
+		t.Fatal("未扫描到任何 Build*Cached/New*Buffer 声明,lint 失效")
+	}
+
+	// 已知未接线死代码白名单 —— ⚠️ 只允许变短。
+	// 每项必须注明处置方向与截止日期,到期必须接线或删除。
+	knownDead := map[string]string{
+		// §20260813-02 U5:§20260813-01 新增,与 GameContext.RecentSpeeches 语义
+		// 重叠度高,意图待确认;P1 评估接线或删除,截止 2026-09-13。
+		"NewShortMemoryBuffer": "§20260813-01 新增,意图待确认,P1 评估接线或删除(截止 2026-09-13)",
+	}
+
+	for name, declPath := range declared {
+		callers := 0
+		for _, body := range src {
+			for _, idx := range regexp.MustCompile(regexp.QuoteMeta(name)+`\(`).FindAllStringIndex(body, -1) {
+				line := lineAt(body, idx[0])
+				if strings.HasPrefix(strings.TrimSpace(line), "func "+name+"(") {
+					continue // 声明
+				}
+				if strings.HasPrefix(strings.TrimSpace(line), "//") {
+					continue // 注释
+				}
+				callers++
+			}
+		}
+		if callers == 0 {
+			if reason, ok := knownDead[name]; ok {
+				t.Logf("[已知死代码] %s (%s) — %s", name, declPath, reason)
+				continue
+			}
+			t.Errorf("缓存/缓冲构造函数 %s(声明于 %s)没有任何生产调用点 —— "+
+				"这是 §130「声明了却从不接线」的缓存形态(U2 前的 BuildToolsCached)。",
+				name, declPath)
+		}
+	}
+}
+
+// TestWiring_U7_B_AgentFieldsHaveWiredSetter 断言:
+// Agent 的「配置类」字段必须有 setter 且 setter 有生产调用点 —— compactConfig
+// 在 U1 之前就是「字段存在、触发判断存在、唯独没有 setter」导致整条压缩路径
+// 静默失效整整两个版本。
+func TestWiring_U7_B_AgentFieldsHaveWiredSetter(t *testing.T) {
+	src := repoFiles(t, "agent", "game/werewolf")
+
+	// 字段 → 必须的 setter 名。
+	mustWire := map[string]string{
+		"compactConfig": "SetCompactConfig",
+	}
+	// 已知死字段白名单(无 setter / setter 无调用点)—— ⚠️ 只允许变短。
+	// §20260813-02 U5:§112 观众全频唤醒已覆盖 steering 价值,toolHooks 与
+	// DispatchTool 主路径重复;P1 评估**删除**而非接线,截止 2026-09-13。
+	knownDeadFields := map[string]string{
+		"steeringQueue": "§20260811-01 借鉴 PI Agent 引入但从未接线;P1 评估删除(截止 2026-09-13)",
+		"toolHooks":     "§20260811-01 借鉴 PI Agent 引入但从未接线;P1 评估删除(截止 2026-09-13)",
+	}
+
+	agentSrc, err := os.ReadFile("agent.go")
+	if err != nil {
+		t.Fatalf("read agent.go: %v", err)
+	}
+	for field, setter := range mustWire {
+		if !strings.Contains(string(agentSrc), field) {
+			t.Fatalf("字段 %s 在 agent.go 中不存在,lint 失效", field)
+		}
+		callers := 0
+		for path, body := range src {
+			if strings.HasSuffix(path, "run_compact.go") || strings.HasSuffix(path, "agent.go") {
+				// setter 声明自身所在文件不计。
+			}
+			for _, idx := range regexp.MustCompile(regexp.QuoteMeta(setter)+`\(`).FindAllStringIndex(body, -1) {
+				line := lineAt(body, idx[0])
+				if strings.HasPrefix(strings.TrimSpace(line), "func (a *Agent) "+setter+"(") {
+					continue // 声明
+				}
+				if strings.HasPrefix(strings.TrimSpace(line), "//") {
+					continue
+				}
+				_ = path
+				callers++
+			}
+		}
+		if callers == 0 {
+			t.Errorf("字段 %s 的 setter %s 没有任何生产调用点 —— "+
+				"这正是 U1 修复前 compactConfig 的死状(Enabled 恒 false,触发判断永不生效)。",
+				field, setter)
+		}
+	}
+	for field, reason := range knownDeadFields {
+		t.Logf("[已知死字段] %s — %s", field, reason)
+	}
+}
+
+// TestWiring_U7_C_MountedToolsHaveDispatch 断言:
+// BuildTools 挂载(add("x"))与 registry 注册(Name: "x")的每个工具名,
+// 必须同时存在派发路径 —— dispatchToolInner 的 case "x",或 registry
+// Dispatcher(DispatchToolByName)。chat_recall(U3)即被此断言保护:
+// 只挂工具不写派发 = LLM 拿到 "unknown tool"(§97 双路径对照的机制化)。
+func TestWiring_U7_C_MountedToolsHaveDispatch(t *testing.T) {
+	toolsSrc, err := os.ReadFile("tools.go")
+	if err != nil {
+		t.Fatalf("read tools.go: %v", err)
+	}
+	dispatch := string(toolsSrc)
+
+	// 收集 BuildTools 内 add("x") 挂载名。
+	mounted := map[string]bool{}
+	for _, m := range regexp.MustCompile(`add\("([a-z_]+)"`).FindAllStringSubmatch(dispatch, -1) {
+		mounted[m[1]] = true
+	}
+	if len(mounted) == 0 {
+		t.Fatal("未解析到任何 add() 工具名,lint 失效")
+	}
+
+	// registry 注册的工具(Name: "x" + Dispatcher)走 DispatchToolByName,
+	// 无需 switch case;收集这些名字作为合法派发证据。
+	registryDispatched := map[string]bool{}
+	for _, file := range []string{"tools_prop.go", "tools_wolf.go", "commitment_tools.go"} {
+		body, rerr := os.ReadFile(file)
+		if rerr != nil {
+			continue
+		}
+		for _, m := range regexp.MustCompile(`Name:\s+"([a-z_]+)"`).FindAllStringSubmatch(string(body), -1) {
+			registryDispatched[m[1]] = true
+		}
+	}
+
+	for name := range mounted {
+		hasCase := strings.Contains(dispatch, `case "`+name+`"`)
+		if !hasCase && !registryDispatched[name] {
+			t.Errorf("工具 %q 在 BuildTools 挂载,但 dispatchToolInner 无 case 且未走 registry 派发 —— "+
+				"LLM 调用会拿到 \"unknown tool\"(§97 双路径对照)", name)
+		}
+	}
+	// chat_recall 是本断言的「金丝雀」:必须显式存在,防止整个断言静默失效。
+	if !mounted["chat_recall"] {
+		t.Fatal("chat_recall 未在 BuildTools 挂载清单中(U3 接线回归)")
+	}
+	if !strings.Contains(dispatch, `case "chat_recall"`) {
+		t.Fatal("chat_recall 未在 dispatchToolInner 派发(U3 接线回归)")
+	}
+}
+
 // lineAt 返回 body 中 offset 所在的整行。
 func lineAt(body string, offset int) string {
 	start := strings.LastIndexByte(body[:offset], '\n') + 1
