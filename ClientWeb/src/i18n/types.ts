@@ -281,6 +281,10 @@ export interface Dict {
   'werewolf.history.subtab.heatmap': string;
   // §20260813-02 U4 — 夜间血迹图 sub-tab(spectator only)
   'werewolf.history.subtab.bloodmap': string;
+  // §20260814-01 U1 — 三个接线修复的 sub-tab。
+  'werewolf.history.subtab.mindmirror': string;
+  'werewolf.history.subtab.trusttrace': string;
+  'werewolf.history.subtab.review': string;
   'werewolf.history.reasoning.empty': string;
   'werewolf.history.reasoning.filterAll': string;
   // §20260811-06 U5 — 黎明流言系统(5 类模板,活动流自动渲染,本键预留扩展)。

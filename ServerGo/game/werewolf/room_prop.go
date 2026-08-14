@@ -25,17 +25,25 @@ type PropHistoryRecord struct {
 	CreatedAt  int64  `json:"created_at"` // unix seconds
 }
 
+// propHistoryCap 是道具历史环形缓冲的容量。
+//
+// 2026-08-14 §20260814-01 U1:原先 20 这个魔数在本函数里硬编码了两次
+// (len < 20 与 % 20),而 recall_review_bridge.go 的
+// propHistorySnapshotLocked 也需要它来还原环绕顺序 —— 三处漂移就会读出
+// 错位数据。提为常量作单一事实来源。
+const propHistoryCap = 20
+
 func (r *WerewolfRoom) recordPropHistoryLocked(rec PropHistoryRecord) {
 	if r == nil {
 		return
 	}
-	if len(r.propHistory) < 20 {
+	if len(r.propHistory) < propHistoryCap {
 		r.propHistory = append(r.propHistory, rec)
 		return
 	}
 	// 环形写入
 	r.propHistory[r.propHistoryHead] = rec
-	r.propHistoryHead = (r.propHistoryHead + 1) % 20
+	r.propHistoryHead = (r.propHistoryHead + 1) % propHistoryCap
 }
 
 func (r *WerewolfRoom) GetPropHistoryLocked(limit int) []PropHistoryRecord {

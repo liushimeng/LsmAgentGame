@@ -333,6 +333,10 @@ func (m *WerewolfManager) Action_FinishVote(roomID string, tiedRound int) (*Were
 	if e := r.State.FinishVote(tiedRound); e != nil {
 		return nil, e
 	}
+	// 2026-08-14 §20260814-01 U1 — 逐日票型入历史(个人复盘投票准确率维度)。
+	// 三条 FinishVote 路径必须全部采集,漏一条即该天票型丢失(§92a/§132
+	// 「同一语义在多路径必须完全一致」)。复用上方已抓的 prevTally 快照。
+	r.recordVoteHistoryLocked(prevTally)
 	// 触发 close_vote:票数差 ≤1 且未平票(平票已在 tiedRound==1 提前返回)
 	if tiedRound == 0 && prevTopCount > 0 && prevTopCount-prevSecondCount <= 1 &&
 		r.State.DayEliminated != NoSeat {

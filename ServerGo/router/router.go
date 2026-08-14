@@ -26,7 +26,7 @@ import (
 )
 
 // New constructs the *gin.Engine.
-func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API) *gin.Engine {
+func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery(), middleware.RequestID(), middleware.Logging(), middleware.CORS(cfg))
@@ -199,6 +199,10 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		// §20260812-03 U3 — 阵营赌注系统。
 		werewolfGames.POST("/rooms/:roomId/faction-bet", werewolf20260812API.PlaceFactionBet)
 		werewolfGames.GET("/rooms/:roomId/faction-bet-status", werewolf20260812API.GetFactionBetStatus)
+		// 2026-08-14 §20260814-01 U1 — 个人复盘 4 维聚合。
+		// 路径与前端 PersonalReviewPanel.tsx:81 已写死的 URL 逐字符对齐;
+		// §135:只能查看自己的复盘(handler 内校验 :userId == 调用者)。
+		werewolfGames.GET("/rooms/:roomId/review/:userId", werewolfReviewAPI.GetPersonalReview)
 	}
 
 	// LLM model metadata — protected, returns the safe (key-free) list of

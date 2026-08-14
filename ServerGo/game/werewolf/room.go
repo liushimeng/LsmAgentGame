@@ -256,6 +256,31 @@ type WerewolfRoom struct {
 	// 不销毁(房间复用),房间 GC 时随 struct 一起回收。
 	llmSema chan struct{}
 
+	// 2026-08-14 §20260814-01 U1 — 逐日票型历史(个人复盘的投票准确率维度)。
+	//
+	// 为什么不能复用 State.LastDayVoteMap:那个字段只保留**最后一天**
+	// (engine.go:360,每轮 fillDayVoteMapLocked 整体覆盖),而复盘要算的是
+	// 「整局每一天投票是否投中被放逐者」。
+	//
+	// 采集点:三条 FinishVote 路径末尾(recordVoteHistoryLocked,均已持 r.mu)
+	// —— 不新增广播、不改 LastDayVoteMap 既有语义,也就不影响 §20260811-02
+	// 影响力计算对它的消费。
+	//
+	// 上限 reviewVoteHistoryMaxDays 条(防长局膨胀);restartGameLocked 清零
+	// (跨局隔离,与 §20260811-08 U2 settlementRewarded 同款纪律)。
+	voteHistory []VoteReviewRecord
+
+	// 2026-08-14 §20260814-01 U1 — 法官整局总结解析出的「信任度轨迹」。
+	//
+	// wwjudge.ParseTrustTrace 自 §20260812-01 U4 落地起零生产调用点
+	// (§130:解析器写好了、i18n 写好了、前端 TrustTraceChart 写好了,
+	// 唯独没人调用它)。现由 judge_summary_bridge.go 在解析法官总结时
+	// **复用同一份 LLM 响应**填充,零新增 LLM 调用。
+	//
+	// §135 核对:TrustTraceEntry 只含 {seat, day, score},不含 Role/Faction
+	// (judge_trust_trace.go:15 已声明该约束),故可对全员下发而非仅 spectator。
+	judgeTrustTrace []wwjudge.TrustTraceEntry
+
 	// phaseWatchdog tracks the current phase+actingSeat "key" so the
 	// background watchdog goroutine can detect a stalled phase (same key
 	// for > phaseWatchdogDeadlineFor(seatCount)) and emit a forced skip.

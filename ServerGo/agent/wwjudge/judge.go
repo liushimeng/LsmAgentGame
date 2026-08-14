@@ -141,6 +141,12 @@ type AgentJudge struct {
 	// 由 NewAgentJudge 初始化;每次 announce/summary 成功追加;
 	// 构造 Messages 时 PrependHistory() 把最近 N 条作为 assistant 历史。
 	Memory *JudgeMemoryRing
+
+	// 2026-08-14 §20260814-01 U3 — 房间级 LLM 并发信号量(可选,nil = 不限流)。
+	// 此前法官完全绕过 WerewolfRoom.llmSema,cap=4 的房间实际在飞可达 6
+	// (4 bot + 法官 + 解说)。由 startJudgeGoroutine 注入同一个 r.llmSema;
+	// goroutine 内只读。setter / Acquire / Release 见 judge_llm_slot.go。
+	llmSema chan struct{}
 }
 
 // NewAgentJudge 创建法官 driver(不启动 goroutine,调用方负责 Run)。
@@ -403,6 +409,19 @@ func (j *AgentJudge) judgeChatOrFallback(ctx context.Context, kind string, evt J
 			}
 		}
 	}
+	// 2026-08-14 §20260814-01 U3 — 房间级 LLM 并发信号量。
+	//
+	// 法官旁白是**装饰性**调用:抢不到槽位即放弃本次播报,由调用方走
+	// JudgeFallbackText 硬编码兜底(返回 false 的既有路径),**不重试**。
+	// phase 由 watchdog 驱动(见上方 §127 注释),故法官让位不会卡住游戏。
+	// 2s 预算 < player bot 的 5s(run.go:346):推进游戏的调用优先。
+	if !j.AcquireLLMSlot(JudgeSlotAcquireWait) {
+		logger.L().Debug("judge: LLM slot busy, skipping this announcement",
+			zap.String("room_id", j.RoomID), zap.String("kind", kind))
+		return false
+	}
+	defer j.ReleaseLLMSlot()
+
 	// §127 + LLM-5min: 30s → 90s,允许 slow thinking 模型完成一次完整响应;
 	// 超过 90s 仍 fallback,不阻塞游戏流(phase 由 watchdog 推动,与法官解耦)。
 	cctx, cancel := context.WithTimeout(ctx, 90*time.Second)

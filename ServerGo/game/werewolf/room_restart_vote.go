@@ -337,6 +337,12 @@ func (m *WerewolfManager) restartGameLocked(r *WerewolfRoom) *errcode.Error {
 	if r.secretLetter != nil {
 		r.secretLetter.reset()
 	}
+	// §20260814-01 U1 — 逐日票型 + 法官信任度轨迹跨局重置。
+	// 与上方 settlementRewarded 同理:任何「整局累积」状态漏清零,
+	// 第二局的个人复盘就会把第一局的票算进去。
+	r.resetVoteHistoryLocked()
+	// 复盘缓存同样属于上一局(30min TTL 会横跨重开局)。
+	ClearReviewCacheForRoom(r.RoomID)
 	logger.L().Info("werewolf: room restarted in-place",
 		zap.String("room_id", r.RoomID),
 		zap.Int64("seed", oldSeed),

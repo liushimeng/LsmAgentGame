@@ -49,6 +49,12 @@ import GodModeView from '@/components/werewolf/GodModeView';
 import { WinRateHeatmapPanel } from '@/components/werewolf/WinRateHeatmap';
 // §20260813-02 U4 — 夜间血迹图(S2)。spectator-only 夜间行动空间可视化。
 import { NightBloodMap } from '@/components/werewolf/NightBloodMap';
+// §20260814-01 U1 — 三个「写好了却从未被 import」的面板接线(§126/§130 清算)。
+// 这三个组件自 §20260812-01 落地起零 import:MindMirror 与 TrustTrace 缺挂载点,
+// PersonalReview 还缺后端路由(本批次一并补齐 GET .../review/:userId)。
+import { MindMirrorPanel, type AgentHypothesisEntry } from '@/components/werewolf/MindMirrorPanel';
+import { TrustTraceChart } from '@/components/werewolf/TrustTraceChart';
+import { PersonalReviewPanel } from '@/components/werewolf/PersonalReviewPanel';
 import { useAuthStore } from '@/store/auth.store';
 
 interface HistoryDrawerProps {
@@ -69,7 +75,12 @@ type SubTab =
   // §20260812-03 U1 — 阵营胜率热力图(仅观战者,§132 隐私隔离)。
   | 'heatmap'
   // §20260813-02 U4 — 夜间血迹图(S2,仅观战者)。
-  | 'bloodmap';
+  | 'bloodmap'
+  // §20260814-01 U1 — 三个接线修复的 tab。三者都**不是** spectator-only:
+  //   mindmirror  — 人类直觉 vs Agent 逻辑,本来就是给「玩家本人」用的
+  //   trusttrace  — TrustTraceEntry 只含 {seat, day, score},无身份字段(§135)
+  //   review      — 个人复盘,后端已校验只能看自己的
+  | 'mindmirror' | 'trusttrace' | 'review';
 
 /** §20260811-02 U2 + §20260811-06 U3 + §20260812-03 U1 + §20260813-02 U4 — spectator 专属 sub-tab 白名单。 */
 const SPECTATOR_ONLY_TABS: SubTab[] = ['infoflow', 'hypothesis', 'decision', 'reasoning', 'godmode', 'heatmap', 'bloodmap'];
@@ -378,10 +389,61 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  // 2026-08-14 §20260814-01 U1 — 修复既有缺陷:sub 状态从不随 spectator 重置。
+  //
+  // 原注释(下方 allTabs 上面)声称「sub 状态若玩家切换前是 infoflow,会落到
+  // 第一个可见 tab」—— 但代码里**从来没有那个 fallback**。实际行为:
+  // 非观战者若停留在某个 spectator-only tab 上(观战 → 入座、或 spectator
+  // prop 因重连翻转),tab 条里没有 is-active 项,而 body 里每个渲染分支都带
+  // `&& spectator` 守卫 ⇒ **整片空白**,用户以为抽屉坏了。
+  //
+  // 这是「注释描述了一个不存在的行为」的又一例(§20260812-04 教训 2:
+  // 注释与实现不符应当像编译错误一样对待)。现在真正实现它。
+  useEffect(() => {
+    if (!spectator && SPECTATOR_ONLY_TABS.includes(sub)) {
+      setSub('timeline');
+    }
+  }, [spectator, sub]);
+
+  // §20260814-01 U1 — MindMirror 的 Agent 侧输入:把 bot_hypotheses 折叠成
+  // 「每座位一个阵营倾向 + 置信度」。
+  //
+  // §135 硬约束:**只**导出 faction 与 confidence,绝不透传 role_guess 明文
+  // (那是具体身份猜测,等同于把 Agent 的验人结论摊给所有人)。
+  // 同一目标座位有多条假说时取置信度最高的那条。
+  //
+  // 后端只在 viewer<0 分支填 bot_hypotheses,故玩家侧恒为 [](面板降级为
+  // 「只显示我的直觉」)—— 这是刻意的:MindMirror 的价值在于事后对照,
+  // 而非在局中给玩家 Agent 的推理结果。
+  const mindMirrorHypothesis = useMemo<AgentHypothesisEntry[]>(() => {
+    const best = new Map<number, AgentHypothesisEntry>();
+    for (const bh of gameState.bot_hypotheses ?? []) {
+      for (const e of bh.entries ?? []) {
+        const faction: AgentHypothesisEntry['faction'] =
+          e.role_guess === 'werewolf' ? 'wolf'
+            : e.role_guess === 'unknown' || !e.role_guess ? 'unknown'
+              : 'good';
+        const confidence = Math.max(0, Math.min(1, (e.confidence ?? 0) / 100));
+        const prev = best.get(e.target_seat);
+        if (!prev || confidence > prev.confidence) {
+          best.set(e.target_seat, { seat: e.target_seat, faction, confidence });
+        }
+      }
+    }
+    return Array.from(best.values()).sort((a, b) => a.seat - b.seat);
+  }, [gameState.bot_hypotheses]);
+
+  // 本地玩家是否存活(MindMirror 只在人类存活时开放录入)。
+  const isLocalPlayerAlive = useMemo(() => {
+    const seat = gameState.my_seat;
+    if (seat < 0) return false;
+    return gameState.players?.find((p) => p.seat === seat)?.alive ?? false;
+  }, [gameState.my_seat, gameState.players]);
+
   if (!open) return null;
 
-  // 2026-08-10 §20260810-08 — 信息流 tab 仅 spectator 可见(与 §135 身份隔离一致);
-  // 这里按 spectator 过滤 tabs,sub 状态若玩家切换前是 infoflow,会落到第一个可见 tab。
+  // 2026-08-10 §20260810-08 — 信息流 tab 仅 spectator 可见(与 §135 身份隔离一致)。
+  // sub 落在 spectator-only tab 而当前非观战者时,由上方 useEffect 回退到 timeline。
   const allTabs: { key: SubTab; label: string }[] = [
     { key: 'timeline',  label: t('werewolf.history.subtab.timeline') },
     { key: 'monologue', label: t('werewolf.history.subtab.monologue') },
@@ -400,6 +462,10 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
     { key: 'heatmap',    label: t('werewolf.history.subtab.heatmap') },
     // §20260813-02 U4 — 夜间血迹图(S2,spectator only)。
     { key: 'bloodmap',   label: t('werewolf.history.subtab.bloodmap') },
+    // §20260814-01 U1 — 接线修复:三个组件写好后从未被 import(§126)。
+    { key: 'mindmirror', label: t('werewolf.history.subtab.mindmirror') },
+    { key: 'trusttrace', label: t('werewolf.history.subtab.trusttrace') },
+    { key: 'review',     label: t('werewolf.history.subtab.review') },
   ];
   const tabs = spectator
     ? allTabs
@@ -480,6 +546,39 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
             <NightBloodMap
               snapshot={gameState.god_mode}
               players={gameState.players}
+            />
+          )}
+          {/* §20260814-01 U1 — 心镜:人类直觉 vs Agent 逻辑。
+              agentHypothesis 由 bot_hypotheses 派生,而后端只在 viewer<0
+              分支填充该字段(§135),故玩家侧恒为空数组 —— 面板会渲染
+              「仅有我的直觉、Agent 侧暂无数据」的对照,这正是它的降级形态。
+              §135 关键:只传 faction + confidence,**绝不**传 role_guess 明文。 */}
+          {sub === 'mindmirror' && (
+            <MindMirrorPanel
+              roomId={gameState.room_id}
+              mySeat={gameState.my_seat}
+              agentHypothesis={mindMirrorHypothesis}
+              isHumanInRoom={!spectator && gameState.my_seat >= 0}
+              isLocalPlayerAlive={isLocalPlayerAlive}
+            />
+          )}
+          {/* §20260814-01 U1 — 信任度轨迹。后端 trust_trace 由法官整局总结解析
+              (judge_summary_bridge.go),终局前为空 → 组件自渲染空态。
+              **不传 factionBySeat**:那会把阵营染色暴露给所有人(§135),
+              组件对缺省值走 'unknown' 灰色单色,信息量不减。 */}
+          {sub === 'trusttrace' && (
+            <TrustTraceChart entries={gameState.trust_trace ?? []} />
+          )}
+          {/* §20260814-01 U1 — 个人复盘 4 维。走本批次新增的
+              GET /api/games/werewolf/rooms/:roomId/review/:userId;
+              后端校验「只能看自己的」(§135),故 userId 传当前登录者。
+              observer(my_seat<0)没有可复盘的对局数据,渲染空态提示。 */}
+          {sub === 'review' && (
+            <PersonalReviewPanel
+              roomId={gameState.room_id}
+              userId={currentUserId ?? ''}
+              open
+              onClose={onClose}
             />
           )}
         </div>

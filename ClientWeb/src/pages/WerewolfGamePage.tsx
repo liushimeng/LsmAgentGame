@@ -47,6 +47,10 @@ import { LastWordsStage } from '@/components/werewolf/LastWordsStage';
 import PropPanel from '@/components/werewolf/PropPanel';
 // 2026-08-10 §20260810-06 — 行为承诺面板 + 按钮。
 import { CommitmentPanel } from '@/components/werewolf/CommitmentPanel';
+// §20260814-01 U1 — 接线修复:两者的后端路由 / i18n / CSS 早已就绪,
+// 唯独没有挂载点,自 §20260812-03 落地起零 import(§126)。
+import SecretLetterPanel from '@/components/werewolf/SecretLetterPanel';
+import FactionBetPanel from '@/components/werewolf/FactionBetPanel';
 // §20260812-02 U4 — 音效反馈系统
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 import { SoundToggle } from '@/components/common/SoundToggle';
@@ -739,6 +743,30 @@ export function WerewolfGamePage() {
                       busy={busy}
                       iAmDead={iAmDead}
                     />
+                  )}
+                  {/* 2026-08-14 §20260814-01 U1 — 接线修复:暗线信件 + 阵营赌注。
+                      两个组件自 §20260812-03 U2/U3 落地起**从未被任何文件 import**
+                      —— 后端路由(router.go:197-201)、三语 i18n(14 键)、
+                      CSS(werewolf-20260812-03.css,34 条规则)全部就绪,
+                      只差这个挂载点(§126「组件存在但未被 import 等于不存在」)。
+                      窗口与后端校验一致:白天 speak 阶段 + 存活人类玩家。 */}
+                  {!spectator && !iAmDead && (
+                    <>
+                      <SecretLetterPanel
+                        roomId={roomId!}
+                        mySeat={effectiveSeat}
+                        aliveSeats={gameState!.players?.map((p, i) => p.alive ? i : -1).filter(i => i >= 0) ?? []}
+                        windowOpen={gameState!.phase === 'speak'}
+                        t={t}
+                      />
+                      <FactionBetPanel
+                        roomId={roomId!}
+                        mySeat={effectiveSeat}
+                        aliveSeats={gameState!.players?.map((p, i) => p.alive ? i : -1).filter(i => i >= 0) ?? []}
+                        windowOpen={gameState!.phase === 'speak'}
+                        t={t}
+                      />
+                    </>
                   )}
                   {canSuicide && (
                     <button

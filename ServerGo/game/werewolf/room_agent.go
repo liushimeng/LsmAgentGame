@@ -276,9 +276,11 @@ func (m *WerewolfManager) StartAgentsLocked(r *WerewolfRoom) {
 		r.BotAgents[seat] = ag
 		// BUG-R242-P1-01: 恢复房间级 LLM 并发信号量(§130 曾删除)。
 		// 首个 bot 启动时创建;后续 bot 共用同一引用。cap=0/负值 = 禁用(完全并发)。
-		if r.llmSema == nil && cfgWerewolfRoomLLMConcurrency() > 0 {
-			r.llmSema = make(chan struct{}, cfgWerewolfRoomLLMConcurrency())
-		}
+		//
+		// 2026-08-14 §20260814-01 U3:懒创建逻辑抽到 ensureLLMSemaphoreLocked,
+		// 因为法官(startJudgeGoroutine)也要注入同一个信号量,而它有 5 个调用点、
+		// 与本函数的先后顺序不保证 —— 两处各写一遍 `if nil { make }` 迟早漂移。
+		r.ensureLLMSemaphoreLocked()
 		ag.SetLLMSemaphore(r.llmSema)
 
 		// 2026-08-13 §20260813-02 U1 — 注入局内 LLM 语义压缩配置。
@@ -294,6 +296,18 @@ func (m *WerewolfManager) StartAgentsLocked(r *WerewolfRoom) {
 		//
 		// 注意:**不能**放进上面 `md != ""` 分支 —— 轮次收紧与是否有持久记忆无关。
 		ag.SetDifficultyRoundCap(ProfileFor(AgentDifficulty(r.agentDifficulty)).MaxToolUse)
+
+		// 2026-08-14 §20260814-01 U2 — 接线难度档位的发言节奏缩放。
+		// difficulty.go 的 SpeakLimiterScale(easy 1.5 / normal 1.0 /
+		// hard 1.0 / hell 0.8)此前 4 处赋值 0 处读取 —— 与紧邻上方的
+		// MaxToolUse(§20260813-04 U3)、MemoryInjectRunes(§20260812-04 U4)
+		// 是**同一 struct 内的第三个**同病字段。前两次修复都没回头扫这个
+		// struct,正是 §20260813-04 教训 (3) 所指的漏修模式。
+		//
+		// 与上面 RoundCap 同理:不放进 `md != ""` 分支 —— 发言节奏与持久记忆无关。
+		// normal 档(1.0)在 setter 内部直接 return,三个 limiter 保持构造期
+		// 原值,逐字节零回归(§20260811-09 U2 纪律)。
+		ag.SetDifficultySpeakScale(ProfileFor(AgentDifficulty(r.agentDifficulty)).SpeakLimiterScale)
 
 		// 2026-08-13 §20260813-04 U1 — 注入实时事件队列(SteeringQueue)。
 		// 此前 steeringQueue 只有字段声明 + run.go 读取,零 setter 恒为 nil,

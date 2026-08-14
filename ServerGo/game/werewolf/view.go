@@ -195,6 +195,14 @@ type ClientGameState struct {
 	// JudgeSpeakOrder 法官生成"按顺序发言"用的座位列表;空 = 无。
 	JudgeSpeakOrder []int `json:"judge_speak_order,omitempty"`
 
+	// 2026-08-14 §20260814-01 U1 — 发言信任度轨迹(终局后由法官总结解析)。
+	//
+	// §135 身份公开公平性:每条只有 {seat, day, score},**不含身份字段**,
+	// 故对全员下发(非 spectator-only)。对局中为 nil(omitempty 不出现)。
+	// 前端 TrustTraceChart 渲染折线图 —— 该组件自 §20260812-01 U4 写好后
+	// 因本字段缺失而从未被 import(§130/§126)。
+	TrustTrace []TrustTraceEntryJSON `json:"trust_trace,omitempty"`
+
 	// §20260811-07 U2 — 自动高光集锦战报。
 	// BattleReportHighlights 是终局时的 3~5 张高光卡片数据,供 SettlementModal
 	// 顶部 BattleReportHighlights 组件渲染(omitempt:终局前不暴露)。
@@ -1128,6 +1136,21 @@ type WolfPeerView struct {
 	Tally       *WolfVoteTally `json:"tally,omitempty"`   // 计票结果(Voting=false 时)
 }
 
+// TrustTraceEntryJSON 是 ClientGameState 对外的单座位单日信任度
+// (2026-08-14 §20260814-01 U1)。
+//
+// 与 wwjudge.TrustTraceEntry 同形状,在 view 层重新声明的理由与
+// BotHypothesisJSON 一致:避免前端类型契约被上游 agent 包的内部演进牵动。
+//
+// §135:**不得**给本结构增加 Role / Faction / RoleName 等身份字段 ——
+// 它是对全员下发的(非 spectator-only),加身份字段即泄漏。
+// 信任度是 LLM 对「发言一致性 / 投票跟随度 / 情绪稳定性」的主观评分。
+type TrustTraceEntryJSON struct {
+	Seat  int     `json:"seat"`  // 0..MaxPlayers-1
+	Day   int     `json:"day"`   // 1..N
+	Score float64 `json:"score"` // -1.0 ~ +1.0
+}
+
 // BotHypothesisJSON 是 ClientGameState 对外的假说条目(避免循环导入 werewolf 包)。
 type BotHypothesisJSON struct {
 	Seat    int                          `json:"seat"`
@@ -1342,6 +1365,22 @@ func BuildClientStateWithRoom(roomID string, r *WerewolfRoom, viewer int) *Clien
 		}
 	}
 	cs.JudgeModelMemories = r.ModelMemoriesSnapshotLocked()
+	// 2026-08-14 §20260814-01 U1 — 下发法官解析出的「信任度轨迹」。
+	//
+	// §135 核对:TrustTraceEntry 只含 {seat, day, score},**不含**
+	// Role / Faction / 任何身份字段(judge_trust_trace.go:15 已声明该约束),
+	// 分数是 LLM 对「发言一致性 / 投票跟随度 / 情绪稳定性」的主观评价。
+	// 故可对全员下发,不需要 viewer<0 的 spectator 隔离。
+	//
+	// 仅在终局后有值:judgeTrustTrace 由整局总结解析填充,对局中恒为 nil
+	// (omitempty 不下发,前端渲染空态)。
+	if len(r.judgeTrustTrace) > 0 {
+		out := make([]TrustTraceEntryJSON, 0, len(r.judgeTrustTrace))
+		for _, e := range r.judgeTrustTrace {
+			out = append(out, TrustTraceEntryJSON{Seat: e.Seat, Day: e.Day, Score: e.Score})
+		}
+		cs.TrustTrace = out
+	}
 	// 2026-07-24 优化:下发暂停状态。前端 GameInfoPanel 渲染 ⏸ 暂停/▶ 恢复按钮,
 	// PausedBy/PauseReason 让真人玩家知道是谁暂停 + 为什么(避免误操作疑惑)。
 	cs.Paused = r.paused

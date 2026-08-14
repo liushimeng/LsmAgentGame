@@ -96,6 +96,41 @@ func cfgWerewolfRoomLLMConcurrency() int {
 	return config.Load().Werewolf.RoomLLMConcurrency
 }
 
+// ensureLLMSemaphoreLocked 懒创建房间级 LLM 并发信号量。
+//
+// 2026-08-14 §20260814-01 U3 —— 从 StartAgentsLocked(room_agent.go:279)
+// 抽出为单一事实来源。
+//
+// # 为什么必须抽出来
+//
+// U3 要把法官(startJudgeGoroutine)也纳入同一个信号量,而:
+//
+//   - startJudgeGoroutine 有 **5 个调用点**(room_action.go:1106 /
+//     room_manage.go:238,505,574 / room_agent.go:1837);
+//   - 它与 StartAgentsLocked 的先后顺序**不保证** —— 其中
+//     room_manage.go 的三处在建房/恢复路径上可能先于 bot 启动。
+//
+// 若两处各写一份 `if r.llmSema == nil { make(...) }`,任一处漏改或参数写错
+// 就会出现「法官拿到 nil、bot 拿到有界 chan」的半失效状态 —— 正是 §92a /
+// §132 反复强调的「同一语义在多路径必须完全一致」。
+//
+// # 幂等 + cap 语义
+//
+//   - 已创建 → 直接返回(不重建,房间复用期间 cap 不变)。
+//   - cap <= 0 → **不创建**,r.llmSema 保持 nil ⇒ 所有调用方的
+//     AcquireLLMSlot 恒返回 true = 完全并发(§130 调试行为,零回归)。
+//
+// 必须在持 r.mu 时调用(§92a):两个调用方 StartAgentsLocked /
+// startJudgeGoroutine 都已持锁。
+func (r *WerewolfRoom) ensureLLMSemaphoreLocked() {
+	if r == nil || r.llmSema != nil {
+		return
+	}
+	if n := cfgWerewolfRoomLLMConcurrency(); n > 0 {
+		r.llmSema = make(chan struct{}, n)
+	}
+}
+
 // cfgWerewolfDeathRevealDelayMinDefault 读取 §20260810-12 D2 死者身份
 // 「终局延时揭晓」默认值(分钟)。可选 0/5/15;0 = 立即揭晓(零回归)。
 // RoomService.CreateRoomWithAgents 在请求未指定时按此兜底。

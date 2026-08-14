@@ -242,6 +242,15 @@ func (m *WerewolfManager) startCommentatorGoroutineLocked(r *WerewolfRoom, onBro
 	ca := wwcommentator.NewCommentatorAgent(r.RoomID, style, modelKey)
 	ca.SetProvider(prov, apiKey)
 	ca.SetRegistry(m.registry)
+	// 2026-08-14 §20260814-01 U3 — 注入房间级 LLM 并发信号量。
+	//
+	// 与法官(judge_summary_bridge.go)同一处修复:解说此前完全绕过 r.llmSema,
+	// cap=4 的房间实际在飞可达 6(4 bot + 法官 + 解说)。
+	// 本函数已持 r.mu(§92a 锁内变体),直接调 *Locked 懒创建。
+	// 槽位繁忙时解说**跳过本轮且不计失败**(见 handleEvent 注释:
+	// 计入 consecutive 会让高峰期 5 次抢不到就永久 quarantine)。
+	r.ensureLLMSemaphoreLocked()
+	ca.SetLLMSemaphore(r.llmSema)
 	// onBroadcast:只把 line 写入 feed,然后调 spectator-only 回调广播。
 	ca.SetOnBroadcast(func(roomID, text, st string) {
 		r.mu.Lock()

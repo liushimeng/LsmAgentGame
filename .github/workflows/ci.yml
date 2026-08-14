@@ -1,0 +1,144 @@
+# CI — 后端编译/测试 + 前端类型检查/构建 + 项目自检
+#
+# 2026-08-14 §20260814-01 U4 新增。
+#
+# # 为什么现在才有
+#
+# 待实施项文档 §1 明确留了这条:「CI 加 unparam + 自定义 lint(检测『声明未用的
+# 函数参数』与『零写入点的 struct 字段』)可自动化拦截此类缺陷 ——
+# **此项工程化改进本身待做**」。
+#
+# 在此之前 .github/ 下只有 dependabot / FUNDING / 模板,**零 workflow**。
+# 也就是说仓库里那 3 个专门为根治 §130「声明了却从不接线」而写的 lint 测试
+# (wiring_lint_test.go / wiring_lint_field_test.go / invariant_wiring_test.go)
+# **从未在 CI 里跑过一次** —— 它们只在有人手动 go test 时生效。
+# 而 CLAUDE.md 已四次记录「注释里的自检条款不会被执行」;
+# 同理:**lint 写了不跑,与没写等价**。本 workflow 就是把它们真正接上。
+#
+# 编译与测试的硬约束依据 CLAUDE.md §4:
+#   - 涉及 ServerGo/ 的提交,go test ./... 必须通过;
+#   - 涉及 ClientWeb/ 的提交,tsc --noEmit 与 npm run build 必须成功。
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 同一分支的新 push 取消仍在跑的旧 run(省 CI 分钟数)。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 后端:编译 + 全量测试(含 3 个 §130 接线 lint)
+  # ---------------------------------------------------------------------------
+  backend:
+    name: ServerGo (build + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 子模块不参与后端编译(CLAUDE.md §9:仅美术生成 / CDP 调试用),
+          # 不 checkout 可省一大截克隆时间。
+          submodules: false
+
+      - uses: actions/setup-go@v5
+        with:
+          # 与 ServerGo/go.mod 的 `go 1.25.0` 对齐。
+          go-version-file: ServerGo/go.mod
+          cache-dependency-path: ServerGo/go.sum
+
+      - name: go build
+        working-directory: ServerGo
+        run: go build -o /tmp/LsmAgentGame main.go
+
+      - name: go vet
+        working-directory: ServerGo
+        run: go vet ./...
+
+      # 全量测试。这里同时跑到了三个「接线 lint」:
+      #   TestWiring_U6_*/U7_*        — XxxBlock 有调用点 / skip 动作有派发 /
+      #                                 夜间私有字段被读 / Agent 字段有 wired setter
+      #   TestWiringLintField_*       — AST 扫描 Agent 私有引用字段的 setter
+      #   TestInvariantWiring_*       — runtime invariant 的 Check* 有生产调用点
+      - name: go test
+        working-directory: ServerGo
+        run: go test ./... -count=1
+
+  # ---------------------------------------------------------------------------
+  # 前端:类型检查 + 生产构建
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: ClientWeb (typecheck + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 用 npm install 而不是 npm ci:本仓库**没有提交 package-lock.json**
+      # (只 gitignore 了 node_modules/,lockfile 从未入库)。npm ci 要求
+      # lockfile 存在,会直接失败;setup-node 的 cache: npm 同样需要 lockfile
+      # 作为 cache key,故也一并去掉。
+      #
+      # 代价是依赖版本不完全可复现(package.json 用的是 ^ 范围)。
+      # 提交 lockfile 是更好的做法,但那会改变依赖解析结果、需要独立验证,
+      # 不适合混在本批次功能提交里 —— 留作独立提交。
+      - name: npm install
+        working-directory: ClientWeb
+        run: npm install --no-audit --no-fund
+
+      # tsc 是 i18n 三语同步的实际执行者:i18n/types.ts 的 Dict 契约
+      # 让「locale 漏一个键」或「加了 types.ts 没加 locale」直接编译失败。
+      - name: tsc --noEmit
+        working-directory: ClientWeb
+        run: npx tsc -b --noEmit
+
+      - name: npm run build
+        working-directory: ClientWeb
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # 项目自检:规则文件符号链接 + §4 单文件行数上限
+  # ---------------------------------------------------------------------------
+  project-checks:
+    name: Project conventions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      # CLAUDE.md §10.2 原文就建议了这一步:「可在 GitHub Actions 加一步
+      # test -L KILO.md && test -L AGENT.md 防止误把符号链接替换为普通文件」。
+      # 一旦变成普通文件副本,三份规则会各自漂移 —— 而漂移不会报错,只会让
+      # 不同 Agent 工具看到不同的项目规则。
+      - name: 规则文件必须是符号链接 (§10.2)
+        run: |
+          test -L KILO.md  || { echo "❌ KILO.md 不是符号链接;修复: rm KILO.md && ln -s CLAUDE.md KILO.md"; exit 1; }
+          test -L AGENT.md || { echo "❌ AGENT.md 不是符号链接;修复: rm AGENT.md && ln -s CLAUDE.md AGENT.md"; exit 1; }
+          echo "✅ KILO.md / AGENT.md 均为符号链接"
+
+      # CLAUDE.md §3:规则文件 ≤ 800 行。
+      - name: CLAUDE.md 行数上限 (§3)
+        run: |
+          lines=$(wc -l < CLAUDE.md)
+          echo "CLAUDE.md = ${lines} 行"
+          # 现状已超 800(历史 lessons 表),此处仅设一个防失控的软天花板,
+          # 避免它无声长到数千行;真正的瘦身按 §3 拆到 docs/ 后再调低本值。
+          if [ "$lines" -gt 1200 ]; then
+            echo "❌ CLAUDE.md ${lines} 行 > 1200 —— 请按 §3 把主题段落拆到 docs/"
+            exit 1
+          fi
+
+      # CLAUDE.md §4:单文件 ≤ 1800 行(带 baseline 棘轮,见脚本头注释)。
+      - name: 单文件行数上限 (§4)
+        run: bash scripts/check_line_limit.sh

@@ -425,10 +425,17 @@ func (m *WerewolfManager) dayVoteLocked(r *WerewolfRoom, userID string, target S
 	// BUG-R193-001: use allActiveVoted() so quarantined bots don't stall the
 	// driver-tally branch either.
 	if r.State.Phase == PhaseVote && r.State.allActiveVoted() {
+		// 2026-08-14 §20260814-01 U1 — 票型快照必须在 FinishVote **之前**抓
+		// (之后 TallyVotes 状态不可重现),历史记录必须在 FinishVote **之后**写
+		// (DayEliminated 才有值)。这是三条 FinishVote 路径中唯一原先没有
+		// tally 快照的一条,故此处新抓。
+		autoTally := r.State.TallyVotes(false)
 		if e := r.State.FinishVote(0); e != nil {
 			logger.L().Warn("werewolf: driver auto-tally FinishVote failed (skip-only path)",
 				zap.String("room_id", r.RoomID), zap.Int("seat", int(seat)),
 				zap.String("err", e.Message))
+		} else {
+			r.recordVoteHistoryLocked(autoTally)
 		}
 	}
 	m.wakeActingAgentsLocked(r, "state_change")
@@ -457,6 +464,11 @@ func (m *WerewolfManager) finishVoteLocked(r *WerewolfRoom, tiedRound int) *errc
 	}
 	if e := r.State.FinishVote(tiedRound); e != nil {
 		return e
+	}
+	// 2026-08-14 §20260814-01 U1 — 逐日票型入历史(个人复盘投票准确率维度)。
+	// 见 recordVoteHistoryLocked:必须在 FinishVote 之后(DayEliminated 才有值)。
+	if prePhase == PhaseVote {
+		r.recordVoteHistoryLocked(preTally)
 	}
 	// §115 房间聊天 — 投票结果广播
 	if prePhase == PhaseVote {

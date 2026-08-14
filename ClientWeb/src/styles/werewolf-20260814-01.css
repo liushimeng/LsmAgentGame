@@ -1,0 +1,71 @@
+/* werewolf-20260814-01.css — §20260814-01 U1 前端接线修复的样式补丁。
+ *
+ * 独立成文件的原因(CLAUDE.md §4):werewolf-v2.css 已 1752 行,距 1800 上限
+ * 仅 48 行;按 §20260812-03 / §20260813-02 已建立的「新特性开新日期文件」
+ * 约定,插在 werewolf-20260813-02.css 之后、werewolf-speech.css 之前,
+ * 不触碰 werewolf.css → werewolf-v2.css → werewolf-emotion.css →
+ * werewolf-speech.css 的 .werewolf-seat 覆盖链。
+ *
+ * 本文件只做两件事:
+ *   1. HistoryDrawer 从 12 → 15 个 sub-tab 后的 tab 条排版收紧;
+ *   2. 侧栏新挂的暗线信件 / 阵营赌注两个面板的间距对齐。
+ *
+ * 三个新面板(MindMirror / TrustTrace / PersonalReview)自身的样式早在
+ * §20260812-01 就写进了 werewolf-20260812.css(40 条规则),本次接线复用,
+ * 无需新增 —— 这也是「组件+样式+i18n 都齐了,只差一个 import」的又一注脚。
+ */
+
+/* ─────────────── 1. 15 tab 排版收紧 ─────────────── */
+
+/* HistoryDrawer 抽屉宽 min(380px, 30vw),tab 条 flex-wrap。
+ * 12 个 tab 时已折到约 4 行;15 个会占掉近 1/3 抽屉高度,把内容区挤扁。
+ *
+ * 策略:**不降低触控目标高度**(§23 的 --ww-touch-target 是无障碍下限,
+ * 不能为了排版牺牲),而是收紧横向 padding + 字号,让每行多放一个 tab。
+ * 净效果:行数从 ~5 回到 ~4,内容区高度基本持平。
+ */
+.ww-history-drawer__tabs {
+  /* 行距略收,4 行时省下约 4px */
+  gap: 3px;
+  padding: 6px;
+}
+
+.ww-history-drawer__tab {
+  /* 12px → 11px;emoji + 2~3 个汉字的标签仍清晰可读 */
+  font-size: 11px;
+  /* 横向 10px → 7px 是本文件排版收益的主要来源 */
+  padding: 5px 7px;
+  /* 标签不换行:「🩸 血迹图」折成两行会把该 tab 撑成双倍高度,
+     进而把整行都撑高(flex 行高取最高项) */
+  white-space: nowrap;
+  /* flex: 1 1 auto 会把最后一行的少数 tab 拉伸得过宽,视觉上像「主 tab」。
+     改为不拉伸、按内容宽度排布,行内左对齐更整齐。 */
+  flex: 0 1 auto;
+}
+
+/* 窄屏(抽屉退化为 30vw 的下限附近)进一步收紧 */
+@media (max-width: 1279px) {
+  .ww-history-drawer__tab {
+    font-size: 10px;
+    padding: 4px 6px;
+  }
+}
+
+/* 选中态在收紧后仍必须明显可辨(§26.2 反模式 4:选中态与未选态
+ * 差异 < 1.5 倍明度必须补光晕)。字号变小后仅靠边框色差不够,
+ * 这里补一层内发光 —— 且它不被 .is-night 的 brightness 滤镜衰减。 */
+.ww-history-drawer__tab.is-active {
+  box-shadow: inset 0 0 0 1px rgba(193, 154, 86, 0.45);
+  font-weight: 700;
+}
+
+/* ─────────────── 2. 侧栏新面板间距 ─────────────── */
+
+/* SecretLetterPanel / FactionBetPanel 的内部样式在
+ * werewolf-20260812-03.css(.ww-secret-letter__* / .ww-faction-bet__*,
+ * 34 条规则)已写好。这里只补它们作为**中栏动作区新成员**的外边距,
+ * 与相邻的 CommitmentPanel / PropPanel 对齐(那两者用 8px)。 */
+.board-container .ww-secret-letter,
+.board-container .ww-faction-bet {
+  margin: 8px 0;
+}

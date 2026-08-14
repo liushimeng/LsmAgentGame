@@ -881,6 +881,10 @@ const ja: Dict = {
   'werewolf.history.subtab.heatmap': '🔥 勝率',
   // §20260813-02 U4 — 夜間血痕マップ(spectator only)
   'werewolf.history.subtab.bloodmap': '🩸 血痕図',
+  // §20260814-01 U1 — 新規接続した 3 つのサブタブ。
+  'werewolf.history.subtab.mindmirror': '🪞 心の鏡',
+  'werewolf.history.subtab.trusttrace': '📉 信頼度',
+  'werewolf.history.subtab.review': '📊 振り返り',
   'werewolf.history.reasoning.empty': 'まだ公開された推論チェーンはありません',
   'werewolf.history.reasoning.filterAll': '全て',
   // §20260811-06 U5 — 黎明の噂システム

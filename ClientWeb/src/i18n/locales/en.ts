@@ -882,6 +882,10 @@ const en: Dict = {
   'werewolf.history.subtab.heatmap': '🔥 Win Rate',
   // §20260813-02 U4 — Night Blood Map (spectator only)
   'werewolf.history.subtab.bloodmap': '🩸 Blood Map',
+  // §20260814-01 U1 — three newly wired sub-tabs.
+  'werewolf.history.subtab.mindmirror': '🪞 Mind Mirror',
+  'werewolf.history.subtab.trusttrace': '📉 Trust',
+  'werewolf.history.subtab.review': '📊 Review',
   'werewolf.history.reasoning.empty': 'No reasoning chains disclosed yet',
   'werewolf.history.reasoning.filterAll': 'All',
   // §20260811-06 U5 — dawn rumor system

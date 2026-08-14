@@ -884,6 +884,10 @@ const zhCN: Dict = {
   'werewolf.history.subtab.heatmap': '🔥 胜率',
   // §20260813-02 U4 — 夜间血迹图(spectator only)
   'werewolf.history.subtab.bloodmap': '🩸 血迹图',
+  // §20260814-01 U1 — 三个接线修复的 sub-tab。
+  'werewolf.history.subtab.mindmirror': '🪞 心镜',
+  'werewolf.history.subtab.trusttrace': '📉 信任度',
+  'werewolf.history.subtab.review': '📊 复盘',
   'werewolf.history.reasoning.empty': '本局暂未公开任何推理链',
   'werewolf.history.reasoning.filterAll': '全部',
   // §20260811-06 U5 — 黎明流言(活动流自动渲染,本键预留扩展)

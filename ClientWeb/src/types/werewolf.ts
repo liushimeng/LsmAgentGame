@@ -357,6 +357,14 @@ export interface WerewolfGameState {
   // §20260811-02 U2 — 补齐后端已下发但前端从未消费的 2 个 spectator 字段。
   /** 各 bot 的身份假说表（spectator 专属；后端 viewer>=0 时 omitempty）。 */
   bot_hypotheses?: BotHypothesisJSON[];
+  /**
+   * §20260814-01 U1 — 发言信任度轨迹（终局后由法官整局总结解析）。
+   *
+   * 对齐后端 `werewolf.TrustTraceEntryJSON`。§135：每条只有
+   * `{seat, day, score}`，**不含**身份字段，故对全员下发（非 spectator-only）。
+   * 对局中后端 omitempty 不下发 → 前端 TrustTraceChart 渲染空态。
+   */
+  trust_trace?: Array<{ seat: number; day: number; score: number }>;
   /** 死者身份终局延时揭晓分钟数（0/5/15；0 时 omitempty）。 */
   death_reveal_delay_min?: number;
   /** §20260811-09 U2 — Agent 难度档位（easy/normal/hard/hell；normal 时 omitempty）。 */

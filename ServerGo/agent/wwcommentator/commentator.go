@@ -84,10 +84,76 @@ type CommentatorAgent struct {
 	// ClientGameState.CommentaryFeed(只对 viewer<0 渲染)。
 	onBroadcast func(roomID, text, style string)
 	history     []string // 环形,最近 5 条输出,用于去重
+
+	// 2026-08-14 §20260814-01 U3 — 房间级 LLM 并发信号量(可选,nil = 不限流)。
+	// 此前解说完全绕过 WerewolfRoom.llmSema,与法官同为「超配额」来源:
+	// cap=4 的房间实际在飞可达 6(4 bot + 法官 + 解说)。
+	// 解说是本文件自述的「锦上添花,不应刷屏」调用,故抢不到槽位即跳过本轮。
+	llmSema chan struct{}
+}
+
+// SetLLMSemaphore 安装房间级 LLM 并发闸门(nil = 不限流,向后兼容)。
+// 由 manager 在 goroutine 启动前注入;goroutine 内只读。
+func (c *CommentatorAgent) SetLLMSemaphore(sema chan struct{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.llmSema = sema
+}
+
+// acquireLLMSlot 尝试取得房间级 LLM 槽位,最多等待 wait。
+// 语义与 wwjudge.AcquireLLMSlot 完全一致(见 wwjudge/judge_llm_slot.go 文件头)。
+func (c *CommentatorAgent) acquireLLMSlot(wait time.Duration) bool {
+	c.mu.Lock()
+	sema := c.llmSema
+	c.mu.Unlock()
+
+	if sema == nil {
+		return true
+	}
+	if wait <= 0 {
+		select {
+		case sema <- struct{}{}:
+			return true
+		default:
+			return false
+		}
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case sema <- struct{}{}:
+		return true
+	case <-timer.C:
+		return false
+	}
+}
+
+// releaseLLMSlot 归还一个槽位。只应在 acquireLLMSlot 返回 true 后 defer 调用。
+func (c *CommentatorAgent) releaseLLMSlot() {
+	c.mu.Lock()
+	sema := c.llmSema
+	c.mu.Unlock()
+
+	if sema == nil {
+		return
+	}
+	select {
+	case <-sema:
+	default:
+	}
 }
 
 // 默认限流 45s(比法官 15s 更克制,解说是锦上添花,不应刷屏)。
 const defaultCommentaryInterval = 45 * time.Second
+
+// commentarySlotAcquireWait 是解说等待房间级 LLM 槽位的上限
+// (2026-08-14 §20260814-01 U3)。
+//
+// 取 2s,与 wwjudge.JudgeSlotAcquireWait 一致 —— 二者同为「不推进 phase」的
+// 旁路装饰性调用,应当给 player bot 的 5s 预算(run.go:346)让路。
+// 不直接 import wwjudge 的常量:两包平级且语义独立(将来若要给解说更短的
+// 预算,不应牵动法官),此处以注释锚定对齐关系。
+const commentarySlotAcquireWait = 2 * time.Second
 
 // 默认 LLM 调用的总预算秒数(基础 + 流式续命)。慢模型可达 15 分钟。
 // 复用 §197 defaultStreamExtendedTimeoutSec=900 的精神,这里给解说
@@ -197,6 +263,22 @@ func (c *CommentatorAgent) handleEvent(ctx context.Context, snap *CommentarySnap
 	provider := c.Provider
 	apiKey := c.apiKey
 	c.mu.Unlock()
+
+	// 2026-08-14 §20260814-01 U3 — 房间级 LLM 并发信号量。
+	//
+	// 解说是本文件自述的「锦上添花,不应刷屏」调用,抢不到槽位就让位给推进
+	// 游戏的 player bot(2s 预算,与法官 wwjudge.JudgeSlotAcquireWait 一致)。
+	//
+	// ⚠️ 必须在 chatOrFallback **之外**获取,且失败时直接 return ——
+	// 不能复用 `ok=false` 那条路径,因为它会 `c.consecutive++`,连续 5 次
+	// 就 quarantine。槽位繁忙是**瞬态资源竞争,不是解说自身故障**;
+    // 在 13 人局高峰期 5 次抢不到槽位轻易发生,会把解说永久打死。
+	// 这与 §112「speak_floor 失败不计入 consecutiveFailures,否则误 quarantine」
+	// 及 §20260812-04 U5「endpoint breaker 必须列为 transient」是同一条教训。
+	if !c.acquireLLMSlot(commentarySlotAcquireWait) {
+		return
+	}
+	defer c.releaseLLMSlot()
 
 	// §197 长预算:parentCtx = base + extended
 	budget := time.Duration(defaultCommentaryBudgetSec) * time.Second

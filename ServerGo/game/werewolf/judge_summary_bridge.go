@@ -118,6 +118,20 @@ func (r *WerewolfRoom) GenerateSummary(in wwjudge.SummaryInput) (wwjudge.Summary
 	if text == "" {
 		return wwjudge.SummarySections{Outcome: wwjudge.FallbackSummary(in, "empty response")}, "empty response"
 	}
+	// 2026-08-14 §20260814-01 U1 — 接线「信任度轨迹」解析。
+	//
+	// wwjudge.ParseTrustTrace 自 §20260812-01 U4 落地起**零生产调用点**:
+	// 解析器 + 5 个单测 + 三语 i18n + 前端 TrustTraceChart(114 行 SVG)
+	// 全部写好,唯独没人调用它(§130 第 N 次复现)。
+	//
+	// 零新增 LLM 调用:复用**同一份**法官总结响应 text。LLM 若没有输出
+	// 【信任度轨迹】段(旧 prompt / 模型不配合),ParseTrustTrace 返回 nil,
+	// 字段 omitempty 不下发,前端渲染空态 —— 优雅降级。
+	//
+	// 本函数持 r.mu(顶部 lockRoomBriefly + defer Unlock),故直接写字段。
+	if trace := wwjudge.ParseTrustTrace(text); len(trace) > 0 {
+		r.judgeTrustTrace = trace
+	}
 	return wwjudge.ParseSummary(text), ""
 }
 
@@ -220,6 +234,18 @@ func (m *WerewolfManager) startJudgeGoroutine(r *WerewolfRoom) {
 		logger.L().Warn("judge: manager registry nil, judge will use rule fallback",
 			zap.String("room_id", r.RoomID))
 	}
+	// 2026-08-14 §20260814-01 U3 — 注入房间级 LLM 并发信号量。
+	//
+	// 此前法官完全绕过 r.llmSema:cap=4 的房间实际在飞 LLM 调用可达 6
+	// (4 bot + 法官 + 解说),超配置值 50%。config.go:91-97 记录了 §130
+	// 移除信号量导致「6min 2.5% → 27min 66% 失败率」的级联故障,这条敞口一直在。
+	//
+	// 与 SetProvider 同款生命周期:goroutine 启动前注入,goroutine 内只读。
+	// ensureLLMSemaphoreLocked 幂等 —— 本函数 5 个调用点均在 StartAgentsLocked
+	// 之后(信号量已建),此处调用只是防御将来顺序变化(cap<=0 时保持 nil = 不限流)。
+	r.ensureLLMSemaphoreLocked()
+	j.SetLLMSemaphore(r.llmSema)
+
 	// 注入广播回调:announce/declare_cause 成功后送公屏(goroutine 内只读)。
 	if m.chatSvc != nil {
 		j.SetOnAnnounceBroadcast(func(roomID, text, kind string) {

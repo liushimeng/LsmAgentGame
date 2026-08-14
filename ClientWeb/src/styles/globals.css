@@ -26,6 +26,11 @@
    插入位置紧随 §20260812-03 之后,不触碰 werewolf.css → werewolf-v2.css →
    werewolf-emotion.css → werewolf-speech.css 的 .werewolf-seat 覆盖链。 */
 @import './werewolf-20260813-02.css';
+/* 2026-08-14 §20260814-01 U1 — HistoryDrawer 15 sub-tab 排版收紧 +
+   侧栏新挂的暗线信件/阵营赌注面板间距。独立成文件(werewolf-v2.css 已 1752 行,
+   距 §4 上限仅 48 行),插入位置紧随 §20260813-02 之后,不触碰
+   .werewolf-seat 覆盖链。 */
+@import './werewolf-20260814-01.css';
 /* 2026-08-05 §Agent聊天显示优化 — 座位卡发言气泡样式。
    必须排在 werewolf-v2.css **之后**:本文件覆盖 .werewolf-seat 的 min-height
    断点值与 .werewolf-seat__metrics 的降权规则(同优先级靠级联顺序取胜)。

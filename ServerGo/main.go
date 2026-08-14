@@ -460,6 +460,10 @@ func main() {
 	recallChatAPI := api.NewRecallChatAPI(gameSvcWs.WerewolfManager())
 	// 2026-08-12 §20260812-03 — 三项升级的 REST 入口(U1 胜率 / U2 暗线信件 / U3 阵营赌注)。
 	werewolf20260812API := api.NewWerewolf20260812API(gameSvcWs.WerewolfManager())
+	// 2026-08-14 §20260814-01 U1 — 个人复盘 4 维聚合 REST 入口。
+	// GET /api/games/werewolf/rooms/:roomId/review/:userId,终局后本人查看
+	// 投票准确率 / 发言暴露度 / 道具效率 / Agent 互动质量四维评分。
+	werewolfReviewAPI := api.NewWerewolfReviewAPI(gameSvcWs.WerewolfManager())
 
 	// 2026-07-10 §125 增强 — 注入法官总结所需回调。
 	// 1) Manager 单例(让 judge goroutine 内部能拿到 registry 调 LLM)。
@@ -662,7 +666,7 @@ func main() {
 	})
 	hub.SetGameManagerCleanupFunc(gameSvcWs.RemoveRoomState)
 
-	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API)
+	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI)
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.

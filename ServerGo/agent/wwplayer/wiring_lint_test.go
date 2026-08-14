@@ -126,19 +126,28 @@ func TestWiring_U6_L1_AllBlockFuncsHaveProductionCaller(t *testing.T) {
 // 缺失时 auto-skip 三条路径全部拿到 "unknown tool"（demon_hunter_hunt_skip
 // 就是这样漏了整整一个版本），只能靠 manager 侧兜底。
 func TestWiring_U6_L2_SkipActionsHaveDispatchCase(t *testing.T) {
-	runSrc, err := os.ReadFile("run.go")
-	if err != nil {
-		t.Fatalf("read run.go: %v", err)
-	}
 	toolsSrc, err := os.ReadFile("tools.go")
 	if err != nil {
 		t.Fatalf("read tools.go: %v", err)
 	}
 
 	// 提取 SkipPhaseAction 函数体内的所有 return "xxx"。
-	body := funcBody(string(runSrc), "func SkipPhaseAction(")
+	//
+	// 2026-08-14 §20260814-01 U4:改为**跨包内全文件搜索**,不再硬编码
+	// "run.go"。原写法在本批次把 SkipPhaseAction 搬到 run_config.go
+	// (§4 行数拆分)时立刻 t.Fatal「lint 失效」—— 这次是好事(lint 咬到了
+	// 真实变化),但把「函数住在哪个文件」当成契约是脆的:下一次拆分又会
+	// 报假失效,而修的人很可能直接把文件名换掉、甚至删掉这条断言。
+	// 按符号搜索让 lint 只关心「函数存在且动作有派发」这个真正的不变量。
+	var body string
+	for _, src := range packageSources(t) {
+		if b := funcBody(src, "func SkipPhaseAction("); b != "" {
+			body = b
+			break
+		}
+	}
 	if body == "" {
-		t.Fatal("未定位到 SkipPhaseAction 函数体，lint 失效")
+		t.Fatal("未在本包任何文件中定位到 SkipPhaseAction 函数体，lint 失效")
 	}
 	actions := map[string]bool{}
 	for _, m := range regexp.MustCompile(`return "([a-z_]+)"`).FindAllStringSubmatch(body, -1) {
@@ -267,16 +276,26 @@ func TestWiring_U7_B_AgentFieldsHaveWiredSetter(t *testing.T) {
 	src := repoFiles(t, "agent", "game/werewolf")
 
 	// 字段 → 必须的 setter 名。
+	//
+	// 2026-08-14 §20260814-01 U2 — 加入 difficultySpeakScale。
+	// 为什么必须**显式**列进来:该字段是值类型 float64,而
+	// wiring_lint_field_test.go 的 isRefType(:166-179)只覆盖指针/map/chan/
+	// func/interface/slice,对值类型返回 false —— 那条 AST 泛化 lint
+	// **抓不到它**。这正是 SpeakLimiterScale 能在 §20260812-04 U4 与
+	// §20260813-04 U3 两轮同 struct 修复中都活下来的原因:
+	// 两条 lint 的交集之外存在盲区,只能靠这张显式表补。
 	mustWire := map[string]string{
-		"compactConfig": "SetCompactConfig",
+		"compactConfig":        "SetCompactConfig",
+		"difficultySpeakScale": "SetDifficultySpeakScale",
 	}
 	// 已知死字段白名单(无 setter / setter 无调用点)—— ⚠️ 只允许变短。
-	// §20260813-02 U5:§112 观众全频唤醒已覆盖 steering 价值,toolHooks 与
-	// DispatchTool 主路径重复;P1 评估**删除**而非接线,截止 2026-09-13。
-	knownDeadFields := map[string]string{
-		"steeringQueue": "§20260811-01 借鉴 PI Agent 引入但从未接线;P1 评估删除(截止 2026-09-13)",
-		"toolHooks":     "§20260811-01 借鉴 PI Agent 引入但从未接线;P1 评估删除(截止 2026-09-13)",
-	}
+	//
+	// 2026-08-14 §20260814-01 U2 — 清空。原有 steeringQueue / toolHooks
+	// 两项已由 §20260813-04 U1/U2 真实接线(room_agent.go 的
+	// SetSteeringQueue / SetToolHooks),白名单条目自那次起就是**过期的**。
+	// 过期白名单比没有白名单更危险:它会让「已修好的字段」看起来仍是已知缺陷,
+	// 下一个审计者会跳过它们。故本次一并移除,而非留着到 2026-09-13 截止日。
+	knownDeadFields := map[string]string{}
 
 	agentSrc, err := os.ReadFile("agent.go")
 	if err != nil {

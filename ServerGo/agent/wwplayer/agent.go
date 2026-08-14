@@ -104,6 +104,14 @@ type Agent struct {
 	// 属 §130「声明了却从不接线」,本次一并修复。
 	memoryInjectRunes int
 
+	// 2026-08-14 §20260814-01 U2 — 难度档位的「发言节奏」缩放系数。
+	// 0 / 未注入 = 1.0（不缩放，逐字节零回归）。由 StartAgentsLocked 按
+	// difficulty.SpeakLimiterScale 注入 —— 该配置自 §20260811-09 落地起
+	// 4 处赋值 0 处读取，是本 struct 内第三个 §130 死字段
+	// （memoryInjectRunes 见上，difficultyRoundCap 见 §20260813-04 U3）。
+	// setter / clamp / limiter 重算逻辑在 difficulty_speak.go。
+	difficultySpeakScale float64
+
 	// v4 §13.1：开局狼队友座位（>=0 表示本 bot 是狼人 + 系统随机选了 1 个队友）。
 	// -1 = 未启用（如非狼人 / 概率未中 / 队友已死）。
 	// wolf_whisper 工具仅在 wolfTeammateSeat >= 0 时挂载；wolfpack prompt
