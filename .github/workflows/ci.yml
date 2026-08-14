@@ -118,14 +118,13 @@ jobs:
           submodules: false
 
       # CLAUDE.md §10.2 原文就建议了这一步:「可在 GitHub Actions 加一步
-      # test -L KILO.md && test -L AGENT.md 防止误把符号链接替换为普通文件」。
-      # 一旦变成普通文件副本,三份规则会各自漂移 —— 而漂移不会报错,只会让
+      # test -L AGENTS.md 防止误把符号链接替换为普通文件」。
+      # 一旦变成普通文件副本,两份规则会各自漂移 —— 而漂移不会报错,只会让
       # 不同 Agent 工具看到不同的项目规则。
       - name: 规则文件必须是符号链接 (§10.2)
         run: |
-          test -L KILO.md  || { echo "❌ KILO.md 不是符号链接;修复: rm KILO.md && ln -s CLAUDE.md KILO.md"; exit 1; }
-          test -L AGENT.md || { echo "❌ AGENT.md 不是符号链接;修复: rm AGENT.md && ln -s CLAUDE.md AGENT.md"; exit 1; }
-          echo "✅ KILO.md / AGENT.md 均为符号链接"
+          test -L AGENTS.md || { echo "� AGENTS.md 不是符号链接;修复: rm AGENTS.md && ln -s CLAUDE.md AGENTS.md"; exit 1; }
+          echo "✅ AGENTS.md 是符号链接"
 
       # CLAUDE.md §3:规则文件 ≤ 800 行。
       - name: CLAUDE.md 行数上限 (§3)

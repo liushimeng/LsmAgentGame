@@ -55,10 +55,10 @@ fi
 PROMPT_ARG="$(cat "${PROMPT_FILE}")"
 
 # ---------- 规则文件守门（防止 prompt 被改回老版本）----------
-# AutoDebugTestReport.md 必须显式声明"禁止修改 CLAUDE.md/KILO.md/AGENT.md"，
+# AutoDebugTestReport.md 必须显式声明"禁止修改 CLAUDE.md/AGENTS.md"，
 # 否则视为脚本被误改，提示人工修复并退出。
-if ! grep -q "绝对禁止修改 \`CLAUDE\.md\`、\`KILO\.md\`、\`AGENT\.md\`" "${PROMPT_FILE}" 2>/dev/null; then
-    echo "[ERROR] ${PROMPT_FILE} 缺少「绝对禁止修改 CLAUDE.md/KILO.md/AGENT.md」守门条款，拒绝启动。" >&2
+if ! grep -qF "绝对禁止修改 \`CLAUDE.md\`、\`AGENTS.md\`" "${PROMPT_FILE}" 2>/dev/null; then
+    echo "[ERROR] ${PROMPT_FILE} 缺少「绝对禁止修改 CLAUDE.md/AGENTS.md」守门条款，拒绝启动。" >&2
     echo "[ERROR] 请先修复 ${PROMPT_FILE} 再重跑本脚本。" >&2
     exit 2
 fi

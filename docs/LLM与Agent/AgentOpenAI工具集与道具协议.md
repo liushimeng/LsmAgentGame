@@ -5,14 +5,14 @@
 > 本文档定义 **OpenAI Chat Completions 协议**(`openai-completions`)在本工程中的完整接入方案:
 > 协议选型、wire 字段映射、SSE 流式解析、Provider 分层架构、数据库 / 管理 API / Web 管理页改造。
 >
-> **权威数据用例**(opencode Agent 真实抓包,仓库 `tmpPlan/` 目录):
+> **权威数据用例**(opencode Agent 真实抓包,见 [`OpenAI协议样例/`](OpenAI协议样例/) 同级子目录):
 >
 > | 角色 | 文件 |
 > |------|------|
-> | Request Headers | `tmpPlan/OpenAI协议-opencode-Agent-RequestHeader.md` |
-> | Request Body | `tmpPlan/OpenAI协议-opencode-Agent-RequestBody.json` |
-> | Response Headers | `tmpPlan/OpenAI协议-opencode-Agent-ResponseHeader.md` |
-> | Response Body | `tmpPlan/OpenAI协议-opencode-Agent-ResponseBody.json` |
+> | Request Headers | [`OpenAI协议样例/RequestHeader.md`](OpenAI协议样例/RequestHeader.md) |
+> | Request Body | [`OpenAI协议样例/RequestBody.json`](OpenAI协议样例/RequestBody.json) |
+> | Response Headers | [`OpenAI协议样例/ResponseHeader.md`](OpenAI协议样例/ResponseHeader.md) |
+> | Response Body | [`OpenAI协议样例/ResponseBody.json`](OpenAI协议样例/ResponseBody.json) |
 
 ## 0. 设计总原则
 

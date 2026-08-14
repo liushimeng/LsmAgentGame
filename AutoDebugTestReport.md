@@ -4,8 +4,8 @@
 
 ### 顶层硬约束(不可违反)
 
-1. **绝对禁止修改 `CLAUDE.md`、`KILO.md`、`AGENT.md` 这三个规则文件。**
-   - 三个文件是仓库的**项目规则唯一事实来源**,任何 AI Agent 都不应在自动修复流程中追加、删除或修改其内容。
+1. **绝对禁止修改 `CLAUDE.md`、`AGENTS.md` 这两个规则文件。**
+   - 两个文件是仓库的**项目规则唯一事实来源**(其中 `AGENTS.md` 是 `CLAUDE.md` 的符号链接),任何 AI Agent 都不应在自动修复流程中追加、删除或修改其内容。
    - 修复摘要 / 版本基线 / commit hash / 教训只写到旁路文档(如 `TestReport/<BugID>_validation.md` 或对应 `docs/` 归档),**绝不写入规则文件**。
    - 如果发现某条结论「必须写进 `CLAUDE.md` 才有效」,说明规则设计有缺陷,应改 prompt 而非写规则文件。
 
@@ -46,7 +46,7 @@
 
 #### §4 文档同步(仅旁路,≤ 2 min)
 - 修复涉及架构调整 / API 变更 / 新增常量 → **只**更新业务/技术文档(`docs/*.md`)与代码内注释。
-- **禁止**追加、删除、修改 `CLAUDE.md` / `KILO.md` / `AGENT.md`。
+- **禁止**追加、删除、修改 `CLAUDE.md` / `AGENTS.md`。
 - 修复摘要 / commit hash / 回归结果可写 `TestReport/<BugID>_validation.md` 作为本轮验证记录。
 - **本步骤仅在「实际改了代码」时执行**;分支 B 跳过。
 

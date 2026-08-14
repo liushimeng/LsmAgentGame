@@ -1,6 +1,6 @@
 # LsmAgentGame — AI 代理项目规则
 
-> 规范规则文件。`KILO.md` 和 `AGENT.md` 是指向此文件的符号链接。
+> 规范规则文件。`AGENTS.md` 是指向此文件的符号链接。
 > 唯一事实来源。请在此处更新，切勿在符号链接中修改。
 
 ## 0. 开源工程说明
@@ -76,7 +76,7 @@ ClientWeb/src/
 
 - `ServerGo/models/` 下的 **GORM 模型文件** 使用前缀 `t_lsm_game_*.go`（例如 `t_lsm_game_user.go`）。这是**唯一允许**使用此前缀的目录。
 - `ServerGo/` 下的**其他所有 Go 文件** 使用 `snake_case.go`（例如 `user_login.go`、`game_logic.go`）。非模型文件切勿使用 `TLsmGame_xxx.go`。
-- **Markdown** 规则文件（CLAUDE.md、KILO.md、AGENT.md）不超过 800 行。如文件过长，请按主题拆分到 `docs/` 目录。
+- **Markdown** 规则文件（CLAUDE.md、AGENTS.md）不超过 800 行。如文件过长，请按主题拆分到 `docs/` 目录。
 
 ## 4. 代码约束
 
@@ -203,19 +203,17 @@ git submodule update --init --recursive
 | Agent 工具 | 入口文件 | 加载方式 |
 |------|------|------|
 | **Claude Code** (`Claude`) | `CLAUDE.md` (项目根) | 自动读取根目录 `CLAUDE.md` |
-| **Kilo Code** (`Kilo`) | `KILO.md` | 项目根 `KILO.md` **必须**是 `CLAUDE.md` 的符号链接 |
-| **OpenCode** (`OpenCode`) | `AGENT.md` | 项目根 `AGENT.md` **必须**是 `CLAUDE.md` 的符号链接 |
-| **pi / OpenClaw** 等其它 Agent | `CLAUDE.md` / `AGENT.md` | 同上,以符号链接透明兼容 |
+| **Kilo Code / OpenCode / pi / OpenClaw / Hermes** 等其它 Agent | `AGENTS.md` | 项目根 `AGENTS.md` **必须**是 `CLAUDE.md` 的符号链接 |
 
 **同步规约**:
-- **符号链接优于复制**:`KILO.md` 与 `AGENT.md` **必须**是 `ln -s CLAUDE.md KILO.md`
-  与 `ln -s CLAUDE.md AGENT.md` 创建的符号链接 — 修改一次,所有工具同步生效。
-- **不要**把同一份内容复制到 3 个文件;任何一边不同步就是 bug。
-- **若发现 `KILO.md` / `AGENT.md` 是普通文件而非符号链接**:立刻
-  `rm KILO.md AGENT.md && ln -s CLAUDE.md KILO.md && ln -s CLAUDE.md AGENT.md` 修正。
+- **符号链接优于复制**:`AGENTS.md` **必须**是 `ln -s CLAUDE.md AGENTS.md`
+  创建的符号链接 — 修改一次,所有工具同步生效。
+- **不要**把同一份内容复制到 2 个文件;任何一边不同步就是 bug。
+- **若发现 `AGENTS.md` 是普通文件而非符号链接**:立刻
+  `rm AGENTS.md && ln -s CLAUDE.md AGENTS.md` 修正。
 - **新增章节时**:只需编辑 `CLAUDE.md`;工具自动加载更新版本,无需通知。
 
-**CI 自检(可选)**:可在 GitHub Actions 加一步 `test -L KILO.md && test -L AGENT.md`
+**CI 自检(可选)**:可在 GitHub Actions 加一步 `test -L AGENTS.md`
 防止误把符号链接替换为普通文件。
 
 ## 11. 常见陷阱
@@ -471,6 +469,8 @@ git submodule update --init --recursive
 | 121 | **模型管理页面渲染崩溃(后端 data 形状与前端类型不匹配)**: 后端 `ListProviders` 返回 `{providers: [...], total, source}`(包装对象),但前端 `http<LlmProvider[]>` 直接解成数组 → `providers.map` 报 `TypeError`。同样问题在 `listProviderGames`/`getGameLog`/`deleteProvider`/`reloadProviders`。修复: 拆出 `ListProvidersResponse`/`ProviderGamesResponse` wrapper 类型并提取目标字段。**教训**: `http<T>` 把后端 `data` 直接展开给前端类型,若 `data` 是 wrapper 对象则前端必须显式声明 wrapper 类型;admin CRUD 上线时前端必须用真实后端响应(curl)核对,不能照文档"按惯例"写 | model-admin-response-shape |
 | 122 | **Agent 单 bot 内多线程 LLM 调用(只读并行 worker)**: `ParallelThink(ctx, queries, maxWait)` 启动 N 个 worker(默认 ≤ 2),走房间级 `llmSema` + 独立 `LLMRequest`(不携带 Memory.messages);`ParallelThoughts()` 取出 + `appendToLastUserMessage` 追加到最后一条 user message 末尾;**默认 `EnableParallelThink=false`**(§128 后整套机制保留但默认关闭)。**不变式**: `agentRunner` / `Memory.Prune/Push` / tool dispatch 串行路径不动;总并发 = Σ bots × perBotParallel ≤ `roomLLMConcurrency`(默认 8);worker 失败**不**计入 consecutiveFailures;测试环境需 `defer recover` 兜住 config.Load() panic | parallel-think-122 |
 | 123 | **Agent 法官 + 死亡语义区分**: (a) **Agent 法官**(LLM 驱动的非玩家主持人,5 个工具:`announce`/`prompt_actor`/`summary`/`declare_cause`/`idle_silent`,`JudgeLimiter` 30s,`MaxToolUse=2`,默认 `cfgWerewolf.JudgeMode="ai"` 启动);(b) **死亡语义二分** `verdict`(**execution = 处决 / death = 死亡**),`killPlayer` 内部 `verdictFor(cause)` 查表自动填(`wolf/hunter/witch_poison` → death,`vote/suicide` → execution,**狼自爆 = 处决**),术语全栈统一(`normalizeDeathTerms` 清洗 + Anthropic 协议注入 `death_semantic_version="2026-07-10-v1"`)。详见 [`docs/狼人杀-重构方案/主持人Agent重构设计.md`](docs/狼人杀-重构方案/主持人Agent重构设计.md) + [`docs/狼人杀-角色设计/狼人杀死亡语义设计.md`](docs/狼人杀-角色设计/狼人杀死亡语义设计.md)。**教训**: 法官 ≠ 身份牌;法官不能影响 phase 状态(驱动分层:watchdog→host driver→judge);`cause → verdict` 必须查表派散 | judge-execution-death |
+| 20260812-DP | **聊天分页 5 条教训(§20260812-DP,from `tmpPlan/Debug-2026-08-12-01.md` §12,代码修复已落地,教训留档)**:(1) **升序/降序切片的游标取端点必须与排序方向绑定断言** —— `History()` 内部把 DESC 反转为 ASC,调用方仍按 DESC 取 `[len-1]`,必然取错;凡「查询用一种序、返回用另一种序」的函数必须在函数名或返回值类型上体现序(如 `HistoryAsc()`);(2) **注释与实现相反是最强缺陷伪装**(§20260812-04 教训 2 复现)—— `// next_cursor is the id of the last (oldest) message` 让 reviewer 确信它取最旧,实则反之,注释与实现不符当编译错误处理;(3) **请求-响应关联字段(`before_id`)缺失会让整个分支变成死代码** —— 前端写完整「首屏 vs 翻页」双分支但服务端不回显,翻页分支从未执行;凡前端按某字段分流,该字段必须在协议契约中标注为服务端必回显;(4) **in-flight 标志位必须在【所有】终止路径上清除** —— `loadingMore` 只在成功路径清除,错误路径遗漏 = 一次瞬时错误即永久死锁;凡 `setXxxLoading(true)`,必须 grep 确认 error/timeout/unmount 三条路径都有对应 `false`;(5) **「没有权限检查」也是一种需主动确认的事实** —— 先证伪最可疑假设再顺着数据流找真因 | debug-pagination-5-lessons |
+| 20260812-LLM | **LLM Provider DB 单源化 3 条决策(§20260812-LLM,from `tmpPlan/删除配置文件中和数据库中重复的部分-2026-08-12-01.md` §3.1–3.3,代码已迁移到 `ServerGo/llm/defaults.go`)**:(1) **默认 seed 路径从配置文件迁到代码常量** —— `t_lsm_game_llm_provider` 表永远不能空(否则 7 bot 房间跑不起来);`defaultProvidersForSeed()` 是唯一 seed 源,启动日志须明确 `[seed-from-code-constants]` 与旧 `[seed-from-config]` 区分;**每个 seed 行 `api_key="API-KEY-PLACEHOLDER"`**,由 operator 在 Web 管理页替换;(2) **`cfg.LLMConfig.Providers` 字段保留(向后兼容)** —— 类型不删但注释标 `DEPRECATED field,保留仅为 JSON 兼容性;运行时不读取此字段`;旧 `LsmAgentGame.conf` 若残留 `providers` 段,JSON 解析仍通过但启动 WARN(不破坏老配置);(3) **DB-wins + `usableProviderModels` 切到 live registry** —— `service/room_service.go:343 usableProviderModels` 必须走 `modelAvailability` 钩子,**不再直接读 `cfg.LLM.Providers`**;`service/room_service_crud.go` 占位 key 检测同步从 cfg 切到 `defaultProvidersForSeed()` | llm-db-single-source |
 
 - 自动重连、Loading 遮罩、刷新/断线后恢复（会话+房间+对局），以及用户列表 `user.*` 帧的完整规则，
   记录在 [`docs/架构与协议/WebSocket重连与恢复.md`](docs/架构与协议/WebSocket重连与恢复.md)。
@@ -636,7 +636,7 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,**必须**�
 
 - **检索入口**：主工程 `TestReport/自动化测试报告_*.md`；子工程 `go-web-debug-tool/UseReport/测试工具使用报告_*.md`。
 - **处理入口**：根目录 `AutoDebugTestReport.sh` —— 后台启动 Claude Code，加载 `AutoDebugTestReport.md` 作为 prompt。
-- **流程规范与硬约束**详见 `AutoDebugTestReport.md`；其中**绝对禁止**自动修复流程写入 `CLAUDE.md` / `KILO.md` / `AGENT.md` 这三个规则文件。
+- **流程规范与硬约束**详见 `AutoDebugTestReport.md`；其中**绝对禁止**自动修复流程写入 `CLAUDE.md` / `AGENTS.md` 这两个规则文件。
 - **报告清理**：修复完成后必须删除已处理的 `TestReport/*.md`（子工程 `UseReport/*.md`），报告不应在仓库中长期堆积。
 
 ## 23. 狼人杀 Web 运行时 UI（房间总运行时间 + 历史抽屉）
