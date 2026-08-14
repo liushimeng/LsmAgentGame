@@ -1531,6 +1531,21 @@ func buildAgentContextLocked(r *WerewolfRoom, seat int, driverSeat int) wwtypes.
 	// 仅人类座位有值;全 AI 房间或无画像时 nil,PlayerProfileBlock 渲染空串。
 	fillPlayerProfilesLocked(r, seat, &gc)
 
+	// 2026-08-13 §20260813-05 U2 — runtime invariant companion。
+	// 检查 GameContext 字段值契约(12 条不变量之 I1-I6),失败 Debug 日志 +
+	// 计数器(wwtypes.InvariantViolationCount),不阻塞当前帧。
+	if violations := wwtypes.CheckGameContextInvariant(&gc); len(violations) > 0 {
+		for _, v := range violations {
+			logger.L().Debug("werewolf: invariant violation in buildAgentContextLocked",
+				zap.String("code", v.Code),
+				zap.String("kind", string(v.Kind)),
+				zap.String("message", v.Message),
+				zap.Int("seat", seat),
+				zap.String("phase", gc.Phase),
+				zap.Int("round", gc.Round))
+		}
+	}
+
 	return gc
 }
 

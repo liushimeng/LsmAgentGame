@@ -69,6 +69,11 @@ var exemptAgentFields = map[string]string{
 	// 由 Run(ctx, runner, rp) 参数注入而非 setter —— 属于「构造式注入」变体
 	"runner": "Run() 参数注入，非 setter 模式",
 	"rp":     "Run() 参数注入的 RolePhase 回调，非 setter 模式",
+
+	// 2026-08-13 §20260813-05 U5 — Provider Cache 字节稳定。
+	// systemPromptBytes 在 NewWithRoom 构造期一次性写入 (BuildSystemPromptBytes 冻结
+	// 字节快照),后续不再修改。invariant I11 在发请求前只读比对。nil = 旧行为不变。
+	"systemPromptBytes": "U5 字节稳定:构造期一次性写入,运行时仅 invariant 读取比对",
 }
 
 // TestWiringLintField_AgentPrivateRefFieldsHaveSetter 断言 Agent struct 的每个

@@ -162,6 +162,17 @@ type Agent struct {
 	// proxy drops) from rapidly accumulating to the quarantine threshold.
 	lastFailureTime time.Time
 
+	// preflightOverflowCount 跟踪 pre-step 主动压缩失败累计(DSH §8.6 不变量)。
+	// 每次成功 LLM 调用(resetPreflightOverflowCount)或成功主动压缩都清零。
+	// 失败 +1,达到 preflightCompressMaxOverflow=2 后告警并继续 fallback。
+	// 2026-08-13 §20260813-05 U3 — pre-step 主动压缩双触发。
+	preflightOverflowCount int
+
+	// systemPromptBytes 是构造期一次性计算 + freeze 的 system prompt 字节快照。
+	// 2026-08-13 §20260813-05 U5 — 借鉴 dsh agent.ts:465-470 request bytes 稳定路线
+	// 让 provider 自动 cache 命中。运行时仅比对 invariant I11,不发 HTTP 时复用。
+	systemPromptBytes []byte
+
 	// onTranscriptPublished is an optional callback fired (in a goroutine) after
 	// recordTranscript publishes a fresh BotTranscript snapshot. The room
 	// manager registers this so it can broadcast game.state (with the new
@@ -879,6 +890,12 @@ func NewWithRoom(seat int, modelKey string, role, faction, win string, registry 
 	// 预算策略:按模型上下文窗口的 60% 设置(留 40% 给 system + tools + max_tokens 输出)
 	modelBudget := getModelContextBudget(modelKey)
 	a.Memory.SetMaxPromptBytes(modelBudget)
+
+	// 2026-08-13 §20260813-05 U5 — Provider Cache 字节稳定路线(DSH 启发)。
+	// 构造期一次性计算 + 冻结 system prompt 字节,跨局不变 → provider
+	// server-side KV cache 自动命中。runtime invariant I11 比对 req.System
+	// 字节与本快照,任何漂移立即 Debug 日志 + 计数器。
+	a.systemPromptBytes = BuildSystemPromptBytes(a.SelfPortraitText, a.Personality, a.PersonalityPresetKey, a.DifficultyDirective)
 
 	// §128 对话即思考重构:loadAgentParallelInto 已删除(原 §122 配置注入)。
 

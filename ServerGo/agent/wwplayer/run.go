@@ -875,6 +875,18 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 		// post-error 处理估算不准导致的意外超限)。
 		if budget := preflightBudgetBytes(a.ModelKey, llmMaxTokensPerCall); budget > 0 {
 			payload := a.Memory.TotalPayloadBytes()
+
+			// 2026-08-13 §20260813-05 U3 — pre-step 主动压缩(80% 阈值)。
+			// 早于 preflight 100% 字节裁剪,让 LLM 摘要先上场,失败 fallback。
+			// 借鉴 dsh compaction-basic 双触发(主动 + overflow 兜底)。
+			if newPayload, newCount, didCompress := preflightCompressLoop(ctx, a, payload, budget, a.preflightOverflowCount, &evt.Context); didCompress {
+				a.preflightOverflowCount = newCount
+				payload = newPayload
+				// 重新快照 —— 压缩后 messages 已变,必须用新内容发请求。
+				freshMsgs, _ := a.Memory.Snapshot()
+				msgs, _ = SanitizeMessagesForAnthropic(freshMsgs)
+			}
+
 			if need, target, reason := shouldPreflightPrune(payload, budget); need {
 				a.Memory.PruneByBytes(target)
 				after := a.Memory.TotalPayloadBytes()
@@ -918,6 +930,23 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 			Metadata: llmtypes.Metadata{
 				UserID: buildMetadataUserID(a),
 			},
+		}
+		// 2026-08-13 §20260813-05 U2 — runtime invariant companion。
+		// 在 LLM 请求真正发出前校验:消息配对 + 请求重建一致性。
+		// 失败 Debug 日志 + 计数器,不阻塞当前帧(生产路径)。
+		if mpv := wwtypes.CheckMessagePairingInvariant(msgs); len(mpv) > 0 {
+			for _, v := range mpv {
+				logger.L().Debug("agent: invariant violation (message pairing)",
+					zap.String("code", v.Code), zap.String("message", v.Message),
+					zap.Int("seat", a.Seat), zap.String("model", a.ModelKey))
+			}
+		}
+		if rrv := wwtypes.CheckRequestReconstructabilityInvariant(req, a.Memory.TotalPayloadBytes(), a.systemPromptBytes); len(rrv) > 0 {
+			for _, v := range rrv {
+				logger.L().Debug("agent: invariant violation (request reconstructability)",
+					zap.String("code", v.Code), zap.String("message", v.Message),
+					zap.Int("seat", a.Seat), zap.String("model", a.ModelKey))
+			}
 		}
 		// §128 对话即思考重构:thinking 注入与 auto-healing fallback 已删除。
 		// LLM API 输出的 text + tool_use 即是模型"思考"的产物。
@@ -1374,6 +1403,10 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 		// 前 3 次之后 3-strike 守卫永久退化成"exceeded 3, allowing through"
 		// (日志 462 次)。现在无论是否发生重试,成功路径都恰好复位一次。
 		a.ResetConsecutiveFailures()
+		// 2026-08-13 §20260813-05 U3 — DSH §8.6 不变量:成功 LLM 调用
+		// 必须清零 overflow 计数。连续成功的对局不会再触发主动压缩,
+		// 避免"成功也对每轮跑一次 LLM 摘要"的浪费。
+		a.resetPreflightOverflowCount()
 
 		a.recordAssistant(resp)
 
