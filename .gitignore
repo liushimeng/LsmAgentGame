@@ -49,6 +49,16 @@ credentials.json
 tmpPlan/
 .agent_work/
 
+# ============ OpenClaw Agent workspace 引导文件 ============
+# 自动化脚本(Auto*.sh)随机选中 openclaw agent 时,首次运行会在
+# workspace(项目根)自动生成这些身份/状态模板,仅本机使用,不提交
+SOUL.md
+IDENTITY.md
+USER.md
+TOOLS.md
+HEARTBEAT.md
+openclaw-workspace-state.json
+
 # ============ 自动化测试产物 ============
 # 逐文件追加极易漏,一律整目录忽略（§22：报告处理完即删,不在仓库长期堆积）
 AutoTestProgress/
