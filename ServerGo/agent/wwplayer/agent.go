@@ -131,7 +131,21 @@ type Agent struct {
 	// §130 重构(2026-07-13):MaxToolUse 字段保留但不再使用。
 	// 每个 bot 现在按 LLM 输出自由循环(end_turn/refusal/max_tokens 退出),
 	// 无硬轮次上限。watchdog / phase deadline / consecutiveFailures 提供死锁兜底。
+	//
+	// Deprecated: 2026-08-13 §20260813-04 U3 起,难度档位的轮次收紧改由
+	// difficultyRoundCap 承载(经 maxInnerRoundsFor 调制 phaseMaxInnerRounds)。
+	// 本字段保留仅为 wire 兼容,新代码不要读写它。
 	MaxToolUse int
+
+	// difficultyRoundCap 是难度档位对内层循环轮次的**收紧**上限(0 = 不收紧)。
+	//
+	// 2026-08-13 §20260813-04 U3 —— 接线 difficulty.go 的 4 处档位配置。
+	// 此前 difficulty.go 给 easy/normal/hard/hell 设 3/6/8/0,但 agent 侧
+	// 把 MaxToolUse 硬设 0 且注释写「不再使用」,**难度档位对工具上限完全无效**
+	// (§130 第七次复发,与 §20260812-04 U4 的 MemoryInjectRunes 同一模式)。
+	//
+	// 语义:只在小于 phase 基线时生效(见 maxInnerRoundsFor),不放宽。
+	difficultyRoundCap int
 
 	// consecutiveFailures tracks the number of LLM call failures in a row.
 	// BUG-WEREWOLF-P0-2 FIX: when this counter exceeds failAutoSkipThreshold
@@ -228,7 +242,7 @@ type Agent struct {
 	// lastTranscript is the agent's most recent decision snapshot, refreshed
 	// after every successful LLM round by recordTranscript. The room's
 	// broadcast path reads it via BotTranscript() to populate
-	// game.state.bot_contexts[] for the spectator AgentThoughtPanel.
+	// game.state.bot_contexts[] for the spectator HistoryDrawer(🤖独白 sub-tab).
 	// BUG-WEREWOLF-P0-NEW-2: previously the server never serialized any bot
 	// thinking / tool activity, so the spectator "Agent 思考" panel was
 	// permanently empty (showed `(0)`). Guarded by a.mu (same lock as the
@@ -288,6 +302,15 @@ type Agent struct {
 	compactAt       int64
 	compactFallback bool
 	compactNote     string
+
+	// 2026-08-13 §20260813-04 U4 — pre-flight 上下文裁剪的可观测标记。
+	//
+	// **降级必留可观测标记**(§20260812-04 教训 4):静默裁剪会让
+	// 「上下文被裁短」与「模型本来就没什么可说」在日志/UI 里同形,
+	// 正是 §20260811-08 教训 (5) 批评的模式。
+	// 由 run.go 的 pre-flight 分支写入,经 BotTranscript 透出前端。
+	preflightNoteText string
+	preflightAt       int64
 
 	// mu guards events-channel swap (Lock/Unlock are exported so the manager
 	// can stop an in-flight Run cleanly).
@@ -697,6 +720,13 @@ type BotTranscript struct {
 	LastCompactFallback bool   `json:"last_compact_fallback,omitempty"`
 	LastCompactNote     string `json:"last_compact_note,omitempty"`
 
+	// 2026-08-13 §20260813-04 U4 — pre-flight 上下文裁剪可观测标记。
+	// LastPreflightAt: 最近一次 pre-flight 裁剪 unix 毫秒(0=从未裁剪);
+	// LastPreflightNote: 一行说明(≤160 字,含 payload/预算/窗口/预留四个数)。
+	// omitempty 保证未触发时不出现在 wire 上,旧客户端零感知。
+	LastPreflightAt   int64  `json:"last_preflight_at,omitempty"`
+	LastPreflightNote string `json:"last_preflight_note,omitempty"`
+
 	// §20260810-15 P2: 熔断器状态 wire 字段。前端 BotPhaseIndicator 据此渲染
 	// "🔌 限流中"徽章(open_429) / "⚠️ 模型错误"徽章(open_400),与"已禁用"并列。
 	// closed/open_400/open_429 三态;空 = closed(避免历史客户端解析报错)。
@@ -828,7 +858,7 @@ func NewWithRoom(seat int, modelKey string, role, faction, win string, registry 
 		// 2026-08-13 §20260813-02 U2 — per-Agent 工具缓存(seat 固定,不共享)。
 		toolsCache: NewToolsCache(),
 		// BUG FIX 2026-07-09 §13.6: stamp creation time so the spectator
-		// AgentThoughtPanel can show "started at HH:MM:SS" for bots that
+		// HistoryDrawer(🤖独白 sub-tab) can show "started at HH:MM:SS" for bots that
 		// haven't spoken yet (placeholder branch in populateBotContexts).
 		startedAt: time.Now(),
 		// BUG-WEREWOLF-P0-NEW-30: lock the bot identifier into an immutable
@@ -969,6 +999,9 @@ func (a *Agent) BotTranscript() *BotTranscript {
 	bt.LastCompactAt = a.compactAt
 	bt.LastCompactFallback = a.compactFallback
 	bt.LastCompactNote = a.compactNote
+	// 2026-08-13 §20260813-04 U4 — pre-flight 裁剪标记同源透出。
+	bt.LastPreflightAt = a.preflightAt
+	bt.LastPreflightNote = a.preflightNoteText
 	// §20260810-15 P2: 透传熔断器状态。前端据此外显显示 "🔌 限流中" /
 	// "⚠️ 模型错误"徽章,避免用户在 Tencent-model 16:32 这类场景下只能
 	// 看到"该 bot 停了"而无任何原因提示。
@@ -1153,7 +1186,7 @@ func (a *Agent) SetQuarantined() {
 	}
 	// BUG-WEREWOLF-P1-NEW-46 (Round 39): the bot just stopped calling the
 	// LLM forever. Publish a refreshed BotTranscript so the spectator
-	// AgentThoughtPanel shows the "已禁用" badge instead of going blank
+	// HistoryDrawer(🤖独白 sub-tab) shows the "已禁用" badge instead of going blank
 	// until the next memory-driven snapshot fires (which it never will).
 	a.publishQuarantineTranscript()
 	if cb != nil {
@@ -1385,6 +1418,9 @@ func (a *Agent) recordTranscript() {
 	bt.LastCompactAt = a.compactAt
 	bt.LastCompactFallback = a.compactFallback
 	bt.LastCompactNote = a.compactNote
+	// 2026-08-13 §20260813-04 U4 — pre-flight 裁剪标记同源透出。
+	bt.LastPreflightAt = a.preflightAt
+	bt.LastPreflightNote = a.preflightNoteText
 	// 2026-08-04 §表情特效 — fx 字段与 live emotion 状态同源,recordTranscript
 	// 作为每次 LLM 响应后的快照也一并透传(与 BotTranscript() 的实时读取
 	// 保持一致的 wire 形状)。
@@ -1778,6 +1814,30 @@ func (a *Agent) SetMemoryInjectRunes(n int) {
 		n = 0
 	}
 	a.memoryInjectRunes = n
+}
+
+// SetDifficultyRoundCap 设置难度档位对内层循环轮次的收紧上限(0 = 不收紧)。
+//
+// 2026-08-13 §20260813-04 U3 新增。由 StartAgentsLocked 紧邻
+// SetMemoryInjectRunes 调用 —— 两者同源于 difficulty.ProfileFor,
+// 且都是「difficulty.go 4 处赋值 + agent 侧 0 处读取」的 §130 实例
+// (MemoryInjectRunes 在 §20260812-04 U4 已修,本字段是漏掉的那一个)。
+//
+// 只收紧不放宽:见 maxInnerRoundsFor 的 cap < base 守卫。
+func (a *Agent) SetDifficultyRoundCap(n int) {
+	a.Lock()
+	defer a.Unlock()
+	if n < 0 {
+		n = 0
+	}
+	a.difficultyRoundCap = n
+}
+
+// DifficultyRoundCap 返回难度轮次收紧上限(0 = 不收紧)。
+func (a *Agent) DifficultyRoundCap() int {
+	a.Lock()
+	defer a.Unlock()
+	return a.difficultyRoundCap
 }
 
 // SetWolfTeammateSeat 注入"开局互认狼队友"提示(2026-07-21 §5.2)。

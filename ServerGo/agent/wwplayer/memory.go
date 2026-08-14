@@ -6,8 +6,10 @@ package wwplayer
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"LsmAgentGame/llm"
 	llmtypes "LsmAgentGame/llm/types"
@@ -330,7 +332,7 @@ func (m *Memory) PushTool(r ToolRecord) {
 	defer m.mu.Unlock()
 	r.At = time.Now()
 	m.tools = append(m.tools, r)
-	// Bump from 50 → 100 so the AgentThoughtPanel can render more of the
+	// Bump from 50 → 100 so the HistoryDrawer(🤖独白 sub-tab) can render more of the
 	// bot's recent tool history (BUG: 狼人杀 7 人局 Agent 多轮上下文).
 	if len(m.tools) > 100 {
 		m.tools = m.tools[len(m.tools)-100:]
@@ -353,7 +355,7 @@ func (m *Memory) PushTool(r ToolRecord) {
 // rejects this with HTTP 400 `tool result's tool id … not found (2013)`.
 // SanitizeMessagesForAnthropic is the request-time safety net, but we
 // also advance past any orphan tool_result here so the long-term
-// transcript (which the UI AgentThoughtPanel renders) stays clean too.
+// transcript (which the UI HistoryDrawer(🤖独白 sub-tab) renders) stays clean too.
 func (m *Memory) Prune(maxTurns int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -375,6 +377,18 @@ func approxPayloadBytes(msgs []llm.Message) int {
 				if s, ok := v.(string); ok {
 					bytes += len(s)
 				}
+			}
+			// 2026-08-13 §20260813-04 U6 修复 —— **既有缺陷**:此前完全不统计
+			// c.Content(tool_result 的嵌套 []ContentBlock),而那正是工具返回
+			// 文本的实际存放处。后果:字节预算长期**低估** tool_result 体积
+			// (实测 30 组 4.8KB 的 tool_result 只被算作 1.6KB,低估 90×),
+			// 于是 enforceByteBudgetLocked 认为"还没超"而不剪枝,
+			// 直到上游返回 400 才被动激进压缩 —— 这是"等 400 才压缩"的根因之一。
+			//
+			// 只递归一层:Anthropic tool_result.content 不嵌套更深(见
+			// llm/types/types.go 的 wire 形状约束 §14.1)。
+			for _, inner := range c.Content {
+				bytes += len(inner.Type) + len(inner.Text)
 			}
 		}
 	}
@@ -557,6 +571,120 @@ func (m *Memory) SetSystemTools(system []llmtypes.SystemBlock, tools []llmtypes.
 	m.totalSystemToolsBytes = approxSystemToolsBytes(system, tools)
 }
 
+// PruneToolResultsOnly 确定性裁剪旧的 tool_result 载荷文本，**不调 LLM**。
+//
+// 2026-08-13 §20260813-04 U6。借鉴 Hermes
+// ContextEngine.prune_tool_results_only（agent/context_engine.py:189）：
+//
+//	"Deterministically trim old tool-result payloads without an LLM call.
+//	 Runs on a low, cost-oriented trigger independent of should_compress
+//	 so large-window engines can reclaim re-sent tool output long before
+//	 full compaction would fire."
+//
+// # 为什么需要它
+//
+// 本项目此前只有整体压缩（Prune / CompressHistoryLocked / CompressAndPrune），
+// 且局内 LLM 语义压缩**每局最多一次**（run_compact.go）。
+// 而 tool_result 是 payload 的大头：chat_recall / prop_inspect / prop_history
+// 的返回值都不小，且**每轮都被完整重发**。
+//
+// 本函数提供一条独立的、无 LLM 成本的回收路径。
+//
+// # 参数
+//
+//	keepRecent 最近多少条消息内的 tool_result 保持原文（0 → 用默认值）
+//	truncTo    更早的 tool_result 文本截断到多少字节（0 → 用默认值）
+//
+// 返回被裁剪的 tool_result 块数。
+//
+// # 不变式（§82b 保护）
+//
+// **只截断 tool_result 的 content 文本，绝不删除整个块**，
+// tool_use_id 保持不变 —— 否则会切断 tool_use/tool_result 配对，
+// 触发 Anthropic 400 "tool result's tool id not found"。
+func (m *Memory) PruneToolResultsOnly(keepRecent, truncTo int) int {
+	if keepRecent <= 0 {
+		keepRecent = defaultToolResultKeepRecent
+	}
+	if truncTo <= 0 {
+		truncTo = defaultToolResultTruncBytes
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(m.messages) == 0 {
+		return 0
+	}
+	// 最近 keepRecent 条不动：它们是当前决策的直接依据。
+	cutoff := len(m.messages) - keepRecent
+	if cutoff <= 0 {
+		return 0
+	}
+
+	pruned := 0
+	for i := 0; i < cutoff; i++ {
+		for bi := range m.messages[i].Content {
+			blk := &m.messages[i].Content[bi]
+			if blk.Type != "tool_result" {
+				continue
+			}
+			// tool_result.Content 是嵌套的 []ContentBlock（通常单个 text）。
+			for ci := range blk.Content {
+				inner := &blk.Content[ci]
+				if inner.Type != "text" || len(inner.Text) <= truncTo {
+					continue
+				}
+				// 幂等保护:已裁剪过的文本带标记，不再二次截断。
+				//
+				// 没有这个守卫时会反复截断:第一次截到 truncTo 后追加标记，
+				// 总长度变成 truncTo+len(marker) > truncTo，下一次调用又满足
+				// "超阈值"条件 → 每轮都裁掉一小段，日志里 pruned 计数永不归零，
+				// 且 tool_result 会被逐轮蚕食到只剩标记。
+				if strings.HasSuffix(inner.Text, toolResultTruncMarker) {
+					continue
+				}
+				inner.Text = truncateBytesWithMarker(inner.Text, truncTo)
+				pruned++
+			}
+		}
+	}
+	return pruned
+}
+
+// truncateBytesWithMarker 按字节截断并追加可观测标记，保证 UTF-8 边界完整。
+//
+// 降级必留可观测标记（§20260812-04 教训 4）：
+// 静默截断会让「工具返回被裁短」与「工具本来就返回很少」在日志里同形。
+func truncateBytesWithMarker(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	// 按 rune 边界回退，避免切出无效 UTF-8（中文场景必然踩到）。
+	cut := maxBytes
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + toolResultTruncMarker
+}
+
+// TotalPayloadBytes 返回当前 payload 的近似字节数
+// （messages + system + tools，与 enforceByteBudgetLocked 的剪枝基准一致）。
+//
+// 2026-08-13 §20260813-04 U4 新增，供 pre-flight 预检在发 HTTP 前读取。
+// 复用 approxPayloadBytes + totalSystemToolsBytes，不引入第二套统计口径
+// —— 若 pre-flight 用另一套算法，会出现「预检说够、剪枝说不够」的分叉。
+func (m *Memory) TotalPayloadBytes() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if len(m.messages) == 0 {
+		return m.totalSystemToolsBytes
+	}
+	// 与 enforceByteBudgetLocked 一致：identity(messages[0]) 不计入可剪枝部分，
+	// 但**要计入总量** —— 它确实占请求体字节。
+	return approxPayloadBytes(m.messages) + m.totalSystemToolsBytes
+}
+
 // PruneByBytes 是字节预算剪枝的公开入口(不依赖按条数阈值)。当某模型因
 // "exceed max message tokens" 400 而持续失败时,强制把上下文压回预算内,
 // 打破「失败 → 推 provider_error → payload 更大 → 再失败」的自强化死循环。
@@ -645,6 +773,21 @@ const DefaultPruneTurns = 80
 // 模型上下文上限,同时保留足够多轮次供 Agent 推理;可按模型通过
 // SetMaxPromptBytes 收紧(小窗口模型)或放宽(大窗口模型)。
 const DefaultMaxPromptBytes = 200 * 1024 // 200 KB
+
+// PruneToolResultsOnly 的默认参数（2026-08-13 §20260813-04 U6）。
+//
+// defaultToolResultKeepRecent = 12：13 人局一轮 LLM 交互典型产生
+// 2-4 条消息（user prompt + assistant + tool_result），12 条约覆盖最近 3-4 轮
+// —— 足够让当前决策看到完整的近期工具返回，同时把更早的重发载荷压掉。
+//
+// defaultToolResultTruncBytes = 512：chat_recall / prop_history 的返回值
+// 典型 1-4KB，截到 512 字节仍保留开头的结构化摘要（谁、何时、做了什么），
+// 丢弃的是尾部明细。中文场景 512 字节 ≈ 170 字。
+const (
+	defaultToolResultKeepRecent = 12
+	defaultToolResultTruncBytes = 512
+	toolResultTruncMarker       = "…[工具返回已裁剪 §20260813-04]"
+)
 
 // DefaultCompressTurns 是 CompressAndPrune 默认压缩的最早轮数(2026-07-11 §126)。
 // 13 人局典型 5-7 轮 × 4-6 messages/turn ≈ 20-40 条历史决策,20 turns
@@ -898,7 +1041,7 @@ func (m *Memory) LastTool() string {
 //
 // The patched slice is returned; the underlying Memory is NOT mutated (a
 // patch here is request-scoped and doesn't pollute the long-term
-// transcript that the UI AgentThoughtPanel renders).
+// transcript that the UI HistoryDrawer(🤖独白 sub-tab) renders).
 //
 // Returns (sanitizedMsgs, patchedCount). patchedCount > 0 means a defensive
 // fix was applied for this round.

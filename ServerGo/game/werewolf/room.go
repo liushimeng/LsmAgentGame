@@ -1679,7 +1679,7 @@ func (m *WerewolfManager) maybeSpectatorWake(r *WerewolfRoom) {
 //
 // Visibility:
 //   - Spectator (cs.MySeat < 0): full bot reasoning — thinking, tool history,
-//     recent messages are all surfaced so the spectator AgentThoughtPanel can
+//     recent messages are all surfaced so the spectator HistoryDrawer(🤖独白 sub-tab) can
 //     follow the AIs' reasoning.
 //   - Mixed human player (cs.MySeat >= 0): sanitized bot reasoning. The panel
 //     still shows that *each bot has a recent thought* (seat + model + vague
@@ -1690,7 +1690,7 @@ func (m *WerewolfManager) maybeSpectatorWake(r *WerewolfRoom) {
 //     ("mixed 模式下人类玩家面板永远是 0") without breaking the hidden-info
 //     invariant (the same invariant that already governs Role / RoleRevealed).
 //
-// BUG-WEREWOLF-P0-NEW-2: previously the spectator AgentThoughtPanel was
+// BUG-WEREWOLF-P0-NEW-2: previously the spectator HistoryDrawer(🤖独白 sub-tab) was
 // permanently empty (showed `(0)`) because the server never serialized any
 // bot thinking / tool activity. This wires each agent's lastTranscript into
 // the game.state payload. Agents that have not yet completed a decision emit

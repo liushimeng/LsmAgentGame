@@ -165,7 +165,7 @@ type ClientGameState struct {
 	Votes map[string]int `json:"votes,omitempty"` // seat(int key as string) -> count
 
 	// BotContexts 是每个 bot 座位最近的决策快照(thinking / 工具调用 / 摘要),
-	// 供观战者 AgentThoughtPanel 渲染。由 WerewolfRoom.populateBotContexts 在
+	// 供观战者 HistoryDrawer(🤖独白 sub-tab) 渲染。由 WerewolfRoom.populateBotContexts 在
 	// BuildClientState 之后填充,且仅对观察者(viewer==-1)填充——避免把狼人 bot
 	// 的推理泄漏给人类对手,破坏隐藏信息不变量。
 	// BUG-WEREWOLF-P0-NEW-2: 此前服务端从未下发该字段,前端思考面板永远空状态。

@@ -19,6 +19,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// agentSteerQueueCap 是每 bot 实时事件队列(SteeringQueue)的容量。
+//
+// 2026-08-13 §20260813-04 U1。取 10 的理由:
+// 队列服务的是「一次 LLM 调用期间到达的事件」,慢模型极端情况 1-3 分钟(§197),
+// 期间观众消息受 60s 冷却限制、道具受价格限制,10 条足够覆盖;
+// 满队列时 Enqueue 丢弃**最旧**消息(FIFO),保证 Agent 看到的是最新事件。
+const agentSteerQueueCap = 10
+
 func (m *WerewolfManager) StartAgentsLocked(r *WerewolfRoom) {
 	if m.registry == nil {
 		logger.L().Info("werewolf: registry nil, skipping agent start",
@@ -277,6 +285,27 @@ func (m *WerewolfManager) StartAgentsLocked(r *WerewolfRoom) {
 		// 此前 compactConfig 无 setter(Enabled 恒 false,§130 第六次复现);
 		// 开关关闭时 Enabled=false,run_compact.go 整链 no-op(旧行为零回归)。
 		ag.SetCompactConfig(cfgAgentCompactConfig())
+
+		// 2026-08-13 §20260813-04 U3 — 接线难度档位的内层循环轮次收紧。
+		// difficulty.go 的 MaxToolUse(easy 3 / normal 0 / hard 6 / hell 8)
+		// 此前 4 处赋值 0 处生效(agent.go 硬设 0 且注释写「不再使用」),
+		// 难度分级对工具调用轮次完全无效 —— 与上面 U4 的 MemoryInjectRunes
+		// 是同一模式,§20260812-04 修了记忆那个、漏了轮次这个(§130 第七次复发)。
+		//
+		// 注意:**不能**放进上面 `md != ""` 分支 —— 轮次收紧与是否有持久记忆无关。
+		ag.SetDifficultyRoundCap(ProfileFor(AgentDifficulty(r.agentDifficulty)).MaxToolUse)
+
+		// 2026-08-13 §20260813-04 U1 — 注入实时事件队列(SteeringQueue)。
+		// 此前 steeringQueue 只有字段声明 + run.go 读取,零 setter 恒为 nil,
+		// steering_queue.go 的 149 行实现从未执行(§130 第七次复发)。
+		// 解决: 慢模型单次 LLM 调用 1-3 分钟(§197)期间到达的观众提问/道具命中/
+		// 私聊,此前要等下一轮 wake 才被感知;现在内层循环每轮 drain 一次。
+		ag.SetSteeringQueue(wwplayer.NewSteeringQueue(agentSteerQueueCap))
+
+		// 2026-08-13 §20260813-04 U2 — 注入工具前后置钩子管道。
+		// 此前 toolHooks 字段是孤岛(零读取零 setter),tools.go:846 写死 nil,
+		// 整个 ToolHooks 管道从未执行(§130 第七次复发,与 U1 同批)。
+		ag.SetToolHooks(wwplayer.NewToolHooks())
 
 		// 2026-07-09 §13-bugfix 改造 — 注入**房间共享** 500K 聊天历史队列。
 		// 第一个 bot 启动时分配,后续 bot 共用同一队列引用;

@@ -132,6 +132,51 @@ func (q *SteeringQueue) DrainAndFormat() string {
 	return "\n\n" + joinSteerParts(parts)
 }
 
+// ---------------------------------------------------------------------------
+// Agent 接线 —— 2026-08-13 §20260813-04 U1
+//
+// 此前 steeringQueue 字段只有声明(agent.go:260)与读取(run.go:684),
+// **零 setter** → 恒为 nil → 上面 149 行实现从未执行过(§130 第七次复发)。
+// 文件头详细描述的「Agent 在 LLM 调用期间无法感知新到达事件」痛点是真实的:
+// 慢模型单次调用可达 1-3 分钟(§197),期间的观众提问要等下一轮 wake 才被看到。
+// ---------------------------------------------------------------------------
+
+// SetSteeringQueue 注入实时事件队列。由 room manager 在 StartAgentsLocked 调用。
+// 传 nil 显式关闭(run.go 的 drain 逻辑跳过)。
+func (a *Agent) SetSteeringQueue(q *SteeringQueue) {
+	a.Lock()
+	defer a.Unlock()
+	a.steeringQueue = q
+}
+
+// SteeringQueue 返回实时事件队列(room manager 入队用)。可能为 nil。
+//
+// 调用方必须做 nil 守卫:
+//
+//	if q := ag.SteeringQueue(); q != nil { q.Enqueue(...) }
+//
+// CloseSteeringQueue 会先置 nil 再 close,因此本方法返回非 nil 即可安全 Enqueue。
+func (a *Agent) SteeringQueue() *SteeringQueue {
+	a.Lock()
+	defer a.Unlock()
+	return a.steeringQueue
+}
+
+// CloseSteeringQueue 在 Agent 生命周期结束时释放队列。
+//
+// **先置 nil 再 close** —— 顺序不可颠倒: 若先 close 再置 nil,
+// 并发的 SteeringQueue() 调用方可能拿到已关闭的 channel 并 Enqueue,
+// 向 closed channel 发送会 panic。
+func (a *Agent) CloseSteeringQueue() {
+	a.Lock()
+	q := a.steeringQueue
+	a.steeringQueue = nil
+	a.Unlock()
+	if q != nil {
+		q.Close()
+	}
+}
+
 // joinSteerParts 拼接多个 steer 文本。
 func joinSteerParts(parts []string) string {
 	if len(parts) == 0 {

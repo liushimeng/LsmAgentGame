@@ -73,6 +73,39 @@ func maxInnerRoundsForPhase(phase string) int {
 	return defaultMaxInnerRounds
 }
 
+// maxInnerRoundsFor 返回本 Agent 在该阶段的内层循环上限，
+// 在 phase 基线之上叠加难度档位的收紧。
+//
+// 2026-08-13 §20260813-04 U3 —— 接线 difficulty.DifficultyRoundCap。
+//
+// # 修的是什么
+//
+// difficulty.go 为 easy/normal/hard/hell 设了 MaxToolUse: 3/6/8/0，
+// 但 agent.go 把 Agent.MaxToolUse 硬设 0 且注释明写「§130 重构：保留但不再使用」，
+// 于是**难度档位对工具调用上限完全无效**（4 处赋值 0 处生效）。
+// 这与 §20260812-04 U4 修的 MemoryInjectRunes（同为 difficulty.go 4 赋值 +
+// agent 侧 0 读取）是同一模式 —— 修了一个漏了另一个。
+//
+// # 为什么不复活旧的全局 MaxToolUse 语义
+//
+// §130 废弃它的理由是对的：全局硬上限会截断正常的多轮 tool_use
+// （如 speak 前先 chat_recall）。真正生效的机制是 phaseMaxInnerRounds。
+// 因此难度档位改为**调制**该基线，而非另立一套计数。
+//
+// # cap 只收紧不放宽
+//
+// 难度值（easy=3）大多比 phase 基线（夜间 3 / 投票 3 / 发言 5）更宽或相等，
+// 直接取 min 意味着只有 easy 会真正收紧发言阶段（5 → 3）。这是刻意的：
+// 弱模型/新手房间的 bot 更快收敛（少一轮 tool_use = 快一次 LLM 往返），
+// 而 hard/hell 保持 phase 基线不被放宽 —— 放宽会破坏 §197 的慢模型预算假设。
+func (a *Agent) maxInnerRoundsFor(phase string) int {
+	base := maxInnerRoundsForPhase(phase)
+	if cap := a.DifficultyRoundCap(); cap > 0 && cap < base {
+		return cap
+	}
+	return base
+}
+
 // isSingleActionTool 判断工具是否为"单次行动工具"——调用成功后本阶段行动即结束，
 // 应立即退出内层循环以避免无意义的后续 LLM 调用。
 // §20260810-13: 这些工具不触发 saidSomething（语义是"公开发言"），所以原本
@@ -730,7 +763,10 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 	//   - round 计数器:每阶段最多 N 轮 LLM 调用(阶段差异化)
 	//   - actionDone 标志:单次行动工具成功后立即退出(见 run.go 工具派发处)
 	//   - watchdog / phase deadline / consecutiveFailures 仍是 phase-level 兜底
-	maxRounds := maxInnerRoundsForPhase(phase)
+	// 2026-08-13 §20260813-04 U3 — 改走 maxInnerRoundsFor 让难度档位生效
+	// (phase 基线 + difficultyRoundCap 收紧)。此前直接调包级
+	// maxInnerRoundsForPhase,difficulty.go 的 4 处档位配置对轮次零影响。
+	maxRounds := a.maxInnerRoundsFor(phase)
 	round := 0
 	// actionDone:单次行动工具(wolf_kill/seer_check 等)成功调用后置 true,
 	// 内层循环立即退出,避免浪费 API 调用。
@@ -795,7 +831,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 		// so DeepSeek/GLM strict proxies don't reject the request with
 		// 400 "tool_use ids were found without tool_result blocks". This
 		// is a defensive, request-scoped patch — Memory itself is left
-		// intact for the UI AgentThoughtPanel.
+		// intact for the UI HistoryDrawer(🤖独白 sub-tab).
 		msgs, patched := SanitizeMessagesForAnthropic(msgs)
 		if patched > 0 {
 			logger.L().Info("agent: sanitized messages for anthropic protocol",
@@ -825,6 +861,38 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 			a.Memory.SetSystemTools(system, tools)
 		}
 
+		// 2026-08-13 §20260813-04 U4 — pre-flight 上下文预算预检。
+		//
+		// 借鉴 Hermes _compute_threshold_tokens:从模型窗口**减去 max_tokens
+		// 输出预留**得到有效输入预算(本项目此前完全没有这个概念,
+		// getModelContextBudget 返回的是整个窗口)。
+		//
+		// 此前唯一的自适应路径是等上游 400「exceed max message tokens」后才
+		// PruneByBytesAggressive —— 对慢模型意味着白等数分钟(§197)且占着
+		// 房间 llmSema 槽位。现在在**发 HTTP 前**就裁剪。
+		//
+		// post-error 路径保留不动:两者是独立机制(pre-flight 处理可预测超限,
+		// post-error 处理估算不准导致的意外超限)。
+		if budget := preflightBudgetBytes(a.ModelKey, llmMaxTokensPerCall); budget > 0 {
+			payload := a.Memory.TotalPayloadBytes()
+			if need, target, reason := shouldPreflightPrune(payload, budget); need {
+				a.Memory.PruneByBytes(target)
+				after := a.Memory.TotalPayloadBytes()
+				note := preflightNote(a.ModelKey, payload, budget, llmMaxTokensPerCall)
+				a.SetLastPreflightNote(note)
+				logger.L().Info("agent: pre-flight context prune",
+					zap.Int("seat", a.Seat), zap.String("model", a.ModelKey),
+					zap.String("reason", reason),
+					zap.Int("payload_bytes_before", payload),
+					zap.Int("payload_bytes_after", after),
+					zap.Int("budget_bytes", budget))
+				// 重新快照 —— 裁剪后 messages 已变，必须用新内容发请求，
+				// 否则 pre-flight 等于没做（裁了 Memory 但发的还是旧 msgs）。
+				freshMsgs, _ := a.Memory.Snapshot()
+				msgs, _ = SanitizeMessagesForAnthropic(freshMsgs)
+			}
+		}
+
 		req := llm.LLMRequest{
 			Model:    resolveModelName(a.ModelKey),
 			System:   system,
@@ -840,7 +908,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 			// tool input 拼接超出),导致夜晚狼人座位失语、auto-skip 接管。提到
 			// 2048 给模型思考 + 工具调用充分预算,§128 对话即思考后工具 schema
 			// 文本较长,实际请求体已逼近 1024 上限。
-			MaxTokens: 2048,
+			MaxTokens: llmMaxTokensPerCall,
 			// Per-call metadata mirrors ClaudeCode's `metadata.user_id` —
 			// a stringified JSON blob identifying the call site. Anthropic
 			// proxies / observability use this for traffic attribution and
@@ -1310,7 +1378,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 		a.recordAssistant(resp)
 
 		// BUG-WEREWOLF-P0-NEW-2: publish this decision (thinking + recent
-		// tools/messages) to the spectator AgentThoughtPanel. Captured right
+		// tools/messages) to the spectator HistoryDrawer(🤖独白 sub-tab). Captured right
 		// after the assistant turn is recorded so last_thinking is always
 		// fresh; tool_calls lag by at most one round (this round's tools are
 		// dispatched below). Runs on every path (no-tool yield, tool dispatch,
@@ -1463,7 +1531,9 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 			if setter, ok := runner.(interface{ SetCurrentGC(*wwtypes.GameContext) }); ok {
 				setter.SetCurrentGC(&evt.Context)
 			}
-			result, derr := DispatchTool(tu.Name, tu.Input, runner)
+			// 2026-08-13 §20260813-04 U2 — 生产路径接线 toolHooks。
+			// ToolHooks() 为 nil 时 DispatchToolWithHooks 走原路径,行为与历史一致。
+			result, derr := DispatchToolWithHooks(tu.Name, tu.Input, runner, a.ToolHooks())
 			a.recordToolResult(tu.ID, result, derr != nil)
 			// R85-P2: 记录本次工具调用到 Memory.tools,供 BotTranscript.ToolCalls
 			// (前端"🔧 工具调用 最近 5 条"面板)经 RecentTools(5) 渲染。此前
@@ -1643,6 +1713,27 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 				}
 			}
 		}
+
+		// 2026-08-13 §20260813-04 U6 — 轮末确定性裁剪旧 tool_result 载荷。
+		//
+		// 借鉴 Hermes ContextEngine.prune_tool_results_only:独立于整体压缩的
+		// **无 LLM** 低成本回收路径。tool_result 是 payload 大头
+		// (chat_recall / prop_inspect / prop_history 返回值 1-4KB)且每轮全量重发,
+		// 而局内 LLM 语义压缩每局只跑一次 —— 中间这段时间无人回收。
+		//
+		// 触发阈值取有效预算的 60%:早于 pre-flight(100%)和 post-error(400),
+		// 让廉价手段先上场(Hermes 的「low, cost-oriented trigger」)。
+		// 只截断 tool_result 内层 text,不删块、不动 tool_use_id(§82b 配对保护)。
+		if budget := preflightBudgetBytes(a.ModelKey, llmMaxTokensPerCall); budget > 0 {
+			if a.Memory.TotalPayloadBytes() > budget*toolResultPruneTriggerPct/100 {
+				if n := a.Memory.PruneToolResultsOnly(0, 0); n > 0 {
+					logger.L().Debug("agent: pruned old tool_result payloads",
+						zap.Int("seat", a.Seat), zap.String("model", a.ModelKey),
+						zap.Int("pruned_blocks", n),
+						zap.Int("payload_bytes_after", a.Memory.TotalPayloadBytes()))
+				}
+			}
+		}
 	}
 
 	// §20260810-13 / BUG-WEREWOLF-P0-SPEAK-IDLE: 内层循环达到最大轮次仍未完成
@@ -1814,9 +1905,10 @@ alive:
 		// AgentClassWerewolfJudge,记忆迭代用 AgentClassWerewolfMemoryIter。
 		// 常量集中在 ServerGo/agent/class_names.go。
 		AgentClassName: string(agentroot.AgentClassWerewolfPlayer),
-		// 2026-07-17 R139 修复:与 handleEvent 主路径对称,从 1024 提到 2048,
-		// 避免 Kimi-model 中文长 thinking + tool_use 拼接近 1024 token 上限。
-		MaxTokens: 2048,
+		// 2026-07-17 R139 修复:与 handleEvent 主路径对称,从 1024 提到 2048。
+		// 2026-08-13 §20260813-04 U4:改走 llmMaxTokensPerCall 常量,
+		// 保证与 pre-flight 预算计算用的是同一个值(两处漂移会让预留量算错)。
+		MaxTokens: llmMaxTokensPerCall,
 		Metadata:  llmtypes.Metadata{UserID: buildMetadataUserID(a)},
 	}
 	// §128 对话即思考重构:thinking 注入已删除。
@@ -1889,7 +1981,9 @@ alive:
 
 	// 7. 派发工具 — 重点关注 speak;其他工具走正常路径
 	for _, tu := range resp.ToolUses() {
-		result, derr := DispatchTool(tu.Name, tu.Input, runner)
+		// §20260813-04 U2 — speak_floor 路径同样接线 hooks(两条路径必须一致,
+		// 否则「per-bot 自救」与「正常派发」的钩子行为分叉,同 §97/§92b 教训)。
+		result, derr := DispatchToolWithHooks(tu.Name, tu.Input, runner, a.ToolHooks())
 		a.recordToolResult(tu.ID, result, derr != nil)
 		if derr != nil {
 			logger.L().Warn("agent: speak_floor_tick tool dispatch failed",

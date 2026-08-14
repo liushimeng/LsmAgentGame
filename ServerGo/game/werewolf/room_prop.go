@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"LsmAgentGame/agent/wwplayer"
 	"LsmAgentGame/agent/wwtypes"
 	"LsmAgentGame/config"
 	"LsmAgentGame/service"
@@ -543,6 +544,26 @@ func (r *WerewolfRoom) enqueuePropHitLocked(target int, entry PropInjectEntry) {
 	r.ledgerAppendLocked(InfoSourcePropInject,
 		fmt.Sprintf("prop_inject from=%d target=%d prop=%s hit=%v", entry.FromSeat, target, entry.PropKey, entry.Hit),
 		singleKnowerSet(target), time.Now().UnixMilli())
+
+	// 2026-08-13 §20260813-04 U1 — 实时注入到目标 bot 的 SteeringQueue。
+	//
+	// 此前道具命中只能等目标 bot 下一轮 handleEvent 入口经
+	// PropInjectPromptBlock 感知;若目标正卡在一次慢模型 LLM 调用中(§197 可达
+	// 1-3 分钟),命中信号要滞后整整一轮。SteeringQueue 让内层循环下一轮就看到。
+	//
+	// 本函数已持 r.mu(manager/agent 双路径都在锁内调用),而 SteeringQueue
+	// 内部只用自己的 mutex + channel,不触碰 r.mu,无锁序风险(§92a)。
+	// Enqueue 非阻塞:满队列丢弃最旧,不会阻塞持锁路径。
+	if entry.Hit {
+		if ag := r.BotAgents[target]; ag != nil {
+			if q := ag.SteeringQueue(); q != nil {
+				q.Enqueue(wwplayer.AgentSteerMsg{
+					Kind:    wwplayer.SteerPropHit,
+					Content: fmt.Sprintf("你被 %s 击中(来自 %d 号)。", entry.PropKey, entry.FromSeat),
+				})
+			}
+		}
+	}
 }
 
 func (r *WerewolfRoom) computeTwistSeatLocked(twistSeatSrc string, fromSeat, toSeat int) int {

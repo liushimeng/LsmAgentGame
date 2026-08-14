@@ -55,6 +55,11 @@ func (m *WerewolfManager) stopAgentsLocked(r *WerewolfRoom) {
 		delete(r.agentCancels, seat)
 	}
 	for seat, ag := range r.BotAgents {
+		// 2026-08-13 §20260813-04 U1 — 先关实时事件队列再 Shutdown。
+		// CloseSteeringQueue 内部「先置 nil 再 close」,保证并发的
+		// SteeringQueue() 调用方拿不到已关闭的 channel(向 closed channel
+		// 发送会 panic)。nil queue 时是 no-op。
+		ag.CloseSteeringQueue()
 		ag.Shutdown()
 		delete(r.BotAgents, seat)
 	}

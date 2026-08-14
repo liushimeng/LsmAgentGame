@@ -218,3 +218,36 @@ func SanitizeToolName(name string) string {
 	}
 	return name
 }
+
+// ---------------------------------------------------------------------------
+// Agent 接线 —— 2026-08-13 §20260813-04 U2
+//
+// 此前 toolHooks 字段是 agent.go:265 的**孤岛**: 零读取、零 setter,
+// 而 tools.go:846 的唯一生产调用点写死 `DispatchToolWithHooks(..., nil)`。
+// 整个 ToolHooks 管道从未执行过(§130 第七次复发,与 steeringQueue 同批)。
+//
+// # 为什么不改 DispatchTool 的签名
+//
+// DispatchTool 是**包级函数**而非 Agent 方法,拿不到 a.toolHooks。
+// 但改它的签名会让所有实现 ToolRunner 的测试桩调用点编译失败
+// (§130 防御原则,见 tools.go:1342-1352 同款权衡)。
+//
+// 因此: 包级 DispatchTool 保持 `nil` 语义供测试使用,
+// **生产调用点(run.go 的 tool dispatch)** 改走 DispatchToolWithHooks
+// 并传入 a.ToolHooks()。
+// ---------------------------------------------------------------------------
+
+// SetToolHooks 注入工具前后置钩子管道。由 room manager 在 StartAgentsLocked 调用。
+// 传 nil 显式关闭(dispatch 走原路径,与历史行为完全一致)。
+func (a *Agent) SetToolHooks(h *ToolHooks) {
+	a.Lock()
+	defer a.Unlock()
+	a.toolHooks = h
+}
+
+// ToolHooks 返回工具钩子管道。可能为 nil —— DispatchToolWithHooks 对 nil 安全。
+func (a *Agent) ToolHooks() *ToolHooks {
+	a.Lock()
+	defer a.Unlock()
+	return a.toolHooks
+}
