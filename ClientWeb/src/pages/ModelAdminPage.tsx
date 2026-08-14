@@ -34,7 +34,6 @@
 //      Partial<LlmProviderCreate>,未提供的字段保持不变)。
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';
 import { useModelAdminStore } from '@/store/modelAdmin.store';
@@ -51,6 +50,17 @@ import { ModelRadarChart } from '@/components/common/ModelRadarChart';
 // 避免本页突破 §4 1800 行上限)。
 import { ModelAnalyticsSection } from '@/components/common/ModelAnalyticsPanels';
 import type { LlmProvider, LlmProviderCreate } from '@/types/model';
+// §20260814-01 — 双协议常量:规范值 + 下拉选项 + 归一化(兼容存量旧值)。
+import {
+  PROVIDER_PROTOCOL_OPTIONS,
+  normalizeProviderProtocol,
+  type ProviderProtocol,
+} from '@/types/model';
+// §20260814-01 — 测试弹窗组件(从本页拆出以维持 §4 1800 行上限)。
+import {
+  TestResultDialog,
+  type TestDialogState,
+} from '@/components/common/ModelTestResultPanel';
 import type { TKey } from '@/i18n';
 
 // 后端永远只下发 api_key_hint("sk-XXXX…YYYY" / "API-KEY-PLACEHOLDER")
@@ -113,13 +123,6 @@ function toForm(p: LlmProvider): FormState {
     enabled: p.enabled,
     remark: p.remark ?? '',
   };
-}
-
-interface TestDialogState {
-  provider: LlmProvider;
-  status: 'testing' | 'done';
-  result?: import('@/types/model').ProviderTestResult;
-  errorMessage?: string;
 }
 
 export function ModelAdminPage() {
@@ -299,6 +302,15 @@ export function ModelAdminPage() {
     }
     if (!f.model.trim()) {
       setFormError('Model 不能为空');
+      return;
+    }
+
+    // §20260814-01 — OpenAI 协议必须填写 endpoint(无全局默认可回退)。
+    if (
+      normalizeProviderProtocol(f.provider_type) === 'openai-completions' &&
+      !f.endpoint.trim()
+    ) {
+      setFormError('openai-completions 协议必须填写 Endpoint 基础地址');
       return;
     }
 
@@ -752,12 +764,15 @@ export function ModelAdminPage() {
               <FormField label={t('modelAdmin.fieldProviderType')}>
                 <select
                   className="form-input"
-                  value={editing.form.provider_type}
+                  value={normalizeProviderProtocol(editing.form.provider_type) as ProviderProtocol}
                   onChange={(e) => updateForm('provider_type', e.target.value)}
                   data-testid="form-provider-type"
                 >
-                  <option value="anthropic">anthropic</option>
-                  <option value="openai">openai</option>
+                  {PROVIDER_PROTOCOL_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {t(opt.i18nKey)}
+                    </option>
+                  ))}
                 </select>
               </FormField>
               <FormField label={t('modelAdmin.fieldEnabled')}>
@@ -825,6 +840,15 @@ export function ModelAdminPage() {
                   当前 DB 覆盖值:<code>{currentEditing.endpoint || '(空 → 回退全局)'}</code>
                   <span className="model-admin-current-hint__note">
                     实际生效:<code style={{ color: 'var(--ok)' }}>{currentEditing.effective_endpoint || defaultEndpoint || '-'}</code>
+                  </span>
+                </div>
+              )}
+              {/* §20260814-01 — OpenAI 协议:endpoint 为基础地址,自动追加 /chat/completions */}
+              {normalizeProviderProtocol(editing.form.provider_type) ===
+                'openai-completions' && (
+                <div className="model-admin-current-hint" style={{ marginTop: 6 }}>
+                  <span style={{ color: 'var(--info)' }}>
+                    💡 {t('modelAdmin.protocolEndpointHint')}
                   </span>
                 </div>
               )}
@@ -1390,244 +1414,6 @@ function FormField({
       {hint && <span className="form-field__hint">{hint}</span>}
     </div>
   );
-}
-
-// TestResultDialog — 测试按钮弹窗,loading + done 两态
-//
-// 关键修复:之前 store.testProvider 是 async,点击后立即显示 toast 但弹窗
-// 出现时机不可控(取决于 React 渲染批次),用户感知"按钮没反应"。
-// 现在由父组件控制 dialog 状态:点击瞬间 setTestDialog(testing) →
-// 调用 testProvider → 完成后 setTestDialog(done)。
-function TestResultDialog({
-  state,
-  onClose,
-}: {
-  state: TestDialogState;
-  onClose: () => void;
-}) {
-  const t = useT();
-  const r = state.result;
-  const isTesting = state.status === 'testing';
-  const chatOK = !!r?.chat_ok;
-
-  return createPortal(
-    <AppModal
-      title={
-        isTesting
-          ? `${t('modelAdmin.testDialogTitle')} · ${state.provider.agent_name}`
-          : chatOK
-            ? `${t('modelAdmin.testDialogTitle')} · ${state.provider.agent_name}`
-            : t('modelAdmin.testDialogTitle')
-      }
-      icon={isTesting ? undefined : (chatOK ? '✅' : '❌')}
-      kind={isTesting ? 'info' : (chatOK ? 'success' : 'error')}
-      maxWidth={720}
-      dismissible={!isTesting}
-      loading={isTesting}
-      testId="model-admin-test-modal"
-      onClose={onClose}
-      footer={
-        !isTesting && (
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={onClose}
-            data-testid="test-modal-close"
-          >
-            {t('modelAdmin.testDialogClose')}
-          </button>
-        )
-      }
-    >
-      {isTesting ? (
-        <div className="test-dialog__loading" data-testid="test-modal-loading">
-          <div className="test-dialog__loading-spinner" aria-hidden>⏳</div>
-          <div className="test-dialog__loading-text">
-            正在调用模型 <strong>{state.provider.model}</strong> …
-          </div>
-          <div className="test-dialog__loading-detail">
-            通过 Anthropic 协议发送测试提示,等待模型回复(最长 15s)
-          </div>
-          <div
-            className="test-dialog__code-block"
-            style={{ marginTop: 14, textAlign: 'left' }}
-          >
-            {r?.prompt ?? 'Hello，请用中文回答你什么模型？都支持什么功能？200字以内？'}
-          </div>
-        </div>
-      ) : state.errorMessage ? (
-        <div className="test-dialog__section" data-testid="test-modal-error-wrap">
-          <div className="test-dialog__section-title">调用失败</div>
-          <div className="test-dialog__code-block test-dialog__reply--error">
-            {state.errorMessage}
-          </div>
-        </div>
-      ) : r ? (
-        <>
-          <div className="test-dialog__section">
-            <div className="test-dialog__section-title">
-              {t('modelAdmin.testDialogPrompt')}
-            </div>
-            <div
-              className="test-dialog__code-block"
-              data-testid="test-modal-prompt"
-            >
-              {r.prompt || '-'}
-            </div>
-          </div>
-
-          <div className="test-dialog__section">
-            <div className="test-dialog__section-title">
-              {t('modelAdmin.testDialogReply')}
-            </div>
-            {chatOK ? (
-              <div
-                className="test-dialog__reply"
-                data-testid="test-modal-reply"
-              >
-                {r.chat_text && r.chat_text.length > 0
-                  ? r.chat_text
-                  : t('modelAdmin.testDialogEmpty')}
-              </div>
-            ) : (
-              <div
-                className="test-dialog__code-block test-dialog__reply--error"
-                data-testid="test-modal-error"
-              >
-                <strong>{t('modelAdmin.testDialogError')}：</strong>
-                {r.chat_error ||
-                  r.message ||
-                  'unknown error'}
-              </div>
-            )}
-          </div>
-
-          <div
-            className="test-dialog__meta"
-            data-testid="test-modal-meta"
-          >
-            {t('modelAdmin.testDialogMeta', {
-              ms: String(r.chat_latency_ms ?? 0),
-              in_tok: String(r.chat_usage_input_tokens ?? 0),
-              out_tok: String(r.chat_usage_output_tokens ?? 0),
-              reason: r.chat_stop_reason || '-',
-            })}
-          </div>
-
-          {r.hint && (
-            <div
-              className="test-dialog__hint"
-              data-testid="test-modal-hint"
-            >
-              💡 {t('modelAdmin.testDialogHint')}：{r.hint}
-            </div>
-          )}
-
-          {/* §134 — 完整请求 / 响应诊断折叠面板:无论成功失败,都展示
-              出站 URL / Headers / Body 与上游 Status / Headers / Body,
-              方便定位 placeholder / 401 / 400 / 网络层错误。默认收起
-              (减少噪音),点击标题展开。 */}
-          <details
-            className="test-dialog__diagnostics"
-            data-testid="test-modal-diagnostics"
-            style={{ marginTop: 12 }}
-          >
-            <summary
-              className="test-dialog__diagnostics-summary"
-              style={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600 }}
-            >
-              🔍 查看完整请求 / 响应(Request URL · Headers · Body · Response Status · Headers · Body)
-            </summary>
-            <div style={{ marginTop: 10 }}>
-              <div className="test-dialog__section-title">
-                Request URL
-              </div>
-              <div
-                className="test-dialog__code-block"
-                data-testid="test-modal-request-url"
-                style={{ wordBreak: 'break-all' }}
-              >
-                {r.request_url || '(unknown)'}
-              </div>
-
-              <div className="test-dialog__section-title" style={{ marginTop: 12 }}>
-                Request Headers
-              </div>
-              <pre
-                className="test-dialog__code-block"
-                data-testid="test-modal-request-headers"
-                style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
-              >
-                {formatHeadersForDisplay(r.request_headers)}
-              </pre>
-
-              <div className="test-dialog__section-title" style={{ marginTop: 12 }}>
-                Request Body
-              </div>
-              <pre
-                className="test-dialog__code-block"
-                data-testid="test-modal-request-body"
-                style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 240, overflow: 'auto' }}
-              >
-                {r.request_body || '(empty)'}
-              </pre>
-
-              <div className="test-dialog__section-title" style={{ marginTop: 12 }}>
-                Response Status
-              </div>
-              <div
-                className="test-dialog__code-block"
-                data-testid="test-modal-response-status"
-              >
-                {typeof r.response_status === 'number'
-                  ? (r.response_status === 0
-                      ? '0 (未发出去 / 网络层失败 / ctx timeout)'
-                      : String(r.response_status))
-                  : '(unknown)'}
-              </div>
-
-              <div className="test-dialog__section-title" style={{ marginTop: 12 }}>
-                Response Headers
-              </div>
-              <pre
-                className="test-dialog__code-block"
-                data-testid="test-modal-response-headers"
-                style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
-              >
-                {formatHeadersForDisplay(r.response_headers)}
-              </pre>
-
-              <div className="test-dialog__section-title" style={{ marginTop: 12 }}>
-                Response Body
-              </div>
-              <pre
-                className="test-dialog__code-block"
-                data-testid="test-modal-response-body"
-                style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 240, overflow: 'auto' }}
-              >
-                {r.response_body || '(empty)'}
-              </pre>
-            </div>
-          </details>
-        </>
-      ) : null}
-    </AppModal>,
-    document.body,
-  );
-}
-
-/**
- * §134 — 把 Record<string,string> 头字典渲染成 "key: value" 多行文本。
- * 与 JSON.stringify 不同,这里只展开一层并按 key 字母排序,运维肉眼
- * 快速对比(curl -v 输出风格)。
- */
-function formatHeadersForDisplay(h?: Record<string, string>): string {
-  if (!h || Object.keys(h).length === 0) {
-    return '(empty)';
-  }
-  const keys = Object.keys(h).sort();
-  const max = Math.max(...keys.map((k) => k.length));
-  return keys.map((k) => `${k.padEnd(max)}: ${h[k]}`).join('\n');
 }
 
 // §135 — 超级管理员每日 grant 批量发放弹窗。两段 UI:

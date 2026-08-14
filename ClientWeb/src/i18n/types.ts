@@ -1112,6 +1112,9 @@ export interface Dict {
   'modelAdmin.fieldAgentName': string;
   'modelAdmin.fieldModel': string;
   'modelAdmin.fieldProviderType': string;
+  'modelAdmin.protocolAnthropicMessages': string;
+  'modelAdmin.protocolOpenaiCompletions': string;
+  'modelAdmin.protocolEndpointHint': string;
   'modelAdmin.fieldApiKey': string;
   'modelAdmin.fieldEndpoint': string;
   'modelAdmin.fieldThinkingRequired': string;

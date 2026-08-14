@@ -30,6 +30,7 @@ import (
 
 	"LsmAgentGame/config"
 	"LsmAgentGame/llm/anthropic"
+	"LsmAgentGame/llm/openai"
 	types "LsmAgentGame/llm/types"
 	"LsmAgentGame/logger"
 	"LsmAgentGame/models"
@@ -67,6 +68,11 @@ type registeredProvider struct {
 	available bool
 	enabled   bool
 	endpoint  string // per-provider override; "" ⇒ use the shared one
+	// §20260814-01 — 归一化后的协议标识('anthropic-messages' |
+	// 'openai-completions')。决定 Get 慢路径构建何种 Provider,以及
+	// thinking 自愈仅对 anthropic-messages 生效。空值视为 anthropic-messages
+	// 以兼容无该字段的历史内存态。
+	protocol string
 	// §R224 (2026-08-01) — 重新引入 §128 误删的 extended thinking 配置,
 	// 由 per-provider DB 行(t_lsm_game_llm_provider.thinking_enabled /
 	// thinking_budget_tokens) 或 cfg.LLM.Providers[].ThinkingRequired/Budget
@@ -103,10 +109,17 @@ type Registry struct {
 	lastEndpointStatuses []EndpointHealth
 
 	// sharedProvider is the single anthropic.Provider instance reused for
-	// every registered model. Sharing keeps the User-Agent / billing-header
-	// / stream-timeout configuration consistent across all models and avoids
-	// allocating a new HTTP client per model.
+	// every registered model that speaks the anthropic-messages protocol.
+	// Sharing keeps the User-Agent / billing-header / stream-timeout
+	// configuration consistent across all models and avoids allocating a new
+	// HTTP client per model.
 	sharedProvider *anthropic.Provider
+
+	// sharedOpenAI (§20260814-01) is the sibling shared instance for the
+	// openai-completions protocol. A model's protocol (registeredProvider.
+	// protocol) selects which shared instance it pins to; per-endpoint
+	// overrides build a dedicated Provider of the matching protocol.
+	sharedOpenAI *openai.Provider
 
 	// gormDB is retained (non-nil only in the production constructor) so
 	// Reload can re-query the table at runtime. Pure-cfg mode leaves it nil.
@@ -294,6 +307,10 @@ func newRegistryShared(cfg config.LLMConfig) *Registry {
 		timeout = 30 * time.Second
 	}
 	shared := anthropic.New(endpoints, timeout, cfg.MaxRetries)
+	// §20260814-01 — openai-completions 协议的共享实例。端点列表在
+	// anthropic-messages 下是全局代理;openai 行通常由 DB 行的 per-endpoint
+	// 覆盖驱动,此共享实例作为兜底(或单 openai 行复用)。
+	openaiShared := openai.New(endpoints, timeout, cfg.MaxRetries)
 	streamIdle := time.Duration(cfg.StreamIdleTimeoutMs) * time.Millisecond
 	if streamIdle <= 0 {
 		// 2026-07-24 优化: 120s → 300s(5 min)。慢模型(Kimi/GLM)首字/间隔
@@ -308,6 +325,8 @@ func newRegistryShared(cfg config.LLMConfig) *Registry {
 	streamTotal := timeout
 	shared.SetStreamTimeouts(streamIdle, streamTotal)
 	r.sharedProvider = shared
+	openaiShared.SetStreamTimeouts(streamIdle, streamTotal)
+	r.sharedOpenAI = openaiShared
 	r.cfg = cfg
 	return r
 }
@@ -315,7 +334,6 @@ func newRegistryShared(cfg config.LLMConfig) *Registry {
 // loadFromConfigLocked populates providers from cfg.Providers. Caller MUST
 // hold r.mu for writing (or invoke before returning to caller).
 func (r *Registry) loadFromConfigLocked(cfg config.LLMConfig) {
-	shared := r.sharedProvider
 	for _, p := range cfg.Providers {
 		// R187-2: sanitize so a config key pasted with invisible Cf runes
 		// stays addressable by its clean ASCII form.
@@ -325,6 +343,8 @@ func (r *Registry) loadFromConfigLocked(cfg config.LLMConfig) {
 		}
 		key := strings.TrimSpace(p.APIKey)
 		available := usableKey(key)
+		// §20260814-01 — 归一化协议标识;空/旧值视为 anthropic-messages。
+		protocol := types.NormalizeProviderType(p.ProviderType)
 		// §R224 (2026-08-01) — 从 cfg.LLM.Providers[].ThinkingRequired/Budget
 		// 读取;若未设置(零值)则默认 false(向后兼容 §128 后的配置)。
 		// LsmAgentGame.conf.example 已给全部 8 家代理打开(实测 100% 失败时 100%
@@ -333,16 +353,34 @@ func (r *Registry) loadFromConfigLocked(cfg config.LLMConfig) {
 			info: types.ModelInfo{
 				AgentName:    strings.TrimSpace(p.AgentName),
 				Model:        model,
-				ProviderType: strings.TrimSpace(p.ProviderType),
+				ProviderType: protocol,
 			},
 			key:             key,
-			provider:        shared,
+			provider:        r.sharedProviderForProtocol(protocol),
 			available:       available,
 			enabled:         true,
+			protocol:        protocol,
 			thinkingEnabled: p.ThinkingRequired,
 			thinkingBudget:  p.ThinkingBudget,
 		}
 	}
+}
+
+// sharedProviderForProtocol returns the shared Provider instance for a given
+// protocol. Exists so loadFromConfigLocked (called before r is fully
+// constructed) and populateLocked can pick the right shared instance without
+// duplicating the mapping. Unknown protocol → anthropic shared (legacy default).
+func (r *Registry) sharedProviderForProtocol(protocol string) types.LLMProvider {
+	switch protocol {
+	case types.ProviderTypeOpenAICompletions:
+		if r.sharedOpenAI != nil {
+			return r.sharedOpenAI
+		}
+	}
+	if r.sharedProvider != nil {
+		return r.sharedProvider
+	}
+	return r.sharedOpenAI
 }
 
 // seedFromConfigLocked is the historical cfg-driven DB-empty fallback. As of
@@ -539,36 +577,51 @@ func (r *Registry) Get(modelKey string) (types.LLMProvider, string, error) {
 		return nil, "", fmt.Errorf("llm: unknown model %q", modelKey)
 	}
 	if rp.provider == nil {
-		rp.provider = r.newEndpointProviderLocked(rp.endpoint)
+		rp.provider = r.newEndpointProviderLocked(rp.endpoint, rp.protocol)
 		r.providers[modelKey] = rp
 	}
 	return rp.provider, rp.key, nil
 }
 
-// newEndpointProviderLocked constructs an anthropic.Provider pinned to a
-// single base URL, inheriting the registry's timeout / retry / UA / billing
-// configuration. Caller MUST hold r.mu.
-func (r *Registry) newEndpointProviderLocked(endpoint string) types.LLMProvider {
+// newEndpointProviderLocked constructs a protocol-appropriate Provider pinned
+// to a single base URL, inheriting the registry's timeout / retry / UA
+// configuration. The protocol selects anthropic vs openai; the per-endpoint
+// provider speaks the same protocol as the row. Caller MUST hold r.mu.
+func (r *Registry) newEndpointProviderLocked(endpoint, protocol string) types.LLMProvider {
 	timeout := time.Duration(r.cfg.TimeoutMs) * time.Millisecond
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
-	p := anthropic.New([]string{endpoint}, timeout, r.cfg.MaxRetries)
 	streamIdle := time.Duration(r.cfg.StreamIdleTimeoutMs) * time.Millisecond
 	if streamIdle <= 0 {
 		streamIdle = 300 * time.Second
 	}
-	p.SetStreamTimeouts(streamIdle, timeout)
-	// Inherit the operator-facing headers from the shared provider so admin
-	// diagnostics (User-Agent / billing header) stay consistent across
-	// per-endpoint providers.
-	if r.sharedProvider != nil {
-		if ua := r.sharedProvider.UserAgent(); ua != "" {
-			p.SetUserAgent(ua)
+	var p types.LLMProvider
+	switch types.NormalizeProviderType(protocol) {
+	case types.ProviderTypeOpenAICompletions:
+		oc := openai.New([]string{endpoint}, timeout, r.cfg.MaxRetries)
+		oc.SetStreamTimeouts(streamIdle, timeout)
+		if r.sharedOpenAI != nil {
+			if ua := r.sharedOpenAI.UserAgent(); ua != "" {
+				oc.SetUserAgent(ua)
+			}
 		}
-		if bh := r.sharedProvider.BillingHeader(); bh != "" {
-			p.SetBillingHeader(bh)
+		p = oc
+	default:
+		ap := anthropic.New([]string{endpoint}, timeout, r.cfg.MaxRetries)
+		ap.SetStreamTimeouts(streamIdle, timeout)
+		// Inherit the operator-facing headers from the shared provider so
+		// admin diagnostics (User-Agent / billing header) stay consistent
+		// across per-endpoint providers.
+		if r.sharedProvider != nil {
+			if ua := r.sharedProvider.UserAgent(); ua != "" {
+				ap.SetUserAgent(ua)
+			}
+			if bh := r.sharedProvider.BillingHeader(); bh != "" {
+				ap.SetBillingHeader(bh)
+			}
 		}
+		p = ap
 	}
 	return p
 }
@@ -734,24 +787,43 @@ func (r *Registry) EndpointFor(modelKey string) string {
 	return r.endpoint
 }
 
-// SetUserAgent propagates a User-Agent string to the shared anthropic Provider
-// so every outbound LLM request carries it. Format expected by the caller:
+// uaSetter is the minimal interface shared by both protocol providers for UA
+// propagation — lets SetUserAgent touch every registered provider regardless
+// of its protocol without importing either provider package into a type switch.
+type uaSetter interface {
+	SetUserAgent(string)
+}
+
+// SetUserAgent propagates a User-Agent string to the shared anthropic AND
+// openai Providers (and every per-endpoint provider built so far) so every
+// outbound LLM request carries it. Format expected by the caller:
 // "ProgramName/Version BuildTime".
 func (r *Registry) SetUserAgent(ua string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.sharedProvider != nil {
+		r.sharedProvider.SetUserAgent(ua)
+	}
+	if r.sharedOpenAI != nil {
+		r.sharedOpenAI.SetUserAgent(ua)
+	}
 	for _, rp := range r.providers {
-		if p, ok := rp.provider.(*anthropic.Provider); ok {
+		if p, ok := rp.provider.(uaSetter); ok {
 			p.SetUserAgent(ua)
 		}
 	}
 }
 
 // SetBillingHeader propagates an `x-anthropic-billing-header` value to the
-// shared anthropic Provider.
+// shared anthropic Provider (and every registered anthropic per-endpoint
+// provider). OpenAI protocol providers ignore the billing header — it is an
+// Anthropic-private header and is never sent on the openai-completions wire.
 func (r *Registry) SetBillingHeader(bh string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.sharedProvider != nil {
+		r.sharedProvider.SetBillingHeader(bh)
+	}
 	for _, rp := range r.providers {
 		if p, ok := rp.provider.(*anthropic.Provider); ok {
 			p.SetBillingHeader(bh)
@@ -773,14 +845,27 @@ func (r *Registry) ChatTimeout() time.Duration {
 	return r.sharedProvider.ChatTimeout()
 }
 
+// streamTimeoutSetter is the minimal interface both protocol providers expose
+// for stream-timeout propagation.
+type streamTimeoutSetter interface {
+	SetStreamTimeouts(idle, total time.Duration)
+}
+
 // SetStreamTimeouts configures the idle and total stream timeouts on every
-// registered anthropic provider. Both values may be 0 (the provider default
-// applies).
+// registered provider (both protocols). Both values may be 0 (the provider
+// default applies). §130 semantics: idle is forced to 0 post-first-byte by
+// each provider so a live stream is never aborted.
 func (r *Registry) SetStreamTimeouts(idle, total time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.sharedProvider != nil {
+		r.sharedProvider.SetStreamTimeouts(idle, total)
+	}
+	if r.sharedOpenAI != nil {
+		r.sharedOpenAI.SetStreamTimeouts(idle, total)
+	}
 	for _, rp := range r.providers {
-		if p, ok := rp.provider.(*anthropic.Provider); ok {
+		if p, ok := rp.provider.(streamTimeoutSetter); ok {
 			p.SetStreamTimeouts(idle, total)
 		}
 	}
@@ -1011,7 +1096,6 @@ func nonEmptyOr(s, fallback string) string {
 // destination map is filled in place — initial load passes r.providers
 // directly, Reload passes a fresh map and atomically swaps it in.
 func (r *Registry) populateLocked(ctx context.Context, rows []models.TLsmGameLlmProvider, dst map[string]registeredProvider) error {
-	shared := r.sharedProvider
 	mk, err := r.ensureMasterKey(ctx)
 	if err != nil {
 		return fmt.Errorf("ensure master key: %w", err)
@@ -1034,29 +1118,38 @@ func (r *Registry) populateLocked(ctx context.Context, rows []models.TLsmGameLlm
 			}
 		}
 		available := usableKey(plain)
-		providerType := strings.TrimSpace(row.ProviderType)
-		if providerType == "" {
-			providerType = "anthropic"
-		}
+		// §20260814-01 — 归一化协议标识。DB 行 'anthropic'/'openai'/''
+		// 全部映射到规范值,供协议选择与前端展示。
+		providerType := types.NormalizeProviderType(row.ProviderType)
+		protocol := providerType
 		// Per-row endpoint: empty (or exactly the global default) ⇒ share the
-		// global provider instance; anything else ⇒ leave provider nil and let
-		// Get lazily pin a dedicated anthropic.Provider to that URL. Storing
-		// the raw value keeps Get's fast/slow-path decision cheap.
+		// protocol-appropriate global provider instance; anything else ⇒ leave
+		// provider nil and let Get lazily pin a dedicated Provider (matching
+		// the row's protocol) to that URL. Storing the raw value keeps Get's
+		// fast/slow-path decision cheap.
 		endpoint := strings.TrimSpace(row.Endpoint)
 		var provider types.LLMProvider
 		if endpoint == "" || endpoint == r.endpoint {
 			endpoint = ""
-			provider = shared
+			// §20260814-01 — 共享实例必须与该行的协议匹配,避免 Get 把
+			// openai 行路由到 anthropic 的 /v1/messages。
+			provider = r.sharedProviderForProtocol(protocol)
 		}
 		// BUG-R229-P0-01 (2026-08-01) — 存量 DB 行自愈: 早期 seed 的
 		// thinking_enabled=0 行在 Reload 时被改写为 true / 4096,避免存量部署重启后
-		// 仍 400 "missing messages.content.thinking parameter"。仅对 anthropic 协议
-		// 生效(OpenAI 预留协议不注入 thinking,未来显式切到 OpenAI 才绕过)。
+		// 仍 400 "missing messages.content.thinking parameter"。仅对
+		// anthropic-messages 协议生效(openai-completions 不注入 thinking,
+		// 显式切到 OpenAI 才绕过,与协议契约一致)。
 		thinkingEnabled := row.ThinkingEnabled
 		thinkingBudget := row.ThinkingBudgetTokens
-		if providerType == "anthropic" && !thinkingEnabled && thinkingBudget <= 0 {
+		if protocol == types.ProviderTypeAnthropicMessages && !thinkingEnabled && thinkingBudget <= 0 {
 			thinkingEnabled = true
 			thinkingBudget = 4096
+		}
+		if protocol == types.ProviderTypeOpenAICompletions {
+			// OpenAI 协议无 thinking 概念; 强制清零避免上层误注入。
+			thinkingEnabled = false
+			thinkingBudget = 0
 		}
 		dst[model] = registeredProvider{
 			info: types.ModelInfo{
@@ -1069,6 +1162,7 @@ func (r *Registry) populateLocked(ctx context.Context, rows []models.TLsmGameLlm
 			available: available,
 			enabled:   row.Enabled,
 			endpoint:  endpoint,
+			protocol:  protocol,
 			// §R224 (2026-08-01) — DB 行(t_lsm_game_llm_provider)的两列字段。
 			// thinking_enabled=false 时 anthropic.Provider 不会注入 thinking
 			// 块;true 时用 thinking_budget_tokens(默认 4096)作 budget。

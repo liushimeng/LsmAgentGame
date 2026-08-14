@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"strings"
 )
 
 // ContentBlock is a single block inside an Anthropic `content` array. The wire
@@ -384,6 +385,48 @@ type StreamEvent struct {
 // provider whose api_key equals this value is marked unavailable so we never
 // accidentally ship bearer <placeholder> to the proxy.
 const PlaceholderKey = "API-KEY-PLACEHOLDER"
+
+// ─── §20260814-01 双协议标识 ───
+//
+// The two protocol systems this project speaks. They are NOT translations of
+// each other: each has its own provider package (llm/anthropic, llm/openai)
+// with its own wire types, SSE parser and circuit breaking. See
+// docs/LLM与Agent/AgentOpenAI工具集与道具协议.md.
+const (
+	// ProviderTypeAnthropicMessages is the canonical id for the Anthropic
+	// Messages API (POST {endpoint}/v1/messages).
+	ProviderTypeAnthropicMessages = "anthropic-messages"
+	// ProviderTypeOpenAICompletions is the canonical id for the OpenAI Chat
+	// Completions API (POST {endpoint}/chat/completions).
+	ProviderTypeOpenAICompletions = "openai-completions"
+)
+
+// NormalizeProviderType maps legacy / empty provider_type values onto the
+// canonical constants above. It is the SINGLE normalization point: the DB
+// read path (registry populateLocked), the cfg read path, and the admin API
+// write path all go through it, so pre-§20260814-01 rows carrying "anthropic"
+// / "openai" keep working without a migration. Unknown values are returned
+// trimmed but unchanged so callers can reject them explicitly.
+func NormalizeProviderType(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "anthropic", ProviderTypeAnthropicMessages:
+		return ProviderTypeAnthropicMessages
+	case "openai", ProviderTypeOpenAICompletions:
+		return ProviderTypeOpenAICompletions
+	default:
+		return strings.TrimSpace(s)
+	}
+}
+
+// IsSupportedProviderType reports whether s normalizes to one of the two
+// wired protocols. Admin CRUD uses it for white-list validation.
+func IsSupportedProviderType(s string) bool {
+	switch NormalizeProviderType(s) {
+	case ProviderTypeAnthropicMessages, ProviderTypeOpenAICompletions:
+		return true
+	}
+	return false
+}
 
 // ModelInfo is the safe, key-free projection exposed via GET /api/llm/models.
 type ModelInfo struct {

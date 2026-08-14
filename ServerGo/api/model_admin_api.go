@@ -37,6 +37,7 @@ import (
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/llm"
 	"LsmAgentGame/llm/anthropic"
+	"LsmAgentGame/llm/openai"
 	types "LsmAgentGame/llm/types"
 	"LsmAgentGame/logger"
 	"LsmAgentGame/models"
@@ -152,7 +153,9 @@ func (h *ModelAdminAPI) requireSuper(c *gin.Context) (string, bool) {
 type CreateProviderRequest struct {
 	AgentName    string `json:"agent_name" binding:"required,min=1,max=64"`
 	Model        string `json:"model"      binding:"required,min=1,max=64"`
-	ProviderType string `json:"provider_type" binding:"required,oneof=anthropic openai"`
+	// §20260814-01 — 规范值 anthropic-messages / openai-completions;旧值
+	// "anthropic"/"openai" 由服务端归一化(binding 放宽为 required + 自定义校验)。
+	ProviderType string `json:"provider_type" binding:"required,min=1,max=32"`
 	APIKey       string `json:"api_key"    binding:"required,min=1"`
 	Endpoint     string `json:"endpoint,omitempty"`
 	// §135 修复 — 新增模型表单会带 `enabled` checkbox,与 UpdateProviderRequest 对齐。
@@ -391,6 +394,24 @@ func (h *ModelAdminAPI) CreateProvider(c *gin.Context) {
 		return
 	}
 
+	// §20260814-01 — 归一化 + 白名单校验协议标识。兼容旧值 anthropic/openai。
+	providerType := types.NormalizeProviderType(req.ProviderType)
+	if !types.IsSupportedProviderType(req.ProviderType) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    errcode.ErrValidationFailed,
+			"message": "provider_type 必须为 anthropic-messages 或 openai-completions",
+		})
+		return
+	}
+	// openai-completions 行必须有 per-row endpoint(无全局默认可回退)。
+	if providerType == types.ProviderTypeOpenAICompletions && strings.TrimSpace(req.Endpoint) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    errcode.ErrValidationFailed,
+			"message": "openai-completions 协议必须填写 endpoint(基础地址,请求时自动追加 /chat/completions)",
+		})
+		return
+	}
+
 	// Encrypt the API key with the persisted master key.
 	enc, err := util.EncryptAPIKey(c.Request.Context(), h.gormDB, req.APIKey)
 	if err != nil {
@@ -411,7 +432,7 @@ func (h *ModelAdminAPI) CreateProvider(c *gin.Context) {
 		ID:           util.NewUUID(),
 		AgentName:    agentName,
 		Model:        modelKey,
-		ProviderType: strings.TrimSpace(req.ProviderType),
+		ProviderType: providerType,
 		APIKeyEnc:    enc,
 		APIKeyHint:   apiKeyHintLocal(req.APIKey),
 		Endpoint:     strings.TrimSpace(req.Endpoint),
@@ -578,10 +599,11 @@ func (h *ModelAdminAPI) UpdateProvider(c *gin.Context) {
 		updates["model"] = clean
 	}
 	if req.ProviderType != nil {
-		pt := strings.TrimSpace(*req.ProviderType)
-		if pt != "anthropic" && pt != "openai" {
+		pt := types.NormalizeProviderType(*req.ProviderType)
+		if !types.IsSupportedProviderType(*req.ProviderType) {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"code": errcode.ErrValidationFailed, "message": "provider_type must be anthropic or openai",
+				"code":    errcode.ErrValidationFailed,
+				"message": "provider_type 必须为 anthropic-messages 或 openai-completions",
 			})
 			return
 		}
@@ -938,25 +960,36 @@ func (h *ModelAdminAPI) runTestProviderChat(parent context.Context, modelKey str
 	// §134 — 即使 registry.Get 失败,也要把诊断字段填好(URL / headers / body),
 	// 让运维在弹窗里看到"我打算调哪个 URL、用什么 Key、发了什么 Body",而不是只看
 	// 到一行 chat_error 才能反推。
-	endpoint := h.registry.EndpointFor(modelKey)
-	if endpoint == "" {
-		endpoint = "registry endpoint (unknown)"
+	// §20260814-01 — 按协议分叉诊断面板的出站 URL / 请求头 / 请求体预览。
+	// anthropic-messages → {ep}/v1/messages(带 anthropic-version 头);
+	// openai-completions → {ep}/chat/completions(无 anthropic-version 头)。
+	protocol := h.registryProtocolLocked(modelKey)
+	var requestURL string
+	headers := map[string]string{
+		"Content-Type": "application/json",
+		"Accept":       "application/json",
 	}
-	requestURL := strings.TrimRight(endpoint, "/") + "/v1/messages"
+	if protocol == types.ProviderTypeOpenAICompletions {
+		endpoint := h.registry.EndpointFor(modelKey)
+		if endpoint == "" {
+			endpoint = "registry endpoint (unknown)"
+		}
+		requestURL = openai.ChatCompletionsURL(endpoint)
+	} else {
+		endpoint := h.registry.EndpointFor(modelKey)
+		if endpoint == "" {
+			endpoint = "registry endpoint (unknown)"
+		}
+		requestURL = strings.TrimRight(endpoint, "/") + "/v1/messages"
+		headers["anthropic-version"] = "2023-06-01"
+	}
 	// 占位 key(registry 未拿到) → 显示 Bearer <placeholder> 让运维一眼看出原因。
 	authPreview := redactBearerKey("")
+	headers["Authorization"] = authPreview
+	headers["x-model-key"] = modelKey
 	result["request_url"] = requestURL
-	result["request_headers"] = map[string]string{
-		"Authorization":     authPreview,
-		"anthropic-version": "2023-06-01",
-		"Content-Type":      "application/json",
-		"Accept":            "application/json",
-		"x-model-key":       modelKey,
-	}
-	result["request_body"] = fmt.Sprintf(
-		"{\n  \"model\": %q,\n  \"max_tokens\": 512,\n  \"stream\": false,\n  \"messages\": [\n    {\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":%q}]}\n  ]\n}",
-		modelKey, testProviderPrompt,
-	)
+	result["request_headers"] = headers
+	result["request_body"] = h.testProviderRequestBody(protocol, modelKey)
 	result["response_status"] = 0
 	result["response_headers"] = map[string]string{}
 	result["response_body"] = ""
@@ -965,24 +998,22 @@ func (h *ModelAdminAPI) runTestProviderChat(parent context.Context, modelKey str
 	if err != nil {
 		result["chat_error"] = "registry.Get: " + err.Error()
 		// 占位 key 场景重写 Authorization 字段,显示 registry 实际状态。
-		result["request_headers"] = map[string]string{
-			"Authorization":     redactBearerKey(key),
-			"anthropic-version": "2023-06-01",
-			"Content-Type":      "application/json",
-			"Accept":            "application/json",
-			"x-model-key":       modelKey,
-			"x-registry-error":  err.Error(),
+		errHeaders := map[string]string{}
+		for k, v := range headers {
+			errHeaders[k] = v
 		}
+		errHeaders["Authorization"] = redactBearerKey(key)
+		errHeaders["x-registry-error"] = err.Error()
+		result["request_headers"] = errHeaders
 		return false
 	}
 	// Get 成功 → 用真实 key 重新渲染 Authorization 头(脱敏)。
-	result["request_headers"] = map[string]string{
-		"Authorization":     redactBearerKey(key),
-		"anthropic-version": "2023-06-01",
-		"Content-Type":      "application/json",
-		"Accept":            "application/json",
-		"x-model-key":       modelKey,
+	gotHeaders := map[string]string{}
+	for k, v := range headers {
+		gotHeaders[k] = v
 	}
+	gotHeaders["Authorization"] = redactBearerKey(key)
+	result["request_headers"] = gotHeaders
 
 	req := llm.LLMRequest{
 		Model:     modelKey,
@@ -995,17 +1026,6 @@ func (h *ModelAdminAPI) runTestProviderChat(parent context.Context, modelKey str
 				},
 			},
 		},
-	}
-
-	// §134 增强:registry.Get 已成功后,重新把 request_headers 中的 Authorization
-	// 替换为「真实 key 的脱敏版本」(前置预填用的是 <placeholder>)。
-	// request_url / request_body 已在前面预填,这里不动。
-	result["request_headers"] = map[string]string{
-		"Authorization":     redactBearerKey(key),
-		"anthropic-version": "2023-06-01",
-		"Content-Type":      "application/json",
-		"Accept":            "application/json",
-		"x-model-key":       modelKey,
 	}
 
 	// 超时预算与 provider HTTP client 对齐(llm.timeout_ms,默认 600s);
@@ -1057,9 +1077,13 @@ func (h *ModelAdminAPI) runTestProviderChat(parent context.Context, modelKey str
 	// §134 增强:成功路径下,Anthropic chat endpoint 是 200。响应 body 重新渲染为 JSON
 	// 给前端展示。resp.Content 是一组 ContentBlock;序列化为可见 JSON。
 	result["response_status"] = 200
+	xProvider := "anthropic"
+	if protocol == types.ProviderTypeOpenAICompletions {
+		xProvider = "openai"
+	}
 	result["response_headers"] = map[string]string{
 		"Content-Type": "application/json",
-		"X-Provider":   "anthropic",
+		"X-Provider":   xProvider,
 	}
 	if bodyJSON, jerr := json.MarshalIndent(map[string]any{
 		"id":           resp.ID,
@@ -1082,6 +1106,36 @@ func (h *ModelAdminAPI) runTestProviderChat(parent context.Context, modelKey str
 		zap.String("stop_reason", resp.StopReason),
 	)
 	return true
+}
+
+// registryProtocolLocked returns the normalized protocol for a model by reading
+// the registry's ModelInfo (which is already normalized by the read path). It
+// falls back to anthropic-messages when the model is unknown, preserving the
+// historical diagnostic behavior.
+func (h *ModelAdminAPI) registryProtocolLocked(modelKey string) string {
+	if h.registry == nil {
+		return types.ProviderTypeAnthropicMessages
+	}
+	if info, ok := h.registry.GetInfo(modelKey); ok {
+		return info.ProviderType
+	}
+	return types.ProviderTypeAnthropicMessages
+}
+
+// testProviderRequestBody renders the outbound request body preview according to
+// the protocol — anthropic-messages (ContentBlock array) vs openai-completions
+// (string content) — so the admin test dialog shows exactly what the proxy sees.
+func (h *ModelAdminAPI) testProviderRequestBody(protocol, modelKey string) string {
+	if protocol == types.ProviderTypeOpenAICompletions {
+		return fmt.Sprintf(
+			"{\n  \"model\": %q,\n  \"max_tokens\": 512,\n  \"stream\": false,\n  \"messages\": [{\"role\":\"user\",\"content\":%q}]\n}",
+			modelKey, testProviderPrompt,
+		)
+	}
+	return fmt.Sprintf(
+		"{\n  \"model\": %q,\n  \"max_tokens\": 512,\n  \"stream\": false,\n  \"messages\": [\n    {\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":%q}]}\n  ]\n}",
+		modelKey, testProviderPrompt,
+	)
 }
 
 // ─────────────────── ReloadProviders ───────────────────

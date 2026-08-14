@@ -5,6 +5,33 @@
 // pipeline). If the backend renames or removes a field, update here and the
 // `modelAdmin` API wrapper simultaneously.
 
+// §20260814-01 — LLM 协议标识常量。后端归一化后的规范值;前端也用它驱动
+// 协议下拉、模型过滤、endpoint 自动追加提示。旧值 'anthropic'/'openai' 由后端
+// 归一化,前端仅在读取存量列表时兼容显示。
+export const PROVIDER_PROTOCOL_ANTHROPIC = 'anthropic-messages' as const;
+export const PROVIDER_PROTOCOL_OPENAI = 'openai-completions' as const;
+
+export type ProviderProtocol =
+  | typeof PROVIDER_PROTOCOL_ANTHROPIC
+  | typeof PROVIDER_PROTOCOL_OPENAI;
+
+// 协议下拉选项列表(值 + i18n key),供 ModelAdminPage 与 RoomCreateModal 共用。
+export interface ProviderProtocolOption {
+  value: ProviderProtocol;
+  i18nKey: 'modelAdmin.protocolAnthropicMessages' | 'modelAdmin.protocolOpenaiCompletions';
+}
+
+export const PROVIDER_PROTOCOL_OPTIONS: ProviderProtocolOption[] = [
+  { value: PROVIDER_PROTOCOL_ANTHROPIC, i18nKey: 'modelAdmin.protocolAnthropicMessages' },
+  { value: PROVIDER_PROTOCOL_OPENAI, i18nKey: 'modelAdmin.protocolOpenaiCompletions' },
+];
+
+// 归一化:兼容后端可能返回的存量旧值。
+export function normalizeProviderProtocol(v: string): ProviderProtocol {
+  if (v === PROVIDER_PROTOCOL_OPENAI || v === 'openai') return PROVIDER_PROTOCOL_OPENAI;
+  return PROVIDER_PROTOCOL_ANTHROPIC;
+}
+
 export interface LlmProvider {
   id: string;
   agent_name: string;

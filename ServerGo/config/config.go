@@ -403,7 +403,7 @@ type ProviderConfig struct {
 	AgentName    string `json:"agent_name"`    // human-readable label (UI)
 	Model        string `json:"model"`         // model id sent to the proxy
 	APIKey       string `json:"api_key"`       // Bearer token for this model
-	ProviderType string `json:"provider_type"` // "anthropic" (reserved: "openai")
+	ProviderType string `json:"provider_type"` // §20260814-01: "anthropic-messages" | "openai-completions" (legacy "anthropic"/"openai" accepted)
 	// §R224 (2026-08-01) — 重新引入 §128 误删的 extended thinking 配置。
 	// 实测 8 家代理(GLM/豆包/Qwen/DeepSeek/Kimi/MiniMax/美团/小米)要求
 	// 每条 message 头部包含 `{type:"thinking", budget:N}` 块;ThinkingRequired=true
@@ -815,8 +815,14 @@ func applyDefaults(c *Config) {
 	// provider 的零值(false / budget=0)改写为 true / 4096,DB 空行 seed 路径读 cfg,
 	// 所以也会被改写;存量 DB 行在 registry.Reload 时自愈(见 registry.go)。
 	for i := range c.LLM.Providers {
-		pt := strings.TrimSpace(c.LLM.Providers[i].ProviderType)
-		if pt != "" && pt != "anthropic" {
+		// §20260814-01 — thinking 自愈仅对 anthropic-messages 协议生效
+		// (openai-completions 无 thinking 概念,强制不改写)。此处内联归一化
+		// 以避免 import llm/types 产生循环依赖(config 被 llm 依赖)。
+		switch strings.ToLower(strings.TrimSpace(c.LLM.Providers[i].ProviderType)) {
+		case "", "anthropic", "anthropic-messages":
+			// anthropic-messages 族 → 继续下面自愈逻辑。
+		default:
+			// openai / openai-completions / 未知 → 跳过,不改写 thinking。
 			continue
 		}
 		if !c.LLM.Providers[i].ThinkingRequired && c.LLM.Providers[i].ThinkingBudget <= 0 {

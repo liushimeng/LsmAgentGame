@@ -10,6 +10,7 @@ import { listModels, type ModelInfo } from '@/api/llm';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import type { CreateRoomOptions } from '@/types/api';
+import { normalizeProviderProtocol } from '@/types/model';
 
 export interface AgentSeatInput {
   seat: number;
@@ -115,7 +116,9 @@ const RoomCreateModal: React.FC<Props> = ({ open, onClose, onSubmit, submitting 
     listModels()
       .then((ms) => {
         if (cancelled) return;
-        setModels(ms.filter((m) => m.provider_type === 'anthropic'));
+        // §20260814-01 — 双协议均可开 AI 房间;兼容存量旧值 anthropic/openai。
+        setModels(ms.filter((m) => normalizeProviderProtocol(m.provider_type) === 'anthropic-messages' ||
+          normalizeProviderProtocol(m.provider_type) === 'openai-completions'));
       })
       .catch((e) => {
         if (cancelled) return;
