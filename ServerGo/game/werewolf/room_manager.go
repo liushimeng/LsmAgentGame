@@ -366,6 +366,19 @@ func (m *WerewolfManager) FactionByUserID(roomID, userID string) (faction string
 		return "unknown", false, true
 	}
 	defer r.mu.Unlock()
+
+	// §20260816-01: Check spectator status FIRST. A user who has been
+	// downgraded from seated player to spectator (e.g. after WS disconnect
+	// cleanup) must be reported as isSpectator=true even if stale seat data
+	// still references their userID. Without this check, the win-probability
+	// endpoint (and other spectator-only APIs) incorrectly reject such users
+	// with 10403 "胜率热力图仅观战者可见".
+	if r.Spectators != nil {
+		if _, ok := r.Spectators[userID]; ok {
+			return "unknown", false, true
+		}
+	}
+
 	seat, seated := r.SeatOf(userID)
 	if !seated {
 		return "unknown", false, true
