@@ -2,22 +2,22 @@
 """werewolf_screenshot.py — 狼人杀 13 人局 Agent 精彩画面自动化截图工具
 
 依赖:
-    - scripts/auto3/atx.py (go-web-debug-tool 封装)
+    - scripts/screenshot/atx.py (go-web-debug-tool 封装,与本脚本同目录)
     - 运行中的后端 https://127.0.0.1:39001
     - 运行中的 GoWebDebugTool http://localhost:28999
 
 用法:
     # 单次截图(指定 URL + 输出)
-    python3 scripts/werewolf_screenshot.py \
+    python3 scripts/screenshot/werewolf_screenshot.py \
         --url "https://127.0.0.1:39001/werewolf" \
         --output ProjectPic/werewolf-01-room.png
 
     # 批量截图 (推荐):登录 → 创建房间 → 进入观战 → 每 60s 截一次
-    python3 scripts/werewolf_screenshot.py --batch --token "$JWT" \
+    python3 scripts/screenshot/werewolf_screenshot.py --batch --token "$JWT" \
         --output-dir ProjectPic --count 12 --interval 60
 
     # 仅截图当前页面(已登录状态)
-    python3 scripts/werewolf_screenshot.py --screenshot-only \
+    python3 scripts/screenshot/werewolf_screenshot.py --screenshot-only \
         --output ProjectPic/werewolf-current.png
 
 设计目标:
@@ -34,14 +34,15 @@ import sys
 import time
 from pathlib import Path
 
-# 把当前目录加入 sys.path 以便 import auto3.atx
+# 把当前目录加入 sys.path 以便 import 同目录的 atx 封装
 THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(THIS_DIR))
-from auto3.atx import (  # noqa: E402
+from atx import (  # noqa: E402
     control, eval_js, local_login, navigate, new_page, screenshot_b64,
 )
 
-PROJECT_ROOT = THIS_DIR.parent
+# scripts/screenshot/ 上两级为项目根
+PROJECT_ROOT = THIS_DIR.parent.parent
 OUTPUT_DIR = PROJECT_ROOT / "ProjectPic"
 DEFAULT_URL = "https://127.0.0.1:39001/werewolf"
 DEFAULT_INTERVAL = 60

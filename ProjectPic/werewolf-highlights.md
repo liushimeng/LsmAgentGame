@@ -125,5 +125,5 @@
 | 法官调用 | 14 次（旁白 + 阶段宣告） |
 | 单局截图采集 | 178 张原始快照（60s/张 · 双页面） |
 
-> 截图工具链：`scripts/werewolf_highlight_capture.py`（go-web-debug-tool CDP 双页采集）
+> 截图工具链：`scripts/screenshot/werewolf_highlight_capture.py`（go-web-debug-tool CDP 双页采集）
 > + ffmpeg GIF 合成。提示词文件：`AutoScreenshotWerewolf.md`。

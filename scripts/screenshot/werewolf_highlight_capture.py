@@ -13,7 +13,7 @@
        或硬超时 hard_timeout(默认 75min); Chrome 连续失败 auto-rebuild 页面
 
 用法:
-    python3 scripts/werewolf_highlight_capture.py --room-id <uuid> [--interval 60]
+    python3 scripts/screenshot/werewolf_highlight_capture.py --room-id <uuid> [--interval 60]
 """
 import argparse
 import json
@@ -23,12 +23,13 @@ from pathlib import Path
 
 THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(THIS_DIR))
-from auto3.atx import (  # noqa: E402
+from atx import (  # noqa: E402
     api_get, close_page, eval_js, list_pages, local_login, navigate, new_page,
     screenshot_b64,
 )
 
-PROJECT_ROOT = THIS_DIR.parent
+# scripts/screenshot/ 上两级为项目根
+PROJECT_ROOT = THIS_DIR.parent.parent
 RAW_DIR = PROJECT_ROOT / "ProjectPic" / "raw"
 MIN_BYTES = 30_000
 

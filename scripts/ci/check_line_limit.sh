@@ -21,13 +21,14 @@
 #  白名单文件仍会被检查「有没有变得更长」—— 超过登记的行数即 fail,
 #  这样既不阻塞现状,又保证债务不会继续恶化(棘轮效应)。
 #
-#  用法: bash scripts/check_line_limit.sh
+#  用法: bash scripts/ci/check_line_limit.sh
 #  退出码: 0 = 通过;1 = 有文件违规
 # =============================================================================
 
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# scripts/ci/ 上两级为项目根(2026-08-15 自 scripts/ 迁入,层级加深一级)
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 LIMIT=1800

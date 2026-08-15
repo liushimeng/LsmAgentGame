@@ -140,4 +140,4 @@ jobs:
 
       # CLAUDE.md §4:单文件 ≤ 1800 行(带 baseline 棘轮,见脚本头注释)。
       - name: 单文件行数上限 (§4)
-        run: bash scripts/check_line_limit.sh
+        run: bash scripts/ci/check_line_limit.sh

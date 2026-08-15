@@ -5,7 +5,9 @@ LsmAgentGame.log
 GoWebDebugTool.log
 GoWebDebugTool.conf
 logs/
-scripts/.ws.log
+# test_wallet_ws.sh 按需编译的 WS 客户端产物与日志(任何层级),不入库
+scripts/**/.wsclient
+scripts/**/.ws.log
 __pycache__/
 
 # 旧二进制 / 日志 / PID

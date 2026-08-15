@@ -2,14 +2,15 @@
 // test_wallet_i18n.js — check wallet.* keys across zh-CN / en / ja and report
 // any missing key in any of the three languages.
 //
-// Usage: node scripts/test_wallet_i18n.js
+// Usage: node scripts/smoke/test_wallet_i18n.js
 // Output: TAP. Exits 0 if all three languages share the same set of wallet.*
 // keys, 1 if any key is missing in any language.
 
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = path.resolve(__dirname, '..');
+// scripts/smoke/ 上两级为项目根(2026-08-15 自 scripts/ 迁入,层级加深一级)
+const ROOT = path.resolve(__dirname, '..', '..');
 const LOCALES_DIR = path.join(ROOT, 'ClientWeb', 'src', 'i18n', 'locales');
 const LANGS = ['zh-CN', 'ja', 'en'];
 

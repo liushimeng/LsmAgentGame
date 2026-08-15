@@ -2,7 +2,7 @@
 # test_wallet_ws.sh — WS push test for wallet.balance.
 #
 #   1. Register a fresh user (HTTP) — response carries a JWT.
-#   2. Connect wss://127.0.0.1:39002/ws?token=<jwt> via scripts/wsclient.go.
+#   2. Connect wss://127.0.0.1:39002/ws?token=<jwt> via scripts/smoke/wsclient.go.
 #   3. POST /api/wallet/claim-daily.
 #   4. Assert a `wallet.balance` frame with delta=+2000 (or document bug).
 #
@@ -16,7 +16,8 @@ FAILED_NAMES=()
 HOST="${WALLET_API_HOST:-https://127.0.0.1:39001}"
 WSS="${WALLET_WSS_HOST:-wss://127.0.0.1:39002/ws}"
 SCRIPTDIR="$(cd "$(dirname "$0")" && pwd)"
-ROOTDIR="$(dirname "$SCRIPTDIR")"
+# scripts/smoke/ 上两级为项目根(2026-08-15 自 scripts/ 迁入,层级加深一级)
+ROOTDIR="$(dirname "$(dirname "$SCRIPTDIR")")"
 CLIENT_OUT="${SCRIPTDIR}/.wsclient"
 ACCOUNT=""
 TOKEN=""

@@ -27,7 +27,7 @@
 
 ### 2. 截图脚本
 
-主入口:`scripts/werewolf_highlight_capture.py`(2026-08-13 起,双页采集器,复用 `scripts/auto3/atx.py`)
+主入口:`scripts/screenshot/werewolf_highlight_capture.py`(2026-08-13 起,双页采集器,复用 `scripts/screenshot/atx.py`)
 
 **核心特性**:
 - **双页同采**: 玩家页 `/werewolf/<room>` + 观战页 `/werewolf/spectate/<room>` 每 60s 各截 1 张
@@ -40,12 +40,12 @@
 - **崩溃自愈**: 连续 3 次双页截图失败自动重建页面;终止条件 = 游戏 over + 180s  settle / 75min 硬超时
 
 ```bash
-python3 scripts/werewolf_highlight_capture.py --room-id <uuid> --interval 60
+python3 scripts/screenshot/werewolf_highlight_capture.py --room-id <uuid> --interval 60
 ```
 
-**旧版单页脚本**(保留兼容): `scripts/werewolf_screenshot.py`
+**旧版单页脚本**(保留兼容): `scripts/screenshot/werewolf_screenshot.py`
 ```bash
-python3 scripts/werewolf_screenshot.py --batch \
+python3 scripts/screenshot/werewolf_screenshot.py --batch \
     --output-dir ProjectPic --count 12 --interval 60 \
     --token "$JWT" --close
 ```
@@ -124,7 +124,7 @@ ffmpeg -y -framerate 1 -i frames%02d.png \
    ```bash
    git add ProjectPic/werewolf-*.png \
           ProjectPic/README*.md \
-          scripts/werewolf_screenshot.py \
+          scripts/screenshot/werewolf_screenshot.py \
           AutoScreenshotWerewolf.md
    git commit -m "docs: 狼人杀 13 人局实机截图(1 人 + 12 Agent) + 自动化截图脚本"
    ```
@@ -135,12 +135,12 @@ ffmpeg -y -framerate 1 -i frames%02d.png \
 - **ProjectPic/ 入库策略**: `ProjectPic/` **已加入 git 跟踪**(README 相对路径引用,GitHub 可直接渲染);
   仅 `ProjectPic/raw/` 过程产物不入库(采集结束即删除)。单张 PNG 控制在 ~1.5MB 以内,GIF ≤ 5MB。
 - **1 人 + 12 Agent 优先**: 全 AI 模式作为补充,主推人类玩家与 AI 同场。
-- **截图脚本复用**: 复用 `scripts/auto3/atx.py` 已有封装,不重复造轮子。
+- **截图脚本复用**: 复用 `scripts/screenshot/atx.py` 已有封装,不重复造轮子。
 
 ### 10. 验收清单
 
 - [ ] `ProjectPic/werewolf-*.png` 至少 8 张,每张 ≥ 50KB
-- [ ] `scripts/werewolf_highlight_capture.py` 可重复运行(`python3 --help` 无错)
+- [ ] `scripts/screenshot/werewolf_highlight_capture.py` 可重复运行(`python3 --help` 无错)
 - [ ] `AutoScreenshotWerewolf.md` 提示词文件存在
 - [ ] `README.md` / `README.en.md` / `README.ja.md` 全部新增「实机截图」板块
 - [ ] `go build ./...` 通过

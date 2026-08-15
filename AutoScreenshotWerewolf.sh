@@ -92,7 +92,7 @@ nohup setsid bash -c "
     # 暂存截图与报告（避免误暂存业务代码的未预期改动）
     git add ProjectPic/werewolf-*.png \
             TestReport/ AutoScreenshotProgress/ \
-            scripts/werewolf_screenshot.py \
+            scripts/screenshot/werewolf_screenshot.py \
             AutoScreenshotWerewolf.md \
             AutoScreenshotWerewolf.sh \
             README.md README.en.md README.ja.md \

@@ -102,17 +102,18 @@ if ! register_user; then
 fi
 echo "# account=$ACCOUNT referrer=$REFERRER"
 
-# ── Test 1: GET /api/wallet/balance → 1000 ─────────────────────────
+# ── Test 1: GET /api/wallet/balance → 5000 ─────────────────────────
 {
     resp=$(api_call GET "/api/wallet/balance")
     code=$(echo "$resp" | tail -1); body=$(echo "$resp" | sed '$d')
     [ "$code" = "200" ] || { tap_fail "balance http $code"; break; }
     api_code=$(echo "$body" | jq -r '.code')
     bal=$(echo "$body" | jq -r '.data.balance')
-    if [ "$api_code" = "0" ] && [ "$bal" = "1000" ]; then
-        tap_pass "balance = 1000 after register"
+    # 期望值与 ServerGo/service/wallet_service.go::DefaultInitialBalance 对齐
+    if [ "$api_code" = "0" ] && [ "$bal" = "5000" ]; then
+        tap_pass "balance = 5000 after register"
     else
-        tap_fail "balance expect (code=0, balance=1000), got code=$api_code bal=$bal"
+        tap_fail "balance expect (code=0, balance=5000), got code=$api_code bal=$bal"
     fi
 }
 
@@ -125,8 +126,8 @@ echo "# account=$ACCOUNT referrer=$REFERRER"
     amt=$(echo "$body" | jq -r '.data.amount')
     claimed=$(echo "$body" | jq -r '.data.claimed')
     bal_after=$(echo "$body" | jq -r '.data.balance_after')
-    if [ "$api_code" = "0" ] && [ "$claimed" = "true" ] && [ "$amt" = "2000" ] && [ "$bal_after" = "3000" ]; then
-        tap_pass "claim-daily returns claimed=true amount=2000 balance_after=3000"
+    if [ "$api_code" = "0" ] && [ "$claimed" = "true" ] && [ "$amt" = "2000" ] && [ "$bal_after" = "7000" ]; then
+        tap_pass "claim-daily returns claimed=true amount=2000 balance_after=7000"
     elif [ "$api_code" = "0" ] && [ "$claimed" = "true" ] && [ "$amt" = "2000" ]; then
         tap_pass "claim-daily returns claimed=true amount=2000 (balance_after=$bal_after)"
     else
@@ -152,37 +153,38 @@ echo "# account=$ACCOUNT referrer=$REFERRER"
     fi
 }
 
-# ── Test 4: GET /api/wallet/transactions → 2 rows: register_bonus(1000), daily_login(2000) ─
+# ── Test 4: GET /api/wallet/transactions → 2 rows: register_bonus(5000), daily_login(2000) ─
 {
     resp=$(api_call GET "/api/wallet/transactions?limit=10")
     code=$(echo "$resp" | tail -1); body=$(echo "$resp" | sed '$d')
     [ "$code" = "200" ] || { tap_fail "transactions http $code"; break; }
     api_code=$(echo "$body" | jq -r '.code')
     [ "$api_code" = "0" ] || { tap_fail "transactions api code $api_code"; break; }
+    # 响应键与 ServerGo/api/wallet_api.go::ListTransactions 对齐:data.entries
     total=$(echo "$body" | jq -r '.data.total')
-    first_type=$(echo "$body" | jq -r '.data.transactions[0].tx_type')
-    first_amt=$(echo "$body" | jq -r '.data.transactions[0].amount')
-    second_type=$(echo "$body" | jq -r '.data.transactions[1].tx_type')
-    second_amt=$(echo "$body" | jq -r '.data.transactions[1].amount')
+    first_type=$(echo "$body" | jq -r '.data.entries[0].tx_type')
+    first_amt=$(echo "$body" | jq -r '.data.entries[0].amount')
+    second_type=$(echo "$body" | jq -r '.data.entries[1].tx_type')
+    second_amt=$(echo "$body" | jq -r '.data.entries[1].amount')
     if [ "$total" = "2" ] && \
        [ "$first_type" = "daily_login" ] && [ "$first_amt" = "2000" ] && \
-       [ "$second_type" = "register_bonus" ] && [ "$second_amt" = "1000" ]; then
-        tap_pass "transactions[0]=register_bonus(1000), transactions[1]=daily_login(2000)"
+       [ "$second_type" = "register_bonus" ] && [ "$second_amt" = "5000" ]; then
+        tap_pass "entries[0]=daily_login(2000), entries[1]=register_bonus(5000)"
     else
         tap_fail "transactions order/content mismatch: total=$total first=$first_type:$first_amt second=$second_type:$second_amt"
     fi
 }
 
-# ── Test 5: GET /api/wallet/balance → 3000 after claim ──────────────
+# ── Test 5: GET /api/wallet/balance → 7000 after claim ──────────────
 {
     resp=$(api_call GET "/api/wallet/balance")
     code=$(echo "$resp" | tail -1); body=$(echo "$resp" | sed '$d')
     [ "$code" = "200" ] || { tap_fail "balance-after http $code"; break; }
     bal=$(echo "$body" | jq -r '.data.balance')
-    if [ "$bal" = "3000" ]; then
-        tap_pass "balance=3000 after daily reward"
+    if [ "$bal" = "7000" ]; then
+        tap_pass "balance=7000 after daily reward"
     else
-        tap_fail "balance after daily reward expect 3000, got $bal"
+        tap_fail "balance after daily reward expect 7000, got $bal"
     fi
 }
 
