@@ -4,9 +4,12 @@
 // §133 EconTier 独立常量:50% 销毁 + 50% 滚存(不与道具销毁耦合)。
 // §135 公平性:押注信息对其他玩家**不可见**。
 // §122 限流:防误触连点(5s/次)。
+// §20260816-01 折叠式紧凑化:默认折叠为单行摘要条,节省中栏座位显示空间。
 import React, { useEffect, useState, useCallback } from 'react';
 import { http } from '@/services/http';
 import { reportGlobalError } from '@/services/globalError';
+
+const LS_KEY = 'ww_panel_collapsed_faction_bet';
 
 interface FactionBetPanelProps {
   roomId: string;
@@ -29,6 +32,23 @@ export const FactionBetPanel: React.FC<FactionBetPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [lastBet, setLastBet] = useState<string | null>(null);
+  // §20260816-01 折叠态:默认折叠,持久化到 localStorage
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem(LS_KEY);
+      return v !== null ? v === '1' : !windowOpen;
+    } catch {
+      return !windowOpen;
+    }
+  });
+
+  const toggle = useCallback(() => {
+    setCollapsed((c) => {
+      const next = !c;
+      try { localStorage.setItem(LS_KEY, next ? '1' : '0'); } catch {}
+      return next;
+    });
+  }, []);
 
   const submit = useCallback(async () => {
     if (target === '' || !windowOpen) return;
@@ -66,16 +86,32 @@ export const FactionBetPanel: React.FC<FactionBetPanelProps> = ({
     }
   }, [windowOpen]);
 
+  // 窗口开启时自动展开,方便玩家直接使用;关闭时尊重用户折叠选择
+  useEffect(() => {
+    if (windowOpen) setCollapsed(false);
+  }, [windowOpen]);
+
   if (mySeat < 0) return null;
 
   return (
-    <div className="ww-faction-bet" data-testid="ww-faction-bet">
-      <header className="ww-faction-bet__header">
-        <h4>💰 {t('werewolf.bet.title')}</h4>
+    <div
+      className={`ww-faction-bet${collapsed ? ' is-collapsed' : ''}`}
+      data-testid="ww-faction-bet"
+    >
+      <header
+        className="ww-faction-bet__header"
+        onClick={toggle}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+        aria-expanded={!collapsed}
+      >
+        <h4>
+          💰 {t('werewolf.bet.title')}
+          {!windowOpen && <span className="ww-faction-bet__closed">· {t('werewolf.letter.window_closed')}</span>}
+        </h4>
+        <span className="ww-panel__arrow" aria-hidden="true">▼</span>
       </header>
-      {!windowOpen && (
-        <p className="ww-faction-bet__closed">{t('werewolf.letter.window_closed')}</p>
-      )}
       {windowOpen && (
         <div className="ww-faction-bet__form">
           <label className="ww-faction-bet__field">

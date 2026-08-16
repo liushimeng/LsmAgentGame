@@ -357,3 +357,117 @@
     transform: none;
   }
 }
+
+/* ── §20260816-01 折叠式紧凑面板 ──
+   私下通道 / 阵营赌注 两个辅助模块默认折叠为单行摘要条，
+   避免挤占中栏(board-container)座位卡显示区域。
+   折叠状态持久化到 localStorage。
+*/
+.ww-secret-letter,
+.ww-faction-bet {
+  /* header 始终可见，作为折叠/展开的触发区 */
+}
+.ww-secret-letter__header,
+.ww-faction-bet__header {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 4px;
+  border-radius: 4px;
+  transition: background 0.15s ease;
+}
+.ww-secret-letter__header:hover,
+.ww-faction-bet__header:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.ww-panel__arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+/* 折叠态: body 隐藏 */
+.ww-secret-letter.is-collapsed .ww-secret-letter__compose,
+.ww-secret-letter.is-collapsed .ww-secret-letter__list,
+.ww-secret-letter.is-collapsed .ww-secret-letter__err,
+.ww-faction-bet.is-collapsed .ww-faction-bet__form,
+.ww-faction-bet.is-collapsed .ww-faction-bet__err,
+.ww-faction-bet.is-collapsed .ww-faction-bet__success {
+  display: none;
+}
+.ww-secret-letter.is-collapsed .ww-panel__arrow,
+.ww-faction-bet.is-collapsed .ww-panel__arrow {
+  transform: rotate(-90deg);
+}
+/* 窗口关闭时的折叠摘要条 — 单行 */
+.ww-secret-letter__closed,
+.ww-faction-bet__closed {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 400;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+/* 紧凑表单 — 窗口开启时把字段排成内联行，减少纵向占用 */
+.ww-secret-letter__compose select {
+  min-height: 30px;
+}
+.ww-secret-letter__compose textarea {
+  min-height: 48px;
+}
+.ww-faction-bet__form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 10px;
+}
+.ww-faction-bet__field {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.ww-faction-bet__field select,
+.ww-faction-bet__field input[type="range"] {
+  flex: 1;
+  min-height: 30px;
+}
+.ww-faction-bet__amount-val {
+  font-size: 13px;
+  min-width: 36px;
+  text-align: right;
+}
+/* 阵营按钮 + 提交按钮合并为一行(跨两列) */
+.ww-faction-bet__factions {
+  grid-column: 1 / -1;
+  gap: 6px;
+}
+.ww-faction-bet__factions button {
+  padding: 6px 10px;
+  min-height: 32px;
+  font-size: 12px;
+}
+.ww-faction-bet__submit {
+  grid-column: 1 / -1;
+  padding: 8px 16px;
+  min-height: 34px;
+  font-size: 13px;
+}
+
+/* 小屏进一步压缩 */
+@media (max-width: 1279px) {
+  .ww-secret-letter,
+  .ww-faction-bet {
+    padding: 8px;
+    gap: 8px;
+  }
+  .ww-secret-letter__header h4,
+  .ww-faction-bet__header h4 {
+    font-size: 14px;
+  }
+}

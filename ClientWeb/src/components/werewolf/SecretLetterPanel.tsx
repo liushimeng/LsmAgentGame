@@ -8,6 +8,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { http } from '@/services/http';
 import { reportGlobalError } from '@/services/globalError';
 
+const LS_KEY = 'ww_panel_collapsed_secret_letter';
+
 interface SecretLetterItem {
   id: string;
   from_seat: number;
@@ -38,6 +40,23 @@ export const SecretLetterPanel: React.FC<SecretLetterPanelProps> = ({
   const [body, setBody] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // §20260816-01 折叠态:默认折叠以节省中栏空间,持久化到 localStorage
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem(LS_KEY);
+      return v !== null ? v === '1' : !windowOpen;
+    } catch {
+      return !windowOpen;
+    }
+  });
+
+  const toggle = useCallback(() => {
+    setCollapsed((c) => {
+      const next = !c;
+      try { localStorage.setItem(LS_KEY, next ? '1' : '0'); } catch {}
+      return next;
+    });
+  }, []);
 
   const refresh = useCallback(async () => {
     if (mySeat < 0) return;
@@ -59,6 +78,11 @@ export const SecretLetterPanel: React.FC<SecretLetterPanelProps> = ({
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // 窗口开启时自动展开,方便玩家直接使用;关闭时尊重用户折叠选择
+  useEffect(() => {
+    if (windowOpen) setCollapsed(false);
+  }, [windowOpen]);
 
   const send = useCallback(async () => {
     if (target === '' || !body.trim() || !windowOpen) return;
@@ -89,13 +113,20 @@ export const SecretLetterPanel: React.FC<SecretLetterPanelProps> = ({
   if (mySeat < 0) return null;
 
   return (
-    <div className="ww-secret-letter" data-testid="ww-secret-letter">
-      <header className="ww-secret-letter__header">
-        <h4>✉️ {t('werewolf.letter.title')}</h4>
+    <div
+      className={`ww-secret-letter${collapsed ? ' is-collapsed' : ''}`}
+      data-testid="ww-secret-letter"
+    >
+      <header className="ww-secret-letter__header" onClick={toggle} role="button" tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+        aria-expanded={!collapsed}
+      >
+        <h4>
+          ✉️ {t('werewolf.letter.title')}
+          {!windowOpen && <span className="ww-secret-letter__closed">· {t('werewolf.letter.window_closed')}</span>}
+        </h4>
+        <span className="ww-panel__arrow" aria-hidden="true">▼</span>
       </header>
-      {!windowOpen && (
-        <p className="ww-secret-letter__closed">{t('werewolf.letter.window_closed')}</p>
-      )}
       {windowOpen && (
         <div className="ww-secret-letter__compose">
           <select
@@ -118,7 +149,7 @@ export const SecretLetterPanel: React.FC<SecretLetterPanelProps> = ({
             placeholder={t('werewolf.letter.body_placeholder')}
             maxLength={200}
             disabled={!windowOpen}
-            rows={3}
+            rows={2}
           />
           <div className="ww-secret-letter__meta">
             <span>
@@ -136,7 +167,7 @@ export const SecretLetterPanel: React.FC<SecretLetterPanelProps> = ({
       )}
       {err && <p className="ww-secret-letter__err" role="alert">{err}</p>}
       <div className="ww-secret-letter__list">
-        {letters.length === 0 && (
+        {letters.length === 0 && !collapsed && (
           <p className="ww-secret-letter__empty">{t('werewolf.letter.inbox_empty')}</p>
         )}
         {letters.map((l) => (
