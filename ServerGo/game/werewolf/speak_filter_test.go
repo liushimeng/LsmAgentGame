@@ -168,6 +168,55 @@ func TestScrubIdentityLeak_SelfReportAre(t *testing.T) {
 			wantHit:   true,
 			wantSubst: "[已过滤]",
 		},
+		// BUG-R10-NEW3-001 (2026-08-16): 第一人称+软建议词+刀/杀动词+X号
+		// R10 自动化测试 23:27 抓取 Bot #1 / Bot #2 白天警长竞选阶段发言
+		// 中使用"建议刀8号"/"我觉得刀1号比较合适"等句式,泄露狼队击杀意图。
+		// R91-P0-1 regex 仅锚定"我们/今晚"主语,未覆盖此类句式。
+		{
+			name:      "R10 Bot1 我建议刀X号 leak",
+			input:     "我是1号。建议刀8号,他发言积极,可能是神职。",
+			wantHit:   true,
+			wantSubst: "[已过滤]",
+		},
+		{
+			name:      "R10 Bot2 我觉得刀X号 leak",
+			input:     "我觉得刀1号比较合适,你们觉得呢?",
+			wantHit:   true,
+			wantSubst: "[已过滤]",
+		},
+		{
+			name:      "R10 我打算刀X号 leak",
+			input:     "我打算刀6号,理由是发言太积极",
+			wantHit:   true,
+			wantSubst: "[已过滤]",
+		},
+		{
+			name:      "R10 咱先杀X号 leak",
+			input:     "咱们先杀2号吧,大家同意吗",
+			wantHit:   true,
+			wantSubst: "[已过滤]",
+		},
+		// 反向 — 良性发言不应误杀
+		{
+			name:    "benign 我建议投X号 stays",
+			input:   "我建议投3号,大家参考",
+			wantHit: false,
+		},
+		{
+			name:    "benign 我觉得X号不像狼 stays",
+			input:   "我觉得5号不像狼,理由如下",
+			wantHit: false,
+		},
+		{
+			name:    "benign 这把刀很锋利 stays",
+			input:   "这把刀很锋利",
+			wantHit: false,
+		},
+		{
+			name:    "benign 大家要记得跟票 stays",
+			input:   "大家要记得跟票",
+			wantHit: false,
+		},
 		// R91-P0-1 新增 — 自我编号+括号式 0-indexed 透出
 		{
 			name:      "leak seat number via parenthetical 0-indexed",
