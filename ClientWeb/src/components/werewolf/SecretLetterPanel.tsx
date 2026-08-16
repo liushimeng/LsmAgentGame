@@ -112,22 +112,37 @@ export const SecretLetterPanel: React.FC<SecretLetterPanelProps> = ({
   // 观战者或自己不在座位时不显示
   if (mySeat < 0) return null;
 
+  // §20260816-02 U1 — 极致紧凑模式:窗口关闭且无未读时,降级为单行摘要(28px)。
+  // 比原 header(90px)节省 60px,两个 panel 合计节省 120px。
+  const unreadCount = letters.filter((l) => !l.is_read).length;
+  const forceStrip = !windowOpen && unreadCount === 0;
+  const showFullPanel = !forceStrip && !collapsed;
+
   return (
     <div
-      className={`ww-secret-letter${collapsed ? ' is-collapsed' : ''}`}
+      className={`ww-secret-letter${collapsed ? ' is-collapsed' : ''}${forceStrip ? ' is-strip' : ''}${showFullPanel ? ' is-open' : ''}`}
       data-testid="ww-secret-letter"
     >
-      <header className="ww-secret-letter__header" onClick={toggle} role="button" tabIndex={0}
+      <header
+        className="ww-secret-letter__header"
+        onClick={toggle}
+        role="button"
+        tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
-        aria-expanded={!collapsed}
+        aria-expanded={showFullPanel}
+        title={forceStrip ? t('werewolf.letter.window_closed') : undefined}
       >
         <h4>
           ✉️ {t('werewolf.letter.title')}
           {!windowOpen && <span className="ww-secret-letter__closed">· {t('werewolf.letter.window_closed')}</span>}
         </h4>
-        <span className="ww-panel__arrow" aria-hidden="true">▼</span>
+        {/* §20260816-02 — strip 模式下额外展示未读徽章,玩家一眼能看到是否有新消息 */}
+        {forceStrip && unreadCount > 0 && (
+          <span className="ww-panel-strip__badge">{unreadCount}</span>
+        )}
+        <span className="ww-panel__arrow" aria-hidden="true">{showFullPanel ? '▼' : '▲'}</span>
       </header>
-      {windowOpen && (
+      {windowOpen && showFullPanel && (
         <div className="ww-secret-letter__compose">
           <select
             value={target}
@@ -166,25 +181,27 @@ export const SecretLetterPanel: React.FC<SecretLetterPanelProps> = ({
         </div>
       )}
       {err && <p className="ww-secret-letter__err" role="alert">{err}</p>}
-      <div className="ww-secret-letter__list">
-        {letters.length === 0 && !collapsed && (
-          <p className="ww-secret-letter__empty">{t('werewolf.letter.inbox_empty')}</p>
-        )}
-        {letters.map((l) => (
-          <div
-            key={l.id}
-            className={`ww-secret-letter__item${l.is_read ? ' is-read' : ' is-unread'}`}
-          >
-            <div className="ww-secret-letter__item-meta">
-              {l.from_seat === mySeat
-                ? `→ ${l.to_seat + 1}号`
-                : `${l.from_seat + 1}号 → 你`}
-              <span className="ww-secret-letter__item-round">R{l.round}</span>
+      {showFullPanel && (
+        <div className="ww-secret-letter__list">
+          {letters.length === 0 && (
+            <p className="ww-secret-letter__empty">{t('werewolf.letter.inbox_empty')}</p>
+          )}
+          {letters.map((l) => (
+            <div
+              key={l.id}
+              className={`ww-secret-letter__item${l.is_read ? ' is-read' : ' is-unread'}`}
+            >
+              <div className="ww-secret-letter__item-meta">
+                {l.from_seat === mySeat
+                  ? `→ ${l.to_seat + 1}号`
+                  : `${l.from_seat + 1}号 → 你`}
+                <span className="ww-secret-letter__item-round">R{l.round}</span>
+              </div>
+              <div className="ww-secret-letter__item-body">{l.body}</div>
             </div>
-            <div className="ww-secret-letter__item-body">{l.body}</div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

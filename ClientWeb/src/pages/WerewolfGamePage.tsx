@@ -592,7 +592,9 @@ export function WerewolfGamePage() {
           )}
         </aside>
         {/* Center column: game board + action panels (10px 紧凑间距由
-         * board-container 的 gap 统一控制)。 */}
+         * board-container 的 gap 统一控制)。
+         * §20260816-02 U6 — cols-N 钩子在 WerewolfTable 内部使用,
+         * 本容器直接靠内层 grid 触发紧凑样式级联。*/}
         <div className="board-container">
           {isWaiting ? (
             <div className="waiting-board">

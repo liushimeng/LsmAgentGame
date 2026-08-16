@@ -93,9 +93,14 @@ export const FactionBetPanel: React.FC<FactionBetPanelProps> = ({
 
   if (mySeat < 0) return null;
 
+  // §20260816-02 U1 — 极致紧凑模式:窗口关闭时降级为单行摘要(28px),
+  // 比原 header(90px)节省 60px,与私下通道面板一起合计节省 ~120px。
+  const forceStrip = !windowOpen;
+  const showFullPanel = !forceStrip && !collapsed;
+
   return (
     <div
-      className={`ww-faction-bet${collapsed ? ' is-collapsed' : ''}`}
+      className={`ww-faction-bet${collapsed ? ' is-collapsed' : ''}${forceStrip ? ' is-strip' : ''}${showFullPanel ? ' is-open' : ''}`}
       data-testid="ww-faction-bet"
     >
       <header
@@ -104,15 +109,16 @@ export const FactionBetPanel: React.FC<FactionBetPanelProps> = ({
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
-        aria-expanded={!collapsed}
+        aria-expanded={showFullPanel}
+        title={forceStrip ? t('werewolf.letter.window_closed') : undefined}
       >
         <h4>
           💰 {t('werewolf.bet.title')}
           {!windowOpen && <span className="ww-faction-bet__closed">· {t('werewolf.letter.window_closed')}</span>}
         </h4>
-        <span className="ww-panel__arrow" aria-hidden="true">▼</span>
+        <span className="ww-panel__arrow" aria-hidden="true">{showFullPanel ? '▼' : '▲'}</span>
       </header>
-      {windowOpen && (
+      {windowOpen && showFullPanel && (
         <div className="ww-faction-bet__form">
           <label className="ww-faction-bet__field">
             <span>{t('werewolf.letter.target_label')}</span>
@@ -169,7 +175,7 @@ export const FactionBetPanel: React.FC<FactionBetPanelProps> = ({
         </div>
       )}
       {err && <p className="ww-faction-bet__err" role="alert">{err}</p>}
-      {lastBet && (
+      {showFullPanel && lastBet && (
         <p className="ww-faction-bet__success">
           ✓ Bet {lastBet} placed
         </p>

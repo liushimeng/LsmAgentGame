@@ -226,114 +226,122 @@ export const GameStatusHeader: React.FC<GameStatusHeaderProps> = ({
         </div>
       </div>
 
-      {/* 主信息行 — 折叠时隐藏(只露标题行,28px);展开时显示(再 28px,共 ≤ 60px) */}
+      {/* 主信息行 — 折叠时隐藏(只露标题行,28px);展开时显示(再 28px,共 ≤ 60px)
+       * §20260816-02 U2 — 信息分两组:
+       *   group-game  = 游戏状态(阶段/法官/真人混合/响应中)
+       *   group-stats = 实时统计(API/Token)
+       *   蓝色 vs 绿色色相区分,1280 视口下自动 stack 双行。 */}
       {!collapsed && (
         <div className="ww-game-status-header__row ww-game-status-header__row--main">
-          {isOver && (
-            <span
-              className="ww-game-status-header__chip ww-game-status-header__chip--gameover"
-              data-testid="ww-status-gameover"
-            >
-              {t('werewolf.statusBar.gameOverReview')}
-            </span>
-          )}
-          {!isOver && typeof remaining === 'number' && (
-            <span
-              className={`ww-game-status-header__chip ww-game-status-header__chip--deadline ${isOverdue ? 'is-overdue' : ''}`}
-              data-testid="ww-status-deadline"
-              title={t('werewolf.history.clock.running')}
-            >
-              {isOverdue
-                ? t('werewolf.statusBar.clockOverdue')
-                : t('werewolf.statusBar.clockRemaining', { seconds: remaining })}
-            </span>
-          )}
-          {!isOver && stats.active > 0 && (
-            <span className="ww-game-status-header__chip ww-game-status-header__chip--thinking">
-              {t('werewolf.statusBar.agentsResponding', { count: stats.active })}
-              {stats.calling > 0 && (
-                <span className="ww-game-status-header__sub">
-                  {t('werewolf.statusBar.subCalls', { count: stats.calling })}
-                </span>
-              )}
-              {stats.streaming > 0 && (
-                <span className="ww-game-status-header__sub">
-                  {t('werewolf.statusBar.subStreaming', { count: stats.streaming })}
-                </span>
-              )}
-              {stats.retrying > 0 && (
-                <span className="ww-game-status-header__sub">
-                  {t('werewolf.statusBar.subRetrying', { count: stats.retrying })}
-                </span>
-              )}
-            </span>
-          )}
-          {!isOver && stats.quarantined > 0 && (
-            <span className="ww-game-status-header__chip ww-game-status-header__chip--quarantined">
-              {t('werewolf.statusBar.agentsAutoPlay', { count: stats.quarantined })}
-            </span>
-          )}
-          {isHumanInRoom && (
-            <span className="ww-game-status-header__chip ww-game-status-header__chip--human">
-              {t('werewolf.statusBar.mixedRoom')}
-            </span>
-          )}
-          {judgeEnabled && judgeModel && (
-            <span
-              className={`ww-game-status-header__chip ww-game-status-header__chip--judge ${judgeQuarantined ? 'is-quarantined' : ''}`}
-              title={judgeAnnouncement || judgeModel}
-            >
-              🎙 {judgeModel}
-              {judgeTool && (
-                <span className="ww-game-status-header__sub">⚙️ {judgeTool}</span>
-              )}
-              {judgePending && judgePending !== '' && (
-                <span className="ww-game-status-header__badge ww-game-status-header__badge--pending">
-                  {t('werewolf.judge.pending')}
-                </span>
-              )}
-              {judgeQuarantined && (
-                <span className="ww-game-status-header__badge ww-game-status-header__badge--quarantined">
-                  {t('werewolf.judge.quarantined')}
-                </span>
-              )}
-              {judgeSummaryReady && (
-                <span className="ww-game-status-header__badge ww-game-status-header__badge--summary">
-                  {t('werewolf.judge.summaryReady')}
-                </span>
-              )}
-            </span>
-          )}
-          {hasAgentStats && (
-            <span className="ww-game-status-header__chip ww-game-status-header__chip--stats">
-              {t('werewolf.statusBar.apiStats', {
-                callCount: agentStats!.api_call_count,
-                successCount: agentStats!.api_success_count,
-                failCount: agentStats!.api_fail_count,
-              })}
-            </span>
-          )}
-          {hasAgentStats && (
-            <span className="ww-game-status-header__chip ww-game-status-header__chip--tokens">
-              {t('werewolf.statusBar.tokenStats', {
-                input: formatK(agentStats!.total_input_tokens),
-                output: formatK(agentStats!.total_output_tokens),
-                total: formatK(agentStats!.total_api_tokens),
-              })}
-            </span>
-          )}
-          {judgeStats && judgeStats.judge_api_call_count > 0 && (
-            <span className="ww-game-status-header__chip ww-game-status-header__chip--judge-stats">
-              {t('werewolf.statusBar.judgeTokenStats', {
-                callCount: judgeStats.judge_api_call_count,
-                successCount: judgeStats.judge_api_success_count,
-                failCount: judgeStats.judge_api_fail_count,
-                input: formatK(judgeStats.judge_total_input_tokens),
-                output: formatK(judgeStats.judge_total_output_tokens),
-                total: formatK(judgeStats.judge_total_api_tokens),
-              })}
-            </span>
-          )}
+          <div className="ww-game-status-header__group ww-game-status-header__group--game">
+            {isOver && (
+              <span
+                className="ww-game-status-header__chip ww-game-status-header__chip--gameover"
+                data-testid="ww-status-gameover"
+              >
+                {t('werewolf.statusBar.gameOverReview')}
+              </span>
+            )}
+            {!isOver && typeof remaining === 'number' && (
+              <span
+                className={`ww-game-status-header__chip ww-game-status-header__chip--deadline ${isOverdue ? 'is-overdue' : ''}`}
+                data-testid="ww-status-deadline"
+                title={t('werewolf.history.clock.running')}
+              >
+                {isOverdue
+                  ? t('werewolf.statusBar.clockOverdue')
+                  : t('werewolf.statusBar.clockRemaining', { seconds: remaining })}
+              </span>
+            )}
+            {!isOver && stats.active > 0 && (
+              <span className="ww-game-status-header__chip ww-game-status-header__chip--thinking">
+                {t('werewolf.statusBar.agentsResponding', { count: stats.active })}
+                {stats.calling > 0 && (
+                  <span className="ww-game-status-header__sub">
+                    {t('werewolf.statusBar.subCalls', { count: stats.calling })}
+                  </span>
+                )}
+                {stats.streaming > 0 && (
+                  <span className="ww-game-status-header__sub">
+                    {t('werewolf.statusBar.subStreaming', { count: stats.streaming })}
+                  </span>
+                )}
+                {stats.retrying > 0 && (
+                  <span className="ww-game-status-header__sub">
+                    {t('werewolf.statusBar.subRetrying', { count: stats.retrying })}
+                  </span>
+                )}
+              </span>
+            )}
+            {!isOver && stats.quarantined > 0 && (
+              <span className="ww-game-status-header__chip ww-game-status-header__chip--quarantined">
+                {t('werewolf.statusBar.agentsAutoPlay', { count: stats.quarantined })}
+              </span>
+            )}
+            {isHumanInRoom && (
+              <span className="ww-game-status-header__chip ww-game-status-header__chip--human">
+                {t('werewolf.statusBar.mixedRoom')}
+              </span>
+            )}
+            {judgeEnabled && judgeModel && (
+              <span
+                className={`ww-game-status-header__chip ww-game-status-header__chip--judge ${judgeQuarantined ? 'is-quarantined' : ''}`}
+                title={judgeAnnouncement || judgeModel}
+              >
+                🎙 {judgeModel}
+                {judgeTool && (
+                  <span className="ww-game-status-header__sub">⚙️ {judgeTool}</span>
+                )}
+                {judgePending && judgePending !== '' && (
+                  <span className="ww-game-status-header__badge ww-game-status-header__badge--pending">
+                    {t('werewolf.judge.pending')}
+                  </span>
+                )}
+                {judgeQuarantined && (
+                  <span className="ww-game-status-header__badge ww-game-status-header__badge--quarantined">
+                    {t('werewolf.judge.quarantined')}
+                  </span>
+                )}
+                {judgeSummaryReady && (
+                  <span className="ww-game-status-header__badge ww-game-status-header__badge--summary">
+                    {t('werewolf.judge.summaryReady')}
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
+          <div className="ww-game-status-header__group ww-game-status-header__group--stats">
+            {hasAgentStats && (
+              <span className="ww-game-status-header__chip ww-game-status-header__chip--stats">
+                {t('werewolf.statusBar.apiStats', {
+                  callCount: agentStats!.api_call_count,
+                  successCount: agentStats!.api_success_count,
+                  failCount: agentStats!.api_fail_count,
+                })}
+              </span>
+            )}
+            {hasAgentStats && (
+              <span className="ww-game-status-header__chip ww-game-status-header__chip--tokens">
+                {t('werewolf.statusBar.tokenStats', {
+                  input: formatK(agentStats!.total_input_tokens),
+                  output: formatK(agentStats!.total_output_tokens),
+                  total: formatK(agentStats!.total_api_tokens),
+                })}
+              </span>
+            )}
+            {judgeStats && judgeStats.judge_api_call_count > 0 && (
+              <span className="ww-game-status-header__chip ww-game-status-header__chip--judge-stats">
+                {t('werewolf.statusBar.judgeTokenStats', {
+                  callCount: judgeStats.judge_api_call_count,
+                  successCount: judgeStats.judge_api_success_count,
+                  failCount: judgeStats.judge_api_fail_count,
+                  input: formatK(judgeStats.judge_total_input_tokens),
+                  output: formatK(judgeStats.judge_total_output_tokens),
+                  total: formatK(judgeStats.judge_total_api_tokens),
+                })}
+              </span>
+            )}
+          </div>
         </div>
       )}
 

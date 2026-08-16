@@ -161,14 +161,17 @@ function buildGridOrder(total: number, mySeat: number, cols: number): number[][]
 // 组件挂载时调用一次,resize 时由 React effect 触发重渲染。
 // §2026-08-06 — 宽度来源改为 board-container(通过 ResizeObserver),
 // 侧栏折叠后 container 变宽,自动增加每行列数让 13 人局展示更多角色。
+// §20260816-02 U1 — 阈值 1100→900:实测 1920 视口下中栏 container 约 1020px,
+// 走 3 列 13 人局 = 5 行,中栏底部 panel 被挤出可见区;下调到 900 后 4 列 = 4 行,
+// 节省 1 行 ≈ 250px,配合头像紧凑化(56→48px)4 列下完整显示 5 行指标无溢出。
 //   ≤360px  → 1 列(极窄手机竖屏)
 //   ≤700px  → 2 列(典型手机/窄屏)
-//   ≤1100px → 3 列(1280 视口、单侧栏折叠后常见宽度)
-//   >1100px → 4 列(两侧栏全折叠后的大宽域)
+//   ≤900px  → 3 列(侧栏全开的中等宽度)
+//   >900px  → 4 列(1920 视口 / 侧栏折叠后的大宽域)
 function calcColsForViewport(width: number): number {
   if (width <= 360) return 1;
   if (width <= 700) return 2;
-  if (width <= 1100) return 3;
+  if (width <= 900) return 3;
   return 4;
 }
 function calcCompactForViewport(width: number): boolean {
@@ -780,7 +783,7 @@ export function WerewolfTable({ gameState, mySeat, identityGuess, spectator = fa
        *   写到 inline style,覆盖静态媒体查询,确保断点切换无延迟。 */}
       <div
         ref={gridRef}
-        className="werewolf-table__grid"
+        className={`werewolf-table__grid cols-${cols}`}
         data-testid="werewolf-table-grid"
         style={{
           // CSS custom properties;CSS 变量作为 inline style 注入优先级高于媒体查询规则。

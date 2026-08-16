@@ -544,6 +544,18 @@
   width: 100%;
   box-sizing: border-box;
 }
+/* §20260816-02 U4 — 左栏房间信息面板块间距收紧(原 16px → 6px),
+   信息密度提升约 2.5x,消除上半部分大量留白。 */
+.werewolf-game .room-info-panel .werewolf-info-panel--v2 {
+  gap: 6px !important;
+}
+.werewolf-game .room-info-panel .info-block {
+  margin-bottom: 0;
+}
+.werewolf-game .room-info-panel .info-row {
+  gap: 4px;
+  line-height: 1.3;
+}
 .werewolf-game .room-info-panel__agents {
   background: rgba(35, 32, 27, 0.55);
   border: 1px solid rgba(193, 154, 86, 0.2);

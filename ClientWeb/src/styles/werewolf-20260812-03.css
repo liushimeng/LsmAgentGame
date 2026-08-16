@@ -471,3 +471,59 @@
     font-size: 14px;
   }
 }
+
+/* §20260816-02 U1 — 极致紧凑模式 (is-strip)
+   触发条件:窗口关闭 + 无未读项。
+   目的:13 人局中栏底部两个 panel 折叠态合计从 ~200px → ≤64px,
+   为主座位卡展示让出 130+px 垂直空间。 */
+.ww-secret-letter.is-strip,
+.ww-faction-bet.is-strip {
+  padding: 4px 12px;
+  gap: 0;
+  max-width: 480px;
+}
+.ww-secret-letter.is-strip .ww-secret-letter__header,
+.ww-faction-bet.is-strip .ww-faction-bet__header {
+  padding: 0;
+  margin: 0;
+  border-bottom: none;
+  min-height: 28px;
+}
+.ww-secret-letter.is-strip .ww-secret-letter__header h4,
+.ww-faction-bet.is-strip .ww-faction-bet__header h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+.ww-secret-letter.is-strip .ww-secret-letter__closed,
+.ww-faction-bet.is-strip .ww-faction-bet__closed {
+  font-size: 11px;
+  opacity: 0.7;
+}
+/* strip 模式隐藏一切展开态结构(JSX 已条件渲染,CSS 兜底) */
+.ww-secret-letter.is-strip .ww-secret-letter__compose,
+.ww-secret-letter.is-strip .ww-secret-letter__list,
+.ww-secret-letter.is-strip .ww-secret-letter__err,
+.ww-faction-bet.is-strip .ww-faction-bet__form,
+.ww-faction-bet.is-strip .ww-faction-bet__err,
+.ww-faction-bet.is-strip .ww-faction-bet__success {
+  display: none !important;
+}
+
+/* §20260816-02 U3 — 面板未读/计数徽章(strip 模式右侧角标) */
+.ww-panel-strip__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 8px;
+  margin-right: auto; /* 推到箭头左侧 */
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+}

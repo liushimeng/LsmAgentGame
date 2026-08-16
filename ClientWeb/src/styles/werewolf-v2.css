@@ -29,9 +29,39 @@
 }
 .ww-game-status-header__row--main {
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   font-size: 11px;
   min-height: 24px;
+  /* §20260816-02 U2 — 容纳两组 chip 的横向布局:左游戏状态右统计 */
+  justify-content: space-between;
+}
+/* §20260816-02 U2 — chip 分组容器。默认 1920 视口下 flex 一行两端对齐;
+   ≤1280 视口自动 stack 双行,组内 chip 内部仍可 wrap。 */
+.ww-game-status-header__group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.ww-game-status-header__group--game {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ww-game-status-header__group--stats {
+  flex: 0 1 auto;
+  /* 统计组右侧贴边,左游戏状态左对齐 */
+  justify-content: flex-end;
+}
+@media (max-width: 1280px) {
+  .ww-game-status-header__row--main {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .ww-game-status-header__group--stats {
+    justify-content: flex-start;
+    width: 100%;
+  }
 }
 .ww-game-status-header__title {
   font-size: 14px;
@@ -536,6 +566,30 @@
   @media (max-width: 1280px) {
     .werewolf-game .board-container { gap: 4px; padding: 4px; }
   }
+}
+
+/* §20260816-02 U6 — 4 列下座位卡紧凑化
+   1920 视口 + 侧栏全折叠 → container > 900px → 4 列,13 座位 ÷ 4 = 4 行。
+   4 行比 3 列模式的 5 行节省 1 行 ≈ 250px,中栏底部 panel 区域重新可见。
+   配套缩放:座位卡 min-height 200→170、padding 8/10→6/8、gap 8→6。 */
+.werewolf-game .board-container.cols-4 .werewolf-seat {
+  min-height: 170px;
+  padding: 6px 8px;
+  gap: 6px;
+}
+.werewolf-game .board-container.cols-4 .werewolf-seat__avatar {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+.werewolf-game .board-container.cols-4 .werewolf-seat__header {
+  /* 4 列下头部行更紧凑 */
+  min-height: 22px;
+}
+.werewolf-game .board-container.cols-4 .werewolf-seat__bubble {
+  font-size: 12px;
+  line-height: 1.35;
+  max-height: 36px; /* 2 行 bubble 钳位 */
 }
 
 /* §130 — 主表格网格:每行座位数由 --ww-grid-cols 控制(2026-08-02 默认 2 列,
@@ -1241,16 +1295,23 @@
   border-radius: 4px;
   line-height: 1.4;
   white-space: nowrap;
-  max-width: 100%;
+  max-width: 110px; /* §20260816-02 U3 — 收紧到 110px 防止 streaming/thinking 长文本撑爆座位卡 */
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ww-bot-phase__icon { font-size: 11px; }
-.ww-bot-phase__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ww-bot-phase__icon { font-size: 11px; flex-shrink: 0; }
+.ww-bot-phase__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ww-bot-phase__countdown {
   font-size: 10px;
   font-weight: 700;
   margin-left: 2px;
+  flex-shrink: 0;
   padding: 0 3px;
   border-radius: 3px;
   background: rgba(0, 0, 0, 0.25);
