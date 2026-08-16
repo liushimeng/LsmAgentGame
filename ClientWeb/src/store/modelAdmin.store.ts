@@ -36,11 +36,17 @@ interface ModelAdminState {
   lastTestProviderId: string | null;
   /** §133 — 全局默认 endpoint(DB 行为空时回退到这里),页面/编辑弹窗展示用 */
   defaultEndpoint: string | null;
+  /** §20260816-03 — 是否显示已停用(软删除)的模型行 */
+  showDisabled: boolean;
+  /** §20260816-03 — 库中已停用的行数,用于"另有 N 个已停用"提示 */
+  disabledCount: number;
 
   loadProviders: () => Promise<void>;
+  /** §20260816-03 — 切换"显示已停用",并立即按新口径重新拉取列表 */
+  setShowDisabled: (v: boolean) => Promise<void>;
   createProvider: (body: LlmProviderCreate) => Promise<boolean>;
   updateProvider: (id: string, body: Partial<LlmProviderCreate>) => Promise<boolean>;
-  deleteProvider: (id: string) => Promise<boolean>;
+  deleteProvider: (id: string, hard?: boolean) => Promise<boolean>;
   testProvider: (id: string) => Promise<{ ok: boolean; message: string }>;
   reloadProviders: () => Promise<boolean>;
   clearToast: () => void;
@@ -55,7 +61,7 @@ const handleErr = (e: unknown, fallback: string): string => {
   return fallback;
 };
 
-export const useModelAdminStore = create<ModelAdminState>((set) => ({
+export const useModelAdminStore = create<ModelAdminState>((set, get) => ({
   providers: [],
   loading: false,
   error: null,
@@ -65,19 +71,28 @@ export const useModelAdminStore = create<ModelAdminState>((set) => ({
   lastTestResult: null,
   lastTestProviderId: null,
   defaultEndpoint: null,
+  showDisabled: false,
+  disabledCount: 0,
 
   loadProviders: async () => {
     set({ loading: true, error: null });
     try {
-      const resp = await api.listProvidersResponse();
+      // §20260816-03 — 按当前"显示已停用"口径拉取。后端默认只返回 enabled=true。
+      const resp = await api.listProvidersResponse(get().showDisabled);
       set({
         providers: resp.providers,
         defaultEndpoint: resp.default_endpoint ?? null,
+        disabledCount: resp.disabled_count ?? 0,
         loading: false,
       });
     } catch (e) {
       set({ loading: false, error: handleErr(e, '加载模型失败') });
     }
+  },
+
+  setShowDisabled: async (v) => {
+    set({ showDisabled: v });
+    await get().loadProviders();
   },
 
   createProvider: async (body) => {
@@ -113,15 +128,18 @@ export const useModelAdminStore = create<ModelAdminState>((set) => ({
     }
   },
 
-  deleteProvider: async (id) => {
+  // §20260816-03 —— 删除后**必须重新拉取列表**,不再本地 filter。
+  //
+  // 历史缺陷:旧实现 `providers.filter(p => p.id !== id)` + 弹「已删除」,而后端
+  // 只是软删除(enabled=false),列表接口又不过滤,于是刷新/重启后行原样重现,
+  // 用户观感是「删不掉」。乐观移除把后端的**部分成功**渲染成了完全成功。
+  // 删除类操作必须以服务端为准重新对账。
+  deleteProvider: async (id, hard = false) => {
     try {
-      await api.deleteProvider(id);
-      set((s) => ({
-        providers: s.providers.filter((p) => p.id !== id),
-        toast: '已删除',
-        toastKind: 'success',
-        lastError: null,
-      }));
+      const res = await api.deleteProvider(id, hard);
+      const toast = res.hard ? '已彻底删除' : '已停用(软删除)';
+      set({ toast, toastKind: 'success', lastError: null });
+      await get().loadProviders();
       return true;
     } catch (e) {
       const msg = handleErr(e, '删除失败');

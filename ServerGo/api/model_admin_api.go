@@ -258,9 +258,18 @@ func newProviderView(row models.TLsmGameLlmProvider, defaultEndpoint, botUserID 
 
 // ListProviders GET /api/admin/llm/providers.
 //
-// Returns every row in t_lsm_game_llm_provider, ordered by created_at ASC.
+// Returns rows from t_lsm_game_llm_provider, ordered by created_at ASC.
 // API keys are never included (the model's JSON tag has `json:"-"` for
 // APIKeyEnc; APIKeyHint is the only key-related field on the wire).
+//
+// §20260816-03 —— 默认**只返回 enabled=true**。
+// DeleteProvider 是软删除(enabled=false),历史上本接口裸 Find() 不带任何
+// 过滤,导致管理员「删掉」的行在刷新/重启后原样重现 —— 用户观感是「删不掉」,
+// 而实际上删除早已成功,只是列表又把它读回来了。
+//
+// 带 ?include_disabled=1 时返回全部(含已停用),供运维查看/恢复误删的行。
+// 这是软删除必须配套的「可见开关」:既然选择保留行,就必须让它可见可恢复,
+// 而不是既看得见又删不掉(§7.1 操作结果必须真实可见)。
 func (h *ModelAdminAPI) ListProviders(c *gin.Context) {
 	if _, ok := h.requireAdmin(c); !ok {
 		return
@@ -271,10 +280,13 @@ func (h *ModelAdminAPI) ListProviders(c *gin.Context) {
 		})
 		return
 	}
+	includeDisabled := c.Query("include_disabled") == "1"
+	q := h.gormDB.WithContext(c.Request.Context()).Order("created_at ASC")
+	if !includeDisabled {
+		q = q.Where("enabled = ?", true)
+	}
 	var rows []models.TLsmGameLlmProvider
-	if err := h.gormDB.WithContext(c.Request.Context()).
-		Order("created_at ASC").
-		Find(&rows).Error; err != nil {
+	if err := q.Find(&rows).Error; err != nil {
 		logger.L().Error("admin list llm providers failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": errcode.ErrDB, "message": "list providers failed",
@@ -340,6 +352,17 @@ func (h *ModelAdminAPI) ListProviders(c *gin.Context) {
 		}
 		views = append(views, newProviderView(row, defaultEndpoint, botUserID, balancePtr))
 	}
+	// §20260816-03 —— 顺带回传「已停用行数」,让前端能显示
+	// 「另有 N 个已停用模型」并提供查看入口,而不是让软删除的行凭空消失。
+	// 单次统计失败仅 log,不影响列表返回(disabled_count 保持 0)。
+	var disabledCount int64
+	if err := h.gormDB.WithContext(ctx).
+		Model(&models.TLsmGameLlmProvider{}).
+		Where("enabled = ?", false).
+		Count(&disabledCount).Error; err != nil {
+		logger.L().Warn("list providers: count disabled failed", zap.Error(err))
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"code": errcode.OK, "message": "ok",
 		"data": gin.H{
@@ -347,6 +370,8 @@ func (h *ModelAdminAPI) ListProviders(c *gin.Context) {
 			"total":            len(views),
 			"source":           registrySource(h.registry),
 			"default_endpoint": defaultEndpoint,
+			"include_disabled": includeDisabled,
+			"disabled_count":   disabledCount,
 		},
 	})
 }
@@ -708,14 +733,35 @@ func (h *ModelAdminAPI) UpdateProvider(c *gin.Context) {
 
 // ─────────────────── DeleteProvider ───────────────────
 
-// DeleteProvider DELETE /api/admin/llm/providers/:id.
+// DeleteProvider DELETE /api/admin/llm/providers/:id[?hard=1].
 //
-// Soft delete: sets enabled=false instead of physically removing the row.
+// **默认软删除**: sets enabled=false instead of physically removing the row.
 // Keeps the audit trail intact (t_lsm_game_model_game_log.bot_user_id points
 // to bot users that derived their linkage from this provider) and avoids
 // surprises in 7-AI rooms currently in flight.
+//
+// §20260816-03 —— 新增 ?hard=1 物理删除(**仅超级管理员**)。
+// 动机: 软删除挡不住「本就不该存在」的脏数据 —— 2026-08-13 一次
+// `go test -tags llmintegration` 把 7 行测试数据写进了生产库,软删除只能让
+// 它们 enabled=false 地继续躺在表里,运维唯一的出路是手工 SQL(而手工 SQL
+// 才是真正危险的)。
+//
+// 硬删除前**必须**确认无审计引用:
+//   - t_lsm_game_model_game_log.provider_id
+//   - t_lsm_game_model_chat_message.provider_id
+//
+// 任一有引用即拒绝(409),提示改用软删除 —— 审计链(§118)优先于清洁度。
+// 无引用时连同关联 bot user 一并物理删除。
 func (h *ModelAdminAPI) DeleteProvider(c *gin.Context) {
-	uid, ok := h.requireAdmin(c)
+	hard := c.Query("hard") == "1"
+	// 硬删除不可逆,权限要求提升到超级管理员。
+	var uid string
+	var ok bool
+	if hard {
+		uid, ok = h.requireSuper(c)
+	} else {
+		uid, ok = h.requireAdmin(c)
+	}
 	if !ok {
 		return
 	}
@@ -731,6 +777,11 @@ func (h *ModelAdminAPI) DeleteProvider(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": errcode.ErrValidationFailed, "message": "id required",
 		})
+		return
+	}
+
+	if hard {
+		h.hardDeleteProvider(c, uid, id)
 		return
 	}
 
@@ -761,6 +812,119 @@ func (h *ModelAdminAPI) DeleteProvider(c *gin.Context) {
 			"id":      id,
 			"enabled": false,
 			"soft":    true,
+		},
+	})
+}
+
+// hardDeleteProvider 物理删除一行 provider(§20260816-03)。
+//
+// 调用方已完成 requireSuper 鉴权与 id 非空校验。本函数负责:
+//  1. 行存在性检查(404);
+//  2. 审计引用检查 —— t_lsm_game_model_game_log / t_lsm_game_model_chat_message
+//     任一存在 provider_id 引用即 409 拒绝(审计链优先,§118);
+//  3. 在单个事务里删除关联 bot user + provider 行。
+//
+// 为什么引用检查不能省: 这两张表的 provider_id 是复盘 AI 对局的唯一线索,
+// 删掉 provider 行会让历史对局日志指向一个不存在的模型。对「有历史」的
+// provider,软删除(enabled=false)才是正确语义;硬删除只服务于「本就不该
+// 存在」的脏数据。
+func (h *ModelAdminAPI) hardDeleteProvider(c *gin.Context, uid, id string) {
+	ctx := c.Request.Context()
+
+	var row models.TLsmGameLlmProvider
+	if err := h.gormDB.WithContext(ctx).Where("id = ?", id).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"code": errcode.ErrValidationFailed, "message": "provider not found",
+			})
+			return
+		}
+		logger.L().Error("admin hard delete: read row failed",
+			zap.String("id", id), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": errcode.ErrDB, "message": "read provider failed",
+		})
+		return
+	}
+
+	// 审计引用检查。两张表分别统计,便于在错误信息里告诉管理员到底哪一类
+	// 记录挡住了删除。
+	var gameLogs, chatMsgs int64
+	if err := h.gormDB.WithContext(ctx).
+		Model(&models.TLsmGameModelGameLog{}).
+		Where("provider_id = ?", id).Count(&gameLogs).Error; err != nil {
+		logger.L().Error("admin hard delete: count game logs failed",
+			zap.String("id", id), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": errcode.ErrDB, "message": "count references failed",
+		})
+		return
+	}
+	if err := h.gormDB.WithContext(ctx).
+		Model(&models.TLsmGameModelChatMessage{}).
+		Where("provider_id = ?", id).Count(&chatMsgs).Error; err != nil {
+		logger.L().Error("admin hard delete: count chat messages failed",
+			zap.String("id", id), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": errcode.ErrDB, "message": "count references failed",
+		})
+		return
+	}
+	if gameLogs > 0 || chatMsgs > 0 {
+		logger.L().Warn("admin hard delete refused — audit references exist",
+			zap.String("admin_id", uid), zap.String("id", id),
+			zap.Int64("game_logs", gameLogs), zap.Int64("chat_messages", chatMsgs))
+		c.JSON(http.StatusConflict, gin.H{
+			"code": errcode.ErrValidationFailed,
+			"message": fmt.Sprintf(
+				"该模型有 %d 条对局日志、%d 条对话记录,为保留审计链禁止物理删除;请改用停用(软删除)",
+				gameLogs, chatMsgs),
+			"data": gin.H{
+				"id":            id,
+				"game_logs":     gameLogs,
+				"chat_messages": chatMsgs,
+			},
+		})
+		return
+	}
+
+	// 无引用 → 事务内删 bot user + provider 行。bot user 先删,避免中途失败
+	// 留下指向已删除 provider 的孤儿 bot。
+	var deletedBotUsers int64
+	if err := h.gormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		bu := tx.Where("bot_provider_id = ?", id).Delete(&models.TLsmGameUser{})
+		if bu.Error != nil {
+			return fmt.Errorf("delete bot user: %w", bu.Error)
+		}
+		deletedBotUsers = bu.RowsAffected
+		if err := tx.Where("id = ?", id).
+			Delete(&models.TLsmGameLlmProvider{}).Error; err != nil {
+			return fmt.Errorf("delete provider row: %w", err)
+		}
+		return nil
+	}); err != nil {
+		logger.L().Error("admin hard delete llm provider failed",
+			zap.String("admin_id", uid), zap.String("id", id), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": errcode.ErrDB, "message": "hard delete failed",
+		})
+		return
+	}
+
+	logger.L().Info("admin hard-deleted llm provider",
+		zap.String("admin_id", uid),
+		zap.String("id", id),
+		zap.String("model", row.Model),
+		zap.String("agent_name", row.AgentName),
+		zap.Int64("deleted_bot_users", deletedBotUsers))
+	c.JSON(http.StatusOK, gin.H{
+		"code": errcode.OK, "message": "ok",
+		"data": gin.H{
+			"id":                id,
+			"model":             row.Model,
+			"hard":              true,
+			"soft":              false,
+			"deleted_bot_users": deletedBotUsers,
 		},
 	})
 }

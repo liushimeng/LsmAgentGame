@@ -21,22 +21,11 @@ import (
 	"LsmAgentGame/util"
 )
 
-// shortSuffix returns a unique-per-test string <= 24 chars so it fits
-// t_lsm_game_llm_provider.model / agent_name (varchar(64)) with headroom
-// for the per-test prefix the caller adds.
+// shortSuffix 委托共享的 testUniqueToken（时间戳在前）。
+// trimTo / testModelKey / testAgentName 统一定义在 db_test_helper_test.go。
 func shortSuffix(t *testing.T) string {
 	t.Helper()
-	return strings.ReplaceAll(t.Name(), "/", "_") + "_" + time.Now().Format("150405")
-}
-
-// trimTo clamps s to at most n bytes; the test fixtures use this to avoid
-// the varchar(64) overflow we hit with longer default uniqueModelSuffix
-// combinations.
-func trimTo(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n]
+	return testUniqueToken(t)
 }
 
 // TestMigrateConfigProvidersToDB_EmptyNoOp 验证 cfg.LLM.Providers 为空时
@@ -75,8 +64,8 @@ func TestMigrateConfigProvidersToDB_InsertsNewRows(t *testing.T) {
 	defer cancel()
 
 	suffix := shortSuffix(t)
-	modelKey := trimTo("mt_"+suffix, 40)
-	agentName := trimTo("Migrate Test "+suffix, 40)
+	modelKey := testModelKey("mt", suffix)
+	agentName := testAgentName("MigrateTest", suffix)
 	apiKey := "sk-mt-" + suffix
 	cfg := config.LLMConfig{
 		Providers: []config.ProviderConfig{
@@ -89,12 +78,9 @@ func TestMigrateConfigProvidersToDB_InsertsNewRows(t *testing.T) {
 		},
 	}
 
-	// Cleanup any prior test leftovers.
-	t.Cleanup(func() {
-		_ = gormDB.WithContext(ctx).
-			Where("model = ?", modelKey).
-			Delete(&models.TLsmGameLlmProvider{}).Error
-	})
+	// §20260816-03 —— 必须走 cleanupProviderRows（自建 ctx + 失败即 FAIL）。
+	// 旧写法复用了上面 defer cancel() 的 ctx，清理时 ctx 已取消，删除必然失败。
+	cleanupProviderRows(t, gormDB, "model = ?", modelKey)
 
 	ins, upd, err := MigrateConfigProvidersToDB(ctx, gormDB, cfg)
 	if err != nil {
@@ -141,7 +127,7 @@ func TestMigrateConfigProvidersToDB_PreservesDBApiKey(t *testing.T) {
 	defer cancel()
 
 	suffix := shortSuffix(t)
-	modelKey := trimTo("prsv_"+suffix, 40)
+	modelKey := testModelKey("prsv", suffix)
 	originalKey := "sk-DB-" + suffix
 	confKey := "sk-CONF-overwrite-" + suffix
 
@@ -152,7 +138,7 @@ func TestMigrateConfigProvidersToDB_PreservesDBApiKey(t *testing.T) {
 	}
 	row := models.TLsmGameLlmProvider{
 		ID:           util.NewUUID(),
-		AgentName:    "Original DB Agent",
+		AgentName:    testAgentName("OrigDBAgent", suffix),
 		Model:        modelKey,
 		ProviderType: "anthropic",
 		APIKeyEnc:    enc,
@@ -162,9 +148,7 @@ func TestMigrateConfigProvidersToDB_PreservesDBApiKey(t *testing.T) {
 	if err := gormDB.WithContext(ctx).Create(&row).Error; err != nil {
 		t.Fatalf("seed row: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = gormDB.WithContext(ctx).Where("id = ?", row.ID).Delete(&models.TLsmGameLlmProvider{}).Error
-	})
+	cleanupProviderRows(t, gormDB, "id = ?", row.ID)
 
 	// Now run migrate with a conf that names the same model + a NEW api_key
 	// + a new agent_name + thinking settings. The migrate MUST update the
@@ -172,7 +156,7 @@ func TestMigrateConfigProvidersToDB_PreservesDBApiKey(t *testing.T) {
 	cfg := config.LLMConfig{
 		Providers: []config.ProviderConfig{
 			{
-				AgentName:        "Updated From Conf",
+				AgentName:        testAgentName("UpdFromConf", suffix),
 				Model:            modelKey,
 				APIKey:           confKey,
 				ProviderType:     "anthropic",
@@ -208,8 +192,8 @@ func TestMigrateConfigProvidersToDB_PreservesDBApiKey(t *testing.T) {
 	}
 
 	// Metadata MUST have been refreshed.
-	if after.AgentName != "Updated From Conf" {
-		t.Errorf("AgentName = %q, want updated value", after.AgentName)
+	if after.AgentName != testAgentName("UpdFromConf", suffix) {
+		t.Errorf("AgentName = %q, want %q", after.AgentName, testAgentName("UpdFromConf", suffix))
 	}
 	if !after.ThinkingEnabled {
 		t.Errorf("ThinkingEnabled should have been updated to true")
@@ -233,8 +217,8 @@ func TestMigrateConfigProvidersToDB_MixedInsertAndUpdate(t *testing.T) {
 	defer cancel()
 
 	suffix := shortSuffix(t)
-	existingModel := trimTo("ex_"+suffix, 40)
-	newModel := trimTo("nw_"+suffix, 40)
+	existingModel := testModelKey("ex", suffix)
+	newModel := testModelKey("nw", suffix)
 
 	// Pre-seed existing row with a non-empty encrypted key.
 	enc, err := util.EncryptAPIKey(ctx, gormDB, fmt.Sprintf("sk-keep-%s", suffix))
@@ -243,7 +227,7 @@ func TestMigrateConfigProvidersToDB_MixedInsertAndUpdate(t *testing.T) {
 	}
 	row := models.TLsmGameLlmProvider{
 		ID:           util.NewUUID(),
-		AgentName:    "Existing",
+		AgentName:    testAgentName("Existing", suffix),
 		Model:        existingModel,
 		ProviderType: "anthropic",
 		APIKeyEnc:    enc,
@@ -252,16 +236,12 @@ func TestMigrateConfigProvidersToDB_MixedInsertAndUpdate(t *testing.T) {
 	if err := gormDB.WithContext(ctx).Create(&row).Error; err != nil {
 		t.Fatalf("seed existing: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = gormDB.WithContext(ctx).
-			Where("model IN ?", []string{existingModel, newModel}).
-			Delete(&models.TLsmGameLlmProvider{}).Error
-	})
+	cleanupProviderRows(t, gormDB, "model IN ?", []string{existingModel, newModel})
 
 	cfg := config.LLMConfig{
 		Providers: []config.ProviderConfig{
-			{AgentName: "Updated Existing", Model: existingModel, APIKey: "sk-should-be-ignored", ProviderType: "anthropic"},
-			{AgentName: "Brand New", Model: newModel, APIKey: fmt.Sprintf("sk-fresh-%s", suffix), ProviderType: "anthropic"},
+			{AgentName: testAgentName("UpdExisting", suffix), Model: existingModel, APIKey: "sk-should-be-ignored", ProviderType: "anthropic"},
+			{AgentName: testAgentName("BrandNew", suffix), Model: newModel, APIKey: fmt.Sprintf("sk-fresh-%s", suffix), ProviderType: "anthropic"},
 		},
 	}
 	ins, upd, err := MigrateConfigProvidersToDB(ctx, gormDB, cfg)
@@ -280,8 +260,8 @@ func TestMigrateConfigProvidersToDB_MixedInsertAndUpdate(t *testing.T) {
 	if err := gormDB.WithContext(ctx).Where("model = ?", existingModel).First(&exist).Error; err != nil {
 		t.Fatalf("re-read existing: %v", err)
 	}
-	if exist.AgentName != "Updated Existing" {
-		t.Errorf("existing AgentName = %q, want %q", exist.AgentName, "Updated Existing")
+	if exist.AgentName != testAgentName("UpdExisting", suffix) {
+		t.Errorf("existing AgentName = %q, want %q", exist.AgentName, testAgentName("UpdExisting", suffix))
 	}
 	existKey, _ := util.DecryptAPIKey(ctx, gormDB, exist.APIKeyEnc)
 	if existKey != fmt.Sprintf("sk-keep-%s", suffix) {
@@ -293,8 +273,8 @@ func TestMigrateConfigProvidersToDB_MixedInsertAndUpdate(t *testing.T) {
 	if err := gormDB.WithContext(ctx).Where("model = ?", newModel).First(&fresh).Error; err != nil {
 		t.Fatalf("re-read new: %v", err)
 	}
-	if fresh.AgentName != "Brand New" {
-		t.Errorf("new AgentName = %q, want %q", fresh.AgentName, "Brand New")
+	if fresh.AgentName != testAgentName("BrandNew", suffix) {
+		t.Errorf("new AgentName = %q, want %q", fresh.AgentName, testAgentName("BrandNew", suffix))
 	}
 	freshKey, _ := util.DecryptAPIKey(ctx, gormDB, fresh.APIKeyEnc)
 	if freshKey != fmt.Sprintf("sk-fresh-%s", suffix) {

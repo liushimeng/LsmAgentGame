@@ -40,6 +40,10 @@ export interface ListProvidersResponse {
   source?: string;
   /** §133 — registry 全局默认 endpoint(DB 行为空时回退到这里) */
   default_endpoint?: string;
+  /** §20260816-03 — 本次响应是否包含已停用(软删除)的行 */
+  include_disabled?: boolean;
+  /** §20260816-03 — 库中 enabled=false 的行数,用于"另有 N 个已停用"提示 */
+  disabled_count?: number;
 }
 
 /**
@@ -53,22 +57,37 @@ export interface ProviderMutationResponse {
   warning?: string;
 }
 
-export async function listProviders(): Promise<LlmProvider[]> {
-  const resp = await http<ListProvidersResponse>('/api/admin/llm/providers');
+/**
+ * §20260816-03 — 后端默认只返回 enabled=true 的行(删除是软删除)。
+ * includeDisabled=true 时追加 ?include_disabled=1 拿回已停用的行。
+ */
+export async function listProviders(includeDisabled = false): Promise<LlmProvider[]> {
+  const resp = await http<ListProvidersResponse>(providersUrl(includeDisabled));
   return resp.providers ?? [];
+}
+
+/** 拼装列表 URL,集中处理 include_disabled 查询参数。 */
+function providersUrl(includeDisabled: boolean): string {
+  return includeDisabled
+    ? '/api/admin/llm/providers?include_disabled=1'
+    : '/api/admin/llm/providers';
 }
 
 /**
  * §133 — 返回 listProviders 的完整响应(含 default_endpoint)。
  * 用于 store 把全局默认 endpoint 缓存,前端展示「实际生效 endpoint」。
  */
-export async function listProvidersResponse(): Promise<ListProvidersResponse> {
-  const resp = await http<ListProvidersResponse>('/api/admin/llm/providers');
+export async function listProvidersResponse(
+  includeDisabled = false,
+): Promise<ListProvidersResponse> {
+  const resp = await http<ListProvidersResponse>(providersUrl(includeDisabled));
   return {
     providers: resp.providers ?? [],
     total: resp.total ?? 0,
     source: resp.source,
     default_endpoint: resp.default_endpoint,
+    include_disabled: resp.include_disabled ?? includeDisabled,
+    disabled_count: resp.disabled_count ?? 0,
   };
 }
 
@@ -94,11 +113,29 @@ export async function updateProvider(
 
 // 2026-07-10 §121 修复 — 后端 delete 为软删除,data 返回 {id, enabled:false, soft:true};
 // 旧前端期望 {ok: boolean}。统一封装为 {ok} 由 enabled/soft 推断。
-export async function deleteProvider(id: string): Promise<{ ok: boolean; id?: string; enabled?: boolean; soft?: boolean }> {
-  const resp = await http<{ id: string; enabled: boolean; soft: boolean }>(
-    `/api/admin/llm/providers/${encodeURIComponent(id)}`,
-    { method: 'DELETE' },
-  );
+//
+// §20260816-03 — 新增 hard 参数。hard=true 走 ?hard=1 物理删除(需超级管理员,
+// 且该模型无对局日志/对话记录引用,否则后端 409)。返回体多出 hard 与
+// deleted_bot_users 两个字段,供 store 区分提示文案。
+export async function deleteProvider(
+  id: string,
+  hard = false,
+): Promise<{
+  ok: boolean;
+  id?: string;
+  enabled?: boolean;
+  soft?: boolean;
+  hard?: boolean;
+  deleted_bot_users?: number;
+}> {
+  const url = `/api/admin/llm/providers/${encodeURIComponent(id)}${hard ? '?hard=1' : ''}`;
+  const resp = await http<{
+    id: string;
+    enabled?: boolean;
+    soft?: boolean;
+    hard?: boolean;
+    deleted_bot_users?: number;
+  }>(url, { method: 'DELETE' });
   return { ok: !!resp?.id, ...resp };
 }
 

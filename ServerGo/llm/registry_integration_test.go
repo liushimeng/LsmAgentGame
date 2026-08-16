@@ -97,6 +97,10 @@ func ensureChdirProjectRoot() {
 
 // newRegistryIntegrationDB returns the shared gorm handle or t.Skip when
 // the DB is unreachable so CI runs cleanly without MariaDB.
+//
+// §20260816-03 —— 增加 requireTestDB 门禁。历史上本函数直接 config.Load() +
+// db.Init() 连上生产 schema lsmDB 就开始写入，7 行测试数据因此进了生产库。
+// 现在必须显式 LSM_TEST_ALLOW_DB=1，且目标 schema 不得是生产库。
 func newRegistryIntegrationDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	if registryIntegrationDB != nil {
@@ -104,6 +108,8 @@ func newRegistryIntegrationDB(t *testing.T) *gorm.DB {
 	}
 	ensureChdirProjectRoot()
 	cfg := config.Load()
+	// 门禁必须在 db.Init 之前 —— 连都不许连，而不是连上再后悔。
+	requireTestDB(t, cfg.DB.Name)
 	gormDB, err := db.Init(cfg)
 	if err != nil {
 		t.Skipf("SKIP: cannot connect to DB: %v", err)
@@ -115,9 +121,12 @@ func newRegistryIntegrationDB(t *testing.T) *gorm.DB {
 
 // uniqueModelSuffix lets each test claim an unused Model/AgentName without
 // colliding with other tests that share the same DB.
+//
+// §20260816-03 —— 改为委托 testUniqueToken（时间戳在前）。model/agent_name
+// 的最终拼装走 testModelKey / testAgentName，由它们负责前缀与截断。
 func uniqueModelSuffix(t *testing.T) string {
 	t.Helper()
-	return strings.ReplaceAll(t.Name(), "/", "_") + "_" + time.Now().Format("150405.000")
+	return testUniqueToken(t)
 }
 
 // TestNewRegistry_LoadFromDB_OverridesConfig verifies that when
@@ -135,7 +144,7 @@ func TestNewRegistry_LoadFromDB_OverridesConfig(t *testing.T) {
 	defer cancel()
 
 	suffix := uniqueModelSuffix(t)
-	dbModel := "dbmodel_" + suffix
+	dbModel := testModelKey("dbmodel", suffix)
 	plain := "sk-real-db-" + suffix
 	enc, err := util.EncryptAPIKey(ctx, gormDB, plain)
 	if err != nil {
@@ -143,7 +152,7 @@ func TestNewRegistry_LoadFromDB_OverridesConfig(t *testing.T) {
 	}
 	row := models.TLsmGameLlmProvider{
 		ID:           util.NewUUID(),
-		AgentName:    "DB Agent",
+		AgentName:    testAgentName("DBAgent", suffix),
 		Model:        dbModel,
 		ProviderType: "anthropic",
 		APIKeyEnc:    enc,
@@ -153,9 +162,7 @@ func TestNewRegistry_LoadFromDB_OverridesConfig(t *testing.T) {
 	if err := gormDB.WithContext(ctx).Create(&row).Error; err != nil {
 		t.Fatalf("seed DB row: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = gormDB.WithContext(ctx).Where("id = ?", row.ID).Delete(&models.TLsmGameLlmProvider{}).Error
-	})
+	cleanupProviderRows(t, gormDB, "id = ?", row.ID)
 
 	// cfg has 2 completely different models — must be IGNORED.
 	cfg := config.LLMConfig{
@@ -221,6 +228,8 @@ func TestNewRegistry_SeedFromConfig_OnEmptyDB(t *testing.T) {
 	if gormDB == nil {
 		return
 	}
+	// 本测试断言 "DB 空 ⇒ seed 8 行" 且 List() 长度 == 8，是整表语义。
+	requireEmptyProviderTable(t, gormDB)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -228,17 +237,13 @@ func TestNewRegistry_SeedFromConfig_OnEmptyDB(t *testing.T) {
 
 	// Wipe any leftover rows for this test's model prefix BEFORE the
 	// assertion so we know DB started empty for these models.
-	prefix := "seedtest_" + suffix
+	prefix := testModelKey("seed", suffix)
 	if err := gormDB.WithContext(ctx).
 		Where("model LIKE ?", prefix+"%").
 		Delete(&models.TLsmGameLlmProvider{}).Error; err != nil {
 		t.Fatalf("pre-clean DB: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = gormDB.WithContext(ctx).
-			Where("model LIKE ?", prefix+"%").
-			Delete(&models.TLsmGameLlmProvider{}).Error
-	})
+	cleanupProviderRows(t, gormDB, "model LIKE ?", prefix+"%")
 
 	cfg := config.LLMConfig{
 		Endpoint:  "http://localhost:1/x",
@@ -246,7 +251,7 @@ func TestNewRegistry_SeedFromConfig_OnEmptyDB(t *testing.T) {
 	}
 	for i := 1; i <= 8; i++ {
 		cfg.Providers = append(cfg.Providers, config.ProviderConfig{
-			AgentName:    "Seed " + suffix,
+			AgentName:    testAgentName("Seed", suffix),
 			Model:        prefix + "_m" + string(rune('0'+i)),
 			APIKey:       "sk-seed-" + suffix + "-" + string(rune('0'+i)),
 			ProviderType: "anthropic",
@@ -345,22 +350,20 @@ func TestReload_AfterCRUD_ReflectsChanges(t *testing.T) {
 	if gormDB == nil {
 		return
 	}
+	// 本测试断言 List() 长度精确等于自己 seed 的行数，是整表语义。
+	requireEmptyProviderTable(t, gormDB)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	suffix := uniqueModelSuffix(t)
-	prefix := "reload_" + suffix
-	t.Cleanup(func() {
-		_ = gormDB.WithContext(ctx).
-			Where("model LIKE ?", prefix+"%").
-			Delete(&models.TLsmGameLlmProvider{}).Error
-	})
+	prefix := testModelKey("reload", suffix)
+	cleanupProviderRows(t, gormDB, "model LIKE ?", prefix+"%")
 
 	// Seed two initial rows.
 	for _, model := range []string{prefix + "_a", prefix + "_b"} {
 		row := models.TLsmGameLlmProvider{
 			ID:           util.NewUUID(),
-			AgentName:    "Reload",
+			AgentName:    testAgentName("Reload"+strings.TrimPrefix(model, prefix), suffix),
 			Model:        model,
 			ProviderType: "anthropic",
 			APIKeyEnc:    "",
@@ -385,7 +388,7 @@ func TestReload_AfterCRUD_ReflectsChanges(t *testing.T) {
 		t.Fatalf("delete _a: %v", err)
 	}
 	cRow := models.TLsmGameLlmProvider{
-		ID: util.NewUUID(), AgentName: "Reload C",
+		ID: util.NewUUID(), AgentName: testAgentName("ReloadC", suffix),
 		Model: prefix + "_c", ProviderType: "anthropic", Enabled: true,
 	}
 	if err := gormDB.WithContext(ctx).Create(&cRow).Error; err != nil {
@@ -439,12 +442,8 @@ func TestRegistry_SeedFailure_RollsBack(t *testing.T) {
 	defer cancel()
 
 	suffix := uniqueModelSuffix(t)
-	prefix := "rollback_" + suffix
-	t.Cleanup(func() {
-		_ = gormDB.WithContext(ctx).
-			Where("model LIKE ?", prefix+"%").
-			Delete(&models.TLsmGameLlmProvider{}).Error
-	})
+	prefix := testModelKey("rb", suffix)
+	cleanupProviderRows(t, gormDB, "model LIKE ?", prefix+"%")
 
 	// Pre-seed a row whose AgentName collides with the SECOND provider in
 	// our cfg. The seed transaction must fail on _m2 and roll _m1 back.

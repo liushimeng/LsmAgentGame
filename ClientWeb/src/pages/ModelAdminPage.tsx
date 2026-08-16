@@ -61,7 +61,6 @@ import {
   TestResultDialog,
   type TestDialogState,
 } from '@/components/common/ModelTestResultPanel';
-import type { TKey } from '@/i18n';
 
 // 后端永远只下发 api_key_hint("sk-XXXX…YYYY" / "API-KEY-PLACEHOLDER")
 // 形式,明文 api_key 不会回客户端(见
@@ -142,6 +141,9 @@ export function ModelAdminPage() {
     lastTestResult,
     lastTestProviderId,
     defaultEndpoint,
+    showDisabled,
+    disabledCount,
+    setShowDisabled,
     loadProviders,
     createProvider,
     updateProvider,
@@ -154,7 +156,10 @@ export function ModelAdminPage() {
   } = useModelAdminStore();
 
   const [editing, setEditing] = useState<{ id: string | null; form: FormState } | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  // §20260816-03 — enabled 决定确认弹窗提供「停用」还是「彻底删除」。
+  const [pendingDelete, setPendingDelete] = useState<
+    { id: string; name: string; enabled: boolean } | null
+  >(null);
   const [submitting, setSubmitting] = useState(false);
   // §7.1 — 弹窗内联错误:API 失败 / 校验失败时显示在弹窗内(最高层级,用户正在操作的
   // 位置),不依赖背景 toast(会被 modal 遮挡或 3s 后消失)。
@@ -528,6 +533,18 @@ export function ModelAdminPage() {
         >
           {showApiKey ? '👁 完整 API Key' : '🫣 脱敏视图'}
         </button>
+        {/* §20260816-03 — 显示/隐藏已停用(软删除)的模型行。
+            后端默认只返回 enabled=true;不给这个开关,被软删除的行就变成
+            「看不见也删不掉」的幽灵记录。 */}
+        <button
+          type="button"
+          className={'btn btn-secondary' + (showDisabled ? ' btn-primary' : '')}
+          onClick={() => void setShowDisabled(!showDisabled)}
+          data-testid="toggle-show-disabled"
+          title={showDisabled ? '只看启用中的模型' : '连已停用的模型一起显示'}
+        >
+          {showDisabled ? '🚫 隐藏已停用' : `♻ 显示已停用${disabledCount > 0 ? ` (${disabledCount})` : ''}`}
+        </button>
         {/* §20260812-02 U1 — 雷达图 toggle */}
         <button
           type="button"
@@ -657,7 +674,9 @@ export function ModelAdminPage() {
                     <button
                       type="button"
                       className="btn btn-danger btn-sm"
-                      onClick={() => setPendingDelete({ id: p.id, name: p.agent_name })}
+                      onClick={() =>
+                        setPendingDelete({ id: p.id, name: p.agent_name, enabled: p.enabled })
+                      }
                       data-testid={`row-delete-${p.id}`}
                     >
                       {t('modelAdmin.actionDelete')}
@@ -904,13 +923,22 @@ export function ModelAdminPage() {
         </AppModal>
       )}
 
+      {/* §20260816-03 — 删除确认按当前 enabled 状态分流:
+          · 启用中的行 → 停用(软删除),保留审计链,可通过「显示已停用」找回;
+          · 已停用的行 → 提供「彻底删除」(物理删除,需超级管理员且无对局引用),
+            这是清理测试脏数据等「本就不该存在」的行的唯一正规通道。 */}
       {pendingDelete && (
         <ConfirmModal
-          messageKey={'modelAdmin.deleteConfirm' as TKey}
-          confirmLabel={t('modelAdmin.actionDelete')}
+          message={
+            pendingDelete.enabled
+              ? `确定停用「${pendingDelete.name}」吗?该模型会从列表隐藏(可通过「显示已停用」找回),历史对局记录保留。`
+              : `「${pendingDelete.name}」已处于停用状态。是否**彻底删除**该行?此操作不可恢复;若该模型有历史对局记录,服务端会拒绝并提示改用停用。`
+          }
+          confirmLabel={pendingDelete.enabled ? '停用' : '彻底删除'}
           danger
           onConfirm={async () => {
-            await deleteProvider(pendingDelete.id);
+            // enabled=true → 软删除;已停用 → 硬删除。
+            await deleteProvider(pendingDelete.id, !pendingDelete.enabled);
             setPendingDelete(null);
           }}
           onCancel={() => setPendingDelete(null)}
