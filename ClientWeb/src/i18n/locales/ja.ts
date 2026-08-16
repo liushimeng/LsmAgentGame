@@ -646,6 +646,11 @@ const ja: Dict = {
   'modelAdmin.analytics.propName': '道具',
   'modelAdmin.analytics.price': '単価',
   'modelAdmin.analytics.uses': '使用回数',
+  // §20260816-04 — レーダーチャート三態
+  'modelAdmin.radar.loading': 'レーダーデータを読み込み中…',
+  'modelAdmin.radar.empty': '対局データがありません — ≥1 局完成后に表示されます',
+  'modelAdmin.radar.error': 'レーダーデータの読み込みに失敗しました',
+  'modelAdmin.radar.retry': '再試行',
 
   // 狼人殺13人標準(2026-07-10 に 7 人から升级、2026-07-11 に 13 人へ拡張;werewolf_12/werewolf_7 は残存)
   'nav.werewolf': '人狼 13人',

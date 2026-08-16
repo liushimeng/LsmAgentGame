@@ -167,8 +167,13 @@ export function ModelAdminPage() {
   // §重构 R133 — API Key 全局显示策略:true=显示完整 hint,false=脱敏。
   // 默认 true(超级管理员应该看到完整 hint),右上角「👁 显示 API Key」按钮切换。
   const [showApiKey, setShowApiKey] = useState(true);
-  // §20260812-02 U1 — 模型能力雷达图数据。
-  const [radarData, setRadarData] = useState<Record<string, ModelRadarStats> | null>(null);
+  // §20260816-04 — 模型能力雷达图:三态管理(idle/loading/ready/error)。
+  const [radarState, setRadarState] = useState<
+    | { status: 'idle' }
+    | { status: 'loading' }
+    | { status: 'ready'; data: Record<string, ModelRadarStats> }
+    | { status: 'error'; message: string }
+  >({ status: 'idle' });
   const [showRadar, setShowRadar] = useState(false);
   // §135 — 超级管理员每日 grant 弹窗(批量对所有 enabled 模型发金币)。
   // 阶段:`form`(输入)→ `submitting`(提交中)→ `result`(展示 granted/skipped)。
@@ -203,12 +208,15 @@ export function ModelAdminPage() {
     }
   }, [isAuthenticated, isAdmin, loadProviders]);
 
-  // §20260812-02 U1 — 加载雷达图数据（一次性，不随 providers 刷新）。
-  useEffect(() => {
+  // §20260816-04 — 雷达图数据:点击时加载 + 失败可重试。
+  const loadRadar = useCallback(() => {
     if (!isAuthenticated || !isAdmin) return;
+    setRadarState({ status: 'loading' });
     getRadarStats()
-      .then(setRadarData)
-      .catch(() => { /* best-effort, radar is optional */ });
+      .then((data) => setRadarState({ status: 'ready', data }))
+      .catch((e: any) =>
+        setRadarState({ status: 'error', message: e?.message || '加载失败' }),
+      );
   }, [isAuthenticated, isAdmin]);
 
   // 关闭 toast 提示
@@ -545,11 +553,18 @@ export function ModelAdminPage() {
         >
           {showDisabled ? '🚫 隐藏已停用' : `♻ 显示已停用${disabledCount > 0 ? ` (${disabledCount})` : ''}`}
         </button>
-        {/* §20260812-02 U1 — 雷达图 toggle */}
+        {/* §20260816-04 — 雷达图 toggle + 首次加载触发 */}
         <button
           type="button"
           className={'btn btn-secondary' + (showRadar ? ' btn-primary' : '')}
-          onClick={() => setShowRadar((v) => !v)}
+          onClick={() => {
+            const nextShow = !showRadar;
+            setShowRadar(nextShow);
+            // 首次展开或之前失败时,自动触发加载
+            if (nextShow && (radarState.status === 'idle' || radarState.status === 'error')) {
+              loadRadar();
+            }
+          }}
           data-testid="toggle-radar"
         >
           📊 {showRadar ? '隐藏雷达图' : '能力雷达图'}
@@ -559,10 +574,32 @@ export function ModelAdminPage() {
         </div>
       </div>
 
-      {/* §20260812-02 U1 — 模型能力雷达图（可折叠） */}
-      {showRadar && radarData && Object.keys(radarData).length > 0 && (
+      {/* §20260816-04 — 模型能力雷达图（三态:loading/ready/error/empty） */}
+      {showRadar && (
         <div className="model-admin-radar-section">
-          <ModelRadarChart data={radarData} width={420} />
+          {radarState.status === 'loading' && (
+            <div className="model-radar-placeholder">
+              <span className="model-radar-spinner" />
+              <span>{t('modelAdmin.radar.loading')}</span>
+            </div>
+          )}
+          {radarState.status === 'error' && (
+            <div className="model-radar-placeholder model-radar-placeholder--error">
+              <span>⚠️ {radarState.message}</span>
+              <button type="button" className="btn btn-secondary" onClick={loadRadar}>
+                🔄 {t('modelAdmin.radar.retry')}
+              </button>
+            </div>
+          )}
+          {radarState.status === 'ready' && Object.keys(radarState.data).length > 0 && (
+            <ModelRadarChart data={radarState.data} width={420} />
+          )}
+          {radarState.status === 'ready' && Object.keys(radarState.data).length === 0 && (
+            <div className="model-radar-placeholder">
+              <span>📊</span>
+              <span>{t('modelAdmin.radar.empty')}</span>
+            </div>
+          )}
         </div>
       )}
 

@@ -647,6 +647,11 @@ const en: Dict = {
   'modelAdmin.analytics.propName': 'Prop',
   'modelAdmin.analytics.price': 'Price',
   'modelAdmin.analytics.uses': 'Uses',
+  // §20260816-04 — Radar chart tri-state
+  'modelAdmin.radar.loading': 'Loading radar data…',
+  'modelAdmin.radar.empty': 'No game data yet — radar appears after ≥1 completed game',
+  'modelAdmin.radar.error': 'Failed to load radar data',
+  'modelAdmin.radar.retry': 'Retry',
 
   // Werewolf 13-player standard (2026-07-10 upgraded from 7-player, 2026-07-11 extended to 13 players; werewolf_12/werewolf_7 preserved)
   'nav.werewolf': 'Werewolf 13P',

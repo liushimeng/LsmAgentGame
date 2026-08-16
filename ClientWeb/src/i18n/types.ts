@@ -1222,6 +1222,11 @@ export interface Dict {
   'modelAdmin.analytics.propName': string;
   'modelAdmin.analytics.price': string;
   'modelAdmin.analytics.uses': string;
+  // §20260816-04 — 雷达图三态
+  'modelAdmin.radar.loading': string;
+  'modelAdmin.radar.empty': string;
+  'modelAdmin.radar.error': string;
+  'modelAdmin.radar.retry': string;
 
   // 2026-08-10 §20260810-06 — 行为承诺系统
   'werewolf.commitment.title': string;

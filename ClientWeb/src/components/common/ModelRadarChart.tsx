@@ -65,18 +65,18 @@ export function ModelRadarChart({ data, width = 480 }: Props) {
         height={width}
         style={{ overflow: 'visible' }}
       >
-        {/* Grid pentagons */}
+        {/* Grid pentagons — §20260816-04 提升暗色主题可见性 */}
         {gridLevels.map((lv) => (
           <polygon
             key={lv}
             points={polygonPoints(cx, cy, r * lv, [100, 100, 100, 100, 100])}
             fill="none"
-            stroke="rgba(255,255,255,0.12)"
+            stroke="rgba(255,255,255,0.18)"
             strokeWidth={lv === 1 ? 1.5 : 0.8}
           />
         ))}
 
-        {/* Axis lines + labels */}
+        {/* Axis lines + labels — §20260816-04 增强对比度 */}
         {DIMS.map((dim, i) => {
           const p = polar(cx, cy, r + 20, (360 / 5) * i);
           const lp = polar(cx, cy, r + 36, (360 / 5) * i);
@@ -87,7 +87,7 @@ export function ModelRadarChart({ data, width = 480 }: Props) {
                 y1={cy}
                 x2={p.x}
                 y2={p.y}
-                stroke="rgba(255,255,255,0.15)"
+                stroke="rgba(255,255,255,0.18)"
                 strokeWidth={0.8}
               />
               <text
@@ -95,8 +95,9 @@ export function ModelRadarChart({ data, width = 480 }: Props) {
                 y={lp.y}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fill="rgba(255,255,255,0.7)"
+                fill="rgba(255,255,255,0.85)"
                 fontSize={11}
+                fontWeight={600}
               >
                 {dim.label}
               </text>

@@ -649,6 +649,11 @@ const zhCN: Dict = {
   'modelAdmin.analytics.propName': '道具',
   'modelAdmin.analytics.price': '单价',
   'modelAdmin.analytics.uses': '使用次数',
+  // §20260816-04 — 雷达图三态
+  'modelAdmin.radar.loading': '加载雷达图数据中…',
+  'modelAdmin.radar.empty': '暂无对局数据，模型完成 ≥1 局后自动显示',
+  'modelAdmin.radar.error': '雷达图加载失败',
+  'modelAdmin.radar.retry': '重试',
 
   // 狼人杀 13 人标准竞技局 — werewolf (第 6 款游戏,2026-07-10 从 7 人升级,2026-07-11 从 12 人扩展到 13 人)
   'nav.werewolf': '狼人杀 13 人局',
