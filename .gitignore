@@ -71,3 +71,9 @@ TestReport/*
 # 根目录临时截图
 test001.png
 workspace_screen.jpg
+
+# 2026-08-17 §20260817-01 — 布局调试/验收的临时截图工作区。
+# 定位与 AutoTestScreenshots/ 一致:随手截的过程图不入仓库,
+# 值得长期保留的成品/证据图一律归档到 ProjectPic/ 并按
+# `<lesson 编号>-before.png` / `-after.png` 命名(见 20260816-02 / 20260817-01)。
+screenshots/
