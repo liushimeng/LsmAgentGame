@@ -1324,7 +1324,7 @@
 }
 .werewolf-guess-popover__clear:hover { color: #ffd0d0; }
 
-/* §20260812-02 U4 — 顶部栏(GamStatusHeader + 音效开关同行) */
+/* 顶部栏(GameStatusHeader) */
 .werewolf-top-bar {
   display: flex;
   align-items: center;

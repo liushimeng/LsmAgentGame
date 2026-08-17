@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 // 2026-08-06 §房间布局优化 — 折叠状态读取(localStorage 持久化)。
 // try/catch 包裹:浏览器隐身模式下 setItem 可能抛 SecurityError,
 const readFoldPref = (key: string): boolean => {
@@ -51,9 +51,6 @@ import { CommitmentPanel } from '@/components/werewolf/CommitmentPanel';
 // 唯独没有挂载点,自 §20260812-03 落地起零 import(§126)。
 import SecretLetterPanel from '@/components/werewolf/SecretLetterPanel';
 import FactionBetPanel from '@/components/werewolf/FactionBetPanel';
-// §20260812-02 U4 — 音效反馈系统
-import { useSoundEffects } from '@/hooks/useSoundEffects';
-import { SoundToggle } from '@/components/common/SoundToggle';
 import { CommitmentButton } from '@/components/werewolf/CommitmentButton';
 // 2026-07-23 §道具特效 — 道具使用视觉特效叠加层(监听 lastPropEvent 触发动画)。
 import { PropUseOverlay } from '@/components/werewolf/PropUseOverlay';
@@ -89,8 +86,6 @@ export function WerewolfGamePage() {
   useEffect(() => { writeFoldPref(LS_FOLD_INFO, infoFolded); }, [infoFolded]);
   const toggleChatFold = useCallback(() => setChatFolded((v) => !v), []);
   const toggleInfoFold = useCallback(() => setInfoFolded((v) => !v), []);
-  // §20260812-02 U4 — 音效系统
-  const sound = useSoundEffects();
 
   const { gameState, mySeat, gameOver, settlement, reset, busy, setBusy, dismissSettlement, preWaitDeadlineAt } =
     useWerewolfStore();
@@ -467,43 +462,6 @@ export function WerewolfGamePage() {
     return () => clearInterval(timer);
   }, [preWaitDeadlineAt]);
 
-  // ─── §20260812-02 U4: 音效事件绑定 ───
-  // 监听 phase 变化，触发天黑/天亮音效
-  const prevPhaseRef = useRef<string | undefined>(gameState?.phase);
-  useEffect(() => {
-    if (!gameState) return;
-    const prev = prevPhaseRef.current;
-    const cur = gameState.phase;
-    prevPhaseRef.current = cur;
-    if (prev === cur) return;
-    // 天黑(进入第一个夜间阶段)
-    if (cur.startsWith('night_') && !prev?.startsWith('night_')) {
-      sound.play('night');
-    }
-    // 天亮(进入白天阶段)
-    if (cur === 'speak' && prev?.startsWith('night_')) {
-      sound.play('dawn');
-    }
-    // 投票结果
-    if (cur === 'vote_result') {
-      sound.play('vote');
-    }
-    // 身份揭晓
-    if (cur === 'idiot_reveal' || cur === 'knight_duel' || cur === 'hunter_shoot') {
-      sound.play('reveal');
-    }
-  }, [gameState?.phase, sound]);
-
-  // 死亡音效:监听 all_dead_list 长度变化
-  const prevDeadLenRef = useRef(gameState?.all_dead_list_verbose?.length ?? 0);
-  useEffect(() => {
-    const curLen = gameState?.all_dead_list_verbose?.length ?? 0;
-    if (curLen > prevDeadLenRef.current) {
-      sound.play('death');
-    }
-    prevDeadLenRef.current = curLen;
-  }, [gameState?.all_dead_list_verbose?.length, sound]);
-
   // 2026-07-10: 重开局投票阶段独立分支 — 渲染投票面板 + 不显示其他控制组件。
   const isRestartVote = !!gameState && gameState.phase === 'restart_vote';
   const handleRestartVote = useCallback(
@@ -525,8 +483,6 @@ export function WerewolfGamePage() {
             onOpenHistory={() => setHistoryOpen(true)}
           />
         )}
-        {/* §20260812-02 U4 — 音效开关(右上角) */}
-        <SoundToggle sound={sound} />
       </div>
       <div
         className="game-area"
