@@ -147,9 +147,18 @@ function buildGridOrder(total: number, mySeat: number, cols: number): number[][]
   for (let i = 0; i < total; i++) all.push((mySeat + 1 + i) % total);
   const rows: number[][] = [];
   // 最后一行仅放 mySeat,前 (total-1) 个按每行 N 个分配。
+  //
+  // 【BUG-20260817-01】slice 的上界必须钳到 headCount,不能用 i+N。
+  // `all` 长度是 total(含 mySeat,它在末位),headCount = total-1。
+  // 当 (total-1) % N !== 0 且最后一段不足 N 个时,`all.slice(i, i+N)` 会越过
+  // headCount 把末位的 mySeat 也切进来,mySeat 于是既出现在末行、又出现在
+  // 倒数第二行 —— **同一玩家渲染两张座位卡**。
+  //   13 人局实测:cols=2/3/4/6 恰好整除或刚好不越界故正常;
+  //   cols=5 → [[1..5],[6..10],[11,12,0],[0]] 共 14 项,seat 0 重复。
+  // 这是 §20260817-01 U5 引入 5 列档时暴露的既有缺陷(2/3/4/6 列下潜伏)。
   const headCount = total - 1;
   for (let i = 0; i < headCount; i += N) {
-    rows.push(all.slice(i, i + N));
+    rows.push(all.slice(i, Math.min(i + N, headCount)));
   }
   rows.push([mySeat]);
   return rows;
@@ -162,17 +171,32 @@ function buildGridOrder(total: number, mySeat: number, cols: number): number[][]
 // §2026-08-06 — 宽度来源改为 board-container(通过 ResizeObserver),
 // 侧栏折叠后 container 变宽,自动增加每行列数让 13 人局展示更多角色。
 // §20260816-02 U1 — 阈值 1100→900:实测 1920 视口下中栏 container 约 1020px,
-// 走 3 列 13 人局 = 5 行,中栏底部 panel 被挤出可见区;下调到 900 后 4 列 = 4 行,
-// 节省 1 行 ≈ 250px,配合头像紧凑化(56→48px)4 列下完整显示 5 行指标无溢出。
+// 走 3 列 13 人局 = 5 行,中栏底部 panel 被挤出可见区;下调到 900 后 4 列 = 4 行。
+//
+// §20260817-01 U5 — 补 5 列档。13 人局的关键约束是 **行数 = ⌈13 / cols⌉**,
+// 而中栏实测可用高度只有约 560px(776 − phase-clock 37 − my-turn 49 −
+// action-panel 264 − 两个 strip 72 − gap/padding):
+//   cols=3 → 5 行 × 170px = 894px  ❌
+//   cols=4 → 4 行 × 168px = 742px  ⚠️(仍溢出)
+//   cols=5 → 3 行 × 158px = 530px  ✅
+// 5 列 3 行是唯一装得进预算的方案,配套 CSS 见 werewolf-20260817-01.css U1。
+//
+// ⚠️ 阈值 940 而非 1000:首版实测 container = 951px。若阈值取 980
+// 会落回 4 列,U5 收益归零 —— **网格列数阈值必须实测容器宽度,
+// 不能按视口宽度估算**(§20260816-02 教训 2 的第二次应用)。
+// §20260817-01 U4 把左栏 317→268 / 右栏 528→470 后 container 约 1078px,
+// 940 阈值下留有 138px 余量,侧栏展开时也不会抖动回 4 列。
 //   ≤360px  → 1 列(极窄手机竖屏)
-//   ≤700px  → 2 列(典型手机/窄屏)
-//   ≤900px  → 3 列(侧栏全开的中等宽度)
-//   >900px  → 4 列(1920 视口 / 侧栏折叠后的大宽域)
+//   ≤560px  → 2 列(典型手机)
+//   ≤760px  → 3 列(窄屏 / 侧栏全开)
+//   ≤940px  → 4 列(中等宽度)
+//   >940px  → 5 列(1920 视口 / 侧栏折叠后的大宽域,13 人 = 3 行)
 function calcColsForViewport(width: number): number {
   if (width <= 360) return 1;
-  if (width <= 700) return 2;
-  if (width <= 900) return 3;
-  return 4;
+  if (width <= 560) return 2;
+  if (width <= 760) return 3;
+  if (width <= 940) return 4;
+  return 5;
 }
 function calcCompactForViewport(width: number): boolean {
   // §2026-08-06 — container 宽 ≤480 时启用紧凑模式(1-2 列下卡片仍窄)。

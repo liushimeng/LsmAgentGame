@@ -1,0 +1,323 @@
+/* ═══════════════════════════════════════════════════════════════════════
+ * werewolf-20260817-01.css — 狼人杀 13 人局主界面布局深度优化(第二版)
+ *
+ * 方案: tmpPlan/狼人杀布局显示优化-20260816-02.md(2026-08-17 第二版)
+ *
+ * 背景 —— 首版(commit 66f288a)的 U6 座位卡紧凑化整段是死代码:
+ *   规则写的是 `.werewolf-game .board-container.cols-4 .werewolf-seat`,
+ *   但 `cols-${cols}` 类由 WerewolfTable.tsx:786 挂在
+ *   **`.werewolf-table__grid`** 上,`.board-container` 永远不含该类。
+ *   getComputedStyle 实测: min-height=200px(期望 170)/ avatar=64px(期望 48),
+ *   三项全不符 → 首版 U6 收益 = 0。这是 §130 系列「声明了却从不接线」的
+ *   新形态:**CSS 语法正确、文件已导入、但选择器永不匹配**,
+ *   tsc / npm run build / 目视截图三者全部无法发现。
+ *
+ * 本文件必须排在 werewolf-speech.css **之后** —— 它覆盖后者的
+ * `.werewolf-seat { min-height }` 断点值(同特异性靠级联顺序取胜),
+ * 这条覆盖链见 globals.css 的注释:
+ *   werewolf.css → werewolf-v2.css → werewolf-emotion.css → werewolf-speech.css
+ * 独立成文件的原因见 CLAUDE.md §4(werewolf-v2.css 已 1813 行 > 1800 上限)。
+ *
+ * 所有选择器带 `.werewolf-game` 作用域前缀 —— 其余 4 款游戏零影响。
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────
+ * U1【P0】修正 §20260816-02 U6 的选择器目标节点
+ *
+ * 双选择器并列: `.werewolf-table__grid.cols-N`(真实命中,由 JSX 挂载)
+ * 与 `.board-container.cols-N`(向后兼容,万一未来 JSX 把类挪回 container)。
+ * 验收断言: getComputedStyle(seat).minHeight !== '200px'
+ * ───────────────────────────────────────────────────────────────────── */
+
+/* 4 列(container 760~940px) */
+.werewolf-game .werewolf-table__grid.cols-4 .werewolf-seat,
+.werewolf-game .board-container.cols-4 .werewolf-seat {
+  min-height: 168px;
+  padding: 6px 8px;
+  gap: 6px;
+}
+.werewolf-game .werewolf-table__grid.cols-4 .werewolf-seat__avatar,
+.werewolf-game .board-container.cols-4 .werewolf-seat__avatar {
+  width: 48px;
+  height: 62px;
+  flex-shrink: 0;
+}
+
+/* 5 列(container > 940px — 1920 视口 + 侧栏折叠的主战场)
+ * 13 座位 ÷ 5 = 3 行。3 行 × 158px + 2 × 6px gap + 44px phase 净空
+ * ≈ 530px,装进中栏实测 560px 预算。 */
+.werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat,
+.werewolf-game .board-container.cols-5 .werewolf-seat {
+  min-height: 158px;
+  padding: 5px 7px;
+  gap: 6px;
+}
+.werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat__avatar,
+.werewolf-game .board-container.cols-5 .werewolf-seat__avatar {
+  width: 42px;
+  height: 56px;
+  flex-shrink: 0;
+}
+/* 5 列下卡宽约 208px — 指标行必须换行紧排,模型名必须省略号兜底 */
+.werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat__metrics {
+  row-gap: 1px;
+  column-gap: 4px;
+  font-size: 9.5px;
+  line-height: 1.3;
+}
+.werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat__model-row,
+.werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat__action {
+  font-size: 10px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 4/5 列共用: header 行紧凑 */
+.werewolf-game .werewolf-table__grid.cols-4 .werewolf-seat__header,
+.werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat__header {
+  min-height: 20px;
+  font-size: 10.5px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * U2【P0】座位卡改「内容驱动高度 + 唯一可变元素钳位」
+ *
+ * 实测: 5 张卡 scrollHeight 246~266 vs height 200 → overflow:hidden
+ * 最多切掉 66px,受害者是最下方的 model-row(模型名整行消失)。
+ *
+ * 根因: 6 行结构里 5 行定高(header 20 / role 14 / action 13 /
+ * metrics 62 / model-row 13),只有 speech 可变(49px 且会继续长)。
+ * 对策: 把不确定性收敛到 speech 一处钳位,整卡改内容驱动。
+ * 裁切点从「随机切掉模型名」变为「只截断发言文本」——
+ * 而发言全文在右侧聊天栏本来就可读,且 title 属性保留全文。
+ * ───────────────────────────────────────────────────────────────────── */
+.werewolf-game .werewolf-seat {
+  /* min-height 由上面的 cols-N 规则给出;此处解除 200px 硬下限的兜底 */
+  height: auto;
+}
+/* 发言气泡 —— 唯一可变高元素,钳到 2 行 + padding ≈ 42px */
+.werewolf-game .werewolf-seat__speech {
+  max-height: 42px;
+  box-sizing: border-box;
+}
+/* 5 列下气泡钳为 1 行(卡更窄,2 行会溢出) */
+.werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat__speech {
+  max-height: 30px;
+  padding: 3px 5px 2px 6px;
+}
+.werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat__speech-body {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+/* 覆盖 werewolf-speech.css 的 ≤1280 / ≤1024 断点 min-height(225/200px)
+ * —— 那两条在 4/5 列下会把卡撑回 200+px,抵消本节优化。
+ * 同特异性,靠 globals.css 中本文件的 @import 顺序在其后取胜。 */
+@media (max-width: 1280px) {
+  .werewolf-game .werewolf-table__grid.cols-4 .werewolf-seat,
+  .werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat {
+    min-height: 168px;
+  }
+}
+@media (max-width: 1024px) {
+  .werewolf-game .werewolf-table__grid.cols-4 .werewolf-seat,
+  .werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat {
+    min-height: 160px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * U3【P0】解除 `.werewolf-table` 的固定 height
+ *
+ * 实测: 该元素被 3 套规则同时约束 ——
+ *   werewolf.css:434  flex: 1 1 auto; min-height: 320px
+ *   werewolf.css:463  height: 560px     (1600~1999 分支)
+ *   werewolf.css:451  display:flex; overflow-y:auto; min-height:0
+ * 结果 getComputedStyle 算出 451px,实际渲染 234px,**三个数字互不相同**。
+ *
+ * 凡 flex 子项,约束应只用 min-height / max-height 表达,不用 height。
+ * ───────────────────────────────────────────────────────────────────── */
+.werewolf-game .werewolf-table {
+  height: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+/* 座位网格拿满 table 的可用高度,不再自行滚动(A2 验收) */
+.werewolf-game .werewolf-table__grid {
+  overflow-y: visible;
+  min-height: 0;
+  align-content: start;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * U4【P1】三栏宽度重配比 —— 同时消灭「左栏留白 336px」与「中栏溢出 469px」
+ *
+ * 实测 1920 视口: 317px | 951px | 528px,而左栏内容仅 376px 高
+ * (容器 712px → 浪费 336px)。**一边溢出一边留空 = 空间分配错了,
+ * 不是空间不够** → 优先调栏宽配比,而不是继续压缩中栏内容。
+ *
+ * 改后: 268px | 1fr | 470px → 中栏约 1078px(+127px),5 列每卡 ~208px。
+ * ───────────────────────────────────────────────────────────────────── */
+@media (min-width: 1400px) {
+  .werewolf-game .game-area {
+    grid-template-columns: 268px minmax(0, 1fr) 470px;
+  }
+}
+@media (min-width: 1900px) {
+  .werewolf-game .game-area {
+    grid-template-columns: 280px minmax(0, 1fr) 500px;
+  }
+}
+
+/* 左栏纵向: 内容不足时收缩到内容高度,不拉伸空容器。
+ *
+ * ⚠️ 关键 —— 仅 `align-self: start` + `max-height: 100%` **不足**:
+ * 实测 `.werewolf-game .game-sidebar` 与 `.werewolf-game .room-info-panel`
+ * 两条规则都显式写了 `height: 100%`,显式高度胜过 align-self,
+ * 容器仍被撑到 776px(内容 376px → 留白 336px 不变)。
+ * 必须显式 `height: auto` 把高度交还给内容,`max-height: 100%` 只作上限兜底。
+ * 这是「改了却没生效」的第二例,同样只有 getComputedStyle 实测能发现。 */
+.werewolf-game .game-sidebar,
+.werewolf-game .game-sidebar.room-info-panel,
+.werewolf-game .room-info-panel {
+  height: auto;
+  max-height: 100%;
+  align-self: start;
+}
+.werewolf-game .room-info-panel__body {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  flex: 0 1 auto;
+  gap: 6px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * U5【P1】中栏垂直预算回收 —— 阶段信息去重
+ *
+ * 实测同屏 3 处相同阶段文案 + 1 处行动提示:
+ *   .werewolf-top-bar        「遗言阶段」          ← 顶栏,保留(全局锚点)
+ *   .phase-clock       h=37  「遗言阶段 / ⌛ 等待…」← 与顶栏重复,压成单行
+ *   .werewolf-table__phase   「🪦遗言阶段 · 白天 1」← 牌桌内徽标,保留(带轮次)
+ *   .my-turn-indicator h=49  「轮到 #1 行动」      ← 关键信息,压成单行 chip
+ * 合计 86px + gap 用于显示顶栏已有的信息。
+ *
+ * 不删 DOM(超时态 is-overdue 挂在 phase-clock 上,删了会丢信息),
+ * 改为压缩到单行并去掉重复的阶段名 —— 纯 CSS,零 JSX 风险。
+ * ───────────────────────────────────────────────────────────────────── */
+.werewolf-game .board-container > .phase-clock {
+  padding: 2px 8px;
+  min-height: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.werewolf-game .board-container > .my-turn-indicator {
+  padding: 3px 10px;
+  min-height: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* 中栏整体间距收紧: gap 10→6, padding 10→6(1400px 以上大屏亦生效,
+ * 原规则只在 ≤1599px 命中,1920 视口反而最宽松 —— 属于断点覆盖漏洞) */
+.werewolf-game .board-container {
+  gap: 6px;
+  padding: 6px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * U6【P1】夜间/投票操作面板紧凑化
+ *
+ * 实测 .werewolf-action-panel h=264 —— 中栏第二大空间消费者,
+ * 且与座位卡点击投票功能重复。13 个按钮 × 44px(§23 触控 token)
+ * 以 7+6 两行铺开 = 88px,加标题/已投票/提交/padding ≈ 264px。
+ *
+ * 对策不是降低触控 token(可达性不可退让),而是让按钮网格自适应
+ * 多列紧排 —— 把可达性成本从「2 行 × 44px」压到「1~2 行紧排」。
+ * ───────────────────────────────────────────────────────────────────── */
+.werewolf-game .werewolf-action-panel {
+  padding: 6px 8px;
+  gap: 5px;
+}
+.werewolf-game .werewolf-action-panel > * + * {
+  margin-top: 0;
+}
+/* 座位按钮网格 —— 真实类名是 `.seat-grid`(实测 DOM 得来,非按惯例猜测:
+ * 首版方案里写的 `.ww-seat-btn-grid` / `.night-action__targets` /
+ * `.vote-panel__targets` 三个名字在 DOM 中零命中,是 §7 教训 1 的同型陷阱)。
+ * 固定 7 列 → auto-fill 尽可能多列(13 个按钮压到 1~2 行)。 */
+.werewolf-game .werewolf-action-panel .seat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 4px;
+}
+/* 标题 / 提示行紧凑(实测 h4=21px + p=18px + sheriff-candidates=56px) */
+.werewolf-game .werewolf-action-panel > h4 {
+  margin: 0 0 2px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+.werewolf-game .werewolf-action-panel > p,
+.werewolf-game .werewolf-action-panel .sheriff-hint {
+  margin: 0 0 2px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.werewolf-game .werewolf-action-panel .sheriff-candidates {
+  margin: 0;
+}
+.werewolf-game .werewolf-action-panel .sheriff-candidates h5 {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+.werewolf-game .werewolf-action-panel .action-row {
+  gap: 6px;
+}
+/* 触控 token 维持 44px(§23),仅压缩横向 padding 与字号 */
+.werewolf-game .werewolf-action-panel button {
+  padding-left: 6px;
+  padding-right: 6px;
+  font-size: 12px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * U7 右栏聊天: 470~500px 下气泡不溢出
+ * ───────────────────────────────────────────────────────────────────── */
+.werewolf-game .game-chat-column {
+  min-width: 0;
+}
+/* 真实类名 `.game-chat-msg__text`(实测 DOM;`.chat-message` / `.chat-msg`
+ * 在狼人杀房间内零命中 —— 那是大厅 ChatPanel 的类名) */
+.werewolf-game .game-chat-column .game-chat-msg__text {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+/* 空历史提示「没有更早的消息了」压到最小占位(首版 U5 的延续) */
+.werewolf-game .game-chat__no-more {
+  padding: 1px 10px;
+  font-size: 10px;
+  line-height: 1.3;
+  opacity: 0.5;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * U8 窄屏兜底 —— ≤1399px 保持首版三栏行为,零回归
+ * ───────────────────────────────────────────────────────────────────── */
+@media (max-width: 1399px) {
+  .werewolf-game .board-container {
+    gap: 5px;
+    padding: 5px;
+  }
+}

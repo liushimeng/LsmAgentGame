@@ -36,5 +36,12 @@
    断点值与 .werewolf-seat__metrics 的降权规则(同优先级靠级联顺序取胜)。
    独立成文件的原因见 CLAUDE.md §4(werewolf-v2.css 已超 1800 行上限)。 */
 @import './werewolf-speech.css';
+/* 2026-08-17 §20260817-01 — 狼人杀主界面布局深度优化(第二版)。
+   **必须**排在 werewolf-speech.css 之后:本文件覆盖后者的
+   `.werewolf-seat { min-height: 225px/200px/180px }` 三个断点值
+   (同特异性,靠级联顺序取胜)。同时修正 §20260816-02 U6 写错节点的
+   `.board-container.cols-N` 选择器(实际类挂在 .werewolf-table__grid 上)。
+   独立成文件的原因见 CLAUDE.md §4(werewolf-v2.css 已 1813 行 > 1800 上限)。 */
+@import './werewolf-20260817-01.css';
 @import './appmodal.css';
 @import './werewolf-modal.css';
