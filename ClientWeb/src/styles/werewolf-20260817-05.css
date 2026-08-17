@@ -1,0 +1,272 @@
+/* =============================================================================
+ * 2026-08-17 §20260817-05 — 狼人杀座位卡「上段横排 + 底部通栏」两段式重构
+ *
+ * 问题(§20260817-04 布局的副作用,实机截图确认):
+ *   缺陷 A — 座位卡是 flex-row,左列 avatar(64×88 + margin-top:6 ≈ 94px)
+ *     下方残留 ~90px 死区空白;卡 min-height 200px,左列无任何元素向下延伸。
+ *   缺陷 B — .werewolf-seat__agent-block(决策摘要/延迟调用/Token 模型三行)
+ *     被 margin-top:auto 囚禁在右列 ~98px 窄列底部,10px 字号 + chips 折行,
+ *     视觉密度过高。
+ *
+ * 修复机制(本文件 + WerewolfTable.tsx SeatCell JSX 重排):
+ *   1. JSX 新增 .werewolf-seat__main wrapper 包住 avatar + info;
+ *      agent-block 移出 info、提升为卡的顶层子节点(通栏);
+ *      BotPhaseIndicator 移入 agent-block 末尾。
+ *   2. 卡容器 flex-direction: row → column;agent-block 的 margin-top:auto
+ *      **保持不变** —— 语义自动从「贴右列底」变为「贴整卡底」,
+ *      这正是消除死区的机制,勿删。
+ *   3. 通栏松绑:chips 单行可容纳,字号 10→11px、块内 gap 2→4px、
+ *      chips padding 1px 4px→2px 6px;决策摘要截断 18→24 字(JSX 侧);
+ *      模型名 max-width:70% 放宽。
+ *
+ * 文件位置:接 werewolf-20260817-04.css 之后(§2.1 globals.css 硬约束 4 —
+ * 既有 werewolf.css → werewolf-v2.css → werewolf-emotion.css → werewolf-speech.css
+ * → §20260817-* 链顺序不动,本文件按编号顺序排在最后)。
+ * 独立成文件的原因见 CLAUDE.md §4(werewolf-v2.css 已超 1800 行上限,
+ * 新样式不回写主表)。
+ *
+ * 选择器特异性说明:本节基础规则与 v2 / §20260817-04 的同优先级选择器
+ * (0,1,0)靠级联顺序取胜;cols-4 兜底规则带 .werewolf-game 作用域前缀
+ * (0,4,0),高于基础 nowrap 规则,仅窄卡生效。
+ *
+ * 2026-08-17 追加 — 实机回归修复(CDP getComputedStyle,1920×941,cols-5):
+ * §20260817-01 给 cols-5/cols-4 定的 min-height 158/168px 是按旧「右列窄布局
+ * + 9.5px 字体」算的,装不下新两段式结构(__main ~80 + agent-block ~90),
+ * model-row 折行的第二行被 overflow:hidden 裁掉(模型名 + 最后调用时间不可见)。
+ * 见文末「U3 — cols-5/cols-4 min-height 与紧凑字号回填」一节。
+ *
+ * 2026-08-17 追加 2 — 座位号 #N 与身份「未知」合并为一行(用户第 5 项需求):
+ * JSX 把 __role 节点移入 __header(紧跟 __num),原独立 role 行删除,
+ * main 段高度改由 avatar 主导,U3 的 min-height 账目同步重算下调。
+ * 见文末「U4 — header 行内排 role」一节。
+ *
+ * 2026-08-17 追加 3 — 发言气泡撑满 info 列剩余高度(用户第 6 项需求):
+ * 气泡 flex:1 1 auto 吃掉剩余高度,底部与 avatar 底部对齐;解除
+ * §20260817-01 的 max-height 钳位(文本边界由 line-clamp 承担)。
+ * 见文末「U5 — 发言气泡撑满」一节。
+ * ============================================================================= */
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * U1 — 卡容器改纵向:上段 __main 横排,下段 agent-block 通栏
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/* row → column:覆盖 werewolf-v2.css:978 的 flex-direction:row。
+   其余属性(position/gap/padding/min-height/overflow 等)全部不动。 */
+.werewolf-seat {
+  flex-direction: column;
+}
+
+/* 上段横排 wrapper:avatar(左,flex-shrink:0 已在 v2 定义)+ info(右,flex:1)。
+   min-width:0 保证 info 内 ellipsis 生效;gap 与卡容器原 gap 一致。 */
+.werewolf-seat__main {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * U2 — agent-block 通栏松绑
+ *
+ * margin-top:auto **保留**(定义在 werewolf-20260817-04.css:35,本文件不重复
+ * 声明)—— JSX 重排后它贴的是整卡底部而非右列底部,死区随之消除。
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+.werewolf-seat__agent-block {
+  /* 覆盖 §20260817-04 的 gap:2px / padding-top:4px —— 通栏后行距可以呼吸。 */
+  gap: 4px;
+  padding-top: 6px;
+}
+
+/* 行 2 — 延迟 + 调用数:通栏(~170px 内宽)下单行可容纳 4 枚 chip,
+   wrap 改回 nowrap + overflow:hidden 防极端溢出(title 挂全文兜底)。 */
+.werewolf-seat__metrics-row {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  gap: 5px;
+  font-size: 11px;
+}
+
+/* cols-4 窄卡(container 760~940px,卡内宽 ~124px)保留 wrap 兜底:
+   4 枚 chip ~110px + gap 勉强容纳,极端长数字(如 ×99 / 📊99)仍可能溢出,
+   窄卡宁可折行也不裁切。双选择器并列(.werewolf-table__grid.cols-4 是真实
+   命中节点,.board-container.cols-4 向后兼容)—— §20260817-01 U1 教训:
+   cols-N 类由 JSX 挂在 .werewolf-table__grid 上,单写后者会永不匹配。 */
+.werewolf-game .werewolf-table__grid.cols-4 .werewolf-seat__metrics-row,
+.werewolf-game .board-container.cols-4 .werewolf-seat__metrics-row {
+  flex-wrap: wrap;
+}
+
+/* 行 3 — Token + 模型名 + 最后调用时间:同通栏松绑。 */
+.werewolf-seat__model-row {
+  gap: 5px;
+  font-size: 11px;
+}
+
+/* chips 内边距加大:覆盖 werewolf-v2.css:1512/1536 的 1px 4px。 */
+.werewolf-seat__metric,
+.werewolf-seat__token {
+  padding: 2px 6px;
+}
+
+/* 行 1 — 决策摘要:字号 10→11px(覆盖 werewolf-v2.css:1489)。
+   注:cols-5 下 §20260817-01.css 的 10px 覆盖(0,4,0 特异性)仍然生效,
+   窄卡保持紧凑,仅默认宽卡松绑。 */
+.werewolf-seat__action {
+  font-size: 11px;
+}
+
+/* 模型名 max-width:70% → 100%:通栏后不再需要给 call-time 徽章预留固定比例,
+   flex 布局(model-row 内 flex:0 1 auto + min-width:0,§20260817-04)已能
+   自动让位;ellipsis 截断保留。 */
+.werewolf-seat__model {
+  max-width: 100%;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * U3 — cols-5 / cols-4 min-height 与紧凑字号回填(2026-08-17 实机回归修复)
+ *
+ * 实机证据(CDP getComputedStyle,1920×941 视口,cols-5 网格):
+ *   - cols-5 卡 min-height=158px,实测 scrollHeight=175~200 —— 内容装不下。
+ *   - 高度账目:__main ~80(头像 56+margin / header 20 + role 18 + speech 30)
+ *     + agent-block ~90(action 15 + metrics-row 23 + model-row 折行 38 + gaps)
+ *     ≈ 170+,网格行轨实测 = min-height(158),卡片被 stretch 到行轨高度,
+ *     超出部分被 .werewolf-seat 的 overflow:hidden 裁切 —— model-row 折行的
+ *     第二行(模型名 + 最后调用时间)不可见。
+ *   - 根因 1:§20260817-01 的 min-height 158/168px 按旧「右列窄布局」账目
+ *     所定,两段式重排后失效。
+ *   - 根因 2:§20260817-01 cols-5 紧凑字号覆盖写的是旧类名
+ *     .werewolf-seat__metrics(9.5px),对 §20260817-04 引入的新类名
+ *     .werewolf-seat__metrics-row 不生效 → 窄卡吃了 11px 基础字号加剧折行。
+ *     (model-row / action 在 §20260817-01 已有 10px 覆盖,此处显式重写以
+ *     自文档化,值不变。)
+ *
+ * 级联说明:本节规则特异性 (0,4,0),高于上面 (0,1,0) 的基础松绑规则;
+ * 与 §20260817-01.css 的 cols-N 规则(含其 ≤1280/≤1024 媒体查询覆盖
+ * 168/160px)同特异性,靠本文件在 globals.css 中更靠后的 @import 顺序取胜
+ * —— 即窄视口下也同样适用新账目(两段式结构在 168/160px 同样装不下)。
+ * 选择器沿用 §20260817-01 的双写格式(.werewolf-table__grid.cols-N 是 JSX
+ * 真实挂载节点,.board-container.cols-N 向后兼容 —— §20260817-01 U1 教训)。
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/* cols-5(container > 940px,1920 视口主战场):192px —— U4 合并行后重算:
+   main = max(avatar 56+margin 6 = 62, 合并行 20 + speech 30 + gap) ≈ 62;
+   agent-block 静态 3 行 ~90(action 15 + metrics 20 + model-row 38 + gaps);
+   **+ LLM 5 态指示器行 .ww-bot-phase 21px**(仅 calling/streaming 等 LLM 活跃时
+   渲染,但静态预算必须容纳 —— 复测实测该状态下卡高 ≈ 191px,170px 预算会把
+   指示器行整行裁掉 18px,而 is-llm-calling 绿边高亮卡正是用户视线焦点);
+   总 ≈ 62 + 6 + 113 + 10(padding) = 191 → 取 192。
+   选择静态容纳而非 .is-llm-calling 动态加高:避免 13 卡网格随行高跳动
+   (layout thrash);idle 卡的 ~24px 富余由 agent-block 的 margin-top:auto
+   以横向整带形式吸收,不会形成左列死区。 */
+.werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat,
+.werewolf-game .board-container.cols-5 .werewolf-seat {
+  min-height: 192px;
+}
+/* metrics-row 回填 9.5px(对齐 §20260817-01 对旧类名 .__metrics 的意图)。 */
+.werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat__metrics-row,
+.werewolf-game .board-container.cols-5 .werewolf-seat__metrics-row {
+  font-size: 9.5px;
+}
+.werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat__model-row,
+.werewolf-game .board-container.cols-5 .werewolf-seat__model-row,
+.werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat__action,
+.werewolf-game .board-container.cols-5 .werewolf-seat__action {
+  font-size: 10px;
+}
+
+/* cols-4(container 760~940px):200px —— 账目同 cols-5:
+   main = max(avatar 62+margin 6 = 68, 合并行 20 + speech 42 + gap) ≈ 68;
+   agent-block 静态 ~90 + **指示器行 21px**(仅 LLM 活跃时渲染,静态预算须容纳,
+   依据同 cols-5 注释);总 ≈ 68 + 6 + 111 + 10 = 195,model-row 在 ~124px
+   内宽更易折行留余量 → 取 200。 */
+.werewolf-game .werewolf-table__grid.cols-4 .werewolf-seat,
+.werewolf-game .board-container.cols-4 .werewolf-seat {
+  min-height: 200px;
+}
+.werewolf-game .werewolf-table__grid.cols-4 .werewolf-seat__metrics-row,
+.werewolf-game .board-container.cols-4 .werewolf-seat__metrics-row,
+.werewolf-game .werewolf-table__grid.cols-4 .werewolf-seat__model-row,
+.werewolf-game .board-container.cols-4 .werewolf-seat__model-row,
+.werewolf-game .werewolf-table__grid.cols-4 .werewolf-seat__action,
+.werewolf-game .board-container.cols-4 .werewolf-seat__action {
+  font-size: 10px;
+}
+
+/* 基础规则(cols 1~3 宽卡)不动:v2 的 min-height 200px 对两段式结构足够。 */
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * U4 — 座位号 #N 与身份「未知」合并为一行(2026-08-17 追加,用户第 5 项需求)
+ *
+ * 原 __header(#N + 徽章)与 __role(未知/角色名)是两个独立 flex 行,
+ * 行后有留白;JSX 已把 __role 节点移入 __header(紧跟 __num,div → span),
+ * 原独立 role 行删除,释放的纵向空间留给下方信息(main 段高度改由 avatar
+ * 主导,U3 的 min-height 账目同步下调)。
+ *
+ * 类名与条件类不变(__role / is-revealed-truth),既有类选择器继续生效:
+ *   werewolf-v2.css:1207  .werewolf-seat.is-dead .werewolf-seat__role 变色
+ *   werewolf.css:1256     .werewolf-seat__role.is-revealed-truth
+ *   werewolf-v2.css:1625  断点 font-size:11px
+ * 本节只处理「行内排」所需的几何覆盖。
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/* header 一行排列:徽章多时 nowrap + overflow hidden 裁切兜底
+   (影响力徽章等的完整数据在 title tooltip,不丢信息)。 */
+.werewolf-seat__header {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  /* 角色文本与 #N / 徽章按基线对齐(覆盖 v2 的 align-items:center)。 */
+  align-items: baseline;
+}
+
+/* 行内 role:覆盖 v2:1195 的 text-align:center;flex item 允许收缩,
+   min-width:0 让 ellipsis 生效(其余 nowrap/ellipsis/max-width 已在 v2 定义)。 */
+.werewolf-seat__header .werewolf-seat__role {
+  text-align: left;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * U5 — 发言气泡撑满 info 列剩余高度,底部与头像底部对齐
+ *      (2026-08-17 追加,用户第 6 项需求)
+ *
+ * 实机现状(cols-5):__main 行内 avatar 高 62(56+margin),info 列内容仅
+ * ~50(header 20 + speech 被 §20260817-01 的 max-height:30px 钳住),
+ * 气泡底部比头像底部短一截,视觉不齐。
+ *
+ * 机制:info 列是 flex column、__main 已 align-items:stretch —— 给气泡
+ * flex:1 1 auto 吃掉剩余高度,底部自然与 avatar 底部齐平。
+ * 钳位从「盒高度」转移到「文本行数」:max-height 解除后,文本边界继续由
+ * .werewolf-seat__speech-body 的 -webkit-line-clamp(base 2 行 / cols-5 1 行,
+ * werewolf-speech.css / §20260817-01)承担,卡片高度仍由 avatar 主导,
+ * §20260817-01 U2「唯一可变元素钳位」的可预测性不变。
+ * 无发言座位气泡不渲染,无需处理;真人座位同理。
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+.werewolf-seat__speech {
+  /* 吃掉 info 列剩余高度 + 内部改 flex 列(正文顶部对齐,meta 贴底)。
+     popover 不受影响:它是 absolute 定位(werewolf-20260817-04.css:85),
+     容器 position:relative(werewolf-speech.css:23)不变,flex 化不参与的
+     绝对定位子节点布局。 */
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 解除 §20260817-01 的盒高度钳位(42px base / 30px cols-5)—— 它现在反而
+   阻碍撑满。同特异性靠本文件 @import 顺序在后取胜。 */
+.werewolf-game .werewolf-seat__speech {
+  max-height: none;
+}
+.werewolf-game .werewolf-table__grid.cols-5 .werewolf-seat__speech,
+.werewolf-game .board-container.cols-5 .werewolf-seat__speech {
+  max-height: none;
+}
+
+/* meta 行(相对时间 + kind)贴气泡底 —— 与头像底边同线,落实「底部对齐」语义。 */
+.werewolf-seat__speech-meta {
+  margin-top: auto;
+}

@@ -55,5 +55,12 @@
    werewolf-v2.css → werewolf-emotion.css → werewolf-speech.css → ... 链顺序。
    独立成文件的原因见 CLAUDE.md §4(werewolf-v2.css 已超 1800 行上限)。 */
 @import './werewolf-20260817-04.css';
+/* 2026-08-17 §20260817-05 — 狼人杀座位卡两段式重构(上段 __main 横排 +
+   agent-block 底部通栏,消除头像列死区 + Agent 指标松绑)。**必须**排在
+   werewolf-20260817-04.css 之后:本文件覆盖 .werewolf-seat 的 flex-direction
+   与 §04 agent-block 的 gap/padding(同特异性,靠级联顺序取胜);
+   不调整既有 @import 链顺序。
+   独立成文件的原因见 CLAUDE.md §4(werewolf-v2.css 已超 1800 行上限)。 */
+@import './werewolf-20260817-05.css';
 @import './appmodal.css';
 @import './werewolf-modal.css';

@@ -339,9 +339,9 @@ const SeatCell: React.FC<SeatCellProps> = ({
   const avgLatencySec = botCtx?.avg_llm_latency_ms !== undefined
     ? (botCtx.avg_llm_latency_ms / 1000).toFixed(1) : null;
   const totalCalls = botCtx?.total_llm_calls;
-  // 决策摘要横版显示 18 字截断;保留 title 显示完整。
-  const decisionShort = decision && decision.length > 18
-    ? decision.slice(0, 18) + '…' : decision;
+  // 决策摘要横版显示 24 字截断(§20260817-05 通栏化后由 18 放宽);保留 title 显示完整。
+  const decisionShort = decision && decision.length > 24
+    ? decision.slice(0, 24) + '…' : decision;
   // 2026-07-30 §统计增强 — Token 统计（含缓存命中检测）。
   const totalInTokens = botCtx?.total_input_tokens;
   const totalOutTokens = botCtx?.total_output_tokens;
@@ -397,9 +397,12 @@ const SeatCell: React.FC<SeatCellProps> = ({
       ].filter(Boolean).join(' ')}
       data-testid={`werewolf-seat-${seatIdx}`}
     >
-      {/* §优化-20260730-01 — 横版布局:左侧 avatar 64×88,右侧 info 5 行结构。
-          之前 1:1 垂直堆叠严重浪费 13 人局 4 列网格空间,现改为 row 方向
-          充分利用每张座位卡 ~320px 宽度,信息密度 ×1.5。 */}
+      {/* 2026-08-17 §20260817-05 — 卡内「上段横排 + 底部通栏」两段式。
+          __main wrapper 横排 avatar + info;agent-block 提升为卡的顶层子节点
+          通栏,margin-top:auto 由「贴右列底」自动变为「贴整卡底」,
+          头像列下方 ~90px 死区从结构上消除(详见 werewolf-20260817-05.css)。 */}
+      <div className="werewolf-seat__main">
+      {/* §优化-20260730-01 — 横版布局:左侧 avatar 64×88,右侧 info 结构。 */}
       <div className="werewolf-seat__avatar">
         {displayRevealed ? (
           <img src={roleImageByKey[player.role!]} alt={player.role} />
@@ -430,9 +433,16 @@ const SeatCell: React.FC<SeatCellProps> = ({
         )}
       </div>
       <div className="werewolf-seat__info">
-        {/* 第 1 行:座位号 + 警长/我 + 情绪 emoji(大号 18px)— 顶行一眼可见 */}
+        {/* 第 1 行:座位号 + 角色 + 警长/我 + 情绪 emoji(大号 18px)— 顶行一眼可见。
+            2026-08-17 §20260817-05 追加 — 角色身份并入 header 行(#N 与「未知」合并
+            为一行),原独立 __role 行删除,释放的纵向空间留给下方信息;
+            class 与 is-revealed-truth 条件不变,div → span 行内排,
+            既有 .is-dead .__role 变色 / .is-revealed-truth 等类选择器继续生效。 */}
         <div className="werewolf-seat__header">
           <span className="werewolf-seat__num">#{seatIdx + 1}</span>
+          <span className={`werewolf-seat__role ${displayRevealed ? 'is-revealed-truth' : ''}`}>
+            {isEmptySeat ? '空' : (displayRevealed ? roleText : unknownRole)}
+          </span>
           {isMySeat && <span className="werewolf-seat__self-badge">(我)</span>}
           {player.is_sheriff && <span className="werewolf-seat__sheriff-badge" title="警长">★</span>}
           {isIdiotRevealed && <span className="werewolf-seat__idiot-badge" title="白痴翻牌">🃏</span>}
@@ -454,14 +464,11 @@ const SeatCell: React.FC<SeatCellProps> = ({
             </span>
           )}
         </div>
-        {/* 第 2 行:角色身份 — 观战者/未揭示走"未知";死亡揭示走 is-revealed-truth */}
-        <div className={`werewolf-seat__role ${displayRevealed ? 'is-revealed-truth' : ''}`}>
-          {isEmptySeat ? '空' : (displayRevealed ? roleText : unknownRole)}
-        </div>
         {/* 2026-08-04 §表情特效 — 座位卡 emotion 徽章(emoji+label 条)已删除,
             信息并入 EmotionAvatar 头像 tooltip;FactionDrawer/HistoryDrawer
             的 emoji 展示保留不变。 */}
-        {/* 2026-08-05 §Agent聊天显示优化 — 第 3 行【主区】发言气泡。
+        {/* 2026-08-05 §Agent聊天显示优化 — 第 2 行【主区】发言气泡(§20260817-05
+            追加:角色并入 header 后由第 3 行晋升为第 2 行)。
             13px 2 行钳位 + title 挂全文;新发言 3s 金色高亮(.is-fresh);
             LLM streaming 时左侧 ▍ 闪烁光标(.is-streaming)。
             数据是**已广播的公开发言**,不需 spectator 守卫(§135 无关);
@@ -511,74 +518,76 @@ const SeatCell: React.FC<SeatCellProps> = ({
             )}
           </div>
         )}
-        {/* 2026-08-17 §04 U1 — Agent 紧凑指标块(贴卡片底部,avatar 下方不留空)。
-            原「决策摘要 / 延迟调用指标 / token+模型」三段分散在 3 个 flex item
-            (各占一行 + gap:2px),宽 ~190px 的座位卡在 5 列网格下视觉过散。
-            新结构三行打包进 .werewolf-seat__agent-block,margin-top:auto 贴底。
-            - 行 1:决策摘要 (人机共用,有则显示)
-            - 行 2:延迟 + 调用数 (Agent only,任一指标存在即渲染)
-            - 行 3:Token + 模型名 + 最后调用时间 (Agent only)
-            真人玩家:整块退化为「行 1(可能有) + avatar 撑满」,不再有 N/A 指标。 */}
-        <div className="werewolf-seat__agent-block">
-          {/* 行 1 — 决策摘要(人机共用) */}
-          {decisionShort && (
-            <div className="werewolf-seat__action" title={decision}>
-              📤 {decisionShort}
-            </div>
-          )}
-          {/* 行 2 — 延迟 + 调用数 (Agent only) */}
-          {botCtx && (lastLatencySec || avgLatencySec || totalCalls !== undefined || botCtx.api_call_count !== undefined) && (
-            <div className="werewolf-seat__metrics-row"
-                 title={[
-                   lastLatencySec ? `最后 ${lastLatencySec}s` : '',
-                   avgLatencySec ? `平均 ${avgLatencySec}s` : '',
-                   totalCalls !== undefined ? `总调用 ${totalCalls} 次` : '',
-                   botCtx.api_call_count !== undefined ? `API ${botCtx.api_call_count} 次` : '',
-                 ].filter(Boolean).join(' · ')}>
-              {lastLatencySec && <span className="werewolf-seat__metric is-last">🐇{lastLatencySec}s</span>}
-              {avgLatencySec && <span className="werewolf-seat__metric is-avg">µ{avgLatencySec}s</span>}
-              {totalCalls !== undefined && <span className="werewolf-seat__metric is-total">×{totalCalls}</span>}
-              {botCtx.api_call_count !== undefined && (
-                <span className="werewolf-seat__metric is-api">📊{botCtx.api_call_count}</span>
-              )}
-            </div>
-          )}
-          {/* 行 3 — Token + 模型名 + 最后调用时间 (Agent only) */}
-          {botCtx && (hasTokenStats || player.agent_name || (!compact && nowMs !== undefined)) && (
-            <div className="werewolf-seat__model-row"
-                 title={hasTokenStats ? `Token: 输入 ${totalInTokens ?? 0} · 输出 ${totalOutTokens ?? 0} · 总计 ${(totalInTokens ?? 0) + (totalOutTokens ?? 0)}` : undefined}>
-              {hasTokenStats && (
-                <>
-                  <span className="werewolf-seat__token">🔤in:{formatK(totalInTokens)}</span>
-                  <span className="werewolf-seat__token">out:{formatK(totalOutTokens)}</span>
-                  {isCacheHit && <span className="werewolf-seat__cachebadge" title={t('werewolf.seat.cacheHit')}>⚡</span>}
-                </>
-              )}
-              {player.agent_name && (() => {
-                // §20260811-08 U5 — 模型风格标识符。emoji 承担主要区分度
-                // (不受 .is-night brightness(0.4) 衰减),色相走 box-shadow 光晕
-                // 而非低透明度背景(§26.2 反模式 2/4)。
-                const ms = modelStyleOf(player.agent_name);
-                const school = t(`werewolf.modelstyle.${ms.schoolKey}` as any);
-                return (
-                  <span
-                    className="werewolf-seat__model ww-model-style"
-                    style={{ ['--ww-model-glow' as any]: ms.glow }}
-                    title={`${player.agent_name} · ${school}`}
-                  >
-                    <span className="ww-model-style__emoji" aria-hidden="true">{ms.emoji}</span>
-                    {player.agent_name}
-                  </span>
-                );
-              })()}
-              {!compact && nowMs !== undefined && (
-                <AgentCallTimeBadge ctx={botCtx} nowMs={nowMs} />
-              )}
-            </div>
-          )}
-        </div>
-        {/* LLM 5 态指示器 — 替代原 decision 行的位置,行高更紧凑
-            §优化-20260730-01 — compact 模式仍保留指示器(高优先级 LLM 状态必须可见)。 */}
+      </div>
+      </div>
+      {/* 2026-08-17 §20260817-05 — Agent 紧凑指标块提升为【整卡通栏】。
+          §20260817-04 把它放在 info 列内,margin-top:auto 贴的是右列底部,
+          造成「左上头像 / 左下空白 / 右下挤满」失衡;现与 __main 平级,
+          auto 语义自动变为贴整卡底部,指标宽度从 ~98px 窄列解放到整卡内宽。
+          - 行 1:决策摘要 (人机共用,有则显示)
+          - 行 2:延迟 + 调用数 (Agent only,任一指标存在即渲染)
+          - 行 3:Token + 模型名 + 最后调用时间 (Agent only)
+          - 末行:BotPhaseIndicator(LLM 5 态,逻辑上属于 Agent 运行状态)
+          真人玩家:整块退化为「行 1(可能有)」,不再有 N/A 指标。 */}
+      <div className="werewolf-seat__agent-block">
+        {/* 行 1 — 决策摘要(人机共用) */}
+        {decisionShort && (
+          <div className="werewolf-seat__action" title={decision}>
+            📤 {decisionShort}
+          </div>
+        )}
+        {/* 行 2 — 延迟 + 调用数 (Agent only) */}
+        {botCtx && (lastLatencySec || avgLatencySec || totalCalls !== undefined || botCtx.api_call_count !== undefined) && (
+          <div className="werewolf-seat__metrics-row"
+               title={[
+                 lastLatencySec ? `最后 ${lastLatencySec}s` : '',
+                 avgLatencySec ? `平均 ${avgLatencySec}s` : '',
+                 totalCalls !== undefined ? `总调用 ${totalCalls} 次` : '',
+                 botCtx.api_call_count !== undefined ? `API ${botCtx.api_call_count} 次` : '',
+               ].filter(Boolean).join(' · ')}>
+            {lastLatencySec && <span className="werewolf-seat__metric is-last">🐇{lastLatencySec}s</span>}
+            {avgLatencySec && <span className="werewolf-seat__metric is-avg">µ{avgLatencySec}s</span>}
+            {totalCalls !== undefined && <span className="werewolf-seat__metric is-total">×{totalCalls}</span>}
+            {botCtx.api_call_count !== undefined && (
+              <span className="werewolf-seat__metric is-api">📊{botCtx.api_call_count}</span>
+            )}
+          </div>
+        )}
+        {/* 行 3 — Token + 模型名 + 最后调用时间 (Agent only) */}
+        {botCtx && (hasTokenStats || player.agent_name || (!compact && nowMs !== undefined)) && (
+          <div className="werewolf-seat__model-row"
+               title={hasTokenStats ? `Token: 输入 ${totalInTokens ?? 0} · 输出 ${totalOutTokens ?? 0} · 总计 ${(totalInTokens ?? 0) + (totalOutTokens ?? 0)}` : undefined}>
+            {hasTokenStats && (
+              <>
+                <span className="werewolf-seat__token">🔤in:{formatK(totalInTokens)}</span>
+                <span className="werewolf-seat__token">out:{formatK(totalOutTokens)}</span>
+                {isCacheHit && <span className="werewolf-seat__cachebadge" title={t('werewolf.seat.cacheHit')}>⚡</span>}
+              </>
+            )}
+            {player.agent_name && (() => {
+              // §20260811-08 U5 — 模型风格标识符。emoji 承担主要区分度
+              // (不受 .is-night brightness(0.4) 衰减),色相走 box-shadow 光晕
+              // 而非低透明度背景(§26.2 反模式 2/4)。
+              const ms = modelStyleOf(player.agent_name);
+              const school = t(`werewolf.modelstyle.${ms.schoolKey}` as any);
+              return (
+                <span
+                  className="werewolf-seat__model ww-model-style"
+                  style={{ ['--ww-model-glow' as any]: ms.glow }}
+                  title={`${player.agent_name} · ${school}`}
+                >
+                  <span className="ww-model-style__emoji" aria-hidden="true">{ms.emoji}</span>
+                  {player.agent_name}
+                </span>
+              );
+            })()}
+            {!compact && nowMs !== undefined && (
+              <AgentCallTimeBadge ctx={botCtx} nowMs={nowMs} />
+            )}
+          </div>
+        )}
+        {/* LLM 5 态指示器 — §20260817-05 从 info 列移入通栏末尾,
+            渲染条件原样不变(§优化-20260730-01:compact 模式仍保留)。 */}
         {hasPhaseIndicator && !isDead && botCtx && nowMs !== undefined && (
           <BotPhaseIndicator
             bot={botCtx}
@@ -586,15 +595,15 @@ const SeatCell: React.FC<SeatCellProps> = ({
             testIdSuffix={String(seatIdx)}
           />
         )}
-        {/* 兼容旧测试 ID — 部分 e2e 仍依赖 seat-calling-{seat}(隐藏元素,仅保留 testid) */}
-        {isLLMCalling && phase === 'idle' && (
-          <span
-            data-testid={`seat-calling-${seatIdx}`}
-            style={{ display: 'none' }}
-            aria-hidden="true"
-          />
-        )}
       </div>
+      {/* 兼容旧测试 ID — 部分 e2e 仍依赖 seat-calling-{seat}(隐藏元素,仅保留 testid) */}
+      {isLLMCalling && phase === 'idle' && (
+        <span
+          data-testid={`seat-calling-${seatIdx}`}
+          style={{ display: 'none' }}
+          aria-hidden="true"
+        />
+      )}
       {/* BUG-R204-SEC-01: 观战者模式下不暴露身份徽章(§135)
           Death+revealed 在卡片外层浮层显示。 */}
       {showDead && displayRevealed && !spectator && (
