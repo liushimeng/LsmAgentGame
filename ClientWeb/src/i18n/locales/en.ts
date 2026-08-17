@@ -1041,6 +1041,9 @@ const en: Dict = {
   'werewolf.createModal.submit': 'Create',
   'werewolf.createModal.submitFailed': 'Creation failed. Check your network or retry; see the red banner at the top for details.',
   'werewolf.createModal.submitError': 'Creation failed: {message}',
+  // 2026-08-17 §20260817-02 — ROW2 all-human empty-state + ROW3 commentary collapsed hint.
+  'werewolf.createModal.allHumanEmptyState': 'All-human room: no AI, no judge, pure human reasoning.',
+  'werewolf.createModal.commentaryRowHint': 'Check to enable AI live commentary (spectator-only).',
   'werewolf.judge.activity.title': '📋 Activity',
   'werewolf.judge.activity.open': 'Expand▼',
   'werewolf.judge.activity.llmMs': 'LLM {ms} ms',

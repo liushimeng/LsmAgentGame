@@ -446,6 +446,9 @@ export interface Dict {
   'werewolf.createModal.submit': string;
   'werewolf.createModal.submitFailed': string;
   'werewolf.createModal.submitError': string; // {message}
+  // 2026-08-17 §20260817-02 — ROW2 全人类空态 + ROW3 commentary 折叠提示。
+  'werewolf.createModal.allHumanEmptyState': string;
+  'werewolf.createModal.commentaryRowHint': string;
   'werewolf.judge.activity.title': string;
   'werewolf.judge.activity.open': string;
   'werewolf.judge.activity.llmMs': string; // {ms}

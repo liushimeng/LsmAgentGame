@@ -1040,6 +1040,9 @@ const ja: Dict = {
   'werewolf.createModal.submit': '作成',
   'werewolf.createModal.submitFailed': '作成に失敗しました。ネットワークを確認して再試行してください。詳細はページ上部の赤いバナーをご覧ください。',
   'werewolf.createModal.submitError': '作成失敗: {message}',
+  // 2026-08-17 §20260817-02 — 全人類ルームの ROW2 右側埋め + ROW3 解説折りたたみヒント。
+  'werewolf.createModal.allHumanEmptyState': '全人類ルーム:AI なし、審判なし、純粋な人狼推理。',
+  'werewolf.createModal.commentaryRowHint': 'AI 実況を有効化するにはチェック(観覧者専用)。',
   'werewolf.judge.activity.title': '📋 アクティビティ',
   'werewolf.judge.activity.open': '展開▼',
   'werewolf.judge.activity.llmMs': 'LLM {ms} ms',

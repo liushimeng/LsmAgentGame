@@ -218,24 +218,79 @@
   grid-template-columns: 160px auto auto minmax(0, 1fr);
 }
 
-/* 全 AI 房(无"我的角色",剩法官模式 + 难度 + 右侧列)。
-   2026-08-12 §20260812-01: 由 2 列改为 3 列。 */
+/* 全 AI 房(无"我的角色",剩法官模式 + 难度 + 法官模型)。
+   2026-08-17 §20260817-02: 由 3 列改为 3 列(法官模式 / 难度 / 法官模型),
+   法官模型获得独立的 minmax 契约列,不再被前两列 `auto` 撑爆。 */
 .ww-create-modal__row--2 {
-  grid-template-columns: auto auto minmax(0, 1fr);
-}
-
-/* AI=0 全人类房(无法官,只剩"我的角色")—— 保持与上方等宽,右侧留白。 */
-.ww-create-modal__row--1 {
-  grid-template-columns: 180px minmax(0, 1fr);
-}
-
-/* 2026-08-12 §20260812-01 — 4 列紧凑布局: 我的角色(160px) / 法官模式(内容宽) /
-   Agent 难度(内容宽) / 右侧列(1fr,承载法官模型+AI解说)。
-   消除原 3 列布局右侧约 300px 留白。 */
-.ww-create-modal__row--4 {
-  grid-template-columns: 160px auto auto minmax(0, 1fr);
+  grid-template-columns:
+    minmax(120px, 0.7fr)
+    minmax(180px, 1fr)
+    minmax(220px, 1.1fr);
   gap: 12px;
   align-items: start;
+}
+
+/* AI=0 全人类房 —— ROW2 唯一子项是"我的角色",但右列必须有内容
+   填满 1fr,否则视觉上「中间空一大块」。2026-08-17 §20260817-02
+   新增 .ww-create-modal__empty-state 渲染"全人类房"说明文字。 */
+.ww-create-modal__row--1 {
+  grid-template-columns: 180px minmax(0, 1fr);
+  align-items: stretch;
+}
+
+/* 2026-08-17 §20260817-02 — 4 列最小宽度契约:
+   任何视口下都不会被 `auto` 列撑破 760px 卡片。
+   · 我的角色  140-160px (label + select)
+   · 法官模式  120-0.7fr (Agent 法官/真人法官 radio 同行)
+   · Agent 难度  180-1fr   (4 档 radio 同行,ja イージー档也够)
+   · 法官模型  220-1.1fr  (「Qwen 3.7-Plus-and-Max」长模型名完整显示)
+   总最小宽 660 + 36 gap + 32 padding = 728 < 760 卡片,留 32px buffer。 */
+.ww-create-modal__row--4 {
+  grid-template-columns:
+    minmax(140px, 160px)
+    minmax(120px, 0.7fr)
+    minmax(180px, 1fr)
+    minmax(220px, 1.1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+/* ROW3 — AI 实时解说(可折叠)。2026-08-17 §20260817-02 新增:
+   默认仅 24px 高(开关一行),展开后才显示 pro/fun radio。
+   不再与法官模型挤在右列 1fr(§20260812-01 旧版会撑爆法官模型宽度)。 */
+.ww-create-modal__row--commentary {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 24px;
+  transition: min-height 160ms ease-out;
+}
+
+.ww-create-modal__row--commentary[data-open="true"] {
+  min-height: 56px;
+}
+
+.ww-create-modal__commentary-styles-inline {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* 全人类房(agentCount=0)ROW2 右列填满说明。
+   2026-08-17 §20260817-02: 视觉上「左控件 / 右说明」配对,
+   左竖线分隔避免与左列 label 视觉混淆。 */
+.ww-create-modal__empty-state {
+  display: flex;
+  align-items: center;
+  font-size: 12.5px;
+  opacity: 0.72;
+  padding: 0 4px 0 12px;
+  border-left: 2px solid rgba(255, 255, 255, 0.10);
+  height: 100%;
+  min-height: 27px;
+  line-height: 1.4;
 }
 
 /* 标签与内联 hint 同排:左标签 / 右提示,不额外占一行。 */
@@ -295,9 +350,14 @@
   flex-direction: column;
   gap: 4px;
   /* §20260808-01: 旧 max-height:280px 是死值 —— 高屏浪费、矮屏挤爆并触发
-     body 外层滚动(嵌套双滚动条)。改为弹性 + 下限,滚动条只出现在列表内部。 */
+     body 外层滚动(嵌套双滚动条)。改为弹性 + 下限,滚动条只出现在列表内部。
+     §20260817-02: 旧 min-height: 96px 也是死值 —— agentCount=1 时硬撑到 96px
+     产生 70px 留白。改为 min-height: 0 + flex: 1 1 auto,内容自然高度,
+     1 行 ≈ 24px, 13 行弹性增长到外层 .ww-create-modal__body 的 max-height
+     兜底(弹窗 760×860,剩余高度约 400~600px 足够装 13 行)。 */
   flex: 1 1 auto;
-  min-height: 96px;
+  min-height: 0;
+  max-height: 100%;
   overflow-y: auto;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 6px;
@@ -432,6 +492,34 @@
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
+  /* §20260817-02 — 难度档视觉分组:4 档用不同底色暗示「冷→暖」递进,
+     选中态统一紫色光晕。当前选中项:背景 18% 紫 + 2px box-shadow。
+     底色透明度 0.10-0.12 极轻,不影响文字对比度(4.5:1+ 仍满足)。 */
+  border-radius: 6px;
+  padding: 2px 6px;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.ww-create-modal__difficulty-mode--easy {
+  background: rgba(46, 160, 67, 0.10);
+}
+.ww-create-modal__difficulty-mode--normal {
+  background: rgba(56, 139, 253, 0.10);
+}
+.ww-create-modal__difficulty-mode--hard {
+  background: rgba(217, 119, 6, 0.12);
+}
+.ww-create-modal__difficulty-mode--hell {
+  background: rgba(207, 34, 46, 0.12);
+}
+
+/* 选中态:任意档选中都用紫色高亮(品牌色,符合 §26 状态徽章色相规约)。
+   :has() 浏览器兼容:Chrome 105+ / Firefox 121+ / Safari 15.4+,均 ≥ 2023。 */
+.ww-create-modal__difficulty-mode:has(input:checked) {
+  font-weight: 700;
+  background: rgba(139, 92, 246, 0.20);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.7);
+  color: #ffffff;
 }
 
 .ww-create-modal__difficulty-mode input[type="radio"] {
@@ -618,6 +706,11 @@
   .ww-create-modal__row--3,
   .ww-create-modal__row--2,
   .ww-create-modal__row--1 {
+    grid-template-columns: 1fr;
+  }
+
+  /* §20260817-02 — ROW3 commentary 行同样降为单列。 */
+  .ww-create-modal__row--commentary {
     grid-template-columns: 1fr;
   }
 

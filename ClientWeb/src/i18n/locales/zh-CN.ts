@@ -1042,6 +1042,9 @@ const zhCN: Dict = {
   'werewolf.createModal.submit': '创建',
   'werewolf.createModal.submitFailed': '创建失败,请检查网络或重试;详细错误请查看页面顶部红色提示。',
   'werewolf.createModal.submitError': '创建失败: {message}',
+  // 2026-08-17 §20260817-02 — 全人类房 ROW2 右列填满说明 + ROW3 commentary 折叠提示。
+  'werewolf.createModal.allHumanEmptyState': '全人类房:无 AI,无法官,纯人类推理对局。',
+  'werewolf.createModal.commentaryRowHint': '勾选启用 AI 实时解说(仅观战者可见)。',
   'werewolf.judge.activity.title': '📋 一举一动',
   'werewolf.judge.activity.open': '展开▼',
   'werewolf.judge.activity.llmMs': 'LLM {ms} ms',
