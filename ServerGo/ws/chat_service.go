@@ -1067,7 +1067,13 @@ func (s *ChatService) WhisperFromBot(roomID, botUserID, botAccount, modelKey, to
 	}
 	toDisplay := toAccount
 	if toDisplay == "" {
-		toDisplay = s.lookupAccount(toUserID)
+		// §20260817-04 U3 — 私聊目标账号格式化为"Bot N号"。
+		// 原 lookupAccount 返回 bot 用户的 nickname/account(如 "e386999a_0"),
+		// 与发送方"Bot N号"(room_agent.go:1917 显式拼)不同源,导致房间聊天显示
+		// "Bot 12号🔒 私聊→ Bot e386999a_0🤖 Qwen 3.8-Max" —— 目标错位 + 缺 N号。
+		// 修复:从房间 t_lsm_game_player 反查 toUserID 对应座位号 → "Bot N号"。
+		// 非 werewolf 房间 / DB miss / userID 不在 seats 时回退 lookupAccount。
+		toDisplay = s.lookupSeatAccount(roomID, toUserID)
 	}
 
 	row := models.TLsmGameChatMessage{
@@ -1267,6 +1273,49 @@ func (s *ChatService) lookupAccount(userID string) string {
 		return u.Account
 	}
 	return userID
+}
+
+// §20260817-04 U3 — 私聊目标账号按房间座位号格式化。
+//
+// Bot 12 给 Bot 6 发私聊时,WhisperFromBot 调用方传 toAccount=""(agent_runner.go:1590),
+// 此前 fallback 到 lookupAccount,返回 bot 用户的 nickname("e386999a_0" 等随机短 ID),
+// 与发送方"Bot N号"格式不同源,房间聊天显示目标错位("Bot 12🔒 → Bot e386999a_0")。
+//
+// 新路径:用房间 t_lsm_game_player 反查 userID 对应 seat,按角色区分:
+//   - Bot 座位 → "Bot {seat+1}号"(与发送方 room_agent.go:1917 同源)
+//   - 真人座位 → "玩家{seat+1}号"(与 GameChatPanel.tsx::toRoomPlayers 同源)
+//   - 非 werewolf 房间 / userID 不在 seats → 兜底 lookupAccount(原行为)
+//
+// 只读、不加锁;DB miss / 空 userID / GameKind 非 werewolf 都安全兜底。
+func (s *ChatService) lookupSeatAccount(roomID, userID string) string {
+	if userID == "" {
+		return ""
+	}
+	if roomID == "" || s.db == nil {
+		return s.lookupAccount(userID)
+	}
+	// 仅 werewolf 房间走 seat 解析;其他游戏 (xiangqi / junqi / doudizhu /
+	// texasholdem) 的 seats 语义不同,继续走 lookupAccount 保持字节级兼容。
+	var room models.TLsmGameRoom
+	if err := s.db.Select("game_kind").Where("id = ?", roomID).First(&room).Error; err != nil {
+		return s.lookupAccount(userID)
+	}
+	if room.GameKind != "werewolf" {
+		return s.lookupAccount(userID)
+	}
+	// 反查 seat(单条 row 索引;room 中同 userID 至多 1 个座位)。
+	var p models.TLsmGamePlayer
+	if err := s.db.Select("seat, role").Where("room_id = ? AND user_id = ?", roomID, userID).First(&p).Error; err != nil {
+		return s.lookupAccount(userID)
+	}
+	if p.Seat < 0 {
+		return s.lookupAccount(userID)
+	}
+	// role:PlayerRoleAgent = bot("Bot N号"),其余(真人/历史 row)= "玩家N号"。
+	if p.Role == models.PlayerRoleAgent {
+		return fmt.Sprintf("Bot %d号", p.Seat+1)
+	}
+	return fmt.Sprintf("玩家%d号", p.Seat+1)
 }
 
 // EmitRoomActivity broadcasts a structured game activity event into the room

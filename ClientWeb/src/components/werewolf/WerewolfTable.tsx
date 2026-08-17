@@ -494,68 +494,87 @@ const SeatCell: React.FC<SeatCellProps> = ({
               {speechRelTime && <span>{speechRelTime}</span>}
               <span>{speechKindLabel(speechKind)}</span>
             </div>
-          </div>
-        )}
-        {/* 第 4 行:当前动作(决策摘要 18 字截断) — 替代原 24 字垂直块
-            §优化-20260730-01 — compact 模式仅对 Agent 显示;真人玩家永远显示此行。 */}
-        {!compact && decisionShort && (
-          <span className="werewolf-seat__action" title={decision}>
-            📤 {decisionShort}
-          </span>
-        )}
-        {/* 2026-08-05 §Agent聊天显示优化 — 第 5 行【次区】指标合并单行。
-            原「第 4 行 latency/calls/api」+「第 4.5 行 token」合并为同一行,
-            数据一条不少(🐇 last · µ avg · ×calls · 📊 api · 🔤in/out · ⚡ 缓存),
-            title tooltip 也合并保留;视觉权重由 CSS 降级为 10px muted。 */}
-        {!compact && (lastLatencySec || avgLatencySec || totalCalls || botCtx?.api_call_count || hasTokenStats) && (
-          <div className="werewolf-seat__metrics"
-               title={[
-                 lastLatencySec
-                   ? `最后 ${lastLatencySec}s · 平均 ${avgLatencySec || '—'}s · 已调 ${totalCalls || 0} 次 · API ${botCtx?.api_call_count ?? 0} 次`
-                   : '',
-                 hasTokenStats
-                   ? `Token 统计: 输入 ${totalInTokens ?? 0} · 输出 ${totalOutTokens ?? 0} · 总计 ${(totalInTokens ?? 0) + (totalOutTokens ?? 0)}`
-                   : '',
-               ].filter(Boolean).join('\n') || undefined}>
-            {lastLatencySec && <span className="werewolf-seat__metric">🐇{lastLatencySec}s</span>}
-            {avgLatencySec && <span className="werewolf-seat__metric">µ{avgLatencySec}s</span>}
-            {totalCalls !== undefined && <span className="werewolf-seat__metric">×{totalCalls}</span>}
-            {botCtx?.api_call_count !== undefined && (
-              <span className="werewolf-seat__metric" title={`API 调用 ${botCtx.api_call_count} 次 (成功 ${botCtx.api_success_count ?? 0} / 失败 ${botCtx.api_fail_count ?? 0})`}>
-                📊{botCtx.api_call_count}
-              </span>
-            )}
-            {hasTokenStats && (
-              <>
-                <span className="werewolf-seat__token">🔤in:{formatK(totalInTokens)}</span>
-                <span className="werewolf-seat__token">out:{formatK(totalOutTokens)}</span>
-                {isCacheHit && <span className="werewolf-seat__cachebadge" title={t('werewolf.seat.cacheHit')}>⚡</span>}
-              </>
+            {/* 2026-08-17 §04 U2 — hover 弹出发言全文。
+                原 only title 原生 tooltip(500ms 延迟 + 鼠标移开即消失 + 移动端无响应),
+                13 人局座位密集时鼠标移到下一张卡就消失,UX 极差。
+                新增 CSS-only popover(.werewolf-seat:hover .werewolf-seat__speech-popover),
+                复用 §20260817-03 U2 的 hover 抬层 z-index:60,末行座位向上展开不被裁。
+                仅文本 > 20 字时渲染,短句不必 popover 视觉杂讯。 */}
+            {speechText && speechText.length > 20 && (
+              <div className="werewolf-seat__speech-popover" role="tooltip">
+                <div className="werewolf-seat__speech-popover-text">{speechText}</div>
+                <div className="werewolf-seat__speech-popover-meta">
+                  {speechRelTime && <span>{speechRelTime}</span>}
+                  <span>{speechKindLabel(speechKind)}</span>
+                </div>
+              </div>
             )}
           </div>
         )}
-        {/* 第 5 行:模型名 + 最后调用时间 — 复用 AgentCallTimeBadge(nowMs)
-            §优化-20260730-01 — compact 模式下 emotion 显示在模型名前;真人玩家仍保留 model 名。 */}
-        <div className="werewolf-seat__model-row">
-          {player.agent_name && (() => {
-            // §20260811-08 U5 — 模型风格标识符。emoji 承担主要区分度
-            // (不受 .is-night brightness(0.4) 衰减),色相走 box-shadow 光晕
-            // 而非低透明度背景(§26.2 反模式 2/4)。
-            const ms = modelStyleOf(player.agent_name);
-            const school = t(`werewolf.modelstyle.${ms.schoolKey}` as any);
-            return (
-              <span
-                className="werewolf-seat__model ww-model-style"
-                style={{ ['--ww-model-glow' as any]: ms.glow }}
-                title={`${player.agent_name} · ${school}`}
-              >
-                <span className="ww-model-style__emoji" aria-hidden="true">{ms.emoji}</span>
-                {player.agent_name}
-              </span>
-            );
-          })()}
-          {!compact && botCtx && nowMs !== undefined && (
-            <AgentCallTimeBadge ctx={botCtx} nowMs={nowMs} />
+        {/* 2026-08-17 §04 U1 — Agent 紧凑指标块(贴卡片底部,avatar 下方不留空)。
+            原「决策摘要 / 延迟调用指标 / token+模型」三段分散在 3 个 flex item
+            (各占一行 + gap:2px),宽 ~190px 的座位卡在 5 列网格下视觉过散。
+            新结构三行打包进 .werewolf-seat__agent-block,margin-top:auto 贴底。
+            - 行 1:决策摘要 (人机共用,有则显示)
+            - 行 2:延迟 + 调用数 (Agent only,任一指标存在即渲染)
+            - 行 3:Token + 模型名 + 最后调用时间 (Agent only)
+            真人玩家:整块退化为「行 1(可能有) + avatar 撑满」,不再有 N/A 指标。 */}
+        <div className="werewolf-seat__agent-block">
+          {/* 行 1 — 决策摘要(人机共用) */}
+          {decisionShort && (
+            <div className="werewolf-seat__action" title={decision}>
+              📤 {decisionShort}
+            </div>
+          )}
+          {/* 行 2 — 延迟 + 调用数 (Agent only) */}
+          {botCtx && (lastLatencySec || avgLatencySec || totalCalls !== undefined || botCtx.api_call_count !== undefined) && (
+            <div className="werewolf-seat__metrics-row"
+                 title={[
+                   lastLatencySec ? `最后 ${lastLatencySec}s` : '',
+                   avgLatencySec ? `平均 ${avgLatencySec}s` : '',
+                   totalCalls !== undefined ? `总调用 ${totalCalls} 次` : '',
+                   botCtx.api_call_count !== undefined ? `API ${botCtx.api_call_count} 次` : '',
+                 ].filter(Boolean).join(' · ')}>
+              {lastLatencySec && <span className="werewolf-seat__metric is-last">🐇{lastLatencySec}s</span>}
+              {avgLatencySec && <span className="werewolf-seat__metric is-avg">µ{avgLatencySec}s</span>}
+              {totalCalls !== undefined && <span className="werewolf-seat__metric is-total">×{totalCalls}</span>}
+              {botCtx.api_call_count !== undefined && (
+                <span className="werewolf-seat__metric is-api">📊{botCtx.api_call_count}</span>
+              )}
+            </div>
+          )}
+          {/* 行 3 — Token + 模型名 + 最后调用时间 (Agent only) */}
+          {botCtx && (hasTokenStats || player.agent_name || (!compact && nowMs !== undefined)) && (
+            <div className="werewolf-seat__model-row"
+                 title={hasTokenStats ? `Token: 输入 ${totalInTokens ?? 0} · 输出 ${totalOutTokens ?? 0} · 总计 ${(totalInTokens ?? 0) + (totalOutTokens ?? 0)}` : undefined}>
+              {hasTokenStats && (
+                <>
+                  <span className="werewolf-seat__token">🔤in:{formatK(totalInTokens)}</span>
+                  <span className="werewolf-seat__token">out:{formatK(totalOutTokens)}</span>
+                  {isCacheHit && <span className="werewolf-seat__cachebadge" title={t('werewolf.seat.cacheHit')}>⚡</span>}
+                </>
+              )}
+              {player.agent_name && (() => {
+                // §20260811-08 U5 — 模型风格标识符。emoji 承担主要区分度
+                // (不受 .is-night brightness(0.4) 衰减),色相走 box-shadow 光晕
+                // 而非低透明度背景(§26.2 反模式 2/4)。
+                const ms = modelStyleOf(player.agent_name);
+                const school = t(`werewolf.modelstyle.${ms.schoolKey}` as any);
+                return (
+                  <span
+                    className="werewolf-seat__model ww-model-style"
+                    style={{ ['--ww-model-glow' as any]: ms.glow }}
+                    title={`${player.agent_name} · ${school}`}
+                  >
+                    <span className="ww-model-style__emoji" aria-hidden="true">{ms.emoji}</span>
+                    {player.agent_name}
+                  </span>
+                );
+              })()}
+              {!compact && nowMs !== undefined && (
+                <AgentCallTimeBadge ctx={botCtx} nowMs={nowMs} />
+              )}
+            </div>
           )}
         </div>
         {/* LLM 5 态指示器 — 替代原 decision 行的位置,行高更紧凑

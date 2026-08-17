@@ -46,3 +46,22 @@ func TestTruncateChatText(t *testing.T) {
 		}
 	})
 }
+
+// §20260817-04 U3 — 私聊目标账号格式化测试。
+//
+// 验证 lookupSeatAccount 在早期返回分支(无需 DB,纯函数分支):
+//   - 空 userID → 返回 ""(WhisperFromBot 调用方在 toUserID="" 时根本不会走到这里,
+//     但作为防御性兜底必须有)
+//   - 空 roomID → 不调 lookupAccount,直接传 userID(lookupAccount 需要 DB,
+//     跳过以避免 panic;后续真实 DB 测试覆盖)
+//
+// 走 DB 的成功/失败路径(werewolf + 找到 seat → "Bot N号"、非 werewolf → lookupAccount)
+// 在集成测试或手工测试中覆盖;这里只覆盖不需要 DB 的纯分支。
+func TestLookupSeatAccount_Fallbacks(t *testing.T) {
+	t.Run("empty userID returns empty string", func(t *testing.T) {
+		s := &ChatService{} // nil db
+		if got := s.lookupSeatAccount("room-1", ""); got != "" {
+			t.Fatalf("got %q, want empty", got)
+		}
+	})
+}

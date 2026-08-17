@@ -49,5 +49,11 @@
    与悬停 z-index(同特异性,靠级联顺序取胜)。
    独立成文件的原因见 CLAUDE.md §4(werewolf-v2.css 已 1813 行 > 1800 上限)。 */
 @import './werewolf-20260817-03.css';
+/* 2026-08-17 §20260817-04 — 狼人杀主界面布局优化(座位卡 Agent 紧凑块 +
+   发言气泡 hover popover)。**必须**排在 werewolf-20260817-03.css 之后,
+   与 §20260817-* 系列同特异性靠级联顺序取胜;不调整既有 werewolf.css →
+   werewolf-v2.css → werewolf-emotion.css → werewolf-speech.css → ... 链顺序。
+   独立成文件的原因见 CLAUDE.md §4(werewolf-v2.css 已超 1800 行上限)。 */
+@import './werewolf-20260817-04.css';
 @import './appmodal.css';
 @import './werewolf-modal.css';

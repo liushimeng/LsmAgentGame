@@ -1,0 +1,146 @@
+/* =============================================================================
+ * 2026-08-17 §20260817-04 — 狼人杀主界面布局优化
+ *   U1: 座位卡 Agent 5 行结构紧凑化(贴 avatar 底部,avatar 下方不留空)
+ *   U2: 发言气泡 hover 弹出完整文本(>20 字时)
+ *
+ * 文件位置:接 werewolf-20260817-03.css 之后(§2.1 globals.css 硬约束 4 —
+ * 既有 werewolf.css → werewolf-v2.css → werewolf-emotion.css → werewolf-speech.css
+ * 链顺序不动,新文件按 §20260817-* 编号顺序排在最后)。
+ *
+ * 独立成文件的原因见 CLAUDE.md §4(werewolf-v2.css 已超 1800 行上限,新样式
+ * 不应回写到主表里继续推高行数)。
+ * ============================================================================= */
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * §20260817-04 U1 — Agent 紧凑指标块
+ *
+ * 原 .werewolf-seat__action(决策摘要)+ .werewolf-seat__metrics(延迟/token)+
+ * .werewolf-seat__model-row(模型名/最后调用)各自占据一个 flex item,中间留 gap:2px。
+ * 在 5 列 13 人局网格下,座位宽 ~190px,三段分散 + 间隔 + 8px 行高 ≈ 60~80px 留空。
+ *
+ * 新结构三行打包进 .werewolf-seat__agent-block,margin-top: auto 贴卡片底部,
+ * avatar 与 info 顶部贴齐 — avatar 下方的「死区」被指标块填满。
+ * - 行 1 (.werewolf-seat__action) — 决策摘要,人机共用(有则显示)
+ * - 行 2 (.werewolf-seat__metrics-row) — 延迟 + 调用数 (Agent only)
+ * - 行 3 (.werewolf-seat__model-row) — Token + 模型名 + 最后调用时间 (Agent only)
+ *
+ * 真人玩家:整块退化为「行 1(可能有)+ avatar 撑满」,无 N/A 指标。
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+.werewolf-seat__agent-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 4px;
+  border-top: 1px dashed rgba(193, 154, 86, 0.18);
+}
+
+/* 行 2 — 延迟 + 调用数。原 nowrap → wrap:190px 座位宽装不下 🐇 + µ + × + 📊 时
+   自动折行而非裁切(§20260817-04 验收清单第 3 项)。 */
+.werewolf-seat__metrics-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  font-size: 10px;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  max-width: 100%;
+}
+
+/* 行 3 — Token + 模型名 + 最后调用时间。同行 wrap:模型名过长(如
+   "Xiaomi mimo-v2.5-pro")自动折到第二行,不再溢出。 */
+.werewolf-seat__model-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+  font-size: 10px;
+  max-width: 100%;
+}
+
+/* 行 3 中 .werewolf-seat__model 与 AgentCallTimeBadge 同行:模型名 wrap 到
+   第二行时让时间徽章跟在同一行末尾,不被换到下一行。 */
+.werewolf-seat__model-row .werewolf-seat__model {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.werewolf-seat__model-row .werewolf-seat__call-time {
+  margin-left: auto;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * §20260817-04 U2 — 发言气泡 hover 弹出完整文本
+ *
+ * 原仅靠 .werewolf-seat__speech 的 title 属性,问题:
+ *   - 500ms 延迟才出 tooltip
+ *   - 鼠标移到下一张卡即消失(13 人局座位密集,几乎无法读完)
+ *   - 移动端 hover 不响应
+ *
+ * 新方案:CSS-only popover,绝对定位在气泡下方/末行向上,无 JS 无 portal。
+ * 复用 §20260817-03 U2 的 .werewolf-seat:hover z-index:60 抬层,无需第二套 z。
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+.werewolf-seat__speech-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: var(--ww-z-popover, 60);
+  background: rgba(15, 13, 10, 0.97);
+  border: 1px solid rgba(135, 206, 235, 0.4);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text);
+  max-width: 240px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+  pointer-events: none;
+  word-break: break-word;
+}
+
+.werewolf-seat:hover .werewolf-seat__speech-popover,
+.werewolf-seat:focus-within .werewolf-seat__speech-popover {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* 末行座位 — popover 向上展开,不被网格下边界裁切。
+   §20260817-03 U2 引入的 .werewolf-seat.is-last-row 同时翻转身份猜测弹层,
+   这里复用同一标志位即可,无需新增。 */
+.werewolf-seat.is-last-row .werewolf-seat__speech-popover {
+  top: auto;
+  bottom: 100%;
+  transform: translateY(4px);
+}
+.werewolf-seat.is-last-row:hover .werewolf-seat__speech-popover {
+  transform: translateY(0);
+}
+
+.werewolf-seat__speech-popover-text {
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.45;
+  margin-bottom: 4px;
+}
+
+.werewolf-seat__speech-popover-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+  border-top: 1px solid rgba(135, 206, 235, 0.15);
+  padding-top: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .werewolf-seat__speech-popover {
+    transition: none;
+  }
+}
