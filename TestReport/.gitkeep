@@ -1,7 +1,0 @@
-# 自动化测试报告落地目录
-# 由 AutoDebugTestReport.sh 自动创建与维护。
-# 命名规约: 自动化测试报告_YYYYMMDD_HHMMSS.md
-# 归宿处理见 AutoDebugTestReport.md §5:
-#   - A. 修复成功 → 删除
-#   - B. 无问题   → 重命名追加 _无问题 后缀
-#   - C. 验证失败 → 保留原名等待人工介入

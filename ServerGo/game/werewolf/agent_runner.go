@@ -385,6 +385,19 @@ func (r *agentRunner) Speak(text string) (string, error) {
 			return "speak rejected: " + wolfCoordinationRejectHint, nil
 		}
 	}
+	// BUG-R13-NEW-001 (2026-08-17): 神职未来时计划泄漏公屏 hard-reject。
+	// R13 22:30 报告 §二.P0-1 实测 Bot 4 号 (MiniMax M3) 公开发言
+	// 「今晚查 11 号。理由:发言模板化强、像悍跳预言家。」—— 真预言家
+	// 首夜已验完人,公屏应直接报「昨夜我验了 X 是 Y」,不可能用「今晚要查」
+	// 这种未来时句式。该 leak 不分阵营(预言家/女巫/守卫都可能误用,狼悍跳
+	// 神职也可能复用此模式),故**不门控 isWolfSeat**,全 bot 生效。
+	// 详见 speak_wolfguard.go::CheckFutureTenseSkillPlan。
+	if cat, hit := CheckFutureTenseSkillPlan(text); hit {
+		logger.L().Info("agentRunner.Speak future-tense-skill-plan rejected (R13-NEW-001)",
+			zap.Int("seat", int(r.seat)), zap.String("room", r.roomID),
+			zap.String("pattern", cat), zap.String("rejected", text))
+		return "speak rejected: " + futureTenseSkillPlanRejectHint, nil
+	}
 	// BUG-R70-P2 (2026-07-09): 跨消息级内容去重。SpeakLimiter 只按时间节流,
 	// 拦截不了"30s 内说相同主题"。recentSpeakDedup 在 90s 窗口内识别
 	// Jaccard ≥ 0.6 的复读,直接拒绝并返回 hint 让 LLM 在下一轮收敛。
@@ -576,6 +589,14 @@ func (r *agentRunner) SpeakAuto(text string) (string, error) {
 			return "speak_auto rejected: " + wolfCoordinationRejectHint, nil
 		}
 	}
+	// BUG-R13-NEW-001 (2026-08-17): 神职未来时计划 hard-reject,与 Speak 同源。
+	// 详见 Speak 注释与 speak_wolfguard.go::CheckFutureTenseSkillPlan。
+	if cat, hit := CheckFutureTenseSkillPlan(text); hit {
+		logger.L().Info("agentRunner.SpeakAuto future-tense-skill-plan rejected (R13-NEW-001)",
+			zap.Int("seat", int(r.seat)), zap.String("room", r.roomID),
+			zap.String("pattern", cat), zap.String("rejected", text))
+		return "speak_auto rejected: " + futureTenseSkillPlanRejectHint, nil
+	}
 	// BUG-R70-P2 跨消息级去重。
 	if r.recentSpeakDedup != nil {
 		if allowed, hint := r.recentSpeakDedup.CheckAndRecord(text, time.Now()); !allowed {
@@ -728,6 +749,13 @@ func (r *agentRunner) SpeakWithThought(publicText, internalThought string) (stri
 				zap.String("pattern", cat), zap.String("rejected", publicText))
 			return "speak_with_thought rejected: " + wolfCoordinationRejectHint, nil
 		}
+	}
+	// BUG-R13-NEW-001 (2026-08-17): 神职未来时计划 hard-reject,与 Speak 同源。
+	if cat, hit := CheckFutureTenseSkillPlan(publicText); hit {
+		logger.L().Info("agentRunner.SpeakWithThought future-tense-skill-plan rejected (R13-NEW-001)",
+			zap.Int("seat", int(r.seat)), zap.String("room", r.roomID),
+			zap.String("pattern", cat), zap.String("rejected", publicText))
+		return "speak_with_thought rejected: " + futureTenseSkillPlanRejectHint, nil
 	}
 	if r.recentSpeakDedup != nil {
 		if allowed, hint := r.recentSpeakDedup.CheckAndRecord(publicText, time.Now()); !allowed {
@@ -1650,6 +1678,13 @@ func (r *agentRunner) Interject(text string) (string, error) {
 				zap.String("pattern", cat), zap.String("rejected", text))
 			return "interject rejected: " + wolfCoordinationRejectHint, nil
 		}
+	}
+	// BUG-R13-NEW-001 (2026-08-17): 神职未来时计划 hard-reject,与 Speak 同源。
+	if cat, hit := CheckFutureTenseSkillPlan(text); hit {
+		logger.L().Info("agentRunner.Interject future-tense-skill-plan rejected (R13-NEW-001)",
+			zap.Int("seat", int(r.seat)), zap.String("room", r.roomID),
+			zap.String("pattern", cat), zap.String("rejected", text))
+		return "interject rejected: " + futureTenseSkillPlanRejectHint, nil
 	}
 	// BUG-R158-FAIRNESS-001 (2026-07-19): 反私聊内容幻觉事实校验补全。
 	// R151 (commit 7451782) 仅在 Speak() 通道过 FactCheckWhisperAttribution,

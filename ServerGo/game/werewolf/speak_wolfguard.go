@@ -146,3 +146,82 @@ func (r *agentRunner) isWolfSeat() bool {
 const wolfCoordinationRejectHint = "你的发言包含狼队击杀协调语义(狼队友称谓/夜间时间+刀杀目标)," +
 	"公屏发出会立即暴露你与队友的阵营 — 队内协调请改用 wolf_whisper 工具(仅狼队友可见);" +
 	"公屏讨论夜间局势请用「刀口可能在 X 号」这类不确认信息的抽象表达,白天请用「投 X 号」「怀疑 X 号」"
+
+// futureTenseSkillPlanPattern 单条神职未来时计划泄漏模式。
+//
+// BUG-R13-NEW-001 (2026-08-17): R13 22:30 报告 §二.P0-1 实测 Bot 4 号
+// (MiniMax M3) 在 D1 警长竞选阶段公开发言「今晚查 11 号。理由:发言模板
+// 化强、像悍跳预言家。如果查到狼,明天对跳抢警徽;如果查到金水,11 号是
+// 真预言家或高玩好人,我跟随站边。」—— 该发言同时违反两条 §119 协议层
+// 隔离原则:
+//
+//	① 真预言家首夜验完人,公屏应直接报「昨夜我验了 X 是 Y」,不可能用
+//	  未来时「今晚要查」;
+//	② 暴露查验计划 = 让狼队提前知道明晚查验目标 = 直接送出神职第二条命。
+//
+// 根因:LLM 缺时态约束,狼队/神职的「未来时行动计划」与「已完成行动回顾」
+// 在公屏混用。修复:服务端 hard-reject + prompt 双重防御纵深。
+//
+// 设计要点:
+//   - **非阵营门控**:任何 bot(预言家/女巫/守卫/狼悍跳神职)都可能误用未来
+//     时句式描述"自己的神职计划",统一 hard-reject 即可;比 §R11-NEW3-001
+//     的「仅狼阵营门控」覆盖面更广;
+//   - 动词表含「查/验/守/毒/解/护」6 类神职动作,与「刀/杀」狼动作正交;
+//   - 误杀防护:不接「投」与「怀疑」(白天公开讨论合法),
+//     数字号格式 `\d+\s*号` 紧跟动词后,与「投 2 号」「怀疑 4 号」分词不同
+//     (「投」是投票动词,与神职「查/验」完全无关);
+type futureTenseSkillPlanPattern struct {
+	Name string
+	Re   *regexp.Regexp
+}
+
+// futureTenseSkillPlanPatterns 神职未来时计划泄漏模式表(全 bot 生效)。
+var futureTenseSkillPlanPatterns = []futureTenseSkillPlanPattern{
+	{
+		// 经典形态:今晚 + 查/验 + X号。R13 报告原句
+		// 「今晚查 11 号」直接命中。
+		Name: "tonight_check_target",
+		Re: regexp.MustCompile(`(?:今晚|今夜|明晚|夜里|夜间)\s*` +
+			`(?:先|准备|打算|计划|就|优先)?\s*` +
+			`(?:查|验|查验|查杀|守|守护|毒|毒杀|解|解药|护|保护)\s*\d+\s*号`),
+	},
+	{
+		// 主语+动词形态:「我今晚查 11 号」「准备验 X 号」。
+		// 「我/咱/咱们」第一人称锚定 + 神职动词 + X号,即使没有
+		// 「今晚」时间词也属计划泄漏(等价于「我打算查X号」)。
+		Name: "i_will_check_target",
+		Re: regexp.MustCompile(`(?:我|咱|咱们)\s*` +
+			`(?:今晚|今夜|明晚|夜里|夜间|先|准备|打算|计划|就|会|要|会|应该)?\s*` +
+			`(?:查|验|查验|查杀|守|守护|毒|毒杀|解|解药|护|保护)\s*\d+\s*号`),
+	},
+	{
+		// 模糊未来时:「我会查 X 号」「准备守 X」「打算毒 X」
+		// 主语+意愿动词+神职动作+X号,无明确时间词也算泄漏意图。
+		Name: "plan_check_target",
+		Re: regexp.MustCompile(`(?:我|咱|咱们)\s*` +
+			`(?:会|准备|打算|计划|想|决定|即将)\s*` +
+			`(?:查|验|查验|查杀|守|守护|毒|毒杀|解|解药|护|保护)\s*\d+\s*号`),
+	},
+}
+
+// CheckFutureTenseSkillPlan 检测公屏发言是否包含「神职未来时计划」语义。
+// 返回 (命中模式名, 是否命中)。**全阵营 bot 生效**(不门控阵营),因任何
+// 持有神职的 bot 都可能误用未来时描述其计划。
+func CheckFutureTenseSkillPlan(text string) (string, bool) {
+	if text == "" {
+		return "", false
+	}
+	for _, p := range futureTenseSkillPlanPatterns {
+		if p.Re.MatchString(text) {
+			return p.Name, true
+		}
+	}
+	return "", false
+}
+
+// futureTenseSkillPlanRejectHint 是 hard-reject 时返回给 LLM 的引导文案。
+// 各广播路径在返回值前拼接各自的动作名前缀(「speak rejected: ...」)。
+const futureTenseSkillPlanRejectHint = "你的发言包含神职未来时计划句式(今晚/明晚/我准备 + 查/验/守/毒/解/护 + X号)," +
+	"公屏发出会立即暴露你的神职意图(狼队可提前规避你的查验,好人被你送出第二条命)。" +
+	"神职夜间行动已通过工具调用完成,公屏必须以「昨夜 / 已」过去时描述:「昨夜我查验了 X 号,结果是 X 色」" +
+	"「昨夜我用了(解药/毒药)」「昨夜我守了 X 号」。绝不使用「今晚/明晚/准备/打算 + 查/验/守/毒/解/护 + X号」"

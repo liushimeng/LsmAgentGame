@@ -208,3 +208,139 @@ func TestWolfGuard_R11_UnknownRoleDegraded(t *testing.T) {
 		t.Fatalf("未发牌阶段应降级放行: res=%q sendN=%d", res, chat.sendFromBotN)
 	}
 }
+
+// ────────────────────────────────────────────────────────────────────
+// BUG-R13-NEW-001 (2026-08-17) 神职未来时计划公屏泄漏 hard-reject 回归
+// ────────────────────────────────────────────────────────────────────
+
+// R13 原句(Bot 4 号 MiniMax M3 警长竞选阶段实测):
+// 「今晚查 11 号。理由:发言模板化强、像悍跳预言家。如果查到狼,明天对跳抢
+// 警徽;如果查到金水,11 号是真预言家或高玩好人,我跟随站边。」
+
+// TestFutureTenseSkillPlan_R13_Positive 实测泄漏句式必须全部命中。
+func TestFutureTenseSkillPlan_R13_Positive(t *testing.T) {
+	cases := []string{
+		// R13 原句(Bot 4 号 完整原话)
+		"今晚查 11 号。理由:发言模板化强、像悍跳预言家。",
+		"今晚查 11 号",
+		// 其它神职动词家族
+		"今晚守 7 号",
+		"明晚验 3 号",
+		"今夜解 2 号",
+		"明晚毒 4 号",
+		"今晚守护 5 号",
+		// 第一人称+动词
+		"我今晚查 11 号",
+		"我准备验 4 号",
+		"我打算守 7 号",
+		"我会查 3 号",
+		"我准备解 2 号",
+		"我决定毒 5 号",
+	}
+	for _, s := range cases {
+		if cat, hit := CheckFutureTenseSkillPlan(s); !hit {
+			t.Errorf("应命中但未命中: %q", s)
+		} else {
+			t.Logf("命中 %q → pattern=%s", s, cat)
+		}
+	}
+}
+
+// TestFutureTenseSkillPlan_R13_Negative 合法发言不得误杀。
+// 「过去时 + 查验/用药/守护」是真预言家/女巫/守卫的标准播报句式,
+// 必须放行(否则本守卫会把所有真神职发言都拦掉)。
+func TestFutureTenseSkillPlan_R13_Negative(t *testing.T) {
+	cases := []string{
+		// 过去时 — 真神职标准播报
+		"昨夜我查验了 4 号,结果是狼人",
+		"昨夜我守了 7 号",
+		"昨夜我用了毒药",
+		"昨夜我解了 2 号",
+		"我昨晚查到 4 号是金水",
+		// 白天合法讨论
+		"我投 7 号",
+		"我建议投死 2 号",
+		"我怀疑 4 号是狼人",
+		// 悍跳预言家
+		"我是预言家,4 号是我查杀",
+		"我是女巫,昨夜用了解药救了 3 号",
+		// 元讨论
+		"狼人杀这个游戏太狠了",
+		"今晚的月亮真圆",
+		// 非神职动词 + 数字号
+		"我查了 3 号的发言记录",
+		"7 号这人不错",
+	}
+	for _, s := range cases {
+		if cat, hit := CheckFutureTenseSkillPlan(s); hit {
+			t.Errorf("误杀合法发言: %q (pattern=%s)", s, cat)
+		}
+	}
+}
+
+// TestFutureTenseSkillPlan_R13_AllFactionsRejected 4 条广播路径全部
+// 接线 hard-reject(不门控阵营,预言家/女巫/守卫/狼悍跳神职都可能误用)。
+// 使用好人(平民)角色验证「不门控 isWolfSeat」生效。
+func TestFutureTenseSkillPlan_R13_AllFactionsRejected(t *testing.T) {
+	const leakText = "今晚查 11 号。理由:发言模板化强。"
+	t.Run("Speak_Villager", func(t *testing.T) {
+		r, chat := wolfGuardRunner(t, RoleVillager)
+		res, err := r.Speak(leakText)
+		if err != nil {
+			t.Fatalf("Speak 不应返回 error: %v", err)
+		}
+		if !strings.Contains(res, "rejected") {
+			t.Fatalf("好人座位未来时泄漏应 rejected, 实际: %q", res)
+		}
+		if chat.sendFromBotN != 0 {
+			t.Fatalf("好人座位未来时泄漏不应广播, sendFromBotN=%d", chat.sendFromBotN)
+		}
+	})
+	t.Run("SpeakAuto_Villager", func(t *testing.T) {
+		r, chat := wolfGuardRunner(t, RoleVillager)
+		res, err := r.SpeakAuto(leakText)
+		if err != nil {
+			t.Fatalf("SpeakAuto 不应返回 error: %v", err)
+		}
+		if !strings.Contains(res, "rejected") || chat.sendFromBotN != 0 {
+			t.Fatalf("SpeakAuto 应 reject 且不广播: res=%q sendN=%d", res, chat.sendFromBotN)
+		}
+	})
+	t.Run("SpeakWithThought_Villager", func(t *testing.T) {
+		r, chat := wolfGuardRunner(t, RoleVillager)
+		res, err := r.SpeakWithThought(leakText, "<internal>")
+		if err != nil {
+			t.Fatalf("SpeakWithThought 不应返回 error: %v", err)
+		}
+		if !strings.Contains(res, "rejected") || chat.sendFromBotN != 0 {
+			t.Fatalf("SpeakWithThought 应 reject 且不广播: res=%q sendN=%d", res, chat.sendFromBotN)
+		}
+	})
+	t.Run("Interject_Villager", func(t *testing.T) {
+		r, chat := wolfGuardRunner(t, RoleVillager)
+		res, err := r.Interject(leakText)
+		if err != nil {
+			t.Fatalf("Interject 不应返回 error: %v", err)
+		}
+		if !strings.Contains(res, "rejected") || chat.sendInterjectN != 0 {
+			t.Fatalf("Interject 应 reject 且不广播: res=%q sendN=%d", res, chat.sendInterjectN)
+		}
+	})
+}
+
+// TestFutureTenseSkillPlan_R13_SeerAllowed 真正的预言家过去时播报不受影响。
+// 真预言家「昨夜我查验了 X 号,结果是 X 色」是 R132 心理战合法化后的标准
+// 播报句式,必须放行,否则本守卫会把所有真神职发言都拦掉。
+func TestFutureTenseSkillPlan_R13_SeerAllowed(t *testing.T) {
+	r, chat := wolfGuardRunner(t, RoleSeer)
+	res, err := r.Speak("昨夜我查验了 4 号,结果是狼人。11 号给我金水,我跟他走。")
+	if err != nil {
+		t.Fatalf("Speak 不应返回 error: %v", err)
+	}
+	if strings.Contains(res, "rejected") {
+		t.Fatalf("真预言家过去时播报应放行, 实际: %q", res)
+	}
+	if chat.sendFromBotN != 1 {
+		t.Fatalf("真预言家过去时播报应广播, sendFromBotN=%d", chat.sendFromBotN)
+	}
+}
