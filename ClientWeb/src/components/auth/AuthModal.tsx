@@ -10,9 +10,23 @@ export function AuthModal() {
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="modal">
         <h2>{mode === 'login' ? t('auth.signIn') : t('auth.createAccount')}</h2>
-        <div className="tabs">
-          <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>{t('auth.signIn')}</button>
-          <button type="button" className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>{t('auth.register')}</button>
+        <div className="tabs" data-testid="auth-modal-tabs">
+          <button
+            type="button"
+            data-testid="auth-tab-login"
+            className={mode === 'login' ? 'active' : ''}
+            onClick={() => setMode('login')}
+          >
+            {t('auth.signIn')}
+          </button>
+          <button
+            type="button"
+            data-testid="auth-tab-register"
+            className={mode === 'register' ? 'active' : ''}
+            onClick={() => setMode('register')}
+          >
+            {t('auth.register')}
+          </button>
         </div>
         {mode === 'login'
           ? <LoginForm onSwitch={() => setMode('register')} />

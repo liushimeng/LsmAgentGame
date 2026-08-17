@@ -582,11 +582,12 @@ const RoomCreateModal: React.FC<Props> = ({ open, onClose, onSubmit, submitting 
         )}
 
         <footer className="ww-create-modal__footer">
-          <button className="ww-create-modal__cancel" onClick={onClose}>
+          <button className="ww-create-modal__cancel" data-testid="ww-create-modal__cancel" onClick={onClose}>
             {t('werewolf.createModal.cancel')}
           </button>
           <button
             className="ww-create-modal__submit"
+            data-testid="ww-create-modal__submit"
             // BUG-R200-P1-03 (2026-07-30): 在父组件 in-flight 时禁用提交按钮,
             // 避免重复点击造成多个僵尸房间(报告里观察到误建 3 个 13AI 房间)。
             disabled={!valid || loading || submitting || localSubmitting}

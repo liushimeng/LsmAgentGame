@@ -278,7 +278,12 @@ export function WerewolfLobbyPage() {
     <div className="lobby werewolf-lobby">
       <div className="lobby-header">
         <h1>🐺 {t('werewolf.title' as TKey)}</h1>
-        <button className="btn btn-primary" onClick={handleCreate} disabled={loading}>
+        <button
+          className="btn btn-primary"
+          data-testid="werewolf-lobby__create-room"
+          onClick={handleCreate}
+          disabled={loading}
+        >
           + {t('werewolf.createRoom' as TKey)}
         </button>
       </div>

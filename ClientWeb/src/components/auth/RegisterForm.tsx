@@ -58,7 +58,10 @@ export function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
         mode: 'account',
       });
     } catch (e) {
-      setErr((e as Error).message);
+      // §20260817-04 P1 — 与 LoginForm 错误前缀口径统一(code 缺省时省略方括号)。
+      const err = e as Error & { code?: number };
+      const code = err.code ?? 0;
+      setErr(code ? `[${code}] ${err.message}` : err.message);
     } finally {
       setBusy(false);
     }
@@ -172,10 +175,10 @@ export function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
           marginTop: 16,
         }}
       >
-        <button type="button" className="ghost" onClick={onSwitch}>
+        <button type="button" className="ghost" data-testid="register-switch-to-login" onClick={onSwitch}>
           {t('auth.signIn')}
         </button>
-        <button type="submit" disabled={busy}>
+        <button type="submit" data-testid="register-submit" disabled={busy}>
           {busy ? t('auth.creating') : t('auth.createAccount')}
         </button>
       </div>

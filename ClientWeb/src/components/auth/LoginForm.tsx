@@ -122,9 +122,10 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
 
   return (
     <form onSubmit={submit}>
-      <div className="tabs" style={{ marginBottom: 12 }}>
+      <div className="tabs" data-testid="login-form-tabs" style={{ marginBottom: 12 }}>
         <button
           type="button"
+          data-testid="login-tab-account"
           className={mode === 'account' ? 'active' : ''}
           onClick={() => setMode('account')}
         >
@@ -132,6 +133,7 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
         </button>
         <button
           type="button"
+          data-testid="login-tab-phone"
           className={mode === 'phone' ? 'active' : ''}
           onClick={() => setMode('phone')}
         >
@@ -219,10 +221,10 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
           marginTop: 16,
         }}
       >
-        <button type="button" className="ghost" onClick={onSwitch}>
+        <button type="button" className="ghost" data-testid="login-switch-to-register" onClick={onSwitch}>
           {t('auth.register')}
         </button>
-        <button type="submit" disabled={busy}>
+        <button type="submit" data-testid="login-submit" disabled={busy}>
           {busy ? t('auth.signingIn') : t('auth.signIn')}
         </button>
       </div>
