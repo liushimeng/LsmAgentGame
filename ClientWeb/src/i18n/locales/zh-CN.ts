@@ -801,6 +801,8 @@ const zhCN: Dict = {
   // 2026-07-30 §统计增强 — 状态栏聚合 API/Token 统计 chip。
   'werewolf.statusBar.apiStats': '📊 调用 {callCount} · 成功 {successCount} · 失败 {failCount}',
   'werewolf.statusBar.tokenStats': '🔤 Token: 输入 {input} · 输出 {output} · 总计 {total}',
+  'werewolf.statusBar.tokensPerHour': '⚡ ≈{rate}/小时',
+  'werewolf.statusBar.tokensPerHourTip': '平均每小时 Token 消耗（总计 {total} ÷ 已运行 {hours} 小时）· 随对局实时更新，仅供参考',
   'werewolf.statusBar.judgeTokenStats': '⚖️ 法官: 调用 {callCount} (成 {successCount}/败 {failCount}) · Token 输入 {input} · 输出 {output} · 总计 {total}',
   // 2026-07-30 §统计增强 — 座位卡 Token 行。
   'werewolf.seat.tokenRow': '🔤 输入 {input} · 输出 {output}',

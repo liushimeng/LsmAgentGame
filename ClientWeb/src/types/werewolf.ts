@@ -371,6 +371,13 @@ export interface WerewolfGameState {
   agent_difficulty?: 'easy' | 'normal' | 'hard' | 'hell';
   /** §20260811-09 U1 — AI 实时解说 feed（spectator 专属；最近 20 条 + seq 单调递增）。 */
   commentary_feed?: CommentaryLineJSON[];
+  /**
+   * §20260817-03 U1 — AI 解说是否开启（房间级开关，后端不带 omitempty 恒下发）。
+   * 观战视图为真实值；玩家视图恒 false（解说仅观众可见，§119）。
+   * SpectatorCompactBar 据此决定是否渲染解说席：false 且无押注交互时整个
+   * 底栏不渲染，把垂直空间让给座位网格。
+   */
+  commentary_enabled?: boolean;
 }
 
 /** §20260811-09 U1 — 单条解说载荷（来自后端 ws.Envelope "chat.commentary" + cs.commentary_feed）。 */

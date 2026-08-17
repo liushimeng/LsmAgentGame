@@ -43,5 +43,11 @@
    `.board-container.cols-N` 选择器(实际类挂在 .werewolf-table__grid 上)。
    独立成文件的原因见 CLAUDE.md §4(werewolf-v2.css 已 1813 行 > 1800 上限)。 */
 @import './werewolf-20260817-01.css';
+/* 2026-08-17 §20260817-03 — 狼人杀界面布局优化(解说席按需隐藏 / 座位卡
+   popover 裁剪修复 / 每小时 Token 消耗 chip)。**必须**排在
+   werewolf-20260817-01.css 之后:本文件覆盖 .werewolf-seat 的 overflow
+   与悬停 z-index(同特异性,靠级联顺序取胜)。
+   独立成文件的原因见 CLAUDE.md §4(werewolf-v2.css 已 1813 行 > 1800 上限)。 */
+@import './werewolf-20260817-03.css';
 @import './appmodal.css';
 @import './werewolf-modal.css';

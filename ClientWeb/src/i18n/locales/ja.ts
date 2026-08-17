@@ -799,6 +799,8 @@ const ja: Dict = {
   // 2026-07-30 §統計強化 — 集計 API/Token 統計チップ。
   'werewolf.statusBar.apiStats': '📊 呼び出し {callCount} · 成功 {successCount} · 失敗 {failCount}',
   'werewolf.statusBar.tokenStats': '🔤 トークン: 入力 {input} · 出力 {output} · 合計 {total}',
+  'werewolf.statusBar.tokensPerHour': '⚡ ≈{rate}/時',
+  'werewolf.statusBar.tokensPerHourTip': '1時間あたりの平均トークン消費（合計 {total} ÷ 経過 {hours} 時間）· リアルタイム更新、目安として',
   'werewolf.statusBar.judgeTokenStats': '⚖️ 裁判: 呼び出し {callCount} (成 {successCount}/敗 {failCount}) · トークン 入力 {input} · 出力 {output} · 合計 {total}',
   // 2026-07-30 §統計強化 — シートカード トークン行。
   'werewolf.seat.tokenRow': '🔤 入力 {input} · 出力 {output}',

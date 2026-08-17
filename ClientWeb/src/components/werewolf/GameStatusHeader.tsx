@@ -165,6 +165,16 @@ export const GameStatusHeader: React.FC<GameStatusHeaderProps> = ({
       ? t('werewolf.history.clock.ended').replace('{h}:{m}:{s}', formatHMS(elapsedSec))
       : t('werewolf.history.clock.running').replace('{h}:{m}:{s}', formatHMS(elapsedSec));
 
+  // §20260817-03 U3 — 每小时平均 Token 消耗(派生展示:累计 ÷ 已运行小时)。
+  // 与统计组 token chip 同源(agent_stats.total_api_tokens,不含法官统计);
+  // formatK 自动 K/M 缩放。守卫:开局不足 60s 外推误差过大不显示;
+  // token 为 0 不显示。status=over 后分子分母都不再增长,数值自然冻结为整局均值。
+  const totalApiTokens = agentStats?.total_api_tokens ?? 0;
+  const showTokenRate = hasClock && elapsedSec >= 60 && totalApiTokens > 0;
+  const tokenRatePerHour = showTokenRate
+    ? Math.round(totalApiTokens / (elapsedSec / 3600))
+    : 0;
+
   const phaseText = phaseLabel(t, gameState.phase) ?? '—';
   const winnerText = isOver
     ? t('werewolf.header.gameOverWinner', { winner: gameState.winner || '?' })
@@ -201,6 +211,20 @@ export const GameStatusHeader: React.FC<GameStatusHeaderProps> = ({
               data-testid="ww-room-clock"
             >
               ⏱ {clockLabel}
+            </span>
+          )}
+          {/* §20260817-03 U3 — 每小时 Token 消耗参考值:紧跟运行时长 chip,
+              给玩家"继续玩下去每小时烧多少 Token"的心理预期。 */}
+          {showTokenRate && (
+            <span
+              className="ww-game-status-header__chip ww-game-status-header__chip--tokenrate"
+              data-testid="ww-token-rate"
+              title={t('werewolf.statusBar.tokensPerHourTip', {
+                total: formatK(totalApiTokens),
+                hours: (elapsedSec / 3600).toFixed(2),
+              })}
+            >
+              {t('werewolf.statusBar.tokensPerHour', { rate: formatK(tokenRatePerHour) })}
             </span>
           )}
           <button

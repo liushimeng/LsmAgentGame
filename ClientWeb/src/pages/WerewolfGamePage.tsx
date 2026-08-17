@@ -814,7 +814,9 @@ export function WerewolfGamePage() {
           )}
         </div>
         {/* §20260812-02 v2 — 观战者紧凑底栏: 解说席 + 观众押注合并为单一组件,
-            共享 header 行,内容区水平并排,空态高度压缩到单行。 */}
+            共享 header 行,内容区水平并排,空态高度压缩到单行。
+            §20260817-03 U1 — 解说未开启(commentary_enabled !== true)且无押注
+            交互时组件自身返回 null,底栏行塌缩,空间让给座位网格。 */}
         {spectator && (
           <div className="spectator-bottom-row">
             <SpectatorCompactBar
@@ -824,6 +826,7 @@ export function WerewolfGamePage() {
               playerNames={Object.fromEntries(
                 (gameState?.players ?? []).map((p: any) => [p.seat, p.account ?? `${p.seat + 1}号`])
               )}
+              commentaryEnabled={gameState?.commentary_enabled === true}
               onPlaceBet={async (targetSeat, amount) => {
                 const { wsClient } = await import('@/services/ws');
                 wsClient.send('game.werewolf_bet', {

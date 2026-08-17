@@ -225,6 +225,11 @@ type ClientGameState struct {
 	// 全部观众订阅 roomID 频道时一次性下发最近 20 条;后续增量走 WS 帧
 	// chat.commentary(seq 单调递增,前端按 seq 去重)。
 	CommentaryFeed []CommentaryLineJSON `json:"commentary_feed,omitempty"`
+	// §20260817-03 U1 — AI 解说是否开启(房间级开关)。观战视图(viewer<0)
+	// 赋 commentaryDesired 真实值;玩家视图恒 false(解说仅观众可见,§119)。
+	// **不带 omitempty** —— false 必须显式下发,否则前端无法区分「未开启」
+	// 与「老服务端未下发」,只能退回恒渲染空态占位的旧行为。
+	CommentaryEnabled bool `json:"commentary_enabled"`
 
 	// BUG Round 40 §95: 首夜强制发言阶段视图。仅在 Phase == PhasePreWolves 时填充;
 	// 其余阶段为 nil(前端可安全用 `?.` 访问,GameState 字段已与 view.go 同步)。
@@ -1418,6 +1423,9 @@ func BuildClientStateWithRoom(roomID string, r *WerewolfRoom, viewer int) *Clien
 		// §20260812-03 U1 — 阵营胜率热力图(仅 spectator 可见,§132 隐私隔离)。
 		// 启发式算法不调 LLM(§120 公平性 + §13 跨职责约束)。
 		cs.WinRateProbability = computeWinRateProbabilityLocked(r)
+		// §20260817-03 U1 — 解说开关下发(前端 SpectatorCompactBar 据此决定
+		// 是否渲染解说席)。锁内直读 r.commentaryDesired,§92a 一致。
+		cs.CommentaryEnabled = r.commentaryDesired
 		// §20260811-09 U1 — 观战者专属:解说 feed(最近 20 条)。锁内拷 snapshot
 		// 后拷结构,§92a 一致(reader 已持 r.mu,直接读)。
 		if len(r.commentaryFeed) > 0 {

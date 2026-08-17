@@ -1,0 +1,87 @@
+/* ═══════════════════════════════════════════════════════════════════════
+ * werewolf-20260817-03.css (§20260817-03 狼人杀界面布局优化)
+ *
+ * 方案文档: tmpPlan/狼人杀游戏界面布局优化-20260817-03.md
+ *
+ * 为什么单独成文件:CLAUDE.md §4 单文件 ≤ 1800 行硬上限 —— werewolf-v2.css
+ * 已 1813 行,新增样式必须落到新文件。globals.css 中本文件的 @import 位于
+ * werewolf-20260817-01.css 之后(既有 import 相对顺序**未调整**),
+ * 同特异性规则靠级联顺序取胜。
+ *
+ * 三个优化点:
+ *   U1 — 观战底栏「仅押注」形态:押注区独占整行
+ *   U2 — 座位卡 popover 裁剪修复(overflow visible + 悬停抬层 + 弹层向上翻转)
+ *   U3 — 标题栏「每小时 Token 消耗」chip
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────
+ * U2【P0】座位卡 popover 裁剪修复
+ *
+ * 根因链(三层叠加):
+ *   1. `.werewolf-seat { overflow: hidden }`(werewolf-v2.css:978)——
+ *      头像情绪 popover(.ww-emotion-popover)与身份猜测弹层
+ *      (.werewolf-guess-popover)一旦超出卡片矩形即被裁剪,
+ *      用户体感「提示框只在游戏角色框内显示」;
+ *   2. 兄弟座位同 z-index(7),DOM 顺序在后者盖住悬停座位的 popover;
+ *   3. .werewolf-table / __grid 是滚动容器(overflow-y:auto),
+ *      越界 popover 还会被网格边界裁剪 —— 该层由组件侧的
+ *      网格感知翻转逻辑化解(EmotionAvatar / IdentityGuessBadge)。
+ * ───────────────────────────────────────────────────────────────────── */
+.werewolf-seat {
+  /* 解除卡片裁剪:popover 得以溢出卡片显示。
+     .werewolf-seat__avatar 的 overflow:hidden 保留(头像圆角裁剪不受影响)。 */
+  overflow: visible;
+}
+
+/* 悬停 / 键盘焦点 / 猜测弹层打开态的座位卡抬层:
+ * 60 = --ww-z-popover,高于兄弟座位(7)/徽章(12)/桌面阶段标签(10)/
+ * 操作面板(50),popover 打开期间稳定压过相邻座位与桌面元素。
+ * :has() 覆盖「鼠标移开但猜测弹层仍开着」的残留窗口;
+ * 不支持 :has 的浏览器自动忽略该行,降级为 hover/focus 两条规则。 */
+.werewolf-game .werewolf-seat:hover,
+.werewolf-game .werewolf-seat:focus-within {
+  z-index: var(--ww-z-popover, 60);
+}
+.werewolf-game .werewolf-seat:has(.werewolf-guess-popover) {
+  z-index: var(--ww-z-popover, 60);
+}
+
+/* 身份猜测弹层向上翻转修饰类(IdentityGuessBadge 测得下方空间不足时挂载)。
+ * 原规则(werewolf.css:1277)恒向下展开:top:100%;右对齐。 */
+.werewolf-guess-popover.werewolf-guess-popover--above {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 6px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * U3 — 标题栏「每小时 Token 消耗」chip
+ * 紧跟 ⏱ 运行时长 chip,色相走青绿(与紫色 tokens chip 同族但可区分),
+ * §26.1 阈值:深底浅字对比度 ≥ 4.5:1。
+ * ───────────────────────────────────────────────────────────────────── */
+.ww-game-status-header__chip--tokenrate {
+  background: rgba(80, 200, 170, 0.22);
+  border: 1px solid rgba(80, 200, 170, 0.55);
+  color: #b8f0e0;
+  font-family: ui-monospace, monospace;
+  cursor: help;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * U1 — 观战底栏「仅押注」形态
+ * 解说席隐藏(commentary_enabled=false)且处于投票/押注态时,
+ * __bet 成为 __body 唯一子元素 → 独占整行左对齐,不再挤在右半边。
+ * ───────────────────────────────────────────────────────────────────── */
+.spectator-compact-bar__body .spectator-compact-bar__bet:only-child {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+}
+/* 仅押注时 header 只剩右标题,避免 space-between 把它甩到最右 */
+.spectator-compact-bar__header .spectator-compact-bar__title-right:only-child {
+  margin-right: auto;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * 无障碍:prefers-reduced-motion 无需特殊处理(本文件无动画)。
+ * ───────────────────────────────────────────────────────────────────── */

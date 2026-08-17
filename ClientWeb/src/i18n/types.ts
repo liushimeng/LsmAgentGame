@@ -185,6 +185,10 @@ export interface Dict {
   'werewolf.statusBar.apiStats': string; // {callCount} {successCount} {failCount}
   /** Token 统计 chip:`🔤 Token: 输入 {input} · 输出 {output} · 总计 {total}`。 */
   'werewolf.statusBar.tokenStats': string; // {input} {output} {total}
+  /** §20260817-03 U3 — 每小时 Token 消耗 chip(紧跟运行时长):`⚡ ≈{rate}/小时`。 */
+  'werewolf.statusBar.tokensPerHour': string; // {rate}
+  /** §20260817-03 U3 — 每小时 Token 消耗 chip 的 tooltip 说明。 */
+  'werewolf.statusBar.tokensPerHourTip': string; // {total} {hours}
   /** 法官 Token 统计 chip。 */
   'werewolf.statusBar.judgeTokenStats': string; // {callCount} {successCount} {failCount} {input} {output} {total}
   // 2026-07-30 §统计增强 — 座位卡 Token 行。

@@ -44,6 +44,9 @@ export function IdentityGuessBadge({
   const t = useT();
   const [open, setOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement | null>(null);
+  // §20260817-03 U2 — 弹层向上翻转:wrap 定位锚点 + 翻转状态。
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [openAbove, setOpenAbove] = useState(false);
 
   // ESC + 外部点击关闭 — 无条件执行。
   useEffect(() => {
@@ -65,6 +68,29 @@ export function IdentityGuessBadge({
     };
   }, [open]);
 
+  // §20260817-03 U2 — 打开后测一次弹层高度与网格边界,下方放不下则向上翻转。
+  // 背景:.werewolf-table / __grid 均为 overflow-y:auto 滚动容器,最后一行座位
+  // 的弹层(10+ 角色按钮,~300px)恒向下展开会被网格下边界裁掉。
+  // 边界取网格 rect 与 viewport 的交集,与 EmotionAvatar 同策略。
+  useEffect(() => {
+    if (!open) {
+      setOpenAbove(false);
+      return;
+    }
+    const wrapEl = wrapRef.current;
+    const popEl = popoverRef.current;
+    if (!wrapEl || !popEl) return;
+    const wRect = wrapEl.getBoundingClientRect();
+    const pRect = popEl.getBoundingClientRect();
+    const gridEl = wrapEl.closest('.werewolf-table') as HTMLElement | null;
+    const gRect = gridEl ? gridEl.getBoundingClientRect() : null;
+    const boundTop = Math.max(gRect ? gRect.top : 0, 0);
+    const boundBottom = Math.min(gRect ? gRect.bottom : window.innerHeight, window.innerHeight);
+    const spaceBelow = boundBottom - wRect.bottom - 6;
+    const spaceAbove = wRect.top - boundTop - 6;
+    setOpenAbove(pRect.height > spaceBelow && spaceAbove > spaceBelow);
+  }, [open]);
+
   // 观众 / 自己 / 已死 → 不显示(early-return 必须放在所有 hooks 之后)。
   const canRender = !(mySeat < 0) && seatIdx !== mySeat && isAlive;
   if (!canRender) return null;
@@ -73,6 +99,7 @@ export function IdentityGuessBadge({
 
   return (
     <div
+      ref={wrapRef}
       className="werewolf-guess-wrap"
       style={{ position: 'absolute', top: 2, right: 2, zIndex: 4 }}
     >
@@ -102,7 +129,7 @@ export function IdentityGuessBadge({
       {open && (
         <div
           ref={popoverRef}
-          className="werewolf-guess-popover"
+          className={`werewolf-guess-popover${openAbove ? ' werewolf-guess-popover--above' : ''}`}
           data-testid={`werewolf-guess-popover-${seatIdx}`}
           role="dialog"
           aria-label={t('werewolf.guess.title' as any)}

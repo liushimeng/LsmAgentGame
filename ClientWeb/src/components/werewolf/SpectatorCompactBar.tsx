@@ -4,6 +4,11 @@
 // 共享 header 行(左标题 + 右标题),内容区水平并排。
 // 空态时高度压缩到单行,消除大面积留白。
 //
+// §20260817-03 U1: AI 解说未开启时(commentaryEnabled=false)隐藏解说席:
+//   - 解说区与押注区都不需要时整个底栏返回 null,grid auto 行塌缩为 0,
+//     中栏 1fr 行吸收释放的垂直空间,座位网格获得更多显示高度;
+//   - 仅投票/押注交互仍保留时,押注区独占整行。
+//
 // §136: 本组件放 components/werewolf/(狼人杀私有),仅观战者路由渲染。
 
 import { useCallback, useState } from 'react';
@@ -18,11 +23,16 @@ interface Props {
   playerNames: Record<number, string>;
   myBet?: { target_seat: number; amount: number; settled: boolean; result: string; payout: number };
   onPlaceBet: (targetSeat: number, amount: number) => Promise<void>;
+  /**
+   * §20260817-03 U1 — 房间是否开启了 AI 解说(game.state.commentary_enabled)。
+   * false 时隐藏解说席(未投票/未押注则整个底栏不渲染)。
+   */
+  commentaryEnabled: boolean;
 }
 
 const AMOUNTS = [10, 25, 50, 100];
 
-export function SpectatorCompactBar({ phase, seatCount, myBet, onPlaceBet }: Props) {
+export function SpectatorCompactBar({ phase, seatCount, myBet, onPlaceBet, commentaryEnabled }: Props) {
   const t = useT();
   const feed = useWerewolfStore((s) => s.commentaryFeed);
   const [targetSeat, setTargetSeat] = useState<number>(-1);
@@ -52,45 +62,60 @@ export function SpectatorCompactBar({ phase, seatCount, myBet, onPlaceBet }: Pro
         ? '🎯 观众押注 · 猜谁会被放逐'
         : '投票阶段开始后可押注';
 
+  // §20260817-03 U1 — 两个子区的可见性:
+  //   解说区 = 房间开启了 AI 解说;押注区 = 投票阶段或已押注。
+  //   两者都不可见 → 整个底栏返回 null(grid auto 行塌缩,空间让给座位网格)。
+  const showCommentary = commentaryEnabled;
+  const showBet = isVotePhase || !!myBet;
+  if (!showCommentary && !showBet) {
+    return null;
+  }
+
   return (
     <div className="spectator-compact-bar" data-testid="spectator-compact-bar">
-      {/* 共享 header: 左右分列 */}
+      {/* 共享 header: 左右分列(各区按需渲染) */}
       <div className="spectator-compact-bar__header">
-        <span className="spectator-compact-bar__title-left">
-          🎙️ {t('werewolf.commentary.title')}
-        </span>
-        <span className="spectator-compact-bar__title-right">
-          🎯 {betHint}
-        </span>
+        {showCommentary && (
+          <span className="spectator-compact-bar__title-left">
+            {t('werewolf.commentary.title')}
+          </span>
+        )}
+        {showBet && (
+          <span className="spectator-compact-bar__title-right">
+            🎯 {betHint}
+          </span>
+        )}
       </div>
 
-      {/* 内容区: 解说 + 押注水平并排 */}
+      {/* 内容区: 解说 + 押注水平并排(各区按需渲染) */}
       <div className="spectator-compact-bar__body">
-        {/* 左侧: 解说 feed(最近 3 条) */}
-        <div className="spectator-compact-bar__commentary">
-          {feed.length === 0 ? (
-            <span className="spectator-compact-bar__empty">
-              {t('werewolf.commentary.empty')}
-            </span>
-          ) : (
-            feed.slice(-3).map((line) => (
-              <div
-                key={line.seq}
-                className={`spectator-compact-bar__line spectator-compact-bar__line--${line.style}`}
-              >
-                <span className="spectator-compact-bar__style-tag">
-                  {line.style === 'pro'
-                    ? t('werewolf.commentary.stylePro')
-                    : t('werewolf.commentary.styleFun')}
-                </span>
-                <span className="spectator-compact-bar__text">{line.text}</span>
-              </div>
-            ))
-          )}
-        </div>
+        {/* 左侧: 解说 feed(最近 3 条) — §20260817-03 U1: 未开启解说时不渲染 */}
+        {showCommentary && (
+          <div className="spectator-compact-bar__commentary">
+            {feed.length === 0 ? (
+              <span className="spectator-compact-bar__empty">
+                {t('werewolf.commentary.empty')}
+              </span>
+            ) : (
+              feed.slice(-3).map((line) => (
+                <div
+                  key={line.seq}
+                  className={`spectator-compact-bar__line spectator-compact-bar__line--${line.style}`}
+                >
+                  <span className="spectator-compact-bar__style-tag">
+                    {line.style === 'pro'
+                      ? t('werewolf.commentary.stylePro')
+                      : t('werewolf.commentary.styleFun')}
+                  </span>
+                  <span className="spectator-compact-bar__text">{line.text}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
 
         {/* 右侧: 押注交互(仅投票阶段展开,或已押注/已结算时显示结果) */}
-        {(isVotePhase || myBet) && (
+        {showBet && (
           <div className="spectator-compact-bar__bet">
             {myBet?.settled ? (
               <span className="spectator-compact-bar__bet-result">

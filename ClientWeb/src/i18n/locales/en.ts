@@ -800,6 +800,8 @@ const en: Dict = {
   // 2026-07-30 §stats enhancement — aggregate API/Token stats chips.
   'werewolf.statusBar.apiStats': '📊 Calls {callCount} · OK {successCount} · Fail {failCount}',
   'werewolf.statusBar.tokenStats': '🔤 Tokens: in {input} · out {output} · total {total}',
+  'werewolf.statusBar.tokensPerHour': '⚡ ≈{rate}/hr',
+  'werewolf.statusBar.tokensPerHourTip': 'Average tokens per hour (total {total} ÷ {hours} h elapsed) · updates live, indicative only',
   'werewolf.statusBar.judgeTokenStats': '⚖️ Judge: calls {callCount} (OK {successCount}/Fail {failCount}) · Tokens in {input} · out {output} · total {total}',
   // 2026-07-30 §stats enhancement — seat card token row.
   'werewolf.seat.tokenRow': '🔤 in {input} · out {output}',

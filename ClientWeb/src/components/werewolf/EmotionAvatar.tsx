@@ -112,6 +112,14 @@ export function EmotionAvatar({
 
   // §20260811-06 U2 — 当 popover 打开时,测一次 avatar 位置 + popover 尺寸,
   // 决定 placement。popover 真实渲染后才可测,所以 useLayoutEffect(同步测,避免抖动)。
+  //
+  // §20260817-03 U2 — 翻转边界从 viewport 改为座位网格滚动容器:
+  // .werewolf-table / .werewolf-table__grid 均为 overflow-y:auto(2026-07-26
+  // 聊天滚动修复引入),overflow-y:auto 连带把 overflow-x 的 visible 计算为 auto,
+  // 超出网格 padding box 的 popover 会被裁剪。旧逻辑用 viewport 顶边判定
+  // (aRect.top - pRect.height >= 8),第 1 行座位头像在 viewport 中上方空间充足
+  // → 判定向上展开 → 被网格上边界裁掉。现改为:取网格 bounding rect 与
+  // viewport 的交集为有效边界,**默认向下**,仅当下方放不下且上方更宽时向上。
   useEffect(() => {
     if (!hovered) return;
     const avatarEl = avatarRef.current;
@@ -119,13 +127,20 @@ export function EmotionAvatar({
     if (!avatarEl || !popoverEl) return;
     const aRect = avatarEl.getBoundingClientRect();
     const pRect = popoverEl.getBoundingClientRect();
-    const vw = window.innerWidth;
-    // 垂直方向:popover 向上展开时(aRect.top - pRect.height) < 0 → 翻转到向下。
-    const openAbove = aRect.top - pRect.height >= 8;
-    // 水平方向:居中展开(popover 宽 ~280),左侧越界则贴左,右侧越界则贴右。
+    const gridEl = avatarEl.closest('.werewolf-table') as HTMLElement | null;
+    const gRect = gridEl ? gridEl.getBoundingClientRect() : null;
+    const boundTop = Math.max(gRect ? gRect.top : 0, 0);
+    const boundBottom = Math.min(gRect ? gRect.bottom : window.innerHeight, window.innerHeight);
+    const boundLeft = Math.max(gRect ? gRect.left : 0, 0);
+    const boundRight = Math.min(gRect ? gRect.right : window.innerWidth, window.innerWidth);
+    // 垂直方向:默认向下;下方剩余空间不足且上方更宽 → 翻转到向上。
+    const spaceBelow = boundBottom - aRect.bottom - 6;
+    const spaceAbove = aRect.top - boundTop - 6;
+    const openAbove = pRect.height > spaceBelow && spaceAbove > spaceBelow;
+    // 水平方向:居中展开(popover 宽 ~280),越出有效边界则贴左/贴右。
     const centeredLeft = aRect.left + aRect.width / 2 - pRect.width / 2;
-    const openLeft = centeredLeft < 8;
-    const openRight = centeredLeft + pRect.width > vw - 8;
+    const openLeft = centeredLeft < boundLeft + 8;
+    const openRight = centeredLeft + pRect.width > boundRight - 8;
     setPlacement({
       vertical: openAbove ? 'above' : 'below',
       horizontal: openLeft ? 'left' : openRight ? 'right' : 'center',
