@@ -84,16 +84,16 @@ func BuildSystemPrompt(selfPortrait string, personality PersonalityVector, perso
 		"⑥ 工具 result 反馈:R132 起,你的发言如果命中「心理战合法」/「隐晦身份」/「系统实现泄漏」\n" +
 		"   三类之一,工具会返回一段「风险提示」告诉你「下次同类表达建议」 — 按建议调整表达,\n" +
 		"   **但不要因为收到提示就沉默**:心理战本身是合法的,玩家识破后会重新评估你。\n" +
-	// §20260811-01 U1: 反事实推理链 —— 引导 LLM 在关键决策前自然产出
-	// 「如果 X 则 Y」推演，不新增工具，产出流入 HeartThought（§119 协议层隔离）。
-	// Token 成本 ~150/轮/Agent，7 bot 合计 ~1000/轮，可控。
-	"\n⑦ 反事实推理(Counterfactual Thinking):在做出关键决策(投票/刀人/用药/开枪/查验)前,\n" +
-	"   在 internal_thought 中自然融入 2~3 条「如果 X 则 Y」的可能性路径:\n" +
-	"   - 「如果 5 号是狼人,他第 2 轮的发言策略就说得通了」\n" +
-	"   - 「如果 3 号是预言家,为什么他的查验逻辑和票型不一致?」\n" +
-	"   - 「如果昨晚守卫守了 7 号,狼人可能换了刀口」\n" +
-	"   这不需要独立工具或额外输出。在你自然思考的过程中融入反事实分析即可。\n" +
-	"   它帮助你避免单一假说锁定,提升决策质量。玩家无法看到你的反事实推理。\n"
+		// §20260811-01 U1: 反事实推理链 —— 引导 LLM 在关键决策前自然产出
+		// 「如果 X 则 Y」推演，不新增工具，产出流入 HeartThought（§119 协议层隔离）。
+		// Token 成本 ~150/轮/Agent，7 bot 合计 ~1000/轮，可控。
+		"\n⑦ 反事实推理(Counterfactual Thinking):在做出关键决策(投票/刀人/用药/开枪/查验)前,\n" +
+		"   在 internal_thought 中自然融入 2~3 条「如果 X 则 Y」的可能性路径:\n" +
+		"   - 「如果 5 号是狼人,他第 2 轮的发言策略就说得通了」\n" +
+		"   - 「如果 3 号是预言家,为什么他的查验逻辑和票型不一致?」\n" +
+		"   - 「如果昨晚守卫守了 7 号,狼人可能换了刀口」\n" +
+		"   这不需要独立工具或额外输出。在你自然思考的过程中融入反事实分析即可。\n" +
+		"   它帮助你避免单一假说锁定,提升决策质量。玩家无法看到你的反事实推理。\n"
 
 	hardBans := "【系统硬约束 - 极端安全/实现泄漏】\n" +
 		// BUG-R245-P0-01 (2026-08-06): Bot 9号 在警长竞选阶段公开说 "**作为
@@ -139,6 +139,17 @@ func BuildSystemPrompt(selfPortrait string, personality PersonalityVector, perso
 		"  干掉/带走/投死 + X号」的击杀手势句式 — 即便加上「建议」等软词也一样\n" +
 		"  暴露狼队身份。白天请用「投 X 号」「怀疑 X 号」「X 号不像好人」等通用\n" +
 		"  表达替代,击杀意图只在 wolf whisper 中出现。\n" +
+		// BUG-R11-001 (2026-08-17): 狼队内沟通泄漏公屏。R11 20:10 实测 Bot 9 号
+		// (美团 LongCat-2.0) 在 D1 遗言阶段公开发言「狼人队友，今晚先刀7号。他拿了
+		// 警徽今晚要验8号，刀了他好人节奏就乱了」— 第二人称复数「狼人队友」称谓
+		// 句式绕过了 §R10-NEW3 的「我/咱/咱们」第一人称主语锚定。服务端已新增
+		// CheckWolfCoordinationLeak hard-reject(仅狼阵营生效,命中即整条不广播);
+		// prompt 层补禁令做防御纵深。
+		"• 【§R11-NEW3-001 狼队内沟通禁令】严禁在公屏出现任何「狼人队友/狼队友/\n" +
+		"  同伙/自己人/我们的人/队友们 + 今晚/先/打算/准备 + 刀/杀/干掉/带走 + X号」\n" +
+		"  的队内协调句式 — 即便软化用「今晚先」「打算」「准备」也不行,系统会\n" +
+		"  hard-reject 整条发言。狼队内沟通只走 wolf_whisper,**绝不进公屏**;\n" +
+		"  公屏讨论夜间局势请改用「刀口可能在 X 号」这类不确认信息的抽象表达。\n" +
 		// BUG-R213-P1-01 (2026-07-31): 观战者私聊引导。自动化测试报告
 		// 2026-07-31 08:17:05 §3.3/§4.2 实测观战者私聊已投递到 bot 的
 		// 【发给你的私聊】段,但 bot 下一轮公开发言完全不引用,测试方误判
@@ -876,7 +887,6 @@ func IdentityBlock(players []wwtypes.PlayerBrief) string {
 	return s
 }
 
-
 // KnowledgeDigestBlock 把当前 bot 的知情清单摘要渲染到 user prompt 末尾。
 // 2026-08-10 §20260810-08：仅本人可见，不进入任何聊天或 BotTranscript 通道。
 func KnowledgeDigestBlock(ctx *wwtypes.GameContext) string {
@@ -1158,7 +1168,8 @@ func PlayerProfileBlock(ctx *wwtypes.GameContext) string {
 //   - 零数据库/零前端改动；prompt token 增加 ≈ 150 token/次，13 人局总体 < 3% 消耗。
 //
 // 仅在以下关键行动阶段提示本约束（其它阶段 LLM 可忽略）：
-//   vote / seer_check / witch_act / guard_protect / hunter_shoot / wolf_kill
+//
+//	vote / seer_check / witch_act / guard_protect / hunter_shoot / wolf_kill
 func ThreeReasonsBlock(ctx *wwtypes.GameContext) string {
 	if ctx == nil {
 		return ""

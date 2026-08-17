@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"LsmAgentGame/agent/wwplayer"
 	"LsmAgentGame/agent/core"
+	"LsmAgentGame/agent/wwplayer"
 	"LsmAgentGame/agent/wwtypes"
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/logger"
@@ -372,6 +372,19 @@ func (r *agentRunner) Speak(text string) (string, error) {
 			}
 		}
 	}
+	// BUG-R11-001 (2026-08-17): 狼队内沟通公屏泄漏 hard-reject。
+	// R132 把「狼队-击杀意图」定为 MysteryAllow(原文放行),§R10-NEW3 的
+	// regex 又只接在 ScrubIdentityLeak(主路径死代码),导致 Bot 9 号
+	// 「狼人队友，今晚先刀7号」原文上公屏。此处与 R93-P1 同范式:狼阵营
+	// bot 命中即整条不广播,hint 引导改用 wolf_whisper。详见 speak_wolfguard.go。
+	if r.isWolfSeat() {
+		if cat, hit := CheckWolfCoordinationLeak(text); hit {
+			logger.L().Info("agentRunner.Speak wolf-coordination rejected (R11-001)",
+				zap.Int("seat", int(r.seat)), zap.String("room", r.roomID),
+				zap.String("pattern", cat), zap.String("rejected", text))
+			return "speak rejected: " + wolfCoordinationRejectHint, nil
+		}
+	}
 	// BUG-R70-P2 (2026-07-09): 跨消息级内容去重。SpeakLimiter 只按时间节流,
 	// 拦截不了"30s 内说相同主题"。recentSpeakDedup 在 90s 窗口内识别
 	// Jaccard ≥ 0.6 的复读,直接拒绝并返回 hint 让 LLM 在下一轮收敛。
@@ -554,6 +567,15 @@ func (r *agentRunner) SpeakAuto(text string) (string, error) {
 			}
 		}
 	}
+	// BUG-R11-001 (2026-08-17): 狼队内沟通公屏泄漏 hard-reject,与 Speak 同源。
+	if r.isWolfSeat() {
+		if cat, hit := CheckWolfCoordinationLeak(text); hit {
+			logger.L().Info("agentRunner.SpeakAuto wolf-coordination rejected (R11-001)",
+				zap.Int("seat", int(r.seat)), zap.String("room", r.roomID),
+				zap.String("pattern", cat), zap.String("rejected", text))
+			return "speak_auto rejected: " + wolfCoordinationRejectHint, nil
+		}
+	}
 	// BUG-R70-P2 跨消息级去重。
 	if r.recentSpeakDedup != nil {
 		if allowed, hint := r.recentSpeakDedup.CheckAndRecord(text, time.Now()); !allowed {
@@ -696,6 +718,15 @@ func (r *agentRunner) SpeakWithThought(publicText, internalThought string) (stri
 			if hint := ComposeMysteryHint(res); hint != "" {
 				r.lastMysteryHint = hint
 			}
+		}
+	}
+	// BUG-R11-001 (2026-08-17): 狼队内沟通公屏泄漏 hard-reject,与 Speak 同源。
+	if r.isWolfSeat() {
+		if cat, hit := CheckWolfCoordinationLeak(publicText); hit {
+			logger.L().Info("agentRunner.SpeakWithThought wolf-coordination rejected (R11-001)",
+				zap.Int("seat", int(r.seat)), zap.String("room", r.roomID),
+				zap.String("pattern", cat), zap.String("rejected", publicText))
+			return "speak_with_thought rejected: " + wolfCoordinationRejectHint, nil
 		}
 	}
 	if r.recentSpeakDedup != nil {
@@ -1376,6 +1407,7 @@ func (r *agentRunner) WolfWhisper(text string) (string, error) {
 //   - "starter"  → 装 2 模板(target_position + fake_seer_posture)
 //   - "advanced" → 装 4 模板(全部)
 //   - ""         → 关闭暗号,纯 wolf_whisper(默认,零回归)
+//
 // 暗号模板仅狼 bot GameContext 可见(§119 协议层隔离)。
 //
 // 协议层隔离(§119):系统留言与 wolf_whisper 同级 — 不进 chat 表/队列/HeartThought。
@@ -1608,6 +1640,15 @@ func (r *agentRunner) Interject(text string) (string, error) {
 			if hint := ComposeMysteryHint(res); hint != "" {
 				r.lastMysteryHint = hint
 			}
+		}
+	}
+	// BUG-R11-001 (2026-08-17): 狼队内沟通公屏泄漏 hard-reject,与 Speak 同源。
+	if r.isWolfSeat() {
+		if cat, hit := CheckWolfCoordinationLeak(text); hit {
+			logger.L().Info("agentRunner.Interject wolf-coordination rejected (R11-001)",
+				zap.Int("seat", int(r.seat)), zap.String("room", r.roomID),
+				zap.String("pattern", cat), zap.String("rejected", text))
+			return "interject rejected: " + wolfCoordinationRejectHint, nil
 		}
 	}
 	// BUG-R158-FAIRNESS-001 (2026-07-19): 反私聊内容幻觉事实校验补全。
