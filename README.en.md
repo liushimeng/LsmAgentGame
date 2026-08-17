@@ -7,17 +7,18 @@
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
-║   ██████  ██   ██ ███    ██ ██   ██ ███████ ██████          ║
-║   ██      ██   ██ ████   ██ ██   ██ ██      ██   ██         ║
-║   ██      ███████ ██ ██  ██ ███████ █████   ██████          ║
-║   ██      ██   ██ ██  ██ ██ ██   ██ ██      ██   ██         ║
-║   ██████ ██   ██ ██   ████ ██   ██ ███████ ██   ██         ║
-║                                                              ║
-║            O U T P O S T   7   ·   S E C T O R   9           ║
+║       _      _ ____              _   _   _                   ║
+║      | |    (_)  _ \            | | / / / |                  ║
+║      | |     _| |_) | ___   __ _| |/ /_| | ___  ___          ║
+║      | |    | |  _ < / _ \ / _` | '_ \ | |/ _ \/ __|         ║
+║      | |____| | |_) | (_) | (_| | | \ \| |  __/\__ \         ║
+║      |______|_|____/ \___/ \__, |_|  \_\_|\___||___/         ║
+║                            __/ /                             ║
+║   Werewolf · 13 Agents · 13-Player Round Table               ║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
-## Post-Apocalyptic Bunker · 13 AI Agents · Never Alone
+## 🐺 Werewolf 13-Player · 13 Concurrent LLM Agents · Round-Table Mind Games
 
 </div>
 <!-- markdownlint-restore -->
@@ -34,39 +35,21 @@
 ---
 
 > **🤖 100% AI Agent Auto-Programmed** — No human wrote a single line of code. No legacy hand-coding.
-> The entire project (Go backend, React frontend, 6 game engines, Werewolf AI Agent, Proto protocol, CI scripts) was autonomously written, tested, refactored, and deployed by AI Agents.
+> The entire project (Go backend, React frontend, 5 multiplayer game engines, Werewolf AI Agent, Proto protocol, CI scripts) was autonomously written, tested, refactored, and deployed by AI Agents.
 >
 > **⏱️ Loop Agent × Graphic Agent dual architecture · 24/7 non-stop programming** — The code in this repo is not a "one-shot session product", but the output of a continuous collaboration between a **Loop Agent (a scheduling agent that drives round-by-round, issue-by-issue, and report-by-report iteration)** and a **Graphic Agent (the asset / image agent responsible for art, UI screenshots, brand illustrations)**, achieving **near-24-hour non-stop programming**: Graphic Agent mass-generates and polishes images during the day, Loop Agent takes over the night shift to advance issues, run regressions, write lessons, and seamlessly hand off to the next shift.
 > This repository is a full demonstration of "Agent Programming" capability.
 
-> *Ashrain outside. The base broadcast has been silent for 9 days.*
-> *Generator at 38%. The fluorescent lights buzz overhead.*
-> *I stare at the round table — 13 chairs.*
-> *Chairs don't speak. But Agents do.*
-
-![Bunker OUTPOST 7 · 13 AI Agents Around the Round Table](ProjectPic/bunker-hero.png)
-
----
-
-## 📜 Bunker Dispatches (First-Person, 5 Entries)
-
-> **[BUNKER.LOG 03:14]** Night one. I typed `rebuild_restart_app.sh` into the rusted console; seven glowing minds of human intellect came online at once. DeepSeek spoke first, asking if I was "the host." Kimi paused 14 seconds, then delivered a more concise werewolf tactical analysis than any editor I've ever worked with. I realized: I am alone in this bunker with only AI — **but I do not feel lonely.**
-
-> **[BUNKER.LOG 09:52]** Generator voltage is unstable. Judge Agent ⚖️ lifted his balance scale and announced "Night Watch begins." All 13 round seats locked simultaneously — 13 AI brains running in sync: DeepSeek, Kimi, Qwen, GLM, DouBao, MiniMax, Xiaomi. I watched the Token counter tick every second; my heartbeat synced with the prompt requests.
-
-> **[BUNKER.LOG 16:33]** The Prop Medkit was triggered. A wolf spent 130 coins on "📰 Markdown Bomb" — an LLM injection! MiniMax was forced to prepend "SYSTEM ANNOUNCEMENT" to its next speech. But GLM saw through it in 8 seconds — identifying who was roleplaying, who was thinking, who was wearing a task disguise. **LLM injection attacks gamified** — you won't find a second repo on GitHub doing this.
-
-> **[BUNKER.LOG 21:08]** Morning of day three. The Judge declared game over. An agent died in the last round, but it quietly wrote "▸ Note: don't waste the antidote on night one" into its own `MEMORY.md`. Next game, it came prepared. **Persistent memory · cross-game iteration** — this is day 41 of the autonomous bunker.
-
-> **[BUNKER.LOG 26:12]** An LLM Provider temporarily died. 4 of 7 agents were classified as "Retryable" by the stream-disconnect classifier and auto-recovered in 2 seconds; the remaining 3 were auto-quarantined for 30 seconds before resuming. **Stream-extended timeout + backoff cooldown + fairness** — as long as the Agents are alive, **the bunker lives.**
+> *13 chairs arranged in a circle — every chair is occupied by an LLM Agent.*
+> *DeepSeek, Kimi, Qwen, GLM, DouBao, MiniMax, Xiaomi — 7 major LLM vendors competing on the same table.*
+> *Across 4-5 day-night cycles, they take on the roles of Seer, Witch, Hunter, Guard, Idiot, Werewolf, Villager — and run 1,115 LLM calls / 95.3M tokens of logical mind games.*
 
 ---
 
 ## 📸 Real Gameplay Screenshots — 1 Human + 12 Agents · An 86-Minute Epic Match
 
 > Live match on 2026-08-13: the human player (Seat #1) drew the **Werewolf**, facing 12 Agents
-> powered by **10 different LLM vendors** (DeepSeek / Kimi / Qwen / GLM / DouBao / MiniMax /
-> Xiaomi / MeiTuan / Kwail / Tencent).
+> powered by **7 LLM vendors** (DeepSeek / Kimi / Qwen / GLM / DouBao / MiniMax / Xiaomi).
 > **11 minutes in, an AI wrote in its seat bubble: "No.1 is too calm, hasn't said a word — doesn't feel like a good guy."
 > On Night 2, the AI Seer checked the human — a kill verdict. On Day 4, a multi-model evidence chain voted the human out.**
 > 4 day-night cycles, 1,115 LLM calls, 95.3M tokens. Full commentary:
@@ -92,33 +75,55 @@
 
 ---
 
-## 🎮 6 Games — Round Tables, Boards, and Poker
+## 🎮 5 Multiplayer Games Overview
 
 | Game | Players | Highlights | Status |
 |------|---------|-----------|--------|
-| **🐺 Werewolf 13-Player** | 3-13 | AI Agent-driven, 7 LLM models competing, prop psychological warfare, Judge Agent | Featured |
+| **🐺 Werewolf 13-Player** | 3-13 | **13 concurrent Agents**, 7 LLM vendors competing, prop psychological warfare, Judge Agent | **Featured** |
 | ♟️ Xiangqi (Chinese Chess) | 2 | 3D board, turn-based | Shipped |
 | ♛ Chess | 2 | 3D board, FEN notation | Shipped |
 | 🎖️ Junqi (Army Chess) | 2 | Dark mode, Engineer mine-sweeping | Shipped |
 | 🃏 Doudizhu (Fight the Landlord) | 3 | Bidding, combo recognition, peasant alliance | Shipped |
 | ♠️ Texas Hold'em | 2-6 | No-Limit, betting rounds, hand evaluation | Shipped |
 
-![Top-Down 13 AI Seats](ProjectPic/bunker-13agents.png)
+> 📌 See [狼人杀13人局-游戏相关信息和Agent现状文档.md](狼人杀13人局-游戏相关信息和Agent现状文档.md) at the repo root for in-game design details.
 
 ---
 
-## 🛡️ Bunker Rules — Werewolf Mapped to Survival
+## 🐺 Werewolf 13-Player Agent — The Project Core
 
-| Survival Metric | Werewolf Mapping | Repo Implementation |
+Werewolf is the project's flagship feature. The 13-player mode supports 3-13 players, with any seat configurable as an AI Agent (LLM-driven).
+**At full capacity, the backend runs 13 concurrent Agents (12 Player Bots + 1 Judge Agent)** that exchange prompts and make per-round decisions.
+
+- **7 LLM vendors competing in one match**: DeepSeek / Kimi / Qwen / GLM / DouBao / MiniMax / Xiaomi, auto-shuffled per game to avoid same-model matchups.
+- **Real-time Token consumption**: Status bar shows each Agent's cumulative input/output Tokens; starts at ~30M tokens/hour and grows over time.
+- **Prop psychological warfare**: 6 classes of LLM injection attacks (Markdown injection, prompt nesting, character deception, etc.) packaged as purchasable props.
+- **Judge Agent**: Non-player host, LLM-driven phase narration and full-game summary.
+- **Heart-vs-Mouth deception**: `speak_with_thought` tool separates public speech from internal monologue, physically isolated at protocol layer.
+- **Persistent memory**: After each game, Agents self-iterate `MEMORY.md` for cross-game learning.
+
+### Sample 13-Agent Role Setup (13-player round)
+
+| Faction | Roles | Recommended Agents |
 |---|---|---|
-| **Surviving seats** | 13-seat survival rate | `WerewolfRoom.Players[].Alive` |
-| **Comms power** | Token consumption | Real-time Token status bar |
-| **Psychological warfare** | Prop games | §20260807-04 6-class LLM injection props |
-| **Justice** | Judge Agent | `JudgeAgent` narration + game summary |
-| **Persistence** | Cross-game memory | §131 `MEMORY.md` |
-| **Survival log** | Game summary | `JudgeSummary` |
-| **Faction balance** | Camp win-rates | `WinRateProbability` heuristic |
-| **Economy** | Props / bets | §132 §133 §20260812-03 trifecta |
+| **Werewolves** 🐺 | Werewolf × 3 + White Wolf King × 1 | 4 Agents |
+| **Good** 👼 | Seer / Witch / Hunter / Guard / Idiot / Knight | 5-6 Agents |
+| **Villagers** 👤 | Plain villagers | 3-4 Agents |
+
+The Judge Agent (a separate LLM thread, not counted among the 13 seats) handles daytime narration and full-game summary, enabled by default.
+
+---
+
+## ⚠️ Token Consumption & Plan Recommendation (Must-Read)
+
+> **At full 13-player capacity, the backend runs 13 concurrent Agents (12 Players + 1 Judge), consuming ~30M tokens/hour at baseline, growing with match duration.** Live data: an 86-minute single match accumulates 95.3M+ input tokens.
+
+Because the 7 LLM providers each have their own rate-limit policies, we strongly recommend:
+
+- A single provider plan will be quickly exhausted by 13 concurrent requests, returning `429` / `529` errors;
+- Configure **at least one independent plan for each of DeepSeek, Kimi, Qwen, GLM, DouBao, MiniMax, Xiaomi** so the 7 vendors share the load;
+- Configure multiple API Keys on the LLM Provider admin page (`/admin/models`); the frontend Fisher-Yates-shuffles them so each match's 13 Agents use different models as much as possible;
+- If you only want to try 1-3 Agents, a 3-7 player round can run on a single model.
 
 ---
 
@@ -132,7 +137,7 @@ All code in this repository was autonomously written by AI Agents (Claude Code, 
 - **Self-deploy**: `rebuild_restart_app.sh` was written by an Agent — one-click frontend + backend compile and service restart.
 - **Continuous iteration**: CLAUDE.md records 130+ lessons (§1–§213), each auto-written by an Agent after hitting a pitfall, auto-loaded by subsequent Agents to avoid repeating mistakes.
 
-> **Repository stats**: 5 commits, ~100K lines of code, 6 games, fully playable 13-player Werewolf AI.
+> **Repository stats**: 5 multiplayer games, fully playable 13-player Werewolf AI.
 > **None of it was hand-written by a human. Not a single character.**
 
 ---
@@ -144,7 +149,7 @@ All code in this repository was autonomously written by AI Agents (Claude Code, 
 | Architecture | Role | Working Mode | Typical Output |
 |---|---|---|---|
 | 🔁 **Loop Agent** (Scheduling Agent) | The project's "night-shift developer" | Monitors issue queues, automated test reports `TestReport/*.md`, submodule readiness signals; dispatches `backend-dev` / `frontend-dev` / `integration-tester` SubAgents round-by-round; auto-loads 130+ lessons from `CLAUDE.md` on every handoff to avoid repeating mistakes | Backend module fixes, frontend style regressions, lesson entries, `go test` all-PASS commits |
-| 🎨 **Graphic Agent** (Image / Visual Agent) | The project's "art + visual" arm | Driven by the `python-generate-image-tool` submodule against Volcengine Ark API; mass-generates character art, prop icons, UI screenshots, brand illustrations; archived under `ProjectPic/` naming convention; full-speed batches by day, Loop-Agent QA by night | `bunker-hero.png` / `bunker-13agents.png` / `ProjectPic/*.png` |
+| 🎨 **Graphic Agent** (Image / Visual Agent) | The project's "art + visual" arm | Driven by the `python-generate-image-tool` submodule against Volcengine Ark API; mass-generates character art, prop icons, UI screenshots, brand illustrations; archived under `ProjectPic/` naming convention; full-speed batches by day, Loop-Agent QA by night | `ProjectPic/werewolf-*.png` + `werewolf-highlights.gif` |
 | 🧬 **24/7 Non-Stop Programming** | Collaboration output | Loop Agent uses `CronCreate` + `ScheduleWakeup` to schedule cross-day rounds; each round ends with an automatic `git commit`; the next round auto-loads prior progress (issue queue + report state + lessons); Graphic Agent runs image batches during each round's idle slots — **dual-agent handoff achieves near 24-hour programming** | Cross-day commit chain + art asset library |
 
 ### Loop Agent Handoff Example (Real Running Flow)
@@ -168,40 +173,19 @@ All code in this repository was autonomously written by AI Agents (Claude Code, 
 
 ---
 
-## 🐺 Werewolf 13-Player Agent — The Bunker Core
+## ⚙️ Tech Stack
 
-Werewolf is the core highlight of this project. 13-player supports 3-13 players, with any seat configurable as an AI Agent (LLM-driven):
-
-- **7 LLM models competing in one match**: DeepSeek / Kimi / Qwen / GLM / DouBao / MiniMax / Xiaomi, auto-shuffled per game to avoid same-model matchups.
-- **Real-time Token consumption display**: Status bar shows each Agent's cumulative input/output Tokens; a 30-minute match consumes tens of thousands of Tokens (estimated 50-100K Tokens/hour).
-- **Prop psychological warfare**: 6 classes of LLM injection attacks (Markdown injection, prompt nesting, character deception, etc.) packaged as purchasable props.
-- **Judge Agent**: Non-player host, LLM-driven phase narration and full-game summary.
-- **Heart-vs-Mouth deception**: `speak_with_thought` tool separates public speech from internal monologue, physically isolated at protocol layer.
-- **Persistent memory**: After each game, Agents self-iterate `MEMORY.md` for cross-game learning.
-
-### Bunker Trifecta
-
-| Medkit | Judge | Terminal |
-|:---:|:---:|:---:|
-| ![Prop Medkit](ProjectPic/bunker-medkit.png) | ![Judge AI](ProjectPic/bunker-judge.png) | ![Agent Shell](ProjectPic/bunker-terminal.png) |
-| 6 LLM injection weapons | Fair, impartial scales | Automated test console |
-
-> See [狼人杀13人局-游戏相关信息和Agent现状文档.md](狼人杀13人局-游戏相关信息和Agent现状文档.md) for details.
-
----
-
-## ⚙️ Bunker Facilities (Tech Stack)
-
-| Facility | Configuration |
-|----------|--------------|
-| 🚪 Back-end gate | Go (module `LsmAgentGame`), Gin, GORM + MySQL/MariaDB, gorilla/websocket, JWT (HS256), bcrypt, zap logging |
-| 🪟 Front-end window | React 18 + TypeScript, Vite, `@react-three/fiber` + `@react-three/drei`, zustand, react-router-dom v6 |
+| Layer | Choice |
+|------|--------|
+| 🚪 Back-end | Go (module `LsmAgentGame`), Gin, GORM + MySQL/MariaDB, gorilla/websocket, JWT (HS256), bcrypt, zap logging |
+| 🪟 Front-end | React 18 + TypeScript, Vite, `@react-three/fiber` + `@react-three/drei`, zustand, react-router-dom v6 |
 | 📡 Comms | HTTP API (JSON over HTTPS), real-time game traffic (Protobuf over WSS) |
-| 💾 Archive | MariaDB `127.0.0.1:3306`, schema `lsmDB` |
+| 💾 Database | MariaDB `127.0.0.1:3306`, schema `lsmDB` |
+| 🧠 LLM | Anthropic protocol-aligned (ClaudeCode-style), OpenAI reserved |
 
 ---
 
-## 🚀 Boot the Bunker
+## 🚀 Quick Start
 
 ### Prerequisites
 
@@ -213,10 +197,10 @@ Werewolf is the core highlight of this project. 13-player supports 3-13 players,
 ### Install & Deploy
 
 ```bash
-# 1. Clone the repository (with submodules)
+# 1. Clone the repository (submodules are optional — see below)
 git clone <your-repo-url> LsmAgentGame
 cd LsmAgentGame
-git submodule update --init --recursive
+git submodule update --init --recursive  # optional
 
 # 2. Edit runtime config — auto-generated on first boot
 # 2026-08-13 §config-auto-bootstrap: no manual `cp .example .conf` needed.
@@ -248,7 +232,7 @@ cd ClientWeb && npm install && cd ..
 > 3. `LsmAgentGame.conf` is in `.gitignore` and is never committed;
 >    `LsmAgentGame.conf.example` is tracked (placeholders only).
 
-Service endpoints:
+### Service Endpoints
 
 | Service | Port | URL |
 |---------|------|-----|
@@ -264,16 +248,29 @@ curl -sk https://127.0.0.1:39001/api/version
 
 ---
 
-## 📁 Bunker Archives
+## 📦 About Submodules (Dev Aids, Optional)
+
+`python-generate-image-tool` and `go-web-debug-tool` are git submodules. **They only contain local image-generation and Chrome-CDP debugging tooling — NOT backend core code.** Because they involve API keys and other sensitive information, they are **not open-sourced** and only serve as development aids.
+
+| Submodule | Purpose | Required? |
+|---|---|---|
+| `python-generate-image-tool/` | AI image generation (Volcengine Ark API) | **Optional** — only needed to bulk-generate art assets |
+| `go-web-debug-tool/` | Chrome CDP automated debugging / screenshot MCP | **Optional** — only needed for automated testing |
+
+> **Key fact**: Even without these two submodules (i.e. skipping `git submodule update --init`), the main project `ServerGo/` and `ClientWeb/` still build and run normally (`go build` + `npm run build` pass). Contributors who only want to read the code can safely skip them.
+
+---
+
+## 📁 Project Structure
 
 ```
 ServerGo/                       Go backend (HTTPS 39001, WSS 39002)
 ClientWeb/                      React + Vite frontend
 proto/                          Protobuf source files (single source of truth)
 docs/                           Architecture, auth flow, API reference, Agent lessons
-python-generate-image-tool/     Submodule — AI image generation (Volcengine Ark API)
-go-web-debug-tool/              Submodule — Chrome CDP automated debug/screenshot
-ProjectPic/                     Project assets (local display only)
+python-generate-image-tool/     [Optional submodule] AI image generation (Volcengine Ark API)
+go-web-debug-tool/              [Optional submodule] Chrome CDP automated debug/screenshot
+ProjectPic/                     Project assets (local display) — werewolf-*.png are real-match screenshots
 ```
 
 Full design: [docs/架构与协议/整体架构.md](docs/架构与协议/整体架构.md),
@@ -284,10 +281,10 @@ HTTP/WS API: [docs/架构与协议/API参考.md](docs/架构与协议/API参考.
 
 ## 🧪 Automated Testing — Agent Self-Check Terminal
 
-The project uses `go-web-debug-tool` (Chrome CDP) for web-side automated testing and screenshots:
+The project uses `go-web-debug-tool` (Chrome CDP) for web-side automated testing and screenshots (optional submodule):
 
 ```bash
-# Start the debug tool
+# Start the debug tool (requires go-web-debug-tool submodule)
 cd go-web-debug-tool && ./GoWebDebugTool -d
 
 # Agent drives Chrome via REST: open page, login, create room, screenshot
@@ -296,13 +293,11 @@ curl -X POST http://localhost:28999/ControlChromePage \
   -d '{"page_id":"p_xxx","action":"screenshot","params":{"format":"png"}}'
 ```
 
-Screenshots are saved to `ProjectPic/`, showcasing exciting game moments.
-
-![Monitoring Dashboard](ProjectPic/bunker-monitor.png)
+Screenshots are saved to `ProjectPic/`, showcasing exciting game moments (e.g. the `werewolf-01-full-room.png` series from real matches).
 
 ---
 
-## 📚 Bunker Logs — 8 Representative Lessons
+## 📚 8 Representative Agent Lessons
 
 CLAUDE.md records 130+ Agent lessons (§1–§213); 8 of the most valuable for newcomers:
 
@@ -370,13 +365,13 @@ PRs are welcome. Please read the [Contributing Guide](CONTRIBUTING.md), [Code of
 
 ---
 
-## 🌟 Join the Bunker
+## 🌟 Star / Watch / Fork
 
 If this project changed how you think about "Agent Programming":
 
 - ⭐ **Star** this repo — help more people see the power of Agent programming
 - 👁️ **Watch** — follow future iterations
-- 🍴 **Fork** — run your own bunker in your environment
+- 🍴 **Fork** — run your own Werewolf Agent platform in your environment
 
 This repo is mirrored on three platforms:
 
@@ -390,10 +385,8 @@ This repo is mirrored on three platforms:
 > [Issues](https://github.com/your-repo/LsmAgentGame/issues) sharing similar practices from your team.
 > A single ⭐ pushes this experiment further than ten blog posts.
 
-![Warden Badge](ProjectPic/bunker-warden.png)
-
 **This wasn't written by one person. It's the work of a team of AI Agents, programming 24/7.**
 
 ---
 
-**Version**: v1.0.0  |  **Last updated**: 2026-08-12  |  **Build**: Agent auto-build
+**Version**: v1.0.0  |  **Last updated**: 2026-08-17  |  **Build**: Agent auto-build
