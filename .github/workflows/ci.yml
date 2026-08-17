@@ -46,7 +46,7 @@ jobs:
           # 不 checkout 可省一大截克隆时间。
           submodules: false
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           # 与 ServerGo/go.mod 的 `go 1.25.0` 对齐。
           go-version-file: ServerGo/go.mod
