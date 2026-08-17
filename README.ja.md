@@ -46,32 +46,34 @@
 
 ---
 
-## 📸 実機プレイスクショ — 人間 1 名 + 12 Agent · 86 分の頂上決戦
+## 📸 実機プレイスクショ — 人間 1 名 + 12 Agent(最新対局:2026-08-17)
 
-> 2026-08-13 の実対局:人間プレイヤー(1 番席)が**人狼**を引き、**7 社の LLM**
-> (DeepSeek / Kimi / Qwen / GLM / 豆包 / MiniMax / 小米)が駆動する 12 体の Agent と対戦。
-> **開始 11 分、AI が座席バブルに「1 号は落ち着きすぎ、ずっと黙っている、好人に見えない」と書き込み。
-> 第 2 夜、AI 占い師が人間を査験 —— 查殺(人狼判定)命中。第 4 日、複数モデルの証拠チェーンが人間への投票を完了。**
-> 4 回の昼夜サイクル、1,115 回の LLM 呼び出し、95.3M Token。全解説は
+> 2026-08-17 深夜の実対局:人間プレイヤー(1 番席)が**村人**を引き、**10 社の LLM**
+> (DeepSeek / Kimi / Qwen / GLM / 豆包 / MiniMax / 小米 / 美団 / 腾讯 / 快手)が駆動する 12 体の Agent と対戦。
+> **人間は終始沈黙 —— それがかえって全場の焦点に:初日に AI が座席バブルで「1 号の人間プレイヤー、全場で君だけ発言していない」と指名;
+> 第 2 夜に AI 占い師が 2 体対立;第 3 日に DeepSeek の人狼が公開チャットで「人狼の勝ちだ、見事な試合だった」と口を滑らせ即座に追求され、
+> 快手 Kwail が人間に直接問いかける:「1 号、君はどう思う?」**
+> 75 分間の収録、**1,238 回の LLM 呼び出しで失敗ゼロ**、42.9M Token。全解説は
+> [`ProjectPic/werewolf-2026-highlights.md`](ProjectPic/werewolf-2026-highlights.md);
+> 歴史的名局「AI 占い師が人間の人狼を查殺」(2026-08-13 · 86 分 · 95.3M Token)は
 > [`ProjectPic/werewolf-highlights.md`](ProjectPic/werewolf-highlights.md)。
 
-![狼人殺 13 人局ハイライト GIF](ProjectPic/werewolf-highlights.gif)
+![狼人殺 13 人局ハイライト GIF(2026-08-17)](ProjectPic/werewolf-2026-highlights.gif)
 
-| 開局 13 座全景 · 沈黙の人間に注目する AI | 心理戦アイテム · LLM 注入攻撃のゲーム化 |
+| 開局 13 座全景 · 10 社モデルバッジ勢揃い | 警長選挙 · Token 29.9M/時間で燃焼中 |
 |---|---|
-| ![開局全景](ProjectPic/werewolf-01-full-room.png) | ![心理戦アイテム](ProjectPic/werewolf-02-props.png) |
-| **初日の追放投票 + 観客ベット** | **遺言フェーズ · Kimi k3 の最後の演説** |
-| ![初日投票](ProjectPic/werewolf-03-vote-bet-day1.png) | ![遺言フェーズ](ProjectPic/werewolf-04-lastwords.png) |
-| **人間の人狼が夜に襲撃 · 狼投票 2/4** | **第 2 夜・占い師フェーズ · 神視点** |
-| ![人間狼の夜襲](ProjectPic/werewolf-05-wolf-night-player.png) | ![占い師の夜](ProjectPic/werewolf-06-seer-night.png) |
-| **偽占い師の対決 · 8 号カミングアウト vs 5 号反撃** | **第 3 夜の人狼 · 9/13 生存** |
-| ![偽占い師対決](ProjectPic/werewolf-07-counter-claim.png) | ![第 3 夜の人狼](ProjectPic/werewolf-08-night-wolves-d3.png) |
-| **第 3 日投票 · 8/13 生存 · 82.9M Token** | **猜疑チェーン完成 · 95.3M Token で人間に投票** |
-| ![第 3 日投票](ProjectPic/werewolf-09-vote-day3.png) | ![猜疑チェーン](ProjectPic/werewolf-10-suspicion-chain.png) |
+| ![開局全景](ProjectPic/werewolf-2026-01-opening-full-room.png) | ![警長選挙](ProjectPic/werewolf-2026-02-sheriff-election.png) |
+| **初日の追放投票 + 観客ベット · 沈黙の人間に注目する AI** | **第 2 日発言 · AI が人間プレイヤーを直接指名** |
+| ![初日投票](ProjectPic/werewolf-2026-03-day1-vote-bet.png) | ![AI が人間を指名](ProjectPic/werewolf-2026-04-day2-ai-calls-human.png) |
+| **人間・村人の夜視点 · AI 占い師対決の最前線** | **遺言フェーズ · #12 DeepSeek V4 の最後の演説** |
+| ![人間の夜視点](ProjectPic/werewolf-2026-05-human-villager-night.png) | ![遺言フェーズ](ProjectPic/werewolf-2026-06-lastwords-deepseek.png) |
+| **第 3 夜の人狼 · 8/13 生存 · Token 36.5M** | **猜疑チェーン完成 · 42.9M Token · 1,238 回呼び出し失敗ゼロ** |
+| ![第 3 夜の人狼](ProjectPic/werewolf-2026-07-night3-wolves.png) | ![猜疑チェーン](ProjectPic/werewolf-2026-08-suspicion-chain.png) |
 
-> 💬 **実際の対話** —— Kimi k3(13 号):「5 号の査験は 2 夜連続で一貫、9 号の金水は検証済み、1 号は查殺、論理チェーンは完璧。
-> 8 号が以前公開チャットで『屠辺成功』『今夜は 5 号を殺さない』と言った —— 本物の占い師が言うはずがない。」
-> Qwen(4 号)はゲーム理論で反論:「2 人の占い師が対立すれば 5 号の『1 号查殺』は相殺され、1 号が白くなる —— だからこそ 5 号が怪しい。」
+> 💬 **実際の対話** —— DeepSeek V4(2 号)が公開チャットで口误:「人狼の勝ちだ、見事な試合だった。8 号の偽占い師が見事に場を支配し、
+> 12 号は追放後に夜襲され、正義陣営の情報は完全に混乱した。」Kimi k3(3 号)が即座に追求:「2 号、今『人狼の勝ち』って……」
+> 快手 Kwail(11 号)が人間に問いかける:「3 号、查殺されても査験ロジックに正面から反論せず話題を逸らす——この回避姿勢は怪しくない?1 号、君はどう思う?」
+> 豆包 2.1(6 号)も疑問を投げる:「場を荒らす連中を調べず、ずっと黙っている 1 号を査験?そのロジックは理解できない。」
 
 ---
 

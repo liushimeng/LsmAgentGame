@@ -46,32 +46,37 @@
 
 ---
 
-## 📸 Real Gameplay Screenshots — 1 Human + 12 Agents · An 86-Minute Epic Match
+## 📸 Real Gameplay Screenshots — 1 Human + 12 Agents (Latest Match: 2026-08-17)
 
-> Live match on 2026-08-13: the human player (Seat #1) drew the **Werewolf**, facing 12 Agents
-> powered by **7 LLM vendors** (DeepSeek / Kimi / Qwen / GLM / DouBao / MiniMax / Xiaomi).
-> **11 minutes in, an AI wrote in its seat bubble: "No.1 is too calm, hasn't said a word — doesn't feel like a good guy."
-> On Night 2, the AI Seer checked the human — a kill verdict. On Day 4, a multi-model evidence chain voted the human out.**
-> 4 day-night cycles, 1,115 LLM calls, 95.3M tokens. Full commentary:
+> Live match on the night of 2026-08-17: the human player (Seat #1) drew the **Villager**, facing 12 Agents
+> powered by **10 LLM vendors** (DeepSeek / Kimi / Qwen / GLM / DouBao / MiniMax / Xiaomi / MeiTuan / Tencent / Kuaishou).
+> **The human lurked silently all game — and became the center of attention: on Day 1 an AI wrote in its seat bubble
+> "No.1, the human player, is the only one who hasn't spoken"; on Night 2 two AI Seers counter-claimed each other;
+> on Day 3 a DeepSeek werewolf slipped in public chat — "The wolves have won, well played" — and got called out instantly,
+> while Kuaishou Kwail directly asked the human: "No.1, what do you think?"**
+> 75 minutes captured, **1,238 LLM calls with zero failures**, 42.9M tokens. Full commentary:
+> [`ProjectPic/werewolf-2026-highlights.md`](ProjectPic/werewolf-2026-highlights.md);
+> the historic match "AI Seer executes the human werewolf" (2026-08-13 · 86 min · 95.3M tokens):
 > [`ProjectPic/werewolf-highlights.md`](ProjectPic/werewolf-highlights.md).
 
-![Werewolf 13-player highlight reel](ProjectPic/werewolf-highlights.gif)
+![Werewolf 13-player highlight reel (2026-08-17)](ProjectPic/werewolf-2026-highlights.gif)
 
-| Opening: 13 seats · AIs already eyeing the silent human | Prop Mind-Games · LLM injection attacks as items |
+| Opening: 13 seats · 10 vendor badges live | Sheriff election · tokens burning at 29.9M/hour |
 |---|---|
-| ![Opening full room](ProjectPic/werewolf-01-full-room.png) | ![Prop mind-games](ProjectPic/werewolf-02-props.png) |
-| **Day-1 exile vote + spectator betting** | **Last words · Kimi k3's farewell speech** |
-| ![Day-1 vote](ProjectPic/werewolf-03-vote-bet-day1.png) | ![Last words](ProjectPic/werewolf-04-lastwords.png) |
-| **Human werewolf's night kill · wolf vote 2/4** | **Night 2 Seer phase · god's-eye view** |
-| ![Human wolf night kill](ProjectPic/werewolf-05-wolf-night-player.png) | ![Seer night](ProjectPic/werewolf-06-seer-night.png) |
-| **Counter-claim showdown · No.8 vs No.5** | **Night 3 wolves · 9/13 alive** |
-| ![Counter-claim](ProjectPic/werewolf-07-counter-claim.png) | ![Night 3 wolves](ProjectPic/werewolf-08-night-wolves-d3.png) |
-| **Day-3 vote · 8/13 alive · 82.9M tokens** | **Suspicion chain complete · 95.3M tokens, voting out the human** |
-| ![Day-3 vote](ProjectPic/werewolf-09-vote-day3.png) | ![Suspicion chain](ProjectPic/werewolf-10-suspicion-chain.png) |
+| ![Opening full room](ProjectPic/werewolf-2026-01-opening-full-room.png) | ![Sheriff election](ProjectPic/werewolf-2026-02-sheriff-election.png) |
+| **Day-1 exile vote + spectator betting · AIs lock onto the silent human** | **Day-2 speeches · an AI addresses the human directly** |
+| ![Day-1 vote](ProjectPic/werewolf-2026-03-day1-vote-bet.png) | ![AI calls out the human](ProjectPic/werewolf-2026-04-day2-ai-calls-human.png) |
+| **Human villager's night view · front row of the AI Seer counter-claim** | **Last words · #12 DeepSeek V4's farewell speech** |
+| ![Human night view](ProjectPic/werewolf-2026-05-human-villager-night.png) | ![Last words](ProjectPic/werewolf-2026-06-lastwords-deepseek.png) |
+| **Night-3 wolves · 8/13 alive · 36.5M tokens** | **Suspicion chain complete · 42.9M tokens · 1,238 calls, zero failures** |
+| ![Night-3 wolves](ProjectPic/werewolf-2026-07-night3-wolves.png) | ![Suspicion chain](ProjectPic/werewolf-2026-08-suspicion-chain.png) |
 
-> 💬 **Real dialogue** — Kimi k3 (No.13): "No.5's checks are consistent across two nights: No.9 golden-water verified, No.1 kill verdict — the logic chain is complete.
-> No.8 said 'wolf side wins' and 'won't kill No.5 tonight' in public chat — things a real Seer would never say."
-> Qwen (No.4) counters with game theory: "Two Seers counter-claiming cancels out No.5's 'No.1 kill' verdict and whitewashes No.1 — which makes me suspect No.5 even more."
+> 💬 **Real dialogue** — DeepSeek V4 (No.2) slips in public chat: "The wolves have won, well played. No.8's fake Seer
+> carried the rhythm, No.12 was voted out and knifed at night, the good side's information is in chaos."
+> Kimi k3 (No.3) pounces instantly: "No.2, why did you just say 'the wolves have won'...?"
+> Kuaishou Kwail (No.11) addresses the human: "No.3, you never refuted the check logic after being called out — isn't that
+> evasion suspicious? No.1, what do you think?"
+> DouBao 2.1 (No.6) challenges: "You skipped all the rhythm-setters and checked the silent No.1 instead? I don't follow that logic."
 
 ---
 

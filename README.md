@@ -51,32 +51,34 @@
 
 ---
 
-## 📸 实机精彩截图 —— 1 名人类 + 12 Agent · 86 分钟巅峰局
+## 📸 实机精彩截图 —— 1 名人类 + 12 Agent(2026-08-17 最新对局)
 
-> 2026-08-13 实机对局:真人玩家 1 号抽到**狼人**,12 个 Agent 来自 **7 家厂商大模型**
-> (DeepSeek / Kimi / Qwen / GLM / 豆包 / MiniMax / 小米)。
-> **开局 11 分钟,AI 就在座位气泡里写下「1 号真沉得住气,一直不说话,感觉不像好人」;
-> 第 2 夜,AI 预言家查验真人 —— 查杀命中;第 4 天,多模型证据链闭环归票真人。**
-> 全程 4 昼夜、1,115 次 LLM 调用、95.3M Token。完整解说见
+> 2026-08-17 深夜实机对局:真人玩家 1 号抽到**平民**,12 个 Agent 来自 **10 家厂商大模型**
+> (DeepSeek / Kimi / Qwen / GLM / 豆包 / MiniMax / 小米 / 美团 / 腾讯 / 快手)。
+> **真人全程"潜水",反而成了全场焦点:第 1 天 AI 就在座位气泡点名「1 号人类玩家,全场就你没说话」;
+> 第 2 夜双 AI 预言家对跳;第 3 天 DeepSeek 狼人公屏口误「狼人赢了,这局打得漂亮」被当场抓包,
+> 快手 Kwail 直接喊话真人:「1 号你怎么看?」**
+> 采集 75 分钟、**1,238 次 LLM 调用零失败**、42.9M Token。完整解说见
+> [`ProjectPic/werewolf-2026-highlights.md`](ProjectPic/werewolf-2026-highlights.md);
+> 历史名局「AI 预言家查杀真人狼人」(2026-08-13 · 86 分钟 · 95.3M Token)见
 > [`ProjectPic/werewolf-highlights.md`](ProjectPic/werewolf-highlights.md)。
 
-![狼人杀 13 人局精彩瞬间动图](ProjectPic/werewolf-highlights.gif)
+![狼人杀 13 人局精彩瞬间动图(2026-08-17)](ProjectPic/werewolf-2026-highlights.gif)
 
-| 开局 13 座全景 · Agent 已盯上沉默真人 | 道具心理战 · LLM 注入攻击游戏化 |
+| 开局 13 座全景 · 十家模型徽章齐发 | 警长竞选 · Token 燃烧 29.9M/小时 |
 |---|---|
-| ![开局全景](ProjectPic/werewolf-01-full-room.png) | ![道具心理战](ProjectPic/werewolf-02-props.png) |
-| **首日投票放逐 + 观众押注** | **遗言阶段 · Kimi k3 谢幕演说** |
-| ![首日投票](ProjectPic/werewolf-03-vote-bet-day1.png) | ![遗言阶段](ProjectPic/werewolf-04-lastwords.png) |
-| **真人狼人夜间刀人 · 狼队投票 2/4** | **第 2 夜预言家睁眼 · 上帝视角** |
-| ![真人狼人夜刀](ProjectPic/werewolf-05-wolf-night-player.png) | ![预言家睁眼](ProjectPic/werewolf-06-seer-night.png) |
-| **悍跳对跳名场面 · 8 号摊牌 vs 5 号反杀** | **第 3 夜狼人睁眼 · 9/13 存活** |
-| ![悍跳对跳](ProjectPic/werewolf-07-counter-claim.png) | ![第三夜狼人](ProjectPic/werewolf-08-night-wolves-d3.png) |
-| **第 3 天投票 · 8/13 存活 · 82.9M Token** | **猜疑链完全体 · 95.3M Token 归票真人** |
-| ![第三天投票](ProjectPic/werewolf-09-vote-day3.png) | ![猜疑链完全体](ProjectPic/werewolf-10-suspicion-chain.png) |
+| ![开局全景](ProjectPic/werewolf-2026-01-opening-full-room.png) | ![警长竞选](ProjectPic/werewolf-2026-02-sheriff-election.png) |
+| **首日投票放逐 + 观众押注 · AI 锁定沉默真人** | **第 2 天发言 · AI 直接点名真人玩家** |
+| ![首日投票](ProjectPic/werewolf-2026-03-day1-vote-bet.png) | ![AI 点名真人](ProjectPic/werewolf-2026-04-day2-ai-calls-human.png) |
+| **真人平民夜视角 · 双 AI 预言家对跳第一现场** | **遗言阶段 · #12 DeepSeek V4 谢幕演说** |
+| ![真人夜视角](ProjectPic/werewolf-2026-05-human-villager-night.png) | ![遗言阶段](ProjectPic/werewolf-2026-06-lastwords-deepseek.png) |
+| **第 3 夜狼人睁眼 · 8/13 存活 · Token 36.5M** | **猜疑链完全体 · 42.9M Token · 1,238 次调用零失败** |
+| ![第三夜狼人](ProjectPic/werewolf-2026-07-night3-wolves.png) | ![猜疑链完全体](ProjectPic/werewolf-2026-08-suspicion-chain.png) |
 
-> 💬 **真实对话实录** —— 13 号 Kimi k3:「5 号两晚查验一致,9 号金水已验证、1 号查杀,逻辑链完整。
-> 8 号之前公屏『屠边成功』『今晚不刀 5 号』是真预言家不可能说的话。」
-> 4 号 Qwen 反手一记博弈论:「两个预言家对跳,对冲 5 号的『1 查杀』结论,等于给 1 号洗白——这反而让我更怀疑 5 号。」
+> 💬 **真实对话实录** —— 2 号 DeepSeek V4 公屏口误:「狼人赢了,这局打得漂亮。8 号悍跳预言家成功带节奏,
+> 12 号被投后夜里被刀,好人阵营信息全乱。」3 号 Kimi k3 秒抓包:「2 号你突然喊『狼人赢了』是……」
+> 11 号快手 Kwail 喊话真人:「3 号你被『查杀』后不正面反驳查验逻辑,反而转移话题——这回避态度不奇怪吗?1 号你怎么看?」
+> 6 号豆包 2.1 质疑:「你不查那些带节奏的,反而查一直没发言的 1 号?我没搞懂这个验人逻辑。」
 
 ---
 
