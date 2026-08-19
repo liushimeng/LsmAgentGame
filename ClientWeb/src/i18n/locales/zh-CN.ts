@@ -107,6 +107,11 @@ const zhCN: Dict = {
 
   'home.title': '游戏大厅',
   'games.title': '全部游戏',
+  // §20260819-02 大厅菜单分类
+  'games.categories.traditional': '传统游戏',
+  'games.categories.agent': 'AGENT 游戏',
+  // §20260819-02 通用 UI
+  'common.backToLobby': '返回大厅',
   'profile.title': '个人中心',
   'profile.userId': '用户 ID',
   'profile.account': '账号',

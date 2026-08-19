@@ -993,6 +993,13 @@ func (s *GameService) handleSpectate(c *Client, env Envelope) {
 			"phase":     phase,
 			"ready":     room.IsReady(),
 		})
+		// §20260819-02 BUG-FIX: 首帧 game.state 直送该 client,避免受
+		// hub.spectators set 时序或 BroadcastRoom 漏推影响导致前端永远
+		// 拿不到首帧而卡在「观战中…」。后续状态变更仍走
+		// broadcastTexasHoldemSpectatorState(fan-out)。
+		if view := s.texasHoldemMgr.SpectatorView(req.RoomID); view != nil {
+			s.sendOK(c, 0, "game.state", view)
+		}
 		s.broadcastTexasHoldemSpectatorState(req.RoomID)
 		logger.L().Info("spectator attached", zap.String("kind", "texasholdem"),
 			zap.String("room_id", req.RoomID), zap.String("user_id", c.UserID))

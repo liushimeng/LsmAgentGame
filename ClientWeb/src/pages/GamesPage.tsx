@@ -7,7 +7,8 @@ import { GameCard } from '@/components/lobby/GameCard';
 import { useT } from '@/hooks/useT';
 import type { GameInfo } from '@/types/api';
 
-// 全部游戏列表页 —— 复用大厅的游戏数据，纯列表呈现。
+// GamesPage 全部游戏列表页(分类渲染)
+// §20260819-02: HomePage 同款分类,但不加 3D 场景,纯列表呈现。
 export function GamesPage() {
   const games = useGameStore((s) => s.games);
   const setGames = useGameStore((s) => s.setGames);
@@ -25,13 +26,48 @@ export function GamesPage() {
       });
   }, [setGames]);
 
+  // §20260819-02: 按 category 分组
+  const agents = games.filter((g) => (g.category ?? 'traditional') === 'agent');
+  const trads = games.filter((g) => (g.category ?? 'traditional') === 'traditional');
+
   return (
     <div>
-      <h1 style={{ marginTop: 0 }}>{t('games.title')}</h1>
+      <h1 style={{ marginTop: 0 }}>{t('games.title' as any)}</h1>
       {err && <div className="error">{err}</div>}
-      <div className="game-grid">
-        {games.map((g) => <GameCard key={g.id} game={g} />)}
-      </div>
+
+      {agents.length > 0 && (
+        <section className="game-section">
+          <h2 className="game-section-title game-section-title--agent">
+            🤖 {t('games.categories.agent' as any)}
+          </h2>
+          <div className="game-grid">
+            {agents.map((g) => (
+              <GameCard key={g.id} game={g} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {trads.length > 0 && (
+        <section className="game-section">
+          <h2 className="game-section-title game-section-title--traditional">
+            🎮 {t('games.categories.traditional' as any)}
+          </h2>
+          <div className="game-grid">
+            {trads.map((g) => (
+              <GameCard key={g.id} game={g} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {agents.length === 0 && trads.length === 0 && (
+        <div className="game-grid">
+          {games.map((g) => (
+            <GameCard key={g.id} game={g} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

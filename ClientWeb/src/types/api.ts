@@ -39,6 +39,8 @@ export interface GameInfo {
   id: string;
   name: string;
   kind: string;
+  // §20260819-02 大厅菜单分组;旧 backend 可能缺失,前端用 'traditional' 兜底
+  category?: 'traditional' | 'agent';
   online: number;
 }
 

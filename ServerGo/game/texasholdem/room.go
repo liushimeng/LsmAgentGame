@@ -765,18 +765,23 @@ func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
 
 // ─────────────────── Spectator API ───────────────────
 
-// SpectateGame 注册 userID 为房间观察者；按需创建房间。不会消耗座位。幂等。
+// SpectateGame 注册 userID 为房间观察者;按需创建房间。不会消耗座位。幂等。
+//
+// §20260819-02 BUG-FIX: 之前在房间不存在时自动创建一个空房间,导致:
+//  1. 前端 spectator 进入后 `BuildClientStateWithRoom` 看到 r.Seats 全空 → Ready=false
+//  2. 页面永久卡在「观战中…」 spinner,无法退出
+//  3. 真实的玩家加入后 r.Seats 也不会更新(空房间已被定格)
+// 修复: 房间不存在时直接返回 ErrRoomNotFound,前端应:
+//  - 看到 error 后自动 reportGlobalError + 返回大厅
+//  - 不再有「凭空创建空房间」退化路径
 func (m *TexasHoldemManager) SpectateGame(roomID, userID string) (*TexasHoldemRoom, *errcode.Error) {
 	m.mu.Lock()
 	r, ok := m.rooms[roomID]
-	if !ok {
-		r = &TexasHoldemRoom{RoomID: roomID}
-		m.rooms[roomID] = r
-		logger.L().Info("texasholdem room created by spectator",
-			zap.String("room_id", roomID), zap.String("user_id", userID))
-	}
 	m.mu.Unlock()
-
+	if !ok {
+		return nil, errcode.CodeMsg(errcode.ErrRoomNotFound,
+			"room does not exist; cannot spectate a non-existent room")
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.Spectators == nil {

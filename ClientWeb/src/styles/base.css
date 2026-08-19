@@ -419,10 +419,53 @@ a:hover { text-decoration: underline; }
   padding: 16px;
   cursor: pointer;
   transition: transform 0.15s ease, border-color 0.15s ease;
+  position: relative;
 }
 .game-card:hover { transform: translateY(-2px); border-color: var(--accent); }
 .game-card h3 { margin: 0 0 4px; }
 .game-card .meta { color: var(--muted); font-size: 12px; }
+
+/* §20260819-02 大厅菜单分类 */
+.game-section { margin-bottom: 32px; }
+.game-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 16px;
+  letter-spacing: 0.5px;
+}
+.game-section-title--agent {
+  color: #c084fc;
+  text-shadow: 0 0 8px rgba(192, 132, 252, 0.4);
+}
+.game-section-title--traditional {
+  color: #94a3b8;
+}
+.game-card__badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
+}
+.game-card__badge--traditional {
+  background: rgba(148, 163, 184, 0.55);
+  color: #ffffff;
+}
+.game-card__badge--agent {
+  background: rgba(192, 132, 252, 0.55);
+  color: #ffffff;
+  box-shadow: 0 0 6px rgba(192, 132, 252, 0.6);
+}
+.game-card--agent {
+  border: 1px solid rgba(192, 132, 252, 0.35);
+}
+.game-card--agent h3 {
+  color: #f0abfc;
+}
 
 .canvas-host { width: 100%; height: calc(100vh - 60px); }
 

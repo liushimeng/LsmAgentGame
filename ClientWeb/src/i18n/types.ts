@@ -634,6 +634,11 @@ export interface Dict {
   // 页面 — pages
   'home.title': string;
   'games.title': string;
+  // §20260819-02 大厅菜单分类
+  'games.categories.traditional': string;
+  'games.categories.agent': string;
+  // §20260819-02 通用 UI
+  'common.backToLobby': string;
   'profile.title': string;
   'profile.userId': string;
   'profile.account': string;

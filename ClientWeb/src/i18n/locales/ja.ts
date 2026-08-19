@@ -106,6 +106,11 @@ const ja: Dict = {
 
   'home.title': 'ロビー',
   'games.title': 'すべてのゲーム',
+  // §20260819-02 大厅メニュー分類
+  'games.categories.traditional': '従来ゲーム',
+  'games.categories.agent': 'AGENT ゲーム',
+  // §20260819-02 共通 UI
+  'common.backToLobby': 'ロビーに戻る',
   'profile.title': 'マイページ',
   'profile.userId': 'ユーザー ID',
   'profile.account': 'アカウント',

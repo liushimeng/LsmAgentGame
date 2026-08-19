@@ -106,6 +106,11 @@ const en: Dict = {
 
   'home.title': 'Lobby',
   'games.title': 'All games',
+  // §20260819-02 lobby categories
+  'games.categories.traditional': 'Traditional Games',
+  'games.categories.agent': 'AGENT Games',
+  // §20260819-02 common UI
+  'common.backToLobby': 'Back to Lobby',
   'profile.title': 'Profile',
   'profile.userId': 'User ID',
   'profile.account': 'Account',
