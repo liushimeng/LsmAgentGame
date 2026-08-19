@@ -103,6 +103,17 @@ type TexasHoldemManager struct {
 	// 2026-08-19 §德州扑克金币 — 钱包服务(由 main.go 注入)。
 	// 手牌结束后按筹码盈亏结算金币。
 	walletSvc WalletSettler
+
+	// 2026-08-19 §德州扑克盲注透传 — 房间级盲注/买入配置。
+	// 由 RoomService 经 SetTexasHoldemRoomConfigurer 回调在房间创建成功后、
+	// 首次 JoinGame 之前写入;缺省房间回退 m.BigBlind / m.StartStack。
+	roomConfigs map[string]texasRoomConfig
+}
+
+// texasRoomConfig 2026-08-19 §德州扑克盲注透传 — 单房间盲注/买入覆盖值。
+type texasRoomConfig struct {
+	BigBlind   int
+	StartStack int
 }
 
 // WalletSettler 是 wallet service 的精简接口(避免循环 import)。
@@ -114,11 +125,29 @@ type WalletSettler interface {
 // NewTexasHoldemManager 创建空管理器。
 func NewTexasHoldemManager() *TexasHoldemManager {
 	return &TexasHoldemManager{
-		rooms:      make(map[string]*TexasHoldemRoom),
-		seedFn:     func() int64 { return time.Now().UnixNano() },
-		BigBlind:   200,
-		StartStack: 10000,
+		rooms:       make(map[string]*TexasHoldemRoom),
+		roomConfigs: make(map[string]texasRoomConfig),
+		seedFn:      func() int64 { return time.Now().UnixNano() },
+		BigBlind:    200,
+		StartStack:  10000,
 	}
+}
+
+// SetRoomConfig 记录房间级盲注/买入(2026-08-19 §德州扑克盲注透传)。
+// 由 RoomService 在房间创建成功后、首次 JoinGame 之前调用。
+func (m *TexasHoldemManager) SetRoomConfig(roomID string, bigBlind, startStack int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.roomConfigs[roomID] = texasRoomConfig{BigBlind: bigBlind, StartStack: startStack}
+}
+
+// configForLocked 返回房间生效的盲注/买入(未配置时回退 manager 默认值)。
+// 锁内变体(§92a):调用方必须已持有 m.mu。
+func (m *TexasHoldemManager) configForLocked(roomID string) (bigBlind, startStack int) {
+	if cfg, ok := m.roomConfigs[roomID]; ok {
+		return cfg.BigBlind, cfg.StartStack
+	}
+	return m.BigBlind, m.StartStack
 }
 
 // SetOnHandStarted 注册新手牌开始回调(§德州扑克Agent)。
@@ -152,6 +181,9 @@ func (m *TexasHoldemManager) JoinGame(roomID, userID string) (*TexasHoldemRoom, 
 		m.rooms[roomID] = r
 		logger.L().Info("texasholdem room created", zap.String("room_id", roomID), zap.String("by", userID))
 	}
+	// 2026-08-19 §德州扑克盲注透传: 在持有 m.mu 时快照房间级盲注/买入
+	// (下方 NewGame/AddPlayer 在 m.mu 释放后执行,不能再读 m.roomConfigs)。
+	bigBlind, startStack := m.configForLocked(roomID)
 	m.mu.Unlock()
 
 	r.mu.Lock()
@@ -177,9 +209,9 @@ func (m *TexasHoldemManager) JoinGame(roomID, userID string) (*TexasHoldemRoom, 
 
 	started := false
 	if r.State == nil {
-		r.State = NewGame(m.seedFn(), m.BigBlind)
+		r.State = NewGame(m.seedFn(), bigBlind)
 	}
-	if _, e := r.State.AddPlayer(userID, m.StartStack); e != nil {
+	if _, e := r.State.AddPlayer(userID, startStack); e != nil {
 		// 不应发生（刚找到空位）
 		logger.L().Warn("texasholdem add player failed", zap.String("room_id", roomID), zap.Error(e))
 	}
@@ -336,6 +368,8 @@ func (m *TexasHoldemManager) RemoveGame(roomID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.rooms, roomID)
+	// 2026-08-19 §德州扑克盲注透传: 同步清理房间级配置,防止 map 泄漏。
+	delete(m.roomConfigs, roomID)
 }
 
 // ─────────────────── Spectator API ───────────────────

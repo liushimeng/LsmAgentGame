@@ -31,6 +31,11 @@ type createRoomRequest struct {
 	// 取值: werewolf/seer/witch/hunter/idiot/guard/knight/demon_hunter/villager
 	// 或 "random"/缺省 = 随机。牌组中无此角色时降级为随机(多重集守恒置换)。
 	CreatorRole string `json:"creator_role,omitempty"`
+	// 2026-08-19 §德州扑克盲注透传 — 房间级盲注/买入(仅 texasholdem 生效,
+	// 其他游戏传了会 400)。两字段必须同时设置或同时缺省;缺省 = 服务端默认
+	// 200/10000。big_blind ∈ {10,50,200,1000,5000};start_stack ∈ [20bb,100bb]。
+	BigBlind   int `json:"big_blind,omitempty"`
+	StartStack int `json:"start_stack,omitempty"`
 }
 
 // RoomAPI serves the room management endpoints.
@@ -108,7 +113,13 @@ func (a *RoomAPI) Create(c *gin.Context) {
 		}
 	}
 
-	detail, e := a.svc.CreateRoomWithAgents(c.Request.Context(), kind, userID, req.Name, req.AgentSeats, req.Judge, req.AgentDifficulty, req.Commentary, req.CreatorRole)
+	// 2026-08-19 §德州扑克盲注透传:任一字段非零才构造配置(全 0 = 未指定,
+	// 走 manager 默认值);取值合法性由 service 层统一校验。
+	var texasCfg *service.TexasTableConfig
+	if req.BigBlind != 0 || req.StartStack != 0 {
+		texasCfg = &service.TexasTableConfig{BigBlind: req.BigBlind, StartStack: req.StartStack}
+	}
+	detail, e := a.svc.CreateRoomWithAgents(c.Request.Context(), kind, userID, req.Name, req.AgentSeats, req.Judge, req.AgentDifficulty, req.Commentary, req.CreatorRole, texasCfg)
 	if e != nil {
 		c.JSON(http.StatusOK, gin.H{"code": e.Code, "message": e.Message})
 		return

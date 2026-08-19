@@ -43,6 +43,16 @@ type JudgeConfig struct {
 	ModelKey string `json:"model_key"`
 }
 
+// TexasTableConfig 2026-08-19 §德州扑克盲注透传 — 房间级盲注/买入设置(仅
+// texasholdem 生效)。nil 或两字段均为 0 = 未指定,走 manager 默认值
+// (BigBlind=200 / StartStack=10000)。两字段必须同时设置:
+//   - BigBlind ∈ {10, 50, 200, 1000, 5000}(与前端 BLIND_TIERS 对齐)
+//   - StartStack ∈ [20*BigBlind, 100*BigBlind]
+type TexasTableConfig struct {
+	BigBlind   int `json:"big_blind,omitempty"`
+	StartStack int `json:"start_stack,omitempty"`
+}
+
 // GameJoiner is the callback RoomService invokes after a successful CreateRoom
 // / JoinRoom so the in-memory game manager (doudizhu / texasholdem / …) can
 // mirror the DB-level seat. Without this, HTTP joiners never trigger the
@@ -217,6 +227,11 @@ type RoomService struct {
 	// random-reassignment pool (R187-2). Wired via SetModelAvailabilityHook
 	// from main.go; nil keeps the legacy cfg-only filter.
 	modelAvailability ModelAvailabilityHook
+	// texasHoldemConfigurer 2026-08-19 §德州扑克盲注透传 — 房间创建成功后把
+	// big_blind/start_stack 下发到 in-memory TexasHoldemManager 的回调。
+	// 由 main.go 通过 SetTexasHoldemRoomConfigurer 注入(thpMgr.SetRoomConfig),
+	// 避免 service → ws 反向依赖;nil 时静默跳过(单元测试 / 老装配)。
+	texasHoldemConfigurer func(roomID string, bigBlind, startStack int)
 }
 
 // NewRoomService builds a RoomService.
@@ -251,6 +266,13 @@ func (s *RoomService) SetWerewolfStateHook(h WerewolfStateHook) {
 // filter behaviour.
 func (s *RoomService) SetModelAvailabilityHook(h ModelAvailabilityHook) {
 	s.modelAvailability = h
+}
+
+// SetTexasHoldemRoomConfigurer 2026-08-19 §德州扑克盲注透传 — 注册房间级
+// 盲注/买入下发回调(与 modelAvailability 等钩子同风格,回调注入避免
+// service → ws 反向依赖)。nil-safe:未注入时 CreateRoomWithAgents 跳过下发。
+func (s *RoomService) SetTexasHoldemRoomConfigurer(fn func(roomID string, bigBlind, startStack int)) {
+	s.texasHoldemConfigurer = fn
 }
 
 // BotUserIDForSeat returns the bot userID occupying `seat` in `roomID`. Used by

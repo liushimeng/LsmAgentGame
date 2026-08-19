@@ -13,11 +13,6 @@ import { RoomListTable } from '@/components/lobby/RoomListTable';
 import { RoomCreateModal } from '@/components/texasholdem/RoomCreateModal';
 import type { TKey } from '@/i18n';
 
-/** Server-side expects ante = SB ( BB/2 ) when options.ante is given. */
-function texasAnteFromBb(bb: number) {
-  return bb / 2;
-}
-
 export function TexasHoldemLobbyPage() {
   const t = useT();
   const nav = useNavigate();
@@ -74,13 +69,16 @@ export function TexasHoldemLobbyPage() {
     agent_seats: Array<{ seat: number; model_key: string }>;
   }): Promise<boolean> => {
     try {
+      // 2026-08-19 §德州扑克盲注透传 — big_blind/start_stack 直传服务端
+      // (替代原 ante 字段;后端 room.go 不再硬编码 200/10000)。
       const detail = await roomService.create('texasholdem', {
         name: req.name,
-        ante: texasAnteFromBb(bb),
+        big_blind: bb,
+        start_stack: buyin,
         agent_seats: req.agent_seats.length > 0 ? req.agent_seats : undefined,
       });
       setShowCreateDialog(false);
-      nav(`/texasholdem/${detail.id}?buyin=${buyin}`);
+      nav(`/texasholdem/${detail.id}`);
       return true;
     } catch (e: any) {
       if (!isSessionExpiredError(e)) {

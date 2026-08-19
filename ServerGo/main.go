@@ -438,6 +438,9 @@ func main() {
 	// 手牌结束后按筹码盈亏自动 Credit/Debit 金币。
 	if thpMgr := gameSvcWs.TexasHoldemManager(); thpMgr != nil {
 		thpMgr.SetWalletService(walletSvc)
+		// 2026-08-19 §德州扑克盲注透传 — 房间创建时把 big_blind/start_stack
+		// 从 RoomService 下发到 manager(roomSvc 构造于上方,此处已可用)。
+		roomSvc.SetTexasHoldemRoomConfigurer(thpMgr.SetRoomConfig)
 	}
 
 	// 2026-07-21 v5 重构 — EconTier 5 档阈值(从 LsmAgentGame.conf 注入)。

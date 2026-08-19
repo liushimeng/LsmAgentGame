@@ -422,6 +422,11 @@ export interface CreateRoomOptions {
   // 2026-08-11 §20260811-09 U2 — Agent 难度分级。easy=新手 / normal=默认 /
   // hard=熟练 / hell=高手。未知值后端归一化为 normal(零回归)。
   agent_difficulty?: 'easy' | 'normal' | 'hard' | 'hell';
+  // 2026-08-19 §德州扑克盲注透传 — texasholdem only。两字段必须同时设置或
+  // 同时缺省;缺省后端用默认值 big_blind=200 / start_stack=10000。
+  // big_blind ∈ {10,50,200,1000,5000};start_stack ∈ [20bb,100bb]。
+  big_blind?: number;
+  start_stack?: number;
 }
 
 /** One bot seat requested at room-creation time (werewolf only). */

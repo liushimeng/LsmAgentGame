@@ -161,16 +161,14 @@ func (s *RoomService) getOrCreateBotUserID(ctx context.Context, suffix string) (
 }
 
 func (s *RoomService) CreateRoom(gameKind, userID, name string) (*RoomDetail, *errcode.Error) {
-	return s.CreateRoomWithAgents(context.Background(), gameKind, userID, name, nil, nil, "", nil, "")
+	return s.CreateRoomWithAgents(context.Background(), gameKind, userID, name, nil, nil, "", nil, "", nil)
 }
 
-func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID, name string, agentSeats []AgentSeatConfig, judge *JudgeConfig, agentDifficulty string, commentary *CommentaryConfig, creatorRole ...string) (*RoomDetail, *errcode.Error) {
-	// creatorRole (2026-08-06 §20260806-03 自选角色):可选可变参,保持既有调用方
-	// (CreateRoom / 测试)零改动;取第一个值,多余忽略。空/"random" = 随机。
-	creatorRolePref := ""
-	if len(creatorRole) > 0 {
-		creatorRolePref = creatorRole[0]
-	}
+func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID, name string, agentSeats []AgentSeatConfig, judge *JudgeConfig, agentDifficulty string, commentary *CommentaryConfig, creatorRole string, texasCfg *TexasTableConfig) (*RoomDetail, *errcode.Error) {
+	// creatorRole (2026-08-06 §20260806-03 自选角色):空/"random" = 随机。
+	// (原为可变参;2026-08-19 §德州扑克盲注透传 追加 texasCfg 参数时归一化为
+	// 普通参数 — Go 仅允许一个可变参且必须在末位。)
+	creatorRolePref := creatorRole
 	// judge 房间级法官设置(可选)。nil = 默认(有 Agent 时启用 Agent 法官)。
 	// 2026-07-30 §重构:仅剩两选项 agent/human,均启用 AgentJudge LLM 路径
 	// (真人法官后端未实现,行为等同 agent)。因此 JudgeDesired 恒为 true,
@@ -236,6 +234,26 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	}
 	if !isSelectableRoleName(creatorRolePref) {
 		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, fmt.Sprintf("invalid creator_role %q", creatorRolePref))
+	}
+
+	// 2026-08-19 §德州扑克盲注透传 — 房间级盲注/买入校验(仅 texasholdem 生效)。
+	// 两字段必须同时设置或同时缺省;缺省走 manager 默认值(200/10000)。
+	// 校验必须在任何 DB 写入之前完成(fail-fast)。
+	if texasCfg != nil && (texasCfg.BigBlind != 0 || texasCfg.StartStack != 0) {
+		if gameKind != "texasholdem" {
+			return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "big_blind/start_stack only supported for texasholdem")
+		}
+		if texasCfg.BigBlind == 0 || texasCfg.StartStack == 0 {
+			return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "big_blind and start_stack must be set together")
+		}
+		switch texasCfg.BigBlind {
+		case 10, 50, 200, 1000, 5000: // 与前端 BLIND_TIERS 对齐
+		default:
+			return nil, errcode.CodeMsg(errcode.ErrValidationFailed, fmt.Sprintf("invalid big_blind %d (allowed: 10/50/200/1000/5000)", texasCfg.BigBlind))
+		}
+		if lo, hi := 20*texasCfg.BigBlind, 100*texasCfg.BigBlind; texasCfg.StartStack < lo || texasCfg.StartStack > hi {
+			return nil, errcode.CodeMsg(errcode.ErrValidationFailed, fmt.Sprintf("start_stack must be within [20bb,100bb] = [%d,%d]", lo, hi))
+		}
 	}
 
 	// R106-20260712 P0: pre-write registry validation for every agent seat's
@@ -609,6 +627,12 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 				zap.Int("code", e.Code),
 				zap.String("msg", e.Message))
 		}
+	}
+	// 2026-08-19 §德州扑克盲注透传 — 下发房间级盲注/买入到 in-memory manager。
+	// 必须在 gameJoiner.SyncSeat 之前:SyncSeat → JoinGame 会用该配置初始化
+	// GameState(BigBlind)与玩家初始筹码(StartStack),晚到即被默认值覆盖。
+	if gameKind == "texasholdem" && texasCfg != nil && texasCfg.BigBlind > 0 && s.texasHoldemConfigurer != nil {
+		s.texasHoldemConfigurer(room.ID, texasCfg.BigBlind, texasCfg.StartStack)
 	}
 	if s.gameJoiner != nil && !creatorAsSpectator {
 		// Human creator sync — this is the canonical path. For werewolf rooms
