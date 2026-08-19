@@ -19,6 +19,13 @@ type TexasHoldemRoom struct {
 	Seats      [MaxPlayers]string // 座位 0..5 的 userID，空串表示空位
 	State      *GameState
 	Spectators map[string]struct{}
+
+	// 2026-08-19 §德州扑克Agent — Agent 集成字段。
+	// botSeats[seat]=true 表示该座位由 Agent 接管,人类玩家通过 WS 提交的动作会被拒绝。
+	// BotModels[seat] 记录 bot 用的 model_key,view.go 透传给前端用于"🤖 AI"徽章。
+	// 由 TexasHoldemAgentDriver.RegisterAgentsLocked 在房间创建时填充。
+	BotSeats  [MaxPlayers]bool
+	BotModels [MaxPlayers]string
 }
 
 // SeatOf 返回 userID 所在座位，未入座返回 (-1,false)。
@@ -45,6 +52,31 @@ func (r *TexasHoldemRoom) Occupied() int {
 // IsReady 报告是否至少 2 人。
 func (r *TexasHoldemRoom) IsReady() bool {
 	return r.Occupied() >= 2
+}
+
+// IsBotSeat 报告指定座位是否为 Agent(2026-08-19 §德州扑克Agent)。
+// 必须在已持有 r.mu 时调用(由 Room Service 或 Manager 调用方保证)。
+func (r *TexasHoldemRoom) IsBotSeat(seat int) bool {
+	if seat < 0 || seat >= MaxPlayers {
+		return false
+	}
+	return r.BotSeats[seat]
+}
+
+// RegisterBotSeatsLocked 标记 bot 座位(由 Room Service 在创建房间时调用)。
+// 锁内变体(§92a):调用方必须已持有 r.mu。
+//
+// seatModels: 座位号 → model_key (空字符串视为人类)。
+func (r *TexasHoldemRoom) RegisterBotSeatsLocked(seatModels map[int]string) {
+	for seat, modelKey := range seatModels {
+		if seat < 0 || seat >= MaxPlayers {
+			continue
+		}
+		if modelKey != "" {
+			r.BotSeats[seat] = true
+			r.BotModels[seat] = modelKey
+		}
+	}
 }
 
 // ─────────────────── Manager ───────────────────
@@ -222,7 +254,7 @@ func (m *TexasHoldemManager) GetState(roomID, userID string) (*ClientGameState, 
 	if !ok {
 		return nil, errcode.Code(errcode.ErrRoomNotIn)
 	}
-	return BuildClientState(roomID, r.Seats, seat, r.State), nil
+	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, seat, r.State), nil
 }
 
 // StateForSeat 在已持有房间引用时构造指定座位视图。
@@ -233,7 +265,7 @@ func (m *TexasHoldemManager) StateForSeat(roomID string, seat int) *ClientGameSt
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return BuildClientState(roomID, r.Seats, seat, r.State)
+	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, seat, r.State)
 }
 
 // Seats 返回房间各座位 userID 的快照。
@@ -313,7 +345,7 @@ func (m *TexasHoldemManager) SpectatorState(roomID, userID string) (*ClientGameS
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return BuildClientState(roomID, r.Seats, -1, r.State), nil
+	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, -1, r.State), nil
 }
 
 // SpectatorView 同 SpectatorState 但省去 userID 参数；所有观察者共享同一
@@ -325,5 +357,5 @@ func (m *TexasHoldemManager) SpectatorView(roomID string) *ClientGameState {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return BuildClientState(roomID, r.Seats, -1, r.State)
+	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, -1, r.State)
 }

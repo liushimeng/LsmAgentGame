@@ -58,14 +58,34 @@ type ClientGameState struct {
 	Winners        []int          `json:"winners,omitempty"`
 	ShowdownHands  [][]CardJSON   `json:"showdown_hands,omitempty"`
 	Status         string         `json:"status"`
+
+	// 2026-08-19 §德州扑克Agent — Bot 状态透传(前端渲染"🤖 AI"徽章 / 思考中指示器)。
+	// BotSeats/BotModels 始终为长度 6 的数组(非 nil),避免 JSON null.length 崩溃(BUG-TEXAS-HOLE-NULL)。
+	// BotHeartThought/BotThinking 同理。
+	BotSeats        [6]bool   `json:"bot_seats"`
+	BotModels       [6]string `json:"bot_models"`
+	BotHeartThought [6]string `json:"bot_heart_thought"`
+	BotThinking     [6]bool   `json:"bot_thinking"`
 }
 
-// BuildClientState 构造座位 viewer 的可见视图。
+// BuildClientState 构造座位 viewer 的可见视图（向后兼容版本）。
+//
+// 内部委托到 BuildClientStateWithRoom 以支持 Bot 字段透传(2026-08-19 §德州扑克Agent)。
+// 保留旧签名(seat 数组+viewer+gs)是为了不破坏 engine_test.go 等测试夹具。
+// 生产路径统一走 BuildClientStateWithRoom(2026-08-19 起)。
+func BuildClientState(roomID string, seats [MaxPlayers]string, viewer int, gs *GameState) *ClientGameState {
+	return BuildClientStateWithRoom(roomID, seats, [MaxPlayers]bool{}, [MaxPlayers]string{}, viewer, gs)
+}
+
+// BuildClientStateWithRoom 构造座位 viewer 的可见视图（含 Bot 字段透传）。
 //
 // 当 viewer == -1 时表示"观察者"：MySeat 设为 -1，不填充任何玩家的 Hole
 //（即使在摊牌阶段也保持底牌隐藏），同时不暴露 MyHole。 公共牌、玩家栈、
 // 行动状态、胜负结果等公开信息仍照常填充。
-func BuildClientState(roomID string, seats [MaxPlayers]string, viewer int, gs *GameState) *ClientGameState {
+//
+// 2026-08-19 §德州扑克Agent — 新增 botSeats/botModels 参数,用于透传 Bot 状态
+// 到前端。前端用 BotSeats/BotModels 渲染"🤖 AI"徽章。
+func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats [MaxPlayers]bool, botModels [MaxPlayers]string, viewer int, gs *GameState) *ClientGameState {
 	cs := &ClientGameState{
 		RoomID:     roomID,
 		GameKind:   "texasholdem",
@@ -156,6 +176,15 @@ func BuildClientState(roomID string, seats [MaxPlayers]string, viewer int, gs *G
 		for _, w := range gs.Winners {
 			cs.ShowdownHands = append(cs.ShowdownHands, cardsToJSON(gs.Players[w].Hole[:]))
 		}
+	}
+
+	// 2026-08-19 §德州扑克Agent — 透传 Bot 状态字段。
+	// 字段始终初始化(默认零值),JSON 序列化不会出现 null。
+	// BotHeartThought 和 BotThinking 由 ws/game_service.go 在 agent 驱动路径中通过
+	// future helper 填充(本期 v1.0 暂留空字符串/false),此处初始化数组。
+	for i := 0; i < MaxPlayers; i++ {
+		cs.BotSeats[i] = botSeats[i]
+		cs.BotModels[i] = botModels[i]
 	}
 
 	return cs
