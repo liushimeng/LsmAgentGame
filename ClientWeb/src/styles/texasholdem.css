@@ -1,450 +1,274 @@
-/* ==========================================================================
-   德州扑克 (Texas Hold'em) — .texas-* 选择器
-   ========================================================================== */
+/* texasholdem.css — 德州扑克组件样式（2026-08-19 §德州扑克Agent）
+ * 隔离样式：与 werewolf/xiangqi 等游戏的 CSS 不共享类名
+ * 颜色对比度遵守 CLAUDE.md §26 规范
+ */
 
-/* ---- 大厅页 ---- */
-.texas-lobby { padding: 24px; }
-.texas-lobby .lobby-header {
-  display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px;
-}
-
-/* ---- 游戏页 ---- */
-.texas-game { padding: 12px; }
-.texas-game .game-area {
-  display: flex; gap: 16px; min-height: 600px;
-}
-.texas-game .board-container { flex: 1; display: flex; flex-direction: column; gap: 12px; }
-.texas-game .game-sidebar { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
-
-/* ---- 牌桌 ---- */
-.texas-table {
-  position: relative;
-  width: 100%; max-width: 1000px; min-height: 580px;
-  margin: 0 auto;
-  border-radius: 24px;
-  overflow: hidden;
-  display: flex; align-items: center; justify-content: center;
-  isolation: isolate;
+/* ===== Bot 徽章（CLAUDE.md §26.4 — 青绿底白字） ===== */
+.texas-seat.bot {
+  border-color: hsl(160, 60%, 45%);
 }
 
-/* 6 个座位布局（从 view 角度：自己在底部）—— 椭圆分布，不与公共牌区重叠 */
-.seat-pos {
-  position: absolute;
-  display: flex; flex-direction: column; align-items: center;
-  z-index: 2;
-  min-width: 110px;
-  max-width: 160px;
-}
-.seat-pos.s0-bottom   { bottom: 16px; left: 50%; transform: translateX(-50%); }
-.seat-pos.s1-left     { left: 16px;  top: 55%; transform: translateY(-50%); }
-.seat-pos.s2-top-left { left: 18%;  top: 24px; }
-.seat-pos.s3-top      { left: 50%;   top: 24px; transform: translateX(-50%); }
-.seat-pos.s4-top-right{ right: 18%; top: 24px; }
-.seat-pos.s5-right    { right: 16px; top: 55%; transform: translateY(-50%); }
-
-.texas-center {
-  position: absolute;
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  z-index: 1;
-  pointer-events: none;
-  width: 70%;
-  max-width: 460px;
-}
-
-/* ---- 公共牌 ---- */
-.texas-community {
-  display: flex; gap: 6px; justify-content: center; padding: 12px 0;
-}
-
-/* ---- 底池 ---- */
-.texas-pot {
-  text-align: center; font-size: 18px; font-weight: 700;
-  color: #f59e0b; padding: 6px 0;
-}
-
-/* ---- 座位 ---- */
-.texas-seat {
-  background: rgba(0,0,0,0.35);
-  border-radius: 12px;
-  padding: 8px 12px;
-  text-align: center;
-  min-width: 90px;
-  transition: opacity 0.2s, box-shadow 0.2s;
-}
-.texas-seat.turn {
-  box-shadow: 0 0 0 2px #22c55e, 0 0 12px rgba(34,197,94,0.4);
-}
-.texas-seat.folded { opacity: 0.45; }
-.texas-seat.allin  { box-shadow: 0 0 0 2px #f97316; }
-.texas-seat .seat-info { display: flex; gap: 4px; align-items: center; justify-content: center; margin-bottom: 4px; }
-.texas-seat .seat-name { font-size: 12px; color: #e5e7eb; }
-.texas-seat .seat-stack { font-size: 14px; font-weight: 600; color: #fff; }
-.texas-seat .seat-holes { display: flex; gap: 3px; justify-content: center; margin-top: 4px; }
-.texas-seat .seat-committed { font-size: 11px; color: #fbbf24; margin-top: 3px; }
-.texas-seat .hole-count { font-size: 13px; color: #9ca3af; }
-
-/* ---- 卡片（复用 doudizhu 卡片结构，改用 .texas-card） ---- */
-.texas-card {
-  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
-  width: 56px; height: 80px; border-radius: 6px; border: 2px solid;
-  position: relative; overflow: hidden; flex-shrink: 0; cursor: default;
-  user-select: none; transition: border-color 0.15s, transform 0.15s;
-}
-.texas-card.card-small { width: 42px; height: 60px; font-size: 12px; }
-.texas-card.face-down .card-back-pattern {
-  width: 100%; height: 100%;
-  background: repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0 4px, transparent 4px 8px);
-}
-.texas-card .card-png { width: 100%; height: 100%; object-fit: contain; }
-.texas-card .card-css { display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 700; }
-.texas-card .card-rank { font-size: 18px; line-height: 1; }
-.texas-card .card-suit { font-size: 14px; line-height: 1; }
-.texas-card.card-small .card-rank { font-size: 14px; }
-.texas-card.card-small .card-suit { font-size: 11px; }
-
-/* ---- 操作控件 ---- */
-.texas-action-controls {
-  display: flex; gap: 10px; align-items: center; justify-content: center;
-  padding: 14px 0; flex-wrap: wrap;
-}
-.texas-action-controls .raise-controls {
-  display: flex; gap: 8px; align-items: center;
-}
-.texas-action-controls .raise-controls input[type="range"] { width: 160px; }
-.texas-action-controls .raise-value { font-size: 14px; font-weight: 600; color: #fff; min-width: 50px; text-align: center; }
-.texas-action-controls .waiting-turn { font-size: 14px; color: var(--muted); }
-.texas-action-controls .game-over-banner { font-size: 20px; font-weight: 700; color: #f59e0b; padding: 12px 24px; background: rgba(245,158,11,0.1); border-radius: 12px; }
-
-/* ---- 等待界面 ---- */
-.waiting-board {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  min-height: 300px; gap: 16px;
-}
-.spinner {
-  width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.2);
-  border-top-color: #22c55e; border-radius: 50%; animation: spin 0.8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ---- 游戏结束横幅 ---- */
-.game-over-banner {
-  text-align: center; font-size: 18px; font-weight: 700; color: #f59e0b;
-  padding: var(--ww-pad); background: rgba(245,158,11,0.1); border-radius: var(--ww-radius);
-}
-
-/* ==========================================================================
-   玩家掉线状态提示
-   ========================================================================== */
-.player-status-alert {
-  padding: 12px;
-  animation: slideIn 0.3s ease;
-}
-
-.player-status-alert .alert {
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.player-status-alert .alert-warning {
-  background: rgba(251, 191, 36, 0.15);
-  border: 1px solid rgba(251, 191, 36, 0.3);
-  color: #fbbf24;
-}
-
-.disconnect-notice {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.disconnect-notice:last-of-type {
-  margin-bottom: 4px;
-}
-
-.timeout-notice {
-  font-size: 12px;
-  opacity: 0.8;
-  margin-top: 4px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(251, 191, 36, 0.2);
-}
-
-.spinner-sm {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(251, 191, 36, 0.3);
-  border-top-color: #fbbf24;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  flex-shrink: 0;
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* ---------------------------------------------------------------------------
-   Session-expired global notice (replaces raw "authorization token expired").
-   --------------------------------------------------------------------------- */
-.auth-error-toast {
-  position: fixed;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  max-width: min(90vw, 520px);
-  padding: 12px 16px;
-  border: 1px solid var(--danger, #e5484d);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--danger, #e5484d) 18%, var(--bg, #161618));
-  color: var(--text, #eee);
-  font-size: 14px;
-  line-height: 1.4;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-  animation: slideIn 0.18s ease-out;
-}
-.auth-error-toast__text {
-  flex: 1;
-}
-.auth-error-toast__close {
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0.7;
-  padding: 0 2px;
-}
-.auth-error-toast__close:hover {
-  opacity: 1;
-}
-
-/* ---------------------------------------------------------------------------
-   GlobalToast — highest-layer API / WS error surface (z-index 1000, above
-   modals which use 200). Centers at the top of the viewport.
-   --------------------------------------------------------------------------- */
-.global-toast {
-  position: fixed;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: min(92vw, 560px);
-  padding: 12px 16px;
-  border: 1px solid var(--danger, #e5484d);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--danger, #e5484d) 18%, var(--bg, #161618));
-  color: var(--text, #eee);
-  font-size: 14px;
-  line-height: 1.4;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-  animation: globalToastSlideIn 0.18s ease-out;
-}
-.global-toast--success {
-  border-color: var(--ok, #3fb950);
-  background: color-mix(in srgb, var(--ok, #3fb950) 18%, var(--bg, #161618));
-}
-.global-toast--info {
-  border-color: var(--accent, #0a84ff);
-  background: color-mix(in srgb, var(--accent, #0a84ff) 18%, var(--bg, #161618));
-}
-.global-toast__icon {
-  font-size: 16px;
-  line-height: 1;
-}
-.global-toast__text {
-  flex: 1;
-}
-.global-toast__close {
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0.7;
-  padding: 0 2px;
-}
-.global-toast__close:hover {
-  opacity: 1;
-}
-@keyframes globalToastSlideIn {
-  from { opacity: 0; transform: translate(-50%, -8px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
-}
-
-/* ─── RulesViewer — markdown rendering (built-in tiny renderer) ─── */
-.md-root {
-  color: var(--text);
-  font-size: 13.5px;
-}
-.md-root > *:first-child { margin-top: 0; }
-.md-root > *:last-child { margin-bottom: 0; }
-
-.md-root h1 {
-  font-size: 20px;
-  font-weight: 700;
-  margin: 12px 0 12px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-}
-.md-root h2 {
-  font-size: 16px;
-  font-weight: 700;
-  margin: 22px 0 10px;
-  padding-left: 8px;
-  border-left: 3px solid var(--accent);
-  color: var(--text);
-}
-.md-root h3 {
-  font-size: 14px;
+.badge.bot-badge {
+  background: rgba(45, 156, 119, 0.6);
+  color: #ffffff;
   font-weight: 600;
-  margin: 18px 0 6px;
-  color: var(--text);
-}
-.md-root h4 {
-  font-size: 13px;
-  font-weight: 600;
-  margin: 14px 0 4px;
-  color: var(--muted);
-}
-.md-root p {
-  margin: 8px 0;
-  line-height: 1.7;
-}
-.md-root strong {
-  color: var(--text);
-  font-weight: 600;
-}
-.md-root code.md-inline-code {
-  background: var(--card);
-  border: 1px solid var(--border);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  padding: 2px 6px;
   border-radius: 4px;
-  padding: 1px 6px;
-  font-size: 12.5px;
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  color: #ff9b8a;
-}
-.md-root pre.md-pre {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 12px 14px;
-  overflow-x: auto;
-  margin: 10px 0;
-  font-size: 12.5px;
-  line-height: 1.55;
-}
-.md-root pre.md-pre code {
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  color: var(--text);
-}
-.md-root blockquote.md-quote {
-  margin: 10px 0;
-  padding: 8px 14px;
-  border-left: 3px solid var(--muted);
-  color: var(--muted);
-  background: rgba(139, 148, 158, 0.06);
-  border-radius: 0 6px 6px 0;
-}
-.md-root ul,
-.md-root ol {
-  margin: 8px 0;
-  padding-left: 24px;
-  line-height: 1.7;
-}
-.md-root li {
-  margin: 2px 0;
-}
-.md-root hr.md-hr {
-  border: 0;
-  border-top: 1px solid var(--border);
-  margin: 20px 0;
-}
-
-/* Tables — most of the rules content is tabular; the design target is
-   "easily scannable on a 760px-wide panel" — sticky header row, zebra
-   rows, soft border, comfortable cell padding. */
-.md-table-wrap {
-  margin: 12px 0;
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-.md-root table.md-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12.5px;
-  background: var(--panel);
-}
-.md-root table.md-table th {
-  background: var(--card);
-  color: var(--text);
-  font-weight: 600;
-  text-align: left;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  font-size: 11px;
+  margin-left: 4px;
+  display: inline-block;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.md-root table.md-table td {
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-  vertical-align: top;
-}
-.md-root table.md-table tr:last-child td {
-  border-bottom: 0;
-}
-.md-root table.md-table tbody tr:nth-child(even) td {
-  background: rgba(255, 255, 255, 0.018);
-}
-.md-root table.md-table tbody tr:hover td {
-  background: rgba(10, 132, 255, 0.06);
+
+/* ===== 思考中指示器（紫色 + 白字） ===== */
+.texas-seat.thinking {
+  border-color: hsl(280, 60%, 55%);
+  animation: thp-thinking-pulse 1.5s ease-in-out infinite;
 }
 
-/* 规则说明 button — used inside the 5 GameInfoPanel components. Slightly
-   softer than primary buttons so it doesn't compete with resign / exit. */
-.rules-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.seat-thinking {
+  background: rgba(155, 89, 182, 0.55);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 2px;
+  text-align: center;
 }
-.rules-button::before {
-  content: '📖';
+
+@keyframes thp-thinking-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(155, 89, 182, 0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(155, 89, 182, 0); }
+}
+
+/* ===== 内心独白卡片（紫色边框 + 半透明白底） ===== */
+.seat-heart-thought {
+  background: rgba(155, 89, 182, 0.18);
+  border: 1px solid rgba(155, 89, 182, 0.5);
+  color: #f5e8ff;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  margin-top: 2px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* ===== BotThoughtPanel ===== */
+.thp-bot-thought {
+  background: rgba(155, 89, 182, 0.12);
+  border: 1px solid rgba(155, 89, 182, 0.4);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 8px;
+  color: #f5e8ff;
+  font-size: 12px;
+  max-width: 320px;
+}
+
+.thp-bot-thought summary {
+  cursor: pointer;
+  font-weight: 600;
+  user-select: none;
+}
+
+.thp-bot-thought__text {
+  margin-top: 6px;
+  margin-bottom: 0;
+  line-height: 1.4;
+}
+
+/* ===== RoomCreateModal ===== */
+.thp-create-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.thp-create-modal__card {
+  background: #1a1f2e;
+  color: #f0f4fa;
+  border-radius: 8px;
+  width: 480px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.thp-create-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.thp-create-modal__header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.thp-create-modal__close {
+  background: transparent;
+  color: #f0f4fa;
+  border: 0;
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.thp-create-modal__body {
+  padding: 14px 18px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.thp-create-modal__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.thp-create-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.thp-create-modal__field-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.thp-create-modal__field input[type='text'],
+.thp-create-modal__field input[type='range'],
+.thp-create-modal__field select {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f0f4fa;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 6px 8px;
   font-size: 13px;
 }
 
-/* DraggableModal — backdrop click closes; the modal itself never blocks
-   outside clicks beyond the backdrop. The header carries the cursor/grab
-   affordance. */
-.draggable-modal-backdrop {
-  animation: rules-fade-in 0.12s ease-out;
-}
-@keyframes rules-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+.thp-create-modal__hint {
+  color: rgba(240, 244, 250, 0.6);
+  font-size: 11px;
 }
 
+.thp-create-modal__error {
+  color: #ff6b6b;
+  font-size: 12px;
+  margin: 6px 0;
+}
+
+.thp-create-modal__seatblock {
+  margin-top: 8px;
+}
+
+.thp-create-modal__seatblock-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.thp-create-modal__reshuffle {
+  background: rgba(155, 89, 182, 0.2);
+  color: #f5e8ff;
+  border: 1px solid rgba(155, 89, 182, 0.4);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.thp-create-modal__seats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.thp-create-modal__seatrow {
+  display: grid;
+  grid-template-columns: 60px 60px 1fr;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.thp-create-modal__seatidx {
+  font-weight: 600;
+  color: rgba(155, 89, 182, 0.85);
+}
+
+.thp-create-modal__seatrow select {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f0f4fa;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.thp-create-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.thp-create-modal__cancel,
+.thp-create-modal__submit {
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.thp-create-modal__cancel {
+  background: transparent;
+  color: rgba(240, 244, 250, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.thp-create-modal__submit {
+  background: rgba(155, 89, 182, 0.85);
+  color: #ffffff;
+  border: 0;
+  font-weight: 600;
+}
+
+.thp-create-modal__submit:disabled {
+  background: rgba(155, 89, 182, 0.3);
+  cursor: not-allowed;
+}
+
+/* prefers-reduced-motion 兜底 */
+@media (prefers-reduced-motion: reduce) {
+  .texas-seat.thinking {
+    animation: none;
+  }
+}

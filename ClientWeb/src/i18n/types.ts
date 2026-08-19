@@ -903,6 +903,29 @@ export interface Dict {
   'texasholdem.style_western_cowboy': string;
   'texasholdem.style_wilderness_escape': string;
 
+  // 2026-08-19 §TexasHoldemAgent — RoomCreateModal + Bot UI
+  'texasholdem.createModal.title': string;
+  'texasholdem.createModal.roomName': string;
+  'texasholdem.createModal.roomNamePlaceholder': string;
+  'texasholdem.createModal.aiCount': string;
+  'texasholdem.createModal.allHuman': string;
+  'texasholdem.createModal.humanAiMix': string;
+  'texasholdem.createModal.aiSeats': string;
+  'texasholdem.createModal.reshuffle': string;
+  'texasholdem.createModal.aiSeatLabel': string;
+  'texasholdem.createModal.aiModelLabel': string;
+  'texasholdem.createModal.seatNumber': string;
+  'texasholdem.createModal.loadingModels': string;
+  'texasholdem.createModal.modelsUnavailable': string;
+  'texasholdem.createModal.cancel': string;
+  'texasholdem.createModal.submit': string;
+  'texasholdem.createModal.submitFailed': string;
+  'texasholdem.createModal.submitError': string;
+  'texasholdem.bot.badge': string;
+  'texasholdem.bot.thinking': string;
+  'texasholdem.bot.recentDecision': string;
+  'texasholdem.bot.heartThought': string;
+
   // 观察者 / 观战 — spectator mode (applies across all 5 games)
   'chat.spectatorTag': string;
   // R91-P0-3 (2026-07-11): Interject tag — bot 主动插话 / 主动发言标记。

@@ -77,6 +77,29 @@ const (
 	// 仅推送给观战者(Hub.BroadcastRoomSpectators),玩家与 Agent 不可见。
 	// 详见 docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-09.md §U1。
 	AgentClassWerewolfCommentator AgentClassName = "LsmAgentGame-Werewolf-Commentator"
+
+	// AgentClassTexasHoldemPlayer 是德州扑克玩家 Bot 的 AgentClassName(2026-08-19 §德州扑克Agent)。
+	// 由 ServerGo/agent/thpagent/ 的 Agent struct 实现;驱动 TexasHoldem 引擎
+	// 参与对局(每轮押注 + 公屏聊天)。与狼人杀玩家的核心差异:
+	//   - 每轮仅 1 次 tool_use(扑克无试探/反悔)
+	//   - 每手牌最多 2 次公屏发言(限流更严)
+	//   - 决策依据 = HandStrength + PotOdds + BluffHint(纯数学)
+	// 详见 docs/德州扑克/德州扑克Agent设计.md。
+	AgentClassTexasHoldemPlayer AgentClassName = "LsmAgentGame-TexasHoldem-Player"
+
+	// AgentClassTexasHoldemJudge 是德州扑克法官(裁判)Bot 的 AgentClassName(2026-08-19)。
+	// 由 ServerGo/agent/thpagent/judge/ 的 AgentJudge struct 实现(预留,v1.0 不实现);
+	// 负责摊牌讲解 / 旁观解说。**不**参与决策/胜负。
+	// 详见 docs/德州扑克/德州扑克Agent设计.md §10 v1.1 路线。
+	AgentClassTexasHoldemJudge AgentClassName = "LsmAgentGame-TexasHoldem-Judge"
+
+	// AgentClassTexasHoldemProfileIter 是德州扑克 Agent「玩家行为画像」迭代的
+	// AgentClassName(2026-08-19)。由 ServerGo/agent/thpagent/profile_bridge.go
+	// 的 IteratePlayerProfilesAsync 调用(预留,v1.0 不实现);每局结束后对每个
+	// (bot model_key × 人类 user_id) 组合异步生成/更新打法画像,写回
+	// t_lsm_game_agent_player_profile。
+	// 详见 docs/德州扑克/德州扑克Agent设计.md §10 v1.1 路线。
+	AgentClassTexasHoldemProfileIter AgentClassName = "LsmAgentGame-TexasHoldem-ProfileIter"
 )
 
 // AllAgentClassNames 返回当前已注册的全部 AgentClassName。
@@ -90,6 +113,9 @@ func AllAgentClassNames() []AgentClassName {
 		AgentClassWerewolfProfileIter,
 		AgentClassWerewolfRecall,
 		AgentClassWerewolfCommentator,
+		AgentClassTexasHoldemPlayer,
+		AgentClassTexasHoldemJudge,
+		AgentClassTexasHoldemProfileIter,
 	}
 }
 

@@ -12,9 +12,26 @@ interface Props {
   isButton: boolean;
   isSB: boolean;
   isBB: boolean;
+  // 2026-08-19 §德州扑克Agent — 新增 Bot 字段(可选,默认 false)
+  isBot?: boolean;
+  botModelName?: string;
+  botThinking?: boolean;
+  botHeartThought?: string;
 }
 
-export function PlayerSeat({ player, style, isMe, isTurn, isButton, isSB, isBB }: Props) {
+export function PlayerSeat({
+  player,
+  style,
+  isMe,
+  isTurn,
+  isButton,
+  isSB,
+  isBB,
+  isBot = false,
+  botModelName,
+  botThinking = false,
+  botHeartThought,
+}: Props) {
   const t = useT();
 
   if (!player.has_player) {
@@ -26,6 +43,8 @@ export function PlayerSeat({ player, style, isMe, isTurn, isButton, isSB, isBB }
     isTurn ? 'turn' : '',
     player.folded ? 'folded' : '',
     player.all_in ? 'allin' : '',
+    isBot ? 'bot' : '',
+    botThinking ? 'thinking' : '',
   ].filter(Boolean).join(' ');
 
   // 服务端 hole 字段可能为 null（非自己座位、观察者、已弃牌等），统一兜底为空数组，
@@ -42,8 +61,34 @@ export function PlayerSeat({ player, style, isMe, isTurn, isButton, isSB, isBB }
         {isSB && <span className="badge sb">SB</span>}
         {isBB && <span className="badge bb">BB</span>}
         {player.all_in && <span className="badge allin-badge">ALL IN</span>}
+        {/* 2026-08-19 §德州扑克Agent — Bot 徽章 */}
+        {isBot && (
+          <span
+            className="badge bot-badge"
+            title={botModelName || t('texasholdem.bot.badge' as TKey)}
+            data-testid="thp-seat-bot-badge"
+          >
+            🤖 {botModelName || t('texasholdem.bot.badge' as TKey)}
+          </span>
+        )}
       </div>
       <div className="seat-stack">${player.stack}</div>
+      {/* 2026-08-19 §德州扑克Agent — 思考中指示器 */}
+      {isBot && botThinking && (
+        <div className="seat-thinking" data-testid="thp-seat-thinking">
+          ⏳ {t('texasholdem.bot.thinking' as TKey)}
+        </div>
+      )}
+      {/* 2026-08-19 §德州扑克Agent — 内心独白(hover 弹全文) */}
+      {isBot && botHeartThought && (
+        <div
+          className="seat-heart-thought"
+          title={botHeartThought}
+          data-testid="thp-seat-heart-thought"
+        >
+          💭 {botHeartThought.length > 30 ? botHeartThought.slice(0, 30) + '…' : botHeartThought}
+        </div>
+      )}
       <div className="seat-holes">
         {isMe || holeCards.length > 0 ? (
           holeCards.length > 0 ? (
