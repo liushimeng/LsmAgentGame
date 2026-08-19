@@ -1,9 +1,11 @@
-## 自动化 Web 游戏测试任务：狼人杀 13 人局 Agent 专项
+## 自动化 Web 游戏测试任务：狼人杀 13 人局 Agent 专项（`_Werewolf` 入口版）
 
 > 本项目按 [MIT License](LICENSE) 开源。测试任务面向维护者，参与前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [AutoDebugTestReport.md](AutoDebugTestReport.md)。
+> 本文件为狼人杀专用入口，**仅产出** `自动化测试报告_YYYYMMDD_HHMMSS.md` 前缀的报告；德州扑克请使用 [`AutoTestAndSaveReport_TexasPoker.md`](AutoTestAndSaveReport_TexasPoker.md)。
 
 - **工作目录**: `/usr/local/LsmAgentGame/LsmAgentGame`
-- **产物路径**:
+- **入口脚本**: `AutoTestAndSaveReport_Werewolf.sh`(随机选编程 Agent CLI → 跑测试 → git 提交狼人杀报告 → 接力自动修复)
+- **产物路径(仅狼人杀)**:
   - 测试报告: `TestReport/自动化测试报告_YYYYMMDD_HHMMSS.md`
   - 进度文件: `AutoTestProgress/自动化测试进度_YYYYMMDD_HHMMSS.md`
   - 子工程工具报告(可选): `go-web-debug-tool/UseReport/测试工具使用报告_YYYYMMDD_HHMMSS.md`

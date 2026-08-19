@@ -69,10 +69,26 @@ if ! grep -qF "绝对禁止修改 \`CLAUDE.md\`、\`AGENTS.md\`" "${PROMPT_FILE}
     exit 2
 fi
 
-# ---------- 待处理报告预检 ----------
+# ---------- 待处理报告预检（多游戏 union） ----------
 # 无待处理报告（全部已删除或已加 _无问题 后缀）时直接退出，避免空跑一个 Agent 会话。
 # 与 AutoDebugTestReport.md §1「无任何待处理报告 → 静默结束」同语义，但省掉会话开销。
-PENDING_MAIN="$(find "${PROJECT_DIR}/TestReport" -maxdepth 1 -name '自动化测试报告_*.md' ! -name '*_无问题.md' 2>/dev/null | head -1)"
+#
+# 多游戏 union glob（2026-08-19 §20260819-01 增加）：
+#   - 狼人杀（向后兼容）：`自动化测试报告_*.md`
+#   - 德州扑克 v1：      `德州扑克自动化测试报告_*.md`
+#   - 后续游戏（象棋/斗地主/军棋）按相同规约追加，每加一个游戏只动本数组。
+#   任何一个 glob 命中都视为有待处理报告。
+PENDING_MAIN=""
+# 顺序扫描多个游戏的前缀 glob — 一旦命中即退出循环。
+for prefix in \
+    '自动化测试报告_*.md' \
+    '德州扑克自动化测试报告_*.md' \
+    '象棋自动化测试报告_*.md' \
+    '斗地主自动化测试报告_*.md' \
+    '军棋自动化测试报告_*.md'; do
+    PENDING_MAIN="$(find "${PROJECT_DIR}/TestReport" -maxdepth 1 -name "${prefix}" ! -name '*_无问题.md' 2>/dev/null | head -1)"
+    [[ -n "${PENDING_MAIN}" ]] && break
+done
 PENDING_SUB="$(find "${PROJECT_DIR}/go-web-debug-tool/UseReport" -maxdepth 1 -name '测试工具使用报告_*.md' ! -name '*_无问题.md' 2>/dev/null | head -1)"
 if [[ -z "${PENDING_MAIN}${PENDING_SUB}" ]]; then
     echo "[AutoDebugTestReport] 无待处理报告（TestReport/ 与 UseReport/ 均为空或已归档），静默结束。"
