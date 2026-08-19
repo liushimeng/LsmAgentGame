@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"LsmAgentGame/agent/thpagent"
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/game/chess"
 	"LsmAgentGame/game/doudizhu"
@@ -37,6 +38,8 @@ type GameService struct {
 	doudizhuMgr    *doudizhu.DoudizhuManager
 	texasHoldemMgr *texasholdem.TexasHoldemManager
 	werewolfMgr    *werewolf.WerewolfManager
+	// 2026-08-19 §德州扑克Agent — Bot 驱动器
+	thpDriver      *thpagent.Driver
 }
 
 // NewGameService builds a GameService with the default set of managers.
@@ -46,7 +49,7 @@ type GameService struct {
 // placeholders (no in-process bot). The registry is forwarded to the werewolf
 // manager so Phase 4 can construct agent.Agent drivers per seat.
 func NewGameService(hub *Hub, roomSvc *service.RoomService, registry *llm.Registry) *GameService {
-	return &GameService{
+	gs := &GameService{
 		hub:            hub,
 		roomSvc:        roomSvc,
 		xiangqiMgr:     xiangqi.NewXiangqiManager(),
@@ -56,6 +59,9 @@ func NewGameService(hub *Hub, roomSvc *service.RoomService, registry *llm.Regist
 		texasHoldemMgr: texasholdem.NewTexasHoldemManager(),
 		werewolfMgr:    werewolf.NewWerewolfManagerWithRegistry(registry),
 	}
+	// 2026-08-19 §德州扑克Agent — 初始化 Bot 驱动器
+	gs.initTexasHoldemBotDriver(registry)
+	return gs
 }
 
 // XiangqiManager exposes the xiangqi manager (used by other services).
@@ -201,6 +207,10 @@ func (s *GameService) WerewolfPublicPlayerStates(roomID string) []service.Werewo
 // persisted the DB rows but never called SetSeatModelKey / ManagerAddPlayerAt,
 // so BotAgents stayed empty and Agent.Run was never started.
 func (s *GameService) RegisterAgentSeats(gameKind, roomID string, seats []service.AgentSeatConfig) *errcode.Error {
+	// 2026-08-19 §德州扑克Agent: texasholdem 分支
+	if gameKind == "texasholdem" {
+		return s.registerTexasHoldemAgentSeats(roomID, seats)
+	}
 	if gameKind != "werewolf" {
 		return nil
 	}

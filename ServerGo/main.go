@@ -434,6 +434,12 @@ func main() {
 	gameSvcWs.WerewolfManager().SetPropCatalog(propCatalog)
 	gameSvcWs.WerewolfManager().SetPropEngine(propEngine)
 
+	// 2026-08-19 §德州扑克金币 — 注入钱包服务到德扑 manager。
+	// 手牌结束后按筹码盈亏自动 Credit/Debit 金币。
+	if thpMgr := gameSvcWs.TexasHoldemManager(); thpMgr != nil {
+		thpMgr.SetWalletService(walletSvc)
+	}
+
 	// 2026-07-21 v5 重构 — EconTier 5 档阈值(从 LsmAgentGame.conf 注入)。
 	// 4 个字段全部显式非零时调 werewolf.ConfigureEconTier;任意字段为 0 走
 	// werewolf 包常量默认值。配置错误(非单调)由 werewolf 包 panic 兜底。

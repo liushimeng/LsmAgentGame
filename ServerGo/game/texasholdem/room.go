@@ -1,6 +1,8 @@
 package texasholdem
 
 import (
+	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -26,6 +28,10 @@ type TexasHoldemRoom struct {
 	// 由 TexasHoldemAgentDriver.RegisterAgentsLocked 在房间创建时填充。
 	BotSeats  [MaxPlayers]bool
 	BotModels [MaxPlayers]string
+
+	// 2026-08-19 §德州扑克金币 — 手牌开始时各座位筹码快照。
+	// StartHand 时记录,手牌结束后用 delta 结算金币。
+	HandStartStacks [MaxPlayers]int
 }
 
 // SeatOf 返回 userID 所在座位，未入座返回 (-1,false)。
@@ -89,6 +95,20 @@ type TexasHoldemManager struct {
 	seedFn     func() int64
 	BigBlind   int
 	StartStack int
+
+	// 2026-08-19 §德州扑克Agent — 新手牌开始回调(由 WS 层注册)。
+	// 在延迟 auto-start goroutine 中调用,通知 WS 层广播新状态并触发 bot 行动。
+	onHandStarted func(roomID string)
+
+	// 2026-08-19 §德州扑克金币 — 钱包服务(由 main.go 注入)。
+	// 手牌结束后按筹码盈亏结算金币。
+	walletSvc WalletSettler
+}
+
+// WalletSettler 是 wallet service 的精简接口(避免循环 import)。
+type WalletSettler interface {
+	Credit(ctx context.Context, userID, txType, refType, refID, gameKind, remark string, amount int64) error
+	Debit(ctx context.Context, userID, txType, refType, refID, gameKind, remark string, amount int64) error
 }
 
 // NewTexasHoldemManager 创建空管理器。
@@ -99,6 +119,21 @@ func NewTexasHoldemManager() *TexasHoldemManager {
 		BigBlind:   200,
 		StartStack: 10000,
 	}
+}
+
+// SetOnHandStarted 注册新手牌开始回调(§德州扑克Agent)。
+// 仅 WS 层调用一次;延迟 auto-start goroutine 触发时通知广播 + bot 行动。
+func (m *TexasHoldemManager) SetOnHandStarted(cb func(roomID string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onHandStarted = cb
+}
+
+// SetWalletService 注入钱包服务(§德州扑克金币)。由 main.go 调用。
+func (m *TexasHoldemManager) SetWalletService(svc WalletSettler) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.walletSvc = svc
 }
 
 func (m *TexasHoldemManager) getRoom(roomID string) *TexasHoldemRoom {
@@ -151,6 +186,8 @@ func (m *TexasHoldemManager) JoinGame(roomID, userID string) (*TexasHoldemRoom, 
 
 	// 满 2 人且当前阶段为 waiting，自动开首手
 	if r.IsReady() && r.State.Street == PhaseWaiting {
+		// 2026-08-19 §德州扑克金币: 记录各座位手牌开始时的筹码
+		r.snapshotHandStartStacks()
 		if e := r.State.StartHand(); e != nil {
 			logger.L().Warn("texasholdem start hand failed", zap.String("room_id", roomID), zap.Error(e))
 		} else {
@@ -181,12 +218,21 @@ func (m *TexasHoldemManager) Action(roomID, userID string, a Action) (*TexasHold
 		return nil, false, errcode.Code(errcode.ErrRoomNotIn)
 	}
 
+	// 2026-08-19 §德州扑克Agent: bot 座位的行动由 driver 自动驱动,
+	// 人类玩家在 bot 座位上提交动作直接拒绝(防止作弊)。
+	if r.BotSeats[seat] {
+		return nil, false, errcode.CodeMsg(errcode.ErrInvalidMove, "seat is bot-controlled")
+	}
+
 	handOver, e := r.State.ApplyAction(seat, a)
 	if e != nil {
 		return nil, false, e
 	}
 
 	if handOver {
+		// 2026-08-19 §德州扑克金币: 手牌结束,异步结算金币
+		go m.SettleHandCoins(roomID)
+
 		// 延迟开新一手（给客户端 time 展示结果）
 		if r.State.CanStartHand() {
 			go func() {
@@ -194,11 +240,17 @@ func (m *TexasHoldemManager) Action(roomID, userID string, a Action) (*TexasHold
 				r.mu.Lock()
 				defer r.mu.Unlock()
 				if r.State.Street == PhaseOver || r.State.Street == PhaseShowdown {
+					// 2026-08-19 §德州扑克金币: 新手牌开始前记录筹码快照
+					r.snapshotHandStartStacks()
 					if e := r.State.StartHand(); e != nil {
 						logger.L().Warn("auto start next hand failed", zap.String("room_id", roomID), zap.Error(e))
 					} else {
 						logger.L().Info("texasholdem next hand", zap.String("room_id", roomID), zap.Int("hand", r.State.HandNumber))
 						m.broadcastState(roomID, r)
+						// 2026-08-19 §德州扑克Agent: 新手牌开始,通知 WS 层广播 + 触发 bot
+						if m.onHandStarted != nil {
+							m.onHandStarted(roomID)
+						}
 					}
 				}
 			}()
@@ -284,6 +336,284 @@ func (m *TexasHoldemManager) RemoveGame(roomID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.rooms, roomID)
+}
+
+// ─────────────────── Spectator API ───────────────────
+
+// ─────────────────── Bot Agent API (2026-08-19 §德州扑克Agent) ───────────────────
+
+// IsBotSeatTurn 报告当前是否轮到 bot 座位行动。
+// 由 WS 层在每次 Action/JoinGame/StartHand 后调用。
+func (m *TexasHoldemManager) IsBotSeatTurn(roomID string) (seat int, isBot bool) {
+	r := m.getRoom(roomID)
+	if r == nil || r.State == nil {
+		return -1, false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.State.Street == PhaseWaiting || r.State.Street == PhaseOver || r.State.Street == PhaseShowdown {
+		return -1, false
+	}
+	turn := r.State.Turn
+	if turn < 0 || turn >= MaxPlayers {
+		return -1, false
+	}
+	return turn, r.BotSeats[turn]
+}
+
+// BotSeatModelKey 返回指定 bot 座位的 model_key。
+func (m *TexasHoldemManager) BotSeatModelKey(roomID string, seat int) string {
+	r := m.getRoom(roomID)
+	if r == nil {
+		return ""
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if seat < 0 || seat >= MaxPlayers || !r.BotSeats[seat] {
+		return ""
+	}
+	return r.BotModels[seat]
+}
+
+// BotGameContext 构造指定 bot 座位的 GameContextForAgent 快照。
+// 调用方不持有任何锁;此函数内部自行获取。
+// 返回 nil 表示房间不存在或该座位不是 bot。
+func (m *TexasHoldemManager) BotGameContext(roomID string, seat int) *BotGameContextSnapshot {
+	r := m.getRoom(roomID)
+	if r == nil || r.State == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if seat < 0 || seat >= MaxPlayers || !r.BotSeats[seat] {
+		return nil
+	}
+	gs := r.State
+	if gs.Street == PhaseWaiting || gs.Street == PhaseOver || gs.Street == PhaseShowdown {
+		return nil
+	}
+	p := &gs.Players[seat]
+	if p.UserID == "" || p.Folded {
+		return nil
+	}
+
+	callAmount := gs.CurrentBet - p.RoundCommitted
+	if callAmount < 0 {
+		callAmount = 0
+	}
+
+	// 构建公共牌数组(转 int 编码: rank*4+suit+1, 与 thpagent 对齐)
+	var community [5]int
+	for i := 0; i < gs.CommunityShown && i < 5; i++ {
+		community[i] = cardToInt(gs.Community[i])
+	}
+
+	// 构建动作历史摘要
+	var actionHistory string
+	for i := 0; i < MaxPlayers; i++ {
+		pl := &gs.Players[i]
+		if pl.UserID == "" {
+			continue
+		}
+		marker := ""
+		if i == seat {
+			marker = " ← 你"
+		}
+		if pl.Folded {
+			actionHistory += fmt.Sprintf("  座位%d: 已弃牌%s\n", i+1, marker)
+		} else if pl.AllIn {
+			actionHistory += fmt.Sprintf("  座位%d: 全押 %d%s\n", i+1, pl.TotalCommitted, marker)
+		} else {
+			actionHistory += fmt.Sprintf("  座位%d: 筹码 %d, 本轮已注 %d%s\n", i+1, pl.Stack, pl.RoundCommitted, marker)
+		}
+	}
+
+	return &BotGameContextSnapshot{
+		RoomID:       roomID,
+		HandNumber:   gs.HandNumber,
+		Street:       gs.Street.String(),
+		MySeat:       seat,
+		MyHole:       [2]int{cardToInt(p.Hole[0]), cardToInt(p.Hole[1])},
+		Community:    community,
+		CommunityLen: gs.CommunityShown,
+		MyStack:      p.Stack,
+		Pot:          gs.Pot,
+		CurrentBet:   gs.CurrentBet,
+		CallAmount:   callAmount,
+		Position:     "", // 由 thpagent.Position() 填充
+		Opponents:    gs.activePlayers() - 1,
+		Button:       gs.Button,
+		BigBlind:     gs.BigBlind,
+		MinRaise:     gs.MinRaise,
+		ActionHistory: actionHistory,
+	}
+}
+
+// BotGameContextSnapshot 是 bot 决策所需的完整上下文快照。
+// 与 thpagent.GameContextForAgent 平行(避免循环 import)。
+type BotGameContextSnapshot struct {
+	RoomID        string
+	HandNumber    int
+	Street        string
+	MySeat        int
+	MyHole        [2]int
+	Community     [5]int
+	CommunityLen  int
+	MyStack       int
+	Pot           int
+	CurrentBet    int
+	CallAmount    int
+	Position      string
+	Opponents     int
+	Button        int
+	BigBlind      int
+	MinRaise      int
+	ActionHistory string
+}
+
+// ApplyBotAction 应用 bot 座位的动作。由 WS 层在 driver.DecideAction 返回后调用。
+// 返回 (手牌是否结束, 错误)。
+func (m *TexasHoldemManager) ApplyBotAction(roomID string, seat int, a Action) (bool, *errcode.Error) {
+	r := m.getRoom(roomID)
+	if r == nil {
+		return false, errcode.Code(errcode.ErrRoomNotFound)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.State == nil {
+		return false, errcode.Code(errcode.ErrGameNotStarted)
+	}
+	if seat != r.State.Turn {
+		return false, errcode.Code(errcode.ErrNotYourTurn)
+	}
+	if !r.BotSeats[seat] {
+		return false, errcode.CodeMsg(errcode.ErrInvalidMove, "not a bot seat")
+	}
+
+	handOver, e := r.State.ApplyAction(seat, a)
+	if e != nil {
+		return false, e
+	}
+
+	if handOver {
+		// 2026-08-19 §德州扑克金币: 手牌结束,异步结算金币
+		go m.SettleHandCoins(roomID)
+
+		// 延迟开新一手(与 Action 方法相同的逻辑)
+		if r.State.CanStartHand() {
+			go func() {
+				time.Sleep(5 * time.Second)
+				r.mu.Lock()
+				defer r.mu.Unlock()
+				if r.State.Street == PhaseOver || r.State.Street == PhaseShowdown {
+					// 2026-08-19 §德州扑克金币: 新手牌开始前记录筹码快照
+					r.snapshotHandStartStacks()
+					if e := r.State.StartHand(); e != nil {
+						logger.L().Warn("auto start next hand failed (bot)", zap.String("room_id", roomID), zap.Error(e))
+					} else {
+						logger.L().Info("texasholdem next hand (bot)", zap.String("room_id", roomID), zap.Int("hand", r.State.HandNumber))
+						m.broadcastState(roomID, r)
+						if m.onHandStarted != nil {
+							m.onHandStarted(roomID)
+						}
+					}
+				}
+			}()
+		}
+	}
+
+	return handOver, nil
+}
+
+// cardToInt 把 Card 转为 thpagent 使用的 int 编码 (rank*4+suit+1)。
+// rank: 0..12 (2..A), suit: 0..3 (Spade/Heart/Club/Diamond)
+// 返回 1..52; 零值 Card 返回 0。
+func cardToInt(c Card) int {
+	if c.Rank == 0 && c.Suit == 0 {
+		return 0
+	}
+	return c.Rank*4 + c.Suit + 1
+}
+
+// ─────────────────── 金币结算 (2026-08-19 §德州扑克金币) ───────────────────
+
+// snapshotHandStartStacks 记录各座位手牌开始时的筹码(锁内调用)。
+func (r *TexasHoldemRoom) snapshotHandStartStacks() {
+	for i := 0; i < MaxPlayers; i++ {
+		if r.State != nil && r.State.Players[i].UserID != "" {
+			r.HandStartStacks[i] = r.State.Players[i].Stack
+		} else {
+			r.HandStartStacks[i] = 0
+		}
+	}
+}
+
+// SettleHandCoins 手牌结束后按筹码盈亏结算金币。
+// 由 WS 层在 handOver 时调用。异步执行,不阻塞游戏流。
+//
+// 结算规则(v1.0 简化):
+//   - delta = 当前筹码 - 手牌开始筹码
+//   - delta > 0 → Credit(赢得金币)
+//   - delta < 0 → Debit(损失金币)
+//   - 仅人类玩家结算(bot 也结算,因为其关联的 model 有金币账户)
+func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
+	if m.walletSvc == nil {
+		return
+	}
+	r := m.getRoom(roomID)
+	if r == nil || r.State == nil {
+		return
+	}
+	r.mu.Lock()
+	// 收集结算数据(锁内快照)
+	type settlement struct {
+		userID string
+		delta  int
+	}
+	var settlements []settlement
+	for i := 0; i < MaxPlayers; i++ {
+		p := &r.State.Players[i]
+		if p.UserID == "" {
+			continue
+		}
+		delta := p.Stack - r.HandStartStacks[i]
+		if delta != 0 {
+			settlements = append(settlements, settlement{userID: p.UserID, delta: delta})
+		}
+	}
+	handNum := r.State.HandNumber
+	r.mu.Unlock()
+
+	// 锁外异步结算(不阻塞游戏流)
+	for _, s := range settlements {
+		refID := roomID + ":" + fmt.Sprintf("%d", handNum)
+		remark := fmt.Sprintf("texasholdem hand #%d settle", handNum)
+		if s.delta > 0 {
+			if err := m.walletSvc.Credit(context.Background(), s.userID, "game_win", "texasholdem_settle", refID, "texasholdem", remark, int64(s.delta)); err != nil {
+				logger.L().Warn("texasholdem settle credit failed",
+					zap.String("room_id", roomID),
+					zap.String("user_id", s.userID),
+					zap.Int("delta", s.delta),
+					zap.Error(err))
+			}
+		} else {
+			amount := int64(-s.delta)
+			if err := m.walletSvc.Debit(context.Background(), s.userID, "game_lose", "texasholdem_settle", refID, "texasholdem", remark, amount); err != nil {
+				logger.L().Warn("texasholdem settle debit failed",
+					zap.String("room_id", roomID),
+					zap.String("user_id", s.userID),
+					zap.Int("delta", s.delta),
+					zap.Error(err))
+			}
+		}
+	}
+	if len(settlements) > 0 {
+		logger.L().Info("texasholdem hand coins settled",
+			zap.String("room_id", roomID),
+			zap.Int("hand", handNum),
+			zap.Int("players", len(settlements)))
+	}
 }
 
 // ─────────────────── Spectator API ───────────────────

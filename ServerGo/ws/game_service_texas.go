@@ -45,6 +45,8 @@ func (s *GameService) handleTexasHoldemJoin(c *Client, env Envelope, roomID stri
 		})
 		s.broadcastTexasHoldemState(roomID)
 		logger.L().Info("texasholdem game started via ws", zap.String("room_id", roomID))
+		// 2026-08-19 §德州扑克Agent: 游戏开始后检查是否 bot 先行动
+		s.ProcessBotTurn(roomID)
 	} else {
 		s.hub.BroadcastRoom(roomID, Envelope{
 			Type: "game.peer_joined",
@@ -114,6 +116,8 @@ func (s *GameService) handleTexasHoldemAction(c *Client, env Envelope) {
 		s.broadcastTexasHoldemOver(req.RoomID, room)
 		s.broadcastTexasHoldemState(req.RoomID)
 	}
+	// 2026-08-19 §德州扑克Agent: 人类行动后检查是否轮到 bot
+	s.ProcessBotTurn(req.RoomID)
 }
 
 func (s *GameService) sendTexasHoldemState(c *Client, seq int64, state *texasholdem.ClientGameState) {

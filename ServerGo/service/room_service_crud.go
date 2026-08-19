@@ -207,13 +207,18 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		agentSeatSet[a.Seat] = struct{}{}
 	}
 
-	if len(agentSeats) > 0 && gameKind != "werewolf" {
-		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "agent_seats only supported for werewolf")
+	// 2026-08-19 §德州扑克Agent: agent_seats 从狼人杀扩展到德州扑克。
+	// werewolf: 13 座位; texasholdem: 6 座位; 其他游戏暂不支持。
+	maxAgentSeats := 13
+	if gameKind == "texasholdem" {
+		maxAgentSeats = 6
 	}
-	// agent 最多 13 座(werewolf 13 人局上限);玩家编号 0..12。
-	// 不设 import werewolf 包(避免反向依赖),直接写死常量 13。
-	const maxAgentSeats = 13
-	if int64(len(agentSeats)) > 0 && int64(len(agentSeats)) > maxAgentSeats {
+	if len(agentSeats) > 0 && gameKind != "werewolf" && gameKind != "texasholdem" {
+		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "agent_seats only supported for werewolf and texasholdem")
+	}
+	// agent 最多 N 座(werewolf 13 人局上限=13; texasholdem 6 人局上限=6)。
+	// 不设 import werewolf/texasholdem 包(避免反向依赖),直接写死常量。
+	if int64(len(agentSeats)) > 0 && int64(len(agentSeats)) > int64(maxAgentSeats) {
 		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "too many agent seats")
 	}
 	for _, a := range agentSeats {
@@ -433,7 +438,8 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	creatorSeat := -1
 	creatorAsSpectator := false
 	if len(freeSeats) == 0 {
-		if gameKind != "werewolf" {
+		// 2026-08-19 §德州扑克Agent: texasholdem 同样允许全 AI 房间(创建者降级为观战者)。
+		if gameKind != "werewolf" && gameKind != "texasholdem" {
 			// Other games don't allow spectator-creator semantics.
 			return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "no free seat for creator")
 		}

@@ -56,6 +56,8 @@ type Agent struct {
 	Provider types.LLMProvider
 	// 缓存的 config key,用于 registry.Get(Provider)
 	providerKey string
+	// apiKey 是 registry.Get 返回的 API key,用于 provider.Chat() 调用
+	apiKey string
 
 	// 上下文（每手牌刷新）
 	currentContext *GameContextForAgent
@@ -123,6 +125,20 @@ func (a *Agent) SetProvider(p types.LLMProvider, key string) {
 	defer a.mu.Unlock()
 	a.Provider = p
 	a.providerKey = key
+}
+
+// SetAPIKey 注入 API key（与 SetProvider 配套）。
+func (a *Agent) SetAPIKey(key string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.apiKey = key
+}
+
+// GetAPIKey 返回当前 API key（线程安全读）。
+func (a *Agent) GetAPIKey() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.apiKey
 }
 
 // ProviderKey 返回当前 Provider 的 registry key（仅用于日志）。

@@ -7,10 +7,10 @@ import { useTexasHoldemStore } from '@/store/texasholdem.store';
 import { useT } from '@/hooks/useT';
 import { BlindSelector, buyInRange } from '@/components/ui/BlindSelector';
 import { BuyinSlider } from '@/components/ui/BuyinSlider';
-import { AppModal } from '@/components/ui/AppModal';
 import { useWallet } from '@/hooks/useWallet';
 import { useLobbyLiveUpdate } from '@/hooks/useLobbyLiveUpdate';
 import { RoomListTable } from '@/components/lobby/RoomListTable';
+import { RoomCreateModal } from '@/components/texasholdem/RoomCreateModal';
 import type { TKey } from '@/i18n';
 
 /** Server-side expects ante = SB ( BB/2 ) when options.ante is given. */
@@ -68,26 +68,26 @@ export function TexasHoldemLobbyPage() {
     setShowCreateDialog(true);
   };
 
-  const handleConfirmCreate = async () => {
-    setLoading(true);
-    setErr('');
+  // 2026-08-19 §德州扑克Agent — 使用 RoomCreateModal 提交(含 agent_seats)
+  const handleCreateSubmit = async (req: {
+    name?: string;
+    agent_seats: Array<{ seat: number; model_key: string }>;
+  }): Promise<boolean> => {
     try {
-      // The ante field is communicated to the backend via the `ante` option;
-      // for texas hold'em it equals SB = BB/2 per the engine spec.
       const detail = await roomService.create('texasholdem', {
+        name: req.name,
         ante: texasAnteFromBb(bb),
+        agent_seats: req.agent_seats.length > 0 ? req.agent_seats : undefined,
       });
       setShowCreateDialog(false);
-      // Pass buy-in via query param so the game page knows user's intent.
-      // (The actual buy-in debit happens on join, server-authoritative.)
       nav(`/texasholdem/${detail.id}?buyin=${buyin}`);
+      return true;
     } catch (e: any) {
       if (!isSessionExpiredError(e)) {
         setErr(e.message);
         reportGlobalError({ message: e.message, severity: 'error' });
       }
-    } finally {
-      setLoading(false);
+      return false;
     }
   };
 
@@ -129,7 +129,7 @@ export function TexasHoldemLobbyPage() {
     }
   };
 
-  const { min, max } = buyInRange(bb);
+  const { min } = buyInRange(bb);
   const minOk = balance == null || balance >= min;
 
   return (
@@ -151,63 +151,35 @@ export function TexasHoldemLobbyPage() {
         emptySub={t('texasholdem.createFirst' as TKey)}
       />
 
+      {/* 2026-08-19 §德州扑克Agent — RoomCreateModal 含 AI 座位配置 */}
+      <RoomCreateModal
+        open={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        onSubmit={handleCreateSubmit}
+        submitting={loading}
+      />
+
+      {/* 盲注/带入选择器 — 独立于 RoomCreateModal,在弹窗下方渲染 */}
       {showCreateDialog && (
-        <AppModal
-          title={t('texasholdem.createRoom' as TKey)}
-          icon="♠️"
-          kind="info"
-          maxWidth={520}
-          dismissible={!loading}
-          blockBackdropClose={!loading}
-          loading={loading}
-          blockHint="请点击「创建房间」或「取消」按钮关闭,误点外面不会丢失已选盲注/带入"
-          testId="texas-create-modal"
-          footer={
-            <>
+        <div className="texas-create-dialog" style={{ marginTop: 8 }}>
+          <section className="texas-create-section">
+            <BlindSelector value={bb} onChange={handleBbChange} />
+          </section>
+          <section className="texas-create-section">
+            <BuyinSlider bb={bb} value={buyin} onChange={setBuyin} />
+          </section>
+          {!minOk && (
+            <div className="texas-create-dialog__insufficient error">
+              {t('ante.insufficient' as TKey)} —{' '}
               <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setShowCreateDialog(false)}
-                disabled={loading}
-                data-testid="texas-create-cancel"
+                className="link-btn"
+                onClick={() => window.dispatchEvent(new CustomEvent('wallet:claimDaily'))}
               >
-                {t('common.cancel')}
+                {t('ante.goClaim' as TKey)}
               </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleConfirmCreate}
-                disabled={loading || !minOk || buyin < min || buyin > max}
-                data-testid="texas-create-confirm"
-              >
-                {loading ? t('common.loading') : t('texasholdem.createRoom' as TKey)}
-              </button>
-            </>
-          }
-          onClose={() => setShowCreateDialog(false)}
-        >
-          <div className="texas-create-dialog">
-            <section className="texas-create-section">
-              <BlindSelector value={bb} onChange={handleBbChange} />
-            </section>
-
-            <section className="texas-create-section">
-              <BuyinSlider bb={bb} value={buyin} onChange={setBuyin} />
-            </section>
-
-            {!minOk && (
-              <div className="texas-create-dialog__insufficient error">
-                {t('ante.insufficient' as TKey)} —{' '}
-                <button
-                  className="link-btn"
-                  onClick={() => window.dispatchEvent(new CustomEvent('wallet:claimDaily'))}
-                >
-                  {t('ante.goClaim' as TKey)}
-                </button>
-              </div>
-            )}
-          </div>
-        </AppModal>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
