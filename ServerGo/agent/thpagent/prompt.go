@@ -210,7 +210,12 @@ func buildRecentHandHistoryBlock(mem *Memory) string {
 }
 
 func buildWalletBlock(ctx *GameContextForAgent) string {
-	return fmt.Sprintf("【筹码】剩余 %d (v1.0 不注入金币余额)\n\n", ctx.MyStack)
+	if ctx.RakeRatePct == 0 {
+		// 缺省值:不显式提抽水(向后兼容旧 GameContext)
+		return fmt.Sprintf("【筹码】剩余 %d (v1.0 不注入金币余额)\n\n", ctx.MyStack)
+	}
+	return fmt.Sprintf("【筹码】剩余 %d | 房间总金币 %d | 当前档位 %s | 赢家抽水 %d%%\n\n",
+		ctx.MyStack, ctx.RoomTotalCoin, ctx.EconTier, ctx.RakeRatePct)
 }
 
 // ModelName 返回模型展示名（占位,实际从 registry 注入）。

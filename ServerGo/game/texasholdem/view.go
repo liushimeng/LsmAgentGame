@@ -74,7 +74,7 @@ type ClientGameState struct {
 // 保留旧签名(seat 数组+viewer+gs)是为了不破坏 engine_test.go 等测试夹具。
 // 生产路径统一走 BuildClientStateWithRoom(2026-08-19 起)。
 func BuildClientState(roomID string, seats [MaxPlayers]string, viewer int, gs *GameState) *ClientGameState {
-	return BuildClientStateWithRoom(roomID, seats, [MaxPlayers]bool{}, [MaxPlayers]string{}, viewer, gs)
+	return BuildClientStateWithRoom(roomID, seats, [MaxPlayers]bool{}, [MaxPlayers]string{}, viewer, gs, [MaxPlayers]string{}, [MaxPlayers]bool{})
 }
 
 // BuildClientStateWithRoom 构造座位 viewer 的可见视图（含 Bot 字段透传）。
@@ -85,7 +85,11 @@ func BuildClientState(roomID string, seats [MaxPlayers]string, viewer int, gs *G
 //
 // 2026-08-19 §德州扑克Agent — 新增 botSeats/botModels 参数,用于透传 Bot 状态
 // 到前端。前端用 BotSeats/BotModels 渲染"🤖 AI"徽章。
-func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats [MaxPlayers]bool, botModels [MaxPlayers]string, viewer int, gs *GameState) *ClientGameState {
+//
+// botHeartThought/botThinking 由 ws/game_service_texas_bot.go 写入(锁内调用
+// SetBotHeartThoughtLocked / SetBotThinkingLocked),此处直接读字段填充
+// ClientGameState.BotHeartThought/BotThinking — 不丢帧(已在 r.mu 保护下)。
+func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats [MaxPlayers]bool, botModels [MaxPlayers]string, viewer int, gs *GameState, botHeartThought [MaxPlayers]string, botThinking [MaxPlayers]bool) *ClientGameState {
 	cs := &ClientGameState{
 		RoomID:     roomID,
 		GameKind:   "texasholdem",
@@ -180,11 +184,13 @@ func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats 
 
 	// 2026-08-19 §德州扑克Agent — 透传 Bot 状态字段。
 	// 字段始终初始化(默认零值),JSON 序列化不会出现 null。
-	// BotHeartThought 和 BotThinking 由 ws/game_service.go 在 agent 驱动路径中通过
-	// future helper 填充(本期 v1.0 暂留空字符串/false),此处初始化数组。
+	// BotHeartThought / BotThinking 由 ws/game_service_texas_bot.go 写入
+	// SetBotHeartThoughtLocked / SetBotThinkingLocked,本函数直接读取后透传。
 	for i := 0; i < MaxPlayers; i++ {
 		cs.BotSeats[i] = botSeats[i]
 		cs.BotModels[i] = botModels[i]
+		cs.BotHeartThought[i] = botHeartThought[i]
+		cs.BotThinking[i] = botThinking[i]
 	}
 
 	return cs

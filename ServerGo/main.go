@@ -338,7 +338,7 @@ func main() {
 	// Pass llmRegistry into the WS game service so the werewolf manager can look
 	// up providers for agent seats. A nil registry is tolerated (agent seats run
 	// as placeholder-only until wired in Phase 4).
-	gameSvcWs := ws.NewGameService(hub, roomSvc, llmRegistry)
+	gameSvcWs := ws.NewGameService(hub, roomSvc, llmRegistry, cfg.TexasHoldem.AgentActionTimeoutSec)
 	// §20260810-03 F1 — 狼人杀房间 whisper 阵营守卫:ChatService 需要 roomSvc
 	// 查 game_kind,以及 werewolfMgr 提供的 FactionByUserID 查阵营。两路注入
 	// 都 nil-safe:旧部署/测试桩不接也不影响 chat 链路。

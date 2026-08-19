@@ -18,16 +18,17 @@ import (
 
 // Config is the root of LsmAgentGame.conf.
 type Config struct {
-	Server   ServerConfig   `json:"server"`
-	DB       DBConfig       `json:"db"`
-	JWT      JWTConfig      `json:"jwt"`
-	Cookie   CookieConfig   `json:"cookie"`
-	Captcha  CaptchaConfig  `json:"captcha"`
-	Log      LogConfig      `json:"log"`
-	CORS     CORSConfig     `json:"cors"`
-	Game     GameConfig     `json:"game"`
-	LLM      LLMConfig      `json:"llm"`
-	Werewolf WerewolfConfig `json:"werewolf"`
+	Server      ServerConfig      `json:"server"`
+	DB          DBConfig          `json:"db"`
+	JWT         JWTConfig         `json:"jwt"`
+	Cookie      CookieConfig   `json:"cookie"`
+	Captcha     CaptchaConfig     `json:"captcha"`
+	Log         LogConfig         `json:"log"`
+	CORS        CORSConfig        `json:"cors"`
+	Game        GameConfig        `json:"game"`
+	LLM         LLMConfig         `json:"llm"`
+	Werewolf    WerewolfConfig    `json:"werewolf"`
+	TexasHoldem TexasHoldemConfig `json:"texasholdem"`
 }
 
 // §128 对话即思考重构:AgentParallelConfig 已删除(原 §122)。
@@ -301,6 +302,22 @@ const DefaultSpeakFloorWindowSec = 60
 
 // DefaultSpeakFloorWakeIntervalSec speak floor watchdog 强制唤醒间隔下限,防止 1 秒内连发。
 const DefaultSpeakFloorWakeIntervalSec = 20
+
+// TexasHoldemConfig 控制德州扑克 Bot Agent 与经济档位(v1.1,2026-08-19 §德州扑克Agent)。
+//
+//   - AgentEnabled:总开关,默认 true。false 时即使创建房间携带 agent_seats 也被忽略。
+//   - AgentActionTimeoutSec:单 bot 决策 LLM 超时,超时服务端 fold 兜底。
+//   - BotChatPerHand / BotChatMinIntervalSec:每手牌最多 N 次 + 相邻 N 秒节流(同 dispatch.go 默认)。
+//   - RakeRatePct:标准档抽水率(Health 档默认 5%)。
+//   - MaxPotPerHand:单手牌最大底池上限(防恶意刷金币)。
+type TexasHoldemConfig struct {
+	AgentEnabled         bool `json:"agent_enabled"`           // 默认 true
+	AgentActionTimeoutSec int `json:"agent_action_timeout_sec"` // 默认 30s
+	BotChatPerHand       int `json:"bot_chat_per_hand"`        // 默认 2
+	BotChatMinIntervalSec int `json:"bot_chat_min_interval_sec"` // 默认 30s
+	RakeRatePct          int `json:"rake_rate_pct"`             // 默认 5(Health 档);Caution 7、Danger 10 由代码常量定
+	MaxPotPerHand        int `json:"max_pot_per_hand"`          // 默认 100000
+}
 
 // ServerConfig holds the listener addresses and TLS material.
 type ServerConfig struct {
@@ -905,6 +922,27 @@ func applyDefaults(c *Config) {
 	}
 	if c.Werewolf.RestartVote.MinPlayers == 0 {
 		c.Werewolf.RestartVote.MinPlayers = 2
+	}
+
+	// 2026-08-19 §德州扑克Agent — 房间级 TexasHoldem 配置默认值。
+	// AgentEnabled 默认 true(开发期);生产 operator 可设为 false 关闭全部 Bot。
+	if !c.TexasHoldem.AgentEnabled {
+		c.TexasHoldem.AgentEnabled = true
+	}
+	if c.TexasHoldem.AgentActionTimeoutSec == 0 {
+		c.TexasHoldem.AgentActionTimeoutSec = 30
+	}
+	if c.TexasHoldem.BotChatPerHand == 0 {
+		c.TexasHoldem.BotChatPerHand = 2
+	}
+	if c.TexasHoldem.BotChatMinIntervalSec == 0 {
+		c.TexasHoldem.BotChatMinIntervalSec = 30
+	}
+	if c.TexasHoldem.RakeRatePct == 0 {
+		c.TexasHoldem.RakeRatePct = 5
+	}
+	if c.TexasHoldem.MaxPotPerHand == 0 {
+		c.TexasHoldem.MaxPotPerHand = 100000
 	}
 	// §128 对话即思考重构:AgentParallel 默认值已删除(原 §122)。
 

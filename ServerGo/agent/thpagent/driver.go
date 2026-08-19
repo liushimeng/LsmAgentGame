@@ -65,6 +65,17 @@ func (d *Driver) SetRegistry(r Registry) {
 	d.registry = r
 }
 
+// SetMaxActionTimeoutSec 注入单 bot 决策超时上限(秒)。
+// 由 main.go 在 wireRoomService 阶段从 cfg.TexasHoldem.AgentActionTimeoutSec 读出注入。
+func (d *Driver) SetMaxActionTimeoutSec(sec int) {
+	if sec <= 0 {
+		sec = 30
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.maxActionTimeoutSec = sec
+}
+
 // RegisterAgents 注册 Agent 座位。必须在 TexasHoldemManager.StartHand 之前调用。
 //
 // 参数：
@@ -118,6 +129,43 @@ type SeatConfig struct {
 	UserID    string
 	ModelKey  string
 	ModelName string
+}
+
+// OnNewHandLocked 重置房间所有 bot 的 chat 计数与 per-round 限流状态。
+// 由 TexasHoldemManager.onHandStarted 回调调用(持 r.mu + thpDriver 调用前)。
+//
+// 修复 §130「声明了却从不接线」:Dispatcher.OnNewHand 在 v1.0 是死代码,
+// driver 永不调它 → bot 跨手牌累计 chat 计数,手牌 N 之后不再允许说话。
+// 现已接通,每手牌开始时强制清零 chat 计数 + round 标志。
+func (d *Driver) OnNewHandLocked(roomID string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	ra, ok := d.rooms[roomID]
+	if !ok {
+		return
+	}
+	for i := 0; i < 6; i++ {
+		if ra.dispatch[i] != nil {
+			ra.dispatch[i].OnNewHand()
+		}
+	}
+	logger.L().Debug("texasholdem driver OnNewHand", zap.String("room_id", roomID))
+}
+
+// OnNewRoundLocked 重置指定 bot 座位的 poker_action 限流(每轮 1 次)。
+// 由 engine.ApplyAction 路径后或 ProcessBotTurn 每轮开头调用。
+func (d *Driver) OnNewRoundLocked(roomID string, seat int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	ra, ok := d.rooms[roomID]
+	if !ok || seat < 0 || seat >= 6 {
+		return
+	}
+	if ra.dispatch[seat] != nil {
+		ra.dispatch[seat].OnNewRound()
+	}
 }
 
 // UnregisterAgents 注销房间的所有 Agent。

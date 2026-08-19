@@ -92,6 +92,9 @@ type GameContextForAgent struct {
 	OpponentsCount int
 	ActionHistory  string   // 拼接好的字符串
 	ModelNameField string   // 模型展示名(由 driver 注入)
+	EconTier       string   // "health"/"caution"/"danger" — 房间经济档位(2026-08-19 §132 §133)
+	RoomTotalCoin  int      // 房间总金币存量(影响 EconTier 切换)
+	RakeRatePct    int      // 当前档位抽水率(供 Agent 知晓「赢得金币被抽 X%」)
 }
 
 // NewAgent 构造一个 Bot Agent。

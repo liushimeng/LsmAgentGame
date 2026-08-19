@@ -48,7 +48,9 @@ type GameService struct {
 // rooms. It may be nil — the game still runs, but agent seats behave as
 // placeholders (no in-process bot). The registry is forwarded to the werewolf
 // manager so Phase 4 can construct agent.Agent drivers per seat.
-func NewGameService(hub *Hub, roomSvc *service.RoomService, registry *llm.Registry) *GameService {
+//
+// thpActionTimeoutSec 是德州扑克单 bot 决策超时(秒);<=0 时 driver 用默认 30s。
+func NewGameService(hub *Hub, roomSvc *service.RoomService, registry *llm.Registry, thpActionTimeoutSec int) *GameService {
 	gs := &GameService{
 		hub:            hub,
 		roomSvc:        roomSvc,
@@ -60,7 +62,7 @@ func NewGameService(hub *Hub, roomSvc *service.RoomService, registry *llm.Regist
 		werewolfMgr:    werewolf.NewWerewolfManagerWithRegistry(registry),
 	}
 	// 2026-08-19 §德州扑克Agent — 初始化 Bot 驱动器
-	gs.initTexasHoldemBotDriver(registry)
+	gs.initTexasHoldemBotDriver(registry, thpActionTimeoutSec)
 	return gs
 }
 

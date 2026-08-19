@@ -144,3 +144,22 @@
     // §130 重构(2026-07-13):agent_parallel 块已删除 (§128 已移除 ParallelThink 机制)。
   }
 }
+
+  // ============================================================================
+  // 2026-08-19 §德州扑克Agent — Texas Hold'em Bot 配置
+  // ============================================================================
+  "texasholdem": {
+    // 总开关(默认 true)。false 时即使创建房间携带 agent_seats 也被忽略,
+    // 所有座位回退为人类占位(同房间级关闭 Bot)。
+    "agent_enabled": true,
+    // 单 bot 决策 LLM 超时(秒)。超时服务端 fold 兜底(不卡死)。
+    "agent_action_timeout_sec": 30,
+    // Bot 公屏发言限流:每手牌最多 N 次 + 相邻 ≥ N 秒。
+    "bot_chat_per_hand": 2,
+    "bot_chat_min_interval_sec": 30,
+    // 标准档(Health)抽水率;Caution 7%、Danger 10% 由代码常量定。
+    "rake_rate_pct": 5,
+    // 单手牌最大底池上限(防恶意刷金币)。
+    "max_pot_per_hand": 100000
+  }
+}

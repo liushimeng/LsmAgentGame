@@ -39,19 +39,31 @@ export function TexasHoldemTable({ gameState, mySeat, style }: Props) {
       style={tableStyle}
       onErrorCapture={() => setBgFailed(true)}
     >
-      {seatOrder.map((seat, idx) => (
-        <div key={seat} className={`seat-pos ${posClasses[idx]}`}>
-          <PlayerSeat
-            player={gameState.players[seat]}
-            style={style}
-            isMe={seat === mySeat}
-            isTurn={seat === gameState.turn}
-            isButton={seat === gameState.button}
-            isSB={false}
-            isBB={false}
-          />
-        </div>
-      ))}
+      {seatOrder.map((seat, idx) => {
+        // 2026-08-19 §德州扑克Agent — 从 gameState 透传 Bot 字段(后端永远初始化长度 6 数组)
+        const botSeats = gameState.bot_seats;
+        const botModels = gameState.bot_models;
+        const botHeartThought = gameState.bot_heart_thought;
+        const botThinking = gameState.bot_thinking;
+        const isBot = !!botSeats?.[seat];
+        return (
+          <div key={seat} className={`seat-pos ${posClasses[idx]}`}>
+            <PlayerSeat
+              player={gameState.players[seat]}
+              style={style}
+              isMe={seat === mySeat}
+              isTurn={seat === gameState.turn}
+              isButton={seat === gameState.button}
+              isSB={false}
+              isBB={false}
+              isBot={isBot}
+              botModelName={isBot ? botModels?.[seat] : undefined}
+              botThinking={isBot ? !!botThinking?.[seat] : false}
+              botHeartThought={isBot ? botHeartThought?.[seat] : undefined}
+            />
+          </div>
+        );
+      })}
 
       {/* 公共牌 + 底池 */}
       <div className="texas-center">

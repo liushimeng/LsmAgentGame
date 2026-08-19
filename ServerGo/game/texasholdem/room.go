@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	texasherp "LsmAgentGame/agent/thpagent"
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/logger"
 
@@ -32,6 +33,42 @@ type TexasHoldemRoom struct {
 	// 2026-08-19 §德州扑克金币 — 手牌开始时各座位筹码快照。
 	// StartHand 时记录,手牌结束后用 delta 结算金币。
 	HandStartStacks [MaxPlayers]int
+
+	// 2026-08-19 §德州扑克Agent — Bot 内部状态(透传前端 BotHeartThought/BotThinking)。
+	// 由 ws/game_service_texas_bot.go::recordBotThought / setBotThinking 写入,
+	// view.go::BuildClientStateWithRoom 读取后填到 ClientGameState.BotHeartThought/BotThinking。
+	// 锁语义:必须先持 r.mu 才能读写。
+	BotHeartThought [MaxPlayers]string
+	BotThinking     [MaxPlayers]bool
+}
+
+// SetBotHeartThoughtLocked 设置指定 bot 座位的最近内心独白(锁内变体)。
+// 必须在已持有 r.mu 时调用;截断到 200 字(与 thpagent.Agent.SetInternalThought 对齐)。
+func (r *TexasHoldemRoom) SetBotHeartThoughtLocked(seat int, thought string) {
+	if seat < 0 || seat >= MaxPlayers {
+		return
+	}
+	const maxLen = 200
+	if len(thought) > maxLen {
+		thought = thought[:maxLen]
+	}
+	r.BotHeartThought[seat] = thought
+}
+
+// SetBotThinkingLocked 设置指定 bot 座位是否正在思考(锁内变体)。
+// 必须在已持有 r.mu 时调用。
+func (r *TexasHoldemRoom) SetBotThinkingLocked(seat int, thinking bool) {
+	if seat < 0 || seat >= MaxPlayers {
+		return
+	}
+	r.BotThinking[seat] = thinking
+}
+
+// ClearBotThinkingAllLocked 重置所有座位的思考标记(每轮结束 / 手牌开始时调用)。
+func (r *TexasHoldemRoom) ClearBotThinkingAllLocked() {
+	for i := 0; i < MaxPlayers; i++ {
+		r.BotThinking[i] = false
+	}
 }
 
 // SeatOf 返回 userID 所在座位，未入座返回 (-1,false)。
@@ -169,6 +206,30 @@ func (m *TexasHoldemManager) getRoom(roomID string) *TexasHoldemRoom {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.rooms[roomID]
+}
+
+// GetRoomForBot 返回房间指针供 WS 层 Bot 驱动写入 BotHeartThought / BotThinking
+// (2026-08-19 §德州扑克Agent v1.1)。调用方拿到指针后**仍需自行 r.mu.Lock** 读/写字段;
+// 本方法不加锁是因为上层可能要做"快照 + 锁内写 + 释放"的原子序列。
+func (m *TexasHoldemManager) GetRoomForBot(roomID string) *TexasHoldemRoom {
+	return m.getRoom(roomID)
+}
+
+// WithRoomLocked 用回调方式执行任意闭包并自动持锁/释放,供 ws 层 bot handler
+// 在不直接访问 unexported r.mu 字段的前提下安全修改 BotHeartThought / BotThinking。
+//
+// fn 返回后立即释放锁;fn 本身**禁止**再调用任何持有 r.mu 的房间方法,以免 §92a 自死锁。
+func (m *TexasHoldemManager) WithRoomLocked(roomID string, fn func(r *TexasHoldemRoom)) {
+	if fn == nil {
+		return
+	}
+	r := m.getRoom(roomID)
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	fn(r)
 }
 
 // JoinGame 让 userID 入座。幂等。
@@ -315,6 +376,12 @@ func (m *TexasHoldemManager) Resign(roomID, userID string) (*TexasHoldemRoom, *e
 		return nil, errcode.Code(errcode.ErrRoomNotIn)
 	}
 
+	// 2026-08-19 §德州扑克Agent: bot 座位不接受人类 resign(§92a 锁内守卫,
+	// 防止作弊绕过 BotDriver.ApplyBotAction)。
+	if r.BotSeats[seat] {
+		return nil, errcode.CodeMsg(errcode.ErrInvalidMove, "seat is bot-controlled")
+	}
+
 	if !r.State.Players[seat].Folded {
 		r.State.Players[seat].Folded = true
 		// 检查是否只剩 1 人
@@ -338,7 +405,7 @@ func (m *TexasHoldemManager) GetState(roomID, userID string) (*ClientGameState, 
 	if !ok {
 		return nil, errcode.Code(errcode.ErrRoomNotIn)
 	}
-	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, seat, r.State), nil
+	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, seat, r.State, r.BotHeartThought, r.BotThinking), nil
 }
 
 // StateForSeat 在已持有房间引用时构造指定座位视图。
@@ -349,7 +416,7 @@ func (m *TexasHoldemManager) StateForSeat(roomID string, seat int) *ClientGameSt
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, seat, r.State)
+	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, seat, r.State, r.BotHeartThought, r.BotThinking)
 }
 
 // Seats 返回房间各座位 userID 的快照。
@@ -444,11 +511,13 @@ func (m *TexasHoldemManager) BotGameContext(roomID string, seat int) *BotGameCon
 
 	// 构建动作历史摘要
 	var actionHistory string
+	roomTotalCoin := int64(0)
 	for i := 0; i < MaxPlayers; i++ {
 		pl := &gs.Players[i]
 		if pl.UserID == "" {
 			continue
 		}
+		roomTotalCoin += int64(pl.Stack)
 		marker := ""
 		if i == seat {
 			marker = " ← 你"
@@ -461,6 +530,11 @@ func (m *TexasHoldemManager) BotGameContext(roomID string, seat int) *BotGameCon
 			actionHistory += fmt.Sprintf("  座位%d: 筹码 %d, 本轮已注 %d%s\n", i+1, pl.Stack, pl.RoundCommitted, marker)
 		}
 	}
+
+	// 计算经济档位(§132 §133 联动)
+	tier := texasherp.ComputeEconTier(roomTotalCoin)
+	econTierStr := string(tier)
+	rakeRatePct := tier.RakeRatePct()
 
 	return &BotGameContextSnapshot{
 		RoomID:       roomID,
@@ -480,6 +554,9 @@ func (m *TexasHoldemManager) BotGameContext(roomID string, seat int) *BotGameCon
 		BigBlind:     gs.BigBlind,
 		MinRaise:     gs.MinRaise,
 		ActionHistory: actionHistory,
+		RoomTotalCoin: int(roomTotalCoin),
+		EconTier:      econTierStr,
+		RakeRatePct:   rakeRatePct,
 	}
 }
 
@@ -503,6 +580,13 @@ type BotGameContextSnapshot struct {
 	BigBlind      int
 	MinRaise      int
 	ActionHistory string
+
+	// 2026-08-19 §德州扑克金币 — 经济档位联动(§132 §133)。
+	// RoomTotalCoin 是房间所有存活玩家当前 Stack 之和(不含旁观金币账户)。
+	// EconTier / RakeRatePct 由 thpagent.ComputeEconTier 计算后回填。
+	RoomTotalCoin int
+	EconTier      string
+	RakeRatePct   int
 }
 
 // ApplyBotAction 应用 bot 座位的动作。由 WS 层在 driver.DecideAction 返回后调用。
@@ -586,11 +670,17 @@ func (r *TexasHoldemRoom) snapshotHandStartStacks() {
 // SettleHandCoins 手牌结束后按筹码盈亏结算金币。
 // 由 WS 层在 handOver 时调用。异步执行,不阻塞游戏流。
 //
-// 结算规则(v1.0 简化):
+// 结算规则(v1.1,2026-08-19 §德州扑克金币 §132 §133):
 //   - delta = 当前筹码 - 手牌开始筹码
-//   - delta > 0 → Credit(赢得金币)
-//   - delta < 0 → Debit(损失金币)
-//   - 仅人类玩家结算(bot 也结算,因为其关联的 model 有金币账户)
+//   - delta > 0 → Credit 赢得金币,但先按 EconTier 抽水(赢家份额 = delta - rake)
+//   - delta < 0 → Debit 损失金币(输家不抽水)
+//   - 房间总金币 = Σ存活玩家金币,按 ComputeEconTier 计算档位
+//   - 抽水明细写 t_lsm_game_wallet_log(reason="texasholdem_rake")
+//   - 人类 + bot 都结算(bot 关联 model 用户的金币账户)
+//
+// 与 §132 potReturn 区别:
+//   - 狼人杀 §133 EconTier 返彩池(50%/40%/30% 给胜方)
+//   - 德扑 §132 当前版本只对赢家扣抽水(无额外 potReturn),后续 v1.2 可叠加
 func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
 	if m.walletSvc == nil {
 		return
@@ -606,12 +696,14 @@ func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
 		delta  int
 	}
 	var settlements []settlement
+	roomTotalCoin := int64(0)
 	for i := 0; i < MaxPlayers; i++ {
 		p := &r.State.Players[i]
 		if p.UserID == "" {
 			continue
 		}
 		delta := p.Stack - r.HandStartStacks[i]
+		roomTotalCoin += int64(p.Stack)
 		if delta != 0 {
 			settlements = append(settlements, settlement{userID: p.UserID, delta: delta})
 		}
@@ -619,17 +711,36 @@ func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
 	handNum := r.State.HandNumber
 	r.mu.Unlock()
 
+	// 按房间总金币计算抽水档位(§133 联动)
+	tier := texasherp.ComputeEconTier(roomTotalCoin)
+	rakeRate := tier.RakeRate()
+
 	// 锁外异步结算(不阻塞游戏流)
 	for _, s := range settlements {
 		refID := roomID + ":" + fmt.Sprintf("%d", handNum)
 		remark := fmt.Sprintf("texasholdem hand #%d settle", handNum)
 		if s.delta > 0 {
-			if err := m.walletSvc.Credit(context.Background(), s.userID, "game_win", "texasholdem_settle", refID, "texasholdem", remark, int64(s.delta)); err != nil {
-				logger.L().Warn("texasholdem settle credit failed",
-					zap.String("room_id", roomID),
-					zap.String("user_id", s.userID),
-					zap.Int("delta", s.delta),
-					zap.Error(err))
+			// 赢家:扣抽水后再 Credit
+			netPayout, rake := texasherp.ApplyRake(int64(s.delta), tier)
+			if netPayout > 0 {
+				if err := m.walletSvc.Credit(context.Background(), s.userID, "game_win", "texasholdem_settle", refID, "texasholdem", remark, netPayout); err != nil {
+					logger.L().Warn("texasholdem settle credit failed",
+						zap.String("room_id", roomID),
+						zap.String("user_id", s.userID),
+						zap.Int64("delta", netPayout),
+						zap.Error(err))
+				}
+			}
+			// 抽水明细
+			if rake > 0 {
+				if err := m.walletSvc.Debit(context.Background(), s.userID, "game_lose", "texasholdem_rake", refID, "texasholdem",
+ fmt.Sprintf("texasholdem rake (tier=%s rate=%.2f%%)", tier, rakeRate*100), rake); err != nil {
+					logger.L().Warn("texasholdem rake debit failed",
+						zap.String("room_id", roomID),
+						zap.String("user_id", s.userID),
+						zap.Int64("rake", rake),
+						zap.Error(err))
+				}
 			}
 		} else {
 			amount := int64(-s.delta)
@@ -646,7 +757,9 @@ func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
 		logger.L().Info("texasholdem hand coins settled",
 			zap.String("room_id", roomID),
 			zap.Int("hand", handNum),
-			zap.Int("players", len(settlements)))
+			zap.Int("players", len(settlements)),
+			zap.String("econ_tier", string(tier)),
+			zap.Float64("rake_rate", rakeRate))
 	}
 }
 
@@ -709,7 +822,7 @@ func (m *TexasHoldemManager) SpectatorState(roomID, userID string) (*ClientGameS
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, -1, r.State), nil
+	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, -1, r.State, r.BotHeartThought, r.BotThinking), nil
 }
 
 // SpectatorView 同 SpectatorState 但省去 userID 参数；所有观察者共享同一
@@ -721,5 +834,5 @@ func (m *TexasHoldemManager) SpectatorView(roomID string) *ClientGameState {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, -1, r.State)
+	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, -1, r.State, r.BotHeartThought, r.BotThinking)
 }

@@ -52,6 +52,14 @@ export interface TexasHoldemGameState {
   winners?: number[];
   showdown_hands?: TexasCard[][];
   status: TexasStatus;
+
+  // 2026-08-19 §德州扑克Agent — Bot 状态透传(前端 PlayerSeat 渲染"🤖 AI"徽章 /
+  // 思考中指示器 / 内心独白)。字段始终为长度 6 的数组,服务端初始化为零值以避免
+  // JSON null.length 崩溃(BUG-TEXAS-HOLE-NULL 同源)。
+  bot_seats?: [boolean, boolean, boolean, boolean, boolean, boolean];
+  bot_models?: [string, string, string, string, string, string];
+  bot_heart_thought?: [string, string, string, string, string, string];
+  bot_thinking?: [boolean, boolean, boolean, boolean, boolean, boolean];
 }
 
 export const RANK_LABELS: Record<number, string> = {

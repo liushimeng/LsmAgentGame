@@ -29,7 +29,8 @@ import (
 // ─────────────────── Bot Driver 初始化 ───────────────────
 
 // initTexasHoldemBotDriver 初始化德扑 Bot 驱动器。由 NewGameService 调用。
-func (s *GameService) initTexasHoldemBotDriver(registry *llm.Registry) {
+// actionTimeoutSec <= 0 时使用 driver 默认 30s。
+func (s *GameService) initTexasHoldemBotDriver(registry *llm.Registry, actionTimeoutSec int) {
 	if s.texasHoldemMgr == nil {
 		return
 	}
@@ -38,9 +39,19 @@ func (s *GameService) initTexasHoldemBotDriver(registry *llm.Registry) {
 	if registry != nil {
 		driver.SetRegistry(registry)
 	}
-	// 设置 manager 的新手牌回调 → 广播 + 触发 bot
+	if actionTimeoutSec > 0 {
+		driver.SetMaxActionTimeoutSec(actionTimeoutSec)
+	}
+	// 设置 manager 的新手牌回调 → 重置 dispatcher + 清思考标记 + 广播 + 触发 bot
 	s.texasHoldemMgr.SetOnHandStarted(func(roomID string) {
+		// 1) 重置所有 bot 的 chat 计数(Dispatcher.OnNewHand)+ 广播前的思考标记清理
+		s.texasHoldemMgr.WithRoomLocked(roomID, func(r *texasholdem.TexasHoldemRoom) {
+			r.ClearBotThinkingAllLocked()
+		})
+		s.thpDriver.OnNewHandLocked(roomID)
+		// 2) 广播新手牌状态
 		s.broadcastTexasHoldemState(roomID)
+		// 3) 检查 bot 先行动
 		s.ProcessBotTurn(roomID)
 	})
 	// 保存 driver 引用(供 RegisterAgentSeats / ProcessBotTurn 使用)
@@ -119,6 +130,11 @@ func (s *GameService) registerTexasHoldemAgentSeats(roomID string, seats []servi
 //   3. onHandStarted 回调 (延迟 auto-start 新手牌后)
 //
 // 如果 bot 行动后下一个仍是 bot(连续 bot),自动链式触发,直到轮到人类或手牌结束。
+//
+// 2026-08-19 §德州扑克Agent v1.1 增强:
+//   - BotThinking 在 LLM 调用期间标 true,完成后置 false(前端可观测)
+//   - BotHeartThought 在 LLM 返回 thought 时写入房间(前端 PlayerSeat hover 弹全文)
+//   - 每手牌开始时由 driver 调 dispatcher.OnNewHand 重置 chat 计数
 func (s *GameService) ProcessBotTurn(roomID string) {
 	if s.thpDriver == nil || s.texasHoldemMgr == nil {
 		return
@@ -140,6 +156,9 @@ func (s *GameService) ProcessBotTurn(roomID string) {
 			return
 		}
 
+		// 标记该 bot 为思考中(锁内,前端可见)
+		s.setBotThinking(roomID, seat, true)
+
 		// 构造 thpagent 上下文
 		agentCtx := buildAgentContext(ctx, s.texasHoldemMgr.BotSeatModelKey(roomID, seat))
 
@@ -147,6 +166,9 @@ func (s *GameService) ProcessBotTurn(roomID string) {
 		decideCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		action, err := s.thpDriver.DecideAction(decideCtx, roomID, seat, agentCtx)
 		cancel()
+
+		// 思考完成 — 立刻置 false,不等广播
+		s.setBotThinking(roomID, seat, false)
 
 		if err != nil {
 			logger.L().Warn("ProcessBotTurn: LLM decision failed, forcing fold",
@@ -184,7 +206,7 @@ func (s *GameService) ProcessBotTurn(roomID string) {
 			handOver = foldOver
 		}
 
-		// 广播状态
+		// 广播状态(把最新 thought/thinking 推到所有玩家)
 		s.broadcastTexasHoldemState(roomID)
 
 		if handOver {
@@ -225,6 +247,10 @@ func buildAgentContext(snap *texasholdem.BotGameContextSnapshot, modelKey string
 		OpponentsCount:  snap.Opponents,
 		ActionHistory:   snap.ActionHistory,
 		ModelNameField:  modelKey,
+		// 2026-08-19 §德州扑克金币 — 经济档位透传(由 game 侧按房间总金币计算)
+		EconTier:      snap.EconTier,
+		RoomTotalCoin: snap.RoomTotalCoin,
+		RakeRatePct:   snap.RakeRatePct,
 	}
 }
 
@@ -250,14 +276,30 @@ func convertToEngineAction(a thpagent.Action) texasholdem.Action {
 	return texasholdem.Action{Type: actionType, Amount: a.Amount}
 }
 
-// recordBotThought 记录 bot 的内心独白到房间(供前端 BotThoughtPanel 渲染)。
-// v1.0 简化版: 仅打日志,不持久化。前端 BotThoughtPanel 通过
-// game.state 中的 bot_contexts 获取(待后续版本透传)。
+// recordBotThought 把 bot 的内心独白写入 TexasHoldemRoom(锁内调),
+// 下一次 broadcastTexasHoldemState 会通过 BuildClientStateWithRoom 把它透传给前端。
+// 协议层隔离:thought 仅入内存态(r.BotHeartThought[seat]),**绝不**入 chat_message
+// 表(同狼人杀 §119 heart-thought 协议层隔离)。
 func (s *GameService) recordBotThought(roomID string, seat int, thought string) {
+	if thought == "" {
+		return
+	}
+	s.texasHoldemMgr.WithRoomLocked(roomID, func(r *texasholdem.TexasHoldemRoom) {
+		r.SetBotHeartThoughtLocked(seat, thought)
+	})
+
 	logger.L().Info("texasholdem bot thought",
 		zap.String("room_id", roomID),
 		zap.Int("seat", seat),
 		zap.String("thought", truncate(thought, 100)))
+}
+
+// setBotThinking 把 bot 思考状态写入 TexasHoldemRoom(锁内调)。
+// 必须在 LLM 调用前后成对调用(true → false),前端 PlayerSeat 用此渲染 ⏳ 指示器。
+func (s *GameService) setBotThinking(roomID string, seat int, thinking bool) {
+	s.texasHoldemMgr.WithRoomLocked(roomID, func(r *texasholdem.TexasHoldemRoom) {
+		r.SetBotThinkingLocked(seat, thinking)
+	})
 }
 
 // truncate 截断字符串到最大长度。
