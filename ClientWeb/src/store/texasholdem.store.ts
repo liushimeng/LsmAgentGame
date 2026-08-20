@@ -13,6 +13,14 @@ interface TexasHoldemStore {
   raiseAmount: number;
   style: TexasStyle;
   gameOver: { winners: number[]; reason: string } | null;
+  /**
+   * §20260819-02 P0-2 — WS game.error 帧(罕见)由 useTexasHoldem 写入。
+   * TexasHoldemGamePage 注入 effect 把 lastError 同步到页内 banner,既保留本地
+   * 上下文(§7.1「在当前页面以最高层级显示」),又由 hook 内的
+   * reportGlobalError 走全局兜底(后者已就位,本字段仅供页面精确反馈)。
+   * null = 无错误。
+   */
+  lastError: { code: number; message: string } | null;
 
   setRooms: (rooms: RoomInfo[]) => void;
   /** Patch a single room in place (called from useLobbyLiveUpdate on `room.state`). */
@@ -25,6 +33,7 @@ interface TexasHoldemStore {
   setRaiseAmount: (amount: number) => void;
   setStyle: (style: TexasStyle) => void;
   setGameOver: (over: { winners: number[]; reason: string } | null) => void;
+  setLastError: (err: { code: number; message: string } | null) => void;
   reset: () => void;
 }
 
@@ -36,6 +45,7 @@ export const useTexasHoldemStore = create<TexasHoldemStore>((set) => ({
   raiseAmount: 0,
   style: 'western_cowboy',
   gameOver: null,
+  lastError: null,
 
   setRooms: (rooms) => set({ rooms }),
   patchRoom: (room) =>
@@ -52,6 +62,7 @@ export const useTexasHoldemStore = create<TexasHoldemStore>((set) => ({
   setRaiseAmount: (amount) => set({ raiseAmount: amount }),
   setStyle: (style) => set({ style }),
   setGameOver: (over) => set({ gameOver: over }),
+  setLastError: (err) => set({ lastError: err }),
   reset: () =>
     set({
       currentRoom: null,
@@ -59,5 +70,6 @@ export const useTexasHoldemStore = create<TexasHoldemStore>((set) => ({
       mySeat: 0,
       raiseAmount: 0,
       gameOver: null,
+      lastError: null,
     }),
 }));

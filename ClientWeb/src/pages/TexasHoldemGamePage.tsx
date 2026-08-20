@@ -24,7 +24,7 @@ export function TexasHoldemGamePage() {
   // §20260819-02 BUG-FIX: 加载超时(15s)降级提示,避免「观战中…」 spinner 永久卡死。
   const [joinTimeout, setJoinTimeout] = useState(false);
 
-  const { gameState, mySeat, style, gameOver, reset } = useTexasHoldemStore();
+  const { gameState, mySeat, style, gameOver, lastError, reset } = useTexasHoldemStore();
   const {
     joinGame,
     spectate,
@@ -72,6 +72,11 @@ export function TexasHoldemGamePage() {
       if (spectator) unspectate();
     };
   }, [roomId, spectator, joinGame, spectate, unspectate, requestState, reset]);
+
+  // §20260819-02 P0-2 — 监听 store.lastError 同步本地显示位。hook 内部
+  // 已 reportGlobalError 兜底,这里只补 §7.1「在当前页面最高可见位置」展示。
+  // 错误来源:hook 收到的 game.error 帧(罕见但 P0-1 触发面必备)。
+  const showLastError = !!lastError;
 
   const handleResign = useCallback(() => {
     setResignPromptOpen(true);
@@ -142,8 +147,20 @@ export function TexasHoldemGamePage() {
     <div className="texas-game">
       <div className="game-area">
         <div className="board-container">
+          {/* §20260819-02 P0-2 — 错误帧到达立即显示,不等 15s。hook 内部已
+              reportGlobalError 全局兜底,这里补当前页面最高可见位置展示(§7.1)。
+              优先于 15s joinTimeout banner:即使是「数据在路上但 WS 已报错」
+              也能立即看到根因,而不是转圈后降级。 */}
+          {showLastError && lastError && (
+            <div className="error-banner" role="alert">
+              <p>⚠️ {lastError.message}</p>
+              <button className="btn btn-primary" onClick={handleLeave}>
+                ← {t('common.backToLobby' as TKey)}
+              </button>
+            </div>
+          )}
           {/* §20260819-02 BUG-FIX: 加载超时降级提示 + 返回大厅按钮 */}
-          {joinTimeout && !gameState && (
+          {joinTimeout && !gameState && !showLastError && (
             <div className="error-banner">
               <p>⚠️ 加载游戏状态超时,可能房间已被解散。</p>
               <button className="btn btn-primary" onClick={handleLeave}>
@@ -153,14 +170,29 @@ export function TexasHoldemGamePage() {
           )}
           {isWaiting ? (
             <div className="waiting-board">
-              <p>
-                {t(
-                  (spectator
-                    ? 'texasholdem.spectating'
-                    : 'texasholdem.waiting') as TKey,
-                )}
-              </p>
-              <div className="spinner" />
+              {/* §20260819-02 P1-3 — 区分观战「数据在路上」与「等待开局」。
+                  观战者拿到 gameState 但 ready=false 时,显示「等待 N/6 玩家入座」,
+                  不再 spinner-only 让观战者误以为是加载问题;
+                  只有 !gameState(完全没收到首帧)才显示 spinner。 */}
+              {spectator && gameState && !gameState.ready ? (
+                <p>
+                  👁 {t('texasholdem.spectating' as TKey)} ·{' '}
+                  {t('texasholdem.spectatingWaiting' as TKey, {
+                    count: gameState.players?.filter((p) => p.has_player).length ?? 0,
+                  } as any)}
+                </p>
+              ) : (
+                <>
+                  <p>
+                    {t(
+                      (spectator
+                        ? 'texasholdem.spectating'
+                        : 'texasholdem.waiting') as TKey,
+                    )}
+                  </p>
+                  <div className="spinner" />
+                </>
+              )}
             </div>
           ) : (
             <>

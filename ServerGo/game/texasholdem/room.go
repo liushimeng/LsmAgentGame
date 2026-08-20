@@ -139,6 +139,14 @@ func (r *TexasHoldemRoom) RegisterBotSeatsLocked(seatModels map[int]string) {
 	}
 }
 
+// SeatRestoreInfo 是 seat hydrator 返回的单座位恢复信息(§20260819-02 P0-1)。
+// ModelKey 为空表示人类座位;非空表示 Agent 座位(用于 BotSeats/BotModels 标记)。
+type SeatRestoreInfo struct {
+	Seat     int
+	UserID   string
+	ModelKey string
+}
+
 // ─────────────────── Manager ───────────────────
 
 // TexasHoldemManager 管理所有活跃的德州扑克房间。
@@ -174,6 +182,12 @@ type TexasHoldemManager struct {
 	// 由 RoomService 经 SetTexasHoldemRoomConfigurer 回调在房间创建成功后、
 	// 首次 JoinGame 之前写入;缺省房间回退 m.BigBlind / m.StartStack。
 	roomConfigs map[string]texasRoomConfig
+
+	// 2026-08-20 §20260819-02 P0-1 - 重启恢复 hydrator(对齐狼人杀 BUG-WEREWOLF-P0-7)。
+	// seatHydrator 按 roomID 返回 DB 持久化的座位清单(人类 + Agent),由 main.go
+	// 注入(读 roomSvc.SeatsForRoom)。SpectateGame 在内存房间缺失时懒创建并
+	// 调此回调恢复座位,避免「DB 房间 / 内存无」导致的观战 404。
+	seatHydrator func(roomID string) ([]SeatRestoreInfo, error)
 }
 
 // texasRoomConfig 2026-08-19 §德州扑克盲注透传 — 单房间盲注/买入覆盖值。
@@ -231,6 +245,16 @@ func (m *TexasHoldemManager) SetOnHandOver(cb func(roomID string)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onHandOver = cb
+}
+
+// SetSeatHydrator 注册重启恢复回调(§20260819-02 P0-1)。
+// 由 main.go 注入,读 roomSvc.SeatsForRoom 返回人类 + Agent 全座位。
+// fn 为 nil 表示禁用恢复(回退到 7858d33 旧行为:SpectateGame 仍懒创建
+// 但不恢复座位,适用单元测试与无 RoomService 的 fixture)。
+func (m *TexasHoldemManager) SetSeatHydrator(fn func(roomID string) ([]SeatRestoreInfo, error)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.seatHydrator = fn
 }
 
 // SetMaxPotPerHand 注入单手牌底池上限(2026-08-20 §B7)。
@@ -957,28 +981,91 @@ func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
 
 // SpectateGame 注册 userID 为房间观察者;按需创建房间。不会消耗座位。幂等。
 //
-// §20260819-02 BUG-FIX: 之前在房间不存在时自动创建一个空房间,导致:
-//  1. 前端 spectator 进入后 `BuildClientStateWithRoom` 看到 r.Seats 全空 → Ready=false
-//  2. 页面永久卡在「观战中…」 spinner,无法退出
-//  3. 真实的玩家加入后 r.Seats 也不会更新(空房间已被定格)
-// 修复: 房间不存在时直接返回 ErrRoomNotFound,前端应:
-//  - 看到 error 后自动 reportGlobalError + 返回大厅
-//  - 不再有「凭空创建空房间」退化路径
-func (m *TexasHoldemManager) SpectateGame(roomID, userID string) (*TexasHoldemRoom, *errcode.Error) {
+// §20260819-02 P0-1 重启恢复修复(对齐狼人杀 BUG-WEREWOLF-P0-7 的 hydrator 模式):
+// 此前(7858d33)内存房间缺失时直接返回 ErrRoomNotFound,导致「服务器重启后 DB
+// 房间成为孤儿」场景:REST spectate 查 DB 成功、WS spectate 404,前端把错误帧
+// 吞进 console,观战者永久卡在「观战中…」。现改为:
+//  1. 内存缺失时懒创建房间(与 xiangqi/chess/junqi/doudizhu 行为一致);
+//  2. 新建房间通过 seatHydrator(main.go 注入,读 t_lsm_game_player)恢复
+//     全部座位(人类 + Agent),恢复后满足条件则自动开首手;
+//  3. 返回 created=true 让 WS 层重建 bot 运行时(thpDriver + watchdog)。
+//
+// 7858d33 修复注释保留备查:凭空创建「空房间」且不恢复座位的旧行为确实会让
+// 前端永远 ready=false -- 根因是缺 hydrator,而非懒创建本身。
+func (m *TexasHoldemManager) SpectateGame(roomID, userID string) (*TexasHoldemRoom, bool, *errcode.Error) {
 	m.mu.Lock()
 	r, ok := m.rooms[roomID]
-	m.mu.Unlock()
+	created := false
 	if !ok {
-		return nil, errcode.CodeMsg(errcode.ErrRoomNotFound,
-			"room does not exist; cannot spectate a non-existent room")
+		r = &TexasHoldemRoom{RoomID: roomID}
+		m.rooms[roomID] = r
+		created = true
+		logger.L().Info("texasholdem room created by spectator",
+			zap.String("room_id", roomID), zap.String("user_id", userID))
 	}
+	// §20260819-02:在持有 m.mu 时快照配置与 hydrator(下方 r.mu 路径不再读 m 字段)。
+	bigBlind, startStack := m.configForLocked(roomID)
+	hydrator := m.seatHydrator
+	m.mu.Unlock()
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	// 仅懒创建的空房间做 DB 恢复 -- 已有内存状态的房间绝不重放(幂等护栏,
+	// 防止重复 StartHand 把进行中的手牌掀了)。
+	if created && hydrator != nil && r.Occupied() == 0 {
+		if infos, err := hydrator(roomID); err == nil && len(infos) > 0 {
+			m.restoreSeatsLocked(r, infos, bigBlind, startStack)
+		} else if err != nil {
+			logger.L().Warn("texasholdem seat hydrate failed",
+				zap.String("room_id", roomID), zap.Error(err))
+		}
+	}
+
 	if r.Spectators == nil {
 		r.Spectators = make(map[string]struct{})
 	}
 	r.Spectators[userID] = struct{}{}
-	return r, nil
+	return r, created, nil
+}
+
+// restoreSeatsLocked 把 DB 恢复的座位写回内存房间(锁内变体,§92a:调用方
+// 必须已持有 r.mu)。人类与 Agent 座位都恢复;Agent 座位同时标记
+// BotSeats/BotModels。恢复后若满足开局条件(>=2 人且 PhaseWaiting)则自动
+// 开首手 -- 纯 Agent 房间重启后观战者进来即看到活局。
+func (m *TexasHoldemManager) restoreSeatsLocked(r *TexasHoldemRoom, infos []SeatRestoreInfo, bigBlind, startStack int) {
+	if r.State == nil {
+		r.State = NewGame(m.seedFn(), bigBlind)
+	}
+	for _, info := range infos {
+		if info.Seat < 0 || info.Seat >= MaxPlayers || info.UserID == "" {
+			continue
+		}
+		r.Seats[info.Seat] = info.UserID
+		if info.ModelKey != "" {
+			r.BotSeats[info.Seat] = true
+			r.BotModels[info.Seat] = info.ModelKey
+		}
+		// 引擎侧按指定座位写 Players(AddPlayer 只能顺次找空位,不能指定座位)。
+		if p := &r.State.Players[info.Seat]; p.UserID == "" {
+			p.UserID = info.UserID
+			p.Seat = info.Seat
+			p.Stack = startStack
+			r.State.NumSeat++
+		}
+	}
+	if r.IsReady() && r.State.Street == PhaseWaiting {
+		r.snapshotHandStartStacks()
+		if e := r.State.StartHand(); e != nil {
+			logger.L().Warn("texasholdem hydrate start hand failed",
+				zap.String("room_id", r.RoomID), zap.Error(e))
+		} else {
+			r.markTurnLocked()
+			logger.L().Info("texasholdem hand started (spectator hydrate)",
+				zap.String("room_id", r.RoomID),
+				zap.Int("hand_number", r.State.HandNumber))
+		}
+	}
 }
 
 // UnspectateGame 取消观察者身份。

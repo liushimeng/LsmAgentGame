@@ -998,12 +998,18 @@ func (s *GameService) handleSpectate(c *Client, env Envelope) {
 			zap.String("room_id", req.RoomID), zap.String("user_id", c.UserID))
 
 	case "texasholdem":
-		room, e := s.texasHoldemMgr.SpectateGame(req.RoomID, c.UserID)
+		room, created, e := s.texasHoldemMgr.SpectateGame(req.RoomID, c.UserID)
 		if e != nil {
 			s.sendError(c, env.Seq, e.Code, e.Message)
 			return
 		}
 		s.hub.SpectateRoom(req.RoomID, c)
+		// §20260819-02 P0-1:懒创建(重启恢复)的房间,bot 运行时(thpDriver +
+		// watchdog)也要从 DB 重建 -- manager 侧 hydrator 只恢复内存座位/视图,
+		// 不触达 ws 层的 bot 决策驱动。`created=true` 是唯一信号。
+		if created {
+			s.rehydrateTexasHoldemAgents(req.RoomID)
+		}
 		phase := "waiting"
 		if room.State != nil {
 			phase = room.State.Street.String()
@@ -1024,7 +1030,8 @@ func (s *GameService) handleSpectate(c *Client, env Envelope) {
 		}
 		s.broadcastTexasHoldemSpectatorState(req.RoomID)
 		logger.L().Info("spectator attached", zap.String("kind", "texasholdem"),
-			zap.String("room_id", req.RoomID), zap.String("user_id", c.UserID))
+			zap.String("room_id", req.RoomID), zap.String("user_id", c.UserID),
+			zap.Bool("hydrate_created", created))
 
 	case "werewolf":
 		room, e := s.werewolfMgr.SpectateGame(req.RoomID, c.UserID)

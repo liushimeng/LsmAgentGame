@@ -104,6 +104,8 @@ const zhCN: Dict = {
   'junqi.spectating': '观战中…',
   'doudizhu.spectating': '观战中…',
   'texasholdem.spectating': '观战中…',
+  // §20260819-02 P1-3 — 观战者看到房间尚未开局(占位 {count} = 当前已入座人数)。
+  'texasholdem.spectatingWaiting': '等待玩家入座({count}/6)',
 
   'home.title': '游戏大厅',
   'games.title': '全部游戏',

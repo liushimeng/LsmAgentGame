@@ -161,9 +161,9 @@ func (s *RoomService) scanOrphanedAgentRooms(ctx context.Context) ([]OrphanRoomR
 	}
 
 	// GROUP BY r.id collapses to one row per room. We restrict the
-	// candidate set to werewolf rooms because role='agent' is only
-	// emitted for werewolf today; including other game kinds would
-	// require an extra role='agent' guard inside the SUM(CASE ...) anyway.
+	// candidate set to games that support agent seats (2026-08-20 §20260819-02
+	// 扩展到德州扑克:其 SpectateGame 已实现 hydrator 重启恢复,但纯 bot 房
+	// 间若再无人访问仍需 boot 兜底清理,否则会无限挂在 DB 大厅列表里)。
 	const q = `
 SELECT r.id              AS id,
        r.game_kind       AS game_kind,
@@ -173,7 +173,7 @@ SELECT r.id              AS id,
        SUM(CASE WHEN p.role =  'agent' THEN 1 ELSE 0 END) AS agent_count
 FROM t_lsm_game_room r
 JOIN t_lsm_game_player p ON p.room_id = r.id
-WHERE r.game_kind = 'werewolf'
+WHERE r.game_kind IN ('werewolf', 'texasholdem')
 GROUP BY r.id, r.game_kind, r.status, r.updated_at
 HAVING SUM(CASE WHEN p.role = 'agent' THEN 1 ELSE 0 END) > 0
 `

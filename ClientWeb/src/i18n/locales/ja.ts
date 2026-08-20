@@ -103,6 +103,8 @@ const ja: Dict = {
   'junqi.spectating': '観戦中…',
   'doudizhu.spectating': '観戦中…',
   'texasholdem.spectating': '観戦中…',
+  // §20260819-02 P1-3 — 観戦中、部屋はまだ待機中({count}/6 人在席)。
+  'texasholdem.spectatingWaiting': 'プレイヤー参加待ち({count}/6)',
 
   'home.title': 'ロビー',
   'games.title': 'すべてのゲーム',

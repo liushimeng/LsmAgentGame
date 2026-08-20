@@ -280,14 +280,18 @@ func zombieAbandonedAge(zombieMaxAge time.Duration) time.Duration {
 // zombieAbandonedCandidate 是 zombieRuleAbandoned 的**纯年龄/游戏类型前置
 // 条件**(不含 hub 探测与 DB 计数,便于单测)。
 //
-// 只扫 werewolf:其它 4 款游戏以分钟计自然收敛,不会留下 playing 僵尸。
+// 扫 werewolf + texasholem(2026-08-20 §20260819-02 扩展):其它 3 款游戏
+//(xiangqi/chess/junqi/doudizhu)以分钟计自然收敛,不会留下 playing 僵尸。
+// 狼人杀和德州扑克的纯 bot 房间在 hub vacancy timer 之外仍可能成为永久
+// playing 僵尸(玩家 / 观察者长期不在线 + 没有 vacancy 触发条件),需要
+// janitor 兜底。
 //
 // 可达性:主路径已把 created_at < now-zombieMaxAge 的行翻成 over,本规则
 // 的窗口是 now-zombieMaxAge .. now-zombieAbandonedAge(默认 4h..1h),是一段
 // 主路径覆盖不到的**真实区间** —— cea6126 的旧二次扫描用的是与主路径
 // **完全相同**的谓词,因此永远匹配 0 行(死代码),这里是它的修正版。
 func zombieAbandonedCandidate(gameKind string, createdAt, now time.Time, zombieMaxAge time.Duration) bool {
-	if gameKind != "werewolf" || createdAt.IsZero() {
+	if (gameKind != "werewolf" && gameKind != "texasholdem") || createdAt.IsZero() {
 		return false
 	}
 	age := zombieAbandonedAge(zombieMaxAge)

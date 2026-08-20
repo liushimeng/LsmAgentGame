@@ -2,10 +2,11 @@ import { useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { wsClient, type WsEnvelope } from '@/services/ws';
 import { useTexasHoldemStore } from '@/store/texasholdem.store';
+import { reportGlobalError } from '@/services/globalError';
 import type { TexasActionType, TexasHoldemGameState } from '@/types/texasholdem';
 
 export function useTexasHoldem(roomId: string) {
-  const { setGameState, setMySeat, setGameOver } = useTexasHoldemStore();
+  const { setGameState, setMySeat, setGameOver, setLastError } = useTexasHoldemStore();
   const roomIdRef = useRef(roomId);
   roomIdRef.current = roomId;
   const navigate = useNavigate();
@@ -37,8 +38,17 @@ export function useTexasHoldem(roomId: string) {
           break;
         }
         case 'game.error': {
+          // §20260819-02 P0-2 — game.error 必须按 §7.1 报到全局 toast,不允许
+          // 只 console.error(此前 5 款游戏 4 个 hook 都违反此规约,本轮只修
+          // 德扑)。同时写 store.lastError,让 TexasHoldemGamePage 就地显示
+          // 错误 banner(§7.1「在当前页面以最高层级显示给用户」,不依赖 15s
+          // 兜底)。对齐 useWerewolf.ts:166-173 的同款处理。
           const e = p as { code: number; message: string };
-          console.error('texasholdem game error:', e.code, e.message);
+          setLastError({ code: e.code, message: e.message });
+          reportGlobalError({
+            message: e.message || `游戏操作失败(code=${e.code})`,
+            severity: 'error',
+          });
           break;
         }
         case 'game.removed': {
@@ -54,7 +64,7 @@ export function useTexasHoldem(roomId: string) {
       }
     });
     return () => unsub();
-  }, [setGameState, setMySeat, setGameOver, navigate]);
+  }, [setGameState, setMySeat, setGameOver, setLastError, navigate]);
 
   const joinGame = useCallback(() => {
     wsClient.send('game.join', { room_id: roomId, game_kind: 'texasholdem' });

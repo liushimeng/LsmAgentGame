@@ -973,6 +973,8 @@ export interface Dict {
   'junqi.spectating': string;
   'doudizhu.spectating': string;
   'texasholdem.spectating': string;
+  // §20260819-02 P1-3 — 观战者进入未开局房间(<2 人)时的文案,占位 {count}。
+  'texasholdem.spectatingWaiting': string;
 
   // 钱包 — wallet
   'wallet.title': string;

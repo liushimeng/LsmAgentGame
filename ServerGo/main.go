@@ -36,6 +36,7 @@ import (
 	"LsmAgentGame/config"
 	"LsmAgentGame/db"
 	"LsmAgentGame/errcode"
+	"LsmAgentGame/game/texasholdem"
 	"LsmAgentGame/game/werewolf"
 	"LsmAgentGame/llm"
 	"LsmAgentGame/logger"
@@ -443,6 +444,24 @@ func main() {
 		roomSvc.SetTexasHoldemRoomConfigurer(thpMgr.SetRoomConfig)
 		// 2026-08-20 §B7 — 单手牌底池上限注入(此前 MaxPotPerHand 零使用点,§130 复现)。
 		thpMgr.SetMaxPotPerHand(cfg.TexasHoldem.MaxPotPerHand)
+		// §20260819-02 P0-1 — 重启恢复 hydrator(对齐狼人杀 BUG-WEREWOLF-P0-7)。
+		// 服务器重启后 DB 房间成孤儿,观战者进来时 SpectateGame 懒创建 +
+		// 从 t_lsm_game_player 恢复人类 + Agent 全部座位,避免 WS 404。
+		thpMgr.SetSeatHydrator(func(roomID string) ([]texasholdem.SeatRestoreInfo, error) {
+			seats, err := roomSvc.SeatsForRoom(roomID)
+			if err != nil {
+				return nil, err
+			}
+			out := make([]texasholdem.SeatRestoreInfo, 0, len(seats))
+			for _, s := range seats {
+				out = append(out, texasholdem.SeatRestoreInfo{
+					Seat:     s.Seat,
+					UserID:   s.UserID,
+					ModelKey: s.ModelKey,
+				})
+			}
+			return out, nil
+		})
 	}
 	// 2026-08-20 §B5 — 德扑 bot 公屏发言(poker_chat)通道。
 	gameSvcWs.SetChatService(chatSvc)

@@ -168,11 +168,30 @@ func TestZombieSweep_AbandonedRuleSkipsWhenHumanPlayerRowsExist(t *testing.T) {
 	}
 }
 
-// TestZombieSweep_AbandonedRuleOnlyAppliesToWerewolf:其它 4 款游戏以分钟计
-// 自然收敛,不走提前回收窗口(仍受规则 1 的 4h 上限约束)。
-func TestZombieSweep_AbandonedRuleOnlyAppliesToWerewolf(t *testing.T) {
+// TestZombieSweep_AbandonedRuleAppliesToWerewolfAndTexasholdem:2026-08-20 §20260819-02
+// 扩展:`zombieAbandonedCandidate` 把德州扑克也纳入「纯 bot 房间提前回收」窗口
+// (纯 bot 房间可在 hub vacancy 之外无限打,需 janitor 兜底)。其它 3 款
+//(xiangqi/chess/junqi/doudizhu)以分钟计自然收敛,不走提前回收窗口(仍受规则 1
+// 的 4h 上限约束)。
+func TestZombieSweep_AbandonedRuleAppliesToWerewolfAndTexasholdem(t *testing.T) {
 	now := time.Now()
-	for _, kind := range []string{"xiangqi", "chess", "junqi", "doudizhu", "texasholdem"} {
+	// 提前回收:werewolf + texasholdem 在 zombieAbandonedAge(默认 1h) 之前的
+	// playing 房间 + hub 空 + 0 非 agent 行 -> abandoned_bot_room。
+	for _, kind := range []string{"werewolf", "texasholdem"} {
+		room := models.TLsmGameRoom{
+			ID:        "r-" + kind,
+			GameKind:  kind,
+			Status:    "playing",
+			CreatedAt: now.Add(-90 * time.Minute),
+			UpdatedAt: now.Add(-1 * time.Second),
+		}
+		if got := zombieRuleFor(room, now, 4*time.Hour, true, 0); got != zombieRuleAbandoned {
+			t.Fatalf("%s 应走纯 bot 提前回收窗口,got %q", kind, got)
+		}
+	}
+	// 不走提前回收:xiangqi/chess/junqi/doudizhu 在同一时间窗内,游戏以分钟
+	// 计自然收敛,继续按规则 1 的 4h 上限走(本测试用 90min < 4h 验证不命中)。
+	for _, kind := range []string{"xiangqi", "chess", "junqi", "doudizhu"} {
 		room := models.TLsmGameRoom{
 			ID:        "r-" + kind,
 			GameKind:  kind,
@@ -181,13 +200,19 @@ func TestZombieSweep_AbandonedRuleOnlyAppliesToWerewolf(t *testing.T) {
 			UpdatedAt: now.Add(-1 * time.Second),
 		}
 		if got := zombieRuleFor(room, now, 4*time.Hour, true, 0); got != zombieRuleNone {
-			t.Fatalf("%s 不应走 werewolf 专属的提前回收窗口,got %q", kind, got)
+			t.Fatalf("%s 不应走提前回收窗口,got %q", kind, got)
 		}
-		// 但超过 4h 上限时仍要被规则 1 回收。
-		room.CreatedAt = now.Add(-5 * time.Hour)
-		if got := zombieRuleFor(room, now, 4*time.Hour, true, 0); got != zombieRuleMaxDuration {
-			t.Fatalf("%s 超过 4h 上限仍应按 %q 回收,got %q", kind, zombieRuleMaxDuration, got)
-		}
+	}
+	// 但超过 4h 上限时仍要被规则 1 回收(全局,所有游戏一致)。
+	room := models.TLsmGameRoom{
+		ID:        "r-overflow",
+		GameKind:  "texasholdem",
+		Status:    "playing",
+		CreatedAt: now.Add(-5 * time.Hour),
+		UpdatedAt: now.Add(-1 * time.Second),
+	}
+	if got := zombieRuleFor(room, now, 4*time.Hour, true, 0); got != zombieRuleMaxDuration {
+		t.Fatalf("texasholdem 超过 4h 上限仍应按 %q 回收,got %q", zombieRuleMaxDuration, got)
 	}
 }
 

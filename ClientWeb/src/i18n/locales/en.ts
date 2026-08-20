@@ -103,6 +103,8 @@ const en: Dict = {
   'junqi.spectating': 'Spectating…',
   'doudizhu.spectating': 'Spectating…',
   'texasholdem.spectating': 'Spectating…',
+  // §20260819-02 P1-3 — spectator sees the room is still filling up ({count}/6 seated).
+  'texasholdem.spectatingWaiting': 'waiting for players ({count}/6)',
 
   'home.title': 'Lobby',
   'games.title': 'All games',

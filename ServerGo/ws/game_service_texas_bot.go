@@ -166,6 +166,46 @@ func (s *GameService) cleanupTexasHoldemBotRuntime(roomID string) {
 	}
 }
 
+// rehydrateTexasHoldemAgents §20260819-02 P0-1 -- 重启恢复后重建 bot 运行时。
+//
+// 触发:handleSpectate 的 texasholdem 分支看到 manager 返回 created=true
+// (即内存房间原本不存在,这次是 SpectateGame 懒创建的)。manager 侧 hydrator
+// 只恢复内存座位 + 视图,触达不到 ws 层的 thpDriver 与 bot watchdog。
+// 这里从 DB 读 agent 座位清单,复用 registerTexasHoldemAgentSeats 重建
+// driver 注册 + watchdog 启动。JoinGame / RegisterBotSeatsLocked 本身是
+// 幂等的(已入座直接返回,BotSeats 覆写无副作用),重复调用安全。
+func (s *GameService) rehydrateTexasHoldemAgents(roomID string) {
+	if s.roomSvc == nil {
+		logger.L().Debug("rehydrateTexasHoldemAgents: roomSvc is nil, skip",
+			zap.String("room_id", roomID))
+		return
+	}
+	seats, err := s.roomSvc.BotSeatsForRoom(roomID)
+	if err != nil {
+		logger.L().Warn("rehydrateTexasHoldemAgents: list agent seats failed",
+			zap.String("room_id", roomID), zap.Error(err))
+		return
+	}
+	if len(seats) == 0 {
+		// 纯人类房间无需 bot 运行时(hydrator 恢复座位即可,无 driver 注册)。
+		return
+	}
+	cfgs := make([]service.AgentSeatConfig, 0, len(seats))
+	for _, st := range seats {
+		cfgs = append(cfgs, service.AgentSeatConfig{
+			Seat:     st.Seat,
+			ModelKey: st.ModelKey,
+		})
+	}
+	if e := s.registerTexasHoldemAgentSeats(roomID, cfgs); e != nil {
+		logger.L().Warn("rehydrateTexasHoldemAgents: register failed",
+			zap.String("room_id", roomID), zap.Error(e))
+		return
+	}
+	logger.L().Info("rehydrated texasholdem agent runtime after restart",
+		zap.String("room_id", roomID), zap.Int("agent_count", len(seats)))
+}
+
 // ─────────────────── Bot 行动入口 ───────────────────
 
 // ProcessBotTurn 检查当前是否 bot 行动,是则调 LLM 决策并应用。
