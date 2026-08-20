@@ -39,20 +39,22 @@ const MENU_GROUPS: MenuGroup[] = [
   },
 
   // ── 传统游戏 ──
+  // §20260819-02 德州扑克已支持 Agent(R1 2026-08-19 接入),从传统分组迁出。
   {
     id: 'traditional', labelKey: 'nav.group.traditional', icon: '🎲', items: [
-      { to: '/xiangqi',     labelKey: 'nav.xiangqi',     icon: '♟' },
-      { to: '/chess',       labelKey: 'nav.chess',       icon: '♚' },
-      { to: '/junqi',       labelKey: 'nav.junqi',       icon: '🚩' },
-      { to: '/doudizhu',    labelKey: 'nav.doudizhu',    icon: '🃏' },
-      { to: '/texasholdem', labelKey: 'nav.texasholdem', icon: '🎰' },
+      { to: '/xiangqi',  labelKey: 'nav.xiangqi',  icon: '♟' },
+      { to: '/chess',    labelKey: 'nav.chess',    icon: '♚' },
+      { to: '/junqi',    labelKey: 'nav.junqi',    icon: '🚩' },
+      { to: '/doudizhu', labelKey: 'nav.doudizhu', icon: '🃏' },
     ],
   },
 
   // ── Agent 游戏 ──
+  // §20260819-02 德州扑克已支持 Agent,与狼人杀并列于 Agent 分组。
   {
     id: 'agent', labelKey: 'nav.group.agent', icon: '🤖', items: [
-      { to: '/werewolf', labelKey: 'nav.werewolf', icon: '🐺' },
+      { to: '/texasholdem', labelKey: 'nav.texasholdem', icon: '🎰' },
+      { to: '/werewolf',    labelKey: 'nav.werewolf',    icon: '🐺' },
     ],
   },
 
