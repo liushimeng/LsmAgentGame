@@ -5,7 +5,8 @@ import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 
 interface Props {
-  player: TexasPlayerInfo;
+  /** 可能为 undefined：座位索引越界时(见下方纵深防御注释)。 */
+  player: TexasPlayerInfo | undefined;
   style: StyleKey;
   isMe: boolean;
   isTurn: boolean;
@@ -34,7 +35,10 @@ export function PlayerSeat({
 }: Props) {
   const t = useT();
 
-  if (!player.has_player) {
+  // 2026-08-20 §德州扑克观战崩溃 — 纵深防御：座位索引越界(观战者 mySeat=-1 旋转、
+  // 服务端 players 数组短于 6 等)会让 player 为 undefined，此处解引用曾直接打穿
+  // 错误边界导致整页「页面渲染异常」。缺座一律按空座渲染，绝不抛错。
+  if (!player || !player.has_player) {
     return <div className="texas-seat empty" />;
   }
 

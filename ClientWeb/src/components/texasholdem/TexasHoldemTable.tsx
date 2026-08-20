@@ -29,8 +29,13 @@ export function TexasHoldemTable({ gameState, mySeat, style }: Props) {
     backgroundSize: 'cover',
   };
 
-  // 6 个座位：自己在 s0，其余顺时针
-  const seatOrder = Array.from({ length: 6 }, (_, i) => (mySeat + i) % 6);
+  // 6 个座位：自己在 s0，其余顺时针。
+  // 2026-08-20 §德州扑克观战崩溃 — 观战者 mySeat=-1(view.go:97 约定的哨兵值)，
+  // 而 JS 的 % 保留符号：(-1 + 0) % 6 === -1，seatOrder 首项为 -1 →
+  // players[-1] 为 undefined → PlayerSeat 解引用 has_player 抛错 → 整页错误边界。
+  // 修复：观战者没有「自己」，不旋转，按 0..5 自然座序渲染；玩家仍以自己为 s0。
+  const baseSeat = mySeat >= 0 && mySeat < 6 ? mySeat : 0;
+  const seatOrder = Array.from({ length: 6 }, (_, i) => (baseSeat + i) % 6);
 
   // 2026-08-20 §F1 — BotThoughtPanel 独白选座：优先「正在思考且有独白」的 bot 座位，
   // 否则取任一最近非空独白的 bot 座位；全空则不渲染(§126/§130「组件存在但未被 import

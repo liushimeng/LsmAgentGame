@@ -214,3 +214,56 @@ type fakeErr struct {
 
 func (e *fakeErr) Error() string  { return e.msg }
 func (e *fakeErr) Code() int      { return e.code }
+
+// T6 观战视图的座位契约 —— 前端 TexasHoldemTable 的座位旋转依赖此契约:
+//   1. MySeat 恒为 -1(观战者没有「自己」的座位);
+//   2. Players 恒为长度 6 的满数组(每个物理座位一项,空座 HasPlayer=false)。
+//
+// 2026-08-20 §德州扑克观战崩溃回归防线: 前端曾用 (mySeat+i)%6 旋转座位,
+// mySeat=-1 时 JS 负取模产出 seatOrder[0]=-1 → players[-1]=undefined →
+// PlayerSeat 解引用 has_player 抛错 → 整页「页面渲染异常」。前端已改为
+// 观战者不旋转; 此测试锁死后端这一侧的契约, 防止 MySeat 哨兵值或 Players
+// 长度被改动后前端再次踩空。
+func TestSpectatorView_SeatContractForClientRotation(t *testing.T) {
+	mgr := NewTexasHoldemManager()
+	mgr.SetSeatHydrator(func(roomID string) ([]SeatRestoreInfo, error) {
+		// 1 真人 + 5 Agent —— 复现用户报告的房间构成。
+		return []SeatRestoreInfo{
+			{Seat: 0, UserID: "human-1"},
+			{Seat: 1, UserID: "bot-1", ModelKey: "DeepSeek-model"},
+			{Seat: 2, UserID: "bot-2", ModelKey: "GLM-model"},
+			{Seat: 3, UserID: "bot-3", ModelKey: "Kimi-model"},
+			{Seat: 4, UserID: "bot-4", ModelKey: "Qwen-model"},
+			{Seat: 5, UserID: "bot-5", ModelKey: "DouBao-model"},
+		}, nil
+	})
+	room, _, err := mgr.SpectateGame("spectator-seat-contract", "viewer-y")
+	if err != nil {
+		t.Fatalf("hydrate failed: %v", err)
+	}
+
+	cs := BuildClientStateWithRoom(
+		"spectator-seat-contract",
+		room.Seats, room.BotSeats, room.BotModels,
+		-1, // 观战者
+		room.State,
+		room.BotHeartThought, room.BotThinking,
+	)
+
+	if cs.MySeat != -1 {
+		t.Fatalf("spectator MySeat must stay the -1 sentinel, got %d", cs.MySeat)
+	}
+	if len(cs.Players) != MaxPlayers {
+		t.Fatalf("Players must always have %d entries so the client can index every seat, got %d",
+			MaxPlayers, len(cs.Players))
+	}
+	// 客户端按 0..5 自然座序渲染: 每个下标都必须可安全解引用。
+	for seat := 0; seat < MaxPlayers; seat++ {
+		if got := cs.Players[seat].Seat; got != seat {
+			t.Fatalf("Players[%d].Seat = %d, want %d (index must equal physical seat)", seat, got, seat)
+		}
+		if !cs.Players[seat].HasPlayer {
+			t.Fatalf("seat %d hydrated with a user but HasPlayer=false", seat)
+		}
+	}
+}
