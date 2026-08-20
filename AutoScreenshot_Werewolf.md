@@ -3,11 +3,16 @@
 > 本项目按 [MIT License](LICENSE) 开源。截图主目录与命名规则详见下方。
 
 - **工作目录**: `/usr/local/LsmAgentGame/LsmAgentGame`
-- **产物路径**:
+- **产物路径(§20260820-01 起统一带「狼人杀」前缀 + 兼容旧文件)**:
   - 截图 PNG: `ProjectPic/werewolf-{NN}-{phase}.png`（NN 序号 01-12）
-  - 截图报告: `TestReport/截图报告_YYYYMMDD_HHMMSS.md`
-  - 进度文件: `AutoScreenshotProgress/截图进度_YYYYMMDD_HHMMSS.md`
+  - 截图报告(新前缀):
+    `TestReport/狼人杀截图报告_YYYYMMDD_HHMMSS.md`
+  - 截图报告(兼容旧):
+    `TestReport/截图报告_YYYYMMDD_HHMMSS.md`(历史已落盘文件,继续合法)
+  - 进度文件(新):
+    `AutoScreenshotProgress/狼人杀截图进度_YYYYMMDD_HHMMSS.md`
   - 文件名时间戳统一 `YYYYMMDD_HHMMSS`,精度到秒
+  - **Glob 单一事实源**: 所有扫描 glob 在 `auto_run_common.sh::GAME_GLOBS` 中声明。
 - **执行模式**: 主 Agent 跑核心截图流程;遇页面渲染异常 / Chrome 崩溃可按需委派 SubAgent,不阻塞主流程。
 - **执行策略**: 1 名人类玩家 + 12 Agent 混合 13 人局,**重点强调 1 人 + 12 Agent**;串行单房间,以最近 10 次非缺陷修复提交划定截图范围,新增/优化项优先。
 - **对局模式(唯一重点)**: 1 名人类玩家 + 12 个 Agent。

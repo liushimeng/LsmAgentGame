@@ -16,6 +16,10 @@
 #   - 启动前预检：无待处理报告时直接退出，不空跑 Agent 会话
 #   - flock 防重入：同一时刻只允许一个自动修复实例（锁由 Agent 所在进程持有）
 #   - 脚本本身赋予 755 权限
+#
+# 公共库依赖(§20260820-01 重构):
+#   - agent_cli_common.sh: Agent CLI 选择 + 调用
+#   - auto_run_common.sh:   多游戏 glob 单一事实源 + 启动日志头 + 后台启动封装
 # ---------------------------------------------------------------
 
 set -u
@@ -30,34 +34,21 @@ LOCK_FILE="${LOG_DIR}/auto_debug.lock"
 
 mkdir -p "${LOG_DIR}"
 
-# ---------- 加载多 Agent 公共库 ----------
-COMMON_LIB="${PROJECT_DIR}/agent_cli_common.sh"
-if [[ ! -f "${COMMON_LIB}" ]]; then
-    echo "[ERROR] 缺少公共库 ${COMMON_LIB}，无法选择 Agent CLI。" >&2
-    exit 1
-fi
-# shellcheck source=agent_cli_common.sh
-source "${COMMON_LIB}"
-
-# ---------- 定位提示词文件 ----------
-PROMPT_FILE=""
-for candidate in \
-    "${PROJECT_DIR}/${PROMPT_FILE_NAME}" \
-    "./${PROMPT_FILE_NAME}" \
-    "${PWD}/${PROMPT_FILE_NAME}"; do
-    if [[ -f "${candidate}" ]]; then
-        PROMPT_FILE="$(readlink -f "${candidate}")"
-        break
+# ---------- 加载多 Agent 公共库 + 自动化脚本公共库 ----------
+AGENT_LIB="${PROJECT_DIR}/agent_cli_common.sh"
+AUTO_LIB="${PROJECT_DIR}/auto_run_common.sh"
+for lib in "${AGENT_LIB}" "${AUTO_LIB}"; do
+    if [[ ! -f "${lib}" ]]; then
+        echo "[ERROR] 缺少公共库 ${lib}，无法启动。" >&2
+        exit 1
     fi
+    # shellcheck source=agent_cli_common.sh
+    # shellcheck source=auto_run_common.sh
+    source "${lib}"
 done
 
-if [[ -z "${PROMPT_FILE}" ]]; then
-    echo "[ERROR] 找不到 ${PROMPT_FILE_NAME}，已检查："
-    echo "  - ${PROJECT_DIR}/${PROMPT_FILE_NAME}"
-    echo "  - ./${PROMPT_FILE_NAME}"
-    echo "  - ${PWD}/${PROMPT_FILE_NAME}"
-    exit 1
-fi
+# ---------- 定位提示词文件 ----------
+PROMPT_FILE="$(locate_prompt_file "${PROMPT_FILE_NAME}")" || exit 1
 
 # ---------- 规则文件守门（防止 prompt 被改回老版本）----------
 # AutoDebugTestReport.md 必须显式声明"禁止修改 CLAUDE.md/AGENTS.md"，
@@ -73,23 +64,13 @@ fi
 # 无待处理报告（全部已删除或已加 _无问题 后缀）时直接退出，避免空跑一个 Agent 会话。
 # 与 AutoDebugTestReport.md §1「无任何待处理报告 → 静默结束」同语义，但省掉会话开销。
 #
-# 多游戏 union glob（2026-08-19 §20260819-01 增加）：
-#   - 狼人杀（向后兼容）：`自动化测试报告_*.md`
-#   - 德州扑克 v1：      `德州扑克自动化测试报告_*.md`
-#   - 后续游戏（象棋/斗地主/军棋）按相同规约追加，每加一个游戏只动本数组。
-#   任何一个 glob 命中都视为有待处理报告。
+# 多游戏 union glob 来源(§20260820-01 改为单一事实源):
+#   - 主工程: auto_run_common.sh::GAME_GLOBS 中所有 *_main glob(去重 _legacy)
+#   - 子工程: go-web-debug-tool/UseReport/ 下测试工具使用报告_*.md(固定)
+#   - 新增游戏: 只需在 auto_run_common.sh::GAME_GLOBS 加一行,本脚本零改动。
 PENDING_MAIN=""
-# 顺序扫描多个游戏的前缀 glob — 一旦命中即退出循环。
-for prefix in \
-    '自动化测试报告_*.md' \
-    '德州扑克自动化测试报告_*.md' \
-    '象棋自动化测试报告_*.md' \
-    '斗地主自动化测试报告_*.md' \
-    '军棋自动化测试报告_*.md'; do
-    PENDING_MAIN="$(find "${PROJECT_DIR}/TestReport" -maxdepth 1 -name "${prefix}" ! -name '*_无问题.md' 2>/dev/null | head -1)"
-    [[ -n "${PENDING_MAIN}" ]] && break
-done
-PENDING_SUB="$(find "${PROJECT_DIR}/go-web-debug-tool/UseReport" -maxdepth 1 -name '测试工具使用报告_*.md' ! -name '*_无问题.md' 2>/dev/null | head -1)"
+PENDING_MAIN="$(any_pending_report "${PROJECT_DIR}")"
+PENDING_SUB="$(find "${PROJECT_DIR}/go-web-debug-tool/UseReport" -maxdepth 1 \( -name '测试工具使用报告_*.md' -o -name '*测试工具使用报告_*.md' \) ! -name '*_无问题.md' 2>/dev/null | head -1)"
 if [[ -z "${PENDING_MAIN}${PENDING_SUB}" ]]; then
     echo "[AutoDebugTestReport] 无待处理报告（TestReport/ 与 UseReport/ 均为空或已归档），静默结束。"
     exit 0
@@ -99,42 +80,31 @@ cd "${PROJECT_DIR}" || { echo "[ERROR] 无法进入 ${PROJECT_DIR}"; exit 1; }
 
 # ---------- 随机选择 Agent ----------
 pick_agent "AutoDebugTestReport"
-AGENT_BIN_PATH="$(command -v "$(agent_binary_of "${SELECTED_AGENT}")" 2>/dev/null || echo 'NOT FOUND')"
 
-{
-    echo "============================================================"
-    echo "[AutoDebugTestReport] 启动时间 : $(date '+%F %T')"
-    echo "[AutoDebugTestReport] 工作目录 : ${PROJECT_DIR}"
-    echo "[AutoDebugTestReport] 提示词文件: ${PROMPT_FILE}"
-    echo "[AutoDebugTestReport] 日志文件  : ${LOG_FILE}"
-    echo "[AutoDebugTestReport] 选中 Agent : ${SELECTED_AGENT}"
-    echo "[AutoDebugTestReport] Agent 二进制: ${AGENT_BIN_PATH}"
-    echo "============================================================"
-} >> "${LOG_FILE}"
+# ---------- 启动日志头 ----------
+print_section_header "AutoDebugTestReport" "${PROMPT_FILE}" "${LOG_FILE}" "${PROJECT_DIR}" "${SELECTED_AGENT}"
 
 # ---------- 启动（后台脱离，不阻塞调用者）----------
 # setsid  : 创建新会话，调用者退出也不会被 SIGHUP
 # nohup   : 忽略 SIGHUP
 # & + disown: 与当前 shell 解除关系
 # stdout/stderr → 日志文件
-nohup setsid bash -c "
-    # 防重入：锁由本进程持有至 Agent 退出；接力/手动重复触发时多余实例直接退出
+# flock 防重入：锁由本进程持有至 Agent 退出；接力/手动重复触发时多余实例直接退出
+start_agent_in_background "${LOG_FILE}" "
     exec 9>>'${LOCK_FILE}'
     if ! flock -n 9; then
         echo '[AutoDebugTestReport] 已有自动修复实例在运行，本次退出(防重入)。'
         exit 0
     fi
     cd '${PROJECT_DIR}'
-    source '${COMMON_LIB}'
+    source '${AGENT_LIB}'
+    source '${AUTO_LIB}'
     run_agent_with_prompt '${SELECTED_AGENT}' '${PROMPT_FILE}' '${PROJECT_DIR}'
     AGENT_EXIT=\$?
     echo '[AutoDebugTestReport] ${SELECTED_AGENT} 退出码 : '\${AGENT_EXIT}
     echo '[AutoDebugTestReport] 结束时间 : '\"\$(date '+%F %T')\"
-" >> "${LOG_FILE}" 2>&1 </dev/null &
+"
 
-AGENT_PID=$!
-disown "${AGENT_PID}" 2>/dev/null || true
-
-echo "[AutoDebugTestReport] 已后台启动 Agent [${SELECTED_AGENT}]，PID=${AGENT_PID}"
+echo "[AutoDebugTestReport] 已后台启动 Agent [${SELECTED_AGENT}]"
 echo "[AutoDebugTestReport] 日志 : ${LOG_FILE}"
 echo "[AutoDebugTestReport] 调用者可继续执行其他操作，不会被阻塞。"

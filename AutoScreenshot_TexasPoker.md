@@ -5,11 +5,12 @@
 
 - **工作目录**: `/usr/local/LsmAgentGame/LsmAgentGame`
 - **入口脚本**: `AutoScreenshotTexasPoker.sh`
-- **产物路径(仅德扑)**:
+- **产物路径(仅德扑,§20260820-01 起 glob 集中到 `auto_run_common.sh::GAME_GLOBS`)**:
   - 截图 PNG: `ProjectPic/texaspoker-{NN}-{phase}.png`（NN 序号 01-12）
   - 截图报告: `TestReport/德州扑克截图报告_YYYYMMDD_HHMMSS.md`
   - 进度文件: `AutoScreenshotProgress/德州扑克截图进度_YYYYMMDD_HHMMSS.md`
   - 文件名时间戳统一 `YYYYMMDD_HHMMSS`,精度到秒
+  - **Glob 单一事实源**: 所有扫描 glob 在 `auto_run_common.sh::GAME_GLOBS` 中声明。
 - **执行模式**: 主 Agent 跑核心截图流程;遇页面渲染异常 / Chrome 崩溃可按需委派 SubAgent,不阻塞主流程。
 - **执行策略**: 人类玩家与 N 个 Agent 混合对局,**重点强调 1 人 + 2~5 Bot**;**轮换玩家数(3~6) 与 Bot 比例**,以最近 10 次非缺陷修复提交划定截图范围,新增/优化项优先。
 - **核心目标**: 采集 ≥ 8 张高质量 PNG 截图,展示 2-6 人桌德扑中人类玩家与 N Bot 同场竞技的精彩画面,用于更新 README 三语种版本。

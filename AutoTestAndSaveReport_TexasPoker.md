@@ -5,12 +5,13 @@
 
 - **工作目录**: `/usr/local/LsmAgentGame/LsmAgentGame`
 - **入口脚本**: `AutoTestAndSaveReport_TexasPoker.sh`(随机选编程 Agent CLI → 跑测试 → git 提交德扑报告 → 接力自动修复)
-- **产物路径(仅德扑)**:
-  - 测试报告: `TestReport/德州扑克自动化测试报告_YYYYMMDD_HHMMSS.md`
+- **产物路径(仅德扑,§20260820-01 起 glob 集中到 `auto_run_common.sh::GAME_GLOBS`)**:
+  - 测试报告: `TestReport/德州扑克自动化测试报告_YYYYMMDD_HHMMSS.md`(单一 glob,无兼容旧文件)
   - 进度文件: `AutoTestProgress/德州扑克自动化测试进度_YYYYMMDD_HHMMSS.md`
   - 子工程工具报告(可选): `go-web-debug-tool/UseReport/德州扑克测试工具使用报告_YYYYMMDD_HHMMSS.md`
   - 协议抓包分析报告(按需): `TestReport/德州扑克协议抓包分析报告_YYYYMMDD_HHMMSS.md`
   - 文件名时间戳统一 `YYYYMMDD_HHMMSS`,精度到秒
+  - **Glob 单一事实源**: 所有扫描 glob 在 `auto_run_common.sh::GAME_GLOBS` 中声明,新增游戏仅改公共库一处,本文件不再内嵌 glob 列表。
 - **执行模式**: 主 Agent 跑核心流程;遇代码读取/协议抓包/数据查询可按需委派 SubAgent,不阻塞主流程。
 - **执行策略**: 模仿真实人类玩家与 N 个 Agent 混合对局,串行单房间;**轮换玩家数(2~6) 与 Bot 比例**(1 人 + 1~5 Bot),严守「每完成一步等待页面完全加载再走下一步」的拟人节奏;以最近 10 次非缺陷修复提交划定测试范围,新增/优化项优先。
 - **对局模式枚举**: 2 人模式(1+1)/ 3 人模式(1+2)/ 4 人模式(1+3, 含 Dealer 按钮旋转)/ 5 人模式(2+3)/ 6 人模式(1+5,**全桌 6 人上限**)。

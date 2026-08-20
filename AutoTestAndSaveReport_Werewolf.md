@@ -5,12 +5,21 @@
 
 - **工作目录**: `/usr/local/LsmAgentGame/LsmAgentGame`
 - **入口脚本**: `AutoTestAndSaveReport_Werewolf.sh`(随机选编程 Agent CLI → 跑测试 → git 提交狼人杀报告 → 接力自动修复)
-- **产物路径(仅狼人杀)**:
-  - 测试报告: `TestReport/自动化测试报告_YYYYMMDD_HHMMSS.md`
-  - 进度文件: `AutoTestProgress/自动化测试进度_YYYYMMDD_HHMMSS.md`
-  - 子工程工具报告(可选): `go-web-debug-tool/UseReport/测试工具使用报告_YYYYMMDD_HHMMSS.md`
-  - 协议抓包分析报告(按需): `TestReport/协议抓包分析报告_YYYYMMDD_HHMMSS.md`
+- **产物路径(仅狼人杀,§20260820-01 起统一带「狼人杀」前缀 + 兼容旧文件)**:
+  - 测试报告(新前缀):
+    `TestReport/狼人杀自动化测试报告_YYYYMMDD_HHMMSS.md`
+  - 测试报告(兼容旧):
+    `TestReport/自动化测试报告_YYYYMMDD_HHMMSS.md`(历史已落盘文件,继续合法)
+  - 进度文件(新):
+    `AutoTestProgress/狼人杀自动化测试进度_YYYYMMDD_HHMMSS.md`
+  - 子工程工具报告(新前缀):
+    `go-web-debug-tool/UseReport/狼人杀测试工具使用报告_YYYYMMDD_HHMMSS.md`
+  - 子工程工具报告(兼容旧):
+    `go-web-debug-tool/UseReport/测试工具使用报告_YYYYMMDD_HHMMSS.md`
+  - 协议抓包分析报告(新):
+    `TestReport/狼人杀协议抓包分析报告_YYYYMMDD_HHMMSS.md`
   - 文件名时间戳统一 `YYYYMMDD_HHMMSS`,精度到秒
+  - **Glob 单一事实源**: 所有扫描 glob 在 `auto_run_common.sh::GAME_GLOBS` 中声明,新增游戏仅改公共库一处,本文件不再内嵌 glob 列表。
 - **执行模式**: 主 Agent 跑核心流程;遇代码读取/协议抓包/数据查询可按需委派 SubAgent,不阻塞主流程。
 - **执行策略**: 模仿真实人类玩家(1 人 + 12 Agent 混合 13 人局),串行单房间,严守「每完成一步等待页面完全加载再走下一步」的拟人节奏;以最近 10 次非缺陷修复提交划定测试范围,新增/优化项优先。
 - **对局模式(唯一)**: 1 名人类玩家 + 12 个 Agent,**不测试全 AI 模式**。
