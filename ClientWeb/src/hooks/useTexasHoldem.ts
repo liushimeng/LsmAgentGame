@@ -30,6 +30,11 @@ export function useTexasHoldem(roomId: string) {
           if (typeof gs.my_seat === 'number' && gs.my_seat >= 0) {
             setMySeat(gs.my_seat);
           }
+          // §R7 P1 修复 — game.state 到达且状态非 over/showdown 时清掉上一局的 gameOver,
+          // 避免「胜者 #4」横幅跨手残留(实测 hand1 结束 → hand2 preflop 期间仍显示)。
+          if (gs.status !== 'over' && gs.status !== 'showdown') {
+            setGameOver(null);
+          }
           break;
         }
         case 'game.over': {
