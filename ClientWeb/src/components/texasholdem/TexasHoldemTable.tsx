@@ -84,8 +84,10 @@ export function TexasHoldemTable({ gameState, mySeat, style }: Props) {
               isMe={seat === mySeat}
               isTurn={seat === gameState.turn}
               isButton={seat === gameState.button}
-              isSB={false}
-              isBB={false}
+              // 2026-08-20 §德州扑克Web端产品界面优化 — SB/BB 座位从 gameState 读取
+              // (view.go BuildClientStateWithRoom 从 Button 顺时针推导)。
+              isSB={seat === gameState.sb_seat}
+              isBB={seat === gameState.bb_seat}
               isBot={isBot}
               botModelName={isBot ? botModels?.[seat] : undefined}
               botThinking={isBot ? !!botThinking?.[seat] : false}

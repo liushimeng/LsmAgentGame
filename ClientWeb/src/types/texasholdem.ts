@@ -60,6 +60,15 @@ export interface TexasHoldemGameState {
   bot_models?: [string, string, string, string, string, string];
   bot_heart_thought?: [string, string, string, string, string, string];
   bot_thinking?: [boolean, boolean, boolean, boolean, boolean, boolean];
+
+  // 2026-08-20 §德州扑克Web端产品界面优化 — 4 字段:
+  // - sb_seat/bb_seat:小盲/大盲座位(view.go 从 Button 顺时针推导)
+  // - turn_started_at_ms:当前 turn 开始 unix ms(前端可做倒计时)
+  // - hand_rank:摊牌阶段赢家最优牌型描述(hand.go String() 透传)
+  sb_seat?: number;
+  bb_seat?: number;
+  turn_started_at_ms?: number;
+  hand_rank?: string;
 }
 
 export const RANK_LABELS: Record<number, string> = {

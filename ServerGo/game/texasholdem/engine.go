@@ -3,6 +3,7 @@ package texasholdem
 import (
 	"fmt"
 	"math/rand"
+	"time"
 
 	"LsmAgentGame/errcode"
 )
@@ -141,6 +142,10 @@ type GameState struct {
 	ShowdownHands [6]HandRank
 	Winners       []int
 	Status        Status
+
+	// 2026-08-20 §德州扑克Web端产品界面优化 — 当前 turn 开始 unix ms,
+	// 透传到 ClientGameState.TurnStartedAtMs,前端可做倒计时。
+	TurnStartedAtMs int64
 }
 
 // NewGame 创建新的对局（尚未发牌，等待足够玩家后调 StartHand）。
@@ -319,6 +324,9 @@ func (gs *GameState) StartHand() *errcode.Error {
 	gs.Status = StatusPlaying
 	gs.Winners = nil
 
+	// 2026-08-20 §德州扑克Web端产品界面优化 — 记录本 turn 开始时间(用于前端倒计时)。
+	gs.TurnStartedAtMs = time.Now().UnixMilli()
+
 	return nil
 }
 
@@ -468,6 +476,8 @@ func (gs *GameState) ApplyAction(seat int, a Action) (bool, *errcode.Error) {
 
 	// 移到下一位
 	gs.Turn = gs.nextActiveSeat(seat)
+	// 2026-08-20 §德州扑克Web端产品界面优化 — turn 切换,记录新 turn 开始时间。
+	gs.TurnStartedAtMs = time.Now().UnixMilli()
 	return false, nil
 }
 
@@ -549,6 +559,8 @@ func (gs *GameState) advanceToNextStreet() (bool, *errcode.Error) {
 
 	// 翻后先行动者 = 庄家之后第一个活跃玩家
 	gs.Turn = gs.nextActiveSeat(gs.Button)
+	// 2026-08-20 §德州扑克Web端产品界面优化 — 新街次 turn 切换,记录开始时间。
+	gs.TurnStartedAtMs = time.Now().UnixMilli()
 
 	// 如果只剩 1 人或全部全押，继续推进（但要等河牌后摊牌）
 	if gs.activePlayers() <= 1 || gs.nonFoldedNonAllIn() == 0 {

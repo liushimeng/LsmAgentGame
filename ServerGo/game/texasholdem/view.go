@@ -17,6 +17,35 @@ func cardsToJSON(cards []Card) []CardJSON {
 	return out
 }
 
+// handRankName 将 HandRank.Category 映射成中文名(供前端牌型展示)。
+// 2026-08-20 §德州扑克Web端产品界面优化 — 透传 hand_rank 字段用。
+func handRankName(category int) string {
+	switch category {
+	case 9:
+		return "皇家同花顺"
+	case 8:
+		return "同花顺"
+	case 7:
+		return "四条"
+	case 6:
+		return "葫芦"
+	case 5:
+		return "同花"
+	case 4:
+		return "顺子"
+	case 3:
+		return "三条"
+	case 2:
+		return "两对"
+	case 1:
+		return "一对"
+	case 0:
+		return "高牌"
+	default:
+		return ""
+	}
+}
+
 // isValidCard 报告 c 是否为有效牌（非零值）。
 // 德州扑克牌的合法范围:Rank 2-14(Rank2..RankA),Suit 1-4(SuitSpade..SuitDiamond)。
 // 零值 {rank:0,suit:0} 表示「未发牌」——典型场景:玩家迟到加入正在进行的手牌,
@@ -81,6 +110,16 @@ type ClientGameState struct {
 	BotModels       [6]string `json:"bot_models"`
 	BotHeartThought [6]string `json:"bot_heart_thought"`
 	BotThinking     [6]bool   `json:"bot_thinking"`
+
+	// 2026-08-20 §德州扑克Web端产品界面优化 — 新增 4 字段:
+	// - SbSeat/BbSeat:小盲/大盲座位(前端渲染 SB/BB 徽章)。
+	//   从 Button 顺时针推导,跳过空座。纯公开信息,观战者也可见。
+	// - TurnStartedAtMs:当前 turn 开始 unix ms(前端可做倒计时)。
+	// - HandRank:摊牌阶段赢家最优牌型描述(hand.go 已实现 String(),这里透传)。
+	SbSeat          int    `json:"sb_seat"`
+	BbSeat          int    `json:"bb_seat"`
+	TurnStartedAtMs int64  `json:"turn_started_at_ms"`
+	HandRank        string `json:"hand_rank,omitempty"`
 }
 
 // BuildClientState 构造座位 viewer 的可见视图（向后兼容版本）。
@@ -211,6 +250,28 @@ func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats 
 		cs.BotModels[i] = botModels[i]
 		cs.BotHeartThought[i] = botHeartThought[i]
 		cs.BotThinking[i] = botThinking[i]
+	}
+
+	// 2026-08-20 §德州扑克Web端产品界面优化 — 透传 4 字段。
+	// SbSeat/BbSeat 从 Button 顺时针推导(SeatWaiting/SbSeat/BbSeat 都用 -1 表示未发盲注)。
+	// TurnStartedAtMs 透传 engine.TurnStartedAtMs(同源)。
+	// HandRank 摊牌后填 winner 的最优牌型描述;观战者也能看(公开信息)。
+	if gs.Button >= 0 {
+		sb, bb := (gs.Button+1)%MaxPlayers, (gs.Button+2)%MaxPlayers
+		// 跳过空座(最多绕一圈)
+		for try := 0; try < MaxPlayers && gs.Players[sb].UserID == ""; try++ {
+			sb = (sb + 1) % MaxPlayers
+		}
+		for try := 0; try < MaxPlayers && gs.Players[bb].UserID == ""; try++ {
+			bb = (bb + 1) % MaxPlayers
+		}
+		cs.SbSeat = sb
+		cs.BbSeat = bb
+	}
+	cs.TurnStartedAtMs = gs.TurnStartedAtMs
+	if (gs.Street == PhaseShowdown || gs.Street == PhaseOver) && len(gs.Winners) > 0 {
+		// 取第一个 winner 的 ShowdownHands(全部winner 时取最大者,showdown() 已保证有序)
+		cs.HandRank = handRankName(gs.ShowdownHands[gs.Winners[0]].Category)
 	}
 
 	return cs

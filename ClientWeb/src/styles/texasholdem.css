@@ -308,3 +308,491 @@
     animation: none;
   }
 }
+
+/* ===== §20260820-02 德州扑克 Web 端产品界面优化 ===== */
+
+/* === 3.1 容器与外框 === */
+.texas-game {
+  height: calc(100vh - var(--header-h, 56px));
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.texas-game .game-area {
+  display: flex;
+  gap: 16px;
+  padding: 12px;
+  flex: 1;
+  align-items: stretch;
+  justify-content: center;
+  overflow: auto;
+  min-height: 0;
+}
+
+.texas-game .board-container {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.texas-game .game-sidebar {
+  flex: 0 0 280px;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* 4 档断点(参考狼人杀 §23 中栏紧凑机制) */
+@media (max-width: 1024px) {
+  .texas-game .game-sidebar { flex-basis: 240px; width: 240px; }
+  .texas-game .game-area { gap: 12px; padding: 10px; }
+}
+@media (max-width: 768px) {
+  .texas-game .game-sidebar { flex-basis: 200px; width: 200px; }
+}
+@media (max-width: 640px) {
+  .texas-game .game-area {
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+  }
+  .texas-game .game-sidebar {
+    flex-basis: auto;
+    width: 100%;
+    max-width: 560px;
+  }
+}
+
+/* === 3.2 椭圆赌桌 === */
+/* §20260820-02 — 修复 6 座位紧凑到中显示:给 texas-table 容器加尺寸+椭圆桌布,
+   6 个 .sX-* 绝对定位坐标(我方在 s0-bottom) */
+.texas-table {
+  position: relative;
+  width: 100%;
+  max-width: 1100px;
+  aspect-ratio: 16 / 9;
+  margin: 0 auto;
+  border-radius: 50% / 35%;
+  overflow: hidden;
+  background-color: #1f4d2e;
+  background-size: cover;
+  background-position: center;
+  box-shadow:
+    inset 0 0 60px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 8px #3a2a18,
+    0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.texas-table .seat-pos {
+  position: absolute;
+  left: var(--seat-x, 50%);
+  top: var(--seat-y, 50%);
+  transform: translate(-50%, -50%);
+  z-index: 2;
+}
+
+.texas-table .s0-bottom    { --seat-x: 50%; --seat-y: 92%; }
+.texas-table .s1-left      { --seat-x: 6%;  --seat-y: 60%; }
+.texas-table .s2-top-left  { --seat-x: 18%; --seat-y: 14%; }
+.texas-table .s3-top       { --seat-x: 50%; --seat-y: 8%;  }
+.texas-table .s4-top-right { --seat-x: 82%; --seat-y: 14%; }
+.texas-table .s5-right     { --seat-x: 94%; --seat-y: 60%; }
+
+/* 中央区域:公共牌 + 底池 + 庄家按钮 */
+.texas-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  z-index: 1;
+  pointer-events: none;
+}
+.texas-center > * { pointer-events: auto; }
+
+.texas-pot {
+  background: rgba(0, 0, 0, 0.55);
+  color: #ffd700;
+  font-weight: 700;
+  font-size: 18px;
+  padding: 6px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+}
+
+.texas-community {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 78px;
+}
+
+@media (max-width: 1024px) {
+  .texas-table { max-width: 800px; }
+  .texas-pot { font-size: 14px; padding: 4px 12px; }
+}
+@media (max-width: 640px) {
+  .texas-table { max-width: 100%; aspect-ratio: 4 / 3; }
+  .texas-table .s0-bottom    { --seat-x: 50%; --seat-y: 94%; }
+  .texas-table .s1-left      { --seat-x: 4%;  --seat-y: 56%; }
+  .texas-table .s2-top-left  { --seat-x: 18%; --seat-y: 12%; }
+  .texas-table .s3-top       { --seat-x: 50%; --seat-y: 6%;  }
+  .texas-table .s4-top-right { --seat-x: 82%; --seat-y: 12%; }
+  .texas-table .s5-right     { --seat-x: 96%; --seat-y: 56%; }
+  .texas-community { gap: 4px; min-height: 58px; }
+}
+
+/* === 3.3 座位卡 3 段式 === */
+.texas-seat {
+  position: relative;
+  width: 132px;
+  background: rgba(20, 25, 35, 0.92);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  padding: 8px 6px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--fg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+}
+
+.texas-seat.empty {
+  width: 96px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  opacity: 0.5;
+}
+
+.texas-seat .seat-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-height: 18px;
+}
+
+.seat-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--fg);
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.texas-seat.is-me .seat-name {
+  color: #f0abfc;
+  text-shadow: 0 0 4px rgba(192, 132, 252, 0.5);
+}
+
+.texas-seat .seat-stack {
+  color: var(--ok);
+  font-weight: 700;
+  font-size: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.texas-seat.folded .seat-stack { color: var(--muted); text-decoration: line-through; }
+
+.texas-seat .seat-holes {
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+  align-items: center;
+  min-height: 42px;
+}
+.texas-seat .seat-holes .hole-count {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.texas-seat .seat-committed {
+  position: absolute;
+  bottom: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(245, 158, 11, 0.85);
+  color: #1a1a1a;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.texas-seat.turn {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35), 0 4px 12px rgba(0, 0, 0, 0.4);
+  animation: thp-seat-turn-pulse 1.6s ease-in-out infinite;
+}
+@keyframes thp-seat-turn-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35), 0 4px 12px rgba(0, 0, 0, 0.4); }
+  50%      { box-shadow: 0 0 0 6px rgba(10, 132, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.4); }
+}
+
+.texas-seat.folded {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+  border-color: var(--muted);
+}
+.texas-seat.folded .seat-name { text-decoration: line-through; }
+
+.texas-seat.allin {
+  border-color: #a855f7;
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.15), rgba(20, 25, 35, 0.92));
+}
+
+/* 内心独白 hover 弹层(让 30 字截断可展开) */
+.seat-heart-thought {
+  position: relative;
+  cursor: help;
+}
+.seat-heart-thought::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 16, 32, 0.95);
+  color: #f5e8ff;
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  max-width: 220px;
+  width: max-content;
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+.seat-heart-thought:hover::after { opacity: 1; }
+
+/* === 3.4 卡牌样式 === */
+.texas-card {
+  width: 56px;
+  height: 78px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  user-select: none;
+  transition: transform 0.15s;
+}
+.texas-card.small, .texas-card.card-small {
+  width: 42px;
+  height: 58px;
+}
+.texas-card:hover { transform: translateY(-2px); }
+
+.texas-card .card-png {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.texas-card .card-css {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #f8f5e9;
+}
+.texas-card .card-rank {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+.texas-card .card-suit {
+  font-size: 22px;
+  line-height: 1;
+}
+.texas-card.card-small .card-rank { font-size: 14px; }
+.texas-card.card-small .card-suit { font-size: 16px; }
+
+.texas-card.face-down {
+  background: #8b1a1a;
+}
+.texas-card.face-down .card-back-pattern {
+  width: 100%;
+  height: 100%;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.12) 0,
+      rgba(255, 255, 255, 0.12) 2px,
+      transparent 2px,
+      transparent 6px
+    ),
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.08) 0%, transparent 70%);
+  border-radius: inherit;
+}
+
+/* === 3.5 动作面板 === */
+.texas-action-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(20, 25, 35, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin: 8px auto 0;
+  max-width: 720px;
+  width: 100%;
+}
+.texas-action-controls .raise-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  min-width: 240px;
+}
+.texas-action-controls .raise-controls input[type='range'] {
+  flex: 1;
+  min-width: 100px;
+}
+.texas-action-controls .raise-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+  color: var(--ok);
+  min-width: 56px;
+  text-align: right;
+}
+.texas-action-controls .waiting-turn {
+  width: 100%;
+  text-align: center;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+}
+.texas-action-controls .game-over-banner {
+  width: 100%;
+  text-align: center;
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.15), rgba(20, 25, 35, 0.92));
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 8px;
+  color: #fde68a;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* === 3.6 状态徽章色相库(§26.4) === */
+.badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+.badge.dealer { background: #f59e0b; color: #1a1a1a; }       /* 对比 8.6:1 */
+.badge.sb     { background: #7dd3fc; color: #0c4a6e; }       /* 对比 6.8:1 */
+.badge.bb     { background: #dc2626; color: #ffffff; }       /* 对比 5.9:1 */
+.badge.allin-badge { background: #a855f7; color: #ffffff; }   /* 对比 5.2:1 */
+
+.spectator-badge {
+  background: #6b7280;
+  color: #ffffff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* === 3.7 信息面板/侧栏微调 === */
+/* 全部借用 xiangqi.css 公共类,只挂 .texas-game 后代避免污染其他游戏 */
+.texas-game .player-info.active {
+  background: rgba(10, 132, 255, 0.18);
+  border-left: 3px solid var(--accent);
+}
+.texas-game .player-info.active .dot {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+.texas-game .texas-pot-info {
+  font-size: 14px;
+  color: var(--ok);
+  font-weight: 600;
+  text-align: center;
+  padding: 4px 0;
+}
+.texas-game .texas-hand-info {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.texas-game .error-banner {
+  background: rgba(248, 81, 73, 0.15);
+  border: 1px solid var(--danger);
+  color: #fca5a5;
+  padding: 12px 16px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.texas-game .waiting-board {
+  width: min(560px, 90vw);
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  gap: 16px;
+}
+
+.texas-game .style-switcher .btn-primary {
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.3);
+}
