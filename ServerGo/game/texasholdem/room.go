@@ -114,6 +114,22 @@ func (r *TexasHoldemRoom) IsReady() bool {
 	return r.Occupied() >= 2
 }
 
+// allBotSeatsOccupiedLocked 报告所有已标记的 bot 座位是否都已入座(锁内变体,§92a)。
+// 2026-08-20 §P0-NEW-1 / P0-3:JoinGame 自动开局守卫 —— 在任何已标记的 bot
+// 座位尚未入座前禁止 StartHand,否则:
+//  1. 开局后才 AddPlayer 的座位本手底牌全为零值(rank:0/suit:0,前端渲染 "? ?");
+//  2. 首个 bot 回合的 IsBotSeatTurn 依赖 BotSeats 标记,时序错位会导致
+//     onHandStarted → ProcessBotTurn 静默 return,对局永久卡死。
+// 纯人类房间 BotSeats 全 false → 真空真,行为不变。
+func (r *TexasHoldemRoom) allBotSeatsOccupiedLocked() bool {
+	for i := 0; i < MaxPlayers; i++ {
+		if r.BotSeats[i] && r.Seats[i] == "" {
+			return false
+		}
+	}
+	return true
+}
+
 // IsBotSeat 报告指定座位是否为 Agent(2026-08-19 §德州扑克Agent)。
 // 必须在已持有 r.mu 时调用(由 Room Service 或 Manager 调用方保证)。
 func (r *TexasHoldemRoom) IsBotSeat(seat int) bool {
@@ -275,6 +291,19 @@ func (m *TexasHoldemManager) SetWalletService(svc WalletSettler) {
 	m.walletSvc = svc
 }
 
+// getOrCreateRoomLocked 返回房间,不存在时懒创建(锁内变体,§92a:调用方
+// 必须已持有 m.mu)。JoinGame / RegisterBotSeats 共用同一懒创建逻辑。
+// by 仅用于创建日志(标识触发方)。
+func (m *TexasHoldemManager) getOrCreateRoomLocked(roomID, by string) *TexasHoldemRoom {
+	r, ok := m.rooms[roomID]
+	if !ok {
+		r = &TexasHoldemRoom{RoomID: roomID}
+		m.rooms[roomID] = r
+		logger.L().Info("texasholdem room created", zap.String("room_id", roomID), zap.String("by", by))
+	}
+	return r
+}
+
 func (m *TexasHoldemManager) getRoom(roomID string) *TexasHoldemRoom {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -305,16 +334,65 @@ func (m *TexasHoldemManager) WithRoomLocked(roomID string, fn func(r *TexasHolde
 	fn(r)
 }
 
-// JoinGame 让 userID 入座。幂等。
-// 达到 2 人时自动发牌进入翻前阶段。
-func (m *TexasHoldemManager) JoinGame(roomID, userID string) (room *TexasHoldemRoom, started bool, joinErr *errcode.Error) {
+// RegisterBotSeats 一次性标记房间的全部 bot 座位(BotSeats/BotModels)。
+// 房间不存在时按 JoinGame 同款逻辑懒创建。
+//
+// 调用方:ws 层 registerTexasHoldemAgentSeats(2026-08-20 §P0-NEW-1 时序契约:
+// BotSeats 标记 + driver 注册必须先于任何可能触发 StartHand 的 JoinGame,
+// 否则首个 bot 回合 IsBotSeatTurn 返回 false,ProcessBotTurn 静默 return,
+// 对局永久卡死)。幂等:重复调用只覆写相同座位,无副作用。
+func (m *TexasHoldemManager) RegisterBotSeats(roomID string, seatModels map[int]string) {
 	m.mu.Lock()
-	r, ok := m.rooms[roomID]
-	if !ok {
-		r = &TexasHoldemRoom{RoomID: roomID}
-		m.rooms[roomID] = r
-		logger.L().Info("texasholdem room created", zap.String("room_id", roomID), zap.String("by", userID))
+	r := m.getOrCreateRoomLocked(roomID, "bot-seats-register")
+	m.mu.Unlock()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.RegisterBotSeatsLocked(seatModels)
+}
+
+// UnregisterBotSeat 清除指定座位的 bot 标记(BotSeats/BotModels)。
+//
+// 调用方:ws 层 registerTexasHoldemAgentSeats 的 JoinGame 失败回滚路径 ——
+// 若 bot 入座失败却保留 BotSeats[seat]=true,JoinGame 自动开局守卫
+// allBotSeatsOccupiedLocked 会永远不满足,对局无法开始。幂等:清除空
+// 标记 / 座位越界 / 房间不存在均安全返回。
+func (m *TexasHoldemManager) UnregisterBotSeat(roomID string, seat int) {
+	r := m.getRoom(roomID)
+	if r == nil {
+		return
 	}
+	if seat < 0 || seat >= MaxPlayers {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.BotSeats[seat] = false
+	r.BotModels[seat] = ""
+}
+
+// JoinGame 让 userID 入座(first-empty 顺次找空位)。幂等。
+// 达到 2 人且所有已标记的 bot 座位均已入座时自动发牌进入翻前阶段
+// (2026-08-20 §P0-NEW-1:追加 allBotSeatsOccupiedLocked 守卫)。
+func (m *TexasHoldemManager) JoinGame(roomID, userID string) (room *TexasHoldemRoom, started bool, joinErr *errcode.Error) {
+	return m.joinInternal(roomID, userID, -1)
+}
+
+// JoinGameAtSeat 让 userID 入座到指定座位(2026-08-20 §P0-NEW-1)。
+// 与 JoinGame 的差别:座位由调用方指定(DB 持久化座位 = 内存物理座位 =
+// BotSeats 标记座位 = driver 座位,四者一致)。前端 agent_seats 座位号随机,
+// bot 若走 first-empty 入座会导致配置/物理座位错位,allBotSeatsOccupiedLocked
+// 守卫可能永不满足(永久不开局)。调用方:ws 层 registerTexasHoldemAgentSeats。
+// 幂等:已入座(任意座位)直接返回;指定座位被占/越界返回错误。
+func (m *TexasHoldemManager) JoinGameAtSeat(roomID, userID string, seat int) (room *TexasHoldemRoom, started bool, joinErr *errcode.Error) {
+	return m.joinInternal(roomID, userID, seat)
+}
+
+// joinInternal 是 JoinGame / JoinGameAtSeat 的共用实现。
+// wantSeat < 0 表示 first-empty 顺次找空位;>= 0 表示必须入座该座位。
+func (m *TexasHoldemManager) joinInternal(roomID, userID string, wantSeat int) (room *TexasHoldemRoom, started bool, joinErr *errcode.Error) {
+	m.mu.Lock()
+	r := m.getOrCreateRoomLocked(roomID, userID)
 	// 2026-08-19 §德州扑克盲注透传: 在持有 m.mu 时快照房间级盲注/买入
 	// (下方 NewGame/AddPlayer 在 m.mu 释放后执行,不能再读 m.roomConfigs)。
 	bigBlind, startStack := m.configForLocked(roomID)
@@ -328,13 +406,23 @@ func (m *TexasHoldemManager) JoinGame(roomID, userID string) (room *TexasHoldemR
 		return r, false, nil
 	}
 
-	// 找空位
-	seat := -1
-	for i, u := range r.Seats {
-		if u == "" {
-			seat = i
-			break
+	// 找座位:first-empty 或指定座位
+	seat := wantSeat
+	if seat < 0 {
+		seat = -1
+		for i, u := range r.Seats {
+			// 2026-08-20 §P0-NEW-1:跳过已标记(即便尚未入座)的 bot 座位 ——
+			// bot 由 JoinGameAtSeat 按 DB 配置座位入座,first-empty 路径(人类)
+			// 不得抢占,否则 allBotSeatsOccupiedLocked 守卫永不满足(永久不开局)
+			// 且「配置座位 = 物理座位 = BotSeats 标记 = driver 座位」对齐被打破。
+			if u == "" && !r.BotSeats[i] {
+				seat = i
+				break
+			}
 		}
+	} else if seat >= MaxPlayers || r.Seats[seat] != "" {
+		// 指定座位越界或已被占
+		seat = -1
 	}
 	if seat == -1 {
 		r.mu.Unlock()
@@ -345,13 +433,21 @@ func (m *TexasHoldemManager) JoinGame(roomID, userID string) (room *TexasHoldemR
 	if r.State == nil {
 		r.State = NewGame(m.seedFn(), bigBlind)
 	}
-	if _, e := r.State.AddPlayer(userID, startStack); e != nil {
+	var e *errcode.Error
+	if wantSeat >= 0 {
+		_, e = r.State.AddPlayerAt(userID, seat, startStack)
+	} else {
+		_, e = r.State.AddPlayer(userID, startStack)
+	}
+	if e != nil {
 		// 不应发生（刚找到空位）
 		logger.L().Warn("texasholdem add player failed", zap.String("room_id", roomID), zap.Error(e))
 	}
 
 	// 满 2 人且当前阶段为 waiting，自动开首手
-	if r.IsReady() && r.State.Street == PhaseWaiting {
+	// (2026-08-20 §P0-NEW-1:含 bot 房间须等全部已标记 bot 座位入座后再开局,
+	// 否则后入座者本手底牌全零且 bot 驱动因 BotSeats 时序错位永久卡死)
+	if r.IsReady() && r.State.Street == PhaseWaiting && r.allBotSeatsOccupiedLocked() {
 		// 2026-08-19 §德州扑克金币: 记录各座位手牌开始时的筹码
 		r.snapshotHandStartStacks()
 		if e := r.State.StartHand(); e != nil {

@@ -132,7 +132,7 @@
 - **bluff 频率**: 验证 Bot 会**偶尔** 选择 raise bluff(手里是垃圾牌但金额合理);但不要被庄家抓到连续 5 局 bluff 同花听牌 ≥ 3 次的「不可解释 bluff」模式。
 - **fold discipline**: 拿到 [2][7] offsuit + 高 raise 入场,Bot **必须** fold(权威策略);**不允许** +AI 角色直接 call 这种烂牌(违规策略会被反向利用)。
 - **all-in 节奏**: Bot 在持有 Nuts(最佳牌型)时**逐步 build pot**,而不是直接 All-in;Showdown 才 All-in。
-- **公平性**: Bot 不得能读到未公开底牌(其他玩家手牌);验证通过后端 `/api/games/texasholdem/state?room_id=...&seat=...` 视图脱敏。
+- **公平性**: Bot 不得能读到未公开底牌(其他玩家手牌);验证方式:WS `game.state` 帧中他人座位仅暴露 `hole_count` 而无 `hole` 牌面(从 React fiber 的 `gameState` 或 WS 抓包确认视图脱敏)。
 
 ##### 6.3.5 聊天(公聊 + 私聊)
 - 德扑聊天频率低,但仍要验证: 公聊界面、消息收发、输入框自动清空;私聊可形成差异化策略配合(本游戏弱化)。
@@ -188,12 +188,19 @@
 
 #### 10.1 第一层:REST API 快照
 
-- `GET /api/games/texasholdem/rooms/:id` — 房间状态(`status`/`phase`/`current_count`/Dealer button)
-- `GET /api/games/texasholdem/state?room_id=:id&seat=:n` — 座位视角状态(含 `community_cards[]`/`pot`/`current_bet`)
+> 2026-08-20 修订(R5 报告 §3.4):德扑**没有**专用的 `GET /api/games/texasholdem/rooms/:id` /
+> `GET /api/games/texasholdem/state` 端点(均 404),以下为本项目**实际存在**的取数方式。
+
+- `GET /api/games/texasholdem/rooms` — 开放房间列表(通用路由 `GET /api/games/:kind/rooms`)
+- `GET /api/rooms/:id` — 房间详情(通用路由,含玩家列表/状态;**不含**牌局内部状态如 phase/pot)
 - `GET /api/llm/models` — 验证 10 个模型注册且 key 可用
 - `GET /api/admin/llm/providers` — Provider 可用性
+- **牌局权威状态(phase/pot/current_bet/turn)**:REST 不暴露,改用以下只读方式:
+  1. 前端页面 React fiber 中提取 `gameState`(go-web-debug-tool `eval_js`,只读);
+  2. 或走 §10.2 服务端日志(`texasholdem hand started` / street 推进日志);
+  3. 或 §10.3 DB 直查 `t_lsm_game_room` 的 `status`/`phase`。
 
-**判定**: 若 REST 返回的 `phase` 与预期不符(如一直停在 `preflop`),则 Action_ 系列接入有问题;若 phase 正常推进但 WS 不推送,则是 WS 分发层问题。
+**判定**: 若 fiber/日志中的 `phase` 与预期不符(如一直停在 `preflop`),则 Action_ 系列接入或 Bot 驱动链路有问题;若 phase 正常推进但 WS 不推送,则是 WS 分发层问题。
 
 #### 10.2 第二层:服务端日志诊断
 

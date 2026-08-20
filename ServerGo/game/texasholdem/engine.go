@@ -186,6 +186,34 @@ func (gs *GameState) AddPlayer(userID string, startStack int) (int, *errcode.Err
 	return seat, nil
 }
 
+// AddPlayerAt 把 userID 入座到指定座位(2026-08-20 §P0-NEW-1)。
+// 与 AddPlayer(first-empty 顺次入座)的差别:座位由调用方指定,使
+// 「DB 持久化座位 = 内存物理座位 = BotSeats 标记座位 = driver 座位」四者一致。
+// 前端 RoomCreateModal 的 agent_seats 座位号是随机的,若 bot 走 first-empty
+// 入座,配置座位与物理座位错位,JoinGame 的 allBotSeatsOccupiedLocked 守卫
+// 可能永不满足(永久不开局)。幂等:已在座(任意座位)直接返回其实际座位。
+func (gs *GameState) AddPlayerAt(userID string, seat, startStack int) (int, *errcode.Error) {
+	if seat < 0 || seat >= MaxPlayers {
+		return 0, errcode.CodeMsg(errcode.ErrValidationFailed, "seat out of range")
+	}
+	// 检查是否已在座(任意座位)
+	for i := 0; i < MaxPlayers; i++ {
+		if gs.Players[i].UserID == userID {
+			return i, nil
+		}
+	}
+	if gs.Players[seat].UserID != "" {
+		return 0, errcode.CodeMsg(errcode.ErrRoomFull, "seat occupied")
+	}
+	gs.Players[seat] = Player{
+		UserID: userID,
+		Stack:  startStack,
+		Seat:   seat,
+	}
+	gs.NumSeat++
+	return seat, nil
+}
+
 // RemovePlayer 移除玩家（弃牌并标记为空位）。
 func (gs *GameState) RemovePlayer(userID string) {
 	for i := 0; i < MaxPlayers; i++ {

@@ -22,6 +22,7 @@ package ws
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -91,12 +92,24 @@ func (s *GameService) initTexasHoldemBotDriver(registry *llm.Registry, actionTim
 
 // registerTexasHoldemAgentSeats 把 agent_seats 注册到 in-memory 德扑房间。
 // 由 RegisterAgentSeats 的 texasholdem 分支调用。
+//
+// 2026-08-20 §P0-NEW-1 / P0-3 时序契约(顺序不可调换):
+//   1. 先 RegisterBotSeats 一次性标记全部 bot 座位(BotSeats/BotModels);
+//   2. 再 thpDriver.RegisterAgents 注册 driver;
+//   3. 先让 DB 已持久化的人类座位按 DB 座位入座(§P0-3:保证开局时全员底牌完整);
+//   4. 最后才按 seat 升序逐个 JoinGameAtSeat 让 bot 入座 —— 可能触发自动
+//      StartHand(room.go allBotSeatsOccupiedLocked 守卫:全部 bot 座位入座前不开局)。
+//
+// 旧顺序(先 JoinGame 后标记 BotSeats)存在竞态:第 2 个 bot 入座即触发
+// StartHand,onHandStarted → ProcessBotTurn 时 BotSeats 尚未标记,
+// IsBotSeatTurn 返回 false 静默 return,此后再无事件驱动 → 464s 零推进;
+// 且开局后才入座的玩家本手底牌全为零值(前端渲染 "? ?")。
 func (s *GameService) registerTexasHoldemAgentSeats(roomID string, seats []service.AgentSeatConfig) *errcode.Error {
 	if s.texasHoldemMgr == nil || s.thpDriver == nil {
 		return nil
 	}
 
-	// 1. 把 bot 座位标记到房间(BotSeats/BotModels)
+	// 1. 解析全部 bot 座位的 model_key 与 bot userID
 	seatModels := make(map[int]string)
 	seatConfigs := make([]thpagent.SeatConfig, 0, len(seats))
 	for _, seatCfg := range seats {
@@ -117,33 +130,68 @@ func (s *GameService) registerTexasHoldemAgentSeats(roomID string, seats []servi
 		})
 	}
 
-	// 2. 把 bot 座位注册到 in-memory 房间(JoinGame 让 bot user 入座)
-	for seatIdx, modelKey := range seatModels {
-		_ = modelKey
-		botUserID, _ := s.botUserIDForSeat(roomID, seatIdx)
-		if botUserID == "" {
-			continue
-		}
-		room, _, e := s.texasHoldemMgr.JoinGame(roomID, botUserID)
-		if e != nil {
-			logger.L().Warn("registerTexasHoldemAgentSeats: JoinGame failed",
-				zap.String("room_id", roomID),
-				zap.Int("seat", seatIdx),
-				zap.Int("code", e.Code), zap.String("msg", e.Message))
-			continue
-		}
-		// 标记 bot 座位
-		room.RegisterBotSeatsLocked(map[int]string{seatIdx: seatModels[seatIdx]})
-	}
+	// 2. §P0-NEW-1: 先于任何 JoinGame,一次性标记全部 bot 座位。
+	// JoinGame 的自动开局守卫(allBotSeatsOccupiedLocked)依赖这些标记。
+	s.texasHoldemMgr.RegisterBotSeats(roomID, seatModels)
 
-	// 3. 注册到 thpagent.Driver
+	// 3. §P0-NEW-1: 先于任何 JoinGame,注册到 thpagent.Driver。
+	// 最后一个 JoinGame 触发 StartHand 时,onHandStarted → ProcessBotTurn
+	// 必须能立即找到已注册的 bot agent。
 	if e := s.thpDriver.RegisterAgents(roomID, seatConfigs); e != nil {
 		logger.L().Warn("registerTexasHoldemAgentSeats: driver registration failed",
 			zap.String("room_id", roomID),
 			zap.Error(e))
 	}
 
-	// 4. §B8: 启动 per-room bot 回合 watchdog
+	// 4. §P0-3: 先让 DB 中已持久化的人类座位(房主等)按 DB 座位入座,
+	// 再让 bot 入座 —— 保证最后一个 bot 触发 StartHand 时全员已在座,
+	// 所有人本手底牌完整(否则开局后才 AddPlayer 的座位底牌全为 rank:0/suit:0)。
+	// JoinGameAtSeat 幂等:随后 SyncSeat / WS game.join 的重复入座安全返回。
+	if s.roomSvc != nil {
+		if allSeats, err := s.roomSvc.SeatsForRoom(roomID); err != nil {
+			logger.L().Warn("registerTexasHoldemAgentSeats: list seats failed",
+				zap.String("room_id", roomID), zap.Error(err))
+		} else {
+			for _, st := range allSeats {
+				if st.ModelKey != "" || st.UserID == "" {
+					continue // bot 座位在下方第 5 步入座
+				}
+				if _, _, e := s.texasHoldemMgr.JoinGameAtSeat(roomID, st.UserID, st.Seat); e != nil {
+					logger.L().Warn("registerTexasHoldemAgentSeats: pre-seat human failed",
+						zap.String("room_id", roomID),
+						zap.Int("seat", st.Seat),
+						zap.Int("code", e.Code), zap.String("msg", e.Message))
+				}
+			}
+		}
+	}
+
+	// 5. 按 seat 升序逐个 JoinGameAtSeat 入座 bot(排序消除 Go map 随机迭代序,
+	// 避免缺陷偶发;指定座位使 DB 座位 = 物理座位 = BotSeats 标记 = driver 座位,
+	// 前端 agent_seats 座位号随机,first-empty 入座会让守卫永不满足)。
+	// JoinGameAtSeat 失败的座位回滚 bot 标记,防止空 bot 座位永久阻塞自动开局守卫。
+	seatIdxs := make([]int, 0, len(seatModels))
+	for seatIdx := range seatModels {
+		seatIdxs = append(seatIdxs, seatIdx)
+	}
+	sort.Ints(seatIdxs)
+	for _, seatIdx := range seatIdxs {
+		botUserID, _ := s.botUserIDForSeat(roomID, seatIdx)
+		if botUserID == "" {
+			s.texasHoldemMgr.UnregisterBotSeat(roomID, seatIdx)
+			continue
+		}
+		if _, _, e := s.texasHoldemMgr.JoinGameAtSeat(roomID, botUserID, seatIdx); e != nil {
+			logger.L().Warn("registerTexasHoldemAgentSeats: JoinGameAtSeat failed, rolling back bot seat",
+				zap.String("room_id", roomID),
+				zap.Int("seat", seatIdx),
+				zap.Int("code", e.Code), zap.String("msg", e.Message))
+			s.texasHoldemMgr.UnregisterBotSeat(roomID, seatIdx)
+			continue
+		}
+	}
+
+	// 6. §B8: 启动 per-room bot 回合 watchdog
 	if len(seatConfigs) > 0 {
 		s.startTexasBotWatchdog(roomID)
 	}
@@ -239,6 +287,13 @@ func (s *GameService) ProcessBotTurn(roomID string) {
 	for i := 0; i < 6; i++ {
 		seat, isBot := s.texasHoldemMgr.IsBotSeatTurn(roomID)
 		if !isBot {
+			// 2026-08-20 §P0-NEW-1: 此前此分支静默 return,BotSeats 时序错位
+			// 导致的「开局后无人驱动」完全无日志可查。补 Info 便于复盘
+			// (seat=-1 表示手牌未在进行或阶段为 waiting/over/showdown)。
+			logger.L().Info("texasholdem ProcessBotTurn: not a bot turn, stop driving",
+				zap.String("room_id", roomID),
+				zap.Int("turn_seat", seat),
+				zap.String("hint", "非 bot 行动位或手牌未在进行"))
 			return // 轮到人类或手牌已结束
 		}
 
@@ -380,7 +435,7 @@ func (s *GameService) startTexasBotWatchdog(roomID string) {
 		return
 	}
 	go s.texasBotWatchdogLoop(roomID, ctx, h)
-	logger.L().Debug("texasholdem bot watchdog started", zap.String("room_id", roomID))
+	logger.L().Info("texasholdem bot watchdog started", zap.String("room_id", roomID))
 }
 
 func (s *GameService) texasBotWatchdogLoop(roomID string, ctx context.Context, h *texasBotWatchdogHandle) {
@@ -404,7 +459,7 @@ func (s *GameService) texasBotWatchdogLoop(roomID string, ctx context.Context, h
 func (s *GameService) texasBotWatchdogTick(roomID string) bool {
 	seat, startedAt, isBot, ok := s.texasHoldemMgr.BotTurnInfo(roomID)
 	if !ok {
-		logger.L().Debug("texasholdem bot watchdog: room gone, exiting",
+		logger.L().Info("texasholdem bot watchdog: room gone, exiting",
 			zap.String("room_id", roomID))
 		return false
 	}

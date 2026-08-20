@@ -2,6 +2,8 @@
 package db
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"LsmAgentGame/config"
@@ -97,6 +99,12 @@ func Init(cfg *config.Config) (*gorm.DB, error) {
 	// so the strict constraint is added explicitly here. Spectators and players
 	// share this index — RoomService guarantees they never overlap for one user.
 	if err := ensurePlayerUniqueIndex(gormDB); err != nil {
+		return nil, err
+	}
+	// 2026-08-20 §P0-2 — ref_id 列宽手工迁移:模型已改 varchar(128),但
+	// AutoMigrate 不会变更已存在列的类型/宽度(线上仍是 char(36)),德扑结算
+	// 写 refID = roomID+":"+handNum(38+ 字符)必然 ERROR 1406。
+	if err := ensureWalletTxRefIDWidth(gormDB); err != nil {
 		return nil, err
 	}
 	logger.L().Info("db migrated",
@@ -297,4 +305,66 @@ func ensurePlayerUniqueIndex(gormDB *gorm.DB) error {
 		`ALTER TABLE t_lsm_game_player
 		 ADD UNIQUE KEY uk_room_user (room_id, user_id)`,
 	).Error
+}
+
+// ensureWalletTxRefIDWidth widens t_lsm_game_wallet_tx.ref_id to varchar(128)
+// (2026-08-20 §P0-2). The model already declares varchar(128)
+// (models/t_lsm_game_wallet_tx.go), but GORM AutoMigrate never alters the
+// type/width of an existing column — a legacy database keeps char(36) and the
+// texasholdem settlement refID ("<36-char roomID>:<handNum>", 38+ chars) fails
+// with ERROR 1406 under STRICT_TRANS_TABLES.
+//
+// Idempotent: skips when the table is absent (AutoMigrate creates it fresh
+// with the correct width) and when the column is already varchar(>=128).
+// The nullability semantics of the existing column are preserved (legacy
+// databases have NULL DEFAULT ''). Indexes on the column are kept by MySQL
+// across MODIFY COLUMN.
+func ensureWalletTxRefIDWidth(gormDB *gorm.DB) error {
+	mig := gormDB.Migrator()
+	if !mig.HasTable(&models.TLsmGameWalletTx{}) {
+		return nil
+	}
+	var cols []struct {
+		DataType  string `gorm:"column:DATA_TYPE"`
+		MaxLength *int64 `gorm:"column:CHARACTER_MAXIMUM_LENGTH"`
+		Nullable  string `gorm:"column:IS_NULLABLE"`
+	}
+	if err := gormDB.Raw(
+		`SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE
+		 FROM information_schema.COLUMNS
+		 WHERE TABLE_SCHEMA = DATABASE()
+		   AND TABLE_NAME   = 't_lsm_game_wallet_tx'
+		   AND COLUMN_NAME  = 'ref_id'`,
+	).Scan(&cols).Error; err != nil {
+		return err
+	}
+	if len(cols) == 0 {
+		// 列不存在 —— 交给 AutoMigrate 按模型定义补齐。
+		return nil
+	}
+	c := cols[0]
+	if strings.EqualFold(c.DataType, "varchar") && c.MaxLength != nil && *c.MaxLength >= 128 {
+		return nil
+	}
+	// 保持现有 nullability 语义(2026-08-20 实测线上为 NULL DEFAULT '')。
+	nullClause := "NULL"
+	if strings.EqualFold(c.Nullable, "NO") {
+		nullClause = "NOT NULL"
+	}
+	fromDesc := c.DataType
+	if c.MaxLength != nil {
+		fromDesc = fmt.Sprintf("%s(%d)", c.DataType, *c.MaxLength)
+	}
+	logger.L().Info("widening t_lsm_game_wallet_tx.ref_id",
+		zap.String("from", fromDesc),
+		zap.String("to", "varchar(128)"),
+		zap.String("null", nullClause))
+	if err := gormDB.Exec(fmt.Sprintf(
+		"ALTER TABLE t_lsm_game_wallet_tx MODIFY COLUMN ref_id varchar(128) %s DEFAULT ''",
+		nullClause,
+	)).Error; err != nil {
+		return err
+	}
+	logger.L().Info("t_lsm_game_wallet_tx.ref_id widened to varchar(128)")
+	return nil
 }
