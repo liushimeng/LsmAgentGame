@@ -258,6 +258,11 @@ func (s *GameService) ProcessBotTurn(roomID string) {
 		modelKey := s.texasHoldemMgr.BotSeatModelKey(roomID, seat)
 		agentCtx := buildAgentContext(ctx, modelKey, s.thpDriver.BluffHintFor(roomID, seat))
 
+		// P0-1: 重置该 bot 的 poker_action 限流标志。OnNewRound 在生产代码中
+		// 从未被调用,导致跨街(flop/turn/river)时 currentRoundActionTaken 残留,
+		// 所有 bot 决策被拒并 fallback fold。
+		s.thpDriver.OnNewRoundLocked(roomID, seat)
+
 		// 调 LLM 决策(配置超时,默认 30s)
 		timeoutSec := s.thpActionTimeoutSec
 		if timeoutSec <= 0 {

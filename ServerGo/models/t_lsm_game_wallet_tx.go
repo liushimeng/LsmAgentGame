@@ -25,7 +25,7 @@ type TLsmGameWalletTx struct {
 	Amount       int64     `gorm:"type:bigint;not null"                  json:"amount"`
 	BalanceAfter int64     `gorm:"type:bigint;not null"                  json:"balance_after"`
 	RefType      string    `gorm:"type:varchar(32);index;default:''"     json:"ref_type"`
-	RefID        string    `gorm:"type:char(36);index;default:''"        json:"ref_id"`
+	RefID        string    `gorm:"type:varchar(128);index;default:''"       json:"ref_id"`
 	GameKind     string    `gorm:"type:varchar(32);index;default:''"     json:"game_kind"`
 	Remark       string    `gorm:"type:varchar(255);default:''"          json:"remark"`
 	CreatedAt    time.Time `gorm:"autoCreateTime;index:idx_user_created,priority:2" json:"created_at"`

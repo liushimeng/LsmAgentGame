@@ -73,9 +73,13 @@ func (d *Dispatcher) OnNewRound() {
 }
 
 // OnNewHand 重置手牌状态（每手牌开始时调用）。
+// 2026-08-20 P0-1: 同时重置 currentRoundActionTaken,否则跨手牌时
+// poker_action 限流标志残留,所有 bot 首轮决策即被拒。
 func (d *Dispatcher) OnNewHand() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	d.currentRoundActionTaken = false
+	d.currentRound = 0
 	d.chatCountThisHand = 0
 	d.chatLastTimestamp = time.Time{}
 }

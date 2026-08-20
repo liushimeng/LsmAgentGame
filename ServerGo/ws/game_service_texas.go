@@ -58,6 +58,14 @@ func (s *GameService) handleTexasHoldemJoin(c *Client, env Envelope, roomID stri
 				"player_count": room.Occupied(),
 			}),
 		})
+		// P0-3: 游戏已开始但玩家迟到(或 WS 重连)时,单独给该玩家推一份完整状态,
+		// 否则前端 my_hole 为 [{rank:0,suit:0},{rank:0,suit:0}]。
+		// 仅当游戏已开局(phase != waiting)且该玩家有座位时才推送。
+		if room.State != nil && room.State.Street != texasholdem.PhaseWaiting && seat >= 0 {
+			if st := s.texasHoldemMgr.StateForSeat(roomID, seat); st != nil {
+				s.hub.BroadcastTo(c.UserID, Envelope{Type: "game.state", Payload: mustMarshal(st)})
+			}
+		}
 	}
 }
 
