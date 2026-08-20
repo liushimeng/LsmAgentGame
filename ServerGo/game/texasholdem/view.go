@@ -17,6 +17,21 @@ func cardsToJSON(cards []Card) []CardJSON {
 	return out
 }
 
+// isValidCard 报告 c 是否为有效牌（非零值）。
+// 德州扑克牌的合法范围:Rank 2-14(Rank2..RankA),Suit 1-4(SuitSpade..SuitDiamond)。
+// 零值 {rank:0,suit:0} 表示「未发牌」——典型场景:玩家迟到加入正在进行的手牌,
+// 下个 StartHand 前不会参与本手,AddPlayer 只写了 UserID/Stack 而 Hole 保持零值。
+func isValidCard(c Card) bool {
+	return c.Rank >= Rank2 && c.Rank <= RankA && c.Suit >= SuitSpade && c.Suit <= SuitDiamond
+}
+
+// hasValidHoleCards 报告玩家是否已被发到底牌。
+// 用于区分「已发底牌」与「迟到加入未发牌」——后者 Hole 为 [2]Card{},
+// 不应渲染为 2 张牌背 / 填充 MyHole / HoleCount=2(R7 P0-1)。
+func hasValidHoleCards(hole [2]Card) bool {
+	return isValidCard(hole[0])
+}
+
 // PlayerJSON 是单个座位的公开信息。
 //
 // 注意:Hole / ShowdownHands / Community / MyHole 字段必须保持"空切片而非 nil",
@@ -150,10 +165,13 @@ func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats 
 			Stack:          p.Stack,
 			ChipsCommitted: p.TotalCommitted,
 			RoundCommitted: p.RoundCommitted,
-			HoleCount:      2,
+			HoleCount:      0,
 		}
 
-		if p.UserID != "" && !p.Folded {
+		// R7 P0-1: 仅当玩家已被发到底牌(非零值)时才渲染 hole/hole_count。
+		// 迟到加入的玩家(未参与本手)底牌为零值,不应显示 2 张牌背或填充 MyHole。
+		if p.UserID != "" && hasValidHoleCards(p.Hole) {
+			pj.HoleCount = 2
 			if !isSpectator && i == viewer {
 				// 自己的底牌完整可见（仅玩家视角）
 				pj.Hole = cardsToJSON(p.Hole[:])
@@ -167,9 +185,11 @@ func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats 
 	}
 
 	// 自己的底牌快捷字段——仅玩家视角填充。
+	// R7 P0-1: 增加 hasValidHoleCards 守卫,迟到加入(未发牌)时 MyHole 保持空切片,
+	// 前端不会渲染出 rank:0/suit:0 占位牌。
 	if !isSpectator && viewer >= 0 && viewer < MaxPlayers {
 		self := &gs.Players[viewer]
-		if self.UserID != "" {
+		if self.UserID != "" && hasValidHoleCards(self.Hole) {
 			cs.MyHole = cardsToJSON(self.Hole[:])
 		}
 	}

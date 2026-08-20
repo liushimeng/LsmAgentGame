@@ -319,7 +319,7 @@ const DefaultSpeakFloorWakeIntervalSec = 20
 //   - MaxPotPerHand:单手牌最大底池上限(防恶意刷金币)。
 type TexasHoldemConfig struct {
 	AgentEnabled         bool `json:"agent_enabled"`           // 默认 true
-	AgentActionTimeoutSec int `json:"agent_action_timeout_sec"` // 默认 30s
+	AgentActionTimeoutSec int `json:"agent_action_timeout_sec"` // 默认 15s(R7 P0-2:原 30s 导致 LLM 失败时 bot 卡住 30s+)
 	BotChatPerHand       int `json:"bot_chat_per_hand"`        // 默认 2
 	BotChatMinIntervalSec int `json:"bot_chat_min_interval_sec"` // 默认 30s
 	RakeRatePct          int `json:"rake_rate_pct"`             // 默认 5(Health 档);Caution 7、Danger 10 由代码常量定
@@ -936,8 +936,10 @@ func applyDefaults(c *Config) {
 	if !c.TexasHoldem.AgentEnabled {
 		c.TexasHoldem.AgentEnabled = true
 	}
+	// R7 P0-2: 默认超时从 30s 缩到 15s。LLM 失败时 watchdog 兜底 fold 的等待期
+	// 大幅缩短(人类玩家不再卡 30s+ 等待 bot 决策);仍足够单轮 LLM 推理。
 	if c.TexasHoldem.AgentActionTimeoutSec == 0 {
-		c.TexasHoldem.AgentActionTimeoutSec = 30
+		c.TexasHoldem.AgentActionTimeoutSec = 15
 	}
 	if c.TexasHoldem.BotChatPerHand == 0 {
 		c.TexasHoldem.BotChatPerHand = 2
