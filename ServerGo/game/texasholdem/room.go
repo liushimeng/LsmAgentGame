@@ -40,6 +40,23 @@ type TexasHoldemRoom struct {
 	// 锁语义:必须先持 r.mu 才能读写。
 	BotHeartThought [MaxPlayers]string
 	BotThinking     [MaxPlayers]bool
+
+	// 2026-08-20 §B8 — bot 回合 watchdog 时钟。
+	// 每次 gs.Turn 变更（StartHand / ApplyAction 后）由 markTurnLocked 刷新;
+	// ws 层 watchdog 每 5s 检查「当前 bot 座位已思考 > timeout+10s」则强制 fold。
+	// 锁语义:必须先持 r.mu 才能读写。
+	TurnStartSeat int
+	TurnStartedAt time.Time
+}
+
+// markTurnLocked 记录当前回合开始时间与座位（锁内变体,§92a）。
+// 必须在 gs.Turn 被赋予新值之后、且已持有 r.mu 时调用。
+func (r *TexasHoldemRoom) markTurnLocked() {
+	if r.State == nil {
+		return
+	}
+	r.TurnStartSeat = r.State.Turn
+	r.TurnStartedAt = time.Now()
 }
 
 // SetBotHeartThoughtLocked 设置指定 bot 座位的最近内心独白(锁内变体)。
@@ -135,11 +152,23 @@ type TexasHoldemManager struct {
 
 	// 2026-08-19 §德州扑克Agent — 新手牌开始回调(由 WS 层注册)。
 	// 在延迟 auto-start goroutine 中调用,通知 WS 层广播新状态并触发 bot 行动。
+	// 注意:回调在**释放 r.mu 之后**调用（2026-08-20 §B6 修复:此前持锁调用,
+	// 回调内 WithRoomLocked 再取 r.mu → sync.Mutex 不可重入自死锁,§92a）。
 	onHandStarted func(roomID string)
+
+	// 2026-08-20 §B2 — 手牌结束回调(由 WS 层注册)。
+	// 在 ApplyAction/ApplyBotAction 判定 handOver 且释放 r.mu 之后调用,
+	// WS 层借此把本手结果写入每个 bot 的 Memory(AppendHand / 对手画像)。
+	onHandOver func(roomID string)
 
 	// 2026-08-19 §德州扑克金币 — 钱包服务(由 main.go 注入)。
 	// 手牌结束后按筹码盈亏结算金币。
 	walletSvc WalletSettler
+
+	// 2026-08-20 §B7 — 单手牌底池上限(筹码),由 main.go 从
+	// cfg.TexasHoldem.MaxPotPerHand 注入(默认 100000)。结算时本手底池超过
+	// 该上限则按比例封顶赢家结算(防恶意刷金币),并 logger.Warn。
+	maxPotPerHand int
 
 	// 2026-08-19 §德州扑克盲注透传 — 房间级盲注/买入配置。
 	// 由 RoomService 经 SetTexasHoldemRoomConfigurer 回调在房间创建成功后、
@@ -167,6 +196,7 @@ func NewTexasHoldemManager() *TexasHoldemManager {
 		seedFn:      func() int64 { return time.Now().UnixNano() },
 		BigBlind:    200,
 		StartStack:  10000,
+		maxPotPerHand: 100000, // §B7 默认值,与 config 兜底一致;main.go 可覆盖
 	}
 }
 
@@ -193,6 +223,25 @@ func (m *TexasHoldemManager) SetOnHandStarted(cb func(roomID string)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onHandStarted = cb
+}
+
+// SetOnHandOver 注册手牌结束回调(2026-08-20 §B2)。
+// 仅 WS 层调用一次;handOver 判定后(锁外)通知 bot Memory 记账。
+func (m *TexasHoldemManager) SetOnHandOver(cb func(roomID string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onHandOver = cb
+}
+
+// SetMaxPotPerHand 注入单手牌底池上限(2026-08-20 §B7)。
+// 由 main.go 从 cfg.TexasHoldem.MaxPotPerHand 读出注入;<=0 时保持默认。
+func (m *TexasHoldemManager) SetMaxPotPerHand(n int) {
+	if n <= 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.maxPotPerHand = n
 }
 
 // SetWalletService 注入钱包服务(§德州扑克金币)。由 main.go 调用。
@@ -285,6 +334,7 @@ func (m *TexasHoldemManager) JoinGame(roomID, userID string) (*TexasHoldemRoom, 
 			logger.L().Warn("texasholdem start hand failed", zap.String("room_id", roomID), zap.Error(e))
 		} else {
 			started = true
+			r.markTurnLocked() // §B8 bot 回合 watchdog 时钟
 			logger.L().Info("texasholdem hand started",
 				zap.String("room_id", roomID),
 				zap.Int("hand_number", r.State.HandNumber))
@@ -301,62 +351,84 @@ func (m *TexasHoldemManager) Action(roomID, userID string, a Action) (*TexasHold
 		return nil, false, errcode.Code(errcode.ErrRoomNotFound)
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	if r.State == nil {
+		r.mu.Unlock()
 		return nil, false, errcode.Code(errcode.ErrGameNotStarted)
 	}
 	seat, ok := r.State.GetSeat(userID)
 	if !ok {
+		r.mu.Unlock()
 		return nil, false, errcode.Code(errcode.ErrRoomNotIn)
 	}
 
 	// 2026-08-19 §德州扑克Agent: bot 座位的行动由 driver 自动驱动,
 	// 人类玩家在 bot 座位上提交动作直接拒绝(防止作弊)。
 	if r.BotSeats[seat] {
+		r.mu.Unlock()
 		return nil, false, errcode.CodeMsg(errcode.ErrInvalidMove, "seat is bot-controlled")
 	}
 
 	handOver, e := r.State.ApplyAction(seat, a)
 	if e != nil {
+		r.mu.Unlock()
 		return nil, false, e
 	}
+	r.markTurnLocked() // §B8: 回合易主,刷新 watchdog 时钟
+
+	// handOver 后处理在锁外进行(2026-08-20 §B6: 此前 onHandStarted 回调在
+	// 持锁的延迟 goroutine 里触发,回调内 WithRoomLocked 再取 r.mu 自死锁)。
+	canNext := handOver && r.State.CanStartHand()
+	r.mu.Unlock()
 
 	if handOver {
-		// 2026-08-19 §德州扑克金币: 手牌结束,异步结算金币
-		go m.SettleHandCoins(roomID)
-
-		// 延迟开新一手（给客户端 time 展示结果）
-		if r.State.CanStartHand() {
-			go func() {
-				time.Sleep(5 * time.Second)
-				r.mu.Lock()
-				defer r.mu.Unlock()
-				if r.State.Street == PhaseOver || r.State.Street == PhaseShowdown {
-					// 2026-08-19 §德州扑克金币: 新手牌开始前记录筹码快照
-					r.snapshotHandStartStacks()
-					if e := r.State.StartHand(); e != nil {
-						logger.L().Warn("auto start next hand failed", zap.String("room_id", roomID), zap.Error(e))
-					} else {
-						logger.L().Info("texasholdem next hand", zap.String("room_id", roomID), zap.Int("hand", r.State.HandNumber))
-						m.broadcastState(roomID, r)
-						// 2026-08-19 §德州扑克Agent: 新手牌开始,通知 WS 层广播 + 触发 bot
-						if m.onHandStarted != nil {
-							m.onHandStarted(roomID)
-						}
-					}
-				}
-			}()
-		}
+		m.runHandOverEpilogue(roomID, r, canNext)
 	}
 
 	return r, handOver, nil
 }
 
-// broadcastState 广播房间状态（供异步开新手时调用）。
-func (m *TexasHoldemManager) broadcastState(roomID string, r *TexasHoldemRoom) {
-	// 此方法只在已持有房间锁时调用，外层负责 hub 广播。
-	// 返回 rooms 快照供调用方获取座位信息。
+// runHandOverEpilogue 手牌结束后的统一收尾（§B2/§B6，锁外调用）：
+//  1. 异步金币结算（SettleHandCoins 自行取锁）
+//  2. onHandOver 回调（bot Memory 记账）
+//  3. 满足条件时延迟 5s 自动开下一手，成功后（锁外）触发 onHandStarted
+func (m *TexasHoldemManager) runHandOverEpilogue(roomID string, r *TexasHoldemRoom, canNext bool) {
+	// 2026-08-19 §德州扑克金币: 手牌结束,异步结算金币
+	go m.SettleHandCoins(roomID)
+
+	// 2026-08-20 §B2: bot Memory 记账（回调内部自行取锁,必须在锁外调）
+	if m.onHandOver != nil {
+		m.onHandOver(roomID)
+	}
+
+	if !canNext {
+		return
+	}
+	// 延迟开新一手（给客户端 time 展示结果）
+	go func() {
+		time.Sleep(5 * time.Second)
+		r.mu.Lock()
+		started := false
+		if r.State.Street == PhaseOver || r.State.Street == PhaseShowdown {
+			// 2026-08-19 §德州扑克金币: 新手牌开始前记录筹码快照
+			r.snapshotHandStartStacks()
+			if e := r.State.StartHand(); e != nil {
+				logger.L().Warn("auto start next hand failed", zap.String("room_id", roomID), zap.Error(e))
+			} else {
+				started = true
+				r.markTurnLocked() // §B8
+				logger.L().Info("texasholdem next hand", zap.String("room_id", roomID), zap.Int("hand", r.State.HandNumber))
+			}
+		}
+		r.mu.Unlock()
+		if started {
+			// 2026-08-19 §德州扑克Agent: 新手牌开始,通知 WS 层广播 + 触发 bot。
+			// 必须在释放 r.mu 之后调用(§B6 死锁修复:回调内会再取 r.mu)。
+			if m.onHandStarted != nil {
+				m.onHandStarted(roomID)
+			}
+		}
+	}()
 }
 
 // Resign 认输（等同弃牌）。
@@ -541,10 +613,12 @@ func (m *TexasHoldemManager) BotGameContext(roomID string, seat int) *BotGameCon
 		HandNumber:   gs.HandNumber,
 		Street:       gs.Street.String(),
 		MySeat:       seat,
+		MyUserID:     p.UserID, // §B2: Memory 记账需要行动者 userID
 		MyHole:       [2]int{cardToInt(p.Hole[0]), cardToInt(p.Hole[1])},
 		Community:    community,
 		CommunityLen: gs.CommunityShown,
 		MyStack:      p.Stack,
+		MyRoundCommitted: p.RoundCommitted, // §B3: prompt 真实值(此前字面「?」占位)
 		Pot:          gs.Pot,
 		CurrentBet:   gs.CurrentBet,
 		CallAmount:   callAmount,
@@ -567,10 +641,12 @@ type BotGameContextSnapshot struct {
 	HandNumber    int
 	Street        string
 	MySeat        int
+	MyUserID      string // 本座位 userID(2026-08-20 §B2: Memory 记账)
 	MyHole        [2]int
 	Community     [5]int
 	CommunityLen  int
 	MyStack       int
+	MyRoundCommitted int // 本轮已下注(2026-08-20 §B3)
 	Pot           int
 	CurrentBet    int
 	CallAmount    int
@@ -597,61 +673,122 @@ func (m *TexasHoldemManager) ApplyBotAction(roomID string, seat int, a Action) (
 		return false, errcode.Code(errcode.ErrRoomNotFound)
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	if r.State == nil {
+		r.mu.Unlock()
 		return false, errcode.Code(errcode.ErrGameNotStarted)
 	}
 	if seat != r.State.Turn {
+		r.mu.Unlock()
 		return false, errcode.Code(errcode.ErrNotYourTurn)
 	}
 	if !r.BotSeats[seat] {
+		r.mu.Unlock()
 		return false, errcode.CodeMsg(errcode.ErrInvalidMove, "not a bot seat")
 	}
 
 	handOver, e := r.State.ApplyAction(seat, a)
 	if e != nil {
+		r.mu.Unlock()
 		return false, e
 	}
+	r.markTurnLocked() // §B8: 回合易主,刷新 watchdog 时钟
+
+	canNext := handOver && r.State.CanStartHand()
+	r.mu.Unlock()
 
 	if handOver {
-		// 2026-08-19 §德州扑克金币: 手牌结束,异步结算金币
-		go m.SettleHandCoins(roomID)
-
-		// 延迟开新一手(与 Action 方法相同的逻辑)
-		if r.State.CanStartHand() {
-			go func() {
-				time.Sleep(5 * time.Second)
-				r.mu.Lock()
-				defer r.mu.Unlock()
-				if r.State.Street == PhaseOver || r.State.Street == PhaseShowdown {
-					// 2026-08-19 §德州扑克金币: 新手牌开始前记录筹码快照
-					r.snapshotHandStartStacks()
-					if e := r.State.StartHand(); e != nil {
-						logger.L().Warn("auto start next hand failed (bot)", zap.String("room_id", roomID), zap.Error(e))
-					} else {
-						logger.L().Info("texasholdem next hand (bot)", zap.String("room_id", roomID), zap.Int("hand", r.State.HandNumber))
-						m.broadcastState(roomID, r)
-						if m.onHandStarted != nil {
-							m.onHandStarted(roomID)
-						}
-					}
-				}
-			}()
-		}
+		// 与 Action 走同一收尾路径(§B2 Memory 记账 + §B6 锁外回调)
+		m.runHandOverEpilogue(roomID, r, canNext)
 	}
 
 	return handOver, nil
 }
 
-// cardToInt 把 Card 转为 thpagent 使用的 int 编码 (rank*4+suit+1)。
-// rank: 0..12 (2..A), suit: 0..3 (Spade/Heart/Club/Diamond)
-// 返回 1..52; 零值 Card 返回 0。
+// BotTurnInfo 返回当前回合信息供 ws 层 bot 回合 watchdog 使用（2026-08-20 §B8）。
+// 返回 (当前回合座位, 回合开始时间, 该座位是否 bot, 房间是否存在且对局进行中)。
+func (m *TexasHoldemManager) BotTurnInfo(roomID string) (seat int, startedAt time.Time, isBot bool, ok bool) {
+	r := m.getRoom(roomID)
+	if r == nil || r.State == nil {
+		return -1, time.Time{}, false, false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.State.Street == PhaseWaiting || r.State.Street == PhaseOver || r.State.Street == PhaseShowdown {
+		return -1, r.TurnStartedAt, false, true
+	}
+	turn := r.State.Turn
+	if turn < 0 || turn >= MaxPlayers {
+		return -1, r.TurnStartedAt, false, true
+	}
+	return turn, r.TurnStartedAt, r.BotSeats[turn], true
+}
+
+// HandEndSummaries 返回本手牌结束时各座位的结算摘要（2026-08-20 §B2）。
+// 由 ws 层 onHandOver 回调调用（锁外），结果喂给 thpagent.Driver.AppendHandResult。
+// ok=false 表示房间不存在或尚未开过任何一手。
+func (m *TexasHoldemManager) HandEndSummaries(roomID string) (handNumber int, community [5]int, communityLen int, winners []int, seats []texasherp.HandSeatSummary, ok bool) {
+	r := m.getRoom(roomID)
+	if r == nil || r.State == nil {
+		return 0, [5]int{}, 0, nil, nil, false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	gs := r.State
+	if gs.HandNumber == 0 {
+		return 0, [5]int{}, 0, nil, nil, false
+	}
+	for i := 0; i < gs.CommunityShown && i < 5; i++ {
+		community[i] = cardToInt(gs.Community[i])
+	}
+	communityLen = gs.CommunityShown
+	winners = append([]int{}, gs.Winners...)
+	wonSet := make(map[int]bool, len(gs.Winners))
+	for _, w := range gs.Winners {
+		wonSet[w] = true
+	}
+	for i := 0; i < MaxPlayers; i++ {
+		p := &gs.Players[i]
+		if p.UserID == "" {
+			continue
+		}
+		seats = append(seats, texasherp.HandSeatSummary{
+			Seat:     i,
+			UserID:   p.UserID,
+			Hole:     [2]int{cardToInt(p.Hole[0]), cardToInt(p.Hole[1])},
+			NetDelta: p.Stack - r.HandStartStacks[i],
+			Won:      wonSet[i],
+		})
+	}
+	return gs.HandNumber, community, communityLen, winners, seats, true
+}
+
+// OverSummary 返回手牌结束广播所需的快照（winners/status/hand_number）。
+// 供 ws 层在只有 roomID 的场景（bot 路径 / watchdog 强制 fold）构造 game.over 帧;
+// 此前 broadcastTexasHoldemOver(roomID, nil) 因 room==nil 直接 return,game.over 从未下发。
+func (m *TexasHoldemManager) OverSummary(roomID string) (winners []int, status string, handNumber int, ok bool) {
+	r := m.getRoom(roomID)
+	if r == nil || r.State == nil {
+		return nil, "", 0, false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]int{}, r.State.Winners...), r.State.Status.String(), r.State.HandNumber, true
+}
+
+// cardToInt 把 Card 转为 thpagent 使用的规范 int 编码 (Rank-2)*4+(Suit-1)+1。
+// rank: 2..14 (2..A), suit: 1..4 (Spade/Heart/Club/Diamond)
+// 返回 1..52; 零值 Card 返回 0（「无牌」哨兵）。
+//
+// 2026-08-20 §B1：旧编码 Rank*4+Suit+1（值域 10..61）与 thpagent 的 1..52
+// 牌堆 + (c-1)/4 解码不一致 —— 底牌 >52 永远不会从抽样牌堆剔除（对手可被
+// 发到同一张物理牌）且解码 rank 错误。现统一为唯一规范编码，由
+// card_encoding_test.go 的往返测试 + 评估器交叉对照强制防漂移。
 func cardToInt(c Card) int {
 	if c.Rank == 0 && c.Suit == 0 {
 		return 0
 	}
-	return c.Rank*4 + c.Suit + 1
+	return texasherp.EncodeCard(c.Rank, c.Suit)
 }
 
 // ─────────────────── 金币结算 (2026-08-19 §德州扑克金币) ───────────────────
@@ -666,6 +803,10 @@ func (r *TexasHoldemRoom) snapshotHandStartStacks() {
 		}
 	}
 }
+
+// maxSettleDeltaPerHand 单手牌单玩家净盈亏结算上限（2026-08-20 §B7,
+// 金币设计 §4.2）。超出部分不进钱包,只 logger.Warn。
+const maxSettleDeltaPerHand = 5000
 
 // SettleHandCoins 手牌结束后按筹码盈亏结算金币。
 // 由 WS 层在 handOver 时调用。异步执行,不阻塞游戏流。
@@ -710,6 +851,55 @@ func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
 	}
 	handNum := r.State.HandNumber
 	r.mu.Unlock()
+
+	// 2026-08-20 §B7 — MaxPotPerHand 封顶(金币设计 §2.3):
+	// 本手底池(= 赢家总进账,筹码守恒下 = 输家总付出)超过上限时,赢家 delta
+	// 按比例缩放到上限,超出部分不进钱包(防恶意刷金币)。游戏内筹码不动,
+	// 只影响钱包结算金额。
+	m.mu.RLock()
+	maxPot := m.maxPotPerHand
+	m.mu.RUnlock()
+	if maxPot > 0 {
+		pot := 0
+		for _, s := range settlements {
+			if s.delta > 0 {
+				pot += s.delta
+			}
+		}
+		if pot > maxPot {
+			scale := float64(maxPot) / float64(pot)
+			for i := range settlements {
+				if settlements[i].delta > 0 {
+					settlements[i].delta = int(float64(settlements[i].delta) * scale)
+				}
+			}
+			logger.L().Warn("texasholdem hand pot exceeds MaxPotPerHand, payout capped",
+				zap.String("room_id", roomID),
+				zap.Int("hand", handNum),
+				zap.Int("pot", pot),
+				zap.Int("max_pot_per_hand", maxPot))
+		}
+	}
+
+	// 2026-08-20 §B7 — 单玩家净盈亏 clamp 到 ±5000(金币设计 §4.2):
+	// 超出部分不进钱包。
+	for i := range settlements {
+		if settlements[i].delta > maxSettleDeltaPerHand {
+			logger.L().Warn("texasholdem settle delta clamped (win)",
+				zap.String("room_id", roomID),
+				zap.String("user_id", settlements[i].userID),
+				zap.Int("delta", settlements[i].delta),
+				zap.Int("clamped_to", maxSettleDeltaPerHand))
+			settlements[i].delta = maxSettleDeltaPerHand
+		} else if settlements[i].delta < -maxSettleDeltaPerHand {
+			logger.L().Warn("texasholdem settle delta clamped (loss)",
+				zap.String("room_id", roomID),
+				zap.String("user_id", settlements[i].userID),
+				zap.Int("delta", settlements[i].delta),
+				zap.Int("clamped_to", -maxSettleDeltaPerHand))
+			settlements[i].delta = -maxSettleDeltaPerHand
+		}
+	}
 
 	// 按房间总金币计算抽水档位(§133 联动)
 	tier := texasherp.ComputeEconTier(roomTotalCoin)

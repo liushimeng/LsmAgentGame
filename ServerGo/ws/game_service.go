@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"LsmAgentGame/agent/thpagent"
@@ -40,6 +41,17 @@ type GameService struct {
 	werewolfMgr    *werewolf.WerewolfManager
 	// 2026-08-19 §德州扑克Agent — Bot 驱动器
 	thpDriver      *thpagent.Driver
+
+	// 2026-08-20 §B5/B6/B8 — 德州扑克 bot 运行时支撑字段。
+	// chatSvc: bot 公屏发言(poker_chat)的落库 + 广播通道(§B5,由 main.go SetChatService 注入)。
+	// thpActionTimeoutSec: 单 bot 决策超时(秒),同时是 §B8 watchdog 的超时基准。
+	// thpTurnGuards: §B6 per-room 串行守卫(roomID -> *sync.Mutex),
+	//   防人类 action 与 onHandStarted 回调并发驱动同一房间的 bot 链。
+	// thpWatchdogs: §B8 per-room watchdog 句柄(roomID -> *texasBotWatchdogHandle)。
+	chatSvc             *ChatService
+	thpActionTimeoutSec int
+	thpTurnGuards       sync.Map
+	thpWatchdogs        sync.Map
 }
 
 // NewGameService builds a GameService with the default set of managers.
@@ -94,6 +106,13 @@ func (s *GameService) TexasHoldemManager() *texasholdem.TexasHoldemManager {
 // WerewolfManager exposes the werewolf manager.
 func (s *GameService) WerewolfManager() *werewolf.WerewolfManager {
 	return s.werewolfMgr
+}
+
+// SetChatService 注入聊天服务(2026-08-20 §B5)。
+// 德州扑克 bot 的 poker_chat 公屏发言经 ChatService.SendFromBot 落库 + 广播,
+// 与狼人杀 bot 发言共用同一通道。nil-safe:不注入时 bot 聊天静默丢弃(仅 Debug 日志)。
+func (s *GameService) SetChatService(c *ChatService) {
+	s.chatSvc = c
 }
 
 // BroadcastCommentarySpectator 2026-08-11 §20260811-09 U1 — 把解说
@@ -605,6 +624,9 @@ func (s *GameService) RemoveRoomState(roomID string) {
 	s.doudizhuMgr.RemoveGame(roomID)
 	s.texasHoldemMgr.RemoveGame(roomID)
 	s.werewolfMgr.RemoveGame(roomID)
+	// 2026-08-20 §B6/§B8: 同步清理德扑 bot 运行时(串行守卫 + watchdog + driver 注册),
+	// 否则 thpDriver.UnregisterAgents 零生产调用点、Agent goroutine 与 watchdog 泄漏。
+	s.cleanupTexasHoldemBotRuntime(roomID)
 }
 
 // BroadcastRoomRemoved fans a single `game.removed` envelope out to every

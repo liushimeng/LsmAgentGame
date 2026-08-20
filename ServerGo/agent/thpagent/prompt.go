@@ -44,18 +44,29 @@ func BuildSystemPrompt(ctx *GameContextForAgent, mem *Memory) string {
 	// [CurrentState] 当前状态段
 	b.WriteString("[CurrentState]\n")
 	b.WriteString(fmt.Sprintf("手牌 #%d,阶段: %s,你的位置: %s。\n", ctx.HandNumber, ctx.Street, ctx.Position))
-	b.WriteString(fmt.Sprintf("你的底牌: %d,%d\n", ctx.MyHole[0], ctx.MyHole[1]))
-	b.WriteString(fmt.Sprintf("公共牌: %d 张: %v\n", ctx.CommunityLen, ctx.Community[:ctx.CommunityLen]))
+	// 2026-08-20 §B3: 底牌/公共牌用 CardString 渲染（A♠/10♥）,裸 int 对 LLM 无语义
+	b.WriteString(fmt.Sprintf("你的底牌: %s\n", CardsString(ctx.MyHole[:])))
+	if ctx.CommunityLen > 0 {
+		b.WriteString(fmt.Sprintf("公共牌: %d 张: %s\n", ctx.CommunityLen, CardsString(ctx.Community[:ctx.CommunityLen])))
+	} else {
+		b.WriteString("公共牌: 未亮\n")
+	}
 	b.WriteString(fmt.Sprintf("底池: %d,当前最高注: %d,跟注所需: %d。\n",
 		ctx.Pot, ctx.CurrentBet, ctx.CallAmount))
-	b.WriteString(fmt.Sprintf("你的剩余筹码: ?,本轮已下注: ?(由服务端 GameContext 注入)\n\n"))
+	// 2026-08-20 §B3: 此前是字面「?」占位,从未被替换
+	b.WriteString(fmt.Sprintf("你的剩余筹码: %d,本轮已下注: %d,大盲: %d。\n\n",
+		ctx.MyStack, ctx.MyRoundCommitted, ctx.BigBlind))
 
 	// [MathHelpers] 数学信号段
 	b.WriteString("[MathHelpers]\n")
 	b.WriteString(fmt.Sprintf("牌力 Hand Strength: %.3f (蒙特卡洛 1000 次抽样)\n", ctx.HandStrength))
 	b.WriteString(fmt.Sprintf("底池赔率: 跟注 %d 赢得 %d → required_equity %.3f\n",
 		ctx.CallAmount, ctx.Pot, ctx.RequiredEquity))
-	b.WriteString(fmt.Sprintf("建议虚张频率: %.2f (按对手弃牌率反推)\n\n", ctx.BluffHint))
+	b.WriteString(fmt.Sprintf("建议虚张频率: %.2f (按对手弃牌率反推)\n", ctx.BluffHint))
+	// 2026-08-20 §B3: 明确最小加注规则 —— LLM 此前只能猜,amount 经常被引擎拒绝
+	b.WriteString(fmt.Sprintf("最小加注规则: raise 的 amount 是「目标总注额」,必须 ≥ 当前最高注 %d + 最小加注增量 %d = %d;"+
+		"低于此值服务端会自动抬到该最小值,超过你的可动用筹码会自动改 allin。\n\n",
+		ctx.CurrentBet, ctx.MinRaise, ctx.CurrentBet+ctx.MinRaise))
 
 	// [StyleGuide] 风格指南段
 	b.WriteString("[StyleGuide]\n")
@@ -65,7 +76,8 @@ func BuildSystemPrompt(ctx *GameContextForAgent, mem *Memory) string {
 	b.WriteString("  * 牌力 > required_equity + 5% → 跟注/加注\n")
 	b.WriteString("  * 牌力 < required_equity - 5% → 弃牌\n")
 	b.WriteString("  * 介于两者之间 → 考虑位置与虚张频率\n")
-	b.WriteString("- 注意: raise amount 必须 ≥ 当前最高注 + 最小加注增量。\n")
+	b.WriteString(fmt.Sprintf("- 注意: raise 的 amount 是目标总注额,必须 ≥ 当前最高注 + 最小加注增量(当前为 %d)。\n",
+		ctx.CurrentBet+ctx.MinRaise))
 
 	result := b.String()
 	if len([]rune(result)) > SystemPromptMaxRunes {
@@ -122,6 +134,9 @@ func BuildUserPrompt(ctx *GameContextForAgent, mem *Memory) string {
 		buildWalletBlock(ctx),
 	}
 	for _, blk := range optionalBlocks {
+		if blk == "" {
+			continue // 无数据块自然省略,不计入 droppedBlocks(§B3 假占位文案禁令)
+		}
 		blkRunes := len([]rune(blk))
 		if remainingBudget-blkRunes < 300 {
 			droppedBlocks++
@@ -149,14 +164,14 @@ func buildCurrentHandBlock(ctx *GameContextForAgent) string {
 }
 
 func buildMyHandBlock(ctx *GameContextForAgent) string {
-	return fmt.Sprintf("【我的底牌】%d, %d\n\n", ctx.MyHole[0], ctx.MyHole[1])
+	return fmt.Sprintf("【我的底牌】%s\n\n", CardsString(ctx.MyHole[:]))
 }
 
 func buildCommunityCardsBlock(ctx *GameContextForAgent) string {
 	if ctx.CommunityLen == 0 {
 		return "【公共牌】未亮\n\n"
 	}
-	return fmt.Sprintf("【公共牌】%d 张: %v\n\n", ctx.CommunityLen, ctx.Community[:ctx.CommunityLen])
+	return fmt.Sprintf("【公共牌】%d 张: %s\n\n", ctx.CommunityLen, CardsString(ctx.Community[:ctx.CommunityLen]))
 }
 
 func buildPotOddsBlock(ctx *GameContextForAgent) string {
@@ -183,8 +198,38 @@ func buildBluffHintBlock(ctx *GameContextForAgent) string {
 	return fmt.Sprintf("【虚张建议】Bluff 频率 %.2f\n\n", ctx.BluffHint)
 }
 
+// buildReputationBlock 基于 Memory.AllOpponentStats 的真实画像（2026-08-20 §B3）。
+// 此前固定返回「v1.0 简化:无 Profile 数据」假占位文案（§130 伪装模式）。
+// 无任何统计数据时返回空字符串 —— 让 BuildUserPrompt 的预算机制自然省略,
+// 而不是给 LLM 喂一句没有信息量的占位符。
 func buildReputationBlock(mem *Memory) string {
-	return fmt.Sprintf("【玩家画像】v1.0 简化:无 Profile 数据\n\n")
+	stats := mem.AllOpponentStats()
+	if len(stats) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("【玩家画像】(按座位)\n")
+	wrote := false
+	for seat := 0; seat < 6; seat++ {
+		for _, st := range stats {
+			if st.Seat != seat || st.HandsPlayed <= 0 {
+				continue
+			}
+			total := st.TotalFold + st.TotalCall + st.TotalRaise + st.TotalAllIn
+			raiseRate := 0.0
+			if total > 0 {
+				raiseRate = float64(st.TotalRaise) / float64(total)
+			}
+			b.WriteString(fmt.Sprintf("  - 座位%d: 共打 %d 手,弃牌率 %.0f%%,加注率 %.0f%%,全押 %d 次,净盈亏 %+d\n",
+				seat+1, st.HandsPlayed, st.FoldRate*100, raiseRate*100, st.TotalAllIn, st.NetChips))
+			wrote = true
+		}
+	}
+	if !wrote {
+		return ""
+	}
+	b.WriteString("\n")
+	return b.String()
 }
 
 func buildMemoryMDBlock(mem *Memory) string {

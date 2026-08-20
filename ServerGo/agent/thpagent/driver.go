@@ -13,6 +13,7 @@ import (
 	"time"
 
 	agentroot "LsmAgentGame/agent"
+	agentcore "LsmAgentGame/agent/core"
 	"LsmAgentGame/llm/types"
 	"LsmAgentGame/logger"
 	"go.uber.org/zap"
@@ -131,13 +132,16 @@ type SeatConfig struct {
 	ModelName string
 }
 
-// OnNewHandLocked 重置房间所有 bot 的 chat 计数与 per-round 限流状态。
-// 由 TexasHoldemManager.onHandStarted 回调调用(持 r.mu + thpDriver 调用前)。
+// OnNewHandLocked 每手牌开始时重置所有 bot 的 per-hand 状态（2026-08-20 §B2 扩展）。
+// 由 WS 层 SetOnHandStarted 回调调用（engine 触发 onHandStarted 后）。
 //
-// 修复 §130「声明了却从不接线」:Dispatcher.OnNewHand 在 v1.0 是死代码,
-// driver 永不调它 → bot 跨手牌累计 chat 计数,手牌 N 之后不再允许说话。
-// 现已接通,每手牌开始时强制清零 chat 计数 + round 标志。
-func (d *Driver) OnNewHandLocked(roomID string) {
+// 接线清单（此前全部是 §130「声明了却从不接线」死代码）：
+//   1. Dispatcher.OnNewHand — 重置 chat 计数（v1.0 已接）
+//   2. Memory.ResetCurrentHand — 清空本手动作记录
+//   3. Memory.IncrementHandsPlayed — 对房间内所有其他入座玩家（含人类）累计手数
+//
+// seats: 房间座位表（空串 = 空位），由调用方从 TexasHoldemManager.Seats 快照。
+func (d *Driver) OnNewHandLocked(roomID string, seats [6]string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -149,8 +153,130 @@ func (d *Driver) OnNewHandLocked(roomID string) {
 		if ra.dispatch[i] != nil {
 			ra.dispatch[i].OnNewHand()
 		}
+		mem := ra.memories[i]
+		if mem == nil {
+			continue
+		}
+		mem.ResetCurrentHand()
+		for j := 0; j < 6; j++ {
+			if j == i || seats[j] == "" {
+				continue
+			}
+			mem.IncrementHandsPlayed(seats[j])
+		}
 	}
 	logger.L().Debug("texasholdem driver OnNewHand", zap.String("room_id", roomID))
+}
+
+// RecordPlayerAction 把一次已应用到引擎的动作广播给所有 bot 的 Memory
+// （2026-08-20 §B2：UpdateOpponentStat / RecordAction 此前零生产调用点）。
+//
+// 调用时机：bot 动作在 ProcessBotTurn 应用成功后 + 人类 action 在引擎成功后。
+//   - 行动者本人（若是 bot）：记录到自己的 CurrentHandActions
+//   - 其他所有 bot：UpdateOpponentStat(行动者) + RecordAction
+func (d *Driver) RecordPlayerAction(roomID string, actorSeat int, actorUserID, actionType string, amount int, street string) {
+	if actorUserID == "" {
+		return
+	}
+	d.mu.RLock()
+	ra, ok := d.rooms[roomID]
+	d.mu.RUnlock()
+	if !ok {
+		return
+	}
+	rec := ActionRecordForMemory{Seat: actorSeat, ActionType: actionType, Amount: amount, Street: street}
+	for i := 0; i < 6; i++ {
+		mem := ra.memories[i]
+		if mem == nil {
+			continue
+		}
+		if i == actorSeat {
+			mem.RecordAction(rec) // 自己的动作也入本手时间线
+			continue
+		}
+		mem.UpdateOpponentStat(actorUserID, actorSeat, actionType)
+		mem.RecordAction(rec)
+	}
+}
+
+// HandSeatSummary 是单手牌结束时单个座位的结算摘要（2026-08-20 §B2）。
+// 与 game/texasholdem 的结算快照平行（避免循环 import，由 ws 层转换）。
+type HandSeatSummary struct {
+	Seat     int
+	UserID   string
+	Hole     [2]int
+	NetDelta int  // 本手净盈亏（筹码,结算前）
+	Won      bool // 是否在 winners 中
+}
+
+// AppendHandResult 手牌结束时把结果写入所有 bot 的 Memory
+// （2026-08-20 §B2：AppendHand / OpponentStat.NetChips 此前零生产调用点）。
+//
+//   - 每个 bot：AppendHand(HandRecord{... 自己的底牌/公共牌/赢家/净盈亏})
+//   - 每个 bot 对房间内其他所有入座玩家：RecordOpponentHandResult（驱动玩家画像）
+func (d *Driver) AppendHandResult(roomID string, handNumber int, community [5]int, communityLen int, winners []int, seats []HandSeatSummary) {
+	d.mu.RLock()
+	ra, ok := d.rooms[roomID]
+	d.mu.RUnlock()
+	if !ok {
+		return
+	}
+	for i := 0; i < 6; i++ {
+		mem := ra.memories[i]
+		if mem == nil {
+			continue
+		}
+		var mine *HandSeatSummary
+		for k := range seats {
+			if seats[k].Seat == i {
+				mine = &seats[k]
+				break
+			}
+		}
+		if mine != nil {
+			mem.AppendHand(HandRecord{
+				HandNumber:   handNumber,
+				MySeat:       i,
+				MyHole:       mine.Hole,
+				Community:    community,
+				CommunityLen: communityLen,
+				Winners:      append([]int{}, winners...),
+				NetChipDelta: mine.NetDelta,
+			}, 5)
+		}
+		for k := range seats {
+			if seats[k].Seat == i || seats[k].UserID == "" {
+				continue
+			}
+			mem.RecordOpponentHandResult(seats[k].UserID, seats[k].Seat, seats[k].NetDelta, seats[k].Won)
+		}
+	}
+}
+
+// BluffHintFor 返回指定 bot 的虚张频率建议（2026-08-20 §B2）。
+// 取该 bot Memory 中所有有交手记录对手的弃牌率均值 → BluffFrequency 映射。
+// 无数据时返回 0.15 中性默认（与旧硬编码一致,保证无回归）。
+func (d *Driver) BluffHintFor(roomID string, seat int) float64 {
+	d.mu.RLock()
+	ra, ok := d.rooms[roomID]
+	d.mu.RUnlock()
+	if !ok || seat < 0 || seat >= 6 || ra.memories[seat] == nil {
+		return 0.15
+	}
+	stats := ra.memories[seat].AllOpponentStats()
+	sum := 0.0
+	n := 0
+	for _, st := range stats {
+		if st.HandsPlayed <= 0 {
+			continue
+		}
+		sum += st.FoldRate
+		n++
+	}
+	if n == 0 {
+		return 0.15
+	}
+	return BluffFrequency(sum / float64(n))
 }
 
 // OnNewRoundLocked 重置指定 bot 座位的 poker_action 限流(每轮 1 次)。
@@ -271,7 +397,31 @@ func (d *Driver) DecideAction(ctx context.Context, roomID string, seat int, prom
 	}
 
 	// 解析 tool_use 块
-	action, thought := parseToolUseResponse(resp, disp, promptContext)
+	action, thought, chatText := parseToolUseResponse(resp, disp, promptContext)
+
+	// 2026-08-20 §B5: poker_chat 接线 —— 去重 + 限流后挂到 Action.ChatText,
+	// 由 WS 层走 ChatService.SendFromBot 真正广播。限流拒绝时只丢 chat,
+	// action 照常应用（工具协议 §5）。
+	if chatText != "" {
+		cleaned, deduped, truncated := agentcore.DedupSpeakText(chatText)
+		if deduped || truncated {
+			logger.L().Debug("texasholdem bot chat deduped/truncated",
+				zap.String("room_id", roomID),
+				zap.Int("seat", seat),
+				zap.Bool("deduped", deduped),
+				zap.Bool("truncated", truncated))
+		}
+		if cleaned == "" {
+			// 整段复读被清空 —— 丢弃 chat
+		} else if err := disp.DispatchPokerChat(cleaned); err != nil {
+			logger.L().Debug("texasholdem bot chat rate-limited, dropped",
+				zap.String("room_id", roomID),
+				zap.Int("seat", seat),
+				zap.Error(err))
+		} else {
+			action.ChatText = cleaned
+		}
+	}
 
 	// 记录决策摘要
 	if thought != "" {
@@ -290,12 +440,17 @@ func (d *Driver) DecideAction(ctx context.Context, roomID string, seat int, prom
 	return action, nil
 }
 
-// parseToolUseResponse 从 LLM 响应中解析 poker_action tool_use。
-// 返回 (action, thought)。未找到 tool_use 时返回 fold + reason。
-func parseToolUseResponse(resp types.LLMResponse, disp *Dispatcher, ctx *GameContextForAgent) (Action, string) {
+// parseToolUseResponse 从 LLM 响应中解析 poker_action / poker_chat tool_use。
+// 返回 (action, thought, chatText)。未找到 poker_action 时返回 fold + reason。
+//
+// 2026-08-20 §B5：poker_chat 的 text 不再只拼进日志字符串,而是作为独立
+// 返回值交给 DecideAction 做去重 + 限流（internal_thought 仍只进 thought,
+// 协议层隔离,绝不入 chat — §119）。
+func parseToolUseResponse(resp types.LLMResponse, disp *Dispatcher, ctx *GameContextForAgent) (Action, string, string) {
 	var textContent string
 	var action Action
 	var thought string
+	var chatText string
 	foundAction := false
 
 	for _, block := range resp.Content {
@@ -310,10 +465,9 @@ func parseToolUseResponse(resp types.LLMResponse, disp *Dispatcher, ctx *GameCon
 				if t, ok := block.Input["internal_thought"].(string); ok {
 					thought = t
 				}
-			} else if block.Name == "poker_chat" {
-				// poker_chat 是可选工具,提取 text 供日志
+			} else if block.Name == "poker_chat" && chatText == "" {
 				if t, ok := block.Input["text"].(string); ok {
-					textContent += " [chat] " + t
+					chatText = t
 				}
 			}
 		}
@@ -324,17 +478,17 @@ func parseToolUseResponse(resp types.LLMResponse, disp *Dispatcher, ctx *GameCon
 		if thought == "" {
 			thought = textContent
 		}
-		return Action{Type: ActFold, Thought: thought}, thought
+		return Action{Type: ActFold, Thought: thought}, thought, chatText
 	}
 
 	// 通过 dispatcher 校验(限流/合法性)
 	validated, err := disp.DispatchPokerAction(action)
 	if err != nil {
 		// 校验失败(如本轮已行动) → fold 兜底
-		return Action{Type: ActFold, Thought: "dispatch rejected: " + err.Error()}, thought
+		return Action{Type: ActFold, Thought: "dispatch rejected: " + err.Error()}, thought, chatText
 	}
 
-	return validated, thought
+	return validated, thought, chatText
 }
 
 // parseActionFromInput 从 tool_use input 中解析 Action。

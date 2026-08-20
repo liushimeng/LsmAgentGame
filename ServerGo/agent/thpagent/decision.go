@@ -33,11 +33,14 @@ type handStrengthResult struct {
 	Draw float64
 }
 
-// HandStrength 蒙特卡洛计算胜率。返回胜率（含平局半数）与平局率。
-//   - hole: 自己的两张底牌（rank*4+suit 编码，与 texasholdem.Card 一致）
+// HandStrength 蒙特卡洛计算胜率（对手底牌完全随机）。返回胜率与平局率。
+//   - hole: 自己的两张底牌（cards.go 唯一规范编码 1..52）
 //   - community: 已亮的 0..5 张公共牌；未亮部分填 0
 //   - nShown: 已亮公共牌数 0..5
 //   - nSimulations: 蒙特卡洛抽样次数；0 时用默认 1000
+//
+// 注意：时间种子 + 结果缓存（同 key O(1) 命中）。需要确定性结果的测试
+// 请走 HandStrengthSeed / HandStrengthVS（§数学引擎设计.md §3 基准测试）。
 func HandStrength(hole [2]int, community [5]int, nShown, nSimulations int) (win, draw float64) {
 	if nSimulations <= 0 {
 		nSimulations = 1000
@@ -61,35 +64,87 @@ func HandStrength(hole [2]int, community [5]int, nShown, nSimulations int) (win,
 	}
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	win, draw = handStrengthMC(hole, nil, community, nShown, nSimulations, rng)
+	HandStrengthCache.Store(key, handStrengthResult{Win: win, Draw: draw})
+	return win, draw
+}
+
+// HandStrengthSeed 与 HandStrength 相同但使用固定种子（测试确定性，防 flaky）。
+// 不走缓存（缓存键不含种子，走缓存会让基准测试互相污染）。
+func HandStrengthSeed(hole [2]int, community [5]int, nShown, nSimulations int, seed int64) (win, draw float64) {
+	rng := rand.New(rand.NewSource(seed))
+	return handStrengthMC(hole, nil, community, nShown, nSimulations, rng)
+}
+
+// HandStrengthVS 蒙特卡洛计算 vs 指定对手底牌的胜率（测试/分析用）。
+// oppHole 必须不与 hole / community 冲突；冲突时对手牌仍在牌堆中会被剔除
+// （makeDeckExcluding 保证），但胜率语义已失真 —— 调用方保证不冲突。
+func HandStrengthVS(hole, oppHole [2]int, community [5]int, nShown, nSimulations int, rng *rand.Rand) (win, draw float64) {
+	if rng == nil {
+		rng = rand.New(rand.NewSource(42))
+	}
+	return handStrengthMC(hole, &oppHole, community, nShown, nSimulations, rng)
+}
+
+// handStrengthMC 是蒙特卡洛主循环。oppHole 为 nil 时对手底牌随机。
+//
+// 2026-08-20 §B1 修复：旧实现有两处物理正确性 bug：
+//  1. 旧编码（Rank*4+Suit+1，值域 10..61）的底牌 >52 永远不会从 1..52 的
+//     抽样牌堆中剔除 → 对手可被发到与自己相同的物理牌；
+//  2. 对手底牌从「未剔除已抽样公共牌」的牌堆中再抽 → 对手可拿到与本次
+//     抽样公共牌相同的牌。
+// 现在：牌堆一次性剔除 hole + 已亮公共牌（+ 指定 oppHole），每次迭代从同一
+// 剩余牌堆无放回地抽「待亮公共牌 + 对手底牌」。
+func handStrengthMC(hole [2]int, oppHole *[2]int, community [5]int, nShown, nSimulations int, rng *rand.Rand) (win, draw float64) {
+	if nSimulations <= 0 {
+		nSimulations = 1000
+	}
+	if nShown < 0 {
+		nShown = 0
+	}
+	if nShown > 5 {
+		nShown = 5
+	}
+
+	exclude := [][]int{hole[:], community[:nShown]}
+	if oppHole != nil {
+		exclude = append(exclude, oppHole[:])
+	}
+	deck := makeDeckExcluding(exclude...)
 
 	wins := 0
 	draws := 0
-	deck := makeDeckExcluding(hole[:], community[:nShown])
-
 	for i := 0; i < nSimulations; i++ {
+		nCommNeeded := 5 - nShown
+		nOpp := 0
+		if oppHole == nil {
+			nOpp = 2
+		}
+		drawn := sampleN(deck, nCommNeeded+nOpp, rng)
+
 		// 抽样补全到 5 张公共牌
 		sample := append([]int{}, community[:nShown]...)
-		needed := 5 - nShown
-		sample = append(sample, sampleN(deck, needed, rng)...)
+		sample = append(sample, drawn[:nCommNeeded]...)
 
-		// 计算自己牌型（占位 — 实际由 HandRank.Compare 评分）
-		myScore := scoreHand(hole[:], sample)
+		var opp []int
+		if oppHole != nil {
+			opp = oppHole[:]
+		} else {
+			opp = drawn[nCommNeeded : nCommNeeded+nOpp]
+		}
 
-		// 对手 2 张底牌
-		oppHole := sampleN(deck, 2, rng)
-		oppScore := scoreHand(oppHole, sample)
+		myScore := evalHoleCommunity(hole[:], sample)
+		oppScore := evalHoleCommunity(opp, sample)
 
-		if myScore > oppScore {
+		cmp := myScore.compare(oppScore)
+		if cmp > 0 {
 			wins++
-		} else if myScore == oppScore {
+		} else if cmp == 0 {
 			draws++
 		}
 	}
 
-	win = float64(wins) / float64(nSimulations)
-	draw = float64(draws) / float64(nSimulations)
-	HandStrengthCache.Store(key, handStrengthResult{Win: win, Draw: draw})
-	return win, draw
+	return float64(wins) / float64(nSimulations), float64(draws) / float64(nSimulations)
 }
 
 // makeDeckExcluding 返回完整 52 张牌的索引数组（0..51），剔除指定牌。
@@ -130,142 +185,9 @@ func sampleN(deck []int, n int, rng *rand.Rand) []int {
 	 return out
 }
 
-// scoreHand 评估手牌得分（简化版，0-1000 整数）。
-//
-// 简化算法：基于 HandRank 的 9 个等级（HighCard=0..RoyalFlush=8）乘以 100 + 5 张牌的 rank 之和。
-// 不做完整 C(7,5)=21 种组合遍历，仅取固定「前 2 张底牌 + 后 3 张公共牌」组合，
-// 保证 v1.0 测试基准的容差内（±3%）。
-//
-// 详细 21 种组合遍历留待 v1.1。
-func scoreHand(hole, community []int) int {
-	all := append([]int{}, hole...)
-	all = append(all, community...)
-	if len(all) < 5 {
-		// 不足 5 张 — 用 0 占位
-		for len(all) < 5 {
-			all = append(all, 0)
-		}
-	} else if len(all) > 5 {
-		// 取前 5 张（简化）
-		all = all[:5]
-	}
-	category := detectCategory(all)
-	rankSum := 0
-	for _, c := range all {
-		if c > 0 {
-			r := (c - 1) / 4
-			if r < 0 {
-				r = 0
-			}
-			rankSum += r
-		}
-	}
-	return category*100 + rankSum
-}
-
-// detectCategory 简化牌型识别（仅识别大致类别, 用于 win/draw 判定）。
-// 返回 0..8 (HighCard=0 .. RoyalFlush=8)。
-func detectCategory(cards []int) int {
-	if len(cards) < 5 {
-		return 0
-	}
-	// 统计 rank 与 suit
-	ranks := make(map[int]int)
-	suits := make(map[int]int)
-	rankList := make([]int, 0, len(cards))
-	for _, c := range cards {
-		if c <= 0 {
-			continue
-		}
-		r := (c - 1) / 4
-		s := (c - 1) % 4
-		ranks[r]++
-		suits[s]++
-		rankList = append(rankList, r)
-	}
-	if len(rankList) < 5 {
-		return 0
-	}
-
-	// 检查同花（5 张同花色）
-	isFlush := false
-	for _, cnt := range suits {
-		if cnt >= 5 {
-			isFlush = true
-			break
-		}
-	}
-
-	// 检查顺子（5 张连续 rank）
-	uniqueRanks := make(map[int]bool)
-	for _, r := range rankList {
-		uniqueRanks[r] = true
-	}
-	isStraight := false
-	for start := 0; start <= 9; start++ {
-		allPresent := true
-		for k := 0; k < 5; k++ {
-			if !uniqueRanks[start+k] {
-				allPresent = false
-				break
-			}
-		}
-		if allPresent {
-			isStraight = true
-			break
-		}
-	}
-	// A-2-3-4-5 特殊顺子
-	if !isStraight && uniqueRanks[0] && uniqueRanks[1] && uniqueRanks[2] && uniqueRanks[3] && uniqueRanks[12] {
-		isStraight = true
-	}
-
-	// 同花顺 / 皇家
-	if isFlush && isStraight {
-		// 检查最高 rank
-		hasAce := uniqueRanks[12]
-		if hasAce {
-			return 8 // RoyalFlush
-		}
-		return 7 // StraightFlush
-	}
-
-	// 检查四条 / 葫芦 / 三条
-	var pairs, triples, quads int
-	for _, cnt := range ranks {
-		switch cnt {
-		case 2:
-			pairs++
-		case 3:
-			triples++
-		case 4:
-			quads++
-		}
-	}
-
-	if quads >= 1 {
-		return 6 // FourOfAKind
-	}
-	if triples >= 1 && pairs >= 1 {
-		return 5 // FullHouse
-	}
-	if isFlush {
-		return 4 // Flush
-	}
-	if isStraight {
-		return 3 // Straight
-	}
-	if triples >= 1 {
-		return 2 // ThreeOfAKind
-	}
-	if pairs >= 2 {
-		return 1 // TwoPair
-	}
-	if pairs >= 1 {
-		return 0 // OnePair (与 HighCard 同一档简化)
-	}
-	return 0 // HighCard
-}
+// scoreHand / detectCategory 已于 2026-08-20 §B1 删除 —— 旧实现只取前 5 张
+// （turn/river 被忽略）且 OnePair 与 HighCard 同档。牌型评估统一走
+// hand_eval.go 的 evalBest（C(7,5)=21 组合取最大 + kicker 字典序）。
 
 // PotOdds 计算底池赔率。返回 (odds, required_equity)，都是 0.0-1.0。
 //   - callAmount: 跟注所需金额

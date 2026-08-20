@@ -137,7 +137,7 @@ func TestDriver_OnNewHand_ResetsChatCounts(t *testing.T) {
 	}
 
 	// 触发 OnNewHandLocked
-	d.OnNewHandLocked("room1")
+	d.OnNewHandLocked("room1", [6]string{"bot0", "", "", "", "", ""})
 	if disp.ChatCountThisHand() != 0 {
 		t.Errorf("expected chat count=0 after OnNewHandLocked, got %d", disp.ChatCountThisHand())
 	}

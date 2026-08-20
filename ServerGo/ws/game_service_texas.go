@@ -46,7 +46,8 @@ func (s *GameService) handleTexasHoldemJoin(c *Client, env Envelope, roomID stri
 		s.broadcastTexasHoldemState(roomID)
 		logger.L().Info("texasholdem game started via ws", zap.String("room_id", roomID))
 		// 2026-08-19 §德州扑克Agent: 游戏开始后检查是否 bot 先行动
-		s.ProcessBotTurn(roomID)
+		// 2026-08-20 §B6: 异步 + per-room 串行守卫(LLM 调用最坏 30s×6,不得阻塞 WS handler)
+		go s.ProcessBotTurn(roomID)
 	} else {
 		s.hub.BroadcastRoom(roomID, Envelope{
 			Type: "game.peer_joined",
@@ -101,6 +102,20 @@ func (s *GameService) handleTexasHoldemAction(c *Client, env Envelope) {
 		return
 	}
 
+	// 2026-08-20 §B2: 人类动作应用成功 → 所有 bot 的 Memory 记录行动者统计。
+	// 取行动者座位与 street(动作后 street 可能已推进,取快照以「动作发生时的阶段」为准
+	// 代价高;此处直接用房间当前 street,统计口径为「动作入账时的阶段」)。
+	if s.thpDriver != nil {
+		seat, seated := room.SeatOf(c.UserID)
+		street := ""
+		if room.State != nil {
+			street = room.State.Street.String()
+		}
+		if seated {
+			s.thpDriver.RecordPlayerAction(req.RoomID, seat, c.UserID, req.Type, req.Amount, street)
+		}
+	}
+
 	s.hub.BroadcastRoom(req.RoomID, Envelope{
 		Type: "game.action_accepted",
 		Payload: mustMarshal(map[string]any{
@@ -117,7 +132,8 @@ func (s *GameService) handleTexasHoldemAction(c *Client, env Envelope) {
 		s.broadcastTexasHoldemState(req.RoomID)
 	}
 	// 2026-08-19 §德州扑克Agent: 人类行动后检查是否轮到 bot
-	s.ProcessBotTurn(req.RoomID)
+	// 2026-08-20 §B6: 异步 + per-room 串行守卫(LLM 调用最坏 30s×6,不得阻塞 WS handler)
+	go s.ProcessBotTurn(req.RoomID)
 }
 
 func (s *GameService) sendTexasHoldemState(c *Client, seq int64, state *texasholdem.ClientGameState) {
@@ -145,7 +161,25 @@ func (s *GameService) broadcastTexasHoldemState(roomID string) {
 }
 
 func (s *GameService) broadcastTexasHoldemOver(roomID string, room *texasholdem.TexasHoldemRoom) {
-	if room == nil || room.State == nil {
+	if room != nil && room.State != nil {
+		s.hub.BroadcastRoom(roomID, Envelope{
+			Type: "game.over",
+			Payload: mustMarshal(map[string]any{
+				"room_id":     roomID,
+				"game_kind":   "texasholdem",
+				"winners":     room.State.Winners,
+				"reason":      "hand_end",
+				"status":      room.State.Status.String(),
+				"hand_number": room.State.HandNumber,
+			}),
+		})
+		return
+	}
+	// 2026-08-20 §B6/B8 修复:bot 路径 / watchdog 强制 fold 只有 roomID,
+	// 旧实现 room==nil 直接 return → game.over 从未下发(前端不知手牌结束)。
+	// 现在回退到 manager 的锁内快照 OverSummary。
+	winners, status, handNumber, ok := s.texasHoldemMgr.OverSummary(roomID)
+	if !ok {
 		return
 	}
 	s.hub.BroadcastRoom(roomID, Envelope{
@@ -153,10 +187,10 @@ func (s *GameService) broadcastTexasHoldemOver(roomID string, room *texasholdem.
 		Payload: mustMarshal(map[string]any{
 			"room_id":     roomID,
 			"game_kind":   "texasholdem",
-			"winners":     room.State.Winners,
+			"winners":     winners,
 			"reason":      "hand_end",
-			"status":      room.State.Status.String(),
-			"hand_number": room.State.HandNumber,
+			"status":      status,
+			"hand_number": handNumber,
 		}),
 	})
 }

@@ -81,9 +81,12 @@ type GameContextForAgent struct {
 	Community      [5]int
 	CommunityLen   int
 	MyStack        int
+	MyRoundCommitted int   // 本轮已下注（2026-08-20 §B3：此前 prompt 输出字面「?」占位）
 	Pot            int
 	CurrentBet     int
 	CallAmount     int
+	MinRaise       int   // 最小加注增量（§B3：此前声明于 snapshot 但未透传给 prompt）
+	BigBlind       int   // 大盲（§B3：raise 规则文案 + allin 90% 判定需要）
 	HandStrength   float64
 	RequiredEquity float64
 	Position       string

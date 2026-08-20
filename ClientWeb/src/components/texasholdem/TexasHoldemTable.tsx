@@ -1,5 +1,6 @@
 import { CommunityCards } from './CommunityCards';
 import { PlayerSeat } from './PlayerSeat';
+import { BotThoughtPanel } from './BotThoughtPanel';
 import { STYLE_COLORS, getBoardBg, type StyleKey } from '@/assets/images/texasholdem';
 import type { TexasHoldemGameState } from '@/types/texasholdem';
 import { useState } from 'react';
@@ -30,6 +31,30 @@ export function TexasHoldemTable({ gameState, mySeat, style }: Props) {
 
   // 6 个座位：自己在 s0，其余顺时针
   const seatOrder = Array.from({ length: 6 }, (_, i) => (mySeat + i) % 6);
+
+  // 2026-08-20 §F1 — BotThoughtPanel 独白选座：优先「正在思考且有独白」的 bot 座位，
+  // 否则取任一最近非空独白的 bot 座位；全空则不渲染(§126/§130「组件存在但未被 import
+  // 等于不存在」修复 —— 面板此前零引用)。
+  const botsArr = gameState.bot_seats;
+  const thoughtsArr = gameState.bot_heart_thought;
+  const thinkingArr = gameState.bot_thinking;
+  let thoughtSeat = -1;
+  if (botsArr && thoughtsArr) {
+    for (let s = 0; s < 6; s++) {
+      if (botsArr[s] && thinkingArr?.[s] && thoughtsArr[s]) {
+        thoughtSeat = s;
+        break;
+      }
+    }
+    if (thoughtSeat < 0) {
+      for (let s = 0; s < 6; s++) {
+        if (botsArr[s] && thoughtsArr[s]) {
+          thoughtSeat = s;
+          break;
+        }
+      }
+    }
+  }
 
   const posClasses = ['s0-bottom', 's1-left', 's2-top-left', 's3-top', 's4-top-right', 's5-right'];
 
@@ -76,6 +101,15 @@ export function TexasHoldemTable({ gameState, mySeat, style }: Props) {
           {t('texasholdem.pot' as TKey)}: ${gameState.pot}
         </div>
       </div>
+
+      {/* §F1: Bot 内心独白面板 — 桌面右上角(设计文档 §4) */}
+      {thoughtSeat >= 0 && (
+        <BotThoughtPanel
+          thought={thoughtsArr![thoughtSeat]}
+          seat={thoughtSeat}
+          thinking={!!thinkingArr?.[thoughtSeat]}
+        />
+      )}
     </div>
   );
 }

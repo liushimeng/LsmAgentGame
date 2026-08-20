@@ -15,7 +15,11 @@ import (
 type Action struct {
 	Type     string // "fold"/"check"/"call"/"bet"/"raise"/"allin"
 	Amount   int    // bet/raise 目标金额
-	Thought  string // 内心独白
+	Thought  string // 内心独白（协议层隔离,绝不入 chat 表 — §119）
+	// ChatText 是 LLM 在同一响应里通过 poker_chat 工具给出的公屏发言。
+	// 仅在通过 Dispatcher.DispatchPokerChat 限流 + 文本去重后填充;
+	// 2026-08-20 §B5 之前 poker_chat 只拼进日志字符串,从未真正广播。
+	ChatText string
 }
 
 // ActionType 枚举常量

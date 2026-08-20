@@ -91,9 +91,9 @@ func TestBluffFrequency(t *testing.T) {
 }
 
 func TestHandStrength_BasicInvariants(t *testing.T) {
-	// HS-04: A♠K♠ (编码 1, 14) vs 7♥2♦ (编码 28, 9) preflop
-	// 期望胜率约 65%, 容差 ±10% (蒙特卡洛 1000 次 + 简化评分)
-	hole := [2]int{1, 14}      // A♠ + A♠？这里简化为 A-A 配对 → 应高胜率
+	// 规范编码(cards.go): encode = (rank-2)*4 + (suit-1) + 1
+	// A♠ = (14-2)*4+0+1 = 49, A♥ = 50 → 口袋对 A，preflop 应高胜率
+	hole := [2]int{49, 50}
 	community := [5]int{}
 	win, draw := HandStrength(hole, community, 0, 500)
 	if win+draw > 1.0 {
@@ -102,78 +102,101 @@ func TestHandStrength_BasicInvariants(t *testing.T) {
 	if win < 0 || draw < 0 {
 		t.Errorf("negative probability: win=%f draw=%f", win, draw)
 	}
+	if win < 0.6 {
+		t.Errorf("AA preflop should be a strong favorite, win=%f", win)
+	}
 	t.Logf("A-A preflop win=%f draw=%f", win, draw)
 }
 
-func TestHandStrength_RoyalFlushDetection(t *testing.T) {
-	// RoyalFlush 应被识别为最高牌型
-	// 10♠=37, J♠=38, Q♠=39, K♠=40, A♠=1 (但我们用 4*suit+rank 编码？这里 1-based)
-	// 实际我们编码: c = rank*4 + suit, rank 1-13, suit 1-4
-	// 10-J-Q-K-A 同花色 = (10,1)(11,1)(12,1)(13,1)(13,4) - 但这跨花色
-	// 简化：直接用 5 张同花色 A-2-3-4-5 顺子
-	cards := []int{
-		1*4 + 1, // A♠
-		2*4 + 1, // 2♠
-		3*4 + 1, // 3♠
-		4*4 + 1, // 4♠
-		5*4 + 1, // 5♠
+// eval5 编码辅助: c(rank, suit)。
+func ec(rank, suit int) int { return EncodeCard(rank, suit) }
+
+func TestEval5_StraightFlush(t *testing.T) {
+	// A-2-3-4-5 同花顺（轮子）
+	s := eval5([5]int{ec(14, 1), ec(2, 1), ec(3, 1), ec(4, 1), ec(5, 1)})
+	if s.category != catStraightFlush {
+		t.Errorf("A-2-3-4-5 same suit should be straight flush, got %d", s.category)
 	}
-	category := detectCategory(cards)
-	// A-2-3-4-5 同花顺不算皇家,但算同花顺(7)
-	if category != 7 {
-		t.Errorf("A-2-3-4-5 same-suit straight should be StraightFlush(7), got %d", category)
+	if s.tiebreak[0] != 5 {
+		t.Errorf("wheel straight flush high should be 5, got %d", s.tiebreak[0])
+	}
+	// 皇家同花顺 = 同花顺 + A 高
+	royal := eval5([5]int{ec(10, 2), ec(11, 2), ec(12, 2), ec(13, 2), ec(14, 2)})
+	if royal.category != catStraightFlush || royal.tiebreak[0] != 14 {
+		t.Errorf("royal flush should be straight flush with A high, got %+v", royal)
+	}
+	if royal.compare(s) <= 0 {
+		t.Error("royal flush should beat wheel straight flush")
 	}
 }
 
-func TestHandStrength_FourOfAKind(t *testing.T) {
-	// 四条 5 (rank=5) 不同花色
-	cards := []int{
-		5*4 + 1, 5*4 + 2, 5*4 + 3, 5*4 + 4, // 四个 5
-		13*4 + 1, // K kicker
+func TestEval5_FourOfAKind(t *testing.T) {
+	s := eval5([5]int{ec(5, 1), ec(5, 2), ec(5, 3), ec(5, 4), ec(13, 1)})
+	if s.category != catQuads {
+		t.Errorf("four 5s should be quads, got %d", s.category)
 	}
-	category := detectCategory(cards)
-	if category != 6 {
-		t.Errorf("FourOfAKind should be category 6, got %d", category)
+	if s.tiebreak[0] != 5 || s.tiebreak[1] != 13 {
+		t.Errorf("quads tiebreak should be [5, K], got %v", s.tiebreak)
 	}
 }
 
-func TestHandStrength_FullHouse(t *testing.T) {
-	// 葫芦: 三个 7 + 两个 3
-	cards := []int{
-		7*4 + 1, 7*4 + 2, 7*4 + 3, // 三个 7
-		3*4 + 1, 3*4 + 2, // 两个 3
+func TestEval5_FullHouse(t *testing.T) {
+	s := eval5([5]int{ec(7, 1), ec(7, 2), ec(7, 3), ec(3, 1), ec(3, 2)})
+	if s.category != catFullHouse {
+		t.Errorf("77733 should be full house, got %d", s.category)
 	}
-	category := detectCategory(cards)
-	if category != 5 {
-		t.Errorf("FullHouse should be category 5, got %d", category)
+	if s.tiebreak[0] != 7 || s.tiebreak[1] != 3 {
+		t.Errorf("full house tiebreak should be [7, 3], got %v", s.tiebreak)
 	}
 }
 
-func TestHandStrength_TwoPair(t *testing.T) {
-	// 两对: 两个 9 + 两个 4
-	cards := []int{
-		9*4 + 1, 9*4 + 2, // 两个 9
-		4*4 + 1, 4*4 + 2, // 两个 4
-		13*4 + 1, // K kicker
+func TestEval5_TwoPair(t *testing.T) {
+	s := eval5([5]int{ec(9, 1), ec(9, 2), ec(4, 1), ec(4, 2), ec(13, 1)})
+	if s.category != catTwoPair {
+		t.Errorf("99 44 K should be two pair, got %d", s.category)
 	}
-	category := detectCategory(cards)
-	if category != 1 {
-		t.Errorf("TwoPair should be category 1, got %d", category)
+	if s.tiebreak[0] != 9 || s.tiebreak[1] != 4 || s.tiebreak[2] != 13 {
+		t.Errorf("two pair tiebreak should be [9, 4, K], got %v", s.tiebreak)
 	}
 }
 
-func TestHandStrength_HighCard(t *testing.T) {
-	// 高牌: A-K-Q-J-9 不同花色
-	cards := []int{
-		13*4 + 1, // K♠
-		12*4 + 2, // Q♥
-		11*4 + 3, // J♣
-		9*4 + 4,  // 9♦
-		8*4 + 1,  // 8♠
+// TestEval5_OnePairBeatsHighCard 是 §B1 的回归锚点：旧 detectCategory 把
+// OnePair 与 HighCard 同档（都 return 0），平局判定系统性错误。
+func TestEval5_OnePairBeatsHighCard(t *testing.T) {
+	pair := eval5([5]int{ec(9, 1), ec(9, 2), ec(4, 1), ec(6, 2), ec(13, 1)})
+	high := eval5([5]int{ec(13, 1), ec(12, 2), ec(11, 3), ec(9, 4), ec(8, 1)})
+	if pair.category != catOnePair {
+		t.Errorf("pair should be category %d, got %d", catOnePair, pair.category)
 	}
-	category := detectCategory(cards)
-	if category != 0 {
-		t.Errorf("HighCard should be category 0, got %d", category)
+	if high.category != catHighCard {
+		t.Errorf("high card should be category %d, got %d", catHighCard, high.category)
+	}
+	if pair.compare(high) <= 0 {
+		t.Error("one pair must beat high card")
+	}
+}
+
+// TestEvalBest_SevenCards 验证 7 选 5 最优组合 —— 旧 scoreHand 只取前 5 张
+// （all[:5]），turn/river 的好牌被完全忽略。本用例中第 7 张牌（river）才
+// 凑成同花，evalBest 必须发现它。
+func TestEvalBest_SevenCards(t *testing.T) {
+	// 底牌 2♠ 3♠ + 公共牌 K♠ Q♦ 9♣ 8♠ 4♠ → 5 张黑桃同花（含第 7 张 4♠）
+	cards := []int{ec(2, 1), ec(3, 1), ec(13, 1), ec(12, 4), ec(9, 3), ec(8, 1), ec(4, 1)}
+	s := evalBest(cards)
+	if s.category != catFlush {
+		t.Errorf("7-card best should find the spade flush (uses river card), got category %d", s.category)
+	}
+}
+
+// TestEvalBest_KickerDecides 验证 kicker 字典序：同样一对 A，K kicker > Q kicker。
+func TestEvalBest_KickerDecides(t *testing.T) {
+	a := evalBest([]int{ec(14, 1), ec(13, 1), ec(14, 2), ec(9, 3), ec(7, 4), ec(5, 2), ec(2, 3)})
+	b := evalBest([]int{ec(14, 3), ec(12, 1), ec(14, 4), ec(9, 3), ec(7, 4), ec(5, 2), ec(2, 3)})
+	if a.category != catOnePair || b.category != catOnePair {
+		t.Fatalf("both should be one pair of aces, got %d / %d", a.category, b.category)
+	}
+	if a.compare(b) <= 0 {
+		t.Error("pair of aces with K kicker must beat pair of aces with Q kicker")
 	}
 }
 

@@ -441,7 +441,11 @@ func main() {
 		// 2026-08-19 §德州扑克盲注透传 — 房间创建时把 big_blind/start_stack
 		// 从 RoomService 下发到 manager(roomSvc 构造于上方,此处已可用)。
 		roomSvc.SetTexasHoldemRoomConfigurer(thpMgr.SetRoomConfig)
+		// 2026-08-20 §B7 — 单手牌底池上限注入(此前 MaxPotPerHand 零使用点,§130 复现)。
+		thpMgr.SetMaxPotPerHand(cfg.TexasHoldem.MaxPotPerHand)
 	}
+	// 2026-08-20 §B5 — 德扑 bot 公屏发言(poker_chat)通道。
+	gameSvcWs.SetChatService(chatSvc)
 
 	// 2026-07-21 v5 重构 — EconTier 5 档阈值(从 LsmAgentGame.conf 注入)。
 	// 4 个字段全部显式非零时调 werewolf.ConfigureEconTier;任意字段为 0 走

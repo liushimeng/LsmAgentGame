@@ -154,6 +154,23 @@ func (m *Memory) IncrementHandsPlayed(userID string) {
 	stat.HandsPlayed++
 }
 
+// RecordOpponentHandResult 手牌结束时更新对手的净盈亏与胜出计数（2026-08-20 §B2）。
+// userID 不存在时建行（HandsPlayed 由 IncrementHandsPlayed 维护,此处不累加）。
+func (m *Memory) RecordOpponentHandResult(userID string, seat, netDelta int, won bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	stat, ok := m.OpponentStats[userID]
+	if !ok {
+		stat = &OpponentStat{UserID: userID, Seat: seat}
+		m.OpponentStats[userID] = stat
+	}
+	stat.Seat = seat
+	stat.NetChips += netDelta
+	if won {
+		stat.HandsWon++
+	}
+}
+
 // OpponentFoldRate 返回指定对手的弃牌率（0.0-1.0）。无记录返回 0.5（中性）。
 func (m *Memory) OpponentFoldRate(userID string) float64 {
 	m.mu.Lock()

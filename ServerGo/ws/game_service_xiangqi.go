@@ -528,6 +528,8 @@ func (s *GameService) handleLeave(c *Client, env Envelope) {
 		}
 		s.hub.UnsubscribeRoom(req.RoomID, c)
 		s.texasHoldemMgr.RemoveGame(req.RoomID)
+		// 2026-08-20 §B6/§B8: 同步清理德扑 bot 运行时(watchdog goroutine + 串行守卫 + driver 注册)
+		s.cleanupTexasHoldemBotRuntime(req.RoomID)
 		s.leaveRoomQuiet(req.RoomID, c.UserID)
 		s.sendOK(c, env.Seq, "game.left", map[string]any{"room_id": req.RoomID, "game_kind": "texasholdem"})
 		logger.L().Info("player left texasholdem game", zap.String("room_id", req.RoomID), zap.String("user_id", c.UserID))

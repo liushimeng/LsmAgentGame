@@ -63,12 +63,26 @@
 }
 
 /* ===== BotThoughtPanel ===== */
+/* §F1 (2026-08-20): 面板接入 TexasHoldemTable 桌面右上角。
+ * 定位上下文:.texas-table 需 position:relative(见下)。
+ * 对比度(CLAUDE.md §26):紫底 rgba(155,89,182,0.18) 叠加深色底层 rgba(20,16,32,0.85),
+ * 字色 #f5e8ff,有效对比度 ≥ 7:1,不受牌桌背景图明暗影响。 */
+.texas-table {
+  position: relative;
+}
+
 .thp-bot-thought {
-  background: rgba(155, 89, 182, 0.12);
-  border: 1px solid rgba(155, 89, 182, 0.4);
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  background:
+    linear-gradient(rgba(155, 89, 182, 0.18), rgba(155, 89, 182, 0.18)),
+    rgba(20, 16, 32, 0.85);
+  border: 1px solid rgba(155, 89, 182, 0.5);
   border-radius: 6px;
   padding: 8px 12px;
-  margin: 8px;
+  margin: 0;
   color: #f5e8ff;
   font-size: 12px;
   max-width: 320px;
@@ -84,6 +98,18 @@
   margin-top: 6px;
   margin-bottom: 0;
   line-height: 1.4;
+}
+
+/* 思考中徽标:紫底白字(§26.4 徽章 ≥5:1 对比度) */
+.thp-bot-thought__thinking {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(155, 89, 182, 0.55);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 11px;
 }
 
 /* ===== RoomCreateModal ===== */
