@@ -561,69 +561,84 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		zap.Int("creator_seat", creatorSeat),
 		zap.Any("seat_model_keys", seatModelSummary(agentSeats)))
 
-	// Mirror seats into the in-memory game manager. For werewolf with agent
+	// Mirror seats into the in-memory game manager. For rooms with agent
 	// seats, ORDER matters: we pre-register each occupied seat via the agent
 	// seater callback (which calls ManagerAddPlayerAt + SetSeatModelKey under
 	// the hood), so the engine's GameState.Players reflect "agent seats
 	// filled" and seatModelKeys records the per-seat LLM model. Then the
 	// human creator's SyncSeat call triggers JoinGame (which auto-starts when
-	// 7 seats reach capacity and kicks off Phase 4's Agent goroutines).
-	if gameKind == "werewolf" && len(agentSeats) > 0 && s.agentSeater != nil {
+	// the room reaches capacity and kicks off the game's Bot goroutines).
+	//
+	// 2026-08-20 §德州扑克Agent注册P0修复:原条件仅 `gameKind == "werewolf"`,
+	// 导致 texasholdem 含 agent_seats 的房间创建后,RegisterAgentSeats 从未被
+	// 调用 → in-memory TexasHoldem manager 无 Bot → IsReady 只计 1 人
+	// (人类) → 游戏永远卡在 waiting。修复:外层条件改为 werewolf | texasholdem,
+	// 内层把狼人杀专属配置 (Judge/Difficulty/Commentary/RolePrefs) 收敛到
+	// `gameKind == "werewolf"` 分支;texasholdem 路径只走 RegisterAgentSeats。
+	// 未来新增游戏只需在 isAgentSupportedGameKind(gameKind) 加枚举即可。
+	if (gameKind == "werewolf" || gameKind == "texasholdem") && len(agentSeats) > 0 && s.agentSeater != nil {
 		// BUG-R136-RACE-001: 复述段落已压缩 — git blame 与 docs/ 索引可还原
 
-		judgeMode := "agent"
-		if judge != nil && judge.Mode != "" {
-			judgeMode = judge.Mode
-		}
-		if e := s.agentSeater.SetJudgeConfig(gameKind, room.ID, judgeDesired, judgeMode, judgeModelKey); e != nil {
-			logger.L().Warn("agent seater set judge config failed",
-				zap.String("room_id", room.ID),
-				zap.Int("code", e.Code),
-				zap.String("msg", e.Message))
-		}
-		// §20260811-09 U2 — Agent 难度分级必须在 RegisterAgentSeats 之前落地
-		// (同 SetJudgeConfig 时序约束:RegisterAgentSeats 在 13/13 满座时立即
-		// 触发 StartAgentsLocked → 读取 r.agentDifficulty 决定 MemoryMD 加载
-		// 与假说表注入,难度晚到即被 normal 兜底覆盖)。
-		if e := s.agentSeater.SetAgentDifficulty(gameKind, room.ID, agentDifficulty); e != nil {
-			logger.L().Warn("agent seater set difficulty failed",
-				zap.String("room_id", room.ID),
-				zap.Int("code", e.Code),
-				zap.String("msg", e.Message))
-		}
-		// §20260811-09 U1 — AI 解说配置必须在 RegisterAgentSeats 之前落地
-		// (同 SetJudgeConfig 时序约束:StartAgentsLocked 末尾会启 startCommentatorGoroutine,
-		// 需要先读到 commentaryDesired=true 才能启动)。
-		if e := s.agentSeater.SetCommentaryConfig(gameKind, room.ID, commentary); e != nil {
-			logger.L().Warn("agent seater set commentary config failed",
-				zap.String("room_id", room.ID),
-				zap.Int("code", e.Code),
-				zap.String("msg", e.Message))
-		}
-		// 2026-08-06 §20260806-03: 角色偏好必须在 RegisterAgentSeats 之前落地
-		// (与 SetJudgeConfig 同时序 — RegisterAgentSeats 在 13/13 满座时立即
-		// 触发 ForceStartIfReady → StartGame 发牌,偏好晚到即失效)。
-		seatRolePrefs := make(map[int]string, len(agentSeats))
-		for _, a := range agentSeats {
-			if strings.TrimSpace(a.Role) != "" {
-				seatRolePrefs[a.Seat] = a.Role
+		if gameKind == "werewolf" {
+			judgeMode := "agent"
+			if judge != nil && judge.Mode != "" {
+				judgeMode = judge.Mode
 			}
-		}
-		if len(seatRolePrefs) > 0 || strings.TrimSpace(creatorRolePref) != "" {
-			if e := s.agentSeater.SetSeatRolePrefs(gameKind, room.ID, seatRolePrefs, creatorRolePref); e != nil {
-				logger.L().Warn("agent seater set role prefs failed",
+			if e := s.agentSeater.SetJudgeConfig(gameKind, room.ID, judgeDesired, judgeMode, judgeModelKey); e != nil {
+				logger.L().Warn("agent seater set judge config failed",
 					zap.String("room_id", room.ID),
 					zap.Int("code", e.Code),
 					zap.String("msg", e.Message))
 			}
+			// §20260811-09 U2 — Agent 难度分级必须在 RegisterAgentSeats 之前落地
+			// (同 SetJudgeConfig 时序约束:RegisterAgentSeats 在 13/13 满座时立即
+			// 触发 StartAgentsLocked → 读取 r.agentDifficulty 决定 MemoryMD 加载
+			// 与假说表注入,难度晚到即被 normal 兜底覆盖)。
+			if e := s.agentSeater.SetAgentDifficulty(gameKind, room.ID, agentDifficulty); e != nil {
+				logger.L().Warn("agent seater set difficulty failed",
+					zap.String("room_id", room.ID),
+					zap.Int("code", e.Code),
+					zap.String("msg", e.Message))
+			}
+			// §20260811-09 U1 — AI 解说配置必须在 RegisterAgentSeats 之前落地
+			// (同 SetJudgeConfig 时序约束:StartAgentsLocked 末尾会启 startCommentatorGoroutine,
+			// 需要先读到 commentaryDesired=true 才能启动)。
+			if e := s.agentSeater.SetCommentaryConfig(gameKind, room.ID, commentary); e != nil {
+				logger.L().Warn("agent seater set commentary config failed",
+					zap.String("room_id", room.ID),
+					zap.Int("code", e.Code),
+					zap.String("msg", e.Message))
+			}
+			// 2026-08-06 §20260806-03: 角色偏好必须在 RegisterAgentSeats 之前落地
+			// (与 SetJudgeConfig 同时序 — RegisterAgentSeats 在 13/13 满座时立即
+			// 触发 ForceStartIfReady → StartGame 发牌,偏好晚到即失效)。
+			seatRolePrefs := make(map[int]string, len(agentSeats))
+			for _, a := range agentSeats {
+				if strings.TrimSpace(a.Role) != "" {
+					seatRolePrefs[a.Seat] = a.Role
+				}
+			}
+			if len(seatRolePrefs) > 0 || strings.TrimSpace(creatorRolePref) != "" {
+				if e := s.agentSeater.SetSeatRolePrefs(gameKind, room.ID, seatRolePrefs, creatorRolePref); e != nil {
+					logger.L().Warn("agent seater set role prefs failed",
+						zap.String("room_id", room.ID),
+						zap.Int("code", e.Code),
+						zap.String("msg", e.Message))
+				}
+			}
 		}
 		// RegisterAgentSeats persists (botUserID, seat, modelKey) pairings in
-		// the in-memory werewolf manager *before* the human creator joins.
+		// the in-memory manager *before* the human creator joins. werewolf 走
+		// ws.GameService.RegisterAgentSeats 的 werewolf 分支 → ManagerAddPlayerAt
+		// + SetSeatModelKey + ForceStartIfReady;texasholdem 走同函数的
+		// registerTexasHoldemAgentSeats → TexasHoldemManager.AddBotSeat + 启动
+		// BotDriver。两类游戏共用同一入口,分支由 gameKind 决定(见 ws/game_service.go:230)。
 		if e := s.agentSeater.RegisterAgentSeats(gameKind, room.ID, agentSeats); e != nil {
 			// Non-fatal: the room is already created in DB; the agent seater
 			// failure only means bots won't auto-play. Surface + continue.
 			logger.L().Warn("agent seater registration failed",
 				zap.String("room_id", room.ID),
+				zap.String("game_kind", gameKind),
 				zap.Int("code", e.Code),
 				zap.String("msg", e.Message))
 		}
