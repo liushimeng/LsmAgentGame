@@ -307,7 +307,7 @@ func (m *TexasHoldemManager) WithRoomLocked(roomID string, fn func(r *TexasHolde
 
 // JoinGame 让 userID 入座。幂等。
 // 达到 2 人时自动发牌进入翻前阶段。
-func (m *TexasHoldemManager) JoinGame(roomID, userID string) (*TexasHoldemRoom, bool, *errcode.Error) {
+func (m *TexasHoldemManager) JoinGame(roomID, userID string) (room *TexasHoldemRoom, started bool, joinErr *errcode.Error) {
 	m.mu.Lock()
 	r, ok := m.rooms[roomID]
 	if !ok {
@@ -321,10 +321,10 @@ func (m *TexasHoldemManager) JoinGame(roomID, userID string) (*TexasHoldemRoom, 
 	m.mu.Unlock()
 
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	// 幂等：已入座直接返回
 	if _, seated := r.SeatOf(userID); seated {
+		r.mu.Unlock()
 		return r, false, nil
 	}
 
@@ -337,11 +337,11 @@ func (m *TexasHoldemManager) JoinGame(roomID, userID string) (*TexasHoldemRoom, 
 		}
 	}
 	if seat == -1 {
+		r.mu.Unlock()
 		return nil, false, errcode.Code(errcode.ErrRoomFull)
 	}
 	r.Seats[seat] = userID
 
-	started := false
 	if r.State == nil {
 		r.State = NewGame(m.seedFn(), bigBlind)
 	}
@@ -363,6 +363,14 @@ func (m *TexasHoldemManager) JoinGame(roomID, userID string) (*TexasHoldemRoom, 
 				zap.String("room_id", roomID),
 				zap.Int("hand_number", r.State.HandNumber))
 		}
+	}
+	r.mu.Unlock()
+
+	// 2026-08-20 §P0-NEW-R: JoinGame 自动开首手后,锁外触发 onHandStarted 回调
+	// (清理思考标记 + 广播新手牌 + 驱动 bot 决策),与 runHandOverEpilogue 路径对齐。
+	// 必须在释放 r.mu 之后调用(§B6: 回调内会再取 r.mu,不可重入)。
+	if started && m.onHandStarted != nil {
+		m.onHandStarted(roomID)
 	}
 	return r, started, nil
 }

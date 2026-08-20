@@ -51,7 +51,7 @@ export function GameInfoPanel({ gameState, mySeat, style, spectator, onResign, o
               {t('texasholdem.pot' as TKey)}: ${gameState.pot}
             </div>
             <div className="texas-hand-info">
-              {t('texasholdem.hand' as TKey)} #{gameState.hand_number}
+              {t('texasholdem.hand' as TKey).replace('{}', String(gameState.hand_number))}
             </div>
           </>
         )}
