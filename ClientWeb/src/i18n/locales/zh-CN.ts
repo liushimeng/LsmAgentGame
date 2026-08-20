@@ -395,6 +395,7 @@ const zhCN: Dict = {
   'texasholdem.bot.thinking': '思考中…',
   'texasholdem.bot.recentDecision': '最近决策',
   'texasholdem.bot.heartThought': '内心独白',
+  'texasholdem.bot.actionDisabled': '🤖 AI 决策中…',
 
   // 钱包
   'wallet.title': '我的钱包',

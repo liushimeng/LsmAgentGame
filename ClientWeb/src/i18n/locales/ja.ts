@@ -393,6 +393,7 @@ const ja: Dict = {
   'texasholdem.bot.thinking': '思考中…',
   'texasholdem.bot.recentDecision': '直近の判断',
   'texasholdem.bot.heartThought': '内心の声',
+  'texasholdem.bot.actionDisabled': '🤖 AI 判断中…',
 
   // ウォレット
   'wallet.title': 'マイウォレット',

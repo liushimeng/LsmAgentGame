@@ -14,6 +14,12 @@ interface Props {
   bigBlind: number;
   pot: number;
   stack: number;
+  /**
+   * 2026-08-20 §德州扑克Agent — 当前轮到 bot 思考时,人类按钮整体禁用。
+   * 来自 `gameState.bot_thinking[turn]`,在 isMyTurn=false 时用于渲染
+   * 「🤖 AI 决策中…」提示(避免人类误以为 UI 卡死)。
+   */
+  botTurnThinking?: boolean;
 }
 
 export function ActionControls({
@@ -26,6 +32,7 @@ export function ActionControls({
   onAction,
   bigBlind,
   stack,
+  botTurnThinking = false,
 }: Props) {
   const t = useT();
   const [betAmount, setBetAmount] = useState(bigBlind);
@@ -43,6 +50,19 @@ export function ActionControls({
   }
 
   if (!isMyTurn) {
+    // 当前不是玩家回合 —— 若对手是 bot 且正在思考,显式提示玩家不要反复点
+    if (botTurnThinking) {
+      return (
+        <div className="texas-action-controls">
+          <div
+            className="waiting-turn bot-thinking-hint"
+            data-testid="thp-action-bot-thinking"
+          >
+            {t('texasholdem.bot.actionDisabled' as TKey)}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="texas-action-controls">
         <div className="waiting-turn">{t('texasholdem.opponentTurn' as TKey)}</div>

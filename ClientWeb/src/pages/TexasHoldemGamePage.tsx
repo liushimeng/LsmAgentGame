@@ -181,6 +181,13 @@ export function TexasHoldemGamePage() {
                   bigBlind={gameState!.big_blind}
                   pot={gameState!.pot}
                   stack={self?.stack ?? 0}
+                  // 2026-08-20 §德州扑克Agent — 当轮到 bot 且 bot_thinking=true 时,
+                  // ActionControls 渲染「🤖 AI 决策中…」提示。
+                  botTurnThinking={
+                    !isMyTurn &&
+                    !!(gameState?.bot_seats?.[gameState!.turn]) &&
+                    !!gameState?.bot_thinking?.[gameState!.turn]
+                  }
                 />
               )}
               {isOver && gameOver && (

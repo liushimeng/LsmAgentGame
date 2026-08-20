@@ -930,6 +930,7 @@ export interface Dict {
   'texasholdem.bot.thinking': string;
   'texasholdem.bot.recentDecision': string;
   'texasholdem.bot.heartThought': string;
+  'texasholdem.bot.actionDisabled': string;
 
   // 观察者 / 观战 — spectator mode (applies across all 5 games)
   'chat.spectatorTag': string;
