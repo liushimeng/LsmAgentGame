@@ -91,15 +91,19 @@ start_agent_in_background "${LOG_FILE}" "
     # 注：AutoTestProgress/ 按 .gitignore 策略为本地进度文件，不入库。
     # 狼人杀专用：仅 add `狼人杀自动化测试报告_*.md`(新) + 兼容旧 `自动化测试报告_*.md`；
     # 德扑报告由 TexasPoker 脚本单独 add，互不影响。
-    # 主 glob 与 legacy glob 用 find -o 串联，自动覆盖新旧文件。
-    WEREWOLF_MAIN_GLOB=\"\$(enqueue_game_glob werewolf main main_legacy)\"
-    git_add_safe \"TestReport/\${WEREWOLF_MAIN_GLOB}\" || echo '[AutoTestAndSaveReport_Werewolf] 警告: TestReport/狼人杀报告无可暂存内容(已忽略)'
+    # 修复(§20260820-03)：enqueue_game_glob 多 kind 输出的是 find -o 串联形式,仅供 find
+    # 未加引号使用;quoted git add 必须逐 glob 调用,否则整串成为永不命中的字面路径。
+    # 注(§20260820-03)：TestReport/* 已整目录入 .gitignore(报告处理完即删,不在仓库堆积),
+    # 本节 git add 通常无暂存内容、提交自动跳过,保留以兼容未来策略调整。
+    git_add_safe \"TestReport/\$(enqueue_game_glob werewolf main)\" || echo '[AutoTestAndSaveReport_Werewolf] 警告: TestReport/狼人杀报告无可暂存内容(已忽略)'
+    git_add_safe \"TestReport/\$(enqueue_game_glob werewolf main_legacy)\" 2>/dev/null || true
 
     # 子模块 UseReport 需在子仓库内先提交，再回主仓库暂存 gitlink
-    # 教训(20260819)：用 `find -name` 动态发现德扑工具报告文件名（避免硬编码时间戳）
-    WEREWOLF_USAGE_GLOB=\"\$(enqueue_game_glob werewolf usage usage_legacy)\"
+    # 教训(20260819)：用 `find -name` 动态发现狼人杀工具报告文件名（避免硬编码时间戳）
+    # 修复(§20260820-03)：多 glob 需逐 kind 调用并用 -o 串联;quoted -name 只接受单 glob,
+    # 旧写法把 \"glob1 -o -name glob2\" 整串当一个 pattern,永远匹配不到文件。
     if [[ -d go-web-debug-tool/UseReport ]]; then
-        WEREWOLF_USAGE_FILES=\$(find go-web-debug-tool/UseReport -maxdepth 1 \( -name \"\${WEREWOLF_USAGE_GLOB}\" \) ! -name '*_无问题.md' 2>/dev/null)
+        WEREWOLF_USAGE_FILES=\$(find go-web-debug-tool/UseReport -maxdepth 1 \( -name \"\$(enqueue_game_glob werewolf usage)\" -o -name \"\$(enqueue_game_glob werewolf usage_legacy)\" \) ! -name '*_无问题.md' 2>/dev/null)
         if [[ -n \"\${WEREWOLF_USAGE_FILES}\" ]]; then
             git -C go-web-debug-tool add -- UseReport/ 2>/dev/null || true
             if ! git -C go-web-debug-tool diff --cached --quiet 2>/dev/null; then
@@ -127,7 +131,7 @@ start_agent_in_background "${LOG_FILE}" "
     # 改为脚本层接力，先预检待处理报告，避免空跑 Agent 会话。
     # 注：接力脚本内部会再次随机选择 Agent（每次脚本运行独立随机）。
     PENDING_WEREWOLF=\$(scan_game_report TestReport werewolf main)
-    PENDING_SUB=\$(find go-web-debug-tool/UseReport -maxdepth 1 \( -name \"\$(enqueue_game_glob werewolf usage usage_legacy)\" \) ! -name '*_无问题.md' 2>/dev/null | head -1)
+    PENDING_SUB=\$(find go-web-debug-tool/UseReport -maxdepth 1 \( -name \"\$(enqueue_game_glob werewolf usage)\" -o -name \"\$(enqueue_game_glob werewolf usage_legacy)\" \) ! -name '*_无问题.md' 2>/dev/null | head -1)
     PENDING_TEXAS=\$(scan_game_report TestReport texasholdem main)
     # 狼人杀接力：仅扫描本游戏 glob + 子模块；德扑报告留给德扑接力脚本处理。
     if [[ -n \"\${PENDING_WEREWOLF}\${PENDING_SUB}\" ]]; then

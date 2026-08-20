@@ -4,7 +4,7 @@
 > 本文件为狼人杀专用入口，**仅产出** `自动化测试报告_YYYYMMDD_HHMMSS.md` 前缀的报告；德州扑克请使用 [`AutoTestAndSaveReport_TexasPoker.md`](AutoTestAndSaveReport_TexasPoker.md)。
 
 - **工作目录**: `/usr/local/LsmAgentGame/LsmAgentGame`
-- **入口脚本**: `AutoTestAndSaveReport_Werewolf.sh`(随机选编程 Agent CLI → 跑测试 → git 提交狼人杀报告 → 接力自动修复)
+- **入口脚本**: `AutoTestAndSaveReport_Werewolf.sh`(随机选编程 Agent CLI → 跑测试 → 报告落盘 → shell 层确定性接力 `AutoDebugTestReport.sh` 自动修复)
 - **产物路径(仅狼人杀,§20260820-01 起统一带「狼人杀」前缀 + 兼容旧文件)**:
   - 测试报告(新前缀):
     `TestReport/狼人杀自动化测试报告_YYYYMMDD_HHMMSS.md`
@@ -20,6 +20,7 @@
     `TestReport/狼人杀协议抓包分析报告_YYYYMMDD_HHMMSS.md`
   - 文件名时间戳统一 `YYYYMMDD_HHMMSS`,精度到秒
   - **Glob 单一事实源**: 所有扫描 glob 在 `auto_run_common.sh::GAME_GLOBS` 中声明,新增游戏仅改公共库一处,本文件不再内嵌 glob 列表。
+  - **测试产物一律不入库**(§20260820-03): `TestReport/*` / `AutoTestProgress/` / `AutoTestScreenshots/` 已被 `.gitignore` 整目录忽略,所有测试生成文件(报告/进度/截图/临时文档)仅留本地,Agent **禁止**对其执行 `git add` / `git commit` / `git push`。
 - **执行模式**: 主 Agent 跑核心流程;遇代码读取/协议抓包/数据查询可按需委派 SubAgent,不阻塞主流程。
 - **执行策略**: 模仿真实人类玩家(1 人 + 12 Agent 混合 13 人局),串行单房间,严守「每完成一步等待页面完全加载再走下一步」的拟人节奏;以最近 10 次非缺陷修复提交划定测试范围,新增/优化项优先。
 - **对局模式(唯一)**: 1 名人类玩家 + 12 个 Agent,**不测试全 AI 模式**。
@@ -147,14 +148,14 @@
    - `未覆盖项跟踪表`(继承上轮 + 本轮新增,含状态与积压标注)
    - `本轮重点突破项`(1-3 项) + `突破结果`
    - `积压升级标注`(连续 ≥ 2 轮未覆盖的条目,§11.1)
-3. 两份文件确认落盘即可——**无需 Agent 手动执行** `AutoDebugTestReport.sh`：`AutoTestAndSaveReport.sh` 在 Claude 退出并完成 git 提交后，由 shell 层**确定性接力**启动自动修复流程（含待处理报告预检；不再依赖 Agent 自觉，避免「声明了却从不接线」式断链）。Agent 只需确保报告与进度文件落盘。
+3. 两份文件确认落盘即可——**测试产物一律不入库**(§20260820-03: `TestReport/*` / `AutoTestProgress/` 已被 `.gitignore` 整目录忽略,Agent **禁止** `git add` / `git commit` / `git push`)。**接力(报告生成后自动 debug)**: 报告落盘 → Agent 退出 → 入口脚本 `AutoTestAndSaveReport_Werewolf.sh` 在 shell 层**确定性接力**启动 `AutoDebugTestReport.sh` 自动修复(含待处理报告预检 + flock 防重入;不再依赖 Agent 自觉,避免「声明了却从不接线」式断链)。Agent **无需也禁止**自行执行 `AutoDebugTestReport.sh`(与 shell 接力双重启动)。修复流程会提交/推送代码修复并删除或归档已处理报告(CLAUDE.md §22),报告内容必须自包含、结论写全。
 4. MCP 工具异常导致终止时,**额外**在 `go-web-debug-tool/UseReport/` 写工具报告,记录报错日志与异常点(参考 `MCP_Proc_Def.md` 规范)。
 5. 触发协议层诊断时,**额外**写协议抓包分析报告(API Key/Token/Cookie 脱敏),并在测试报告里引用。
 6. 中断未完成也要写进度,标 `中断未完成`,避免被后续轮次误判为已覆盖。
 
 ### 9. 注意事项
 
-- **多 Agent 并发与 Git**: 测试期间留意其他开发 Agent;**仅做只读 Git 查询**,不提交/合并;Git 操作前先 `git status` 确认工作区。
+- **多 Agent 并发与 Git**: 测试期间留意其他开发 Agent;**仅做只读 Git 查询**(`git status` / `git log` / `git diff`),**禁止** `git add` / `git commit` / `git push` 等一切写操作——测试产物按 `.gitignore` 策略仅留本地,不入库、不提交(§20260820-03)。
 - **单轮单角色**: 硬性约束,禁止「提高效率」连测多个角色;全角色覆盖靠多轮推进。
 - **断线重连**: 验证服务器重启 / 客户端断网 场景下重连有效性,确认重连后游戏状态/角色/历史消息完整同步,无丢失 / 重复推送。
 - **公平性与健壮性**: 校验 Agent 不得违规获取非公开信息(含人类玩家身份);网络波动重试 / 异常降级 / 重连;观战模式下 Agent 不得因人类观战者对话泄露私有信息。

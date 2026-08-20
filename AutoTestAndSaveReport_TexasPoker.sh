@@ -85,6 +85,8 @@ start_agent_in_background "${LOG_FILE}" "
     # 被 .gitignore 整体忽略 + 子模块内路径在父仓库 add 直接 fatal(exit=128)，
     # 任一失败都让整条 add 原子性落空，报告从未被暂存，日志却显示「暂存区无变更」。
     # 注：AutoTestProgress/ 按 .gitignore 策略为本地进度文件，不入库。
+    # 注(§20260820-03)：TestReport/* 已整目录入 .gitignore(报告处理完即删,不在仓库
+    # 堆积),本节 git add 通常无暂存内容、提交自动跳过,保留以兼容未来策略调整。
     # 德扑专用：仅 add 德扑主报告 + 协议抓包报告 glob（auto_run_common.sh::GAME_GLOBS）；
     # 狼人杀报告由 Werewolf 脚本单独 add，互不影响。
     TEXAS_MAIN_GLOB=\"\$(enqueue_game_glob texasholdem main)\"
@@ -126,14 +128,16 @@ start_agent_in_background "${LOG_FILE}" "
     # 德扑接力：仅扫描德扑主报告 glob；狼人杀 + 子模块 UseReport 由 Werewolf 脚本接力。
     PENDING_TEXAS=\$(scan_game_report TestReport texasholdem main)
     PENDING_WEREWOLF=\$(scan_game_report TestReport werewolf main)
-    if [[ -n \"\${PENDING_TEXAS}\${PENDING_WEREWOLF}\" ]]; then
-        echo '[AutoTestAndSaveReport_TexasPoker] 检测到待处理报告(德扑+狼人杀 共存)，接力启动 AutoDebugTestReport.sh ...'
+    # 修复(§20260820-03)：旧条件 \"\${PENDING_TEXAS}\${PENDING_WEREWOLF}\" 使下方 elif
+    # 成为不可达死分支;德扑脚本仅在德扑有待处理报告时接力,狼人杀报告留给 Werewolf 脚本。
+    if [[ -n \"\${PENDING_TEXAS}\" ]]; then
+        echo '[AutoTestAndSaveReport_TexasPoker] 检测到德扑待处理报告，接力启动 AutoDebugTestReport.sh ...'
         bash ./AutoDebugTestReport.sh || echo '[AutoTestAndSaveReport_TexasPoker] 接力启动失败，请人工检查。'
     elif [[ -n \"\${PENDING_WEREWOLF}\" ]]; then
         # 当前德扑脚本发现狼人杀报告，跳过接力（留给 Werewolf 脚本接力）
         echo '[AutoTestAndSaveReport_TexasPoker] 狼人杀有未接力报告(由 Werewolf 脚本处理)，跳过。'
     else
-        echo '[AutoTestAndSaveReport_TexasPoker] 无待处理报告，跳过自动修复流程。'
+        echo '[AutoTestAndSaveReport_TexasPoker] 无德扑待处理报告，跳过自动修复流程。'
     fi
 
     echo '[AutoTestAndSaveReport_TexasPoker] 全流程结束时间 : '\"\$(date '+%F %T')\"
