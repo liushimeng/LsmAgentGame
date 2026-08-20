@@ -223,9 +223,16 @@ type WerewolfConfig struct {
 	// 2026-08-13 §20260813-02 U1 — 局内 LLM 语义压缩(CompactWithLLM)开关与预算。
 	// AgentCompactEnabled: true(默认)消息数超阈值时用 bot 自己的 provider
 	//   把最早 1/3 消息压缩为结构化摘要;false 退回纯规则式压缩。
-	// AgentCompactMaxTokens: 压缩调用 max_tokens 预算,默认 1200。
+	// AgentCompactMaxTokens: 压缩调用 max_tokens 预算,默认 2048(§20260820-01
+	//   从 1200 提到 2048,以容纳 8 段结构化摘要 ~640 字 + system 缓冲)。
 	AgentCompactEnabled   bool `json:"agent_compact_enabled"`
 	AgentCompactMaxTokens int  `json:"agent_compact_max_tokens"`
+
+	// 2026-08-20 §20260820-01 — 8 段结构化摘要 + 视角隔离开关。
+	// AgentCompactEightSectionsEnabled: true(默认) 启用 8 段结构化摘要;
+	//   false 退回旧 4 段(向后兼容,允许灰度关闭)。同样需要 applyDefaults
+	//   显式置 true(与 AgentCompactEnabled 同款 bool 零值陷阱)。
+	AgentCompactEightSectionsEnabled bool `json:"agent_compact_eight_sections_enabled"`
 
 	// 2026-08-10 §20260810-10 U2 新增 — 模型自画像注入开关。
 	// true(默认)开局时按 modelKey 聚合 t_lsm_game_model_game_log 生成
@@ -1035,8 +1042,16 @@ func applyDefaults(c *Config) {
 	if !c.Werewolf.AgentCompactEnabled {
 		c.Werewolf.AgentCompactEnabled = true
 	}
+	// 2026-08-20 §20260820-01 — MaxTokens 默认值从 1200 提到 2048(8 段 schema)。
 	if c.Werewolf.AgentCompactMaxTokens <= 0 {
-		c.Werewolf.AgentCompactMaxTokens = 1200
+		c.Werewolf.AgentCompactMaxTokens = 2048
+	}
+
+	// 2026-08-20 §20260820-01 — 8 段结构化摘要默认启用。
+	// 与 AgentCompactEnabled 同模式:bool 默认 true,operator 需显式设 false 关闭
+	// (允许灰度退回旧 4 段 schema)。
+	if !c.Werewolf.AgentCompactEightSectionsEnabled {
+		c.Werewolf.AgentCompactEightSectionsEnabled = true
 	}
 
 	// 2026-08-10 §20260810-10 U2 — 模型自画像默认启用。

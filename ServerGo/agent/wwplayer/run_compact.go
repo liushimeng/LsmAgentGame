@@ -94,13 +94,17 @@ func (a *Agent) maybeCompactMemory(ctx context.Context, rp RolePhase, gc *wwtype
 			if result.Incremental {
 				mode = "增量"
 			}
-			a.setCompactOutcome(false, fmt.Sprintf("LLM 压缩成功(%s): %d→%d 条, %d ms",
-				mode, result.MessagesBefore, result.MessagesAfter, result.DurationMs))
+			// 2026-08-20 §20260820-01 — BotTranscript 留 8 段 schema 标识,
+			// 便于测试与前端观测当前压缩质量。
+			a.setCompactOutcome(false, fmt.Sprintf("LLM 压缩成功(%s·%d段): %d→%d 条, %d ms",
+				mode, result.SectionCount, result.MessagesBefore, result.MessagesAfter, result.DurationMs))
 			logger.L().Info("agent: memory compacted",
 				zap.Int("seat", a.Seat),
 				zap.Int("before", result.MessagesBefore),
 				zap.Int("after", result.MessagesAfter),
 				zap.Bool("incremental", result.Incremental),
+				zap.Int("sections", result.SectionCount),
+				zap.Int("summary_len", result.SummaryLen),
 				zap.Int64("ms", result.DurationMs))
 			return
 		}
@@ -115,6 +119,8 @@ func (a *Agent) maybeCompactMemory(ctx context.Context, rp RolePhase, gc *wwtype
 		logger.L().Warn("agent: memory compact failed, fell back to rule-based compression",
 			zap.Int("seat", a.Seat),
 			zap.String("model", a.ModelKey),
+			zap.Int("summary_len", result.SummaryLen),
+			zap.Int("sections", result.SectionCount),
 			zap.Error(result.Error))
 	}()
 }

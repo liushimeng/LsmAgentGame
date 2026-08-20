@@ -20,8 +20,9 @@ import (
 )
 
 // defaultAgentCompactMaxTokens 是压缩 LLM 调用的 max_tokens 兜底值。
-// 压缩输出是 4 段结构化摘要,1200 token 足够;过大徒增计费。
-const defaultAgentCompactMaxTokens = 1200
+// 2026-08-20 §20260820-01:从 1200 提到 2048(8 段 × ~80 字 = 640 字 + system 缓冲)。
+// 旧 4 段 schema 时代 1200 token 足够;8 段 schema 后 1200 偶有截断。
+const defaultAgentCompactMaxTokens = 2048
 
 // cfgAgentCompactEnabled 安全读取 config.WerewolfConfig.AgentCompactEnabled。
 // 默认 true(applyDefaults 已置);测试环境 config.Load() panic 时按"关闭"
@@ -54,11 +55,29 @@ func cfgAgentCompactMaxTokens() (n int) {
 // 为每个 bot 注入(ag.SetCompactConfig)。Provider/apiKey 不走本配置 —
 // run_compact.go 在触发点直接使用 Agent 自身构造期绑定的 a.Provider/a.apiKey
 // (与 NewWithRoom 的 registry.Get 路径一致)。
+//
+// 2026-08-20 §20260820-01: 新增 EightSectionsEnabled 字段读取(§130 防
+// 「声明了却从不接线」 —— defer recover 模式)。
 func cfgAgentCompactConfig() wwplayer.CompactConfig {
 	cfg := wwplayer.DefaultCompactConfig()
 	cfg.Enabled = cfgAgentCompactEnabled()
 	cfg.MaxTokens = cfgAgentCompactMaxTokens()
+	// 2026-08-20 §20260820-01 — 8 段 schema 开关;默认 true,允许灰度关闭。
+	cfg.EightSectionsEnabled = cfgAgentCompactEightSectionsEnabled()
 	// 超时固定 60s(§3 设计:慢模型降级规则压缩,不阻塞主决策循环)。
 	cfg.TimeoutSec = 60
 	return cfg
+}
+
+// cfgAgentCompactEightSectionsEnabled 安全读取
+// config.WerewolfConfig.AgentCompactEightSectionsEnabled(§20260820-01)。
+// 默认 true(applyDefaults 已置);测试环境 config.Load() panic 时按"关闭"
+// 兜底,与 cfgAgentCompactEnabled 同模式(防止无配置环境误启用新 schema)。
+func cfgAgentCompactEightSectionsEnabled() (enabled bool) {
+	defer func() { _ = recover() }()
+	c := config.Load()
+	if c == nil {
+		return false
+	}
+	return c.Werewolf.AgentCompactEightSectionsEnabled
 }

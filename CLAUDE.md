@@ -407,6 +407,7 @@ git submodule update --init --recursive
 | 20260813-04 | §130 第七次复发 + Hermes Agent 对标优化 | [`docs/其他Agent代码分析/Hermes_Agent_源码分析.md`](docs/其他Agent代码分析/Hermes_Agent_源码分析.md) |
 | 20260813-05 | DeepSeek Harness 借鉴 U2/U3/U5 落地 | [`docs/狼人杀-重构方案/狼人杀Agent_根据_deepseek-harness_优化和解决方案_20260813.md`](docs/狼人杀-重构方案/狼人杀Agent_根据_deepseek-harness_优化和解决方案_20260813.md) |
 | 20260814-02 | OpenCode 启发的 6 项升级（CachePolicy / WolfWhisper / LLMSlot / BotTranscript 分桶 / AgentRunTrace / AgentWiringLint） | [`docs/狼人杀-重构方案/狼人杀Agent_根据_OpenCode_优化和解决方案_20260814.md`](docs/狼人杀-重构方案/狼人杀Agent_根据_OpenCode_优化和解决方案_20260814.md) |
+| 20260820-01 | 狼人杀 Agent Context 压缩优化（8 段 schema + 视角隔离 + 质量校验） | [`docs/狼人杀-Agent与系统/狼人杀Agent的Conetxt压缩优化方案-20260820-01.md`](docs/狼人杀-Agent与系统/狼人杀Agent的Conetxt压缩优化方案-20260820-01.md) |
 
 #### 道具 / 经济 / 游戏机制类
 
