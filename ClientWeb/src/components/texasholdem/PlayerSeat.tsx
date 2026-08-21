@@ -62,7 +62,10 @@ export function PlayerSeat({
 
   return (
     <div className={classList}>
-      <div className="seat-info">
+      {/* §20260821-06 — 座位信息分两行:名字行 + 徽章行,
+       * 确保名字始终独占一行不被挤压,徽章多时换行也不影响名字显示,
+       * 座位卡整体高度更稳定。 */}
+      <div className="seat-name-row">
         <span className="seat-name">
           {isMe
             ? t('texasholdem.seatYou' as TKey)
@@ -70,6 +73,18 @@ export function PlayerSeat({
               ? (botModelName || player.user_id.slice(0, 6))
               : player.user_id.slice(0, 6)}
         </span>
+        {/* §20260821-06 — Bot 徽章精简:只显示 🤖 图标,模型名放 title 悬浮显示 */}
+        {isBot && (
+          <span
+            className="badge bot-badge"
+            title={botModelName || t('texasholdem.bot.badge' as TKey)}
+            data-testid="thp-seat-bot-badge"
+          >
+            🤖
+          </span>
+        )}
+      </div>
+      <div className="seat-badges">
         {/* §20260821-01 — 庄家按钮优先 PNG,否则 CSS 徽章 */}
         {isButton && dealerPng && (
           <img
@@ -84,26 +99,18 @@ export function PlayerSeat({
         {isSB && <span className="badge sb">SB</span>}
         {isBB && <span className="badge bb">BB</span>}
         {player.all_in && <span className="badge allin-badge">ALL IN</span>}
-        {/* 2026-08-19 §德州扑克Agent — Bot 徽章 */}
-        {isBot && (
-          <span
-            className="badge bot-badge"
-            title={botModelName || t('texasholdem.bot.badge' as TKey)}
-            data-testid="thp-seat-bot-badge"
-          >
-            🤖 {botModelName || t('texasholdem.bot.badge' as TKey)}
-          </span>
-        )}
       </div>
       <div className="seat-stack">${player.stack}</div>
-      {/* 2026-08-19 §德州扑克Agent — 思考中指示器 */}
+      {/* §20260821-06 — 思考中与内心独白互斥显示:
+       * 思考中时只显示思考指示器,不显示内心独白,减少座位卡行数,
+       * 让 Bot 座位与普通座位高度更接近,布局更紧凑。
+       * 未在思考且有独白时才显示内心独白卡片。 */}
       {isBot && botThinking && (
         <div className="seat-thinking" data-testid="thp-seat-thinking">
           ⏳ {t('texasholdem.bot.thinking' as TKey)}
         </div>
       )}
-      {/* 2026-08-19 §德州扑克Agent — 内心独白(hover 弹全文) */}
-      {isBot && botHeartThought && (
+      {isBot && !botThinking && botHeartThought && (
         <div
           className="seat-heart-thought"
           title={botHeartThought}

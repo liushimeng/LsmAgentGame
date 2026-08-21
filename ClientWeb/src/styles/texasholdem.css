@@ -8,20 +8,18 @@
   border-color: hsl(160, 60%, 45%);
 }
 
+/* §20260821-06 — Bot 徽章精简:只显示 🤖 图标,缩小尺寸,减少占位 */
 .badge.bot-badge {
   background: rgba(45, 156, 119, 0.6);
   color: #ffffff;
   font-weight: 600;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  padding: 2px 6px;
+  padding: 2px 5px;
   border-radius: 4px;
   font-size: 11px;
-  margin-left: 4px;
+  margin-left: 2px;
   display: inline-block;
-  max-width: 80px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  cursor: help;
 }
 
 /* ===== 思考中指示器（紫色 + 白字） ===== */
@@ -64,12 +62,10 @@
 
 /* ===== BotThoughtPanel ===== */
 /* §F1 (2026-08-20): 面板接入 TexasHoldemTable 桌面右上角。
- * 定位上下文:.texas-table 需 position:relative(见下)。
+ * 定位上下文:.texas-table 的 position:relative 定义在下方 3.2 节椭圆赌桌处,
+ * 此处在 §20260821-06 清理了重复定义(原 .texas-table{position:relative} 重复两次)。
  * 对比度(CLAUDE.md §26):紫底 rgba(155,89,182,0.18) 叠加深色底层 rgba(20,16,32,0.85),
  * 字色 #f5e8ff,有效对比度 ≥ 7:1,不受牌桌背景图明暗影响。 */
-.texas-table {
-  position: relative;
-}
 
 /* §20260821-02 — BotThoughtPanel 桌面浮卡背景优化。
  * 原 rgba(20,16,32,0.85) 暗紫黑在深绿牌桌背景上观感发黑,叠加后人类用户看不清;
@@ -359,10 +355,12 @@
 }
 
 /* === §20260821-02 三栏布局:信息(左) + 牌桌(中) + 聊天(右) === */
+/* §20260821-06 — 左列从 240px 减到 220px,信息面板内容不多,220px 足够,
+ * 让中间牌桌区域获得更多空间,整体布局更紧凑。 */
 .texas-game .game-area {
   display: grid;
-  /* 三栏:信息 240px / 牌桌自适应 / 聊天 300px */
-  grid-template-columns: 240px minmax(0, 1fr) 300px;
+  /* 三栏:信息 220px / 牌桌自适应 / 聊天 300px */
+  grid-template-columns: 220px minmax(0, 1fr) 300px;
   /* §20260821-04 — 命名网格区域:列位由 grid-area 决定而非 DOM 顺序,
      根除「DOM 顺序与列定义不匹配 → 牌桌被挤入窄列」这类回归(旧 §20260821-04 初版仅靠 DOM 顺序对齐)。 */
   grid-template-areas: "info board chat";
@@ -434,16 +432,18 @@
 }
 
 /* 4 档断点(参考狼人杀 §23 中栏紧凑机制 + §20260821-02 三栏保形) */
+/* §20260821-06 — 同步调整断点列宽:左列基准从 220px 起(原 240px),
+ * 各断点按比例缩减,保持与桌面端一致的紧凑度梯度。 */
 @media (max-width: 1280px) {
   .texas-game .game-area {
-    grid-template-columns: 220px minmax(0, 1fr) 280px;
+    grid-template-columns: 210px minmax(0, 1fr) 270px;
     gap: 10px;
     padding: 10px;
   }
 }
 @media (max-width: 1024px) {
   .texas-game .game-area {
-    grid-template-columns: 200px minmax(0, 1fr) 240px;
+    grid-template-columns: 190px minmax(0, 1fr) 230px;
     gap: 8px;
     padding: 8px;
   }
@@ -477,11 +477,13 @@
 
 /* === 3.2 椭圆赌桌 === */
 /* §20260820-02 — 修复 6 座位紧凑到中显示:给 texas-table 容器加尺寸+椭圆桌布,
-   6 个 .sX-* 绝对定位坐标(我方在 s0-bottom) */
+   6 个 .sX-* 绝对定位坐标(我方在 s0-bottom)
+   §20260821-06 — max-width 从 1100px 提升到 1200px,利用大屏下中间列的更多空间,
+   让牌桌更大、座位更舒展,整体视觉更饱满。 */
 .texas-table {
   position: relative;
   width: 100%;
-  max-width: 1100px;
+  max-width: 1200px;
   aspect-ratio: 16 / 9;
   margin: 0 auto;
   border-radius: 50% / 35%;
@@ -503,14 +505,23 @@
   z-index: 2;
 }
 
-.texas-table .s0-bottom    { --seat-x: 50%; --seat-y: 92%; }
-.texas-table .s1-left      { --seat-x: 6%;  --seat-y: 60%; }
-.texas-table .s2-top-left  { --seat-x: 18%; --seat-y: 14%; }
-.texas-table .s3-top       { --seat-x: 50%; --seat-y: 8%;  }
-.texas-table .s4-top-right { --seat-x: 82%; --seat-y: 14%; }
-.texas-table .s5-right     { --seat-x: 94%; --seat-y: 60%; }
+/* §20260821-06 — 座位坐标优化:
+ * 1. 上下对称:底部 s0 从 92% 上移到 88%,顶部 s3 从 8% 下移到 12%,
+ *    为下注筹码条和 ActionControls 留出空间,同时视觉更均衡。
+ * 2. 顶部两座位(s2/s4)y 从 14% → 18%,与 s3 拉开距离,避免顶部三座位挤在一条线上。
+ * 3. 顶部两座位 x 从 18%/82% → 22%/78%,向中心靠拢,减少上半区空旷感。
+ * 4. 侧面座位(s1/s5)x 从 6%/94% → 8%/92%,稍微向内,避免太靠近椭圆边缘。 */
+.texas-table .s0-bottom    { --seat-x: 50%; --seat-y: 88%; }
+.texas-table .s1-left      { --seat-x: 8%;  --seat-y: 60%; }
+.texas-table .s2-top-left  { --seat-x: 22%; --seat-y: 18%; }
+.texas-table .s3-top       { --seat-x: 50%; --seat-y: 12%; }
+.texas-table .s4-top-right { --seat-x: 78%; --seat-y: 18%; }
+.texas-table .s5-right     { --seat-x: 92%; --seat-y: 60%; }
 
 /* 中央区域:公共牌 + 底池 + 庄家按钮 */
+/* §20260821-06 — 公共牌区 z-index 提升到 3,高于座位卡(z:2)。
+ * 原 z-index:1 导致侧面座位(s1-left/s5-right)的底部可能延伸到公共牌区域,
+ * 遮挡公共牌;提升后中央公共牌在视觉层级上位于牌桌最上层,符合真实赌场牌桌层次。 */
 .texas-center {
   position: absolute;
   left: 50%;
@@ -520,7 +531,7 @@
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  z-index: 1;
+  z-index: 3;
   pointer-events: none;
 }
 .texas-center > * { pointer-events: auto; }
@@ -554,8 +565,10 @@
   min-height: 78px;
 }
 
+/* §20260821-06 — 1024px 断点牌桌 max-width 从 800px 提到 900px,
+ * 配合 1200px 桌面基准的等比缩放。 */
 @media (max-width: 1024px) {
-  .texas-table { max-width: 800px; }
+  .texas-table { max-width: 900px; }
   .texas-pot { font-size: 14px; padding: 4px 12px; }
 }
 @media (max-width: 640px) {
@@ -570,16 +583,18 @@
 }
 
 /* === 3.3 座位卡 3 段式 === */
+/* §20260821-06 — 座位卡内间距紧凑化: padding/gap 各减 1~2px,
+ * 宽度从 132px 减到 128px,让椭圆布局更紧凑,同时不影响内容可读性。 */
 .texas-seat {
   position: relative;
-  width: 132px;
+  width: 128px;
   background: rgba(20, 25, 35, 0.92);
   border: 2px solid transparent;
   border-radius: 10px;
-  padding: 8px 6px 6px;
+  padding: 6px 6px 4px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   font-size: 12px;
   color: var(--fg);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
@@ -596,12 +611,24 @@
   opacity: 0.5;
 }
 
-.texas-seat .seat-info {
+/* §20260821-06 — 座位信息分两行:
+ * .seat-name-row: 名字 + Bot 徽章(同行,名字优先占满)
+ * .seat-badges: 状态徽章组(D/SB/BB/ALL-IN),独立一行,高度稳定
+ * 分两行后名字不再被徽章挤压,座位卡整体高度更可控。 */
+.texas-seat .seat-name-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 4px;
-  flex-wrap: wrap;
   min-height: 18px;
+}
+
+.texas-seat .seat-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-height: 16px;
 }
 
 .seat-name {
@@ -639,11 +666,15 @@
   font-size: 11px;
 }
 
+/* §20260821-06 — 下注筹码条加 z-index 确保在座位卡最上层,
+ * 同时 bottom 从 -16px 调整为 -14px 配合座位坐标上移,
+ * 防止底部座位(s0)的筹码条与下方 ActionControls 重叠时被遮挡。 */
 .texas-seat .seat-committed {
   position: absolute;
-  bottom: -16px;
+  bottom: -14px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 1;
   background: rgba(245, 158, 11, 0.85);
   color: #1a1a1a;
   font-size: 11px;
