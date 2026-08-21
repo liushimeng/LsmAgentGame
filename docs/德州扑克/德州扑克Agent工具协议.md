@@ -257,14 +257,14 @@ func BuildTools(seat int, gs *texasholdem.GameState) []llm.Tool {
 
 ## 8. Anthropic 协议合规检查清单
 
-- [ ] ContentBlock 按 Type 分支序列化（与狼人杀共用 `types.go::MarshalJSON`）
-- [ ] messages 数组 user/assistant 严格交替（`SanitizeMessagesForAnthropic` 末尾合并）
-- [ ] tool_use 块必带 `{"type","id","name","input"}` 四键
-- [ ] tool_result 块必带 `{"type","tool_use_id","content","is_error"}` 四键
-- [ ] system 字段是 SystemBlock 数组（`[{"type","text"}]`）而非纯 string
-- [ ] `content` 字段是 content-block 数组而非纯 string
-- [ ] metadata.user_id 走 `buildMetadataUserID` 构造
-- [ ] 出站请求头：`Authorization` / `anthropic-version: 2023-06-01` / `User-Agent: <AgentClassName>/<ver> <time>` / `x-anthropic-billing-header` / `Content-Type`
+- [x] ContentBlock 按 Type 分支序列化（与狼人杀共用 `types.go::MarshalJSON`）
+- [x] messages 数组 user/assistant 严格交替（`SanitizeMessagesForAnthropic` 末尾合并）
+- [x] tool_use 块必带 `{"type","id","name","input"}` 四键
+- [x] tool_result 块必带 `{"type","tool_use_id","content","is_error"}` 四键
+- [x] system 字段是 SystemBlock 数组（`[{"type","text"}]`）而非纯 string
+- [x] `content` 字段是 content-block 数组而非纯 string
+- [x] metadata.user_id 走 `buildMetadataUserID` 构造
+- [x] 出站请求头：`Authorization` / `anthropic-version: 2023-06-01` / `User-Agent: <AgentClassName>/<ver> <time>` / `x-anthropic-billing-header` / `Content-Type`
 
 ## 9. 测试用例
 

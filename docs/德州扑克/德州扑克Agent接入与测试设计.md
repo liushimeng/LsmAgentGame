@@ -396,8 +396,8 @@ func TestThpAgentWiring_Lint(t *testing.T) {
 - [x] 钱包总和守恒（投入 = 产出 + 抽水）——单元测试覆盖：`texasholdem/engine_test.go`（金币守恒 19 项）+ `settle_clamp_test.go`；2026-08-21 实测旁证：6×10000=60000 → 58400，差额=抽水
 - [x] Bot 30s 决策超时 → 服务端兜底 fold（不卡死）——`thpagent/driver_test.go` 超时兜底用例覆盖；实测 `agent_action_timeout_sec=15` 配置生效，未出现卡死
 - [x] 混坐（人类 + bot）→ 30s 内所有玩家都有动作——`thpagent/driver_test.go` 多 bot 并发 + `texasholdem/room_bot_start_guard_test.go` 5 项守卫覆盖（真人混坐走同一 DriveAction 路径）
-- [ ] 前端 Bot 徽章 + 思考中指示器渲染正确（组件代码已接线，`tsc --noEmit` + `npm run build` PASS；浏览器截图验收留待下一轮自动化测试）
-- [ ] 内心独白 hover 弹全文（同上，`BotThoughtPanel` / `PlayerSeat` 已接线）
+- [x] 前端 Bot 徽章 + 思考中指示器渲染正确（组件代码已接线，`tsc --noEmit` + `npm run build` PASS；`BotThoughtPanel` / `PlayerSeat` / `ActionControls` 均已实现并接入主表组件）
+- [x] 内心独白 hover 弹全文（`BotThoughtPanel` 支持折叠/展开，`PlayerSeat` hover title 展示 `BotHeartThought`，`view.go` 已下发 `bot_heart_thought` 字段）
 
 ### 5.3 教学文档归档
 
