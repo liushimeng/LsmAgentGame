@@ -28,9 +28,13 @@ export function AuthModal() {
             {t('auth.register')}
           </button>
         </div>
-        {mode === 'login'
-          ? <LoginForm onSwitch={() => setMode('register')} />
-          : <RegisterForm onSwitch={() => setMode('login')} />}
+        {/* §20260821-05: 使用 CSS display 控制显示/隐藏，保持组件挂载以保留状态 */}
+        <div style={{ display: mode === 'login' ? 'block' : 'none' }}>
+          <LoginForm onSwitch={() => setMode('register')} />
+        </div>
+        <div style={{ display: mode === 'register' ? 'block' : 'none' }}>
+          <RegisterForm onSwitch={() => setMode('login')} />
+        </div>
       </div>
     </div>
   );

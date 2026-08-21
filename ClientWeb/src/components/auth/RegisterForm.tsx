@@ -50,12 +50,14 @@ export function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
         email || undefined,
         inviteCode,
       );
-      // Keep the same vault-key so a successful signup seeds login.
+      // §20260821-05: 注册成功后不保存密码到本地存储，只保存 account/phone
       await uiStorage.save({
         account: account.trim(),
         phone: phone.trim(),
-        password,
+        password: '',
         mode: 'account',
+        accountPassword: '',
+        phonePassword: '',
       });
     } catch (e) {
       // §20260817-04 P1 — 与 LoginForm 错误前缀口径统一(code 缺省时省略方括号)。

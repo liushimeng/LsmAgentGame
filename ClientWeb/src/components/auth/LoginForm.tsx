@@ -4,32 +4,57 @@ import { authService, isAgentBypassAccount } from '@/services/auth.service';
 import { uiStorage } from '@/shared/utils/ui-storage';
 import { useT } from '@/hooks/useT';
 
-// LoginForm renders two modes (account | phone), both with captcha.
+// §20260821-05: LoginForm 按登录模式完全隔离状态
 //
-// Behavior:
-//   - On mount, hydrate the form fields from the encrypted localStorage blob
-//     (lsm.auth.ui) and fetch the first captcha challenge.
-//   - On submit, save the form values back to the encrypted blob before
-//     hitting authService — this guarantees persistence on success.
-//   - The agent bypass account (test19082jauishf8) hides the captcha UI and
-//     does NOT send captcha_id/answer; the server-side gate mirrors this.
-//   - Errors from the server come back as ApiError(code, message). We show
-//     the message verbatim (still localized by the server's English table).
+// 账号登录和手机号登录现在是两个独立的子页面，各自保存自己的凭证：
+//   - account 模式：使用 account + accountPassword
+//   - phone 模式：使用 phone + phonePassword
+// 切换模式时自动加载对应保存的凭证
+
+interface ModeCredentials {
+  identifier: string;
+  password: string;
+}
+
+interface CaptchaState {
+  id: string;
+  svg: string;
+  answer: string;
+}
+
+// §20260821-05: 类型别名避免 JSX 解析问题
+type LoginPayload = {
+  account?: string;
+  phone?: string;
+  password: string
+  captcha_id?: string;
+  captcha_answer?: string;
+};
+
 export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
   const login = useAuth((s) => s.login);
   const t = useT();
 
   const [mode, setMode] = useState<'account' | 'phone'>('account');
-  const [account, setAccount] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [captchaId, setCaptchaId] = useState('');
-  const [captchaSvg, setCaptchaSvg] = useState('');
-  const [captchaAnswer, setCaptchaAnswer] = useState('');
+
+  // §20260821-05: 按模式隔离凭证
+  const [accountCreds, setAccountCreds] = useState<ModeCredentials>({ identifier: '', password: '' });
+  const [phoneCreds, setPhoneCreds] = useState<ModeCredentials>({ identifier: '', password: '' });
+
+  // §20260821-05: 按模式隔离验证码
+  const [accountCaptcha, setAccountCaptcha] = useState<CaptchaState>({ id: '', svg: '', answer: '' });
+  const [phoneCaptcha, setPhoneCaptcha] = useState<CaptchaState>({ id: '', svg: '', answer: '' });
+
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const isAgentBypass = isAgentBypassAccount(account);
+  // 当前模式的凭证和验证码
+  const creds = mode === 'account' ? accountCreds : phoneCreds;
+  const setCreds = mode === 'account' ? setAccountCreds : setPhoneCreds;
+  const captcha = mode === 'account' ? accountCaptcha : phoneCaptcha;
+  const setCaptcha = mode === 'account' ? setAccountCaptcha : setPhoneCaptcha;
+
+  const isAgentBypass = isAgentBypassAccount(mode === 'account' ? accountCreds.identifier : '');
   const requireCaptcha = !isAgentBypass;
 
   // Hydrate saved credentials once.
@@ -38,9 +63,8 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
     (async () => {
       const saved = await uiStorage.load();
       if (cancelled) return;
-      setAccount(saved.account);
-      setPhone(saved.phone);
-      setPassword(saved.password);
+      setAccountCreds({ identifier: saved.account, password: saved.accountPassword });
+      setPhoneCreds({ identifier: saved.phone, password: saved.phonePassword });
       setMode(saved.mode);
     })();
     return () => {
@@ -48,72 +72,73 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
     };
   }, []);
 
-  // Fetch a captcha whenever one is needed (initial mount, after submit,
-  // and when the user switches to a non-bypass mode while typing an account
-  // name other than the bypass).
+  // Fetch a captcha for the current mode.
   async function refreshCaptcha() {
     if (isAgentBypass) return;
     try {
       const ch = await authService.getCaptcha();
-      setCaptchaId(ch.captcha_id);
-      setCaptchaSvg(ch.svg);
-      setCaptchaAnswer('');
+      setCaptcha({ id: ch.captcha_id, svg: ch.svg, answer: '' });
       setErr('');
     } catch (e) {
       setErr('failed to load captcha: ' + (e as Error).message);
     }
   }
 
+  // Refresh captcha when mode changes or bypass status changes.
   useEffect(() => {
     refreshCaptcha();
-    // We intentionally exclude refreshCaptcha deps; we re-run only when the
-    // account field becomes (non-)bypass.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAgentBypass]);
+  }, [mode, isAgentBypass]);
 
-  // Strip the captcha payload if the user starts typing the bypass name —
-  // prevents stale IDs from being submitted accidentally.
+  // Clear captcha answer when entering bypass mode.
   useEffect(() => {
     if (isAgentBypass) {
-      setCaptchaAnswer('');
+      setCaptcha((prev) => ({ ...prev, answer: '' }));
       setErr('');
     }
-  }, [isAgentBypass]);
+  }, [isAgentBypass, setCaptcha]);
+
+  function updateIdentifier(value: string) {
+    setCreds((prev) => ({ ...prev, identifier: value }));
+  }
+
+  function updatePassword(value: string) {
+    setCreds((prev) => ({ ...prev, password: value }));
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr('');
     setBusy(true);
     try {
-      const payload =
-        mode === 'phone'
-          ? {
-              phone: phone.trim(),
-              password,
-              captcha_id: requireCaptcha ? captchaId : undefined,
-              captcha_answer: requireCaptcha ? captchaAnswer : undefined,
-            }
-          : {
-              account: account.trim(),
-              password,
-              captcha_id: requireCaptcha ? captchaId : undefined,
-              captcha_answer: requireCaptcha ? captchaAnswer : undefined,
-            };
+      const captchaId = requireCaptcha ? captcha.id : undefined;
+      const captchaAnswer = requireCaptcha ? captcha.answer : undefined;
+      const identifier = creds.identifier.trim();
+      const passwordValue = creds.password;
+      let payload: LoginPayload;
+      if (mode === 'phone') {
+        payload = { phone: identifier, password: passwordValue, captcha_id: captchaId, captcha_answer: captchaAnswer };
+      } else {
+        payload = { account: identifier, password: passwordValue, captcha_id: captchaId, captcha_answer: captchaAnswer };
+      }
       await login(payload);
-      // Persist encrypted localStorage only on success — if the user typed
-      // wrong creds we don't want the wrong password saved.
+      // §20260821-05: 按模式分别保存凭证
+      const accountVal = mode === 'account' ? creds.identifier.trim() : accountCreds.identifier.trim();
+      const phoneVal = mode === 'phone' ? creds.identifier.trim() : phoneCreds.identifier.trim();
+      const accountPwd = mode === 'account' ? creds.password : accountCreds.password;
+      const phonePwd = mode === 'phone' ? creds.password : phoneCreds.password;
       await uiStorage.save({
-        account: account.trim(),
-        phone: phone.trim(),
-        password,
+        account: accountVal,
+        phone: phoneVal,
+        password: '',
         mode,
+        accountPassword: accountPwd,
+        phonePassword: phonePwd
       });
     } catch (e) {
       const err = e as Error & { code?: number };
       const code = err.code ?? 0;
       setErr(`[${code}] ${err.message}`);
-      // Captcha is single-use on the server — always re-fetch after any
-      // failure so the user can retry with a fresh challenge.
       refreshCaptcha();
     } finally {
       setBusy(false);
@@ -146,8 +171,8 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
           <label htmlFor="login-account">{t('auth.account')}</label>
           <input
             id="login-account"
-            value={account}
-            onChange={(e) => setAccount(e.target.value)}
+            value={accountCreds.identifier}
+            onChange={(e) => updateIdentifier(e.target.value)}
             autoComplete="username"
             required
           />
@@ -157,8 +182,8 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
           <label htmlFor="login-phone">{t('auth.phone')}</label>
           <input
             id="login-phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            value={phoneCreds.identifier}
+            onChange={(e) => updateIdentifier(e.target.value)}
             autoComplete="tel"
             required
             placeholder="+86138…"
@@ -171,8 +196,8 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
         <input
           id="login-password"
           type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          value={creds.password}
+          onChange={(e) => updatePassword(e.target.value)}
           autoComplete="current-password"
           required
           minLength={6}
@@ -185,8 +210,8 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input
               id="login-captcha"
-              value={captchaAnswer}
-              onChange={(e) => setCaptchaAnswer(e.target.value)}
+              value={captcha.answer}
+              onChange={(e) => setCaptcha((prev) => ({ ...prev, answer: e.target.value }))}
               autoComplete="off"
               required
               style={{ flex: 1 }}
@@ -201,10 +226,10 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
               ↻
             </button>
           </div>
-          {captchaSvg && (
+          {captcha.svg && (
             <div
               style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-start' }}
-              dangerouslySetInnerHTML={{ __html: captchaSvg }}
+              dangerouslySetInnerHTML={{ __html: captcha.svg }}
               aria-label="captcha image"
             />
           )}

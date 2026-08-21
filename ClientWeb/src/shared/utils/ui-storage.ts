@@ -1,14 +1,18 @@
 // Lightweight encrypted localStorage helper for the login form.
 //
-// Stores {account, password, phone, mode} as a single AES-GCM-encrypted JSON
-// blob keyed by lsm.auth.ui. The key is derived from a deterministic
-// per-browser passphrase (UA + location.host), wrapped with PBKDF2 to slow
-// offline brute force on a stolen localStorage dump.
+// Stores {account, password, phone, mode, accountPassword, phonePassword} as a
+// single AES-GCM-encrypted JSON blob keyed by lsm.auth.ui. The key is derived
+// from a deterministic per-browser passphrase (UA + location.host), wrapped with
+// PBKDF2 to slow offline brute force on a stolen localStorage dump.
+//
+// §20260821-05: 支持按登录模式分别保存凭证
+//   - account/phone: 通用字段，用于表单回填
+//   - accountPassword: 账号登录模式保存的密码
+//   - phonePassword: 手机号登录模式保存的密码
+//   - 这样切换登录模式时可以自动加载对应的密码
 //
 // Important properties:
-//   - Fails silently to {account:'', password:'', phone:'', mode:'account'} on
-//     any crypto / parse error. We never want a corrupted blob to lock the
-//     user out.
+//   - Fails silently to empty defaults on any crypto / parse error.
 //   - The passphrase is NOT user-supplied. It is derived from public browser
 //     attributes. That makes this obfuscation, not real confidentiality —
 //     the security model is "no plaintext password at rest," not
@@ -16,6 +20,7 @@
 
 const STORAGE_KEY = 'lsm.auth.ui';
 const PBKDF2_ITER = 50_000;
+const STORAGE_VERSION = 2; // §20260821-05: 版本标记，用于向前兼容
 
 export interface SavedCredentials {
   account: string;
@@ -23,6 +28,10 @@ export interface SavedCredentials {
   phone: string;
   mode: 'account' | 'phone';
   savedAt: number;
+  // §20260821-05: 新增按模式分别保存的密码
+  accountPassword: string;
+  phonePassword: string;
+  version: number;
 }
 
 const EMPTY: SavedCredentials = {
@@ -31,6 +40,9 @@ const EMPTY: SavedCredentials = {
   phone: '',
   mode: 'account',
   savedAt: 0,
+  accountPassword: '',
+  phonePassword: '',
+  version: STORAGE_VERSION,
 };
 
 function b64encode(buf: ArrayBuffer | Uint8Array): string {
@@ -97,8 +109,8 @@ async function decryptString(token: string): Promise<string | null> {
 }
 
 export const uiStorage = {
-  async save(creds: Omit<SavedCredentials, 'savedAt'>): Promise<void> {
-    const payload: SavedCredentials = { ...creds, savedAt: Date.now() };
+  async save(creds: Omit<SavedCredentials, 'savedAt' | 'version'>): Promise<void> {
+    const payload: SavedCredentials = { ...creds, savedAt: Date.now(), version: STORAGE_VERSION };
     const cipher = await encryptString(JSON.stringify(payload));
     if (cipher == null) return;
     localStorage.setItem(STORAGE_KEY, cipher);
@@ -110,12 +122,22 @@ export const uiStorage = {
     if (!plain) return EMPTY;
     try {
       const obj = JSON.parse(plain) as Partial<SavedCredentials>;
+      // §20260821-05: 向前兼容旧格式（无 accountPassword/phonePassword）
+      const isV2 = obj.version === STORAGE_VERSION;
       return {
         account: typeof obj.account === 'string' ? obj.account : '',
         password: typeof obj.password === 'string' ? obj.password : '',
         phone: typeof obj.phone === 'string' ? obj.phone : '',
         mode: obj.mode === 'phone' ? 'phone' : 'account',
         savedAt: typeof obj.savedAt === 'number' ? obj.savedAt : 0,
+        // v2 新增字段，旧版本默认为空或使用旧的 password
+        accountPassword: isV2
+          ? (typeof obj.accountPassword === 'string' ? obj.accountPassword : '')
+          : (typeof obj.password === 'string' ? obj.password : ''),
+        phonePassword: isV2
+          ? (typeof obj.phonePassword === 'string' ? obj.phonePassword : '')
+          : '',
+        version: isV2 ? STORAGE_VERSION : 0,
       };
     } catch {
       return EMPTY;
