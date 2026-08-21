@@ -506,3 +506,32 @@ func TestHeadsUp_ButtonIsSB(t *testing.T) {
 		t.Fatalf("preflop first actor in heads-up should be SB (button=%d), got turn=%d", sb, gs.Turn)
 	}
 }
+
+// BUG-TEXAS-BUSTED-TURN: 破产玩家(stack=0) StartHand 后必须 Folded=true,
+// 不进 turn queue,不参与盲注;否则其无法行动导致整桌永久卡死。
+func TestStartHand_BustedPlayerFolded(t *testing.T) {
+	gs := newTestGame([]int{200, 200, 200, 200}, []int{10000, 0, 10000, 0})
+	gs.Button = 3
+	if e := gs.StartHand(); e != nil {
+		t.Fatal(e)
+	}
+	for _, seat := range []int{1, 3} {
+		p := gs.Players[seat]
+		if !p.Folded {
+			t.Errorf("seat %d (stack=0) Folded=false, want true", seat)
+		}
+		if p.Hole != [2]Card{} {
+			t.Errorf("seat %d (stack=0) was dealt hole cards, want none", seat)
+		}
+		if p.RoundCommitted != 0 {
+			t.Errorf("seat %d (stack=0) posted blind %d, want 0", seat, p.RoundCommitted)
+		}
+		if gs.Turn == seat {
+			t.Errorf("Turn landed on busted seat %d", seat)
+		}
+	}
+	// 破产玩家的任何动作(含降级 allin=0)必须被拒绝
+	if _, e := gs.ApplyAction(1, Action{Type: ActAllIn}); e == nil {
+		t.Error("ApplyAction from busted seat 1 should be rejected")
+	}
+}

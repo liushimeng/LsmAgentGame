@@ -301,7 +301,12 @@ func (gs *GameState) StartHand() *errcode.Error {
 			continue
 		}
 		p.Hole = [2]Card{}
-		p.Folded = false
+		// BUG-TEXAS-BUSTED-TURN: 破产玩家(stack=0)不能进新一手——
+		// 若重置为未弃牌,会被纳入盲注轮转与 turn queue,但其任何动作
+		// (含降级 allin=0)在服务端均无意义,前端也不发帧,导致整桌卡死。
+		// 设 Folded=true 使 nextActiveSeat/activePlayerSeats/nextActableSeat
+		// 天然跳过该座位(不发底牌、不进 turn queue、不参与盲注)。
+		p.Folded = p.Stack <= 0
 		p.AllIn = false
 		p.RoundCommitted = 0
 		p.TotalCommitted = 0

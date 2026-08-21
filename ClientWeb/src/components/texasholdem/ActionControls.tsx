@@ -49,6 +49,10 @@ export function ActionControls({
   const sliderMin = Math.min(minTotal, stack);
   const sliderMax = Math.max(stack, sliderMin);
   const belowMin = betAmount < minTotal;
+  // BUG-TEXAS-BUSTED-TURN: 破产玩家(stack=0)防御性禁用所有动作按钮,
+  // 防止 UI 允许点击却不触发 WS 帧造成静默无响应。服务端修复后该状态
+  // 在轮到自己时不可达,此处为兜底防御(报告 R14 建议 2)。
+  const busted = stack <= 0;
 
   // minTotal/stack 变化(如对手加注抬高下界)时夹紧 slider 当前值。
   useEffect(() => {
@@ -90,16 +94,16 @@ export function ActionControls({
 
   return (
     <div className="texas-action-controls">
-      <button className="btn btn-danger" onClick={() => onAction('fold')}>
+      <button className="btn btn-danger" disabled={busted} onClick={() => onAction('fold')}>
         {t('texasholdem.fold' as TKey)}
       </button>
       {canCheck && (
-        <button className="btn btn-ghost" onClick={() => onAction('check')}>
+        <button className="btn btn-ghost" disabled={busted} onClick={() => onAction('check')}>
           {t('texasholdem.check' as TKey)}
         </button>
       )}
       {canCall && (
-        <button className="btn btn-primary" onClick={() => onAction('call')}>
+        <button className="btn btn-primary" disabled={busted} onClick={() => onAction('call')}>
           {t('texasholdem.call' as TKey)} ${callAmount}
         </button>
       )}
@@ -120,13 +124,13 @@ export function ActionControls({
         )}
         <button
           className="btn btn-ghost"
-          disabled={belowMin}
+          disabled={belowMin || busted}
           onClick={() => onAction(callAmount > 0 ? 'raise' : 'bet', betAmount)}
         >
           {t(callAmount > 0 ? ('texasholdem.raise' as TKey) : ('texasholdem.bet' as TKey))}
         </button>
       </div>
-      <button className="btn btn-warning" onClick={() => onAction('allin')}>
+      <button className="btn btn-warning" disabled={busted} onClick={() => onAction('allin')}>
         {t('texasholdem.allIn' as TKey)} ${stack}
       </button>
     </div>
