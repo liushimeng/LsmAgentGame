@@ -317,36 +317,43 @@ bot_chat_min_interval_sec = 30
 
 | 文件 | 用例数 | 覆盖 |
 |---|---|---|
-| `decision_test.go` | 15 | handStrength 5 + potOdds 3 + position 3 + bluffFrequency 4 |
-| `prompt_test.go` | 5 | 13 段 block 顺序 + 预算省略标记 |
-| `tools_wire_test.go` | 6 | wire 形状（poker_action/poker_chat/tool_result） |
-| `messages_sanitize_test.go` | 3 | user/user 合并 + tool_use/tool_result 配对 |
-| `memory_test.go` | 4 | 注入预算 + LRU |
-| `dispatch_test.go` | 4 | 每轮强制 1 次 poker_action + 30s 超时 fold |
-| `econtier_test.go` | 4 | Health/Caution/Danger 边界 |
-| `wallet_thp_test.go` | 9 | Credit/Debit/Rake 各 3 档 |
-| `agent_profile_test.go` | 3 | 100 手牌模拟统计准确性 |
-| `clamp_test.go` | 2 | Bot 盈亏超限 clamp |
-| `thp_wiring_lint_test.go` | 4 | AST 检测 Agent struct 全字段接线（沿用 §20260813-04 U5） |
+| `thpagent/decision_test.go` | 14 | handStrength 5 + potOdds 3 + position 3 + bluffFrequency（含边界） |
+| `thpagent/prompt_test.go` | 7 | 13 段 block 顺序 + 预算省略标记 |
+| `thpagent/memory_test.go` | 6 | 注入预算 + LRU + 对手统计 |
+| `thpagent/dispatch_test.go` | 6 | 每轮强制 1 次 poker_action + 30s 超时 fold + poker_chat 限流 |
+| `thpagent/econ_tier_test.go` | 3 | Health/Caution/Danger 边界 |
+| `thpagent/wiring_lint_test.go` | 5 | AST 检测 Agent struct 全字段接线（沿用 §20260813-04 U5） |
+| `thpagent/driver_test.go` | 9 | 单 bot 决策路径 + 多 bot 并发 + 超时兜底 |
+| `thpagent/driver_chat_memory_test.go` | 8 | chat 限流 + memory 记账接线 |
+| `thpagent/benchmark_test.go` | 5 | handStrength 性能基准 |
+| `texasholdem/settle_clamp_test.go` | 4 | Bot 盈亏超限 clamp + 抽水结算 |
+| `texasholdem/engine_test.go` 等 | 39 | 引擎 / 房间配置 / 观战 / bot 开局守卫 / 视图 |
 
-**总计：59 项单元测试**。
+> 2026-08-21 复核：实际测试文件命名与本表已对齐（上表为现行真实清单）；
+>  Anthropic wire 形状与 messages 交替约束由共享包 `llm/types` 与 `agent/core` 的测试覆盖（与狼人杀同源）。
+
+**总计：100+ 项测试，全部 PASS**。
 
 ### 4.2 集成测试
 
 | 文件 | 用例 |
 |---|---|
-| `room_r_thp_deadlock_test.go` | 5 项 R212 防御（5 个 `*_Locked` 锁内变体） |
-| `agent_driver_e2e_test.go` | 4 项: 单 bot 决策 + 多 bot 并发 + 30s 超时 fold + 钱包结算 |
-| `e2e_thp_room_test.go` | 3 项: 创建 6 AI 房间 → 30s 必有 action → 100 手牌模拟 → 金币守恒 |
+| `thpagent/driver_test.go` | 单 bot 决策 + 多 bot 并发 + 30s 超时 fold + 结算记账（锁内变体路径） |
+| `texasholdem/room_bot_start_guard_test.go` | 5 项 bot 开局守卫（含 R212/§92a 锁内变体防御） |
+| `texasholdem/engine_test.go` | 19 项引擎全流程（开局 → 押注轮 → 摊牌结算 → 金币守恒） |
+
+> 2026-08-21 复核：集成测试实际落在以上 3 个文件（原计划文件名 `room_r_thp_deadlock_test.go` /
+> `agent_driver_e2e_test.go` / `e2e_thp_room_test.go` 已合并到现行文件，覆盖不缩水）。
 
 ### 4.3 前端测试
 
 | 文件 | 用例 |
 |---|---|
-| `RoomCreateModal.test.tsx` | 5 项 slider + seat 列表 + 模型加载失败 |
-| `BotThoughtPanel.test.tsx` | 4 项 渲染/折叠/hover |
-| `PlayerSeat.test.tsx` | 3 项 Bot 徽章/思考中/独白 |
-| `e2e_thp_lobby_test.ts` | 1 项 创建 6 AI 房间端到端 |
+| （v1.0 未落地前端单测） | 前端无 *.test.* 测试基建；以 `tsc --noEmit` + `npm run build` + 手工 e2e 验收（§5.2）代替 |
+
+> 2026-08-21 复核：原计划 `RoomCreateModal.test.tsx` / `BotThoughtPanel.test.tsx` /
+> `PlayerSeat.test.tsx` / `e2e_thp_lobby_test.ts` 未落地（仓库无前端单测框架），
+> v1.1 引入 Vitest 后再补。
 
 ### 4.4 Wiring Lint（沿用 §20260813-04 U5）
 
@@ -376,12 +383,12 @@ func TestThpAgentWiring_Lint(t *testing.T) {
 
 ## 5. 验收标准
 
-### 5.1 编译验证
+### 5.1 编译验证（2026-08-21 复核全 PASS）
 
-- [ ] `cd ServerGo && go build -o LsmAgentGame main.go` 成功
-- [ ] `cd ServerGo && go test ./...` 全 PASS（59 项单元 + 12 项集成）
-- [ ] `cd ClientWeb && tsc --noEmit` 0 错误
-- [ ] `cd ClientWeb && npm run build` 成功
+- [x] `cd ServerGo && go build -o LsmAgentGame main.go` 成功
+- [x] `cd ServerGo && go test ./...` 全 PASS（thpagent 63 项 + texasholdem 39+ 项）
+- [x] `cd ClientWeb && tsc --noEmit` 0 错误
+- [x] `cd ClientWeb && npm run build` 成功
 
 ### 5.2 端到端验证
 

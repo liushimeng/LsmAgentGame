@@ -8,7 +8,7 @@ _实现状态（2026-08-21 更新）_
 | §3 EconTier 经济档位联动 | ✅ 已完成 | Health 5% / Caution 7% / Danger 10% |
 | §4 Bot 经济行为约束（clamp） | ✅ 已完成 | 单手 ±5000 / 单局 ±30000 / 单房间 ±100000 |
 | §5 金币变动日志 | ✅ 已完成 | t_lsm_game_wallet_log（reason 枚举 5 种） |
-| §6 Bot 金币统计与画像 | ⏳ 部分完成 | 基础统计字段已定义，Profile 迭代 v1.1 |
+| §6 Bot 金币统计与画像 | ⏳ 部分完成 | 内存统计已实现（`thpagent/memory.go` 对手 HandsPlayed/FoldRate/NetChips 注入 prompt）；DB 持久化 `thp_*` 画像字段留 v1.1（2026-08-21 复核确认） |
 | §7 与 wallet_service 集成 | ✅ 已完成 | Credit/Debit/Rake 三路径 |
 | §8 测试用例 | ✅ 已完成 | econtier_test.go + wallet_thp_test.go + clamp_test.go |
 
