@@ -146,6 +146,20 @@ export function TexasHoldemGamePage() {
   return (
     <div className="texas-game">
       <div className="game-area">
+        {/* §20260821-04 — 三栏 DOM 顺序与 CSS Grid 列对齐:
+            grid-template-columns: 240px minmax(0,1fr) 300px
+            → 第 1 列=信息(左) / 第 2 列=牌桌(中) / 第 3 列=聊天(右)。
+            DOM 顺序必须与 Grid 列序一致,否则牌桌会被挤入 240px 窄列。 */}
+        <div className="game-info-column">
+          <GameInfoPanel
+            gameState={gameState}
+            mySeat={effectiveSeat}
+            style={style}
+            spectator={spectator}
+            onResign={handleResign}
+            onLeave={handleLeave}
+          />
+        </div>
         <div className="board-container">
           {/* §20260819-02 P0-2 — 错误帧到达立即显示,不等 15s。hook 内部已
               reportGlobalError 全局兜底,这里补当前页面最高可见位置展示(§7.1)。
@@ -232,19 +246,6 @@ export function TexasHoldemGamePage() {
               )}
             </>
           )}
-        </div>
-        {/* §20260821-02 — 三栏布局:信息(左) + 牌桌(中) + 聊天(右)。
-            原 .game-sidebar 单列 280px 拆为两个独立列,
-            grid-template-columns: 240px minmax(0,1fr) 300px(详情见 texasholem.css)。 */}
-        <div className="game-info-column">
-          <GameInfoPanel
-            gameState={gameState}
-            mySeat={effectiveSeat}
-            style={style}
-            spectator={spectator}
-            onResign={handleResign}
-            onLeave={handleLeave}
-          />
         </div>
         <div className="game-chat-column">
           <GameChatPanel roomId={roomId} />

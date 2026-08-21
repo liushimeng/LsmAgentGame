@@ -358,9 +358,13 @@
   overflow: hidden;
 }
 
+/* §20260821-04 — 牌桌居中:board-container 是 Grid 第 2 列(minmax(0,1fr)),
+   用 flex 列方向垂直堆叠 牌桌 + ActionControls,水平居中。
+   旧 flex 布局残留 `flex: 1 1 auto` 已删除(Grid 子项不适用该属性)。
+   overflow:auto — 矮视口下牌桌 + ActionControls 超出时允许滚动,不裁切。 */
 .texas-game .board-container {
-  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -425,7 +429,8 @@
     grid-template-columns: 180px minmax(0, 1fr) 220px;
   }
 }
-/* 移动端折回单列(牌桌 → 信息 → 聊天,默认 grid auto-flow 已经按 DOM 顺序) */
+/* 移动端折回单列(信息 → 牌桌 → 聊天,grid auto-flow 按 DOM 顺序;
+   §20260821-04 起 DOM 顺序已与三栏 Grid 列序对齐) */
 @media (max-width: 640px) {
   .texas-game .game-area {
     grid-template-columns: 1fr;
@@ -836,6 +841,19 @@
 
 /* === 3.7 信息面板/侧栏微调 === */
 /* 全部借用 xiangqi.css 公共类,只挂 .texas-game 后代避免污染其他游戏 */
+
+/* §20260821-04 — xiangqi.css 的 .game-info-panel 固定 width:240px,
+   在三栏布局的 240px Grid 列(内 padding 10px → 内容 220px)中会溢出 20px。
+   覆盖为 width:100% 让面板贴合信息列;选择器特异性 (0,2,0) 高于 xiangqi.css 的
+   (0,1,0),且 texasholdem.css 级联在 xiangqi.css 之后,覆盖安全。 */
+.texas-game .game-info-panel {
+  width: 100%;
+  flex-shrink: 1;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
 .texas-game .player-info.active {
   background: rgba(10, 132, 255, 0.18);
   border-left: 3px solid var(--accent);
