@@ -338,6 +338,18 @@
 /* ===== §20260820-02 德州扑克 Web 端产品界面优化 ===== */
 
 /* === 3.1 容器与外框 === */
+/* §20260821-04 — 覆写 .content 默认约束(padding 24px + max-width 1280px),
+   让三栏布局撑满整个可用视口。机制同 werewolf.css 的
+   .content:has(.werewolf-game):不覆写时 .texas-game 被限宽 1280-48,
+   大屏上牌桌中栏只剩 ~700px(实测 1920 视口中栏 644px)。 */
+.content:has(.texas-game) {
+  padding: 0;
+  max-width: none;
+  height: calc(100dvh - var(--header-h, 56px));
+  max-height: calc(100dvh - var(--header-h, 56px));
+  overflow: hidden;
+}
+
 .texas-game {
   height: calc(100vh - var(--header-h, 56px));
   display: flex;
@@ -351,11 +363,19 @@
   display: grid;
   /* 三栏:信息 240px / 牌桌自适应 / 聊天 300px */
   grid-template-columns: 240px minmax(0, 1fr) 300px;
+  /* §20260821-04 — 命名网格区域:列位由 grid-area 决定而非 DOM 顺序,
+     根除「DOM 顺序与列定义不匹配 → 牌桌被挤入窄列」这类回归(旧 §20260821-04 初版仅靠 DOM 顺序对齐)。 */
+  grid-template-areas: "info board chat";
   gap: 12px;
   padding: 12px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  /* §20260821-04 — 覆写 xiangqi.css 基类 .game-area 继承的
+     align-items:flex-start(列不拉伸 → 三栏高度参差)与
+     justify-content:center(Grid 下无意义,显式归位)。 */
+  align-items: stretch;
+  justify-content: normal;
 }
 
 /* §20260821-04 — 牌桌居中:board-container 是 Grid 第 2 列(minmax(0,1fr)),
@@ -363,18 +383,23 @@
    旧 flex 布局残留 `flex: 1 1 auto` 已删除(Grid 子项不适用该属性)。
    overflow:auto — 矮视口下牌桌 + ActionControls 超出时允许滚动,不裁切。 */
 .texas-game .board-container {
+  grid-area: board;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* §20260821-04 — safe center:矮视口内容溢出时退回 start 对齐,
+     避免 justify-content:center 把溢出顶部裁切到滚动不可达区域。 */
+  justify-content: safe center;
   gap: 12px;
   overflow: auto;
 }
 
 /* 左信息列 —— §20260821-02 */
 .texas-game .game-info-column {
+  grid-area: info;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -388,6 +413,7 @@
 
 /* 右聊天列 —— §20260821-02 */
 .texas-game .game-chat-column {
+  grid-area: chat;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -429,11 +455,15 @@
     grid-template-columns: 180px minmax(0, 1fr) 220px;
   }
 }
-/* 移动端折回单列(信息 → 牌桌 → 聊天,grid auto-flow 按 DOM 顺序;
-   §20260821-04 起 DOM 顺序已与三栏 Grid 列序对齐) */
+/* 移动端折回单列 —— §20260821-04:牌桌优先(对局第一视觉),信息/聊天随后;
+   顺序由 grid-template-areas 显式声明,与 DOM 顺序解耦。 */
 @media (max-width: 640px) {
   .texas-game .game-area {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "board"
+      "info"
+      "chat";
     gap: 8px;
     overflow-y: auto;
   }

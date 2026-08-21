@@ -146,10 +146,9 @@ export function TexasHoldemGamePage() {
   return (
     <div className="texas-game">
       <div className="game-area">
-        {/* §20260821-04 — 三栏 DOM 顺序与 CSS Grid 列对齐:
-            grid-template-columns: 240px minmax(0,1fr) 300px
-            → 第 1 列=信息(左) / 第 2 列=牌桌(中) / 第 3 列=聊天(右)。
-            DOM 顺序必须与 Grid 列序一致,否则牌桌会被挤入 240px 窄列。 */}
+        {/* §20260821-04 — 三栏:信息(左) / 牌桌(中) / 聊天(右)。
+            列位由 texasholdem.css 的 grid-template-areas + 各列 grid-area 决定,
+            与 DOM 顺序解耦(历史 bug:DOM 顺序与列定义错位 → 牌桌被挤入 240px 窄列)。 */}
         <div className="game-info-column">
           <GameInfoPanel
             gameState={gameState}
