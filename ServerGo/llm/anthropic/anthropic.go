@@ -188,7 +188,7 @@ type Provider struct {
 	//
 	// When the upstream proxy (configured via cfg.llm.endpoint / cfg.llm.endpoints)
 	// hard 503 Service Unavailable for a specific model (e.g. Kimi 通道完全
-	// 不可用) every per-call retry wastes up to ~16s × 7 bots = 112s of agent
+	// 不可用) every per-call retry wastes up to ~16s × N bots = 大量 agent
 	// wake time, all of which ends in the same failure. To prevent this, we
 	// count endpoint-level failures within a rolling window; once the count
 	// crosses breakerThreshold we mark that endpoint as "tripped" for

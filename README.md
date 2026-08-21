@@ -46,15 +46,15 @@
 > 本仓库是「Agent 编程」能力的一次完整展示。
 
 > *13 把椅子围成一圈,每把椅子上坐着一个 LLM Agent。*
-> *DeepSeek、Kimi、Qwen、GLM、豆包、MiniMax、小米 —— 7 家厂商大模型同场竞技。*
+> *DeepSeek、Kimi、Qwen、GLM、豆包、MiniMax、小米、美团、腾讯、快手、Google-Gemini、Anthropic-Claude、OpenAI-GPT-5.6 —— 13 家厂商大模型同场竞技。*
 > *在 4-5 个昼夜里,它们扮演预言家、女巫、猎人、守卫、白痴、狼人、平民,展开 1,115 次 LLM 调用、95.3M Token 的逻辑博弈。*
 
 ---
 
 ## 📸 实机精彩截图 —— 1 名人类 + 12 Agent(2026-08-17 最新对局)
 
-> 2026-08-17 深夜实机对局:真人玩家 1 号抽到**平民**,12 个 Agent 来自 **10 家厂商大模型**
-> (DeepSeek / Kimi / Qwen / GLM / 豆包 / MiniMax / 小米 / 美团 / 腾讯 / 快手)。
+> 2026-08-17 深夜实机对局:真人玩家 1 号抽到**平民**,12 个 Agent 来自 **多家厂商大模型**
+> (DeepSeek / Kimi / Qwen / GLM / 豆包 / MiniMax / 小米 / 美团 / 腾讯 / 快手 / Google-Gemini / Anthropic-Claude / OpenAI-GPT-5.6)。
 > **真人全程"潜水",反而成了全场焦点:第 1 天 AI 就在座位气泡点名「1 号人类玩家,全场就你没说话」;
 > 第 2 夜双 AI 预言家对跳;第 3 天 DeepSeek 狼人公屏口误「狼人赢了,这局打得漂亮」被当场抓包,
 > 快手 Kwail 直接喊话真人:「1 号你怎么看?」**
@@ -65,7 +65,7 @@
 
 ![狼人杀 13 人局精彩瞬间动图(2026-08-17)](ProjectPic/werewolf-2026-highlights.gif)
 
-| 开局 13 座全景 · 十家模型徽章齐发 | 警长竞选 · Token 燃烧 29.9M/小时 |
+| 开局 13 座全景 · 多家模型徽章齐发 | 警长竞选 · Token 燃烧 29.9M/小时 |
 |---|---|
 | ![开局全景](ProjectPic/werewolf-2026-01-opening-full-room.png) | ![警长竞选](ProjectPic/werewolf-2026-02-sheriff-election.png) |
 | **首日投票放逐 + 观众押注 · AI 锁定沉默真人** | **第 2 天发言 · AI 直接点名真人玩家** |
@@ -86,7 +86,7 @@
 
 | 游戏 | 人数 | 特色 | 状态 |
 |------|------|------|------|
-| **🐺 狼人杀 13 人局** | 3-13 | **13 并发 Agent**、7 家厂商 LLM 同场、道具心理战、法官 Agent | **核心** |
+| **🐺 狼人杀 13 人局** | 3-13 | **13 并发 Agent**、13 家厂商 LLM 同场、道具心理战、法官 Agent | **核心** |
 | ♟️ 中国象棋 | 2 | 3D 棋盘、回合制 | 已实装 |
 | ♛ 国际象棋 | 2 | 3D 棋盘、FEN 记谱 | 已实装 |
 | 🎖️ 军棋 | 2 | 暗棋模式、工兵挖雷 | 已实装 |
@@ -102,7 +102,7 @@
 狼人杀是本项目的核心亮点。13 人局支持 3-13 人,其中任意座位可配置为 AI Agent(LLM 驱动)。
 **满员对局时后端并发跑 13 个 Agent(12 玩家 Bot + 1 法官 Agent)**,互相发送 prompt 并轮次决策。
 
-- **7 家厂商大模型同场竞技**:DeepSeek / Kimi / Qwen / GLM / 豆包 / MiniMax / 小米,每局自动打散分配,避免同模型对局。
+- **13 家厂商大模型同场竞技**:DeepSeek / Kimi / Qwen / GLM / 豆包 / MiniMax / 小米 / 美团 / 腾讯 / 快手 / Google-Gemini / Anthropic-Claude / OpenAI-GPT-5.6,每局自动打散分配,避免同模型对局。
 - **Token 消耗实时显示**:状态栏展示每个 Agent 的输入/输出 Token 累计,1 小时约消耗 3000 万 Token 起步,随时间延长略有增加。
 - **道具心理战**:Markdown 注入、提示词套娃、字符欺骗等 6 类 LLM 注入攻击封装为可购买道具。
 - **法官 Agent**:非玩家主持人,LLM 驱动的阶段旁白与整局总结。
@@ -125,11 +125,11 @@
 
 > **13 人局满员时,后端同时跑 13 个并发 Agent(12 玩家 + 1 法官),每小时消耗 3000 万 Token 起步,随对局时间延长略有增加**。实测 86 分钟单局可累计 95.3M+ 输入 Token。
 
-由于 7 家厂商 LLM Provider 各有不同的限流策略,**强烈建议**:
+由于多家厂商 LLM Provider 各有不同的限流策略,**强烈建议**:
 
 - 单 Provider 套餐包会被 13 个并发请求快速打满,频繁返回 `429` / `529` 错误;
-- 推荐至少**为 DeepSeek、Kimi、Qwen、GLM、豆包、MiniMax、小米 各配置一个独立套餐包**,
-  让 7 家厂商均摊并发,避免单家过载;
+- 推荐**为多家厂商各配置一个独立套餐包**(DeepSeek / Kimi / Qwen / GLM / 豆包 / MiniMax / 小米 / 美团 / 腾讯 / 快手 / Google-Gemini / Anthropic-Claude / OpenAI-GPT-5.6),
+  让多家厂商均摊并发,避免单家过载;
 - 在 `ServerGo` 的 LLM Provider 管理页(`/admin/models`)配置多个 API Key,前端会自动
   Fisher-Yates 洗牌分配,确保每局 13 个 Agent 尽量使用不同模型;
 - 如果只想体验 1-3 个 Agent 试玩,3-7 人局可以只配单模型。

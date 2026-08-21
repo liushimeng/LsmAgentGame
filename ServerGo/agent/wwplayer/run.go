@@ -208,12 +208,12 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 	// 1. Record the incoming context as a user turn.
 	// BUG-R79 P1-NEW (2026-07-10): 连续失败 ≥2 次时,在 user prompt 末尾追
 	// 加强提示,告诉 LLM "如不能正常回复请立即调 idle_silent / finish_speak
-	// 跳过"。R79 观察到 6/7 bot 因 LLM 失败 stuck 在 >2min 的 retry 循环,
+	// 跳过"。R79 观察到多数 bot 因 LLM 失败 stuck 在 >2min 的 retry 循环,
 	// 仅 MiniMax (1 bot) 实际公屏发言 — 强化提示让 LLM 立即放弃,避免
 	// 浪费 LLMCallLimiter 槽位 + 阻塞正常 bot 的发言节奏。
 	basePrompt := BuildUserPrompt(evt.Context)
 	// BUG-R82-P1-NEW (2026-07-10 §P0-NEW): 观战者公开消息触发 spectator_speech
-	// wake 后,7 个 bot 同时被唤醒;但 §13.4 phase 白名单导致 wake 后 LLM 调用
+	// wake 后,所有 bot 同时被唤醒;但 §13.4 phase 白名单导致 wake 后 LLM 调用
 	// 立即进入"phase moved on → yield"路径 → spectator 消息没有 bot 回应。
 	// 在 user prompt 末尾追加【观众问询】块:即使本轮 phase 推进,bot 也会把
 	// 这条 spectator 消息留在最近 prompt 里,下一轮 LLM 决策时仍可 interject/whisper。

@@ -177,7 +177,7 @@ func (r *WerewolfRoom) populateGodModeLocked() *GodModeSnapshot {
 
 	// §20260810-11 V1 + §20260811-08 U1 — PerSeatPOV 填充(全 13 座位「第一视角」快照)。
 	//
-	// §20260811-08 U1 修复:旧版 7 个字段硬编码为空/零值,注释自述「实际数据由前端
+	// §20260811-08 U1 修复:旧版多个字段硬编码为空/零值,注释自述「实际数据由前端
 	// 通过单独的 spectator-only endpoint 拉取」—— 该 endpoint 从未存在
 	// (grep "per_seat_pov" ServerGo/api/ ServerGo/ws/ 零命中),导致前端视角切换
 	// 面板永远只显示角色+阵营。这是 §130「声明了却从不接线」的又一次复现,且注释

@@ -133,7 +133,7 @@ type ToolRunner interface {
 	Interject(text string) (string, error)
 
 	// 2026-07-10: 重开局投票工具。一局 game over 后,主持人把 phase 切到
-	// restart_vote,7 个 Agent + 人类玩家在 5 分钟内投票决定是否原地重开。
+	// restart_vote,所有 Agent + 人类玩家在 5 分钟内投票决定是否原地重开。
 	// choice ∈ {"yes", "no", "abstain"}; 同 seat 多次投票时后覆盖前。
 	RestartVote(choice string) (string, error)
 

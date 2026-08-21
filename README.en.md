@@ -41,7 +41,7 @@
 > This repository is a full demonstration of "Agent Programming" capability.
 
 > *13 chairs arranged in a circle — every chair is occupied by an LLM Agent.*
-> *DeepSeek, Kimi, Qwen, GLM, DouBao, MiniMax, Xiaomi — 7 major LLM vendors competing on the same table.*
+> *DeepSeek, Kimi, Qwen, GLM, DouBao, MiniMax, Xiaomi, MeiTuan, Tencent, Kuaishou, Google-Gemini, Anthropic-Claude, OpenAI-GPT-5.6 — 13 major LLM vendors competing on the same table.*
 > *Across 4-5 day-night cycles, they take on the roles of Seer, Witch, Hunter, Guard, Idiot, Werewolf, Villager — and run 1,115 LLM calls / 95.3M tokens of logical mind games.*
 
 ---
@@ -49,7 +49,7 @@
 ## 📸 Real Gameplay Screenshots — 1 Human + 12 Agents (Latest Match: 2026-08-17)
 
 > Live match on the night of 2026-08-17: the human player (Seat #1) drew the **Villager**, facing 12 Agents
-> powered by **10 LLM vendors** (DeepSeek / Kimi / Qwen / GLM / DouBao / MiniMax / Xiaomi / MeiTuan / Tencent / Kuaishou).
+> powered by **13 LLM vendors** (DeepSeek / Kimi / Qwen / GLM / DouBao / MiniMax / Xiaomi / MeiTuan / Tencent / Kuaishou / Google-Gemini / Anthropic-Claude / OpenAI-GPT-5.6).
 > **The human lurked silently all game — and became the center of attention: on Day 1 an AI wrote in its seat bubble
 > "No.1, the human player, is the only one who hasn't spoken"; on Night 2 two AI Seers counter-claimed each other;
 > on Day 3 a DeepSeek werewolf slipped in public chat — "The wolves have won, well played" — and got called out instantly,
@@ -61,7 +61,7 @@
 
 ![Werewolf 13-player highlight reel (2026-08-17)](ProjectPic/werewolf-2026-highlights.gif)
 
-| Opening: 13 seats · 10 vendor badges live | Sheriff election · tokens burning at 29.9M/hour |
+| Opening: 13 seats · multiple vendor badges live | Sheriff election · tokens burning at 29.9M/hour |
 |---|---|
 | ![Opening full room](ProjectPic/werewolf-2026-01-opening-full-room.png) | ![Sheriff election](ProjectPic/werewolf-2026-02-sheriff-election.png) |
 | **Day-1 exile vote + spectator betting · AIs lock onto the silent human** | **Day-2 speeches · an AI addresses the human directly** |
@@ -84,7 +84,7 @@
 
 | Game | Players | Highlights | Status |
 |------|---------|-----------|--------|
-| **🐺 Werewolf 13-Player** | 3-13 | **13 concurrent Agents**, 7 LLM vendors competing, prop psychological warfare, Judge Agent | **Featured** |
+| **🐺 Werewolf 13-Player** | 3-13 | **13 concurrent Agents**, 13 LLM vendors competing, prop psychological warfare, Judge Agent | **Featured** |
 | ♟️ Xiangqi (Chinese Chess) | 2 | 3D board, turn-based | Shipped |
 | ♛ Chess | 2 | 3D board, FEN notation | Shipped |
 | 🎖️ Junqi (Army Chess) | 2 | Dark mode, Engineer mine-sweeping | Shipped |
@@ -100,7 +100,7 @@
 Werewolf is the project's flagship feature. The 13-player mode supports 3-13 players, with any seat configurable as an AI Agent (LLM-driven).
 **At full capacity, the backend runs 13 concurrent Agents (12 Player Bots + 1 Judge Agent)** that exchange prompts and make per-round decisions.
 
-- **7 LLM vendors competing in one match**: DeepSeek / Kimi / Qwen / GLM / DouBao / MiniMax / Xiaomi, auto-shuffled per game to avoid same-model matchups.
+- **13 LLM vendors competing in one match**: DeepSeek / Kimi / Qwen / GLM / DouBao / MiniMax / Xiaomi / MeiTuan / Tencent / Kuaishou / Google-Gemini / Anthropic-Claude / OpenAI-GPT-5.6, auto-shuffled per game to avoid same-model matchups.
 - **Real-time Token consumption**: Status bar shows each Agent's cumulative input/output Tokens; starts at ~30M tokens/hour and grows over time.
 - **Prop psychological warfare**: 6 classes of LLM injection attacks (Markdown injection, prompt nesting, character deception, etc.) packaged as purchasable props.
 - **Judge Agent**: Non-player host, LLM-driven phase narration and full-game summary.
@@ -123,10 +123,10 @@ The Judge Agent (a separate LLM thread, not counted among the 13 seats) handles 
 
 > **At full 13-player capacity, the backend runs 13 concurrent Agents (12 Players + 1 Judge), consuming ~30M tokens/hour at baseline, growing with match duration.** Live data: an 86-minute single match accumulates 95.3M+ input tokens.
 
-Because the 7 LLM providers each have their own rate-limit policies, we strongly recommend:
+Because each LLM provider has their own rate-limit policies, we strongly recommend:
 
 - A single provider plan will be quickly exhausted by 13 concurrent requests, returning `429` / `529` errors;
-- Configure **at least one independent plan for each of DeepSeek, Kimi, Qwen, GLM, DouBao, MiniMax, Xiaomi** so the 7 vendors share the load;
+- Configure **multiple independent plans** across DeepSeek, Kimi, Qwen, GLM, DouBao, MiniMax, Xiaomi, MeiTuan, Tencent, Kuaishou, Google-Gemini, Anthropic-Claude, OpenAI-GPT-5.6 so the load is shared;
 - Configure multiple API Keys on the LLM Provider admin page (`/admin/models`); the frontend Fisher-Yates-shuffles them so each match's 13 Agents use different models as much as possible;
 - If you only want to try 1-3 Agents, a 3-7 player round can run on a single model.
 

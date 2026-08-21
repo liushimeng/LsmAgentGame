@@ -5,13 +5,13 @@
 //   - 现有 GameContext.RecentSpeeches 仅保留最近 50 条公开 chat,whisperInbox 仅 20 条;
 //     长对局(超过 ~10 轮)后 Agent 失去早期投票/共识上下文。
 //   - 观众私聊(whisper)与公开 chat 也应作为 Agent 决策上下文的一部分。
-//   - 公平性: 7 个 Agent 必须看到同一份共享事件流(同一玩家、同一活动、同一 phase),
+//   - 公平性: 所有 Agent 必须看到同一份共享事件流(同一玩家、同一活动、同一 phase),
 //     否则推理上下文不一致导致结论分歧。
 //
 // 架构(2026-07-09 §13-bugfix):
 //   - 之前: 每 Agent 各自维护 500K 字节 ChatHistoryQueue,appendRoomMessage 给每个
 //     alive bot 复制一份(whisper 给 sender+recipient 两份)。
-//     问题: 7 bot × 500K = 3.5MB / 房间 + 锁顺序复杂 + 公平性靠 push 时机的 race-free 保障。
+//     问题: N bot × 500K = 大量内存 / 房间 + 锁顺序复杂 + 公平性靠 push 时机的 race-free 保障。
 //   - 现在: 一个房间共享一个 ChatHistoryQueue(上限 500K),每 Agent 持一个 ReadPointer
 //     (atomic 计数器,标识"这个 bot 上次消费到的 message 序号")。
 //     优点: 内存只剩 500K / 房间; 推送逻辑只需 append 一次; LLM prompt 注入时按
@@ -186,7 +186,7 @@ func NewChatHistoryQueue(capBytes int) *ChatHistoryQueue {
 }
 
 // Append 追加一条消息,自动分配 Seq、计算 Size 并按需触发 Compress。
-// 2026-07-09 §13-bugfix: 同一队列现在被 7 bot 共享,Append 只 push 一次。
+// 2026-07-09 §13-bugfix: 同一队列现在被所有 bot 共享,Append 只 push 一次。
 func (q *ChatHistoryQueue) Append(m ChatMessage) {
 	if m.Size == 0 {
 		m.Size = chatMsgSize(m.Text)

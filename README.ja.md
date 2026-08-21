@@ -41,15 +41,15 @@
 > このリポジトリは「Agent プログラミング」能力のフル展示です。
 
 > *13 脚の椅子が円形に並ぶ — 各椅子には LLM Agent が座っている。*
-> *DeepSeek、Kimi、Qwen、GLM、DouBao、MiniMax、Xiaomi — 7 社の LLM が同じテーブルで対戦。*
+> *DeepSeek、Kimi、Qwen、GLM、DouBao、MiniMax、Xiaomi、MeiTuan、Tencent、Kuaishou、Google-Gemini、Anthropic-Claude、OpenAI-GPT-5.6 — 13 社の LLM が同じテーブルで対戦。*
 > *4-5 昼夜のサイクルで、占い師・魔女・狩人・衛兵・白痴・人狼・村人を演じ、1,115 回の LLM 呼び出し / 95.3M Token の論理戦を繰り広げる。*
 
 ---
 
 ## 📸 実機プレイスクショ — 人間 1 名 + 12 Agent(最新対局:2026-08-17)
 
-> 2026-08-17 深夜の実対局:人間プレイヤー(1 番席)が**村人**を引き、**10 社の LLM**
-> (DeepSeek / Kimi / Qwen / GLM / 豆包 / MiniMax / 小米 / 美団 / 腾讯 / 快手)が駆動する 12 体の Agent と対戦。
+> 2026-08-17 深夜の実対局:人間プレイヤー(1 番席)が**村人**を引き、**13 社の LLM**
+> (DeepSeek / Kimi / Qwen / GLM / 豆包 / MiniMax / 小米 / MeiTuan / Tencent / Kuaishou / Google-Gemini / Anthropic-Claude / OpenAI-GPT-5.6)が駆動する 12 体の Agent と対戦。
 > **人間は終始沈黙 —— それがかえって全場の焦点に:初日に AI が座席バブルで「1 号の人間プレイヤー、全場で君だけ発言していない」と指名;
 > 第 2 夜に AI 占い師が 2 体対立;第 3 日に DeepSeek の人狼が公開チャットで「人狼の勝ちだ、見事な試合だった」と口を滑らせ即座に追求され、
 > 快手 Kwail が人間に直接問いかける:「1 号、君はどう思う?」**
@@ -60,7 +60,7 @@
 
 ![狼人殺 13 人局ハイライト GIF(2026-08-17)](ProjectPic/werewolf-2026-highlights.gif)
 
-| 開局 13 座全景 · 10 社モデルバッジ勢揃い | 警長選挙 · Token 29.9M/時間で燃焼中 |
+| 開局 13 座全景 · 複数社モデルバッジ勢揃い | 警長選挙 · Token 29.9M/時間で燃焼中 |
 |---|---|
 | ![開局全景](ProjectPic/werewolf-2026-01-opening-full-room.png) | ![警長選挙](ProjectPic/werewolf-2026-02-sheriff-election.png) |
 | **初日の追放投票 + 観客ベット · 沈黙の人間に注目する AI** | **第 2 日発言 · AI が人間プレイヤーを直接指名** |
@@ -81,7 +81,7 @@
 
 | ゲーム | 人数 | 特徴 | ステータス |
 |------|------|------|------|
-| **🐺 人狼 13 人局** | 3-13 | **13 並列 Agent**、7 社 LLM 同場競技、道具心理戦、Judge Agent | **コア** |
+| **🐺 人狼 13 人局** | 3-13 | **13 並列 Agent**、13 社 LLM 同場競技、道具心理戦、Judge Agent | **コア** |
 | ♟️ 中国象棋 | 2 | 3D 盤面、ターン制 | 出荷済 |
 | ♛ 国際象棋 | 2 | 3D 盤面、FEN 記譜 | 出荷済 |
 | 🎖️ 軍棋 | 2 | 暗棋モード、工兵地雷除去 | 出荷済 |
@@ -97,7 +97,7 @@
 人狼は本プロジェクトの最重要機能。13 人局は 3-13 人対応で、任意席を AI Agent(LLM 駆動)に設定可能。
 **満員対局時、バックエンドは 13 体の並列 Agent(12 プレイヤー Bot + 1 法官 Agent)を並行実行**し、相互にプロンプトを送り合いラウンドごとに意思決定します。
 
-- **7 社の LLM モデル同場競技**:DeepSeek / Kimi / Qwen / GLM / DouBao / MiniMax / Xiaomi、毎局自動シャッフルで同モデル回避。
+- **13 社の LLM モデル同場競技**:DeepSeek / Kimi / Qwen / GLM / DouBao / MiniMax / Xiaomi / MeiTuan / Tencent / Kuaishou / Google-Gemini / Anthropic-Claude / OpenAI-GPT-5.6、毎局自動シャッフルで同モデル回避。
 - **Token 消費量をリアルタイム表示**:ステータスバーに各 Agent の累積入出力 Token を表示、**1 時間あたり約 3000 万 Token 起步**、対局時間とともに増加。
 - **道具心理戦**:Markdown インジェクション、プロンプトネスト、文字詐欺など 6 類 LLM インジェクション攻撃を購入可能道具に封装。
 - **Judge Agent**:非プレイヤー司会者、LLM 駆動のフェーズナレーションと局全体総括。
@@ -120,10 +120,10 @@
 
 > **13 人局満員時、バックエンドは 13 体の並列 Agent(12 プレイヤー + 1 法官)を実行し、1 時間あたり約 3000 万 Token 起步を消費**。実測値:86 分の単局で 95.3M+ 入力 Token 累積。
 
-7 社の LLM プロバイダにはそれぞれ独自のレート制限ポリシーがあるため、以下を強く推奨します:
+各 LLM プロバイダにはそれぞれ独自のレート制限ポリシーがあるため、以下を強く推奨します:
 
 - 単一プロバイダのプランは 13 並列リクエストで急速に消費され、`429` / `529` エラーが多発;
-- **DeepSeek、Kimi、Qwen、GLM、DouBao、MiniMax、Xiaomi の各々に独立したプランを少なくとも 1 つ**ずつ設定し、7 社で負荷分散;
+- **DeepSeek、Kimi、Qwen、GLM、DouBao、MiniMax、Xiaomi、MeiTuan、Tencent、Kuaishou、Google-Gemini、Anthropic-Claude、OpenAI-GPT-5.6 の各々に独立したプランを少なくとも 1 つ**ずつ設定し、負荷分散;
 - LLM プロバイダ管理ページ(`/admin/models`)で複数の API Key を設定すれば、フロントエンドが Fisher-Yates シャッフルで各局 13 Agent に異なるモデルを割り当て;
 - 1-3 Agent で試したいだけなら、3-7 人局なら単一モデルで十分。
 

@@ -2,7 +2,7 @@
 //
 // 设计动机(Agent-Surpport-01.md §9.4 / §4.4):
 //   - 同一模型所有 Agent 打法同质化 → 持久化"性格"维度,让 13 人局内
-//     7 个 bot 展现差异化策略倾向(逻辑流 vs 戏精型 vs 激进冲锋)。
+//     所有 bot 展现差异化策略倾向(逻辑流 vs 戏精型 vs 激进冲锋)。
 //   - 与 §20260810-10 U2 ModelSelfPortrait 同源思路(都是 system 末尾注入),
 //     但维度互补:SelfPortrait 是「事后经验」(胜率/局数),Personality
 //     是「事前倾向」(5 维行为向量)。
@@ -28,7 +28,7 @@ import (
 
 // PersonalityAssignmentMode 是房间级人设分配模式(对应 RoomConfig.PersonalityMode)。
 const (
-	PersonalityModeUniform = "uniform" // 7 个 Agent 统一人设(默认 logical)
+	PersonalityModeUniform = "uniform" // 所有 Agent 统一人设(默认 logical)
 	PersonalityModeRandom  = "random"  // 每个 Agent 独立随机人设
 	PersonalityModeCustom  = "custom"  // 用户自定义 5 维向量
 )

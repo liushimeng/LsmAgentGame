@@ -29,7 +29,7 @@ import (
 )
 
 // recordLogBufferSize is the default buffered channel size for the
-// background worker. With 7 bot × ~50 events/局 = ~350 events; 1024
+// background worker. With N bot × ~50 events/局 = ~350 events; 1024
 // gives a comfortable 3局 burst capacity before backpressure kicks in.
 const recordLogBufferSize = 1024
 
@@ -613,7 +613,7 @@ func (s *RecordLogService) handleGameStarted(p gameStartedPayload, reqToken stri
 // replyGameStarted delivers the result to the waiter that owns reqToken.
 // The GameStarted caller uses a unique UUID per request; we look it up
 // directly in the waiters map. Each request is 1:1 mapped to one waiter,
-// so concurrent GameStarted calls (e.g. 7 bots starting simultaneously)
+// so concurrent GameStarted calls (e.g. multiple bots starting simultaneously)
 // don't cross-contaminate.
 func (s *RecordLogService) replyGameStarted(reqToken string, res gameStartedResult) {
 	s.gameStartedMu.Lock()

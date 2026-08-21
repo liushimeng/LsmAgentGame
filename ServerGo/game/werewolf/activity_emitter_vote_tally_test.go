@@ -2,7 +2,7 @@
 // §20260809-02 U2 Bot 票型回灌 的单元测试。
 //
 // 覆盖 fillDayVoteMapLocked 的关键边界:
-//   - 7 个存活 bot 全投票,LastDayVoteMap 应有 7 条
+//   - 存活 bot 全投票,LastDayVoteMap 条数应与存活 bot 数一致
 //   - NoSeat(弃权)不进入 Map
 //   - 死人(Alive=false)的票不进入 Map
 //   - 越界 VoteTarget 兜底丢弃

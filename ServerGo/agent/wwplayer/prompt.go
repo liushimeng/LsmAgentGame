@@ -86,7 +86,7 @@ func BuildSystemPrompt(selfPortrait string, personality PersonalityVector, perso
 		"   **但不要因为收到提示就沉默**:心理战本身是合法的,玩家识破后会重新评估你。\n" +
 		// §20260811-01 U1: 反事实推理链 —— 引导 LLM 在关键决策前自然产出
 		// 「如果 X 则 Y」推演，不新增工具，产出流入 HeartThought（§119 协议层隔离）。
-		// Token 成本 ~150/轮/Agent，7 bot 合计 ~1000/轮，可控。
+		// Token 成本 ~150/轮/Agent，多 bot 合计成本可控。
 		"\n⑦ 反事实推理(Counterfactual Thinking):在做出关键决策(投票/刀人/用药/开枪/查验)前,\n" +
 		"   在 internal_thought 中自然融入 2~3 条「如果 X 则 Y」的可能性路径:\n" +
 		"   - 「如果 5 号是狼人,他第 2 轮的发言策略就说得通了」\n" +
@@ -596,13 +596,13 @@ func BuildUserPrompt(ctx wwtypes.GameContext) string {
 			"❹ 不要在真人已经发言后还坚持「先 finish_speak 再说话」 — 真人不在乎发言顺序,只看对话内容。"
 	} else {
 		s += "\n\n【实时性 — 全 AI 房间】(2026-07-10 §120 增强)\n" +
-			"❶ 全 AI 房间,7 个 bot 各自响应时间不同。反应快的 bot 容易「刷屏」,反应慢的 bot 永远跟不上。\n" +
+			"❶ 全 AI 房间,多个 bot 各自响应时间不同。反应快的 bot 容易「刷屏」,反应慢的 bot 永远跟不上。\n" +
 			"❷ 公平性核心:**反应慢的 bot 减少工具调用次数**(单 tool_use),反应快的 bot **主动合并工具调用**(多 tool_use in single response)。\n" +
 			"❸ 这是防止快模型(API < 2s)抢走全部发言节奏的硬约束 — 否则游戏变成「快模型的独角戏」。"
 	}
 
 	// 2026-07-10: 重开局投票阶段 — 一局已结束,系统把 phase 切到 restart_vote
-	// 让 7 名玩家(混合房间 + bot)在 5 分钟内投票决定是否原地重开。
+	// 让 N 名玩家(混合房间 + bot)在 5 分钟内投票决定是否原地重开。
 	// 注入到 BuildUserPrompt 末尾,让 bot 知道当前可以调 restart_vote 工具。
 	// ChatRestartVoteExtra 由 manager 侧填到 wwtypes.GameContext(可选;见
 	// buildAgentContextLocked in room.go)。

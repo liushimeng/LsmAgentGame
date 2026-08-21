@@ -162,7 +162,7 @@ func (m *WerewolfManager) IterateAgentMemoriesAsync(r *WerewolfRoom, judgeSummar
 	roomID := r.RoomID
 	r.mu.Unlock()
 
-	// 去重:同一 model_key 只迭代一次(7 bot 可能 2 个座位共享模型)。
+	// 去重:同一 model_key 只迭代一次(多个 bot 可能 2 个座位共享模型)。
 	unique := make(map[string]int, len(seatModels))
 	for seat, mk := range seatModels {
 		if _, ok := unique[mk]; !ok {

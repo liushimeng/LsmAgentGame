@@ -237,7 +237,7 @@ type WerewolfRoom struct {
 	pendingBehaviorReport *BehaviorReportJSON
 
 	// 2026-07-09 §13-bugfix — chatQueue 是**房间共享**的 500K 字节滚动聊天历史队列。
-	// 此前(§13)实现是 per-seat 各自一个 Queue,7 bot × 500K = 3.5MB / 房间,
+	// 此前(§13)实现是 per-seat 各自一个 Queue,N bot × 500K = 大量内存 / 房间,
 	// 且公平性靠 push 时机确保; 现改为单 Queue + 每 bot ReadPointer:
 	//   - 内存从 3.5MB 降到 500K / 房间
 	//   - Append 一次全员可见,推送逻辑极简
@@ -1006,7 +1006,7 @@ func (r *WerewolfRoom) IsPaused() bool {
 // room's append method, which appends to the rolling buffers used by
 // buildAgentContextLocked.
 //
-// 2026-07-08 §13: 观战者公开消息额外触发 maybeSpectatorWake,让 7 个 Agent
+// 2026-07-08 §13: 观战者公开消息额外触发 maybeSpectatorWake,让所有 Agent
 // 在 ≤15s 内被 wake 后通过 LLM 决策回应(可选 interject/whisper/idle_think)。
 //
 // BUG: 狼人杀 7 人局 Agent 多轮上下文 — without this dispatcher the
@@ -1071,7 +1071,7 @@ func (r *WerewolfRoom) IsPaused() bool {
 //
 // 2026-07-09 §13 增强:移除 15s 滑动窗口节流(`cfgWerewolfSpectatorFullWake`
 // 默认 true → 全阶段全频唤醒;false 时回退旧行为),让观众的每条公开消息
-// 都即时唤醒 7 个 bot。
+// 都即时唤醒所有 bot。
 // §130 重构(2026-07-13):LLMCallLimiter 已删除 — 取消单 bot 最小调用间隔锁定。
 //
 // 锁策略:appendRoomMessage 不持 r.mu;但 wakeAllAgentsLocked 内部用 BotAgents
@@ -1264,7 +1264,7 @@ func (m *WerewolfManager) maybeSpectatorWake(r *WerewolfRoom) {
 // WakeActingAgents pushes a wake event only to bot seats whose per-seat
 // GameContext says MyTurn=true. Used by the in-process agent-action path
 // (agentRunner.wakeAll) so that after e.g. a wolf_kill, only the next acting
-// seat (the seer) is nudged — not all 7 bots, which would otherwise each burn
+// seat (the seer) is nudged — not all bots, which would otherwise each burn
 // an LLM round-trip just to reply "保持沉默". The broadcast path keeps using
 // WakeAllAgents so non-acting agents still get state-synced into Memory.
 //
@@ -1696,7 +1696,7 @@ func (m *WerewolfManager) maybeSpectatorWake(r *WerewolfRoom) {
 //   - r.seatModelKeys  (room-creation-time model assignment) — primary
 //   - r.BotAgents      (after StartAgentsLocked) — secondary
 //
-// We union both so the panel keeps showing all 7 bot tabs even when:
+// We union both so the panel keeps showing all bot tabs even when:
 //  1. StartAgentsLocked hasn't run yet (PhaseFilling).
 //  2. BotAgents is empty for some other reason (registry nil, partial
 //     start failure).
@@ -1725,9 +1725,9 @@ func (m *WerewolfManager) maybeSpectatorWake(r *WerewolfRoom) {
 // 全 AI 房间 spectator 等待阶段、或某个 goroutine 启动失败)时,旧实现
 // 早返回导致 cs.BotContexts = nil,JSON 序列化时被 omitempty 吃掉,前端
 // `gameState.bot_contexts === undefined` → 显示「尚无思考内容」,即使该
-// 房间已经配置了 7 个 bot 座位。新实现改为基于 seatModelKeys + BotAgents
+// 房间已经配置了 bot 座位。新实现改为基于 seatModelKeys + BotAgents
 // 的并集:只要房间存在已注册的 bot 座位,就一定输出占位条目,前端面板
-// 至少能显示 N 个 tab,符合「7 人标准局 → 7 个 bot」的预期。
+// 至少能显示 N 个 tab,符合「N 人标准局 → N 个 bot」的预期。
 
 // populateAgentNames fills in PlayerJSON.AgentName for bot seats so the
 // frontend can display the LLM model name alongside the seat number.
