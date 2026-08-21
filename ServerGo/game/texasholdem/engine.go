@@ -266,6 +266,12 @@ func (gs *GameState) nonFoldedNonAllIn() int {
 
 // StartHand 发牌、设置盲注、进入翻前阶段。
 // 自动旋转庄家（顺时针）。
+//
+// 2026-08-21 §20260821-P0-1: 每手重建+重洗一副全新的 52 张牌。
+// 历史实现只在 NewGame() 洗一次,跨手牌堆耗尽,StartHand 后 dealHoleCards
+// → drawCard 触发 `panic: index out of range [-1]`(Room.go 5s 自动开新
+// 一手的裸 goroutine 路径无 defer recover,会击穿整个服务进程)。
+// 「德州扑克每手独立用牌」是规则正确性要求,不只是防崩。
 func (gs *GameState) StartHand() *errcode.Error {
 	if gs.NumSeat < 2 {
 		return errcode.CodeMsg(errcode.ErrGameNotStarted, "need at least 2 players")
@@ -274,6 +280,12 @@ func (gs *GameState) StartHand() *errcode.Error {
 	gs.HandNumber++
 	// 庄家顺时针旋转
 	gs.Button = gs.nextActiveSeat(gs.Button)
+
+	// 重建+重洗牌堆(§20260821-P0-1 根因修复)。每手用全新 52 张 +
+	// 时间戳种子,杜绝跨手重复发牌 + 牌堆耗尽 panic。略早于 Community
+	// 重置,顺手把 burn-card 重建也防一手。
+	gs.Deck = NewDeck()
+	Shuffle(gs.Deck, rand.New(rand.NewSource(time.Now().UnixNano())))
 
 	// 重置公共牌与计数 —— 必须清零，否则下一手 advanceToNextStreet 会在
 	// CommunityShown=5 时 dealCommunity 写入越界（BUG-TEXAS-DEALCOMMUNITY-OOB）。
@@ -343,7 +355,16 @@ func (gs *GameState) dealHoleCards() {
 }
 
 // drawCard 从牌堆抽一张牌。
+//
+// 2026-08-21 §20260821-P0-1 防御层:StartHand 已每手重建 52 张牌堆,正常
+// 路径下 n≥1(dealHoleCards 2N + 烧牌 3 + 公共 5 最多 12+2N ≤ 24,
+// 远小于 52)。一旦 n==0(测试手工改 Deck / 极端 all-in 多手烧牌)→
+// 重建并重洗,绝不 `Deck[-1]` panic 拖垮进程。
 func (gs *GameState) drawCard() Card {
+	if len(gs.Deck) == 0 {
+		gs.Deck = NewDeck()
+		Shuffle(gs.Deck, rand.New(rand.NewSource(time.Now().UnixNano())))
+	}
 	n := len(gs.Deck)
 	c := gs.Deck[n-1]
 	gs.Deck = gs.Deck[:n-1]

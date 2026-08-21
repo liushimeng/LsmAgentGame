@@ -522,7 +522,22 @@ func (m *TexasHoldemManager) Action(roomID, userID string, a Action) (*TexasHold
 //  3. 满足条件时延迟 5s 自动开下一手，成功后（锁外）触发 onHandStarted
 func (m *TexasHoldemManager) runHandOverEpilogue(roomID string, r *TexasHoldemRoom, canNext bool) {
 	// 2026-08-19 §德州扑克金币: 手牌结束,异步结算金币
-	go m.SettleHandCoins(roomID)
+	//
+	// 2026-08-21 §20260821-P0-1: SettleHandCoins 是异步 goroutine,内部
+	// 调用 walletSvc / DB 等不可控依赖,历史无 defer recover;一旦下游
+	// 抛 panic 会直接击穿进程(`pgrep LsmAgentGame` 消失)。补 recover
+	// 兜底 + zap.Stack 便于定位(对齐 ProcessBotTurn 既有 recover 风格)。
+	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.L().Error("texasholdem SettleHandCoins panic recovered",
+					zap.String("room_id", roomID),
+					zap.Any("panic", rec),
+					zap.Stack("stack"))
+			}
+		}()
+		m.SettleHandCoins(roomID)
+	}()
 
 	// 2026-08-20 §B2: bot Memory 记账（回调内部自行取锁,必须在锁外调）
 	if m.onHandOver != nil {
@@ -532,8 +547,21 @@ func (m *TexasHoldemManager) runHandOverEpilogue(roomID string, r *TexasHoldemRo
 	if !canNext {
 		return
 	}
-	// 延迟开新一手（给客户端 time 展示结果）
+	// 延迟开新一手（给客户端 time 展示结果）。
+	//
+	// 2026-08-21 §20260821-P0-1: 此 goroutine 此前无 recover —— df6b6a7 补的
+	// zap.Stack 只覆盖了 ProcessBotTurn 路径;跨手牌堆耗尽 → drawCard 触发
+	// `index out of range [-1]` 时直接击穿进程,所有房间中断。
+	// 现补 defer recover + zap.Stack,与 SettleHandCoins 一致。
 	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.L().Error("texasholdem auto-next-hand goroutine panic recovered",
+					zap.String("room_id", roomID),
+					zap.Any("panic", rec),
+					zap.Stack("stack"))
+			}
+		}()
 		time.Sleep(5 * time.Second)
 		r.mu.Lock()
 		started := false
@@ -932,14 +960,10 @@ func (r *TexasHoldemRoom) snapshotHandStartStacks() {
 	}
 }
 
-// maxSettleDeltaPerHand 单手牌单玩家净盈亏结算上限（2026-08-20 §B7,
-// 金币设计 §4.2）。超出部分不进钱包,只 logger.Warn。
-const maxSettleDeltaPerHand = 5000
-
 // SettleHandCoins 手牌结束后按筹码盈亏结算金币。
 // 由 WS 层在 handOver 时调用。异步执行,不阻塞游戏流。
 //
-// 结算规则(v1.1,2026-08-19 §德州扑克金币 §132 §133):
+// 结算规则(v1.2,2026-08-21 §20260821-P1-1):
 //   - delta = 当前筹码 - 手牌开始筹码
 //   - delta > 0 → Credit 赢得金币,但先按 EconTier 抽水(赢家份额 = delta - rake)
 //   - delta < 0 → Debit 损失金币(输家不抽水)
@@ -947,9 +971,21 @@ const maxSettleDeltaPerHand = 5000
 //   - 抽水明细写 t_lsm_game_wallet_log(reason="texasholdem_rake")
 //   - 人类 + bot 都结算(bot 关联 model 用户的金币账户)
 //
+// 2026-08-21 §20260821-P1-1 重大修改(对齐 R10/R11 报告):
+//   历史版本(§B7)对赢家单独加 ±5000 硬顶 clamp,导致:
+//     - winner +9400 → clamp +5000(少付 4400)
+//     - loser -8000 → clamp -5000,然后钱包不足 → debit 失败
+//     → 筹码守恒被破坏:7700 筹码凭空消失(桌面上 +9400,钱包只入账 +5000
+//       + 试图扣 -5000 失败),R10/R11 报告反复复现。
+//   现改为:不再做单玩家硬顶 clamp,只保留 pot 级 MaxPotPerHand 缩放
+//     (防一手刷金币 + 防系统性通胀)。输家钱包不足时只 logger.Warn
+//     记录 shortfall,游戏内筹码已正确流转向赢家,钱包负债留在用户
+//     账上(下次入金或离座时优先结算)。这与金币设计 §4.4 边池模型
+//     一致:引擎的栈增/减是权威,钱包只是「投影」,不应反向裁剪。
+//
 // 与 §132 potReturn 区别:
 //   - 狼人杀 §133 EconTier 返彩池(50%/40%/30% 给胜方)
-//   - 德扑 §132 当前版本只对赢家扣抽水(无额外 potReturn),后续 v1.2 可叠加
+//   - 德扑 §132 当前版本只对赢家扣抽水(无额外 potReturn),后续 v1.3 可叠加
 func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
 	if m.walletSvc == nil {
 		return
@@ -983,7 +1019,8 @@ func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
 	// 2026-08-20 §B7 — MaxPotPerHand 封顶(金币设计 §2.3):
 	// 本手底池(= 赢家总进账,筹码守恒下 = 输家总付出)超过上限时,赢家 delta
 	// 按比例缩放到上限,超出部分不进钱包(防恶意刷金币)。游戏内筹码不动,
-	// 只影响钱包结算金额。
+	// 只影响钱包结算金额。这是唯一保留的 cap 机制 —— 单玩家 clamp 已废除
+	// (2026-08-21 §20260821-P1-1,见函数级注释)。
 	m.mu.RLock()
 	maxPot := m.maxPotPerHand
 	m.mu.RUnlock()
@@ -1006,26 +1043,6 @@ func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
 				zap.Int("hand", handNum),
 				zap.Int("pot", pot),
 				zap.Int("max_pot_per_hand", maxPot))
-		}
-	}
-
-	// 2026-08-20 §B7 — 单玩家净盈亏 clamp 到 ±5000(金币设计 §4.2):
-	// 超出部分不进钱包。
-	for i := range settlements {
-		if settlements[i].delta > maxSettleDeltaPerHand {
-			logger.L().Warn("texasholdem settle delta clamped (win)",
-				zap.String("room_id", roomID),
-				zap.String("user_id", settlements[i].userID),
-				zap.Int("delta", settlements[i].delta),
-				zap.Int("clamped_to", maxSettleDeltaPerHand))
-			settlements[i].delta = maxSettleDeltaPerHand
-		} else if settlements[i].delta < -maxSettleDeltaPerHand {
-			logger.L().Warn("texasholdem settle delta clamped (loss)",
-				zap.String("room_id", roomID),
-				zap.String("user_id", settlements[i].userID),
-				zap.Int("delta", settlements[i].delta),
-				zap.Int("clamped_to", -maxSettleDeltaPerHand))
-			settlements[i].delta = -maxSettleDeltaPerHand
 		}
 	}
 
@@ -1052,7 +1069,7 @@ func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
 			// 抽水明细
 			if rake > 0 {
 				if err := m.walletSvc.Debit(context.Background(), s.userID, "game_lose", "texasholdem_rake", refID, "texasholdem",
- fmt.Sprintf("texasholdem rake (tier=%s rate=%.2f%%)", tier, rakeRate*100), rake); err != nil {
+					fmt.Sprintf("texasholdem rake (tier=%s rate=%.2f%%)", tier, rakeRate*100), rake); err != nil {
 					logger.L().Warn("texasholdem rake debit failed",
 						zap.String("room_id", roomID),
 						zap.String("user_id", s.userID),
@@ -1061,12 +1078,17 @@ func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
 				}
 			}
 		} else {
+			// 输家:Debit 失败时(余额不足)仅 logger.Warn 记录 shortfall,
+			// 桌内筹码已正确流转向赢家,钱包负债留在用户账上等下次结算。
+			//(2026-08-21 §20260821-P1-1:不再 clamp 到 -5000,直接尝试
+			// 全额 Debit,失败即欠账。引擎是筹码权威,钱包是上层投影。)
 			amount := int64(-s.delta)
 			if err := m.walletSvc.Debit(context.Background(), s.userID, "game_lose", "texasholdem_settle", refID, "texasholdem", remark, amount); err != nil {
-				logger.L().Warn("texasholdem settle debit failed",
+				logger.L().Warn("texasholdem settle debit failed (wallet shortfall, debt carried)",
 					zap.String("room_id", roomID),
 					zap.String("user_id", s.userID),
 					zap.Int("delta", s.delta),
+					zap.Int64("attempted", amount),
 					zap.Error(err))
 			}
 		}

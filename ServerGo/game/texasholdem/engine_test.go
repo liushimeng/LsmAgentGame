@@ -324,6 +324,60 @@ func TestStartHand_ResetsCommunity(t *testing.T) {
 	}
 }
 
+// TestStartHand_RebuildsDeck 回归 §20260821-P0-1:
+// 跨手牌堆耗尽 → drawCard → index out of range [-1] panic → 进程崩溃。
+// 修复后 StartHand 必须每手重建+重洗 52 张牌堆,确保第 N 手 drawCard 仍
+// 有合法牌可发。52 张 - dealHoleCards 2N 张 = 2 人桌 48 张(本测试断言 48)。
+// 关键回归:5 轮不触发 panic,而不是「每手都恰好 52 张」(后者过严)。
+func TestStartHand_RebuildsDeck(t *testing.T) {
+	gs := newTestGame([]int{200, 200}, []int{10000, 10000})
+	gs.Button = 0
+
+	for hand := 1; hand <= 5; hand++ {
+		if e := gs.StartHand(); e != nil {
+			t.Fatalf("hand %d: StartHand failed: %v", hand, e)
+		}
+		// 2 人桌:dealHoleCards 抽 4 张;p1/p2 各 2 张底牌。剩余 48。
+		// 关键断言:每手开始时 deck 必须是「重新洗过的、满的、未耗尽」的状态。
+		if len(gs.Deck) != 48 {
+			t.Fatalf("hand %d: deck size after dealHoleCards = %d, want 48 (regression: §20260821-P0-1 deck rebuild)", hand, len(gs.Deck))
+		}
+		// 走完一手(简化:直接收尾)
+		gs.Street = PhaseOver
+		gs.Status = StatusOver
+		gs.Winners = []int{0}
+		gs.Players[0].Stack += 200
+		gs.Players[1].Stack -= 200
+	}
+
+	// 走完 5 手不让 StartHand 触发 panic
+	t.Logf("5 hands completed without panic (deck rebuilt each hand)")
+}
+
+// TestDrawCard_EmptyDeckRebuilds 防御层:即使 Deck 被人为清空,drawCard
+// 也要重建+重洗,而非 `Deck[-1]` 拖垮进程。
+func TestDrawCard_EmptyDeckRebuilds(t *testing.T) {
+	gs := newTestGame([]int{200, 200}, []int{10000, 10000})
+	gs.Button = 0
+	if e := gs.StartHand(); e != nil {
+		t.Fatal(e)
+	}
+	// 模拟极端情况:Deck 已被外部作弊清空
+	gs.Deck = nil
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("drawCard panicked on empty deck (regression: §20260821-P0-1 defense): %v", r)
+		}
+	}()
+	c := gs.drawCard()
+	if c == (Card{}) {
+		t.Fatalf("drawCard returned zero card after empty-deck rebuild")
+	}
+	if len(gs.Deck) != 51 {
+		t.Fatalf("after drawCard on empty deck: deck size = %d, want 51", len(gs.Deck))
+	}
+}
+
 // TestDealCommunity_OOB_NoPanic 回归 BUG-TEXAS-DEALCOMMUNITY-OOB 防御层:
 // 即使 CommunityShown 已被外部篡改到 >=5，dealCommunity 也必须 no-op 而非 PANIC。
 func TestDealCommunity_OOB_NoPanic(t *testing.T) {

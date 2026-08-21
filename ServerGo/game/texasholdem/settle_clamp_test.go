@@ -6,7 +6,11 @@ import (
 	"testing"
 )
 
-// 2026-08-20 §B7 — 金币结算 clamp + MaxPotPerHand 封顶回归测试。
+// 2026-08-21 §20260821-P1-1 — 金币结算回归测试(v1.2:不再做单玩家 clamp,
+// 仅保留 pot 级 MaxPotPerHand 缩放)。历史 §B7 单玩家 ±5000 clamp 已在
+// R10/R11 报告中被反复复现短付赢家 + 扣款失败,导致筹码守恒被破坏。
+// 现测试断言:delta 范围内 → 全额进钱包,pot 超 MaxPotPerHand → 比例缩放
+// 赢家,输家按真实 delta 扣款(失败时记 shortfall 由用户在下次入金结算)。
 
 // fakeWallet 记录所有 Credit/Debit 调用(净额)。
 type fakeWallet struct {
@@ -62,10 +66,11 @@ func settleRoomWithStacks(t *testing.T, m *TexasHoldemManager, roomID string, st
 	r.mu.Unlock()
 }
 
-// TestSettle_001_DeltaClamp5000: 单手牌净盈亏 clamp 到 ±5000(金币设计 §4.2),
-// 超出部分不进钱包。房间总金币 200K ≥ 50K → Health 档 5% 抽水:
-// 赢家 credit = 5000 - 5% = 4750,rake = 250;输家 debit = 5000。
-func TestSettle_001_DeltaClamp5000(t *testing.T) {
+// TestSettle_001_DeltaNormal: 单手牌净盈亏 +20000/-20000,2026-08-21
+// §20260821-P1-1 起不再 clamp,直接全额进钱包。房间总金币 200K ≥ 50K
+// → Health 档 5% 抽水:赢家 credit = 20000 - 5% = 19000, rake = 1000;
+// 输家 debit = 20000(无抽水)。先前(R10/R11)±5000 hard clamp 已废除。
+func TestSettle_001_DeltaNormal(t *testing.T) {
 	m := NewTexasHoldemManager()
 	fw := newFakeWallet()
 	m.SetWalletService(fw)
@@ -73,20 +78,20 @@ func TestSettle_001_DeltaClamp5000(t *testing.T) {
 
 	m.SettleHandCoins("room-clamp")
 
-	if got := fw.credits["user-a"]; got != 4750 {
-		t.Errorf("winner credit = %d, want 4750 (5000 clamp - 5%% rake)", got)
+	if got := fw.credits["user-a"]; got != 19000 {
+		t.Errorf("winner credit = %d, want 19000 (20000 - 5%% rake)", got)
 	}
-	if got := fw.rakes["user-a"]; got != 250 {
-		t.Errorf("winner rake = %d, want 250", got)
+	if got := fw.rakes["user-a"]; got != 1000 {
+		t.Errorf("winner rake = %d, want 1000", got)
 	}
-	if got := fw.debits["user-b"]; got != 5000 {
-		t.Errorf("loser debit = %d, want 5000 (clamped from 20000)", got)
+	if got := fw.debits["user-b"]; got != 20000 {
+		t.Errorf("loser debit = %d, want 20000 (no clamp, full delta)", got)
 	}
 }
 
 // TestSettle_002_MaxPotPerHand: 底池 > MaxPotPerHand 时赢家按比例封顶(§B7)。
-// maxPot=1000,pot=8000 → scale 0.125 → 赢家 delta 1000,输家 -8000 仍先被
-// ±5000 clamp 截到 -5000(clamp 在 pot 缩放之后生效,见实现注释)。
+// §20260821-P1-1 后只剩这一层 cap(单玩家 clamp 已废除)。maxPot=1000,
+// pot=8000 → scale 0.125 → 赢家 delta 1000,输家 -8000 不被 clamp。
 // 房间总金币 20000 → Caution 档 7% 抽水:赢家 credit = 1000 - 7% = 930。
 func TestSettle_002_MaxPotPerHand(t *testing.T) {
 	m := NewTexasHoldemManager()
@@ -97,17 +102,17 @@ func TestSettle_002_MaxPotPerHand(t *testing.T) {
 
 	m.SettleHandCoins("room-maxpot")
 
-	// 赢家: 8000 → pot 缩放到 1000 → clamp 不触发(1000<5000) → Caution 7% → credit 930
+	// 赢家: 8000 → pot 缩放到 1000 → 无单玩家 clamp → Caution 7% → credit 930
 	if got := fw.credits["user-a"]; got != 930 {
 		t.Errorf("winner credit = %d, want 930 (1000 capped - 7%% rake)", got)
 	}
-	// 输家: -8000 → clamp 到 -5000
-	if got := fw.debits["user-b"]; got != 5000 {
-		t.Errorf("loser debit = %d, want 5000", got)
+	// 输家: -8000 → 不 clamp → 全额 debit 8000
+	if got := fw.debits["user-b"]; got != 8000 {
+		t.Errorf("loser debit = %d, want 8000 (no clamp, full delta)", got)
 	}
 }
 
-// TestSettle_003_NormalHandUnclamped: 正常小手牌不触发任何 clamp(回归保护)。
+// TestSettle_003_NormalHandUnclamped: 正常小手牌不触发任何 cap(回归保护)。
 // 房间总金币 20000 → Caution 档 7% 抽水:赢家 credit = 300 - 7% = 279。
 func TestSettle_003_NormalHandUnclamped(t *testing.T) {
 	m := NewTexasHoldemManager()
