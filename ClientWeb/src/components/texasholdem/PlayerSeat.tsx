@@ -64,7 +64,11 @@ export function PlayerSeat({
     <div className={classList}>
       <div className="seat-info">
         <span className="seat-name">
-          {isMe ? t('texasholdem.seatYou' as TKey) : player.user_id.slice(0, 6)}
+          {isMe
+            ? t('texasholdem.seatYou' as TKey)
+            : isBot
+              ? (botModelName || player.user_id.slice(0, 6))
+              : player.user_id.slice(0, 6)}
         </span>
         {/* §20260821-01 — 庄家按钮优先 PNG,否则 CSS 徽章 */}
         {isButton && dealerPng && (

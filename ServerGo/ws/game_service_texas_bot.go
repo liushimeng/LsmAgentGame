@@ -278,7 +278,8 @@ func (s *GameService) ProcessBotTurn(roomID string) {
 		if r := recover(); r != nil {
 			logger.L().Error("texasholdem ProcessBotTurn panic recovered",
 				zap.String("room_id", roomID),
-				zap.Any("panic", r))
+				zap.Any("panic", r),
+				zap.Stack("stack"))
 		}
 		mu.Unlock()
 	}()
@@ -335,7 +336,8 @@ func (s *GameService) ProcessBotTurn(roomID string) {
 				zap.String("room_id", roomID),
 				zap.Int("seat", seat),
 				zap.Error(err))
-			action = thpagent.Action{Type: thpagent.ActFold, Thought: "LLM error, forced fold"}
+			// 2026-08-21 §P0-2: 友好化错误信息,避免内部细节泄漏到 UI
+			action = thpagent.Action{Type: thpagent.ActFold, Thought: "思考超时,自动弃牌"}
 		}
 
 		// 记录 bot 内心独白(供前端 BotThoughtPanel 渲染;§119 协议层隔离,绝不入 chat 表)

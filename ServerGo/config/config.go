@@ -936,10 +936,10 @@ func applyDefaults(c *Config) {
 	if !c.TexasHoldem.AgentEnabled {
 		c.TexasHoldem.AgentEnabled = true
 	}
-	// R7 P0-2: 默认超时从 30s 缩到 15s。LLM 失败时 watchdog 兜底 fold 的等待期
-	// 大幅缩短(人类玩家不再卡 30s+ 等待 bot 决策);仍足够单轮 LLM 推理。
+	// 2026-08-21 §P0-2: 默认超时 45s。实测多模型(Gemini/MeiTuan/Xiaomi)决策耗时 8~30s+,
+	// 原 15s 导致 3/5 模型全灭 context deadline exceeded;watchdog 兜底 fold 等待期 = 45+10s。
 	if c.TexasHoldem.AgentActionTimeoutSec == 0 {
-		c.TexasHoldem.AgentActionTimeoutSec = 15
+		c.TexasHoldem.AgentActionTimeoutSec = 45
 	}
 	if c.TexasHoldem.BotChatPerHand == 0 {
 		c.TexasHoldem.BotChatPerHand = 2

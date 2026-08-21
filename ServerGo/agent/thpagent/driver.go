@@ -393,7 +393,8 @@ func (d *Driver) DecideAction(ctx context.Context, roomID string, seat int, prom
 			zap.Int("seat", seat),
 			zap.Int64("latency_ms", latencyMs),
 			zap.Error(callErr))
-		return Action{Type: ActFold, Thought: "LLM call failed: " + callErr.Error()}, nil
+		// 2026-08-21 §P0-2: 友好化错误信息,避免内部细节(context deadline exceeded等)泄漏到 UI
+		return Action{Type: ActFold, Thought: "思考超时,自动弃牌"}, nil
 	}
 
 	// 解析 tool_use 块

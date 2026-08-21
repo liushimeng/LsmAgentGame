@@ -153,7 +153,8 @@
     // 所有座位回退为人类占位(同房间级关闭 Bot)。
     "agent_enabled": true,
     // 单 bot 决策 LLM 超时(秒)。超时服务端 fold 兜底(不卡死)。
-    "agent_action_timeout_sec": 30,
+    // 2026-08-21 §P0-2: 默认 45s(实测多模型决策耗时 8~30s+,原 15s 导致 3/5 模型全灭)。
+    "agent_action_timeout_sec": 45,
     // Bot 公屏发言限流:每手牌最多 N 次 + 相邻 ≥ N 秒。
     "bot_chat_per_hand": 2,
     "bot_chat_min_interval_sec": 30,
