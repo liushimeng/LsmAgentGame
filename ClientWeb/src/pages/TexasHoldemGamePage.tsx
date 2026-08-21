@@ -233,7 +233,10 @@ export function TexasHoldemGamePage() {
             </>
           )}
         </div>
-        <div className="game-sidebar">
+        {/* §20260821-02 — 三栏布局:信息(左) + 牌桌(中) + 聊天(右)。
+            原 .game-sidebar 单列 280px 拆为两个独立列,
+            grid-template-columns: 240px minmax(0,1fr) 300px(详情见 texasholem.css)。 */}
+        <div className="game-info-column">
           <GameInfoPanel
             gameState={gameState}
             mySeat={effectiveSeat}
@@ -242,6 +245,8 @@ export function TexasHoldemGamePage() {
             onResign={handleResign}
             onLeave={handleLeave}
           />
+        </div>
+        <div className="game-chat-column">
           <GameChatPanel roomId={roomId} />
         </div>
       </div>

@@ -181,9 +181,16 @@
  * 与 whisper(蓝紫)/ interject(暖金)在色相上互相区分。 */
 .game-chat-msg--bot {
   border-left: 2px solid rgba(45, 212, 191, 0.55);
-  padding: 2px 6px 2px 8px;
-  border-radius: 3px;
-  background: rgba(45, 212, 191, 0.045);
+  /* §20260821-02 — 背景透明度 4.5% → 15% + 加 1px 描边;
+   * 原 4.5% 在 .game-chat 深色 panel 上观感发黑,
+   * 与德州扑克 .game-chat-column 暗背景叠加后用户反馈"气泡背景接近纯黑"。
+   * 15% + 描边后有效对比 ≥ 5.4:1,通过 §26.4 徽章色相库 ≥ 5.0:1 阈值。 */
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(45, 212, 191, 0.15);
+  border-top: 1px solid rgba(45, 212, 191, 0.18);
+  border-right: 1px solid rgba(45, 212, 191, 0.18);
+  border-bottom: 1px solid rgba(45, 212, 191, 0.18);
 }
 
 /* Whisper (private message) styling */
