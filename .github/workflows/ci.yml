@@ -57,7 +57,7 @@ jobs:
     name: ServerGo (build + test)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # 子模块不参与后端编译(CLAUDE.md §9:仅美术生成 / CDP 调试用),
           # 不 checkout 可省一大截克隆时间。
@@ -111,7 +111,7 @@ jobs:
     name: ClientWeb (typecheck + build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: false
 
@@ -162,7 +162,7 @@ jobs:
     name: Project conventions
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: false
 
