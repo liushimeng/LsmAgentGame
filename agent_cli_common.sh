@@ -4,24 +4,30 @@
 # 多 Agent CLI 随机选择公共库（被 AutoDebugTestReport.sh /
 # AutoScreenshotWerewolf.sh / AutoTestAndSaveReport.sh source 引用）。
 #
-# 支持的编程 Agent CLI（2026-08-14 逐一实测验证，命令以本机 --help 为准）：
-#   claude    v2.1.232   claude --dangerously-skip-permissions -p "<prompt>"
-#   opencode  v1.18.18   opencode run --auto -m <provider/model> "<prompt>"
+# 支持的编程 Agent CLI（2026-08-21 §20260821-02 复核 --help，命令以本机为准）：
+#   claude    v2.1.238   claude --dangerously-skip-permissions -p "<prompt>"
+#   opencode  v1.18.19   opencode run --auto -m <provider/model> "<prompt>"
 #                        （--auto = 自动批准未显式拒绝的权限，危险模式）
-#   hermes    v0.20.0    hermes chat -q "<prompt>" --yolo -Q --accept-hooks
+#   hermes    v0.20.4    hermes chat -q "<prompt>" --yolo -Q --accept-hooks
+#                        --max-turns <N>
 #                        （--yolo = 跳过全部危险命令审批；-Q = 脚本静默模式）
-#   openclaw  2026.7.1   openclaw agent --agent lsm --message-file <file>
+#   openclaw  2026.7.1-2 openclaw agent --agent lsm --message-file <file>
 #                        --timeout <sec>
 #                        （专属 agent `lsm` 的 workspace 指向本项目目录；
 #                          全局 exec 策略 security=full ask=off 已免审批）
 #
 # 用法（在调用脚本中）：
 #   source "${PROJECT_DIR}/agent_cli_common.sh"
-#   pick_agent "<脚本名>"                    # 随机选一个可用 Agent（或 AGENT_CLI 强制指定）
+#   pick_agent "<脚本名>"                     # 随机选一个可用 Agent
+#   pick_agent "<脚本名>" claude              # 首选 claude(§20260821-02)：可用则必选，
+#                                             # 不可用自动降级随机选（日志有 WARN）
 #   run_agent_with_prompt "${SELECTED_AGENT}" "${PROMPT_FILE}"
 #
+# Agent 选择优先级（§20260821-02）：
+#   AGENT_CLI 环境变量强制指定 > pick_agent 第二参数首选 Agent > 随机选择
+#
 # 环境变量：
-#   AGENT_CLI           强制指定 Agent（claude|opencode|hermes|openclaw），为空则随机
+#   AGENT_CLI           强制指定 Agent（claude|opencode|hermes|openclaw），为空走首选/随机
 #   CLAUDE_BIN / OPENCODE_BIN / HERMES_BIN / OPENCLAW_BIN   各二进制路径覆盖
 #   OPENCODE_MODEL      opencode 模型（provider/model 格式），缺省自动从
 #                       ~/.config/opencode/config.json 推导
@@ -73,11 +79,16 @@ list_available_agents() {
     done
 }
 
-# pick_agent <caller_tag> —— 随机选择一个可用 Agent，结果写入 SELECTED_AGENT。
-# AGENT_CLI 环境变量可强制指定（用于定向测试某个 Agent）。
+# pick_agent <caller_tag> [preferred_agent] —— 选择一个可用 Agent，结果写入 SELECTED_AGENT。
+# 选择优先级（§20260821-02）：
+#   1. AGENT_CLI 环境变量强制指定（用于定向测试某个 Agent），不可用则报错退出；
+#   2. preferred_agent 首选（如 AutoDebugTestReport 首选 claude/Claude Code CLI）：
+#      可用则必选；不可用打 WARN 并自动降级随机选择（不阻塞自动化流水线）；
+#   3. 无首选时从全部可用 Agent 中随机选择。
 # 无可用 Agent 时直接退出（exit 3）。
 pick_agent() {
     local caller_tag="${1:-AutoAgent}"
+    local preferred="${2:-}"
     local available=()
     local a
     while IFS= read -r a; do
@@ -100,6 +111,20 @@ pick_agent() {
         fi
         SELECTED_AGENT="${found}"
         echo "[${caller_tag}] AGENT_CLI 强制指定 Agent : ${SELECTED_AGENT}"
+    elif [[ -n "${preferred}" ]]; then
+        local found=""
+        for a in "${available[@]}"; do
+            if [[ "${a}" == "${preferred}" ]]; then found="${a}"; break; fi
+        done
+        if [[ -n "${found}" ]]; then
+            SELECTED_AGENT="${found}"
+            echo "[${caller_tag}] 首选命中 Agent : ${SELECTED_AGENT}（可用候选: ${available[*]}）"
+        else
+            echo "[${caller_tag}] [WARN] 首选 Agent '${preferred}' 不可用，降级随机选择（可用候选: ${available[*]}）" >&2
+            local idx=$(( RANDOM % ${#available[@]} ))
+            SELECTED_AGENT="${available[$idx]}"
+            echo "[${caller_tag}] 随机选中 Agent : ${SELECTED_AGENT}"
+        fi
     else
         local idx=$(( RANDOM % ${#available[@]} ))
         SELECTED_AGENT="${available[$idx]}"
@@ -162,7 +187,9 @@ run_agent_with_prompt() {
 
     case "${agent}" in
         claude)
-            "${CLAUDE_BIN}" --dangerously-skip-permissions -p "${prompt_text}"
+            # §20260821-02：与 opencode/hermes 对齐，显式 cd 到项目目录，
+            # 不再隐式依赖调用方 cwd（Claude Code 以 cwd 为工作区）
+            (cd "${project_dir}" && "${CLAUDE_BIN}" --dangerously-skip-permissions -p "${prompt_text}")
             ;;
         opencode)
             local model_arg

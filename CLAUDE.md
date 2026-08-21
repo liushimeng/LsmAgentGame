@@ -417,7 +417,7 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,**必须**�
 > 本节仅保留**流程规约**，不再记录每轮具体报告内容。
 
 - **检索入口**：主工程 `TestReport/自动化测试报告_*.md`；子工程 `go-web-debug-tool/UseReport/测试工具使用报告_*.md`。
-- **处理入口**：根目录 `AutoDebugTestReport.sh` —— **每次运行随机选一个可用编程 Agent CLI**（Claude Code / OpenCode / Hermes / OpenClaw；公共库 `agent_cli_common.sh`，`AGENT_CLI=<name>` 可强制指定），加载 `AutoDebugTestReport.md` 作为 prompt；`AutoTestAndSaveReport.sh` / `AutoScreenshotWerewolf.sh` 同机制。
+- **处理入口**：根目录 `AutoDebugTestReport.sh` —— **首选 Claude Code CLI 执行**（claude 不可用降级随机选；§20260821-02；公共库 `agent_cli_common.sh`，`AGENT_CLI=<name>` 可强制指定），加载 `AutoDebugTestReport.md` 作为 prompt；`AutoTestAndSaveReport_{Werewolf,TexasPoker}.sh` / `AutoScreenshot_{Werewolf,TexasPoker}.sh` 同机制（全部可用 Agent 随机选择）。
 - **流程规范与硬约束**详见 `AutoDebugTestReport.md`；其中**绝对禁止**自动修复流程写入 `CLAUDE.md` / `AGENTS.md` 这两个规则文件。
 - **报告清理**：修复完成后必须删除已处理的 `TestReport/*.md`（子工程 `UseReport/*.md`），报告不应在仓库中长期堆积。
 

@@ -2,13 +2,15 @@
 # AutoDebugTestReport.sh
 # ---------------------------------------------------------------
 # 用途：
-#   随机选择一个可用的编程 Agent CLI（Claude Code / OpenCode / Hermes /
-#   OpenClaw），读取当前目录或仓库根的 AutoDebugTestReport.md 作为提示词
-#   执行，全程 bypass 权限，运行结束后自动退出。
+#   首选 Claude Code CLI（claude）执行自动修复，claude 不可用时降级为随机
+#   选择其它可用编程 Agent CLI（OpenCode / Hermes / OpenClaw）；读取当前目录
+#   或仓库根的 AutoDebugTestReport.md 作为提示词执行，全程 bypass 权限，
+#   运行结束后自动退出。
 #
 # 特性：
 #   - 工作目录与 Agent 启动目录均为 /usr/local/LsmAgentGame/LsmAgentGame
-#   - 多 Agent 随机选择逻辑在公共库 agent_cli_common.sh 中（可 source 复用）；
+#   - Agent 选择(§20260821-02)：首选 Claude Code CLI（自动修复对编码能力要求
+#     最高）；选择逻辑在公共库 agent_cli_common.sh 中（可 source 复用）；
 #     AGENT_CLI 环境变量可强制指定某个 Agent（claude|opencode|hermes|openclaw）
 #   - 通过 nohup + setsid + & + disown 脱离调用者，**不阻塞**调用者进程
 #   - 日志体系（§20260821-01 增强）：
@@ -93,8 +95,9 @@ fi
 
 cd "${PROJECT_DIR}" || { echo "[ERROR] 无法进入 ${PROJECT_DIR}"; exit 1; }
 
-# ---------- 随机选择 Agent ----------
-pick_agent "${SCRIPT_TAG}"
+# ---------- 选择 Agent（§20260821-02：首选 Claude Code CLI，不可用降级随机） ----------
+# 优先级：AGENT_CLI 环境变量强制指定 > 首选 claude > 随机选择
+pick_agent "${SCRIPT_TAG}" "claude"
 
 # ---------- 日志文件名含 Agent 程序名（§20260821-01） ----------
 LOG_FILE="${LOG_DIR}/auto_debug_${SELECTED_AGENT}_${TS}.log"

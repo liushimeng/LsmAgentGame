@@ -202,14 +202,16 @@ cleanup_old_logs() {
 # ---------- print_section_header <tag> <prompt_file> <log_file> <workdir> <agent> ----------
 # 启动日志头(替代各脚本裸 echo "=====" ... >> LOG)
 # §20260821-01：补充 Git HEAD 与 Bash 版本，便于把日志与代码版本对齐。
+# §20260821-02：补充「可用 Agents」候选池，审计选择结果时可见当时可选项。
 print_section_header() {
     local tag="$1"
     local prompt_file="$2"
     local log_file="$3"
     local workdir="$4"
     local agent="$5"
-    local git_head
+    local git_head avail_agents
     git_head="$(git -C "${workdir}" rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+    avail_agents="$(list_available_agents 2>/dev/null | tr '\n' ' ')"
     {
         echo "============================================================"
         echo "[${tag}] 启动时间 : $(date '+%F %T')"
@@ -218,6 +220,7 @@ print_section_header() {
         echo "[${tag}] 日志文件  : ${log_file}"
         echo "[${tag}] 选中 Agent : ${agent}"
         echo "[${tag}] Agent 二进制: $(command -v "$(agent_binary_of "${agent}")" 2>/dev/null || echo 'NOT FOUND')"
+        echo "[${tag}] 可用 Agents: ${avail_agents:-none}"
         echo "[${tag}] Git HEAD  : ${git_head}"
         echo "[${tag}] Bash 版本 : ${BASH_VERSION:-unknown}"
         echo "============================================================"
