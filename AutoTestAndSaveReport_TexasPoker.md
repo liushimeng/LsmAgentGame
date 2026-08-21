@@ -5,21 +5,21 @@
 
 - **工作目录**: `/usr/local/LsmAgentGame/LsmAgentGame`
 - **入口脚本**: `AutoTestAndSaveReport_TexasPoker.sh`(随机选编程 Agent CLI → 跑测试 → 报告落盘 → shell 层确定性接力 `AutoDebugTestReport.sh` 自动修复)
-- **产物路径(仅德扑,§20260820-01 起 glob 集中到 `auto_run_common.sh::GAME_GLOBS`)**:
+- **产物路径(仅德扑,glob 集中到 `auto_run_common.sh::GAME_GLOBS`)**:
   - 测试报告: `TestReport/德州扑克自动化测试报告_YYYYMMDD_HHMMSS.md`(单一 glob,无兼容旧文件)
   - 进度文件: `AutoTestProgress/德州扑克自动化测试进度_YYYYMMDD_HHMMSS.md`
   - 子工程工具报告(可选): `go-web-debug-tool/UseReport/德州扑克测试工具使用报告_YYYYMMDD_HHMMSS.md`
   - 协议抓包分析报告(按需): `TestReport/德州扑克协议抓包分析报告_YYYYMMDD_HHMMSS.md`
   - 文件名时间戳统一 `YYYYMMDD_HHMMSS`,精度到秒
   - **Glob 单一事实源**: 所有扫描 glob 在 `auto_run_common.sh::GAME_GLOBS` 中声明,新增游戏仅改公共库一处,本文件不再内嵌 glob 列表。
-  - **测试产物一律不入库**(§20260820-03): `TestReport/*` / `AutoTestProgress/` / `AutoTestScreenshots/` 已被 `.gitignore` 整目录忽略,所有测试生成文件(报告/进度/截图/临时文档)仅留本地,Agent **禁止**对其执行 `git add` / `git commit` / `git push`。
+   - **测试产物一律不入库**: `TestReport/*` / `AutoTestProgress/` / `AutoTestScreenshots/` 已被 `.gitignore` 整目录忽略,所有测试生成文件(报告/进度/截图/临时文档)仅留本地,Agent **禁止**对其执行 `git add` / `git commit` / `git push`。
 - **执行模式**: 主 Agent 跑核心流程;遇代码读取/协议抓包/数据查询可按需委派 SubAgent,不阻塞主流程。
 - **执行策略(本版本硬约束)**:
   - **阶段 A**:先以 **1 个真人类 + N 个 Agent** 跑完两轮(初测 + 回归),均通过后再进入阶段 B。
   - **阶段 B**:再以 **2 个真人类 + N 个 Agent** 跑同主路径,验证多人类视角/座位抢占/盲注职责分配。
   - **N 优先 5**(`1+5` 撞满 6 人上限桌),缺 Agent 资源时允许 `N=3`(`1+3` 4 人桌)或 `N=1`(`1+1` 2 人桌);**N 不允许 < 1**(低于 2 人无法成局)。
   - **拟人节奏**:每步操作后**等待页面完全加载**(推荐 800~1500ms)再走下一步;**操作严格模拟正常人类玩家**——不瞬时连点、不用 `eval_js` 一键改多状态、不省略决策思考时长。Bot 思考阶段**保留 0.8~1.5s 间隔**,不要触发服务端「过快操作」频率熔断。
-  - **重大问题/卡住/严重不及预期 → 立即终止本轮**:不等待超时,**立刻**生成问题报告 + 调用 `AutoDebugTestReport.sh` 启动修复,**严禁强行绕过继续推流程**(§CLAUDE.md §22)。
+   - **重大问题/卡住/严重不及预期 → 立即终止本轮**:不等待超时,**立刻**生成问题报告 + 调用 `AutoDebugTestReport.sh` 启动修复,**严禁强行绕过继续推流程**。
 - **核心目标**: 验证 Web 端人类玩家可用全部交互(房间创建、Buy-in、座位抢占、Dealer 按钮、盲注、4 个下注轮、All-in、Showdown、手牌复盘)与 Bot 的拟人行为(牌力推断、底池赔率、bluff/fold 决策、错开思考时序)。
 - **代码变更限制**: 业务代码只读;若发现 Agent 提示词/工具定义/业务逻辑缺陷,**只出报告与建议**,严禁自动改业务代码。
 
@@ -105,7 +105,7 @@
 
 ##### 6.3.1 房间创建与角色(座位)选择
 - 校验德扑房间创建弹窗各配置项渲染完整、可交互(房间名/小额盲注/大额盲注/最低 Buy-in/最大 Buy-in/最大玩家数 2-6)。
-- **AI 配置块 UI 验证**: AI 数量 slider 0~6、模型下拉、不同模型重复检测、自动 Fisher-Yates 重排(沿用 §14.2 狼人杀实现)。
+- **AI 配置块 UI 验证**: AI 数量 slider 0~6、模型下拉、不同模型重复检测、自动 Fisher-Yates 重排(沿用狼人杀同款实现)。
 - 按本轮阶段 + Agent 数创建房间;**最低必须 2 Bot**(本测试硬约束)才有显著 Agent 调度意义。
 - 校验 Dealer 按钮 / 盲注位置 / 玩家座位与加入顺序严格一致。
 - **阶段 B**:2 个人类玩家抢占座位(谁先点击谁坐),验证先点者先得 + 旁观者不能挤占已占座位 + 两人分别下的盲注职责正确(如 dealer=1 时玩家 2 付小盲、玩家 3 付大盲)。
@@ -123,8 +123,8 @@
 - 重点验证 Bot **决策时序错开**(不要 6 Bot 同时发牌同时行动);遇长时间沉默 **不视为缺陷**(沉默=正常德扑基线)。
 
 ##### 6.3.4 Agent 智能行为(核心)
-- **多模型驱动**: 接入不同 LLM(美团/豆包/DeepSeek/Kimi/GLM/Qwen/小米 等),**§14.2 Fisher-Yates 重排**:同一房间 N 个 Bot 尽量使用不同模型。
-- **决策工具**: 校验 `hand_strength`、`pot_odds`、`win_rate_pot_odds_compare` 三个 LLM 工具的合理性(LLM 给出的金额 vs 工具返回数值);**不允许 LLM 直接决定行动**——必须 ToolUse 取值后由规则引擎比对后输出(同 §120 公平性)。
+- **多模型驱动**: 接入不同 LLM(美团/豆包/DeepSeek/Kimi/GLM/Qwen/小米 等),**Fisher-Yates 重排**:同一房间 N 个 Bot 尽量使用不同模型。
+- **决策工具**: 校验 `hand_strength`、`pot_odds`、`win_rate_pot_odds_compare` 三个 LLM 工具的合理性(LLM 给出的金额 vs 工具返回数值);**不允许 LLM 直接决定行动**——必须 ToolUse 取值后由规则引擎比对后输出(同公平性原则)。
 - **牌力推断**: 蒙特卡洛模拟下,AA vs KK preflop 胜率应在 [77%, 83%](权威 80.2%);验证工具运行结束 ≥ 800 次抽样且结果在该区间。
 - **底池赔率**:
   - 听牌(pot = 100, call = 20)底池赔率 5:1,听牌成功率需 ≥ 16.7% 才是 +EV call。
@@ -165,15 +165,15 @@
    - `已测组合清单` / `待测组合清单` / `下一轮建议组合`
    - `未覆盖项跟踪表`(继承上轮 + 本轮新增,含状态与积压标注)
    - `本轮重点突破项`(1-3 项) + `突破结果`
-3. **报告文件名前缀必须为 `德州扑克自动化测试报告_`**(shell 接力预检 `auto_run_common.sh::GAME_GLOBS` 按此前缀扫描);报告 + 进度文件确认落盘即可——**严禁 Agent 执行任何 git 写操作**:测试产物已被 `.gitignore` 忽略,不入库、不提交(§20260820-03)。
-4. **接力逻辑(报告生成后自动 debug)**: 报告与进度文件落盘 → Agent 退出 → 入口脚本 `AutoTestAndSaveReport_TexasPoker.sh` 在 shell 层**确定性接力**启动 `AutoDebugTestReport.sh` 进入自动修复(含待处理报告预检 + flock 防重入),避免「声明了却从不接线」式断链。Agent 只需确保报告与进度文件落盘;**严禁 Agent 自行启动 `AutoDebugTestReport.sh`**(与 shell 接力双重启动)。修复流程会提交/推送代码修复并删除或归档已处理报告(CLAUDE.md §22),因此报告内容必须自包含、结论写全。
+3. **报告文件名前缀必须为 `德州扑克自动化测试报告_`**(shell 接力预检 `auto_run_common.sh::GAME_GLOBS` 按此前缀扫描);报告 + 进度文件确认落盘即可——**严禁 Agent 执行任何 git 写操作**:测试产物已被 `.gitignore` 忽略,不入库、不提交。
+4. **接力逻辑(报告生成后自动 debug)**: 报告与进度文件落盘 → Agent 退出 → 入口脚本 `AutoTestAndSaveReport_TexasPoker.sh` 在 shell 层**确定性接力**启动 `AutoDebugTestReport.sh` 进入自动修复(含待处理报告预检 + flock 防重入),避免「声明了却从不接线」式断链。Agent 只需确保报告与进度文件落盘;**严禁 Agent 自行启动 `AutoDebugTestReport.sh`**(与 shell 接力双重启动)。修复流程会提交/推送代码修复并删除或归档已处理报告,因此报告内容必须自包含、结论写全。
 5. MCP 工具异常导致终止时,**额外**在 `go-web-debug-tool/UseReport/德州扑克测试工具使用报告_*.md` 写工具报告。
 6. 触发协议层诊断时,**额外**写 `TestReport/德州扑克协议抓包分析报告_*.md`(API Key/Token/Cookie 脱敏),并在测试报告里引用。
 7. 中断未完成也要写进度,标 `中断未完成`。
 
 ### 9. 注意事项
 
-- **多 Agent 并发与 Git**: 测试期间留意其他开发 Agent;**仅做只读 Git 查询**(`git status` / `git log` / `git diff`),**禁止** `git add` / `git commit` / `git push` 等一切写操作——测试产物按 `.gitignore` 策略仅留本地,不入库、不提交(§20260820-03)。
+- **多 Agent 并发与 Git**: 测试期间留意其他开发 Agent;**仅做只读 Git 查询**(`git status` / `git log` / `git diff`),**禁止** `git add` / `git commit` / `git push` 等一切写操作——测试产物按 `.gitignore` 策略仅留本地,不入库、不提交。
 - **单轮单组合**: 硬性约束,禁止「提高效率」连测多个组合;全组合覆盖靠多轮推进。
 - **重大问题立即停**(§3 已列):不待页面超时,不绕路,立刻写报告 + 接力修复。
 - **断线重连**: 验证服务器重启 / 客户端断网 场景下重连有效性。
@@ -188,7 +188,7 @@
 
 #### 10.1 第一层:REST API 快照
 
-> 2026-08-20 修订(R5 报告 §3.4):德扑**没有**专用的 `GET /api/games/texasholdem/rooms/:id` /
+> 修订说明:德扑**没有**专用的 `GET /api/games/texasholdem/rooms/:id` /
 > `GET /api/games/texasholdem/state` 端点(均 404),以下为本项目**实际存在**的取数方式。
 
 - `GET /api/games/texasholdem/rooms` — 开放房间列表(通用路由 `GET /api/games/:kind/rooms`)
