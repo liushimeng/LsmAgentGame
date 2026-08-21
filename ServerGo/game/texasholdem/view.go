@@ -92,6 +92,7 @@ type ClientGameState struct {
 	Turn           int            `json:"turn"`
 	Pot            int            `json:"pot"`
 	CurrentBet     int            `json:"current_bet"`
+	MinRaise       int            `json:"min_raise"` // 最小加注增量(前端 raise slider 下界校验,2026-08-21 R9 建议4)
 	BigBlind       int            `json:"big_blind"`
 	Button         int            `json:"button"`
 	Community      []CardJSON     `json:"community"`       // 已亮出的公共牌
@@ -152,6 +153,8 @@ func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats 
 		Phase:      PhaseWaiting.String(),
 		BigBlind:   200,
 		Button:     -1,
+		SbSeat:     -1,
+		BbSeat:     -1,
 		Status:     StatusPlaying.String(),
 		Players:    make([]PlayerJSON, MaxPlayers),
 		// Community / MyHole / ShowdownHands 初始为空切片（非 nil），保证 JSON 输出 `[]` 而非 `null`。
@@ -176,6 +179,7 @@ func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats 
 	cs.Turn = gs.Turn
 	cs.Pot = gs.Pot
 	cs.CurrentBet = gs.CurrentBet
+	cs.MinRaise = gs.MinRaise
 	cs.BigBlind = gs.BigBlind
 	cs.Button = gs.Button
 	cs.HandNumber = gs.HandNumber
@@ -257,16 +261,34 @@ func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats 
 	// TurnStartedAtMs 透传 engine.TurnStartedAtMs(同源)。
 	// HandRank 摊牌后填 winner 的最优牌型描述;观战者也能看(公开信息)。
 	if gs.Button >= 0 {
-		sb, bb := (gs.Button+1)%MaxPlayers, (gs.Button+2)%MaxPlayers
-		// 跳过空座(最多绕一圈)
-		for try := 0; try < MaxPlayers && gs.Players[sb].UserID == ""; try++ {
-			sb = (sb + 1) % MaxPlayers
+		// 2026-08-21 修复(测试报告 R9 P1-1):SB/BB 推导与 engine.go startHand 对齐 ——
+		// bb 必须从 sb 继续顺时针推导(此前两个独立循环在稀疏座位时收敛到同一座位,
+		// 前端同一座位渲染 SB+BB 双徽章)。注:不能用 gs.nextActiveSeat(它会跳过
+		// 已弃牌玩家,翻后徽章会错位);这里只跳过空座(UserID == ""),与发盲注时刻
+		// 的座位占用一致。
+		nextOccupied := func(start int) int {
+			for step := 1; step <= MaxPlayers; step++ {
+				next := (start + step) % MaxPlayers
+				if gs.Players[next].UserID != "" {
+					return next
+				}
+			}
+			return start
 		}
-		for try := 0; try < MaxPlayers && gs.Players[bb].UserID == ""; try++ {
-			bb = (bb + 1) % MaxPlayers
+		numOccupied := 0
+		for i := 0; i < MaxPlayers; i++ {
+			if gs.Players[i].UserID != "" {
+				numOccupied++
+			}
 		}
-		cs.SbSeat = sb
-		cs.BbSeat = bb
+		if numOccupied == 2 {
+			// 单挑:庄家 = SB,对手 = BB(与 engine.go startHand 一致)
+			cs.SbSeat = gs.Button
+			cs.BbSeat = nextOccupied(gs.Button)
+		} else {
+			cs.SbSeat = nextOccupied(gs.Button)
+			cs.BbSeat = nextOccupied(cs.SbSeat)
+		}
 	}
 	cs.TurnStartedAtMs = gs.TurnStartedAtMs
 	if (gs.Street == PhaseShowdown || gs.Street == PhaseOver) && len(gs.Winners) > 0 {

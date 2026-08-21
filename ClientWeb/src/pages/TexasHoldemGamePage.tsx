@@ -224,6 +224,8 @@ export function TexasHoldemGamePage() {
                   gameOver={gameOver}
                   onAction={handleAction}
                   bigBlind={gameState!.big_blind}
+                  currentBet={gameState!.current_bet}
+                  minRaise={gameState!.min_raise ?? gameState!.big_blind}
                   pot={gameState!.pot}
                   stack={self?.stack ?? 0}
                   // 2026-08-20 §德州扑克Agent — 当轮到 bot 且 bot_thinking=true 时,

@@ -42,6 +42,8 @@ export interface TexasHoldemGameState {
   turn: number;
   pot: number;
   current_bet: number;
+  /** 最小加注增量(2026-08-21 R9 建议4):合法 raise 总额 ≥ current_bet + min_raise。 */
+  min_raise?: number;
   big_blind: number;
   button: number;
   community: TexasCard[];

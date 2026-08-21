@@ -361,6 +361,7 @@ const en: Dict = {
   'texasholdem.call': 'Call',
   'texasholdem.bet': 'Bet',
   'texasholdem.raise': 'Raise',
+  'texasholdem.minRaiseTo': 'Min raise to',
   'texasholdem.allIn': 'All In',
   'texasholdem.pot': 'Pot',
   'texasholdem.dealer': 'Dealer',

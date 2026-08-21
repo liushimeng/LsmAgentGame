@@ -896,6 +896,7 @@ export interface Dict {
   'texasholdem.call': string;
   'texasholdem.bet': string;
   'texasholdem.raise': string;
+  'texasholdem.minRaiseTo': string;
   'texasholdem.allIn': string;
   'texasholdem.pot': string;
   'texasholdem.dealer': string;

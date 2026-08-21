@@ -812,6 +812,12 @@
   min-width: 56px;
   text-align: right;
 }
+/* 2026-08-21 R9 建议4 — 最小加注内联警告(暗色底,对比度 ≥4.5:1) */
+.raise-min-hint {
+  color: #fbbf24;
+  font-size: 12px;
+  white-space: nowrap;
+}
 .texas-action-controls .waiting-turn {
   width: 100%;
   text-align: center;

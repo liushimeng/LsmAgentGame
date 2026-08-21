@@ -361,6 +361,7 @@ const ja: Dict = {
   'texasholdem.call': 'コール',
   'texasholdem.bet': 'ベット',
   'texasholdem.raise': 'レイズ',
+  'texasholdem.minRaiseTo': '最小レイズ',
   'texasholdem.allIn': 'オールイン',
   'texasholdem.pot': 'ポット',
   'texasholdem.dealer': 'ディーラー',

@@ -363,6 +363,7 @@ const zhCN: Dict = {
   'texasholdem.call': '跟注',
   'texasholdem.bet': '下注',
   'texasholdem.raise': '加注',
+  'texasholdem.minRaiseTo': '最小加注到',
   'texasholdem.allIn': '全押',
   'texasholdem.pot': '底池',
   'texasholdem.dealer': '庄家',
