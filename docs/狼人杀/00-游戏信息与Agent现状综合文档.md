@@ -633,7 +633,7 @@ ServerGo/agent/
 | 狼人杀 Agent 公屏猜疑化设计 | `docs/狼人杀-Agent与系统/狼人杀Agent公屏猜疑化设计.md` | 猜疑化发言 |
 | 狼人杀 13 人局道具系统设计 | `docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md` | 道具系统 v1-v5 |
 | 狼人杀 13 人局 Agent 道具 | `docs/狼人杀-道具与经济/狼人杀13人局-Agent道具-20260807-04.md` | §20260807-04 修复 |
-| Agent 工具定义解决方案 | `docs/LLM与Agent/Agent工具定义-解决和设计方案-20260804-01.md` | emotion_switch_speak |
+| Agent 工具定义解决方案 | `docs/LLM与Agent/Agent工具定义设计方案.md` | emotion_switch_speak |
 | LLM 供应商设计 | `docs/LLM与Agent/LLM供应商设计.md` | LLM Provider 模块 |
 | 狼人杀观众交互设计 | `docs/狼人杀观众交互设计.md` | 观战者交互 |
 | 狼人杀观众唤醒设计 | `docs/狼人杀观众唤醒设计.md` | 观众唤醒 |

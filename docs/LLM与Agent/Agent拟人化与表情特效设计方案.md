@@ -5,7 +5,7 @@
 > 本方案把座位卡头像区重构为 **Agent 驱动的拟人化表情头像 + 10s+ 动态特效**，
 > 并扩展 `emotion_switch_speak` 工具参数让 Agent 自主控制特效、持续时长与表情文字。
 >
-> 关联历史文档：`docs/LLM与Agent/Agent工具定义-解决和设计方案-20260804-01.md`（emotion_switch 合并重构，本方案的上一环）。
+> 关联历史文档：`docs/LLM与Agent/Agent工具定义设计方案.md`（emotion_switch 合并重构，本方案的上一环）。
 
 ---
 

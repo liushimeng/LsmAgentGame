@@ -337,13 +337,13 @@ func BuildSystemPrompt(selfPortrait string, personality AgentPersonalityVector) 
 
 - 主综合文档：[`docs/狼人杀/00-游戏信息与Agent现状综合文档.md`](../狼人杀/00-游戏信息与Agent现状综合文档.md)
 - Agent 设计：[`狼人杀Agent设计.md`](狼人杀Agent设计.md)
-- 狼队战术分工（U1 前置）：[`狼人杀13人局Agent升级-20260810-10.md`](狼人杀13人局Agent升级-20260810-10.md) §U1 WolfRoleAssignment
-- 模型自画像（U2 正交）：[`狼人杀13人局Agent升级-20260810-10.md`](狼人杀13人局Agent升级-20260810-10.md) §U2 ModelSelfPortrait
+- 狼队战术分工（U1 前置）：[`狼队角色分工与模型自我认知.md`](狼队角色分工与模型自我认知.md) §U1 WolfRoleAssignment
+- 模型自画像（U2 正交）：[`狼队角色分工与模型自我认知.md`](狼队角色分工与模型自我认知.md) §U2 ModelSelfPortrait
 - 对话即思考：[`狼人杀对话即思考设计.md`](狼人杀对话即思考设计.md)
 - 持久化记忆：[`狼人杀Agent持久化记忆设计.md`](狼人杀Agent持久化记忆设计.md)
 - 协议层隔离参考：[`狼人杀Agent公屏猜疑化设计.md`](狼人杀Agent公屏猜疑化设计.md)
 - 狼人杀房间聊天：[`狼人杀房间聊天设计.md`](狼人杀房间聊天设计.md)
-- 历史批次文档索引：`docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260810-*.md` ~ `狼人杀13人局Agent升级-20260811-03.md`
+- 历史批次文档索引：`狼人杀-Agent与系统/Agent升级/基础修复与接线补齐/` ~ `信息账本与行为追踪/信息污染链RumorGraph与跨局声誉.md`
 
 ---
 
