@@ -397,10 +397,30 @@ func (gs *GameState) activePlayerSeats() []int {
 }
 
 // nextActiveSeat 返回从 start 顺时针的下一个非空未弃牌座位。
+// 注意:不跳过全押玩家 —— StartHand 的庄家旋转/盲注分配依赖此语义
+// (此时全押标记已被本手 reset 清零,或仍残留上一手状态但不影响开局)。
 func (gs *GameState) nextActiveSeat(start int) int {
 	for step := 1; step <= MaxPlayers; step++ {
 		next := (start + step) % MaxPlayers
 		if gs.Players[next].UserID != "" && !gs.Players[next].Folded {
+			return next
+		}
+	}
+	return start
+}
+
+// nextActableSeat 返回从 start 顺时针的下一个可行动座位(非空、未弃牌、未全押)。
+// 2026-08-21 §BUG-TEXAS-ALLIN-TURN:全押玩家不再参与下注,回合轮转必须跳过。
+// 历史实现复用 nextActiveSeat(仅跳过空位/弃牌),导致全押玩家的座位被轮转到
+// 却无法行动(人类全押则 bot driver 停在「非 bot 行动位」、人类无筹码可动;
+// bot 全押则被反复 prompt 出「check(免费看牌)」),对局永久卡死(R13 P1-2)。
+// 仅用于回合推进(ApplyAction / advanceToNextStreet);StartHand 的庄家/盲注
+// 仍用 nextActiveSeat,避免改动词序引入庄家旋转回归。
+func (gs *GameState) nextActableSeat(start int) int {
+	for step := 1; step <= MaxPlayers; step++ {
+		next := (start + step) % MaxPlayers
+		p := &gs.Players[next]
+		if p.UserID != "" && !p.Folded && !p.AllIn {
 			return next
 		}
 	}
@@ -495,8 +515,8 @@ func (gs *GameState) ApplyAction(seat int, a Action) (bool, *errcode.Error) {
 		return gs.advanceToNextStreet()
 	}
 
-	// 移到下一位
-	gs.Turn = gs.nextActiveSeat(seat)
+	// 移到下一位（跳过全押玩家，§BUG-TEXAS-ALLIN-TURN）
+	gs.Turn = gs.nextActableSeat(seat)
 	// 2026-08-20 §德州扑克Web端产品界面优化 — turn 切换,记录新 turn 开始时间。
 	gs.TurnStartedAtMs = time.Now().UnixMilli()
 	return false, nil
@@ -578,8 +598,8 @@ func (gs *GameState) advanceToNextStreet() (bool, *errcode.Error) {
 	// 烧牌
 	gs.drawCard()
 
-	// 翻后先行动者 = 庄家之后第一个活跃玩家
-	gs.Turn = gs.nextActiveSeat(gs.Button)
+	// 翻后先行动者 = 庄家之后第一个可行动玩家（跳过全押，§BUG-TEXAS-ALLIN-TURN）
+	gs.Turn = gs.nextActableSeat(gs.Button)
 	// 2026-08-20 §德州扑克Web端产品界面优化 — 新街次 turn 切换,记录开始时间。
 	gs.TurnStartedAtMs = time.Now().UnixMilli()
 
