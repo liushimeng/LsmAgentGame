@@ -9,6 +9,7 @@
 #   - agent_cli_common.sh: Agent CLI 选择 + 调用（pick_agent / run_agent_with_prompt）
 #   - auto_run_common.sh:   多游戏 glob 单一事实源 + 脚本样板（日志头 / prompt 定位 /
 #                           git add/commit 封装 / 后台启动封装 / 报告文件前缀）
+#                           + 统一日志工具（§20260821-01）
 #
 # 关键规约：
 #   - 多游戏 glob 在 GAME_GLOBS 关联数组中**单一声明**，新游戏一行新增；
@@ -16,6 +17,12 @@
 #   - 旧无游戏名前缀的狼人杀产物（兼容旧）：保留 `_legacy` 后缀的 glob 作为兜底，
 #     历史已落盘文件不重命名（避免污染 git 历史）。
 #   - 时间戳格式：`YYYYMMDD_HHMMSS`，精度到秒。
+#   - 日志规约（§20260821-01）：
+#     * 单次运行日志 `logs/auto_<类型>_<Agent名>_<时间戳>.log` —— 文件名含 Agent 程序名，
+#       记录启动日志头 + Agent 全程 stdout/stderr + 各阶段时间戳。
+#     * 运行索引日志 `logs/auto_run_index.log` —— 每次运行追加 key=value 单行，
+#       记录脚本名 / Agent 程序名 / 事件 / 时间 / PID / 退出码，便于事后 grep 审计。
+#     * 旧日志保留期缺省 30 天（LOG_RETAIN_DAYS 可覆盖），由 cleanup_old_logs 清理。
 #
 # 用法（在调用脚本中）：
 #   source "${PROJECT_DIR}/auto_run_common.sh"
@@ -24,8 +31,11 @@
 #   PROMPT_FILE="$(locate_prompt_file "${PROMPT_FILE_NAME}")"
 #   enqueue_game_glob "${GAME_NAME}" "main"   # 输出 glob 给 find 用
 #   git_add_safe "TestReport/狼人杀*.md"      # 单路径 add 容错封装
-#   git_commit_chinese "测试" "${GAME_NAME}" "${TS}"   # 中文 commit 封装
-#   start_agent_in_background "<args>"        # nohup setsid & disown 封装
+#   git_commit_chinese "测试" "${GAME_NAME}" "${TS}" "${SCRIPT_NAME}"   # 中文 commit 封装
+#   start_agent_in_background "<log_file>" "<bash_script>"   # nohup setsid & disown 封装
+#   bg_log "${TAG}" "message"                 # 后台段带时间戳日志（stdout 已重定向到日志文件）
+#   append_run_index script=X agent=Y event=Z # 运行索引日志追加一行
+#   cleanup_old_logs                          # 清理超过保留期的旧日志
 # ---------------------------------------------------------------
 
 # ---------- 多游戏 Glob 单一事实源 ----------
@@ -145,14 +155,61 @@ game_display_name() {
     echo "${GAME_DISPLAY_NAME[${game}]:-${game}}"
 }
 
+# ---------- 统一日志工具（§20260821-01 新增） ----------
+
+# bg_log <tag> <message...>
+# 后台段日志助手：start_agent_in_background 已把后台 shell 的 stdout/stderr
+# 重定向到本次运行日志文件，此处仅负责补上统一时间戳前缀：
+#   [2026-08-21 12:00:00] [AutoDebugTestReport] claude 退出码 : 0
+bg_log() {
+    local tag="$1"
+    shift
+    echo "[$(date '+%F %T')] [${tag}] $*"
+}
+
+# append_run_index <key=value> ...
+# 运行索引日志：向 ${PROJECT_DIR}/logs/auto_run_index.log 追加一行，
+# 格式 `[YYYY-MM-DD HH:MM:SS] key=value key=value ...`。
+# 推荐键：script(脚本名) / agent(Agent 程序名) /
+#         event(start|launched|agent_done|commit_done|commit_skip|done|skip_*|error_*) /
+#         pid / exit / log / commit
+# 用于事后一条 grep 即可审计「哪个脚本、哪个 Agent、何时跑、退出码多少」。
+append_run_index() {
+    local idx_dir="${PROJECT_DIR:-$(pwd)}/logs"
+    local idx_file="${idx_dir}/auto_run_index.log"
+    local line="[$(date '+%F %T')]"
+    local kv
+    for kv in "$@"; do
+        line+=" ${kv}"
+    done
+    mkdir -p "${idx_dir}" 2>/dev/null || true
+    printf '%s\n' "${line}" >> "${idx_file}" 2>/dev/null || true
+}
+
+# cleanup_old_logs [retain_days]
+# 清理 logs/ 下超过保留期的 *.log 运行日志。
+#   - 运行索引 auto_run_index.log 永久保留（审计用）；*.lock 锁文件不受影响（非 .log）。
+#   - 保留期缺省 30 天，环境变量 LOG_RETAIN_DAYS 可覆盖。
+cleanup_old_logs() {
+    local retain_days="${1:-${LOG_RETAIN_DAYS:-30}}"
+    local log_dir="${PROJECT_DIR:-$(pwd)}/logs"
+    [[ -d "${log_dir}" ]] || return 0
+    find "${log_dir}" -maxdepth 1 -type f -name '*.log' \
+        ! -name 'auto_run_index.log' \
+        -mtime +"${retain_days}" -delete 2>/dev/null || true
+}
+
 # ---------- print_section_header <tag> <prompt_file> <log_file> <workdir> <agent> ----------
 # 启动日志头(替代各脚本裸 echo "=====" ... >> LOG)
+# §20260821-01：补充 Git HEAD 与 Bash 版本，便于把日志与代码版本对齐。
 print_section_header() {
     local tag="$1"
     local prompt_file="$2"
     local log_file="$3"
     local workdir="$4"
     local agent="$5"
+    local git_head
+    git_head="$(git -C "${workdir}" rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
     {
         echo "============================================================"
         echo "[${tag}] 启动时间 : $(date '+%F %T')"
@@ -161,6 +218,8 @@ print_section_header() {
         echo "[${tag}] 日志文件  : ${log_file}"
         echo "[${tag}] 选中 Agent : ${agent}"
         echo "[${tag}] Agent 二进制: $(command -v "$(agent_binary_of "${agent}")" 2>/dev/null || echo 'NOT FOUND')"
+        echo "[${tag}] Git HEAD  : ${git_head}"
+        echo "[${tag}] Bash 版本 : ${BASH_VERSION:-unknown}"
         echo "============================================================"
     } >> "${log_file}"
 }
@@ -195,21 +254,26 @@ git_add_safe() {
     git add -- "${path_glob}" 2>/dev/null || true
 }
 
-# ---------- git_commit_chinese <type_zh> <game_key> <commit_ts> [extra_msg ...] ----------
+# ---------- git_commit_chinese <type_zh> <game_key> <commit_ts> <source_tag> [extra_msg ...] ----------
 # 中文 commit 封装。
 #   type_zh: "测试" / "截图" / "修复" / "处理"
 #   game_key: werewolf / texasholdem / ...
 #   commit_ts: 时间戳(YYYYMMDD_HHMMSS)
+#   source_tag: 来源脚本名(如 AutoTestAndSaveReport_Werewolf.sh)
 #   extra_msg: 可选追加 commit message 行
+# 修复(§20260821-01)：旧实现用 $(basename "$0") 标注来源，但本函数实际在
+# start_agent_in_background 的 bash -c 子 shell 中执行，$0 恒为 "bash"，
+# 提交信息会误写成「自动提交由 bash 生成」；改为调用方显式传脚本名。
 git_commit_chinese() {
     local type_zh="$1"
     local game_key="$2"
     local commit_ts="$3"
-    shift 3
+    local source_tag="${4:-auto_run}"
+    shift 4 2>/dev/null || true
     local game_display
     game_display="$(game_display_name "${game_key}")"
     local -a msg_args=("-m" "${type_zh}: ${game_display} ${type_zh}报告 ${commit_ts} 已完成")
-    msg_args+=("-m" "自动提交由 $(basename "${0}") 生成")
+    msg_args+=("-m" "自动提交由 ${source_tag} 生成")
     if [[ $# -gt 0 ]]; then
         msg_args+=("-m" "包含: $*")
     fi
