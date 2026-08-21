@@ -1,6 +1,23 @@
 # CI — 后端编译/测试 + 前端类型检查/构建 + 项目自检
 #
 # 2026-08-14 §20260814-01 U4 新增。
+# 2026-08-21 §20260821-03 修复 CI #48 三 Job 全红,两个根因:
+#   ① proto 生成产物(ServerGo/proto/pb/ 与 ClientWeb/src/proto/)被
+#     .gitignore 排除,CI 全新 checkout 里不存在,而已提交源码 import 它们
+#     → go build / tsc 必然失败。修复:两个 build Job 各插入 proto 生成步骤
+#     (proto/gen.sh go|ts),protoc 钉 v28.3 与开发机一致。
+#   ② Project conventions 的 §4 行数检查失败(werewolf-v2.css 超限 +
+#     agent_runner.go baseline 恶化),随本批次代码修复一并解决。
+#
+# 网络环境说明(国内外双兼容):
+#   - CI runner 在海外网络:protoc zip 走 GitHub Releases、Go 模块走默认
+#     proxy.golang.org、npm 走默认 registry.npmjs.org,均为海外直达源。
+#   - 开发机在国内网络:GOPROXY=goproxy.cn、npm registry=npmmirror
+#     (见 ~/.npmrc / go env),rebuild_restart_app.sh 不经过本 workflow。
+#   - package-lock.json 已入库且 resolved 指向国内镜像 npmmirror ——
+#     这正是 CI 坚持 `npm install` 而非 `npm ci` 的原因:npm >= 8 会把异源
+#     resolved 重写到当前 registry,海外 runner 因此走 npmjs.org;
+#     而本地 rebuild_restart_app.sh 的 `npm ci` 依赖 resolved 里的国内镜像。
 #
 # # 为什么现在才有
 #
@@ -52,6 +69,24 @@ jobs:
           go-version-file: ServerGo/go.mod
           cache-dependency-path: ServerGo/go.sum
 
+      # ── §20260821-03:proto Go 产物现场生成(CI 失败根因①的修复) ──
+      # protoc 钉 v28.3(与开发机 /tmp/protoc 完全一致,保证生成行为同源);
+      # protoc-gen-go 钉 v1.34.2(与 go.mod 的 google.golang.org/protobuf
+      # 同版本,防生成代码与运行时库漂移)。
+      - name: Install protoc (pinned v28.3)
+        run: |
+          curl -fsSL -o /tmp/protoc.zip \
+            https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip
+          sudo unzip -oq /tmp/protoc.zip -d /usr/local/protoc
+          echo "/usr/local/protoc/bin" >> "$GITHUB_PATH"
+          /usr/local/protoc/bin/protoc --version
+
+      - name: Install protoc-gen-go (pinned v1.34.2)
+        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34.2
+
+      - name: Generate proto Go code
+        run: bash proto/gen.sh go
+
       - name: go build
         working-directory: ServerGo
         run: go build -o /tmp/LsmAgentGame main.go
@@ -84,17 +119,31 @@ jobs:
         with:
           node-version: '22'
 
-      # 用 npm install 而不是 npm ci:本仓库**没有提交 package-lock.json**
-      # (只 gitignore 了 node_modules/,lockfile 从未入库)。npm ci 要求
-      # lockfile 存在,会直接失败;setup-node 的 cache: npm 同样需要 lockfile
-      # 作为 cache key,故也一并去掉。
-      #
-      # 代价是依赖版本不完全可复现(package.json 用的是 ^ 范围)。
-      # 提交 lockfile 是更好的做法,但那会改变依赖解析结果、需要独立验证,
-      # 不适合混在本批次功能提交里 —— 留作独立提交。
+      # 用 npm install 而不是 npm ci(2026-08-21 §20260821-03 更新):
+      # package-lock.json **已入库**(迁移提交 b67ebb3 带入,与 package.json
+      # 同步,npm ci --dry-run 通过),但其 resolved URL 指向国内镜像
+      # registry.npmmirror.com —— 这是本地 rebuild_restart_app.sh 的 npm ci
+      # 在国内网络稳定工作的关键。海外 runner 上 `npm ci` 会强制走这些
+      # resolved URL(直连国内镜像,偶发不稳);而 npm >= 8 的 `npm install`
+      # 会把异源 resolved 重写到当前 registry(runner 默认 npmjs.org),
+      # 版本仍按 lockfile 锁定,国内外网络各走各的稳定源。
       - name: npm install
         working-directory: ClientWeb
         run: npm install --no-audit --no-fund
+
+      # ── §20260821-03:proto TS 产物现场生成(CI 失败根因①的修复) ──
+      # 必须在 npm install 之后:@protobuf-ts/plugin(devDependency)提供
+      # protoc-gen-ts 插件。protoc 与 backend Job 同为钉死的 v28.3。
+      - name: Install protoc (pinned v28.3)
+        run: |
+          curl -fsSL -o /tmp/protoc.zip \
+            https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip
+          sudo unzip -oq /tmp/protoc.zip -d /usr/local/protoc
+          echo "/usr/local/protoc/bin" >> "$GITHUB_PATH"
+          /usr/local/protoc/bin/protoc --version
+
+      - name: Generate proto TypeScript code
+        run: bash proto/gen.sh ts
 
       # tsc 是 i18n 三语同步的实际执行者:i18n/types.ts 的 Dict 契约
       # 让「locale 漏一个键」或「加了 types.ts 没加 locale」直接编译失败。

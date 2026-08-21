@@ -1,0 +1,1280 @@
+/* werewolf-v2-base.css — 2026-08-21 §20260821-03 从 werewolf-v2.css(1813 行 > §4 上限 1800)
+ * 整段搬移拆出:原文件第 1-1275 行。级联顺序由 werewolf-v2.css 入口的
+ * @import 列表保持(先 base 后 ext),globals.css 的 @import 顺序不变。
+ * 约束见 CLAUDE.md §2.1 硬约束 #4 与 §4。 */
+
+/* ====== §126 狼人杀13人局界面重构 — 表格布局 + Agent 整合 + 信息压缩 ====== */
+
+/* §2026-08-07 — 合并主标题 + 法官横幅 + 状态条 为统一可折叠 GameStatusHeader。
+ * 顶部总高度 ≤ 60px(展开)/ ≤ 32px(折叠),sticky 粘性顶部。 */
+.ww-game-status-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 12px;
+  background: linear-gradient(180deg, rgba(193, 154, 86, 0.18) 0%, rgba(193, 154, 86, 0.04) 100%);
+  border-bottom: 1px solid rgba(193, 154, 86, 0.4);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: var(--ww-z-action, 50);
+  transition: padding 200ms ease;
+}
+.ww-game-status-header.is-collapsed { padding: 2px 12px; }
+.ww-game-status-header.is-pulse {
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.5);
+  transition: box-shadow 200ms ease;
+}
+.ww-game-status-header__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  flex-wrap: nowrap;
+}
+.ww-game-status-header__row--main {
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  min-height: 24px;
+  /* §20260816-02 U2 — 容纳两组 chip 的横向布局:左游戏状态右统计 */
+  justify-content: space-between;
+}
+/* §20260816-02 U2 — chip 分组容器。默认 1920 视口下 flex 一行两端对齐;
+   ≤1280 视口自动 stack 双行,组内 chip 内部仍可 wrap。 */
+.ww-game-status-header__group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.ww-game-status-header__group--game {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ww-game-status-header__group--stats {
+  flex: 0 1 auto;
+  /* 统计组右侧贴边,左游戏状态左对齐 */
+  justify-content: flex-end;
+}
+@media (max-width: 1280px) {
+  .ww-game-status-header__row--main {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .ww-game-status-header__group--stats {
+    justify-content: flex-start;
+    width: 100%;
+  }
+}
+.ww-game-status-header__title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--accent);
+  text-shadow: 0 0 6px rgba(193, 154, 86, 0.25);
+  white-space: nowrap;
+}
+.ww-game-status-header__sub {
+  font-size: 11px;
+  color: rgba(216, 200, 165, 0.75);
+  font-family: ui-monospace, monospace;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.ww-game-status-header__roomid { opacity: 0.85; }
+.ww-game-status-header__phase.is-over { color: #f0d060; font-weight: 600; }
+.ww-game-status-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.ww-game-status-header__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ww-game-status-header__chip--clock {
+  background: rgba(193, 154, 86, 0.18);
+  border: 1px solid rgba(193, 154, 86, 0.4);
+  color: var(--accent);
+  font-family: ui-monospace, monospace;
+}
+.ww-game-status-header__chip--clock.is-ended {
+  background: rgba(216, 200, 165, 0.12);
+  color: rgba(216, 200, 165, 0.85);
+}
+.ww-game-status-header__chip--deadline {
+  background: rgba(120, 160, 255, 0.4);
+  border: 1px solid rgba(120, 160, 255, 0.7);
+  color: #d8e6ff;
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+}
+.ww-game-status-header__chip--deadline.is-overdue {
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.55);
+  animation: wwPulse 1s ease-in-out infinite;
+}
+.ww-game-status-header__chip--thinking {
+  background: rgba(120, 160, 255, 0.4);
+  color: #d8e6ff;
+  border: 1px solid rgba(120, 160, 255, 0.7);
+}
+.ww-game-status-header__chip--quarantined {
+  /* 2026-08-08 §20260808-02 — quarantined chip 对比度提升。 */
+  background: rgba(245, 158, 11, 0.55);
+  color: #ffffff;
+  border: 1px solid rgba(245, 158, 11, 0.85);
+  font-weight: 700;
+}
+.ww-game-status-header__chip--human {
+  background: rgba(193, 154, 86, 0.32);
+  color: #ffe8a8;
+  border: 1px solid rgba(193, 154, 86, 0.7);
+}
+.ww-game-status-header__chip--gameover {
+  background: rgba(212, 175, 55, 0.55);
+  color: #ffffff;
+  border: 1px solid rgba(212, 175, 55, 0.85);
+  font-weight: 700;
+}
+.ww-game-status-header__chip--stats {
+  background: rgba(100, 200, 150, 0.4);
+  color: #d3f5dd;
+  border: 1px solid rgba(100, 200, 150, 0.7);
+}
+.ww-game-status-header__chip--tokens {
+  background: rgba(200, 150, 255, 0.4);
+  color: #ecd9ff;
+  border: 1px solid rgba(200, 150, 255, 0.7);
+}
+.ww-game-status-header__chip--judge,
+.ww-game-status-header__chip--judge-stats {
+  background: rgba(245, 200, 100, 0.45);
+  color: #ffe8b8;
+  border: 1px solid rgba(245, 200, 100, 0.75);
+}
+.ww-game-status-header__chip--judge.is-quarantined {
+  border-color: rgba(220, 38, 38, 0.55);
+  background: rgba(60, 28, 28, 0.6);
+}
+.ww-game-status-header__sub {
+  font-weight: 400;
+  opacity: 0.85;
+}
+.ww-game-status-header__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  margin-left: 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+/* 2026-08-08 §20260808-02 — 状态徽章三档对比度提升。原浅蓝/浅黄/浅紫字 + 25% 透明背景
+   实测约 3.5:1,均低于 WCAG AA 正文标准。统一改为白字 + 加粗 + ≥45% 背景透明度,
+   保留三档色相(蓝=pending/橙=quarantined/紫=summary)用于分类。 */
+.ww-game-status-header__badge--pending { background: rgba(56, 189, 248, 0.5); color: #ffffff; font-weight: 700; }
+.ww-game-status-header__badge--quarantined { background: rgba(245, 158, 11, 0.55); color: #ffffff; font-weight: 700; }
+.ww-game-status-header__badge--summary { background: rgba(139, 92, 246, 0.55); color: #ffffff; font-weight: 700; }
+.ww-game-status-header__broadcast {
+  font-size: 11px;
+  color: #ff9090;
+  padding: 2px 8px;
+  background: rgba(255, 100, 100, 0.1);
+  border-left: 3px solid #ff9090;
+  border-radius: 3px;
+}
+.ww-game-status-header__fold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(193, 154, 86, 0.12);
+  border: 1px solid rgba(193, 154, 86, 0.3);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  min-height: var(--ww-touch-target, 36px);
+  min-width: var(--ww-touch-target, 36px);
+  flex-shrink: 0;
+}
+.ww-game-status-header__fold:hover {
+  background: rgba(193, 154, 86, 0.25);
+}
+@keyframes wwPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* 旧 RoomRunningClock 仍被 HistoryDrawer 内部沿用,样式保留兼容。 */
+.ww-room-running-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(193, 154, 86, 0.18);
+  border: 1px solid rgba(193, 154, 86, 0.4);
+  color: var(--accent);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.ww-room-running-clock.is-ended {
+  background: rgba(216, 200, 165, 0.12);
+  color: rgba(216, 200, 165, 0.8);
+}
+.ww-room-running-clock--idle { opacity: 0.55; }
+
+/* 2026-07-18 §UX-运行时 — Header 上的"📜 历史"按钮 + 其触发的抽屉。 */
+.ww-header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: var(--ww-radius);
+  background: rgba(120, 160, 255, 0.16);
+  border: 1px solid rgba(120, 160, 255, 0.45);
+  color: #8ab4ff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: var(--ww-touch-target, 36px);
+}
+.ww-header-btn:hover { background: rgba(120, 160, 255, 0.28); }
+.ww-header-btn--history { font-size: 13px; }
+
+/* === HistoryDrawer === */
+/* 2026-07-24 修正:z-index 由 200/201 提到 300/301,确保抽屉始终盖住
+ * settlement-modal(200) 和 faction-drawer(90)。旧版 200 与 settlement-modal
+ * 同层,同时打开时抽屉被弹层遮挡,用户看不到历史/阵营信息。
+ * 2026-07-24 z-token 化:收敛到 --ww-z-drawer / --ww-z-drawer-panel。 */
+.ww-history-drawer__overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: var(--ww-z-drawer, 300);
+}
+.ww-history-drawer__panel {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: min(380px, 30vw);
+  max-width: 100vw;
+  background: var(--card, #23201b);
+  border-left: 1px solid var(--accent, #c19a56);
+  display: flex; flex-direction: column;
+  z-index: var(--ww-z-drawer-panel, 301);
+  animation: wwDrawerSlideIn 0.18s ease-out;
+}
+@keyframes wwDrawerSlideIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.ww-history-drawer__header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(193, 154, 86, 0.4);
+  flex-shrink: 0;
+}
+.ww-history-drawer__title {
+  margin: 0; font-size: 16px; color: var(--accent);
+  flex: 1; font-weight: 700; letter-spacing: 0.8px;
+}
+.ww-history-drawer__close {
+  width: 36px; height: 36px;
+  font-size: 22px; line-height: 1;
+  background: transparent;
+  border: 1px solid rgba(193, 154, 86, 0.4);
+  color: var(--accent);
+  border-radius: 6px; cursor: pointer;
+}
+.ww-history-drawer__tabs {
+  display: flex; gap: 4px; padding: 8px;
+  border-bottom: 1px solid rgba(193, 154, 86, 0.2);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.ww-history-drawer__tab {
+  flex: 1 1 auto;
+  padding: 6px 10px;
+  font-size: 12px; font-weight: 600;
+  background: rgba(193, 154, 86, 0.08);
+  border: 1px solid transparent;
+  color: rgba(216, 200, 165, 0.85);
+  border-radius: 6px; cursor: pointer;
+  min-height: var(--ww-touch-target, 36px);
+}
+.ww-history-drawer__tab.is-active {
+  background: rgba(193, 154, 86, 0.18);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.ww-history-drawer__body {
+  flex: 1; overflow-y: auto; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.ww-history-panel__empty {
+  padding: 24px 12px; text-align: center;
+  color: rgba(216, 200, 165, 0.6); font-size: 13px;
+}
+
+/* Timeline 行 */
+.ww-history-timeline { list-style: none; margin: 0; padding: 0; }
+.ww-history-timeline__row {
+  display: flex; gap: 6px; align-items: baseline;
+  padding: 8px 4px;
+  border-bottom: 1px dashed rgba(193, 154, 86, 0.15);
+  font-size: 12px;
+  min-height: 36px;
+}
+.ww-history-timeline__emoji { font-size: 14px; }
+.ww-history-timeline__day { color: var(--accent); font-weight: 700; }
+.ww-history-timeline__type { font-weight: 600; min-width: 56px; }
+.ww-history-timeline__detail {
+  flex: 1; color: rgba(216, 200, 165, 0.85);
+  word-break: break-word;
+}
+
+/* Monologue 行 */
+.ww-history-monologue__hint {
+  font-size: 11px; color: rgba(216, 200, 165, 0.55); font-style: italic;
+  padding-bottom: 4px;
+}
+.ww-history-monologue__agent {
+  border-bottom: 1px solid rgba(193, 154, 86, 0.18);
+  padding: 6px 0;
+}
+.ww-history-monologue__agent summary {
+  cursor: pointer; display: flex; gap: 6px; align-items: center;
+  min-height: 36px; padding: 4px;
+  list-style: none;
+}
+.ww-history-monologue__agent summary::-webkit-details-marker { display: none; }
+.ww-history-monologue__agent summary::before { content: '📂'; }
+.ww-history-monologue__agent[open] summary::before { content: '📂'; opacity: 0.6; }
+.ww-history-monologue__seat { font-weight: 700; color: var(--accent); }
+.ww-history-monologue__model {
+  flex: 1; font-family: ui-monospace, monospace;
+  font-size: 11px; color: rgba(120, 160, 255, 0.85);
+}
+.ww-history-monologue__phase {
+  font-size: 10px; padding: 1px 6px; border-radius: 999px;
+  background: rgba(120, 160, 255, 0.2); color: #8ab4ff;
+}
+.ww-history-monologue__heart {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-left: 3px solid rgba(120, 160, 255, 0.5);
+  background: rgba(120, 160, 255, 0.08);
+  font-size: 12px; font-style: italic;
+}
+.ww-history-monologue__summary {
+  margin-top: 4px; font-size: 12px; line-height: 1.5;
+  color: rgba(216, 200, 165, 0.85);
+}
+
+/* Deaths 列表 */
+.ww-history-deaths h4 { margin: 0 0 6px; font-size: 13px; color: var(--accent); }
+.ww-history-deaths__list { list-style: none; margin: 0; padding: 0; }
+.ww-history-deaths__row {
+  display: flex; gap: 8px; align-items: center;
+  padding: 6px 4px; font-size: 12px;
+  border-bottom: 1px dashed rgba(193, 154, 86, 0.12);
+  min-height: 32px;
+}
+.ww-history-deaths__day { font-weight: 700; color: var(--accent); }
+.ww-history-deaths__verdict {
+  font-size: 10px; padding: 1px 6px; border-radius: 999px;
+}
+.ww-history-deaths__verdict.verdict-execution {
+  background: rgba(245, 158, 11, 0.18); color: #f59e0b;
+}
+.ww-history-deaths__verdict.verdict-death {
+  background: rgba(160, 53, 47, 0.18); color: #ff9090;
+}
+
+/* Summary 文本 */
+.ww-history-summary__text {
+  white-space: pre-wrap; word-break: break-word;
+  background: rgba(120, 160, 255, 0.06);
+  padding: 10px; border-radius: 8px;
+  font-size: 12px; line-height: 1.6;
+  max-height: 50vh; overflow-y: auto;
+}
+.ww-history-summary h4 { margin: 8px 0 4px; font-size: 13px; color: var(--accent); }
+.ww-history-summary__model summary {
+  cursor: pointer; padding: 4px;
+  font-family: ui-monospace, monospace; font-size: 11px;
+}
+.ww-history-summary__model pre {
+  white-space: pre-wrap; word-break: break-word;
+  font-size: 11px; line-height: 1.5; padding: 6px 8px;
+  background: rgba(193, 154, 86, 0.08);
+  border-radius: 6px;
+}
+
+/* === §20260809-02 U3 人类身份猜测准确率卡(HistoryDrawer 总结 tab) === */
+.werewolf-guess-accuracy {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(46, 16, 80, 0.18);
+  border: 1px solid rgba(139, 92, 246, 0.30);
+}
+.werewolf-guess-accuracy__title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--accent, #c7d2fe);
+  font-weight: 600;
+}
+.werewolf-guess-accuracy__summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.werewolf-guess-accuracy__big {
+  font-size: 22px;
+  font-weight: 700;
+  color: #f0e6ff;
+}
+.werewolf-guess-accuracy__percent {
+  font-size: 13px;
+  color: rgba(199, 210, 254, 0.7);
+}
+.werewolf-guess-accuracy__bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(139, 92, 246, 0.15);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.werewolf-guess-accuracy__bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8b5cf6, #c084fc);
+  transition: width 0.3s ease;
+}
+.werewolf-guess-accuracy__details summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: rgba(199, 210, 254, 0.85);
+  padding: 4px 0;
+  user-select: none;
+}
+.werewolf-guess-accuracy__list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+  font-size: 11px;
+}
+.werewolf-guess-accuracy__row {
+  display: grid;
+  grid-template-columns: 36px 1fr 16px 1fr;
+  gap: 4px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+}
+.werewolf-guess-accuracy__row.is-match {
+  background: rgba(34, 197, 94, 0.10);
+  color: #d4f4dd;
+}
+.werewolf-guess-accuracy__row.is-mismatch {
+  background: rgba(239, 68, 68, 0.10);
+  color: #fad5d5;
+}
+.werewolf-guess-accuracy__row.is-skipped {
+  color: rgba(199, 210, 254, 0.5);
+}
+.werewolf-guess-accuracy__seat {
+  font-weight: 700;
+}
+.werewolf-guess-accuracy__arrow {
+  text-align: center;
+  font-weight: 700;
+}
+
+/* === 2026-07-22 §UX-法官布局 — 抽屉内法官详情面板(HistoryDrawer「⚖️ 法官」tab) ===
+ * 原 WerewolfTable 内嵌 JudgePanel 迁移至此;内容纵向排布、无自带边框外壳,
+ * 不再挤压 13 人座位格,消除与游戏界面重合。 */
+.ww-judge-panel { display: flex; flex-direction: column; gap: 10px; font-size: 12px; }
+.ww-judge-panel__status {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 6px 8px; border-radius: 6px;
+  background: rgba(139, 92, 246, 0.10);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+}
+.ww-judge-panel__model { font-weight: 700; color: #c7d2fe; }
+.ww-judge-panel__statusline { font-size: 11px; color: rgba(233, 231, 245, 0.7); }
+.ww-judge-panel__badge {
+  font-size: 10px; padding: 1px 7px; border-radius: 10px; font-weight: 600; white-space: nowrap;
+}
+/* 2026-07-24 — quarantine softened: amber info tone instead of alert red. */
+.ww-judge-panel__badge--quarantined { background: rgba(245, 158, 11, 0.22); color: #fde68a; }
+.ww-judge-panel__badge--pending { background: rgba(56, 189, 248, 0.25); color: #bae6fd; }
+.ww-judge-panel__last {
+  font-size: 13px; line-height: 1.6; padding: 8px 10px;
+  background: rgba(120, 160, 255, 0.06); border-radius: 8px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.ww-judge-panel__quote-mark { opacity: 0.5; }
+.ww-judge-panel__section { display: flex; flex-direction: column; gap: 4px; }
+.ww-judge-panel__section-title { margin: 0; font-size: 13px; color: var(--accent); }
+.ww-judge-panel__history,
+.ww-judge-panel__activities { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ww-judge-panel__history li,
+.ww-judge-panel__activities li {
+  font-size: 11px; line-height: 1.5; color: rgba(233, 231, 245, 0.85);
+  padding: 4px 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.04);
+}
+.ww-judge-panel__bullet { opacity: 0.5; }
+.ww-judge-panel__activity-time { opacity: 0.7; }
+.ww-judge-panel__activity-tool { color: #c7d2fe; }
+.ww-judge-panel__activity-input { opacity: 0.6; }
+.ww-judge-panel__activity-ms { opacity: 0.5; }
+.ww-judge-panel__activity-out { padding-left: 10px; color: rgba(233, 231, 245, 0.95); word-break: break-word; }
+
+/* === 2026-07-18 §UX-运行时 — 触控 44px 热区 token(仅 werewolf 作用域) === */
+.werewolf-game {
+  --ww-touch-target: 44px;
+}
+.werewolf-game .btn,
+.werewolf-game .seat-chip,
+.werewolf-game button.ww-header-btn,
+.werewolf-game button.ww-history-drawer__tab,
+.werewolf-game button.ww-history-drawer__close {
+  min-height: var(--ww-touch-target);
+}
+/* 中栏(board-container)13 人局紧凑间距优化 */
+@media (max-width: 1599px) {
+  .werewolf-game .board-container { --ww-gap: 6px; --ww-pad: 6px; }
+  /* 1280px 以下进一步压缩 */
+  @media (max-width: 1280px) {
+    .werewolf-game .board-container { gap: 4px; padding: 4px; }
+  }
+}
+
+/* §20260816-02 U6 — 4 列下座位卡紧凑化
+   1920 视口 + 侧栏全折叠 → container > 900px → 4 列,13 座位 ÷ 4 = 4 行。
+   4 行比 3 列模式的 5 行节省 1 行 ≈ 250px,中栏底部 panel 区域重新可见。
+   配套缩放:座位卡 min-height 200→170、padding 8/10→6/8、gap 8→6。 */
+.werewolf-game .board-container.cols-4 .werewolf-seat {
+  min-height: 170px;
+  padding: 6px 8px;
+  gap: 6px;
+}
+.werewolf-game .board-container.cols-4 .werewolf-seat__avatar {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+.werewolf-game .board-container.cols-4 .werewolf-seat__header {
+  /* 4 列下头部行更紧凑 */
+  min-height: 22px;
+}
+.werewolf-game .board-container.cols-4 .werewolf-seat__bubble {
+  font-size: 12px;
+  line-height: 1.35;
+  max-height: 36px; /* 2 行 bubble 钳位 */
+}
+
+/* §130 — 主表格网格:每行座位数由 --ww-grid-cols 控制(2026-08-02 默认 2 列,
+ * 超宽屏 3 列,窄屏 1 列),13/12/7 人按 N 列多行展开。
+ * CSS Grid repeat(var(--ww-grid-cols), minmax(0, 1fr)) 让座位卡在所有断点下
+ * 自适应填充列宽,13/12/7 人均保持每行不低于 1 个对象。
+ *
+ * §优化-20260730-01 — 列数与 gap 改用 CSS 变量,JS 监听 resize 写入
+ *   --ww-grid-cols / --ww-grid-gap,使 13 人局在 1920 大屏用 3 列(更宽),
+ *   1280-1600 用 4 列,768-1024 用 3 列,< 600 落到 1 列,真正自适应。 */
+.werewolf-table__grid {
+  display: grid;
+  grid-template-columns: repeat(var(--ww-grid-cols, 4), minmax(0, 1fr));
+  gap: var(--ww-grid-gap, 12px);
+  padding: var(--ww-grid-gap, 12px);
+  z-index: var(--ww-z-overlay, 5);
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: start;
+  /* §130 — 让多行网格整体居中显示,最后一行居中 */
+  justify-content: center;
+  justify-items: stretch;
+}
+
+/* §优化-20260802-01 — 严格 2 列/行:3+ 列下座位卡内 5 行 Agent 指标
+   (情绪/延迟/调用/token/模型名)挤压重叠;2 列保证每卡 ≥ ~560px。
+   - 默认 >600:2 列 14px(1280 视口卡 ≥ ~560px)
+   - ≤600 竖排 1 列 6px */
+@media (min-width: 600.02px) {
+  .werewolf-table__grid {
+    --ww-grid-cols: 2;
+    --ww-grid-gap: 14px;
+  }
+}
+@media (max-width: 600px) {
+  .werewolf-table__grid {
+    --ww-grid-cols: 1;
+    --ww-grid-gap: 6px;
+  }
+}
+
+/* BUG-R233-P2-03 (2026-08-02): 阶段徽标与座位卡重叠回归修复。
+ *
+ * 历史:
+ *  - R232-P2-01 已在 werewolf.css:736 写 `.werewolf-table__grid { padding-top: 44px }`
+ *    试图给网格顶部留出 44px 净空避开 phase badge。
+ *  - 该修复被 werewolf-v2.css:428 的 `padding: var(--ww-grid-gap, 12px)` 简写
+ *    整条抹掉 —— globals.css 中 werewolf.css 第 7 行导入,werewolf-v2.css 第 12 行导入,
+ *    后导入者胜,同选择器同特异性 → padding-top:44px 从未生效。
+ *
+ * 修复:把 padding-top:44px 挪到 werewolf-v2.css 的简写规则之后,层叠顺序晚于简写,
+ * 不依赖 !important,选择器特异性维持 0,1,0 不变。编译后还需 R233 §8.3 工程流程
+ * 教训所述「用 getComputedStyle 实测断言目标属性实际生效」验证。
+ */
+.werewolf-table__grid {
+  padding-top: 44px;
+}
+
+/* §优化-20260730-01 — compact 模式的情绪 inline 徽章(1280px 以下与模型名同行)。 */
+.werewolf-seat__emotion-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* 压缩版 GameInfoPanel — info-row 紧凑排版(§126) */
+.werewolf-info-panel--compact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px; /* 减半:从 8px → 4px */
+}
+.werewolf-info-panel--compact .info-row--compact {
+  padding: 3px 0;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px dashed rgba(193, 154, 86, 0.12);
+}
+.werewolf-info-panel--compact .info-row--compact .label {
+  font-size: 11px;
+  color: rgba(216, 200, 165, 0.7);
+  flex-shrink: 0;
+  min-width: 60px;
+}
+.werewolf-info-panel--compact .info-row--compact .value {
+  font-size: 12px;
+  color: var(--fg);
+  font-weight: 600;
+}
+.werewolf-info-panel--compact .role-pill {
+  background: rgba(193, 154, 86, 0.2);
+  border: 1px solid rgba(193, 154, 86, 0.35);
+  border-radius: 3px;
+  padding: 1px 6px;
+  margin-left: auto;
+  font-size: 11px;
+}
+.werewolf-info-panel--compact .info-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* ====== §129 房间信息 v2 布局 — 全面适配 0.6fr 窄列(≈ 240px) ====== */
+/* §129:§128 奠定基础结构,本节把所有子控件(font-size / padding / min-width /
+ * overflow)统一按 240px 约束设计,不留任何溢出 / 截断 / 错位。 */
+
+.werewolf-info-panel--v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* §130:info-block 进一步压缩内部 padding,去除 border,仅保留淡色背景 */
+.werewolf-info-panel--v2 .info-block {
+  background: rgba(28, 22, 14, 0.5);
+  border: none;
+  border-left: 2px solid rgba(193, 154, 86, 0.35);
+  border-radius: 4px;
+  padding: 5px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+  min-width: 0;
+}
+.werewolf-info-panel--v2 .info-block__label {
+  font-size: 9px;
+  font-weight: 600;
+  color: rgba(193, 154, 86, 0.75);
+  letter-spacing: 0.5px;
+  /* §130:标签不再 uppercase(节省空间) */
+  text-transform: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.werewolf-info-panel--v2 .info-block__big {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: center;
+  padding: 1px 0;
+  letter-spacing: 0.4px;
+  /* §130:阶段名称太长自动换行 */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+.werewolf-info-panel--v2 .info-block__mini {
+  font-size: 9px;
+  color: rgba(216, 200, 165, 0.7);
+  text-align: center;
+  white-space: nowrap;
+}
+/* 2026-08-11 BUG-ROLE-MISMATCH-P0 — 自选角色未生效提示。
+ * 色相库 §26.4:quarantined/告警 用红底(≥0.55)+白字(700) — 沿用该规约,
+ * 但字号保持 info-block__mini 的 9px,避免抢占身份块视觉层级。 */
+.werewolf-info-panel--v2 .werewolf-role-pref-unmet {
+  margin-top: 4px;
+  padding: 3px 4px;
+  border-radius: 3px;
+  background: rgba(220, 60, 60, 0.55);
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: normal;
+}
+/* §2026-08-06:两列行 grid,子元素等宽占满,无空白。
+ * width:100% + box-sizing:border-box 双保险防溢出。 */
+.werewolf-info-panel--v2 .info-block__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* §130:角色 pill 更紧凑,padding 减半。
+ * §2026-08-06:display:flex+width:100% 保证 pill 占满所在列,不留右侧空白。 */
+.werewolf-info-panel--v2 .info-block__role-pill {
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  background: rgba(193, 154, 86, 0.15);
+  border: 1px solid rgba(193, 154, 86, 0.35);
+  border-radius: 3px;
+  padding: 4px 2px;
+  color: var(--accent);
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* §130:stat 控件更紧凑,padding 减半 */
+.werewolf-info-panel--v2 .info-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 16, 8, 0.4);
+  border-radius: 3px;
+  padding: 3px 2px;
+  gap: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.werewolf-info-panel--v2 .info-stat--dual {
+  /* §130:身份卡左格合并 Day+座位,单行展示 */
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  justify-content: center;
+  padding: 3px 4px;
+}
+.werewolf-info-panel--v2 .info-stat__num {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.werewolf-info-panel--v2 .info-stat--dual .info-stat__num {
+  font-size: 11px;
+}
+.werewolf-info-panel--v2 .info-stat__sub {
+  font-size: 7px;
+  color: rgba(216, 200, 165, 0.55);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+.werewolf-info-panel--v2 .info-stat__divider {
+  color: rgba(193, 154, 86, 0.35);
+  font-size: 9px;
+  margin: 0 1px;
+}
+
+/* §130:阵营计数 — 进一步紧凑,减少 padding,emoji 略小 */
+.werewolf-info-panel--v2 .info-counts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 3px;
+}
+.werewolf-info-panel--v2 .info-count-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(20, 16, 8, 0.45);
+  border-radius: 3px;
+  padding: 4px 1px;
+  gap: 0;
+  border-top: 2px solid transparent;
+  min-width: 0;
+  overflow: hidden;
+}
+.werewolf-info-panel--v2 .info-count-cell--divine { border-top-color: #ffd76b; }
+.werewolf-info-panel--v2 .info-count-cell--plain { border-top-color: #8b949e; }
+.werewolf-info-panel--v2 .info-count-cell--wolf { border-top-color: #f85149; }
+.werewolf-info-panel--v2 .info-count-cell__emoji {
+  font-size: 12px;
+  line-height: 1;
+}
+.werewolf-info-panel--v2 .info-count-cell__num {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg);
+  line-height: 1.1;
+}
+
+/* §130:操作块 — padding 再减 1px,按钮更紧凑。
+ * §2026-08-06:子按钮设 width:100% 保证在 info-block 宽度内左右对齐不留空,
+ * flex:1+width:100% 双保险:纯 button 直接 flex 拉伸,RulesButton(多一层
+ * wrapper 时)仍然撑满。 */
+.werewolf-info-panel--v2 .info-block--actions {
+  flex-direction: row;
+  gap: 4px;
+  padding: 5px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.werewolf-info-panel--v2 .info-block--actions > button,
+.werewolf-info-panel--v2 .info-block--actions > .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 5px 3px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: border-color 0.15s, background 0.15s;
+  box-sizing: border-box;
+}
+.werewolf-info-panel--v2 .info-block--actions > button:hover:not(:disabled),
+.werewolf-info-panel--v2 .info-block--actions > .btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: rgba(193, 154, 86, 0.08);
+}
+.werewolf-info-panel--v2 .info-block--actions > button:disabled,
+.werewolf-info-panel--v2 .info-block--actions > .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* §129:身份块纵向居中,avatar 空间留给 Day/座位格 + 角色 pill */
+.werewolf-info-panel--v2 .info-block--identity {
+  gap: 5px;
+}
+
+/* 2026-07-24 优化:UI 暂停/恢复按钮块(房主可见)。 */
+.werewolf-info-panel--v2 .info-block--pause {
+  padding: 8px;
+  border-top: 1px dashed rgba(193, 154, 86, 0.25);
+  /* 与其它 info-block 同样的层(在 sidebar 内 z-index 由父 .room-info-panel
+   * 决定,不直接定位;但保留 position:relative 防止 .is-paused 动画
+   * pulse box-shadow 被兄弟块截断)。 */
+  position: relative;
+  z-index: 1;
+}
+.werewolf-pause-btn {
+  display: block;
+  width: 100%;
+  padding: 10px 8px;
+  font-size: 14px;
+  font-weight: 600;
+  background: rgba(193, 154, 86, 0.18);
+  color: var(--fg, #f4ecd8);
+  border: 1px solid rgba(193, 154, 86, 0.5);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  min-height: 44px; /* §23 触控 token */
+}
+.werewolf-pause-btn:hover {
+  background: rgba(193, 154, 86, 0.35);
+  transform: translateY(-1px);
+}
+.werewolf-pause-btn.is-paused {
+  background: rgba(220, 80, 80, 0.25);
+  border-color: rgba(220, 80, 80, 0.7);
+  color: #ffe9e9;
+  animation: werewolf-pause-pulse 1.5s ease-in-out infinite;
+}
+.werewolf-pause-btn.is-paused:hover {
+  background: rgba(220, 80, 80, 0.4);
+}
+@keyframes werewolf-pause-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 80, 80, 0.5); }
+  50%      { box-shadow: 0 0 0 6px rgba(220, 80, 80, 0); }
+}
+.werewolf-pause-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(244, 236, 216, 0.7);
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+/* §128 — 表格布局下的座位卡:由绝对定位改为 flex 静态布局。
+ * §优化-20260730-01 — 横版布局:flex-direction: row,avatar 64×88 在左,
+ * info 5 行结构在右。新增 .werewolf-seat__info / .werewolf-seat__action /
+ * .werewolf-seat__metrics / .werewolf-seat__model 等节点。
+ * 关键改进:13 人局 4 列网格下每张卡约 320px 宽,横向利用率从 35% 提升到 75%。
+ * 复用第 130 节 4 列基准 + 第 128 节 5 行结构,保留「我方在底部」语义。 */
+.werewolf-seat {
+  position: relative;
+  transform: none;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+  background: rgba(20, 16, 8, 0.6);
+  border: 1px solid rgba(193, 154, 86, 0.4);
+  border-radius: 8px;
+  padding: 8px 10px;
+  /* §优化-20260802-02 — min-height 130→170:5 行指标在 130px 下被裁+重叠。
+     2026-08-05 §Agent聊天显示优化 — 170→200:新增发言气泡(13px×2 行钳位
+     + meta 行),latency 行与 token 行已合并为一行;无发言时气泡不渲染。 */
+  min-height: 200px;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.werewolf-seat:hover {
+  border-color: rgba(193, 154, 86, 0.8);
+}
+.werewolf-seat.is-self {
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 14px 3px rgba(160, 53, 47, 0.55);
+  background: rgba(48, 24, 20, 0.78);
+}
+/* §128 — 最后一行(自己所在的行)整体加金色底色 + 顶部发光,强化「我方在底部」语义 */
+.werewolf-seat.is-last-row:not(.is-self) {
+  border-color: rgba(193, 154, 86, 0.55);
+  background: rgba(28, 22, 14, 0.7);
+}
+.werewolf-seat.is-dead {
+  opacity: 0.55;
+  background: rgba(10, 8, 5, 0.6);
+}
+.werewolf-seat.is-llm-calling {
+  border-color: #4ade80;
+  box-shadow: 0 0 10px 2px rgba(74, 222, 128, 0.45);
+  animation: wwSeatCallingPulse 1.5s ease-in-out infinite;
+}
+@keyframes wwSeatCallingPulse {
+  0%, 100% { box-shadow: 0 0 10px 2px rgba(74, 222, 128, 0.45); }
+  50%      { box-shadow: 0 0 18px 5px rgba(74, 222, 128, 0.7); }
+}
+/* 2026-07-23 §道具特效:道具命中座位脉冲高亮(主色由覆盖层 --ww-prop-c 同步;
+   此处用固定醒目金色描边 + 缩放脉冲,对齐"谁被打了"的空间感知)。 */
+.werewolf-seat.is-prop-target {
+  border-color: #fff;
+  animation: wwPropTargetPulse 0.9s ease-in-out infinite;
+  z-index: var(--ww-z-seat-badge, 12);
+}
+@keyframes wwPropTargetPulse {
+  0%, 100% {
+    box-shadow: 0 0 16px 4px rgba(255, 215, 107, 0.7), 0 0 0 2px #fff inset;
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 30px 10px rgba(255, 215, 107, 0.95), 0 0 0 3px #fff inset;
+    transform: scale(1.04);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .werewolf-seat.is-prop-target { animation: none; }
+}
+.werewolf-seat.is-quarantined {
+  border-color: rgba(220, 38, 38, 0.5);
+  background: rgba(60, 10, 10, 0.4);
+}
+.werewolf-seat.is-sheriff {
+  border-color: #ffd76b;
+}
+/* §R178-OBS1: 空座位(无人入座) — 灰色半透明,不显示死亡遮罩 */
+.werewolf-seat.is-empty {
+  opacity: 0.45;
+  background: rgba(15, 12, 8, 0.4);
+  border-style: dashed;
+}
+.werewolf-seat.is-empty .werewolf-seat__avatar {
+  filter: grayscale(0.9) opacity(0.35);
+  border-color: #444;
+}
+.werewolf-seat__silhouette--empty {
+  color: #888 !important;
+  font-size: 22px !important;
+  font-weight: normal !important;
+}
+
+/* §优化-20260730-01 — 横版布局下 header 由垂直居中改为左对齐,贴合左侧 avatar。 */
+.werewolf-seat__header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  justify-content: flex-start;
+  font-size: 11px;
+}
+.werewolf-seat__num {
+  font-size: 12px;
+  color: var(--fg);
+  background: rgba(0,0,0,0.6);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+.werewolf-seat__self-badge {
+  font-size: 10px;
+  /* 2026-08-08 §20260808-02 — 「我」徽章对比度修复。原 color:#ff8888 + 25% 透明
+     红底叠加深色座位卡,对比度约 3.5:1 低于 WCAG AA。改为更亮浅红 + 提高
+     背景透明度 + 加粗,「我」标识在 13 人座位阵列里一眼可识别。 */
+  color: #ffb3b3;
+  background: rgba(255, 80, 80, 0.45);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+.werewolf-seat__sheriff-badge {
+  font-size: 12px;
+  /* 2026-08-08 §20260808-02 — 警长徽章对比度提升。原浅金字 + 22% 金底实测约 4.0:1,
+     边缘可读性不足。提高透明度 + 加粗,与 self-badge/idiot-badge 三档色相
+     区分清晰(红=我/金=警长/紫=白痴)。 */
+  color: #ffe8a8;
+  background: rgba(255, 200, 100, 0.45);
+  padding: 0 5px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+.werewolf-seat__idiot-badge {
+  font-size: 11px;
+  /* 2026-08-08 §20260808-02 — 白痴翻牌徽章。此前只有 font-size,无 color/background,
+     直接显示为父元素颜色 + 无背景,与普通文本无视觉区分。补紫底白字 + 加粗,
+     与 self-badge/sheriff-badge 形成三档色相区分(红=我/金=警长/紫=白痴)。 */
+  color: #ffffff;
+  background: rgba(120, 80, 200, 0.55);
+  padding: 0 5px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+.werewolf-seat__avatar {
+  position: relative;
+  width: 64px;
+  height: 88px;
+  background: var(--card);
+  border: 2px solid var(--accent);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* §表情特效(20260804-01 修复):overflow:visible 让 pulse/shake/glow/sweat/tears/
+     spin_question/drowsy 等 CSS keyframes 特效 + caption 气泡可以溢出 64×88,
+     不再被裁切。此前 overflow:hidden 把整棵特效树完全裁掉,用户看不到表情特效。 */
+  overflow: visible;
+  /* margin-top 给 caption(top:-8px) 留出空间,避免被父 .werewolf-seat 的
+     overflow:hidden 裁掉。座位 min-height 170px 远高于 avatar 88px+6px,
+     空间充足。 */
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+/* §优化-20260730-01 — 横版布局 info 容器:flex 1 占满剩余宽度。
+   5 行结构:① 头部徽章 / ② 角色 / ③ 情绪 / ④ 动作 / ⑤ 指标 / ⑥ 模型+时间。
+   96% 内容文字 nowrap + ellipsis + title,绝不溢出。 */
+.werewolf-seat__info {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+  align-items: flex-start;
+}
+.werewolf-seat__avatar img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.werewolf-seat__silhouette {
+  color: var(--accent);
+  font-size: 28px;
+  font-weight: bold;
+}
+.werewolf-seat.is-dead .werewolf-seat__avatar {
+  filter: grayscale(0.8) brightness(0.55);
+  border-color: #555;
+}
+.werewolf-seat__dead-mask {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.5);
+  color: #ff5050;
+  font-size: 22px;
+  font-weight: bold;
+}
+
+/* §126 verdict 徽章 — 在 avatar 角落 */
+.werewolf-seat__verdict-badge {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.werewolf-seat__verdict-badge--execution {
+  /* 2026-08-08 §20260808-02 — 处决徽章对比度提升。原亮橙字 + 30% 透明橙底
+     实测约 2.7:1,13 人局同时多人处决时极易混淆。改为白字 + 更不透明橙底
+     + 加粗,与「death(自然死亡)」徽章形成清晰的色相对比(橙=处决,灰=死亡)。 */
+  color: #ffffff;
+  background: rgba(255, 150, 50, 0.75);
+  font-weight: 700;
+}
+.werewolf-seat__verdict-badge--death {
+  color: #ccc;
+  background: rgba(120,120,120,0.3);
+}
+
+/* §128 — 角色名 + agent 名(3 列布局下字号放大) */
+.werewolf-seat__role {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.werewolf-seat.is-dead .werewolf-seat__role {
+  color: rgba(216, 200, 165, 0.5);
+}
+.werewolf-seat__agent-name {
+  font-size: 10px;
+  color: rgba(216, 200, 165, 0.7);
+  background: rgba(0,0,0,0.4);
+  padding: 1px 5px;
+  border-radius: 2px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* §128 — 情绪徽章:横排在座位卡上,字号放大。
+ * §优化-20260730-01-P0-1 — 修复浅底浅字:颜色由父 SeatCell 通过 inline style
+ * 注入(深底浅字 — WCAG ≥ 4.5:1),本规则只保留 padding/边框/字号基础。 */
+.werewolf-seat__emotion {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid rgba(0,0,0,0.4);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.werewolf-seat__emotion-emoji { font-size: 14px; }
+.werewolf-seat__emotion-label { font-size: 11px; }
+
+/* §128 — Agent 实时状态区(LLM 调用 / 决策摘要 / 延迟) */
+.werewolf-seat__agent-state {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  margin-top: auto;
+  padding-top: 5px;
+  border-top: 1px dashed rgba(193, 154, 86, 0.18);
+}
+.werewolf-seat__quarantined {
+  font-size: 10px;
+  background: rgba(220, 38, 38, 0.18);
+  color: #f87171;
+  padding: 2px 4px;
+  border-radius: 3px;
+  text-align: center;
+}
+.werewolf-seat__calling {
+  font-size: 10px;
+  background: rgba(74, 222, 128, 0.22);
+  color: #4ade80;
+  padding: 2px 4px;
+  border-radius: 3px;
+  text-align: center;
+  font-weight: 600;
+}
+.is-pulsing { animation: wwPulsing 1.2s ease-in-out infinite; }
+@keyframes wwPulsing {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+

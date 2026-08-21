@@ -42,11 +42,12 @@ LIMIT=1800
 #
 # §20260814-01 U4 已经拆掉了原本最大的一个:
 #   ServerGo/agent/wwplayer/run.go  2154 → 1684(搬到 run_config.go)
+# §20260821-03 拆掉了 agent_runner.go(2058 → 1711,私聊通道 4 方法搬到
+#   agent_runner_whisper.go),已从本表删除。
 # ---------------------------------------------------------------------------
 BASELINE=(
   "ServerGo/agent/wwplayer/agent.go:2111"
   "ServerGo/game/werewolf/room_agent.go:2105"
-  "ServerGo/game/werewolf/agent_runner.go:1982"
   "ServerGo/game/werewolf/room.go:1896"
 )
 

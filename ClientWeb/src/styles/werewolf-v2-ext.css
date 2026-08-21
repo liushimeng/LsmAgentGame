@@ -1,0 +1,542 @@
+/* werewolf-v2-ext.css — 2026-08-21 §20260821-03 从 werewolf-v2.css(1813 行 > §4 上限 1800)
+ * 整段搬移拆出:原文件第 1276-1813 行(LLM 调用相位状态机指示器起)。
+ * 级联顺序见 werewolf-v2-base.css 头注。 */
+
+/* ============================================================
+ * 2026-07-10 §重构 — LLM 调用相位状态机多态指示器样式
+ * ============================================================
+ * 替代旧的 .werewolf-seat__calling 单色绿脉冲,引入 5 态指示器:
+ *   ww-bot-phase--calling    (蓝紫渐变 + 1.5s 错峰跳点)
+ *   ww-bot-phase--streaming  (蓝绿渐变 + 1.5s 错峰跳点)
+ *   ww-bot-phase--retrying   (黄渐变 + 0.8s 错峰跳点 + 倒计时)
+ *   ww-bot-phase--cooling    (红渐变 + 0.8s 错峰跳点 + 倒计时)
+ *   ww-bot-phase--quarantined(琥珀提示色 + ⏳ 静态;2026-07-24 由告警红软化)
+ * 模仿 ChatGPT o1 / Claude.ai / Gemini 阶梯指示器配色。
+ * ============================================================ */
+
+.ww-bot-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1.4;
+  white-space: nowrap;
+  max-width: 110px; /* §20260816-02 U3 — 收紧到 110px 防止 streaming/thinking 长文本撑爆座位卡 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ww-bot-phase__icon { font-size: 11px; flex-shrink: 0; }
+.ww-bot-phase__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ww-bot-phase__countdown {
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 2px;
+  flex-shrink: 0;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* 5 态配色 */
+.ww-bot-phase--calling {
+  background: linear-gradient(135deg, rgba(110, 123, 242, 0.30), rgba(139, 92, 246, 0.30));
+  color: #c7d2fe;
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  animation: wwBotPulseCalling 1.5s ease-in-out infinite;
+}
+.ww-bot-phase--streaming {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.30), rgba(34, 197, 94, 0.30));
+  color: #bae6fd;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  animation: wwBotPulseCalling 1.5s ease-in-out infinite;
+}
+.ww-bot-phase--retrying {
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.30), rgba(245, 158, 11, 0.30));
+  color: #fde68a;
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  animation: wwBotPulseRetrying 0.8s ease-in-out infinite;
+}
+/* 2026-07-24 — quarantine semantics softened (system auto-play in effect);
+ * visual changed from alert-red to amber info tone. */
+.ww-bot-phase--quarantined {
+  background: rgba(245, 158, 11, 0.22);
+  color: #fde68a;
+  border: 1px solid rgba(245, 158, 11, 0.50);
+  animation: none;
+}
+.ww-bot-phase--5xx { /* 5xx / timeout / reconnecting 子类型 */ }
+.ww-bot-phase--429 {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.30), rgba(220, 38, 38, 0.30));
+  color: #fecaca;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  animation: wwBotPulseRetrying 0.8s ease-in-out infinite;
+}
+
+@keyframes wwBotPulseCalling {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.45); }
+  50%      { box-shadow: 0 0 6px 2px rgba(139, 92, 246, 0.20); }
+}
+@keyframes wwBotPulseRetrying {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.55); }
+  50%      { box-shadow: 0 0 6px 2px rgba(250, 204, 21, 0.20); }
+}
+
+/* === ThinkingDots 错峰跳点 === */
+.ww-thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 2px;
+}
+.ww-thinking-dots__dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.4;
+  animation: wwThinkingDot 1.5s ease-in-out infinite;
+}
+.ww-thinking-dots__dot--1 { animation-delay: 0ms; }
+.ww-thinking-dots__dot--2 { animation-delay: 150ms; }
+.ww-thinking-dots__dot--3 { animation-delay: 300ms; }
+.ww-thinking-dots--calling .ww-thinking-dots__dot { background: #c7d2fe; }
+.ww-thinking-dots--streaming .ww-thinking-dots__dot { background: #bae6fd; }
+@keyframes wwThinkingDot {
+  0%, 60%, 100% { opacity: 0.4; transform: scale(0.8); }
+  30%           { opacity: 1.0; transform: scale(1.0); }
+}
+
+/* === WerewolfThinkingHeader 全局聚合 === */
+.ww-thinking-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  margin: 8px 16px;
+  background: linear-gradient(135deg, rgba(20, 18, 30, 0.85), rgba(30, 27, 45, 0.85));
+  border: 1px solid rgba(139, 92, 246, 0.30);
+  border-radius: 8px;
+  color: #e9e7f5;
+  font-size: 13px;
+}
+.ww-thinking-header__dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.ww-thinking-header__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  transition: background 0.3s;
+}
+.ww-thinking-header__dot.is-filled {
+  background: linear-gradient(135deg, #6e7bf2, #8b5cf6);
+  border-color: rgba(139, 92, 246, 0.60);
+  box-shadow: 0 0 4px rgba(139, 92, 246, 0.60);
+  animation: wwHeaderDotPulse 1.5s ease-in-out infinite;
+}
+@keyframes wwHeaderDotPulse {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1.0; }
+}
+.ww-thinking-header__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ww-thinking-header__count {
+  font-weight: 700;
+  color: #c7d2fe;
+}
+.ww-thinking-header__breakdown {
+  display: inline-flex;
+  gap: 4px;
+}
+.ww-thinking-header__chip {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.ww-thinking-header__chip--calling   { background: rgba(110, 123, 242, 0.25); color: #c7d2fe; }
+.ww-thinking-header__chip--streaming { background: rgba(56, 189, 248, 0.25); color: #bae6fd; }
+.ww-thinking-header__chip--retrying  { background: rgba(250, 204, 21, 0.25); color: #fde68a; }
+.ww-thinking-header__perf {
+  font-size: 11px;
+  color: rgba(199, 210, 254, 0.7);
+  margin-left: auto;
+}
+
+/* === a11y: prefers-reduced-motion 降级 === */
+@media (prefers-reduced-motion: reduce) {
+  .ww-bot-phase--calling,
+  .ww-bot-phase--streaming,
+  .ww-bot-phase--retrying,
+  .ww-bot-phase--429 {
+    animation: none;
+  }
+  .ww-thinking-dots__dot { animation: none; opacity: 1.0; }
+  .ww-thinking-header__dot.is-filled { animation: none; }
+}
+.werewolf-seat__decision {
+  font-size: 10px;
+  color: rgba(216, 200, 165, 0.9);
+  background: rgba(35, 32, 27, 0.7);
+  padding: 2px 4px;
+  border-radius: 3px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.werewolf-seat__latency {
+  font-size: 10px;
+  color: rgba(135, 206, 235, 0.85);
+  text-align: center;
+  font-family: ui-monospace, monospace;
+}
+
+/* §优化-20260730-01-P1-3 — 横版 5 行结构新节点:
+ *   .werewolf-seat__action    → 当前动作(决策摘要 18 字,等宽)
+ *   .werewolf-seat__metrics   → 关键指标容器(last / avg / 总调用)
+ *   .werewolf-seat__metric    → 单个指标 chip
+ *   .werewolf-seat__model-row → 模型名 + AgentCallTimeBadge 横排
+ *   .werewolf-seat__model     → 模型名截断
+ */
+.werewolf-seat__action {
+  font-size: 10px;
+  color: rgba(216, 200, 165, 0.95);
+  background: rgba(35, 32, 27, 0.7);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 500;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.werewolf-seat__metrics {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  font-size: 10px;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  color: #87ceeb;
+  max-width: 100%;
+  overflow: hidden;
+}
+.werewolf-seat__metric {
+  background: rgba(20, 40, 60, 0.55);
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid rgba(135, 206, 235, 0.25);
+  white-space: nowrap;
+  font-weight: 500;
+  /* 区分最近延迟 vs 平均延迟的颜色 */
+}
+.werewolf-seat__metric:nth-child(1) { color: #87ceeb; }    /* last latency */
+.werewolf-seat__metric:nth-child(2) { color: #b8b8d4; }    /* avg latency */
+.werewolf-seat__metric:nth-child(3) { color: #d4af6b; }    /* total calls */
+.werewolf-seat__metric:nth-child(4) { color: #7dd8a0; }    /* api call count */
+/* 2026-07-30 §统计增强 — 座位卡 Token 行（含缓存命中徽章）。 */
+.werewolf-seat__tokenrow {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  font-size: 10px;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  color: #c896ff;
+  max-width: 100%;
+  overflow: hidden;
+}
+.werewolf-seat__token {
+  background: rgba(60, 40, 80, 0.55);
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid rgba(200, 150, 255, 0.25);
+  white-space: nowrap;
+  font-weight: 500;
+}
+.werewolf-seat__cachebadge {
+  color: #fcd34d;
+  font-size: 9px;
+  padding: 1px 3px;
+  background: rgba(245, 200, 100, 0.18);
+  border-radius: 3px;
+  border: 1px solid rgba(245, 200, 100, 0.4);
+}
+.werewolf-seat__model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  font-size: 10px;
+  max-width: 100%;
+  overflow: hidden;
+}
+.werewolf-seat__model {
+  color: rgba(216, 200, 165, 0.85);
+  background: rgba(0, 0, 0, 0.4);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 500;
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+}
+
+/* §128 — 内心独白折叠面板(座位卡底部,字号放大) */
+.werewolf-seat__heart-thought {
+  width: 100%;
+  margin-top: 3px;
+}
+.werewolf-seat__heart-thought summary {
+  cursor: pointer;
+  font-size: 10px;
+  color: rgba(216, 200, 165, 0.65);
+  text-align: center;
+  list-style: none;
+  padding: 1px 0;
+  user-select: none;
+}
+.werewolf-seat__heart-thought summary::marker,
+.werewolf-seat__heart-thought summary::-webkit-details-marker {
+  display: none;
+}
+.werewolf-seat__heart-thought summary::before {
+  content: '▸ ';
+  font-size: 9px;
+}
+.werewolf-seat__heart-thought[open] summary::before {
+  content: '▾ ';
+}
+.werewolf-seat__heart-thought blockquote {
+  margin: 3px 0 0 0;
+  padding: 4px 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  background: rgba(255, 247, 230, 0.06);
+  border-left: 2px solid #ffd76b;
+  border-radius: 3px;
+  color: rgba(216, 200, 165, 0.9);
+  max-height: 100px;
+  overflow-y: auto;
+  word-break: break-word;
+}
+.werewolf-seat__heart-thought-time {
+  display: block;
+  font-size: 9px;
+  color: rgba(216, 200, 165, 0.45);
+  text-align: right;
+  margin-top: 2px;
+}
+
+/* §128 — 中等断点(≤1280px):座位卡内文字缩小、avatar 略缩 */
+@media (max-width: 1280px) {
+  .werewolf-seat__avatar { width: 50px; height: 70px; }
+  .werewolf-seat { min-height: 195px; padding: 8px 6px; }
+  .werewolf-seat__role { font-size: 11px; }
+  .werewolf-seat__agent-name { font-size: 9px; }
+  /* §优化-20260730-01 — 列数与 gap 由 CSS 变量驱动,移除此处的 hard-coded gap 覆盖。*/
+}
+@media (max-width: 1024px) {
+  /* §优化-20260730-01 — 移除硬切 2 列,改由 --ww-grid-cols 变量 + JS 视口监听统一。*/
+  .ww-game-status-header__title { font-size: 12px; }
+  .ww-game-status-header__sub { font-size: 10px; }
+  .werewolf-seat { min-height: 170px; }
+  .werewolf-seat__avatar { width: 44px; height: 62px; }
+}
+
+/* ─── §13 Agent 最后调用时间实时脉冲圆点 ─────────────────────── */
+.bot-call-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.bot-call-dot--calling,
+.bot-call-dot--streaming {
+  background: #22c55e;
+  animation: botCallPulse 1.4s ease-in-out infinite;
+}
+.bot-call-dot--retrying {
+  background: #f59e0b;
+  animation: botCallPulse 0.9s ease-in-out infinite;
+}
+.bot-call-dot--quarantined { background: #ef4444; }
+.bot-call-dot--idle { background: #6b7280; }
+@keyframes botCallPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(1.4); }
+}
+
+.werewolf-seat__call-time {
+  font-size: 10px;
+  color: rgba(135, 206, 235, 0.85);
+  text-align: center;
+  font-family: ui-monospace, monospace;
+  display: inline-flex;
+  align-items: center;
+}
+.werewolf-seat__call-time--never { color: rgba(150, 150, 150, 0.7); }
+
+/* ─── §13 GameInfoPanel 阵营块可点开 ───────────────────────────── */
+.info-block--clickable {
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+}
+.info-block--clickable:hover .info-counts-grid,
+.info-block--clickable:focus-visible .info-counts-grid {
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.5);
+}
+.info-block--clickable:focus-visible { outline: none; }
+
+/* ─── §13 阵营侧滑抽屉 ────────────────────────────────────────── */
+/* 2026-07-24 修正:z-index 由 90 提到 300,与 ww-history-drawer 同层,
+ * 确保 faction-drawer 始终盖住 settlement-modal(200)。旧版 90 低于
+ * settlement-modal,结算弹层打开时阵营抽屉被遮挡。 */
+.faction-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ww-z-drawer, 300);
+  display: flex;
+  justify-content: flex-end;
+}
+.faction-drawer__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.18s ease-out;
+}
+.faction-drawer__panel {
+  position: relative;
+  width: min(380px, 30vw);
+  height: 100%;
+  background: linear-gradient(180deg, #1a1726, #14121d);
+  border-left: 1px solid rgba(139, 92, 246, 0.35);
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 0.22s ease-out;
+  color: #e9e7f5;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.faction-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.25);
+}
+.faction-drawer__title { margin: 0; font-size: 16px; color: #c7d2fe; }
+.faction-drawer__close {
+  background: transparent;
+  border: none;
+  color: #c7d2fe;
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+}
+.faction-drawer__tabs { display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid rgba(139, 92, 246, 0.18); }
+.faction-drawer__tab {
+  flex: 1;
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(233, 231, 245, 0.7);
+  padding: 6px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.faction-drawer__tab.is-active { background: rgba(139, 92, 246, 0.22); color: #fff; border-color: rgba(139, 92, 246, 0.5); }
+.faction-drawer__body { flex: 1; overflow-y: auto; padding: 12px 16px; }
+.faction-drawer__empty { color: rgba(233, 231, 245, 0.5); font-size: 12px; padding: 16px 0; text-align: center; }
+.faction-drawer__task-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.faction-drawer__task {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.faction-drawer__task.is-done { opacity: 0.55; }
+.faction-drawer__task.is-pending { border-left: 3px solid rgba(139, 92, 246, 0.7); }
+.faction-drawer__task-icon { flex-shrink: 0; }
+.faction-drawer__task--empty { justify-content: center; color: rgba(233, 231, 245, 0.5); }
+/* Agent 信息卡 */
+.faction-drawer__agent-list, .faction-drawer__player-list { display: flex; flex-direction: column; gap: 8px; }
+.faction-drawer__agent, .faction-drawer__player {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.faction-drawer__agent-head { display: flex; align-items: center; gap: 6px; width: 100%; }
+.faction-drawer__agent-seat { font-weight: 700; color: #c7d2fe; }
+.faction-drawer__agent-model { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.faction-drawer__agent-phase { font-size: 10px; padding: 1px 6px; border-radius: 8px; }
+.faction-drawer__agent-phase--calling, .faction-drawer__agent-phase--streaming { background: rgba(34,197,94,0.22); color: #bbf7d0; }
+.faction-drawer__agent-phase--retrying { background: rgba(245,158,11,0.22); color: #fde68a; }
+.faction-drawer__agent-phase--quarantined { background: rgba(239,68,68,0.45); color: #ffffff; font-weight: 700; }
+.faction-drawer__agent-phase--idle { background: rgba(107,114,128,0.22); color: #d1d5db; }
+.faction-drawer__agent-meta { display: flex; gap: 10px; width: 100%; color: rgba(233, 231, 245, 0.7); }
+.faction-drawer__agent-calltime { width: 100%; }
+.faction-drawer__agent-emotion { width: 100%; color: rgba(233, 231, 245, 0.8); }
+.faction-drawer__agent-heart { width: 100%; margin: 4px 0 0; padding: 4px 8px; font-size: 11px; background: rgba(255, 247, 230, 0.06); border-left: 2px solid #ffd76b; border-radius: 3px; color: rgba(216, 200, 165, 0.9); }
+.faction-drawer__player-seat { font-weight: 700; color: #c7d2fe; }
+.faction-drawer__player-role.is-hidden { color: rgba(233, 231, 245, 0.7); }
+.faction-drawer__player-alive.is-alive { color: #22c55e; }
+.faction-drawer__player-alive.is-dead { color: #ef4444; }
+.faction-drawer__player-type { font-size: 10px; color: rgba(233, 231, 245, 0.6); }
+.faction-drawer__player-agent { font-size: 10px; color: rgba(233, 231, 245, 0.5); width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ─── §13 Bot 流式预览气泡光标闪烁 ───────────────────────────── */
+.game-chat-msg--stream { position: relative; }
+.game-chat-msg__cursor {
+  display: inline-block;
+  margin-left: 1px;
+  color: #c7d2fe;
+  animation: chatCursorBlink 0.6s steps(1) infinite;
+}
+@keyframes chatCursorBlink { 50% { opacity: 0; } }
+
+/* ─── a11y: prefers-reduced-motion 降级 ──────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .bot-call-dot--calling,
+  .bot-call-dot--streaming,
+  .bot-call-dot--retrying { animation: none; }
+  .faction-drawer__overlay, .faction-drawer__panel { animation: none; }
+  .game-chat-msg__cursor { animation: none; }
+}
