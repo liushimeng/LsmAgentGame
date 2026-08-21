@@ -1,6 +1,9 @@
 import { TexasCardView, TexasCardBack } from './CardView';
 import type { TexasPlayerInfo } from '@/types/texasholdem';
-import type { StyleKey } from '@/assets/images/texasholdem';
+import {
+  dealerButtonImg,
+  type StyleKey,
+} from '@/assets/images/texasholdem';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 
@@ -34,6 +37,8 @@ export function PlayerSeat({
   botHeartThought,
 }: Props) {
   const t = useT();
+  // §20260821-01 — 拟物 PNG 资源
+  const dealerPng = dealerButtonImg(style);
 
   // 2026-08-20 §德州扑克观战崩溃 — 纵深防御：座位索引越界(观战者 mySeat=-1 旋转、
   // 服务端 players 数组短于 6 等)会让 player 为 undefined，此处解引用曾直接打穿
@@ -61,7 +66,17 @@ export function PlayerSeat({
         <span className="seat-name">
           {isMe ? t('texasholdem.seatYou' as TKey) : player.user_id.slice(0, 6)}
         </span>
-        {isButton && <span className="badge dealer">D</span>}
+        {/* §20260821-01 — 庄家按钮优先 PNG,否则 CSS 徽章 */}
+        {isButton && dealerPng && (
+          <img
+            src={dealerPng}
+            alt="D"
+            className="dealer-png"
+            draggable={false}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+          />
+        )}
+        {isButton && !dealerPng && <span className="badge dealer">D</span>}
         {isSB && <span className="badge sb">SB</span>}
         {isBB && <span className="badge bb">BB</span>}
         {player.all_in && <span className="badge allin-badge">ALL IN</span>}
