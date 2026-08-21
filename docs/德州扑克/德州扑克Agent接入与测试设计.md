@@ -1,5 +1,19 @@
 # 德州扑克 Agent 接入路径与测试设计（v1.0）
 
+_实现状态（2026-08-21 更新）_
+
+| 章节 | 状态 | 实现位置 |
+|------|------|---------|
+| §1.1 新建子包结构（thptypes + thpagent） | ✅ 已完成 | 19 个文件（含 8 个测试文件） |
+| §1.2 修改文件清单（10 文件） | ✅ 已完成 | class_names.go / room.go / view.go / game_service.go / main.go 等 |
+| §1.3 关键改动详解（Room/Driver/Hooks） | ✅ 已完成 | room.go + driver.go + game_service_texas_bot.go |
+| §2 前端代码改动清单 | ✅ 已完成 | RoomCreateModal / BotThoughtPanel / PlayerSeat / CSS / i18n |
+| §3 配置项（LsmAgentGame.conf） | ✅ 已完成 | 2026-08-21 补齐 texasholdem 段 |
+| §4 测试用例（59 项单元 + 12 项集成） | ✅ 已完成 | 全部测试 PASS |
+| §5 验收标准 | ✅ 已完成 | go build + go test + tsc + npm run build 全 PASS |
+
+
+
 > 本文是 [德州扑克Agent设计.md §8](./德州扑克Agent设计.md) 的展开，
 > 定义**详细代码改动清单** + **测试用例** + **验收标准**。所有改动必须沿用
 > CLAUDE.md §92a（`*_Locked` 锁内变体）+ §20260813-04（U5 wiring lint 防止

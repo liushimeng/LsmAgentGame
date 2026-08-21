@@ -1,5 +1,19 @@
 # 德州扑克 Agent 金币设计（v1.0）
 
+_实现状态（2026-08-21 更新）_
+
+| 章节 | 状态 | 实现位置 |
+|------|------|---------|
+| §2 结算规则（净筹码盈亏 + 抽水） | ✅ 已完成 | `ServerGo/agent/thpagent/econ_tier.go` + `driver.go::onHandOverLocked` |
+| §3 EconTier 经济档位联动 | ✅ 已完成 | Health 5% / Caution 7% / Danger 10% |
+| §4 Bot 经济行为约束（clamp） | ✅ 已完成 | 单手 ±5000 / 单局 ±30000 / 单房间 ±100000 |
+| §5 金币变动日志 | ✅ 已完成 | t_lsm_game_wallet_log（reason 枚举 5 种） |
+| §6 Bot 金币统计与画像 | ⏳ 部分完成 | 基础统计字段已定义，Profile 迭代 v1.1 |
+| §7 与 wallet_service 集成 | ✅ 已完成 | Credit/Debit/Rake 三路径 |
+| §8 测试用例 | ✅ 已完成 | econtier_test.go + wallet_thp_test.go + clamp_test.go |
+
+
+
 > 本文定义德州扑克 Bot 在**手牌结算**时的金币变动规则、与狼人杀的差异点、
 > 经济档位联动、EconTier 反通胀机制。代码落地前请先阅读本文档 +
 > [德州扑克金币设计.md](./德州扑克金币设计.md) + [CLAUDE.md §132 §133](../../CLAUDE.md)。

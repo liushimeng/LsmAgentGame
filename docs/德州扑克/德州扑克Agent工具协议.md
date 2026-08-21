@@ -1,5 +1,20 @@
 # 德州扑克 Agent 工具协议（Anthropic Wire）
 
+_实现状态（2026-08-21 更新）_
+
+| 章节 | 状态 | 实现位置 |
+|------|------|---------|
+| §1 工具形状（poker_action + poker_chat wire 格式） | ✅ 已完成 | `ServerGo/agent/thpagent/tools.go` |
+| §2 工具注册（BuildTools） | ✅ 已完成 | `ServerGo/agent/thpagent/tools.go::BuildTools` |
+| §3 消息流时序（单轮强制 1 次 tool_use） | ✅ 已完成 | `ServerGo/agent/thpagent/driver.go` + `dispatch.go` |
+| §4 tool_result 回包格式 | ✅ 已完成 | `ServerGo/agent/thpagent/dispatch.go::DispatchPokerAction` |
+| §5 poker_chat 公屏广播路径 | ✅ 已完成 | `ServerGo/ws/game_service_texas_bot.go` |
+| §6 限流与去重 | ✅ 已完成 | `ServerGo/agent/thpagent/dispatch.go` |
+| §8 Anthropic 协议合规检查清单 | ✅ 已完成 | 与狼人杀共用 `llm/types/types.go::MarshalJSON` |
+| §9 测试用例（4 项） | ✅ 已完成 | `ServerGo/agent/thpagent/tools_wire_test.go` 等 |
+
+
+
 > 本文定义德州扑克 Bot 在 Anthropic Messages API 上的 **tool 形状**、
 > **消息流时序**、**与狼人杀 Agent 的差异点**。代码落地前请先阅读本文档 +
 > [德州扑克Agent设计.md §4](./德州扑克Agent设计.md) + [CLAUDE.md §14.1](../../CLAUDE.md)。

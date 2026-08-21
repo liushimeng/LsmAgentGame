@@ -1,5 +1,19 @@
 # 德州扑克 Agent 数学引擎设计（v1.0）
 
+_实现状态（2026-08-21 更新）_
+
+| 章节 | 状态 | 实现位置 |
+|------|------|---------|
+| §1.1 牌力计算（蒙特卡洛 1000 次） | ✅ 已完成 | `ServerGo/agent/thpagent/decision.go::HandStrength` |
+| §1.2 底池赔率（纯算术） | ✅ 已完成 | `ServerGo/agent/thpagent/decision.go::PotOdds` |
+| §1.3 位置评估（6-max 标签） | ✅ 已完成 | `ServerGo/agent/thpagent/decision.go::Position` |
+| §1.4 虚张频率（按弃牌率反推） | ✅ 已完成 | `ServerGo/agent/thpagent/decision.go::BluffFrequency` |
+| §2 数据结构（HandRecord/ActionRecord） | ✅ 已完成 | `ServerGo/agent/thptypes/context.go` + `record.go` |
+| §3 测试基准（15 项） | ✅ 已完成 | `ServerGo/agent/thpagent/decision_test.go` |
+| §5 蒙特卡洛实现要点 | ✅ 已完成 | crypto/rand + early termination |
+
+
+
 > 本文是 [德州扑克Agent设计.md](./德州扑克Agent设计.md) §6 「决策引擎」的展开，
 > 描述**牌力 + 底池赔率 + 虚张频率** 4 个纯函数的算法选择、复杂度与测试基准。
 

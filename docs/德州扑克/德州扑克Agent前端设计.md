@@ -1,5 +1,19 @@
 # 德州扑克 Agent 前端设计（v1.0）
 
+_实现状态（2026-08-21 更新）_
+
+| 章节 | 状态 | 实现位置 |
+|------|------|---------|
+| §1 改造范围（9 项） | ✅ 已完成 | 全部 P0 + P1 组件已创建 |
+| §2 Bot 座位卡设计 | ✅ 已完成 | `PlayerSeat.tsx` 含 🤖 徽章 + ⏳ thinking + 💭 独白 |
+| §3 RoomCreateModal 设计 | ✅ 已完成 | `RoomCreateModal.tsx`（0-6 slider + 模型选择 + reshuffle） |
+| §4 BotThoughtPanel 设计 | ✅ 已完成 | `BotThoughtPanel.tsx` 接入 TexasHoldemTable |
+| §5 错误处理 | ✅ 已完成 | formError + reportGlobalError |
+| §7 i18n 三语种 | ✅ 已完成 | zh-CN / en / ja 各 30 键 |
+| §8 CSS 样式约定 | ✅ 已完成 | `styles/texasholdem.css` |
+
+
+
 > 本文定义德州扑克 Bot 接入后的**前端 UI 改造**：Bot 座位卡、BetHistory 渲染、
 > 创建房间弹窗 AI 配置块、BotThoughtPanel 内心独白显示、错误处理。代码落地前
 > 请先阅读本文档 + [德州扑克Agent设计.md §8.2](./德州扑克Agent设计.md) +

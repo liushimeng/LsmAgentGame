@@ -1,5 +1,20 @@
 # 德州扑克 Agent 设计（v1.0，2026-08-19）
 
+_实现状态（2026-08-21 更新）_
+
+| 章节 | 状态 | 实现位置 |
+|------|------|---------|
+| §3 AgentClassName 注册 | ✅ 已完成 | `ServerGo/agent/class_names.go` — 3 个常量 + AllAgentClassNames |
+| §4 工具集（poker_action + poker_chat） | ✅ 已完成 | `ServerGo/agent/thpagent/tools.go` |
+| §5 Prompt 结构（5 段 System + 13 块 User） | ✅ 已完成 | `ServerGo/agent/thpagent/prompt.go` |
+| §6 决策引擎（4 个纯函数） | ✅ 已完成 | `ServerGo/agent/thpagent/decision.go` + `hand_eval.go` |
+| §8.1 后端接入路径（全部 9 步） | ✅ 已完成 | thptypes/ + thpagent/ + room.go + view.go + game_service_texas_bot.go |
+| §8.2 前端接入（6 项） | ✅ 已完成 | components/texasholdem/ 全部组件 |
+| §9 验收硬约束 | ✅ 已完成 | go build + go test + tsc + npm run build 全 PASS |
+| §10 后续路线（v1.1+） | ⏳ 预留 | 法官 Bot / ProfileIter / 记忆持久化 / 复盘 PDF |
+
+
+
 > 本文档定义德州扑克（Texas Hold'em）AI 玩家 Agent 的**架构设计**、**工具调用协议**、
 > **Prompt 结构**、**与狼人杀 Agent 的差异点**与**接入路径**。代码落地前请先阅读本文档 +
 > [德州扑克规则与协议.md](./德州扑克规则与协议.md) + [德州扑克金币设计.md](./德州扑克金币设计.md)。
