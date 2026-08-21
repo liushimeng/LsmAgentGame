@@ -48,7 +48,6 @@ credentials.json
 
 # ============ AI Agent 工作目录 ============
 # 仅本机使用,不提交
-tmpPlan/
 .agent_work/
 
 # ============ OpenClaw Agent workspace 引导文件 ============
