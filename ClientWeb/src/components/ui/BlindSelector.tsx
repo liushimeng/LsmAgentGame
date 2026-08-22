@@ -4,7 +4,7 @@ import { formatBalance } from '@/shared/utils/balance';
 import type { TKey } from '@/i18n';
 
 /** Blind tier definition for Texas Hold'em.
- *  Each card shows BB/SB/Ante along with the computed min / default / max buy-in. */
+ *  Each option shows BB/SB/Ante along with the computed min / default / max buy-in. */
 export interface BlindTier {
   /** Big-blind value. Small-blind = BB / 2, ante = SB. */
   bb: number;
@@ -39,72 +39,113 @@ interface Props {
 
 /**
  * BlindSelector — 德州扑克盲注级别选择器。
- * 5 档 (10 / 50 / 200 / 1000 / 5000 BB)。显示 SB / Ante / min / max buy-in。
- * 余额 < min buy-in 时置灰 + tooltip "余额不足"。
+ *
+ * 2026-08-22 §20260822-02 — 改用 List 下拉列表（`<select>`），把 5 档盲注折叠成
+ * 单行 36px 的下拉框；选中后下方展开一条 4 列信息条（BB / SB+Ante / BuyIn range /
+ * 默认买入），既保留详细档位信息又避免了大面积留白。
+ *
+ * 5 档 (10 / 50 / 200 / 1000 / 5000 BB)。余额 < min buy-in 时该档 `<option>`
+ * 置灰 + tooltip "余额不足"。
  */
 export function BlindSelector({ value, onChange }: Props) {
   const t = useT();
   const { balance } = useWallet();
 
+  const currentTier = BLIND_TIERS.find((tier) => tier.bb === value) ?? BLIND_TIERS[0];
+  const currentRange = buyInRange(currentTier.bb);
+  const currentSb = currentTier.bb / 2;
+
   return (
     <div className="blind-selector">
       <div className="blind-selector__title">
-        {t('texasholdem.blind.title' as TKey)}
+        <span>
+          {t('texasholdem.blind.title' as TKey)}
+          {currentTier ? (
+            <span className="blind-selector__title-current">
+              {' · '}
+              {t('texasholdem.blind.bb' as TKey)} {currentTier.bb}
+            </span>
+          ) : null}
+        </span>
         {balance != null && (
           <span className="blind-selector__balance">
-            {' · '}
             {t('wallet.balance' as TKey)}: {formatBalance(balance, 'zh-CN')}
           </span>
         )}
       </div>
 
-      <div className="blind-selector__grid">
-        {BLIND_TIERS.map((tier) => {
-          const { min, defaultBI, max } = buyInRange(tier.bb);
-          const sb = tier.bb / 2;
-          const locked = tier.active === false;
-          const insufficient = balance != null && balance < min;
-          const disabled = locked || insufficient;
-          const selected = value === tier.bb;
-          const cls = [
-            'blind-card',
-            selected ? 'selected' : '',
-            disabled ? 'disabled' : '',
-            locked ? 'locked' : '',
-            insufficient && !locked ? 'insufficient' : '',
-          ].filter(Boolean).join(' ');
-
-          return (
-            <button
-              key={tier.bb}
-              className={cls}
-              disabled={disabled}
-              onClick={() => !disabled && onChange(tier.bb)}
-              title={
-                locked
-                  ? tier.lockedHintKey
-                    ? t(tier.lockedHintKey)
-                    : t('ante.comingSoon' as TKey)
-                  : insufficient
-                    ? t('ante.minBalance' as TKey, { amount: min })
-                    : undefined
-              }
-            >
-              <span className="blind-card__bb">{t('texasholdem.blind.bb' as TKey)} {tier.bb}</span>
-              <span className="blind-card__sb">
-                {t('texasholdem.blind.sb' as TKey)} {sb} · {t('texasholdem.blind.ante' as TKey)} {sb}
-              </span>
-              <span className="blind-card__buyin">
-                {t('texasholdem.blind.buyin' as TKey)}: {formatBalance(min, 'zh-CN')}–{formatBalance(max, 'zh-CN')}
-              </span>
-              <span className="blind-card__def">
-                {t('texasholdem.blind.default' as TKey)}: {formatBalance(defaultBI, 'zh-CN')}
-              </span>
-              {insufficient && !locked && <span className="blind-card__no-funds">⚠</span>}
-            </button>
-          );
-        })}
+      <div className="blind-selector__select">
+        <select
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          data-testid="blind-selector__select"
+          aria-label={t('texasholdem.blind.title' as TKey)}
+        >
+          {BLIND_TIERS.map((tier) => {
+            const { min, max } = buyInRange(tier.bb);
+            const sb = tier.bb / 2;
+            const locked = tier.active === false;
+            const insufficient = balance != null && balance < min;
+            const disabled = locked || insufficient;
+            const optionLabel =
+              `${t('texasholdem.blind.bb' as TKey)} ${tier.bb}` +
+              ` · ${t('texasholdem.blind.sb' as TKey)}/${t('texasholdem.blind.ante' as TKey)} ${sb}` +
+              ` · ${t('texasholdem.blind.buyin' as TKey)} ${formatBalance(min, 'zh-CN')}–${formatBalance(max, 'zh-CN')}` +
+              (disabled ? ' 🔒' : '');
+            return (
+              <option
+                key={tier.bb}
+                value={tier.bb}
+                disabled={disabled}
+                title={
+                  locked
+                    ? tier.lockedHintKey
+                      ? t(tier.lockedHintKey)
+                      : t('ante.comingSoon' as TKey)
+                    : insufficient
+                      ? t('ante.minBalance' as TKey, { amount: min })
+                      : undefined
+                }
+              >
+                {optionLabel}
+              </option>
+            );
+          })}
+        </select>
       </div>
+
+      {currentTier && (
+        <div className="blind-selector__info-row" data-testid="blind-selector__info">
+          <div className="blind-selector__info-cell">
+            <span className="blind-selector__info-label">
+              {t('texasholdem.blind.bb' as TKey)}
+            </span>
+            <span className="blind-selector__info-value">{currentTier.bb}</span>
+          </div>
+          <div className="blind-selector__info-cell">
+            <span className="blind-selector__info-label">
+              {t('texasholdem.blind.sb' as TKey)}/{t('texasholdem.blind.ante' as TKey)}
+            </span>
+            <span className="blind-selector__info-value">{currentSb}</span>
+          </div>
+          <div className="blind-selector__info-cell">
+            <span className="blind-selector__info-label">
+              {t('texasholdem.blind.buyin' as TKey)}
+            </span>
+            <span className="blind-selector__info-value">
+              {formatBalance(currentRange.min, 'zh-CN')}–{formatBalance(currentRange.max, 'zh-CN')}
+            </span>
+          </div>
+          <div className="blind-selector__info-cell">
+            <span className="blind-selector__info-label">
+              {t('texasholdem.blind.default' as TKey)}
+            </span>
+            <span className="blind-selector__info-value">
+              {formatBalance(currentRange.defaultBI, 'zh-CN')}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

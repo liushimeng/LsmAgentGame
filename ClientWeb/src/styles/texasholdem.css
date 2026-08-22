@@ -155,13 +155,14 @@
   z-index: 200;
 }
 
+/* §20260822-02 — 弹窗宽度从 480px 收紧到 440px,适配 List 下拉选择器的内容宽度 */
 .thp-create-modal__card {
   background: #1a1f2e;
   color: #f0f4fa;
   border-radius: 8px;
-  width: 480px;
+  width: 440px;
   max-width: 90vw;
-  max-height: 80vh;
+  max-height: 86vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
@@ -196,10 +197,11 @@
   flex: 1;
 }
 
+/* §20260822-02 — 单列堆叠,每个 field 独占一行,容纳 List 下拉选择器的宽度 */
 .thp-create-modal__row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   margin-bottom: 12px;
 }
 
@@ -991,4 +993,176 @@
   color: #ffffff;
   font-weight: 700;
   box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.3);
+}
+
+/* ===== §20260822-02 盲注 List 下拉选择器 + 买入选择器样式 ===== */
+
+/* BlindSelector — 5 档盲注折叠为 List 下拉,选中后展开 4 列信息条 */
+.blind-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.blind-selector__title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  color: rgba(240, 244, 250, 0.85);
+  font-weight: 600;
+  gap: 8px;
+}
+
+.blind-selector__title-current {
+  color: rgba(155, 89, 182, 0.95);
+  font-weight: 700;
+}
+
+.blind-selector__balance {
+  font-size: 11px;
+  color: rgba(240, 244, 250, 0.55);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
+}
+
+.blind-selector__select {
+  position: relative;
+}
+
+.blind-selector__select select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f0f4fa;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 8px 32px 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3e%3cpath fill='%23f0f4fa' d='M6 8L0 0h12z'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px;
+}
+
+.blind-selector__select select:focus {
+  outline: none;
+  border-color: rgba(155, 89, 182, 0.6);
+  box-shadow: 0 0 0 2px rgba(155, 89, 182, 0.2);
+}
+
+.blind-selector__select select option {
+  background: #1a1f2e;
+  color: #f0f4fa;
+  padding: 4px 6px;
+}
+
+.blind-selector__select select option:disabled {
+  color: rgba(240, 244, 250, 0.4);
+}
+
+.blind-selector__info-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+
+.blind-selector__info-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.blind-selector__info-label {
+  color: rgba(240, 244, 250, 0.45);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.blind-selector__info-value {
+  color: #f0f4fa;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.blind-selector__hint {
+  color: #ff9966;
+  font-size: 11px;
+}
+
+/* BuyinSlider — min/default/max 三按钮 + 滑块 + 风险提示 */
+.buyin-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.buyin-slider__title {
+  font-size: 12px;
+  color: rgba(240, 244, 250, 0.85);
+  font-weight: 600;
+}
+
+.buyin-slider__presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.buyin-slider__presets .btn {
+  font-size: 11px;
+  padding: 6px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.buyin-slider__range {
+  width: 100%;
+  margin: 4px 0;
+  accent-color: rgba(155, 89, 182, 0.85);
+}
+
+.buyin-slider__info {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  color: rgba(240, 244, 250, 0.7);
+  gap: 8px;
+}
+
+.buyin-slider__value strong {
+  color: #f0f4fa;
+  font-weight: 600;
+}
+
+.buyin-slider__ratio.risk {
+  color: #ff6b6b;
+  font-weight: 600;
+}
+
+.buyin-slider__warn {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.4;
 }
