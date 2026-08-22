@@ -627,6 +627,21 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 				}
 			}
 		}
+		// 2026-08-22 §BUG-TEXAS-ROOMCFG — 德州扑克盲注/买入透传修复:
+		// SetRoomConfig 必须在 RegisterAgentSeats 之前执行(对 texasholdem)。
+		// 原因:registerTexasHoldemAgentSeats 内部第 4 步(人类)与第 5 步(bot)
+		// 立即调用 JoinGameAtSeat → joinInternal → configForLocked,如果此时
+		// roomConfigs 还没写入,会回退到 manager 默认 BigBlind=200 / StartStack=10000。
+		// 原顺序(RegisterAgentSeats → SetRoomConfig)始终走默认值。
+		// 移到这里后,无论 RegisterAgentSeats 内部是否触发了 JoinGameAtSeat,
+		// 都已读到正确的房间级配置。
+		if gameKind == "texasholdem" && texasCfg != nil && texasCfg.BigBlind > 0 && s.texasHoldemConfigurer != nil {
+			s.texasHoldemConfigurer(room.ID, texasCfg.BigBlind, texasCfg.StartStack)
+			logger.L().Info("texasholdem room config set before RegisterAgentSeats",
+				zap.String("room_id", room.ID),
+				zap.Int("big_blind", texasCfg.BigBlind),
+				zap.Int("start_stack", texasCfg.StartStack))
+		}
 		// RegisterAgentSeats persists (botUserID, seat, modelKey) pairings in
 		// the in-memory manager *before* the human creator joins. werewolf 走
 		// ws.GameService.RegisterAgentSeats 的 werewolf 分支 → ManagerAddPlayerAt
@@ -642,12 +657,15 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 				zap.Int("code", e.Code),
 				zap.String("msg", e.Message))
 		}
-	}
-	// 2026-08-19 §德州扑克盲注透传 — 下发房间级盲注/买入到 in-memory manager。
-	// 必须在 gameJoiner.SyncSeat 之前:SyncSeat → JoinGame 会用该配置初始化
-	// GameState(BigBlind)与玩家初始筹码(StartStack),晚到即被默认值覆盖。
-	if gameKind == "texasholdem" && texasCfg != nil && texasCfg.BigBlind > 0 && s.texasHoldemConfigurer != nil {
+	} else if gameKind == "texasholdem" && texasCfg != nil && texasCfg.BigBlind > 0 && s.texasHoldemConfigurer != nil {
+		// 2026-08-22 §BUG-TEXAS-ROOMCFG — 无 agent_seats 的纯人类房间:
+		// SyncSeat → JoinGame 也会读 configForLocked,同理必须在 SyncSeat 之前
+		// 调用 SetRoomConfig。原代码此处顺序正确,保留作为纯人类分支。
 		s.texasHoldemConfigurer(room.ID, texasCfg.BigBlind, texasCfg.StartStack)
+		logger.L().Info("texasholdem room config set (no agent_seats path)",
+			zap.String("room_id", room.ID),
+			zap.Int("big_blind", texasCfg.BigBlind),
+			zap.Int("start_stack", texasCfg.StartStack))
 	}
 	if s.gameJoiner != nil && !creatorAsSpectator {
 		// Human creator sync — this is the canonical path. For werewolf rooms

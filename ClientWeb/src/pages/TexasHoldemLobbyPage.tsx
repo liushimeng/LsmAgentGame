@@ -5,9 +5,6 @@ import { reportGlobalError } from '@/services/globalError';
 import { roomService } from '@/services/auth.service';
 import { useTexasHoldemStore } from '@/store/texasholdem.store';
 import { useT } from '@/hooks/useT';
-import { BlindSelector, buyInRange } from '@/components/ui/BlindSelector';
-import { BuyinSlider } from '@/components/ui/BuyinSlider';
-import { useWallet } from '@/hooks/useWallet';
 import { useLobbyLiveUpdate } from '@/hooks/useLobbyLiveUpdate';
 import { RoomListTable } from '@/components/lobby/RoomListTable';
 import { RoomCreateModal } from '@/components/texasholdem/RoomCreateModal';
@@ -21,20 +18,6 @@ export function TexasHoldemLobbyPage() {
   const [err, setErr] = useState('');
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [bb, setBb] = useState<number>(50);
-  const [buyin, setBuyin] = useState<number>(buyInRange(bb).defaultBI);
-
-  const { balance, refresh } = useWallet();
-
-  // Keep buy-in in sync when BB changes.
-  const handleBbChange = useCallback(
-    (nextBb: number) => {
-      const { defaultBI } = buyInRange(nextBb);
-      setBb(nextBb);
-      setBuyin(defaultBI);
-    },
-    [],
-  );
 
   const fetchRooms = useCallback(() => {
     roomService
@@ -57,24 +40,27 @@ export function TexasHoldemLobbyPage() {
   // 订阅 room.state WS 帧,实时更新房间卡片;5s HTTP 轮询退化为兜底。
   useLobbyLiveUpdate({ gameKind: 'texasholdem', updateRoom: patchRoom, removeRoom });
 
-  const handleOpenCreate = async () => {
+  const handleOpenCreate = () => {
     setErr('');
-    await refresh();
     setShowCreateDialog(true);
   };
 
   // 2026-08-19 §德州扑克Agent — 使用 RoomCreateModal 提交(含 agent_seats)
+  //
+  // 2026-08-22 §BUG-TEXAS-CREATE-OVERLAY — bb/buyin 已在 RoomCreateModal 内部
+  // 持有,这里通过 req.big_blind / req.start_stack 接收;盲注档位选择器已移入
+  // 弹窗内(避免被全屏遮罩挡住)。
   const handleCreateSubmit = async (req: {
     name?: string;
     agent_seats: Array<{ seat: number; model_key: string }>;
+    big_blind: number;
+    start_stack: number;
   }): Promise<boolean> => {
     try {
-      // 2026-08-19 §德州扑克盲注透传 — big_blind/start_stack 直传服务端
-      // (替代原 ante 字段;后端 room.go 不再硬编码 200/10000)。
       const detail = await roomService.create('texasholdem', {
         name: req.name,
-        big_blind: bb,
-        start_stack: buyin,
+        big_blind: req.big_blind,
+        start_stack: req.start_stack,
         agent_seats: req.agent_seats.length > 0 ? req.agent_seats : undefined,
       });
       setShowCreateDialog(false);
@@ -127,9 +113,6 @@ export function TexasHoldemLobbyPage() {
     }
   };
 
-  const { min } = buyInRange(bb);
-  const minOk = balance == null || balance >= min;
-
   return (
     <div className="lobby texas-lobby">
       <div className="lobby-header">
@@ -149,36 +132,13 @@ export function TexasHoldemLobbyPage() {
         emptySub={t('texasholdem.createFirst' as TKey)}
       />
 
-      {/* 2026-08-19 §德州扑克Agent — RoomCreateModal 含 AI 座位配置 */}
+      {/* 2026-08-19 §德州扑克Agent — RoomCreateModal 含 AI 座位配置 + 盲注/买入选择器 */}
       <RoomCreateModal
         open={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}
         onSubmit={handleCreateSubmit}
         submitting={loading}
       />
-
-      {/* 盲注/带入选择器 — 独立于 RoomCreateModal,在弹窗下方渲染 */}
-      {showCreateDialog && (
-        <div className="texas-create-dialog" style={{ marginTop: 8 }}>
-          <section className="texas-create-section">
-            <BlindSelector value={bb} onChange={handleBbChange} />
-          </section>
-          <section className="texas-create-section">
-            <BuyinSlider bb={bb} value={buyin} onChange={setBuyin} />
-          </section>
-          {!minOk && (
-            <div className="texas-create-dialog__insufficient error">
-              {t('ante.insufficient' as TKey)} —{' '}
-              <button
-                className="link-btn"
-                onClick={() => window.dispatchEvent(new CustomEvent('wallet:claimDaily'))}
-              >
-                {t('ante.goClaim' as TKey)}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

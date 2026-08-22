@@ -255,15 +255,20 @@ const RoomCreateModal: React.FC<Props> = ({ open, onClose, onSubmit, submitting 
     // 2026-07-22 修复: 当 useEffect 的 push 循环因 free-seat bug 没填满时,
     // 这里再校验 seats.length === agentCount,确保「创建」按钮不被错误启用。
     if (seats.length !== agentCount) return false;
+    // 2026-08-22 §BUG-TEXAS-ORPHAN-MODEL — 同步德扑修复:校验 model_key 必须在
+    // /api/llm/models 当前返回的注册表里(管理员下线某个模型后,旧座位值变成
+    // 孤儿,<select> 显示空白且提交会被服务端拒)。
+    const validModelKeys = new Set(models.map((m) => m.model));
     const seen = new Set<number>();
     for (const s of seats) {
       if (seen.has(s.seat)) return false;
       if (s.seat < 0 || s.seat >= MAX_AI_SEATS) return false;
       if (!s.model_key) return false;
+      if (!validModelKeys.has(s.model_key)) return false;
       seen.add(s.seat);
     }
     return true;
-  }, [agentCount, seats, models.length]);
+  }, [agentCount, seats, models]);
 
   if (!open) return null;
 

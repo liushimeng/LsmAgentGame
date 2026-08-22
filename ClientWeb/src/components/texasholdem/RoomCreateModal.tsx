@@ -3,6 +3,13 @@
  *
  * 2026-08-19 §德州扑克Agent — 加 AI 配置块(0..6 bot 数量 slider + 模型选择)
  *
+ * 2026-08-22 §BUG-TEXAS-CREATE-OVERLAY — 把盲注档位(BlindSelector)与
+ * 买入(BuyinSlider)移入弹窗内部,避免全屏遮罩挡住页面层选择区导致
+ * CDP 真实点击无响应。弹窗 owner 持有 bb/buyin,提交时作为 big_blind/
+ * start_stack 一并回传(原 TexasHoldemLobbyPage 把选择器渲染在弹窗下方的
+ * `.texas-create-dialog` 容器,被 `.thp-create-modal` 全屏遮罩
+ * pointer-events:auto 罩住,人类无法切换档位)。
+ *
  * 设计要点（沿用狼人杀 RoomCreateModal 模式,简化版）：
  * - 容量上限 6
  * - 无法官模式（v1.0 不实现）
@@ -11,6 +18,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listModels, type ModelInfo } from '@/api/llm';
 import { useT } from '@/hooks/useT';
+import { BlindSelector, buyInRange } from '@/components/ui/BlindSelector';
+import { BuyinSlider } from '@/components/ui/BuyinSlider';
+import { useWallet } from '@/hooks/useWallet';
 import type { TKey } from '@/i18n';
 
 interface AgentSeatInput {
@@ -24,6 +34,8 @@ interface Props {
   onSubmit: (req: {
     name?: string;
     agent_seats: AgentSeatInput[];
+    big_blind: number;
+    start_stack: number;
   }) => Promise<boolean>;
   submitting?: boolean;
 }
@@ -42,6 +54,26 @@ export function RoomCreateModal({ open, onClose, onSubmit, submitting = false }:
   const [formError, setFormError] = useState<string | null>(null);
   const [localSubmitting, setLocalSubmitting] = useState(false);
   const [shuffleNonce, setShuffleNonce] = useState(0);
+
+  // 2026-08-22 §BUG-TEXAS-CREATE-OVERLAY — bb/buyin 状态上移入弹窗 owner,
+  // 选择器渲染在弹窗 body 内(全屏遮罩不再挡住)。外部页面 TexasHoldemLobbyPage
+  // 不再持有这些状态,提交时由 onSubmit 一并回传。
+  const [bb, setBb] = useState<number>(50);
+  const [buyin, setBuyin] = useState<number>(buyInRange(bb).defaultBI);
+  const { balance, refresh } = useWallet();
+
+  const handleBbChange = (nextBb: number) => {
+    const { defaultBI } = buyInRange(nextBb);
+    setBb(nextBb);
+    setBuyin(defaultBI);
+  };
+
+  // 弹窗打开时拉取钱包余额,确保买入档位的 insufficient 校验是最新值
+  useEffect(() => {
+    if (open) {
+      void refresh();
+    }
+  }, [open, refresh]);
 
   useEffect(() => {
     if (!open) {
@@ -137,15 +169,20 @@ export function RoomCreateModal({ open, onClose, onSubmit, submitting = false }:
     if (agentCount === 0) return true;
     if (models.length === 0) return false;
     if (seats.length !== agentCount) return false;
+    // 2026-08-22 §BUG-TEXAS-ORPHAN-MODEL — 校验 model_key 必须在 /api/llm/models
+    // 当前返回的注册表里(管理员下线某个模型后,旧座位值变成"孤儿",<select>
+    // 显示空白且提交会被服务端拒)。用 Set 让 O(N) 而不是 O(N²)。
+    const validModelKeys = new Set(models.map((m) => m.model));
     const seen = new Set<number>();
     for (const s of seats) {
       if (seen.has(s.seat)) return false;
       if (s.seat < 0 || s.seat >= MAX_AI_SEATS) return false;
       if (!s.model_key) return false;
+      if (!validModelKeys.has(s.model_key)) return false;
       seen.add(s.seat);
     }
     return true;
-  }, [agentCount, seats, models.length]);
+  }, [agentCount, seats, models]);
 
   if (!open) return null;
 
@@ -175,6 +212,20 @@ export function RoomCreateModal({ open, onClose, onSubmit, submitting = false }:
                 maxLength={32}
               />
             </label>
+
+            {/* 2026-08-22 §BUG-TEXAS-CREATE-OVERLAY — 盲注档位与买入选择器
+                移入弹窗内部,确保全屏遮罩不阻挡真实 CDP 点击 */}
+            <section className="thp-create-modal__field">
+              <BlindSelector value={bb} onChange={handleBbChange} />
+            </section>
+            <section className="thp-create-modal__field">
+              <BuyinSlider bb={bb} value={buyin} onChange={setBuyin} />
+              {balance != null && balance < buyInRange(bb).min && (
+                <p className="thp-create-modal__hint thp-create-modal__hint--warn">
+                  {t('ante.insufficient' as TKey)}
+                </p>
+              )}
+            </section>
 
             <div className="thp-create-modal__field">
               <div className="thp-create-modal__field-head">
@@ -289,6 +340,8 @@ export function RoomCreateModal({ open, onClose, onSubmit, submitting = false }:
                     seat: s.seat,
                     model_key: s.model_key,
                   })),
+                  big_blind: bb,
+                  start_stack: buyin,
                 });
                 if (ok === false) {
                   setFormError(t('texasholdem.createModal.submitFailed' as TKey));
