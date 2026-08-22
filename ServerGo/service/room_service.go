@@ -232,6 +232,12 @@ type RoomService struct {
 	// 由 main.go 通过 SetTexasHoldemRoomConfigurer 注入(thpMgr.SetRoomConfig),
 	// 避免 service → ws 反向依赖;nil 时静默跳过(单元测试 / 老装配)。
 	texasHoldemConfigurer func(roomID string, bigBlind, startStack int)
+	// roomActivityChecker 2026-08-22 §BUG-TEXAS-JANITOR-SPLITBRAIN — 强删前
+	// 探测 in-memory 游戏管理器(狼人杀 + 德州扑克)的权威状态。若管理器认为
+	// 该房间仍有玩家(活跃对局或未开局但已入座),janitor 必须跳过,避免
+	// REST 404 / DB 无记录 / WS 对局照常的三层分裂脑。由 main.go 注入;
+	// nil 时 janitor 保持旧行为(仅靠 DB 行判定)。
+	roomActivityChecker func(roomID string) bool
 }
 
 // NewRoomService builds a RoomService.
@@ -273,6 +279,13 @@ func (s *RoomService) SetModelAvailabilityHook(h ModelAvailabilityHook) {
 // service → ws 反向依赖)。nil-safe:未注入时 CreateRoomWithAgents 跳过下发。
 func (s *RoomService) SetTexasHoldemRoomConfigurer(fn func(roomID string, bigBlind, startStack int)) {
 	s.texasHoldemConfigurer = fn
+}
+
+// SetRoomActivityChecker 2026-08-22 §BUG-TEXAS-JANITOR-SPLITBRAIN — 注册
+// in-memory 游戏管理器的房间活跃度探测回调。由 main.go 注入,把狼人杀 + 德州扑克
+// 两个 manager 的 IsRoomActive 合并成单回调;nil 时 janitor 保持旧行为。
+func (s *RoomService) SetRoomActivityChecker(fn func(roomID string) bool) {
+	s.roomActivityChecker = fn
 }
 
 // BotUserIDForSeat returns the bot userID occupying `seat` in `roomID`. Used by

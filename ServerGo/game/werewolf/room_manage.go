@@ -76,6 +76,20 @@ func (m *WerewolfManager) RoomIDs() []string {
 	return out
 }
 
+// IsRoomActive 报告 roomID 是否在内存管理器中存在且仍有玩家入座(活
+// 跃对局或未开局但已有人类/bot 座位)。由 RoomService 的 stale-room janitor
+// 调用(2026-08-22 §BUG-TEXAS-JANITOR-SPLITBRAIN):只要管理器里还有玩家,
+// 就跳过不强删,避免 DB 记录被清但内存对局继续的分裂脑。
+func (m *WerewolfManager) IsRoomActive(roomID string) bool {
+	r := m.getRoom(roomID)
+	if r == nil {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.Occupied() > 0
+}
+
 func (m *WerewolfManager) RemovePlayer(roomID, userID string) *errcode.Error {
 	r := m.getRoom(roomID)
 	if r == nil {

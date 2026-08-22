@@ -667,6 +667,21 @@ func (m *TexasHoldemManager) RemoveGame(roomID string) {
 	delete(m.roomConfigs, roomID)
 }
 
+// IsRoomActive 报告 roomID 是否在内存管理器中存在且仍有玩家入座。
+// 由 RoomService 的 stale-room janitor 调用(2026-08-22 §BUG-TEXAS-JANITOR-SPLITBRAIN):
+// 德州扑克开手后 DB status 永不推进到 'playing',30 分钟 staleMaxAge 会把活跃对局
+// 当「陈旧 open 房」强删。内存态是权威 —— 只要管理器里还有玩家,就跳过不删,
+// 避免 REST 404 / DB 无记录 / WS 对局照常的三层分裂脑。
+func (m *TexasHoldemManager) IsRoomActive(roomID string) bool {
+	r := m.getRoom(roomID)
+	if r == nil {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.Occupied() > 0
+}
+
 // ─────────────────── Spectator API ───────────────────
 
 // ─────────────────── Bot Agent API (2026-08-19 §德州扑克Agent) ───────────────────

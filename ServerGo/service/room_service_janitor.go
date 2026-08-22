@@ -183,6 +183,19 @@ func (s *RoomService) JanitorSweepStale(ctx context.Context, maxAge time.Duratio
 			stats.Skipped++
 			continue
 		}
+		// 2026-08-22 §BUG-TEXAS-JANITOR-SPLITBRAIN — 强删前探测 in-memory 管理器
+		// 的权威状态。德州扑克开手后 DB status 永不推进到 'playing',纯靠
+		// status='open' + created_at 会把活跃对局当陈旧房强删,造成
+		// REST 404 / DB 无记录 / WS 对局照常的三层分裂脑。内存态是权威 ——
+		// 只要任一管理器认为该房间仍有玩家,直接 skip。
+		if s.roomActivityChecker != nil && s.roomActivityChecker(r.ID) {
+			logger.L().Info("stale janitor skipped: room active in-memory",
+				zap.String("room_id", r.ID),
+				zap.String("game_kind", r.GameKind),
+				zap.Int("age_min", int(time.Since(r.CreatedAt).Minutes())))
+			stats.Skipped++
+			continue
+		}
 		if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 			if err := tx.Where("room_id = ?", r.ID).
 				Delete(&models.TLsmGamePlayer{}).Error; err != nil {

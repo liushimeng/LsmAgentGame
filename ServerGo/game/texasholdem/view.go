@@ -1,7 +1,33 @@
 package texasholdem
 
+import "regexp"
+
 // view.go — 把权威 GameState 投影成「某个座位可见」的客户端视图。
 // 隐藏信息规则：玩家只见自己完整底牌，其余座位仅见张数；摊牌后亮出未弃牌者手牌。
+
+// 2026-08-22 §BUG-TEXAS 公平性 — bot 思考气泡在对局进行中会向对手泄露
+// 真实底牌(如「我的底牌是K♣J♦」)与精确牌力数值(如「蒙特卡洛牌力0.591」),
+// 违反德扑底牌不对称的核心博弈。下发前用正则脱敏:底牌段替换为「??」,
+// 牌力数值替换为「***」。摊牌/结束后底牌已公开,thought 保持原文。
+
+// botThoughtCardPattern 匹配扑克牌张的标准渲染(点数 + 花色),例如
+// K♣ J♦ A♠ 10♥ 2♣。点数:2-9 / 10 / T J Q K A;花色:♠ ♥ ♦ ♣。
+var botThoughtCardPattern = regexp.MustCompile(`(?:10|[2-9TJQKA])[♠♥♦♣]`)
+
+// botThoughtStrengthPattern 匹配牌力/equity/胜率数值,例如
+// 「牌力0.591」「equity0.274」「胜率0.286」。
+var botThoughtStrengthPattern = regexp.MustCompile(`(牌力|equity|胜率|赔率)\s*[0-9]*\.?[0-9]+`)
+
+// sanitizeBotThought 对 bot 内心独白脱敏:底牌替换为「??」,牌力数值替换为
+// 「***」。对局进行中调用(对手/观战者视角);摊牌/结束后底牌已公开,
+// 保留原文。空串原样返回。
+func sanitizeBotThought(thought string) string {
+	if thought == "" {
+		return thought
+	}
+	s := botThoughtCardPattern.ReplaceAllString(thought, "??")
+	return botThoughtStrengthPattern.ReplaceAllString(s, "$1***")
+}
 
 // CardJSON 是发送给客户端的牌。
 type CardJSON struct {
@@ -249,10 +275,20 @@ func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats 
 	// 字段始终初始化(默认零值),JSON 序列化不会出现 null。
 	// BotHeartThought / BotThinking 由 ws/game_service_texas_bot.go 写入
 	// SetBotHeartThoughtLocked / SetBotThinkingLocked,本函数直接读取后透传。
+	//
+	// 2026-08-22 §BUG-TEXAS 公平性 — 对局进行中 bot 的内心独白可能包含
+	// 真实底牌与精确牌力(「我的底牌是K♣J♦,蒙特卡洛牌力0.591」),向对手
+	// 展示即泄露最高机密信息。非 showdown/over 阶段一律脱敏:底牌→「??」,
+	// 牌力数值→「***」。摊牌/结束后底牌已公开,保留完整 thought。
+	showFullThought := gs.Street == PhaseShowdown || gs.Street == PhaseOver
 	for i := 0; i < MaxPlayers; i++ {
 		cs.BotSeats[i] = botSeats[i]
 		cs.BotModels[i] = botModels[i]
-		cs.BotHeartThought[i] = botHeartThought[i]
+		if showFullThought {
+			cs.BotHeartThought[i] = botHeartThought[i]
+		} else {
+			cs.BotHeartThought[i] = sanitizeBotThought(botHeartThought[i])
+		}
 		cs.BotThinking[i] = botThinking[i]
 	}
 

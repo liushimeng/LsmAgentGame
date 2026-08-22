@@ -542,6 +542,19 @@ func main() {
 	// runtime-disabled models from the pick pool.
 	roomSvc.SetModelAvailabilityHook(gameSvcWs)
 
+	// 2026-08-22 §BUG-TEXAS-JANITOR-SPLITBRAIN — 注册 in-memory 管理器活跃度
+	// 探测。JanitorSweepStale 强删前据此跳过仍有玩家的活跃房间(德州扑克 DB status
+	// 永不推进到 'playing',纯靠 status='open' + created_at 会误删进行中房间)。
+	roomSvc.SetRoomActivityChecker(func(roomID string) bool {
+		if gameSvcWs.WerewolfManager().IsRoomActive(roomID) {
+			return true
+		}
+		if thp := gameSvcWs.TexasHoldemManager(); thp != nil && thp.IsRoomActive(roomID) {
+			return true
+		}
+		return false
+	})
+
 	// BUG: 狼人杀 7 人局 Agent 多轮上下文 — wire the chat service's
 	// onRoomMessage hook to the werewolf manager so each room-scoped
 	// chat.message / chat.whisper is recorded into the per-room rolling
