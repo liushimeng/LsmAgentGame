@@ -479,20 +479,23 @@
 /* §20260820-02 — 修复 6 座位紧凑到中显示:给 texas-table 容器加尺寸+椭圆桌布,
    6 个 .sX-* 绝对定位坐标(我方在 s0-bottom)
    §20260821-06 — max-width 从 1100px 提升到 1200px,利用大屏下中间列的更多空间,
-   让牌桌更大、座位更舒展,整体视觉更饱满。 */
+   让牌桌更大、座位更舒展,整体视觉更饱满。
+   §20260822-01 — 显示层级优化:移除 overflow:hidden 防止座位卡底部下注筹码条被裁切;
+   减弱 inset shadow(60px→30px, 0.6→0.3)减少深色晕影遮挡边缘座位信息;
+   椭圆桌比例从 50%/35% 调整为 50%/40% 增加垂直空间。 */
 .texas-table {
   position: relative;
   width: 100%;
   max-width: 1200px;
   aspect-ratio: 16 / 9;
   margin: 0 auto;
-  border-radius: 50% / 35%;
-  overflow: hidden;
+  border-radius: 50% / 40%;
+  overflow: visible;
   background-color: #1f4d2e;
   background-size: cover;
   background-position: center;
   box-shadow:
-    inset 0 0 60px rgba(0, 0, 0, 0.6),
+    inset 0 0 30px rgba(0, 0, 0, 0.3),
     inset 0 0 0 8px #3a2a18,
     0 8px 32px rgba(0, 0, 0, 0.5);
 }
@@ -503,6 +506,8 @@
   top: var(--seat-y, 50%);
   transform: translate(-50%, -50%);
   z-index: 2;
+  /* §20260822-01 — 确保座位定位容器不会裁切子元素(如下注筹码条) */
+  overflow: visible;
 }
 
 /* §20260821-06 — 座位坐标优化:
@@ -521,7 +526,9 @@
 /* 中央区域:公共牌 + 底池 + 庄家按钮 */
 /* §20260821-06 — 公共牌区 z-index 提升到 3,高于座位卡(z:2)。
  * 原 z-index:1 导致侧面座位(s1-left/s5-right)的底部可能延伸到公共牌区域,
- * 遮挡公共牌;提升后中央公共牌在视觉层级上位于牌桌最上层,符合真实赌场牌桌层次。 */
+ * 遮挡公共牌;提升后中央公共牌在视觉层级上位于牌桌最上层,符合真实赌场牌桌层次。
+ * §20260822-01 — 添加 pointer-events:auto 确保公共牌区域可交互,
+ * 增强阴影效果提升在深色背景上的可见性。 */
 .texas-center {
   position: absolute;
   left: 50%;
@@ -533,11 +540,12 @@
   gap: 12px;
   z-index: 3;
   pointer-events: none;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
 }
 .texas-center > * { pointer-events: auto; }
 
 .texas-pot {
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.6);
   color: #ffd700;
   font-weight: 700;
   font-size: 18px;
@@ -547,14 +555,15 @@
   /* §20260821-02 — 金黄字加双层光晕(text-shadow + box-shadow)。
    * 原单纯 1px 黑 text-shadow 在浅色 PNG 桌布上字锐利但不醒目,
    * 加金黄光晕后无论深绿 / 浅 PNG 桌布都保持可读。
-   * 字色 #ffd700 / 背景 rgba(0,0,0,0.55) 叠加牌桌底 ≈ 6.8:1,§26.4 已通过。 */
+   * 字色 #ffd700 / 背景 rgba(0,0,0,0.55) 叠加牌桌底 ≈ 6.8:1,§26.4 已通过。
+   * §20260822-01 — 增强背景不透明度(0.55→0.6)和光晕效果,提升可读性。 */
   text-shadow:
-    0 0 8px rgba(255, 215, 0, 0.45),
-    0 0 2px rgba(255, 215, 0, 0.6),
-    0 1px 2px rgba(0, 0, 0, 0.6);
+    0 0 10px rgba(255, 215, 0, 0.5),
+    0 0 3px rgba(255, 215, 0, 0.7),
+    0 1px 2px rgba(0, 0, 0, 0.7);
   box-shadow:
-    0 0 12px rgba(255, 215, 0, 0.2),
-    0 2px 6px rgba(0, 0, 0, 0.4);
+    0 0 16px rgba(255, 215, 0, 0.25),
+    0 2px 8px rgba(0, 0, 0, 0.5);
   white-space: nowrap;
 }
 
@@ -584,12 +593,15 @@
 
 /* === 3.3 座位卡 3 段式 === */
 /* §20260821-06 — 座位卡内间距紧凑化: padding/gap 各减 1~2px,
- * 宽度从 132px 减到 128px,让椭圆布局更紧凑,同时不影响内容可读性。 */
+ * 宽度从 132px 减到 128px,让椭圆布局更紧凑,同时不影响内容可读性。
+ * §20260822-01 — 显示层级优化:增强座位卡背景不透明度(0.92→0.96),
+ * 添加可见边框(rgba(255,255,255,0.12))提升辨识度,
+ * 增强阴影效果(双层阴影+光晕)确保在深色桌布上清晰可见。 */
 .texas-seat {
   position: relative;
   width: 128px;
-  background: rgba(20, 25, 35, 0.92);
-  border: 2px solid transparent;
+  background: rgba(15, 20, 30, 0.96);
+  border: 2px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   padding: 6px 6px 4px;
   display: flex;
@@ -597,7 +609,9 @@
   gap: 3px;
   font-size: 12px;
   color: var(--fg);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(4px);
   transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
 }
@@ -668,31 +682,34 @@
 
 /* §20260821-06 — 下注筹码条加 z-index 确保在座位卡最上层,
  * 同时 bottom 从 -16px 调整为 -14px 配合座位坐标上移,
- * 防止底部座位(s0)的筹码条与下方 ActionControls 重叠时被遮挡。 */
+ * 防止底部座位(s0)的筹码条与下方 ActionControls 重叠时被遮挡。
+ * §20260822-01 — z-index 从 1 提升到 3,确保下注信息始终在座位卡最上层,
+ * 不被同级元素遮挡;增加 text-shadow 提升在深色背景上的可读性。 */
 .texas-seat .seat-committed {
   position: absolute;
   bottom: -14px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1;
-  background: rgba(245, 158, 11, 0.85);
+  z-index: 3;
+  background: rgba(245, 158, 11, 0.9);
   color: #1a1a1a;
   font-size: 11px;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 10px;
   white-space: nowrap;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.2);
 }
 
 .texas-seat.turn {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35), 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35), 0 4px 16px rgba(0, 0, 0, 0.5);
   animation: thp-seat-turn-pulse 1.6s ease-in-out infinite;
 }
 @keyframes thp-seat-turn-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35), 0 4px 12px rgba(0, 0, 0, 0.4); }
-  50%      { box-shadow: 0 0 0 6px rgba(10, 132, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.4); }
+  0%, 100% { box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35), 0 4px 16px rgba(0, 0, 0, 0.5); }
+  50%      { box-shadow: 0 0 0 6px rgba(10, 132, 255, 0.15), 0 4px 16px rgba(0, 0, 0, 0.5); }
 }
 
 .texas-seat.folded {
