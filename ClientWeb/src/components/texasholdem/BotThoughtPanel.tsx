@@ -15,9 +15,14 @@ interface Props {
   seat?: number;
   /** 该座位 bot 是否正在思考(用于追加 ⏳ 指示)。 */
   thinking?: boolean;
+  /**
+   * 2026-08-23 §德扑Agent聊天 — 「本手闲聊」最近 5 条公屏闲聊快照
+   * (game.state 的 chat_window_preview,后端已脱敏)。空数组/undefined 不渲染。
+   */
+  chatPreview?: string[];
 }
 
-export function BotThoughtPanel({ thought, visible = true, seat, thinking = false }: Props) {
+export function BotThoughtPanel({ thought, visible = true, seat, thinking = false, chatPreview }: Props) {
   const t = useT();
   if (!visible || !thought) return null;
 
@@ -38,6 +43,17 @@ export function BotThoughtPanel({ thought, visible = true, seat, thinking = fals
         )}
       </summary>
       <p className="thp-bot-thought__text">{thought}</p>
+      {/* 2026-08-23 §德扑Agent聊天 — 「本手闲聊」折叠小节,样式与主面板一致 */}
+      {chatPreview && chatPreview.length > 0 && (
+        <details className="thp-bot-thought__chat">
+          <summary>💬 {t('texasholdem.bot.chatPreview' as TKey)}</summary>
+          <ul className="thp-bot-thought__chat-list">
+            {chatPreview.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </details>
+      )}
     </details>
   );
 }

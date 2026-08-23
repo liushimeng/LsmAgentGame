@@ -21,6 +21,11 @@ interface Props {
   botModelName?: string;
   botThinking?: boolean;
   botHeartThought?: string;
+  /**
+   * 2026-08-23 §德扑Agent聊天 — 该座位 bot 最近一条公屏发言(≤3s 气泡)。
+   * 显示优先级:发言气泡 > 内心独白(互斥,参考 §20260821-06 thinking/独白约定)。
+   */
+  botChatBubble?: string;
 }
 
 export function PlayerSeat({
@@ -35,6 +40,7 @@ export function PlayerSeat({
   botModelName,
   botThinking = false,
   botHeartThought,
+  botChatBubble,
 }: Props) {
   const t = useT();
   // §20260821-01 — 拟物 PNG 资源
@@ -110,7 +116,18 @@ export function PlayerSeat({
           ⏳ {t('texasholdem.bot.thinking' as TKey)}
         </div>
       )}
-      {isBot && !botThinking && botHeartThought && (
+      {/* 2026-08-23 §德扑Agent聊天 — bot 公屏发言气泡(≤3s,与内心独白互斥):
+       * 发言是对外的话,优先于内心独白;思考指示器仍可叠加。 */}
+      {isBot && botChatBubble && (
+        <div
+          className="seat-chat-bubble"
+          title={botChatBubble}
+          data-testid="thp-seat-chat-bubble"
+        >
+          💬 {botChatBubble.length > 40 ? botChatBubble.slice(0, 40) + '…' : botChatBubble}
+        </div>
+      )}
+      {isBot && !botThinking && !botChatBubble && botHeartThought && (
         <div
           className="seat-heart-thought"
           title={botHeartThought}

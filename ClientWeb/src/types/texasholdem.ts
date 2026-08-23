@@ -71,6 +71,12 @@ export interface TexasHoldemGameState {
   bb_seat?: number;
   turn_started_at_ms?: number;
   hand_rank?: string;
+
+  /**
+   * 2026-08-23 §德扑Agent聊天 — 最近 5 条公屏闲聊快照(随 game.state 下发,
+   * 后端已脱敏,无底牌等敏感信息)。BotThoughtPanel「本手闲聊」小节数据源。
+   */
+  chat_window_preview?: string[];
 }
 
 export const RANK_LABELS: Record<number, string> = {

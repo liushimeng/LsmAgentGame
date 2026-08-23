@@ -98,6 +98,17 @@ type GameContextForAgent struct {
 	EconTier       string   // "health"/"caution"/"danger" — 房间经济档位(2026-08-19 §132 §133)
 	RoomTotalCoin  int      // 房间总金币存量(影响 EconTier 切换)
 	RakeRatePct    int      // 当前档位抽水率(供 Agent 知晓「赢得金币被抽 X%」)
+
+	// ChatWindow 是「牌桌闲聊(增量)」注入段(§3.1 德州扑克Agent聊天系统设计):
+	// 由 ws 层从 per-room 500K ChatHistoryQueue 用 WindowFor(seat) 取增量并
+	// FormatChatWindow 渲染。空串 = 本轮无新消息,不注入。只含公屏消息
+	// (whisper 不进德扑队列),无任何 Hole 卡信息(公平性硬约束)。
+	ChatWindow string
+
+	// suppressOptionalBlocks 由 §3.4 压缩梯度 Tier400(上下文超限兜底)置位:
+	// BuildUserPrompt 据此跳过全部 Optional 段(画像/持久记忆/手牌回顾/筹码),
+	// 仅保留当前街动作历史等 Critical 段。
+	suppressOptionalBlocks bool
 }
 
 // NewAgent 构造一个 Bot Agent。

@@ -162,6 +162,8 @@ func (s *GameService) broadcastTexasHoldemState(roomID string) {
 		if state == nil {
 			continue
 		}
+		// 2026-08-23 §3.5: 附带最近 5 条公屏聊天预览(500K 队列 Tail)。
+		state.ChatWindowPreview = s.TexasChatPreview(roomID)
 		s.hub.BroadcastTo(userID, Envelope{Type: "game.state", Payload: mustMarshal(state)})
 	}
 	// 同时向观察者推送他们可见的状态（所有玩家 Hole 隐藏）。
@@ -209,6 +211,8 @@ func (s *GameService) broadcastTexasHoldemSpectatorState(roomID string) {
 	if state == nil {
 		return
 	}
+	// 2026-08-23 §3.5: 观战者同样可见公屏聊天预览。
+	state.ChatWindowPreview = s.TexasChatPreview(roomID)
 	for _, uid := range uids {
 		s.hub.BroadcastTo(uid, Envelope{Type: "game.state", Payload: mustMarshal(state)})
 	}

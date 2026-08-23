@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -52,6 +53,34 @@ type GameService struct {
 	thpActionTimeoutSec int
 	thpTurnGuards       sync.Map
 	thpWatchdogs        sync.Map
+
+	// 2026-08-23 §3.1 德州扑克Agent聊天系统 — per-room 500K 共享聊天队列
+	// (roomID → *agentcore.ChatHistoryQueue,复用狼人杀同一队列实现)。
+	// 写入点:sendBotChat(bot 发言)+ main.go SetRoomMessageHook(人类房间消息);
+	// 读取点:ProcessBotTurn 注入 ChatWindow;房间删除时在
+	// cleanupTexasHoldemBotRuntime 清理。
+	thpChatQueues sync.Map
+
+	// thpRegistry / thpMemoryStore:德扑 MemoryIter(§3.4)的 LLM 注册表与
+	// 持久记忆存取层(由 main.go / initTexasHoldemBotDriver 注入;nil 时 no-op)。
+	thpRegistry     *llm.Registry
+	thpMemoryStore  texasAgentMemoryStore
+}
+
+// texasAgentMemoryStore 是德扑 MemoryIter 的持久记忆存取窄接口
+// (service.AgentMemoryService 天然实现;与狼人杀 werewolf.AgentMemoryStore
+// 同形,便于测试桩注入)。
+type texasAgentMemoryStore interface {
+	Load(ctx context.Context, modelKey string) (string, error)
+	SaveIterated(ctx context.Context, modelKey, newMD, gameID string) error
+}
+
+// SetTexasAgentMemoryStore 注入德扑 MemoryIter 持久记忆存取层(§3.4)。
+// nil 时整链 no-op。main.go 装配:
+//
+//	gameSvcWs.SetTexasAgentMemoryStore(agentMemorySvc)
+func (s *GameService) SetTexasAgentMemoryStore(store texasAgentMemoryStore) {
+	s.thpMemoryStore = store
 }
 
 // NewGameService builds a GameService with the default set of managers.

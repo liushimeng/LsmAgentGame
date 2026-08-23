@@ -100,6 +100,14 @@ const (
 	// t_lsm_game_agent_player_profile。
 	// 详见 docs/德州扑克/德州扑克Agent设计.md §10 v1.1 路线。
 	AgentClassTexasHoldemProfileIter AgentClassName = "LsmAgentGame-TexasHoldem-ProfileIter"
+
+	// AgentClassTexasPokerMemoryIter 是德州扑克 Agent 持久化记忆(MEMORY.md)
+	// 自我迭代的 AgentClassName(2026-08-23 §3.4 德州扑克Agent聊天系统设计)。
+	// 由 ws/game_service_texas_memoryiter.go 的 IterateTexasAgentMemoriesAsync
+	// 调用;读旧记忆 + 本局事实(风格画像 + 对手笔记两段式),生成新 MEMORY.md
+	// 写回 t_lsm_game_agent_memory(复用狼人杀的存储布局)。
+	// 详见 docs/德州扑克/德州扑克Agent聊天系统设计.md §3.4。
+	AgentClassTexasPokerMemoryIter AgentClassName = "LsmAgentGame-TexasPoker-MemoryIter"
 )
 
 // AllAgentClassNames 返回当前已注册的全部 AgentClassName。
@@ -116,6 +124,7 @@ func AllAgentClassNames() []AgentClassName {
 		AgentClassTexasHoldemPlayer,
 		AgentClassTexasHoldemJudge,
 		AgentClassTexasHoldemProfileIter,
+		AgentClassTexasPokerMemoryIter,
 	}
 }
 

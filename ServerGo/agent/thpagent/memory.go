@@ -206,6 +206,55 @@ func (m *Memory) AllOpponentStats() map[string]*OpponentStat {
 	return out
 }
 
+// TruncateRecentHands 只保留最近 n 手牌(§3.4 压缩梯度 Tier60=3 / Tier100,400=1)。
+// n ≤ 0 时清空。线程安全。
+func (m *Memory) TruncateRecentHands(n int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if n < 0 {
+		n = 0
+	}
+	if len(m.RecentHands) > n {
+		m.RecentHands = m.RecentHands[len(m.RecentHands)-n:]
+	}
+}
+
+// PruneOpponentStats 只保留「交手最多」的 maxN 个对手统计(§3.4 Tier80:
+// OpponentStats 收敛到同桌主要对手 —— 德扑 Memory 不感知座位表,以
+// HandsPlayed 降序近似)。maxN ≤ 0 时 no-op。线程安全。
+func (m *Memory) PruneOpponentStats(maxN int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if maxN <= 0 || len(m.OpponentStats) <= maxN {
+		return
+	}
+	type kv struct {
+		id string
+		hp int
+	}
+	pairs := make([]kv, 0, len(m.OpponentStats))
+	for id, st := range m.OpponentStats {
+		pairs = append(pairs, kv{id, st.HandsPlayed})
+	}
+	// HandsPlayed 降序(简单选择排序,n ≤ 6)
+	for i := 0; i < len(pairs); i++ {
+		for j := i + 1; j < len(pairs); j++ {
+			if pairs[j].hp > pairs[i].hp {
+				pairs[i], pairs[j] = pairs[j], pairs[i]
+			}
+		}
+	}
+	keep := make(map[string]bool, maxN)
+	for i := 0; i < maxN && i < len(pairs); i++ {
+		keep[pairs[i].id] = true
+	}
+	for id := range m.OpponentStats {
+		if !keep[id] {
+			delete(m.OpponentStats, id)
+		}
+	}
+}
+
 // SetLastDecisionSummary 设置最近决策摘要。
 func (m *Memory) SetLastDecisionSummary(s string) {
 	m.mu.Lock()

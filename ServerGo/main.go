@@ -507,6 +507,10 @@ func main() {
 	// 每局法官整局总结落地后(PersistSummary),manager 对本局每个 bot 模型
 	// 异步自我迭代 t_lsm_game_agent_memory;下一局 StartAgentsLocked 注入。
 	gameSvcWs.WerewolfManager().SetAgentMemoryStore(agentMemorySvc)
+	// 2026-08-23 §3.4 德州扑克Agent聊天系统 — 注入德扑 MemoryIter 持久记忆
+	// 存取层(房间删除/局终异步迭代 MEMORY.md,复用同一张
+	// t_lsm_game_agent_memory 表与狼人杀存储布局)。
+	gameSvcWs.SetTexasAgentMemoryStore(agentMemorySvc)
 	// 2026-08-11 §20260811-05 U1 新增 — 注入 Agent 玩家行为画像存取层。
 	// 每局法官整局总结落地后(PersistSummary),manager 对本局每个
 	// (bot model_key × 人类 user_id) 组合异步迭代 t_lsm_game_agent_player_profile;
@@ -574,6 +578,10 @@ func main() {
 			Text:          msg.Text,
 			TS:            msg.TS,
 		})
+		// 2026-08-23 §3.1 德州扑克Agent聊天系统 — 同一消息流旁路写入德扑
+		// per-room 500K 队列(仅公屏;whisper 不进队列)。队列按 roomID 隔离,
+		// 非德扑房间写入无消费点、随房间清理删除,不影响其他游戏。
+		gameSvcWs.RecordTexasRoomChat(msg.RoomID, msg.FromUserID, msg.FromAccount, msg.Text, msg.Whisper)
 	})
 
 	// §115 房间聊天 — 活动事件 hook。ChatService.EmitRoomActivity 触发,

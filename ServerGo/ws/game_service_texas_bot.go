@@ -22,6 +22,7 @@ package ws
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -82,10 +83,59 @@ func (s *GameService) initTexasHoldemBotDriver(registry *llm.Registry, actionTim
 			return
 		}
 		s.thpDriver.AppendHandResult(roomID, handNum, community, communityLen, winners, seats)
+		// 2026-08-23 §3.2 摊牌局「结算闲聊」:摊牌(Status=showdown)且有 bot
+		// 参与本手时,允许一次结算闲聊(同样走 DispatchPokerChat 限流,
+		// LLM 失败静默)。不改引擎语义 — 纯额外异步 LLM 调用。
+		go s.runHandOverEpilogueChat(roomID, handNum, winners, seats)
 	})
 	// 保存 driver 引用(供 RegisterAgentSeats / ProcessBotTurn 使用)
 	s.thpDriver = driver
+	// 2026-08-23 §3.4: MemoryIter 用的 LLM Registry(房间删除/局末异步迭代)。
+	s.thpRegistry = registry
 	logger.L().Info("texasholdem bot driver initialized")
+}
+
+// runHandOverEpilogueChat 摊牌局结算闲聊(§3.2):选一个参与了本手的 bot,
+// 调 Driver.HandOverChat 做一次情绪化短评(限流复用 DispatchPokerChat,
+// 失败静默)。goroutine 内 recover 兜底。
+func (s *GameService) runHandOverEpilogueChat(roomID string, handNumber int, winners []int, seats []thpagent.HandSeatSummary) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.L().Warn("texasholdem hand-over epilogue chat panicked",
+				zap.String("room_id", roomID), zap.Any("panic", r))
+		}
+	}()
+	if s.thpDriver == nil || s.texasHoldemMgr == nil {
+		return
+	}
+	// 摊牌判定:OverSummary 的 status == "showdown"。
+	if _, status, _, ok := s.texasHoldemMgr.OverSummary(roomID); !ok || status != "showdown" {
+		return
+	}
+	botSeats := make(map[int]bool)
+	if seatsArr, ok := s.texasHoldemMgr.Seats(roomID); ok {
+		for i := 0; i < 6; i++ {
+			if seatsArr[i] != "" && s.texasHoldemMgr.BotSeatModelKey(roomID, i) != "" {
+				botSeats[i] = true
+			}
+		}
+	}
+	wonSet := make(map[int]bool, len(winners))
+	for _, w := range winners {
+		wonSet[w] = true
+	}
+	for _, st := range seats {
+		if !botSeats[st.Seat] {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		text := s.thpDriver.HandOverChat(ctx, roomID, st.Seat, handNumber, wonSet[st.Seat], st.NetDelta)
+		cancel()
+		if text != "" {
+			s.sendBotChat(roomID, st.Seat, st.UserID, s.texasHoldemMgr.BotSeatModelKey(roomID, st.Seat), text)
+			return // 一次结算闲聊,一个 bot 说即可
+		}
+	}
 }
 
 // ─────────────────── Agent 座位注册 ───────────────────
@@ -194,6 +244,9 @@ func (s *GameService) registerTexasHoldemAgentSeats(roomID string, seats []servi
 	// 6. §B8: 启动 per-room bot 回合 watchdog
 	if len(seatConfigs) > 0 {
 		s.startTexasBotWatchdog(roomID)
+		// 2026-08-23 §3.1: 预热 per-room 500K 聊天队列 —— RecordTexasRoomChat
+		// 只写已存在的队列(防其他游戏房间误建),必须在此先创建。
+		_ = s.texasChatQueue(roomID)
 	}
 
 	logger.L().Info("texasholdem agent seats registered",
@@ -209,9 +262,14 @@ func (s *GameService) cleanupTexasHoldemBotRuntime(roomID string) {
 		v.(*texasBotWatchdogHandle).cancel()
 	}
 	s.thpTurnGuards.Delete(roomID)
+	// 2026-08-23 §3.4: 房间删除 → 异步 MemoryIter(必须先于 UnregisterAgents
+	// 快照记忆,快照在 Iterate 内完成,故先触发再注销)。
+	s.IterateTexasAgentMemoriesAsync(roomID)
 	if s.thpDriver != nil {
 		s.thpDriver.UnregisterAgents(roomID)
 	}
+	// 2026-08-23 §3.1: 清理 per-room 500K 聊天队列(§5 接线清理点)。
+	s.cleanupTexasChatQueue(roomID)
 }
 
 // rehydrateTexasHoldemAgents §20260819-02 P0-1 -- 重启恢复后重建 bot 运行时。
@@ -313,6 +371,8 @@ func (s *GameService) ProcessBotTurn(roomID string) {
 		// 构造 thpagent 上下文(§B2: BluffHint 由 Memory 对手弃牌率驱动,不再硬编码)
 		modelKey := s.texasHoldemMgr.BotSeatModelKey(roomID, seat)
 		agentCtx := buildAgentContext(ctx, modelKey, s.thpDriver.BluffHintFor(roomID, seat))
+		// 2026-08-23 §3.1: 注入「牌桌闲聊(增量)」窗口(500K 队列 WindowFor)。
+		agentCtx.ChatWindow = s.TexasChatWindow(roomID, seat)
 
 		// P0-1: 重置该 bot 的 poker_action 限流标志。OnNewRound 在生产代码中
 		// 从未被调用,导致跨街(flop/turn/river)时 currentRoundActionTaken 残留,
@@ -327,6 +387,8 @@ func (s *GameService) ProcessBotTurn(roomID string) {
 		decideCtx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
 		action, err := s.thpDriver.DecideAction(decideCtx, roomID, seat, agentCtx)
 		cancel()
+		// §3.1: 决策完成(无论成败)推进 read pointer —— 该 bot 已消费当前增量。
+		s.AdvanceTexasChat(roomID, seat)
 
 		// 思考完成 — 立刻置 false,不等广播
 		s.setBotThinking(roomID, seat, false)
@@ -389,10 +451,15 @@ func (s *GameService) ProcessBotTurn(roomID string) {
 	}
 }
 
-// sendBotChat 把 bot 的公屏发言写入聊天系统(§B5)。
-// 失败只记日志,绝不影响已决策的动作(聊天是可选工具)。
+// sendBotChat 把 bot 的公屏发言写入聊天系统(§B5;2026-08-23 §3.1/§3.3 增强:
+// 流式三帧 + 500K 队列写入)。失败只记日志,绝不影响已决策的动作(聊天是可选工具)。
+//
+// §3.3 流式发言三帧:SendBotStreamStart → 分片 Delta(每片 12~24 rune,
+// 取 18)→ End,随后 SendFromBot 终帧落库 + 广播(保证 chat.history 可分页读回)。
+// 流式任何失败(帧发送错误等)静默降级 —— 终帧 SendFromBot 始终执行,
+// 不因流式挂掉而丢发言。
 func (s *GameService) sendBotChat(roomID string, seat int, botUserID, modelKey, text string) {
-	if s.chatSvc == nil {
+	if s.chatSvc == nil || text == "" {
 		return
 	}
 	if botUserID == "" {
@@ -406,7 +473,18 @@ func (s *GameService) sendBotChat(roomID string, seat int, botUserID, modelKey, 
 			return
 		}
 	}
-	// botAccount 传空串,SendFromBot 内部 lookupAccount 兜底
+
+	// §3.3 流式三帧(尽力而为;失败不影响终帧)。
+	streamID := fmt.Sprintf("thp-%s-%d-%d", roomID, seat, time.Now().UnixNano())
+	streamed := false
+	if err := s.chatSvc.SendBotStreamStart(roomID, seat, streamID); err == nil {
+		streamed = s.streamBotChatDeltas(roomID, streamID, text)
+		// End 帧始终补发(即使 delta 中途断片,前端也要收口)。
+		_ = s.chatSvc.SendBotStreamEnd(roomID, streamID, text)
+	}
+
+	// 终帧:落库 + 广播 chat.message(botAccount 传空串,SendFromBot 内部
+	// lookupAccount 兜底)。失败即整体失败,记日志。
 	if _, err := s.chatSvc.SendFromBot(roomID, botUserID, "", modelKey, text); err != nil {
 		logger.L().Warn("sendBotChat: SendFromBot failed",
 			zap.String("room_id", roomID),
@@ -414,10 +492,31 @@ func (s *GameService) sendBotChat(roomID string, seat int, botUserID, modelKey, 
 			zap.Error(err))
 		return
 	}
+	// §3.1 写入点 2:bot 发言进 500K 共享队列(其他 bot 下次决策可见)。
+	s.RecordTexasBotChat(roomID, seat, botUserID, modelKey, text)
 	logger.L().Debug("texasholdem bot chat sent",
 		zap.String("room_id", roomID),
 		zap.Int("seat", seat),
+		zap.Bool("streamed", streamed),
 		zap.String("text", truncate(text, 80)))
+}
+
+// streamBotChatDeltas 按 18 rune 分片发送 chat.stream_delta(§3.3)。
+// 返回是否全程成功(失败返回 false,调用方补发 End 帧)。
+func (s *GameService) streamBotChatDeltas(roomID, streamID, text string) bool {
+	runes := []rune(text)
+	const chunk = 18 // 12~24 rune 分片的中值
+	for i := 0; i < len(runes); i += chunk {
+		end := i + chunk
+		if end > len(runes) {
+			end = len(runes)
+		}
+		if err := s.chatSvc.SendBotStreamDelta(roomID, streamID, string(runes[i:end])); err != nil {
+			return false
+		}
+		time.Sleep(60 * time.Millisecond) // 打字机节奏,总时长 ≈ len/18×60ms
+	}
+	return true
 }
 
 // ─────────────────── §B8 Bot 回合 watchdog ───────────────────

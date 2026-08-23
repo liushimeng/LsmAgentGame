@@ -4,6 +4,7 @@ import { BotThoughtPanel } from './BotThoughtPanel';
 import { STYLE_COLORS, getBoardBg, type StyleKey } from '@/assets/images/texasholdem';
 import type { TexasHoldemGameState } from '@/types/texasholdem';
 import { useState } from 'react';
+import { useSeatChatBubbles } from './useSeatChatBubbles';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 
@@ -22,6 +23,8 @@ export function TexasHoldemTable({ gameState, mySeat, style }: Props) {
   const [bgFailed, setBgFailed] = useState(false);
   const bgSrc = getBoardBg(style);
   const t = useT();
+  // 2026-08-23 §德扑Agent聊天 — 座位级 bot 发言气泡(chat.message,≤3s)。
+  const chatBubbles = useSeatChatBubbles(gameState.room_id);
 
   const tableStyle: React.CSSProperties = {
     backgroundColor: bgFailed ? colors.boardBg : undefined,
@@ -92,6 +95,7 @@ export function TexasHoldemTable({ gameState, mySeat, style }: Props) {
               botModelName={isBot ? botModels?.[seat] : undefined}
               botThinking={isBot ? !!botThinking?.[seat] : false}
               botHeartThought={isBot ? botHeartThought?.[seat] : undefined}
+              botChatBubble={isBot ? chatBubbles[seat]?.text : undefined}
             />
           </div>
         );
@@ -115,6 +119,7 @@ export function TexasHoldemTable({ gameState, mySeat, style }: Props) {
           thought={thoughtsArr![thoughtSeat]}
           seat={thoughtSeat}
           thinking={!!thinkingArr?.[thoughtSeat]}
+          chatPreview={gameState.chat_window_preview}
         />
       )}
     </div>

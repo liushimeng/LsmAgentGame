@@ -71,7 +71,10 @@ func BuildSystemPrompt(ctx *GameContextForAgent, mem *Memory) string {
 	// [StyleGuide] 风格指南段
 	b.WriteString("[StyleGuide]\n")
 	b.WriteString("- 使用 poker_action 工具(必填 internal_thought,描述你的真实思考)。\n")
-	b.WriteString("- poker_chat 是可选公屏发言,每手牌最多 2 次。\n")
+	// 2026-08-23 §3.2 发言策略放宽:每手 ≤3 次 + 间隔 ≥20s;新增回应/情绪短评指引。
+	b.WriteString("- poker_chat 是可选公屏发言,每手牌最多 3 次,相邻两次间隔至少 20 秒。\n")
+	b.WriteString("- 可以在 poker_chat 中回应他人的发言(被点名/被挑衅时应优先考虑回应),但注意不要泄露自己的底牌信息。\n")
+	b.WriteString("- 摊牌后的 win/loss 关键手,鼓励用一句情绪化短评回应结果。\n")
 	b.WriteString("- fold/call/raise 决策基于牌力 vs required_equity:\n")
 	b.WriteString("  * 牌力 > required_equity + 5% → 跟注/加注\n")
 	b.WriteString("  * 牌力 < required_equity - 5% → 弃牌\n")
@@ -114,6 +117,9 @@ func BuildUserPrompt(ctx *GameContextForAgent, mem *Memory) string {
 		buildOpponentsBlock(ctx),
 		buildHandStrengthBlock(ctx),
 		buildBluffHintBlock(ctx),
+		// 2026-08-23 §3.1「牌桌闲聊(增量)」段:注入 500K 共享队列中该 bot
+		// 尚未消费的公屏消息,驱动 bot 回应人类/其他 bot 发言。
+		buildChatWindowBlock(ctx),
 	}
 	droppedBlocks := 0
 	for _, blk := range importantBlocks {
@@ -134,6 +140,10 @@ func BuildUserPrompt(ctx *GameContextForAgent, mem *Memory) string {
 		buildWalletBlock(ctx),
 	}
 	for _, blk := range optionalBlocks {
+		// §3.4 Tier400(上下文超限兜底):Optional 段整体清空,仅保留 Critical/Important。
+		if ctx.suppressOptionalBlocks {
+			continue
+		}
 		if blk == "" {
 			continue // 无数据块自然省略,不计入 droppedBlocks(§B3 假占位文案禁令)
 		}
@@ -196,6 +206,16 @@ func buildActionHistoryBlock(ctx *GameContextForAgent) string {
 
 func buildBluffHintBlock(ctx *GameContextForAgent) string {
 	return fmt.Sprintf("【虚张建议】Bluff 频率 %.2f\n\n", ctx.BluffHint)
+}
+
+// buildChatWindowBlock 渲染「牌桌闲聊(增量)」段(§3.1)。ChatWindow 为空
+// (本轮无新消息)时返回空串,由预算机制自然省略 —— 不喂占位符给 LLM。
+func buildChatWindowBlock(ctx *GameContextForAgent) string {
+	if ctx.ChatWindow == "" {
+		return ""
+	}
+	return fmt.Sprintf("【牌桌闲聊(增量)】以下是自你上次决策后牌桌上新增的公屏发言:\n%s(你可以在 poker_chat 中回应他人,但不要泄露自己的底牌)\n\n",
+		ctx.ChatWindow)
 }
 
 // buildReputationBlock 基于 Memory.AllOpponentStats 的真实画像（2026-08-20 §B3）。

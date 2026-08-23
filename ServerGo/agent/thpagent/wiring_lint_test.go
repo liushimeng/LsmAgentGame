@@ -105,11 +105,12 @@ func TestMemory_WiresAllFields(t *testing.T) {
 // TestDispatcher_WiresAllFields 验证 NewDispatcher 初始化必填字段。
 func TestDispatcher_WiresAllFields(t *testing.T) {
 	d := NewDispatcher()
-	if d.maxChatPerHand != 2 {
-		t.Errorf("maxChatPerHand = %d, want 2", d.maxChatPerHand)
+	// 2026-08-23 §3.2 放宽:每手 ≤3 次 + 间隔 ≥20s。
+	if d.maxChatPerHand != 3 {
+		t.Errorf("maxChatPerHand = %d, want 3", d.maxChatPerHand)
 	}
-	if d.minChatIntervalSec != 30 {
-		t.Errorf("minChatIntervalSec = %d, want 30", d.minChatIntervalSec)
+	if d.minChatIntervalSec != 20 {
+		t.Errorf("minChatIntervalSec = %d, want 20", d.minChatIntervalSec)
 	}
 	if d.actionTimeout != 30*time.Second {
 		t.Errorf("actionTimeout = %v, want 30s", d.actionTimeout)

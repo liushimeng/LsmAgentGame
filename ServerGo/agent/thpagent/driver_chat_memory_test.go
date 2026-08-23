@@ -98,8 +98,9 @@ func TestB5_ChatDeliveredWithAction(t *testing.T) {
 	}
 }
 
-// TestB5_ChatRateLimitedButActionApplied: chat 超每手 2 次限流时被丢弃,
-// 但 action 照常应用(工具协议 §5)。这是「chat 丢弃 ≠ 动作失败」的回归锚点。
+// TestB5_ChatRateLimitedButActionApplied: chat 超每手 3 次限流(2026-08-23
+// §3.2 放宽后上限)时被丢弃,但 action 照常应用(工具协议 §5)。
+// 这是「chat 丢弃 ≠ 动作失败」的回归锚点。
 func TestB5_ChatRateLimitedButActionApplied(t *testing.T) {
 	d := NewDriver()
 	registerAgentWithProvider(t, d, "room1", 0, &fakeProvider{resp: pokerResponse("call", "t", "发言")})
@@ -108,8 +109,8 @@ func TestB5_ChatRateLimitedButActionApplied(t *testing.T) {
 	d.mu.RUnlock()
 
 	ctx := &GameContextForAgent{RoomID: "room1", Street: "preflop"}
-	// 第 1、2 次 chat 应通过
-	for i := 0; i < 2; i++ {
+	// 第 1~3 次 chat 应通过(§3.2:每手 ≤3 次)
+	for i := 0; i < 3; i++ {
 		action, err := d.DecideAction(context.Background(), "room1", 0, ctx)
 		if err != nil {
 			t.Fatalf("DecideAction #%d: %v", i, err)
@@ -119,7 +120,7 @@ func TestB5_ChatRateLimitedButActionApplied(t *testing.T) {
 		}
 		d.OnNewRoundLocked("room1", 0) // 每轮 poker_action 限流复位
 	}
-	// 第 3 次 chat 超限 → 丢弃,但 action 仍是 call
+	// 第 4 次 chat 超限 → 丢弃,但 action 仍是 call
 	action, err := d.DecideAction(context.Background(), "room1", 0, ctx)
 	if err != nil {
 		t.Fatalf("DecideAction #3: %v", err)

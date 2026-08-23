@@ -59,16 +59,17 @@ func TestDispatcher_PokerChat_LimitPerHand(t *testing.T) {
 	d := NewDispatcher()
 	d.minChatIntervalSec = 0 // 测试时关掉时间限制
 
-	for i := 1; i <= 2; i++ {
+	// 2026-08-23 §3.2 放宽:每手 ≤3 次。
+	for i := 1; i <= 3; i++ {
 		err := d.DispatchPokerChat("test")
 		if err != nil {
 			t.Errorf("chat %d should succeed, got: %v", i, err)
 		}
 	}
 
-	err := d.DispatchPokerChat("third")
+	err := d.DispatchPokerChat("fourth")
 	if err != ErrTooManyChat {
-		t.Errorf("third chat should fail with ErrTooManyChat, got: %v", err)
+		t.Errorf("fourth chat should fail with ErrTooManyChat, got: %v", err)
 	}
 }
 
@@ -81,17 +82,17 @@ func TestDispatcher_PokerChat_IntervalLimit(t *testing.T) {
 		t.Errorf("first chat should succeed: %v", err)
 	}
 
-	// 第 2 条间隔过短(< 30s) — 失败
+	// 第 2 条间隔过短(< 20s,§3.2 放宽后阈值) — 失败
 	err = d.DispatchPokerChat("second")
 	if err != ErrChatIntervalTooShort {
 		t.Errorf("second chat should fail with ErrChatIntervalTooShort, got: %v", err)
 	}
 
-	// 模拟时间已过 30s
-	d.chatLastTimestamp = time.Now().Add(-31 * time.Second)
+	// 模拟时间已过 20s
+	d.chatLastTimestamp = time.Now().Add(-21 * time.Second)
 	err = d.DispatchPokerChat("third")
 	if err != nil {
-		t.Errorf("third chat (after 31s) should succeed, got: %v", err)
+		t.Errorf("third chat (after 21s) should succeed, got: %v", err)
 	}
 }
 

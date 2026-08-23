@@ -147,6 +147,12 @@ type ClientGameState struct {
 	BbSeat          int    `json:"bb_seat"`
 	TurnStartedAtMs int64  `json:"turn_started_at_ms"`
 	HandRank        string `json:"hand_rank,omitempty"`
+
+	// 2026-08-23 §3.5 德州扑克Agent聊天系统 — 最近 5 条公屏消息预览
+	// ("昵称: 文本"),由 ws 层从 per-room 500K 聊天队列 Tail(5) 填充
+	// (broadcastTexasHoldemState / spectator 路径)。公屏消息本就是公开
+	// 信息,无需脱敏;空时不序列化(omitempty,向后兼容)。
+	ChatWindowPreview []string `json:"chat_window_preview,omitempty"`
 }
 
 // BuildClientState 构造座位 viewer 的可见视图（向后兼容版本）。

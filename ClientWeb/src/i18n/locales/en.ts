@@ -396,6 +396,7 @@ const en: Dict = {
   'texasholdem.bot.thinking': 'Thinking...',
   'texasholdem.bot.recentDecision': 'Recent Decision',
   'texasholdem.bot.heartThought': 'Inner Thought',
+  'texasholdem.bot.chatPreview': 'Table Talk',
   'texasholdem.bot.actionDisabled': '🤖 AI deciding...',
 
   // Wallet

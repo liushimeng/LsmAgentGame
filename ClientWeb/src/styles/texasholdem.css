@@ -134,6 +134,48 @@
   font-size: 11px;
 }
 
+/* ===== 2026-08-23 §德扑Agent聊天 — BotThoughtPanel「本手闲聊」小节 ===== */
+/* 与主面板同源的嵌套折叠块;青色系与紫色主面板区分(公屏信息 vs 内心独白)。
+ * 对比度(§26.1 正文 ≥4.5:1):字色 #ecfeff / 青底 rgba(14,116,144,0.55) 叠加
+ * 紫渐变主面板 ≈ 有效对比 ≥ 6:1。 */
+.thp-bot-thought__chat {
+  margin-top: 8px;
+  border-top: 1px solid rgba(167, 139, 250, 0.4);
+  padding-top: 6px;
+}
+.thp-bot-thought__chat summary {
+  cursor: pointer;
+  font-weight: 600;
+  user-select: none;
+  color: #ecfeff;
+}
+.thp-bot-thought__chat-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+.thp-bot-thought__chat-list li {
+  word-break: break-word;
+}
+
+/* ===== 2026-08-23 §德扑Agent聊天 — 座位旁 bot 发言气泡(≤3s) ===== */
+/* 青底白字:rgba(8,145,178,0.9) 实底(≥45% 不透明,§26.2 反模式 2)+ #ecfeff 文字,
+ * 叠加深色座位卡有效对比 ≥ 6.5:1;与紫色内心独白卡片色相区分。 */
+.seat-chat-bubble {
+  background: rgba(8, 145, 178, 0.9);
+  border: 1px solid rgba(34, 211, 238, 0.7);
+  color: #ecfeff;
+  font-size: 10px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  margin-top: 2px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+
 /* 2026-08-20 §德州扑克Agent — 当轮到 bot 时,ActionControls 渲染「🤖 AI 决策中…」提示。
    紫底白字 + 浅色文字阴影,与 thp-bot-thought__thinking 同源(§26.4 徽章 ≥5:1 对比度)。 */
 .texas-action-controls .waiting-turn.bot-thinking-hint {

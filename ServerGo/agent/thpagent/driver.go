@@ -359,7 +359,8 @@ func (d *Driver) DecideAction(ctx context.Context, roomID string, seat int, prom
 		return Action{Type: ActFold, Thought: "no LLM provider configured"}, nil
 	}
 
-	// 构建 prompt
+	// 构建 prompt(先做 §3.4 压缩梯度判定,再渲染)
+	applyDecisionCompression(ctx, a, provider, apiKey, promptContext, mem)
 	systemPrompt := BuildSystemPrompt(promptContext, mem)
 	userPrompt := BuildUserPrompt(promptContext, mem)
 	tools := BuildTools()
@@ -375,6 +376,20 @@ func (d *Driver) DecideAction(ctx context.Context, roomID string, seat int, prom
 	for attempt := 0; attempt < 2; attempt++ {
 		resp, callErr = provider.Chat(ctx, apiKey, *req)
 		if callErr == nil {
+			break
+		}
+		// §3.4 Tier400:上下文超限 → Aggressive 压缩后重试一次
+		// (可选段清空,仅保留当前街动作历史)。
+		if IsContextExceededError(callErr) {
+			logger.L().Warn("texasholdem LLM context exceeded, aggressive compression retry",
+				zap.String("room_id", roomID),
+				zap.Int("seat", seat),
+				zap.Error(callErr))
+			ApplyPromptCompression(promptContext, mem, Tier400, "")
+			systemPrompt = BuildSystemPrompt(promptContext, mem)
+			userPrompt = BuildUserPrompt(promptContext, mem)
+			req = a.BuildLLMRequest(systemPrompt, userPrompt, tools)
+			resp, callErr = provider.Chat(ctx, apiKey, *req)
 			break
 		}
 		logger.L().Warn("texasholdem LLM call failed, retrying",
