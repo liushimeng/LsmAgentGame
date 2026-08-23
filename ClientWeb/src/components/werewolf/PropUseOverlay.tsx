@@ -2,7 +2,8 @@
  * PropUseOverlay.tsx — 2026-07-23 §道具特效:道具使用视觉特效叠加层。
  *
  * 监听 store 的 lastPropEvent/lastPropSeq:当一条语义新道具使用事件到来时,
- * 在屏幕中央展示一次"道具命中/落空"特效,最少 12 秒,明确表达:
+ * 在屏幕中央展示一次"道具命中/落空"特效,展示 ≤4 秒且可点击关闭
+ * (§20260823-02 P6,原 12 秒无关闭途径),明确表达:
  *   - 谁(from_seat / from_account)给谁(target_seat / AOE)使用了什么道具;
  *   - 道具名称 + 独特 emoji + 配色(每种道具一色);
  *   - 是否中招(hit/miss) + 效果摘要(effect_text)。
@@ -73,8 +74,10 @@ function looksLikeUUID(s: string): boolean {
   return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(s);
 }
 
-/** 展示时长(ms):进场 600 + 保持 10800 + 退场 600 = 12秒,满足"最少 10 秒"。 */
-const DISPLAY_MS = 12000;
+/** 展示时长(ms):进场 300 + 保持 3400 + 退场 300 ≈ 4秒。
+ *  2026-08-23 §20260823-02 P6 — 不遮挡原则:≤4s 自动消失 + 可点击 ✕/卡片本体
+ *  立即关闭(原 12 秒无关闭途径,长时间遮挡屏幕中央)。 */
+const DISPLAY_MS = 4000;
 
 export function PropUseOverlay({ players }: Props) {
   const t = useT();
@@ -82,12 +85,12 @@ export function PropUseOverlay({ players }: Props) {
   const lastPropSeq = useWerewolfStore((s) => s.lastPropSeq);
   const setPropTargetSeat = useWerewolfStore((s) => s.setPropTargetSeat);
   const [active, setActive] = useState<typeof lastPropEvent>(null);
-  /** 已播放的事件 seq 哨兵,防止重复触发。 */
+  /** 已播放的事件 seq 哨兵,防止重复触发;手动关闭后同 seq 不复活。 */
   const [shownSeq, setShownSeq] = useState<number>(-1);
 
   useEffect(() => {
     if (!lastPropEvent) return;
-    if (lastPropSeq === shownSeq) return; // 已播放过
+    if (lastPropSeq === shownSeq) return; // 已播放过(含手动关闭,不复活)
     setActive(lastPropEvent);
     setShownSeq(lastPropSeq);
     // 2026-07-23 §道具特效:写入目标座位高亮(AOE 时 target_seat=-1 → 复位,不特指单座)。
@@ -98,6 +101,13 @@ export function PropUseOverlay({ players }: Props) {
     }, DISPLAY_MS);
     return () => clearTimeout(timer);
   }, [lastPropEvent, lastPropSeq, shownSeq, setPropTargetSeat]);
+
+  // §20260823-02 P6 — 手动关闭:active 置空 + 复位座位高亮;shownSeq 已在
+  // 触发时写入,故同一 seq 不会因本关闭而复弹,新事件(seq 变化)正常弹出。
+  const dismiss = () => {
+    setActive(null);
+    setPropTargetSeat(-1);
+  };
 
   // 解析"来源座位名" + "目标座位名"。后端对 Agent 下发模型名(如"小米 mimo-v2.5"),
   // 对真人下发原始 userID(UUID)——二者都走 players 数组反查为可读昵称/编号,
@@ -149,7 +159,34 @@ export function PropUseOverlay({ players }: Props) {
     >
       {/* 全屏暗化背板(半透明,仅弱化背景让主体突出;pointer-events:none 透传)。 */}
       <div className="ww-prop-overlay__dim" />
-      <div className="ww-prop-overlay__center">
+      {/* §20260823-02 P6 — 特效卡片 pointer-events:auto(容器仍 none,不挡座位
+          点击);点卡片本体或右上角 ✕ 立即关闭。 */}
+      <div
+        className="ww-prop-overlay__center"
+        role="button"
+        tabIndex={0}
+        aria-label={t('werewolf.panel.close')}
+        onClick={dismiss}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            dismiss();
+          }
+        }}
+      >
+        <button
+          type="button"
+          className="ww-prop-overlay__close"
+          aria-label={t('werewolf.panel.close')}
+          title={t('werewolf.panel.close')}
+          data-testid="werewolf-prop-overlay-close"
+          onClick={(e) => {
+            e.stopPropagation();
+            dismiss();
+          }}
+        >
+          ✕
+        </button>
         {/* 扩散光环 */}
         <div className="ww-prop-overlay__ring" />
         {/* 道具 emoji + 主色圆盘 */}

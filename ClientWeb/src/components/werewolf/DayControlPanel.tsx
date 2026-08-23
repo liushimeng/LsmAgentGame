@@ -6,10 +6,11 @@
  *   兜底:8s 自动 setTimeout 触发 start_day,避免玩家挂机阻塞全场。
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useT } from '@/hooks/useT';
 import { phaseLabel as phaseLabelKey } from '@/components/werewolf/phaseLabel';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { CollapsibleActionPanel } from '@/components/werewolf/CollapsibleActionPanel';
 import type { WerewolfGameState } from '@/types/werewolf';
 
 interface Props {
@@ -30,6 +31,9 @@ interface Props {
 
 const DAWN_AUTO_START_MS = 8000;
 
+// §20260823-02 P4 — 白天发言/投票面板折叠 localStorage 键(speak/vote 共用)。
+const LS_DAY_CONTROL_COLLAPSED = 'ww_panel_collapsed_day_control';
+
 export function DayControlPanel({ gameState, mySeat, onVote, onSheriff, onFinish, onOpenSheriffStream, onProposeVote, onDuel, busy }: Props) {
   const t = useT();
   const phase = gameState.phase;
@@ -48,6 +52,43 @@ export function DayControlPanel({ gameState, mySeat, onVote, onSheriff, onFinish
   // 当 vote_suspense=true 且投票阶段结束时，延迟显示完整票型。
   const [voteSuspenseActive, setVoteSuspenseActive] = useState(false);
   const [voteSuspenseTimer, setVoteSuspenseTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── §20260823-02 P4 — speak/vote 面板折叠(提交即收起 + 新阶段自动展开) ──
+  // 仅 speak/vote 两阶段可折叠;sheriff 竞选 / 骑士决斗二次确认等必须操作的
+  // 场景通过 forceExpand 强制展开。折叠偏好 localStorage 持久化(骨架内处理)。
+  const [collapseSig, setCollapseSig] = useState(0);
+  const [expandSig, setExpandSig] = useState(0);
+  const [doneSummary, setDoneSummary] = useState<string | null>(null);
+
+  // 新阶段(新的一天/新投票轮)到来 → 自动重新展开一次(phase + 回合号做 key)。
+  const roundKey = `${phase}:${gameState.day}`;
+  const prevRoundKeyRef = useRef(roundKey);
+  useEffect(() => {
+    if (prevRoundKeyRef.current !== roundKey) {
+      prevRoundKeyRef.current = roundKey;
+      setDoneSummary(null);
+      setExpandSig((s) => s + 1);
+    }
+  }, [roundKey]);
+
+  // 投票成功(服务端回执 my_voted false→true)→ 自动收起为「✅ 已投票 #N」摘要。
+  const prevMyVotedRef = useRef(gameState.my_voted === true);
+  useEffect(() => {
+    const now = gameState.my_voted === true;
+    if (phase === 'vote' && now && !prevMyVotedRef.current) {
+      const seat = (gameState.my_vote_target ?? -1) + 1;
+      setDoneSummary(t('werewolf.panel.voted', { seat }));
+      setCollapseSig((s) => s + 1);
+    }
+    prevMyVotedRef.current = now;
+  }, [gameState.my_voted, gameState.my_vote_target, phase, t]);
+
+  // 「我说完了」→ 提交即收起为「✅ 已提交,等待阶段推进」摘要。
+  const handleSpeakDone = () => {
+    onFinish('speak');
+    setDoneSummary(t('werewolf.panel.submitted'));
+    setCollapseSig((s) => s + 1);
+  };
 
   // 检测投票结束 → 触发悬念
   useEffect(() => {
@@ -309,14 +350,26 @@ export function DayControlPanel({ gameState, mySeat, onVote, onSheriff, onFinish
       gameState.speak_turn_seat === mySeat &&
       gameState.players?.[mySeat]?.role_revealed !== true &&
       onDuel !== undefined;
+    // §20260823-02 P4 — speak 阶段接入统一折叠骨架:轮到我说话 / 骑士决斗
+    // 二次确认中 → forceExpand 强制展开;「我说完了」→ 自动收起为结果摘要。
+    const speakForceExpand = gameState.speak_turn_seat === mySeat || confirmDuelTarget !== null;
     return (
-      <div className="werewolf-action-panel">
-        <h4>🗣 白天发言</h4>
+      <CollapsibleActionPanel
+        icon="🗣"
+        title="白天发言"
+        storageKey={LS_DAY_CONTROL_COLLAPSED}
+        summary={doneSummary ?? undefined}
+        collapseSignal={collapseSig}
+        expandSignal={expandSig}
+        forceExpand={speakForceExpand}
+        className="werewolf-action-panel"
+        testId="werewolf-speak-panel"
+      >
         <p>当前发言:#{(gameState.speak_turn_seat ?? -1) + 1}</p>
         {gameState.speak_turn_seat === mySeat && (
           <button
             className="btn btn-primary"
-            onClick={() => onFinish('speak')}
+            onClick={handleSpeakDone}
             disabled={busy}
           >
             ✅ 我说完了
@@ -412,7 +465,7 @@ export function DayControlPanel({ gameState, mySeat, onVote, onSheriff, onFinish
             onCancel={() => setConfirmDuelTarget(null)}
           />
         )}
-      </div>
+      </CollapsibleActionPanel>
     );
   }
 
@@ -435,9 +488,20 @@ export function DayControlPanel({ gameState, mySeat, onVote, onSheriff, onFinish
         </div>
       );
     }
+    // §20260823-02 P4 — vote 阶段接入统一折叠骨架:未投票 → forceExpand 强制
+    // 展开(必须操作);投票成功(服务端回执 my_voted)→ 自动收起为结果摘要。
     return (
-      <div className="werewolf-action-panel">
-        <h4>🗳 白天投票放逐</h4>
+      <CollapsibleActionPanel
+        icon="🗳"
+        title="白天投票放逐"
+        storageKey={LS_DAY_CONTROL_COLLAPSED}
+        summary={doneSummary ?? undefined}
+        collapseSignal={collapseSig}
+        expandSignal={expandSig}
+        forceExpand={!gameState.my_voted}
+        className="werewolf-action-panel"
+        testId="werewolf-vote-panel"
+      >
         <div className="seat-grid">
           {aliveSeatCandidates.map((s) => (
             <button
@@ -483,7 +547,7 @@ export function DayControlPanel({ gameState, mySeat, onVote, onSheriff, onFinish
             )}
           </div>
         )}
-      </div>
+      </CollapsibleActionPanel>
     );
   }
 

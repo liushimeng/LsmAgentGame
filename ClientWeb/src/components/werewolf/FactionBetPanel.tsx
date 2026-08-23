@@ -16,7 +16,8 @@ interface FactionBetPanelProps {
   mySeat: number;
   aliveSeats: number[];
   windowOpen: boolean;
-  t: (k: any) => string;
+  // §20260823-02 P3 — 加宽类型以支持插值({amount}),与 useT 返回签名兼容。
+  t: (k: any, vars?: Record<string, string | number>) => string;
 }
 
 export const FactionBetPanel: React.FC<FactionBetPanelProps> = ({
@@ -32,13 +33,17 @@ export const FactionBetPanel: React.FC<FactionBetPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [lastBet, setLastBet] = useState<string | null>(null);
+  // §20260823-02 P3 — 最近一次下注摘要(收起态单行展示「✅ 已下注 {amount}」)。
+  const [lastBetAmount, setLastBetAmount] = useState<number | null>(null);
   // §20260816-01 折叠态:默认折叠,持久化到 localStorage
+  // §20260823-02 P3 — 无存储值时一律默认收起(原 !windowOpen 会在 speak 阶段
+  // 首次进入时默认摊开,与「主界面优先」目标冲突);已有存储值的用户不动。
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
       const v = localStorage.getItem(LS_KEY);
-      return v !== null ? v === '1' : !windowOpen;
+      return v !== null ? v === '1' : true;
     } catch {
-      return !windowOpen;
+      return true;
     }
   });
 
@@ -71,6 +76,11 @@ export const FactionBetPanel: React.FC<FactionBetPanelProps> = ({
         },
       );
       setLastBet(res.data?.bet_id ?? null);
+      // §20260823-02 P3 — HTTP 2xx 成功 → 提交即收起 + 结果摘要;失败走 catch
+      // 保持展开 + 内联错误(§7.1)。
+      setLastBetAmount(amount);
+      setCollapsed(true);
+      try { localStorage.setItem(LS_KEY, '1'); } catch {}
     } catch (e: any) {
       const msg = e?.message || '下注失败';
       setErr(msg);
@@ -86,10 +96,8 @@ export const FactionBetPanel: React.FC<FactionBetPanelProps> = ({
     }
   }, [windowOpen]);
 
-  // 窗口开启时自动展开,方便玩家直接使用;关闭时尊重用户折叠选择
-  useEffect(() => {
-    if (windowOpen) setCollapsed(false);
-  }, [windowOpen]);
+  // §20260823-02 P3 — 删除「窗口开启时自动展开」副作用:面板不再每轮 speak
+  // 被强制摊开,折叠偏好完全由用户控制(localStorage 持久化)。
 
   if (mySeat < 0) return null;
 
@@ -116,6 +124,12 @@ export const FactionBetPanel: React.FC<FactionBetPanelProps> = ({
           💰 {t('werewolf.bet.title')}
           {!windowOpen && <span className="ww-faction-bet__closed">· {t('werewolf.letter.window_closed')}</span>}
         </h4>
+        {/* §20260823-02 P3 — 收起态单行摘要:最近一次下注结果。点击 header 整行重新展开。 */}
+        {!showFullPanel && lastBetAmount !== null && (
+          <span className="ww-faction-bet__result">
+            {t('werewolf.panel.sentBet', { amount: lastBetAmount })}
+          </span>
+        )}
         <span className="ww-panel__arrow" aria-hidden="true">{showFullPanel ? '▼' : '▲'}</span>
       </header>
       {windowOpen && showFullPanel && (

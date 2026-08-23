@@ -22,7 +22,7 @@
  *   - DH7 发动即公开身份(文案提示)
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { werewolfAssets } from '@/assets/images/werewolf';
 import { useT } from '@/hooks/useT';
 import { phaseLabel as phaseLabelKey } from '@/components/werewolf/phaseLabel';
@@ -54,11 +54,31 @@ export function NightActionPanel({ gameState, onAction, busy }: Props) {
   // 跨阶段/跨玩家死亡重置本地选中态,避免上轮已死座位的"投票给 #N"按钮残留(自动化测试报告 T2)。
   // 例: D1 夜狼人选中 #8 → 进入 seer/witch 阶段(组件仍挂载,仅渲染"闭眼") → D2 夜 phase 回到 night_wolves,
   // 此时 #8 已死,座位按钮被隐藏(p.alive=false),但 action-row 仍显示"投票给 #8"。
+  // §20260823-02 P9 — 提交成功后(busy 等待阶段推进期间)渲染紧凑「已提交」态,
+  // 避免全表单定格;若 busy 回落而阶段未推进(被拒/超时)则恢复表单可重试。
+  const [submitted, setSubmitted] = useState(false);
+  const busyRef = useRef(false);
+  useEffect(() => {
+    if (busy) {
+      busyRef.current = true;
+    } else if (busyRef.current) {
+      busyRef.current = false;
+      setSubmitted(false);
+    }
+  }, [busy]);
+
   const aliveSnap = gameState.players.map(p => p.alive).join(',');
   useEffect(() => {
     setTarget(null);
     setPoisonTarget(null);
+    setSubmitted(false);
   }, [phase, aliveSnap]);
+
+  // 包装 onAction:发送动作即视为已交付服务端(WS fire-and-forget),进入紧凑态。
+  const handleAction: Props['onAction'] = (action, opts) => {
+    onAction(action, opts);
+    setSubmitted(true);
+  };
 
   // 若当前选中目标已死亡(由其它路径导致),同步清除,避免"投票给 #N"指向不可选座位。
   if (target !== null && !gameState.players[target]?.alive) {
@@ -91,6 +111,27 @@ export function NightActionPanel({ gameState, onAction, busy }: Props) {
           <li>{t('werewolf.dead.actions.watch')}</li>
           <li>{t('werewolf.dead.actions.lastwords')}</li>
         </ul>
+      </div>
+    );
+  }
+
+  // §20260823-02 P9 — 紧凑已提交态(点击可恢复表单重试,兜底服务端拒收场景)。
+  if (submitted) {
+    return (
+      <div
+        className="werewolf-action-panel ww-cap-submitted"
+        role="button"
+        tabIndex={0}
+        onClick={() => setSubmitted(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setSubmitted(false);
+          }
+        }}
+        data-testid="werewolf-night-submitted"
+      >
+        {t('werewolf.panel.submitted')}
       </div>
     );
   }
@@ -144,7 +185,7 @@ export function NightActionPanel({ gameState, onAction, busy }: Props) {
         <div className="action-row">
           <button
             className="btn btn-primary"
-            onClick={() => target !== null && onAction('guard_protect', { target })}
+            onClick={() => target !== null && handleAction('guard_protect', { target })}
             disabled={busy || target === null}
           >
             {t('werewolf.guard.protect')}
@@ -152,7 +193,7 @@ export function NightActionPanel({ gameState, onAction, busy }: Props) {
           </button>
           <button
             className="btn btn-secondary"
-            onClick={() => onAction('guard_protect', { target: -1 })}
+            onClick={() => handleAction('guard_protect', { target: -1 })}
             disabled={busy}
           >
             {t('werewolf.guard.skip')}
@@ -271,14 +312,14 @@ export function NightActionPanel({ gameState, onAction, busy }: Props) {
             <>
               <button
                 className="btn btn-primary"
-                onClick={() => onAction('wolf_kill', { target: target ?? -1 })}
+                onClick={() => handleAction('wolf_kill', { target: target ?? -1 })}
                 disabled={busy || target === null || !gameState.players[target]?.alive}
               >
                 投票给 #{target !== null ? target + 1 : '?'}
               </button>
               <button
                 className="btn btn-secondary"
-                onClick={() => onAction('wolf_kill', { target: -1 })}
+                onClick={() => handleAction('wolf_kill', { target: -1 })}
                 disabled={busy}
               >
                 弃权
@@ -314,7 +355,7 @@ export function NightActionPanel({ gameState, onAction, busy }: Props) {
         <div className="action-row">
           <button
             className="btn btn-primary"
-            onClick={() => target !== null && onAction('seer_check', { target })}
+            onClick={() => target !== null && handleAction('seer_check', { target })}
             disabled={busy || target === null}
           >
             查验
@@ -358,7 +399,7 @@ export function NightActionPanel({ gameState, onAction, busy }: Props) {
         <div className="action-row">
           <button
             className="btn btn-secondary"
-            onClick={() => onAction('witch_act', { witchAction: 'none' })}
+            onClick={() => handleAction('witch_act', { witchAction: 'none' })}
             disabled={busy}
           >
             不用药
@@ -366,7 +407,7 @@ export function NightActionPanel({ gameState, onAction, busy }: Props) {
           {wolfTarget >= 0 && antidoteAvail && (
             <button
               className="btn btn-primary"
-              onClick={() => onAction('witch_act', { witchAction: 'antidote' })}
+              onClick={() => handleAction('witch_act', { witchAction: 'antidote' })}
               disabled={busy}
             >
               💊 解药救人
@@ -375,7 +416,7 @@ export function NightActionPanel({ gameState, onAction, busy }: Props) {
           {poisonAvail && poisonTarget !== null && (
             <button
               className="btn btn-danger"
-              onClick={() => onAction('witch_act', { witchAction: 'poison', witchTarget: poisonTarget })}
+              onClick={() => handleAction('witch_act', { witchAction: 'poison', witchTarget: poisonTarget })}
               disabled={busy}
             >
               ☠ 毒 #{poisonTarget + 1}
@@ -436,7 +477,7 @@ export function NightActionPanel({ gameState, onAction, busy }: Props) {
             <div className="action-row">
               <button
                 className="btn btn-primary"
-                onClick={() => target !== null && onAction('demon_hunter_hunt', { target })}
+                onClick={() => target !== null && handleAction('demon_hunter_hunt', { target })}
                 disabled={busy || target === null}
               >
                 {t('werewolf.demon_hunter.confirm')}
@@ -444,7 +485,7 @@ export function NightActionPanel({ gameState, onAction, busy }: Props) {
               </button>
               <button
                 className="btn btn-secondary"
-                onClick={() => onAction('demon_hunter_hunt', { target: -1 })}
+                onClick={() => handleAction('demon_hunter_hunt', { target: -1 })}
                 disabled={busy}
               >
                 {t('werewolf.demon_hunter.skip')}

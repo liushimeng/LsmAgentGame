@@ -64,3 +64,8 @@
 @import './werewolf-20260817-05.css';
 @import './appmodal.css';
 @import './werewolf-modal.css';
+
+/* 2026-08-23 §20260823-02 — 狼人杀弹出式/堆叠式面板优化(统一折叠骨架 ww-cap-* +
+   PropUseOverlay 可关闭 + RecallChatPanel ✕ + 各面板提交即收起摘要)。
+   只追加在末尾,不调整既有 @import 链顺序(CLAUDE.md §2.1 约束 4)。 */
+@import './werewolf-20260823-02.css';

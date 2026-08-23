@@ -1124,6 +1124,16 @@ const zhCN: Dict = {
   'werewolf.prop.expand': '展开',
   'werewolf.prop.deadBadge': '☠ 已死亡',
   'werewolf.prop.deadLockedHint': '☠ 已死亡 · 本局道具无法使用',
+  // 2026-08-23 §20260823-02 — 弹出式/堆叠式面板优化:统一折叠骨架 + 提交即收起摘要。
+  'werewolf.panel.collapse': '收起',
+  'werewolf.panel.expand': '展开',
+  'werewolf.panel.close': '关闭',
+  'werewolf.panel.sentProp': '✅ 已使用 {name}',
+  'werewolf.panel.sentLetter': '✅ 信件已发送至 #{seat}',
+  'werewolf.panel.sentBet': '✅ 已下注 {amount}',
+  'werewolf.panel.voted': '✅ 已投票 #{seat}',
+  'werewolf.panel.submitted': '✅ 已提交,等待阶段推进',
+  'werewolf.panel.restartVoted': '✅ 已投 {choice},等待其他玩家',
   // 2026-08-09 §20260808-03 — 死亡玩家观察者提示
   'werewolf.dead.title': '你已阵亡 · {phase}',
   'werewolf.dead.nightHint': '夜间由存活玩家行动(狼人/守卫/预言家/女巫)。等待黎明遗言。',

@@ -1,0 +1,271 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   2026-08-23 §20260823-02 — 狼人杀弹出式/堆叠式面板优化。
+
+   范围:
+     1. CollapsibleActionPanel 统一骨架(ww-cap-*):header 整行可点 +
+        ≥44px 折叠按钮 + 收起态单行摘要(≤36px)。
+     2. PropPanel / SecretLetterPanel / FactionBetPanel 既有折叠控件
+        触控目标补齐到 44px(--ww-touch-target)。
+     3. PropUseOverlay 可关闭(卡片 pointer-events:auto + 右上角 ✕)。
+     4. RecallChatPanel ✕ 关闭按钮。
+     5. WerewolfRestartVotePanel 已投票单行摘要条。
+     6. LastWordsPanel / NightActionPanel / HunterShootInline 已提交紧凑态。
+
+   §26 对比度规约:摘要文字用 #f0f0f0(暗底 ≥4.5:1);禁用态不用 opacity:0.4;
+   prefers-reduced-motion 下关闭过渡动画。
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* ── 1. 统一可折叠骨架 ww-cap-* ─────────────────────────────────────────── */
+
+.ww-cap__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 6px;
+}
+
+.ww-cap__header:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ww-cap__title {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.ww-cap__badge {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #f0c674;
+}
+
+/* 收起态单行摘要:单行省略,文字 #f0f0f0 保 §26 ≥4.5:1 对比度。 */
+.ww-cap__summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 24px;
+  color: #f0f0f0;
+}
+
+/* 折叠按钮:44×44 触控目标,醒目但不喧宾夺主。 */
+.ww-cap__toggle {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -8px -8px -8px 0; /* 触控区外扩,不撑高 header */
+  border: none;
+  background: transparent;
+  color: #f0f0f0;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.ww-cap__toggle:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.ww-cap__toggle:focus-visible {
+  outline: 2px solid #f0c674;
+  outline-offset: -2px;
+}
+
+.ww-cap.is-collapsed {
+  /* 收起态整行 ≤36px:摘要 + toggle 外扩触控区不增加盒高 */
+}
+
+/* 骨架包在 .werewolf-action-panel 外层时(DayControlPanel),避免双层 padding。 */
+.ww-cap.werewolf-action-panel .ww-cap__body > :first-child {
+  margin-top: 0;
+}
+
+/* ── 2. 既有面板折叠控件触控目标补齐 ────────────────────────────────────── */
+
+/* PropPanel 折叠按钮(既有 class,§20260808-03):补齐 44px 触控目标。 */
+.werewolf-prop-panel__header {
+  cursor: pointer;
+}
+
+.werewolf-prop-panel__collapse-btn {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* SecretLetterPanel / FactionBetPanel header 箭头(既有 class):
+   触控目标 20px → 44px,负 margin 保持视觉布局不变。 */
+.ww-secret-letter .ww-panel__arrow,
+.ww-faction-bet .ww-panel__arrow {
+  width: 44px;
+  height: 44px;
+  margin: -12px -10px -12px 0;
+  font-size: 14px;
+  color: #f0f0f0;
+}
+
+/* 收起态 header 内的结果摘要(信件已发送 / 已下注)。 */
+.ww-secret-letter__result,
+.ww-faction-bet__result {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #f0f0f0;
+}
+
+/* ── 3. PropUseOverlay 可关闭(§20260823-02 P6) ─────────────────────────── */
+
+/* 卡片本体可点击关闭;容器仍 pointer-events:none 不挡座位点击。 */
+.ww-prop-overlay__center {
+  pointer-events: auto;
+  cursor: pointer;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+/* 右上角 ✕:44px 触控目标,半透深底 + 白字(§26:不用 opacity:0.4 禁用态)。 */
+.ww-prop-overlay__close {
+  position: absolute;
+  top: -8px;
+  right: 0;
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #f0f0f0;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.ww-prop-overlay__close:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.ww-prop-overlay__close:focus-visible {
+  outline: 2px solid #f0c674;
+  outline-offset: 2px;
+}
+
+/* ── 4. RecallChatPanel ✕ 关闭按钮(§20260823-02 P7) ────────────────────── */
+
+.recall-panel__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.recall-panel__close {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -8px -8px -8px 0;
+  border: none;
+  background: transparent;
+  color: #f0f0f0;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.recall-panel__close:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.recall-panel__close:focus-visible {
+  outline: 2px solid #f0c674;
+  outline-offset: -2px;
+}
+
+/* ── 5. 重开局投票「已投票」单行摘要条(§20260823-02 P8) ────────────────── */
+
+.restart-vote__strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  user-select: none;
+}
+
+.restart-vote__strip:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.restart-vote__strip-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: #f0f0f0;
+}
+
+.restart-vote__strip-toggle {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -10px -10px -10px 0;
+  border: none;
+  background: transparent;
+  color: #f0f0f0;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+/* ── 6. 「已提交,等待阶段推进」紧凑态(§20260823-02 P9) ─────────────────── */
+
+.ww-cap-submitted {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(76, 175, 80, 0.18);
+  border: 1px solid rgba(76, 175, 80, 0.45);
+  color: #e8f5e9;
+  font-size: 13px;
+}
+
+/* ── prefers-reduced-motion 兜底(§26.3) ────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .ww-cap__toggle,
+  .ww-prop-overlay__close,
+  .recall-panel__close {
+    transition: none;
+  }
+}

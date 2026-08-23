@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { useT } from '@/hooks/useT';
 import { wsClient } from '../../services/ws';
+import { reportGlobalError } from '@/services/globalError';
 
 interface CommitmentButtonProps {
   roomId: string;
@@ -50,9 +51,12 @@ export function CommitmentButton({ roomId, mySeat, aliveSeats, disabled }: Commi
         target: needsTarget ? targetSeat : -1,
         reason: reason.trim().slice(0, 30),
       });
+      // §20260823-02 P5 — 发送成功:关闭弹层 + 全局成功提示(对齐「提交即收起」);
+      // 发送抛错走 catch,弹层保持打开 + 内联错误(§7.1)。
       setOpen(false);
       setReason('');
       setTargetSeat(-1);
+      reportGlobalError({ message: t('werewolf.panel.submitted'), severity: 'success' });
     } catch (e: any) {
       setError(e.message || t('werewolf.commitment.submitFailed'));
     } finally {

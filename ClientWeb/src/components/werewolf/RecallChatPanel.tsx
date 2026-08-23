@@ -33,6 +33,8 @@ interface RecallChatPanelProps {
   roomId: string;
   /** 本局 bot 座位候选(由父组件从 gameState.players 过滤 is_bot/agent_name)。 */
   botSeats: BotSeatOption[];
+  /** §20260823-02 P7 — 右上角 ✕ 关闭回调(由父组件控制 dock 不再自动出现)。 */
+  onClose?: () => void;
 }
 
 interface QAItem {
@@ -50,7 +52,7 @@ const MAX_QUESTION_LEN = 200;
  * RecallChatPanel —— 赛后复盘问答。
  * 纯前端本地 state 管理问答历史(不落库);提问走 REST 单轮请求/响应。
  */
-export function RecallChatPanel({ roomId, botSeats }: RecallChatPanelProps) {
+export function RecallChatPanel({ roomId, botSeats, onClose }: RecallChatPanelProps) {
   const t = useT();
   const [seat, setSeat] = useState<number>(botSeats[0]?.seat ?? -1);
   const [question, setQuestion] = useState('');
@@ -123,7 +125,22 @@ export function RecallChatPanel({ roomId, botSeats }: RecallChatPanelProps) {
 
   return (
     <div className="recall-panel">
-      <div className="recall-panel__title">💬 {t('werewolf.recall.title' as TKey)}</div>
+      {/* §20260823-02 P7 — 标题行右侧 ✕ 关闭按钮(44px 触控目标,i18n aria-label)。 */}
+      <div className="recall-panel__title-row">
+        <div className="recall-panel__title">💬 {t('werewolf.recall.title' as TKey)}</div>
+        {onClose && (
+          <button
+            type="button"
+            className="recall-panel__close"
+            onClick={onClose}
+            aria-label={t('werewolf.panel.close' as TKey)}
+            title={t('werewolf.panel.close' as TKey)}
+            data-testid="werewolf-recall-close"
+          >
+            ✕
+          </button>
+        )}
+      </div>
       <div className="recall-panel__hint">{t('werewolf.recall.hint' as TKey)}</div>
 
       <div className="recall-panel__composer">

@@ -1123,6 +1123,16 @@ const en: Dict = {
   'werewolf.prop.expand': 'Expand',
   'werewolf.prop.deadBadge': '☠ Dead',
   'werewolf.prop.deadLockedHint': '☠ Dead · props disabled this round',
+  // 2026-08-23 §20260823-02 — popup/stacked panel optimization: unified collapse + submit-to-collapse summaries.
+  'werewolf.panel.collapse': 'Collapse',
+  'werewolf.panel.expand': 'Expand',
+  'werewolf.panel.close': 'Close',
+  'werewolf.panel.sentProp': '✅ Used {name}',
+  'werewolf.panel.sentLetter': '✅ Letter sent to #{seat}',
+  'werewolf.panel.sentBet': '✅ Bet {amount} placed',
+  'werewolf.panel.voted': '✅ Voted #{seat}',
+  'werewolf.panel.submitted': '✅ Submitted, awaiting phase',
+  'werewolf.panel.restartVoted': '✅ Voted {choice}, waiting others',
   // 2026-08-09 §20260808-03 — Dead-player observer hints
   'werewolf.dead.title': 'You are dead · {phase}',
   'werewolf.dead.nightHint': 'Night actions belong to living players (wolf/guard/seer/witch). Await dawn.',

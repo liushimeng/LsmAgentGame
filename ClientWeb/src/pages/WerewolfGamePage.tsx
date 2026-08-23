@@ -132,6 +132,15 @@ export function WerewolfGamePage() {
     return () => window.removeEventListener('idiot-reveal-closed', onClosed);
   }, []);
 
+  // §20260823-02 P7 — 赛后复盘 dock(RecallChatPanel)✕ 关闭后本局不再自动出现;
+  // phase 离开 over 再回来时重置(新一局终局可再次展示)。
+  const [recallDismissed, setRecallDismissed] = useState(false);
+  useEffect(() => {
+    if (gameState?.phase !== 'over') {
+      setRecallDismissed(false);
+    }
+  }, [gameState?.phase]);
+
   // 入局 / 切视图时 reset
   useEffect(() => {
     if (!roomId) return;
@@ -895,10 +904,11 @@ export function WerewolfGamePage() {
        * 观战者开放:向本局任意 bot 座位提问,bot 用冻结 Memory 快照单轮回答。
        * bot 座位列表从 bot_contexts(权威 bot 清单)+ players(role,终局已公开)
        * 合并构造;全 AI 房间观战者同样可用。 */}
-      {gameState?.phase === 'over' && (gameState.bot_contexts?.length ?? 0) > 0 && (
+      {gameState?.phase === 'over' && !recallDismissed && (gameState.bot_contexts?.length ?? 0) > 0 && (
         <div className="werewolf-recall-dock">
           <RecallChatPanel
             roomId={roomId ?? ''}
+            onClose={() => setRecallDismissed(true)}
             botSeats={(gameState.bot_contexts ?? []).map((bc): BotSeatOption => {
               const p = gameState.players?.[bc.seat];
               // 终局后存活座位 players[].role 经 RolePubliclyRevealed 全场公开;
@@ -918,7 +928,8 @@ export function WerewolfGamePage() {
       )}
 
       {/* 2026-07-23 §道具特效 — 道具使用视觉特效叠加层(监听 lastPropEvent/lastPropSeq
-          触发,最少展示 12 秒,pointer-events:none 不阻塞交互)。覆盖整个 werewolf-game 区域。 */}
+          触发;§20260823-02 起展示 ≤4s 且可点击 ✕/卡片关闭,pointer-events:none
+          容器不阻塞交互)。覆盖整个 werewolf-game 区域。 */}
       {gameState && (
         <PropUseOverlay
           players={gameState.players.map((p, i) => (p ? { seat: i, name: p.agent_name } : null))}
@@ -937,6 +948,28 @@ function HunterShootInline({
   onShoot: (target: number) => void;
 }) {
   const t = useT();
+  // §20260823-02 P9 — 开枪提交后渲染紧凑「已提交」态,等待阶段推进
+  // (hunter_pending 清除即卸载);点击紧凑条可恢复座位网格重试。
+  const [submitted, setSubmitted] = useState(false);
+  if (submitted) {
+    return (
+      <div
+        className="werewolf-action-panel ww-cap-submitted"
+        role="button"
+        tabIndex={0}
+        onClick={() => setSubmitted(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setSubmitted(false);
+          }
+        }}
+        data-testid="werewolf-hunter-submitted"
+      >
+        {t('werewolf.panel.submitted')}
+      </div>
+    );
+  }
   return (
     <div className="werewolf-action-panel">
       <h4>🎯 {t('werewolf.action.hunterShootPrompt')}</h4>
@@ -949,7 +982,10 @@ function HunterShootInline({
               key={seat}
               type="button"
               className="seat-chip"
-              onClick={() => onShoot(seat)}
+              onClick={() => {
+                onShoot(seat);
+                setSubmitted(true);
+              }}
               data-testid={`werewolf-hunter-target-${seat}`}
             >
               #{seat + 1}

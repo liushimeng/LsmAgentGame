@@ -497,6 +497,16 @@ export interface Dict {
   'werewolf.prop.expand': string;
   'werewolf.prop.deadBadge': string;
   'werewolf.prop.deadLockedHint': string;
+  // 2026-08-23 §20260823-02 — 弹出式/堆叠式面板优化:统一折叠骨架 + 提交即收起摘要。
+  'werewolf.panel.collapse': string;
+  'werewolf.panel.expand': string;
+  'werewolf.panel.close': string;
+  'werewolf.panel.sentProp': string; // {name}
+  'werewolf.panel.sentLetter': string; // {seat}
+  'werewolf.panel.sentBet': string; // {amount}
+  'werewolf.panel.voted': string; // {seat}
+  'werewolf.panel.submitted': string;
+  'werewolf.panel.restartVoted': string; // {choice}
   // 2026-08-09 §20260808-03 — 死亡玩家在各阶段看到的观察者提示。
   'werewolf.dead.title': string; // {phase}
   'werewolf.dead.nightHint': string;

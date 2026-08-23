@@ -1122,6 +1122,16 @@ const ja: Dict = {
   'werewolf.prop.expand': '展開',
   'werewolf.prop.deadBadge': '☠ 死亡',
   'werewolf.prop.deadLockedHint': '☠ 死亡 · 本局の道具は使用不可',
+  // 2026-08-23 §20260823-02 — ポップアップ/積層パネル最適化:統一折りたたみ + 送信後自動折りたたみ要約。
+  'werewolf.panel.collapse': '折りたたむ',
+  'werewolf.panel.expand': '展開',
+  'werewolf.panel.close': '閉じる',
+  'werewolf.panel.sentProp': '✅ {name} 使用済み',
+  'werewolf.panel.sentLetter': '✅ #{seat} に送信済み',
+  'werewolf.panel.sentBet': '✅ {amount} ベット済み',
+  'werewolf.panel.voted': '✅ #{seat} に投票済み',
+  'werewolf.panel.submitted': '✅ 送信済み・フェーズ待ち',
+  'werewolf.panel.restartVoted': '✅ {choice} 投票済み',
   // 2026-08-09 §20260808-03 — 死亡プレイヤーのオブザーバーヒント
   'werewolf.dead.title': '死亡しています · {phase}',
   'werewolf.dead.nightHint': '夜間は生存プレイヤーの行動(狼/守卫/預言家/魔女)。明け方の遺言をお待ちください。',

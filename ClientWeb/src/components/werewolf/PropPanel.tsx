@@ -66,17 +66,26 @@ const PropPanel: React.FC<Props> = ({ gameState, mySeat, myRole, myFaction, onUs
   const [formError, setFormError] = useState<string | null>(null);
   const [selectedProp, setSelectedProp] = useState<string | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<number | null>(null);
-  // 2026-08-09 §20260808-03 — 道具列表折叠状态。默认展开;持久化到
+  // 2026-08-09 §20260808-03 — 道具列表折叠状态。持久化到
   // localStorage(对齐 §23 LS_FOLD_CHAT/LS_FOLD_INFO 模式),刷新后保留。
   // 折叠仅影响列表展示,PropUseOverlay 事件特效正常触发(正交)。
+  // 2026-08-23 §20260823-02 P1 — 默认改为收起(无存储值的首次渲染);
+  // 已有存储值的老用户不动。提交成功后自动收起 + 单行结果摘要。
   const LS_PROP_COLLAPSED = 'werewolf.prop.collapsed';
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     try {
-      return typeof window !== 'undefined' && window.localStorage.getItem(LS_PROP_COLLAPSED) === '1';
+      if (typeof window === 'undefined') return true;
+      const v = window.localStorage.getItem(LS_PROP_COLLAPSED);
+      return v !== null ? v === '1' : true;
     } catch {
-      return false;
+      return true;
     }
   });
+  // §20260823-02 P1 — 最近一次道具使用结果摘要(收起态单行展示)。
+  const [lastResult, setLastResult] = useState<string | null>(null);
+  // §20260823-02 P1 — formError 非空时强制展开(失败不收起,§7.1 就地改错)。
+  const effectiveCollapsed = isCollapsed && !formError;
+  const toggleCollapsed = () => setIsCollapsed((v) => !v);
   useEffect(() => {
     try {
       if (typeof window !== 'undefined') {
@@ -238,6 +247,13 @@ const PropPanel: React.FC<Props> = ({ gameState, mySeat, myRole, myFaction, onUs
     try {
       // AOE 道具 target_seat = -1;后端 prop_engine 会按 is_aoe 判定。
       onUseProp(p.prop_key, targetSeat);
+      // §20260823-02 P1 — 提交即收起(WS fire-and-forget,发送动作本身即视为
+      // 已交付服务端):自动收起 + 单行结果摘要「✅ 已使用 {道具名}→#{seat} / AOE」。
+      // 后端拒绝会以 prop 事件/game.error 回流,此时 formError 非空 → 强制展开。
+      const name = p.name_zh || p.prop_key;
+      const targetText = p.is_aoe ? 'AOE' : `#${(targetSeat ?? -1) + 1}`;
+      setLastResult(`${t('werewolf.panel.sentProp', { name })} → ${targetText}`);
+      setIsCollapsed(true);
     } catch (e: unknown) {
       if (isSessionExpiredError(e)) return;
       const msg = errorMessage(e, t('werewolf.prop.error.unknown'));
@@ -248,14 +264,28 @@ const PropPanel: React.FC<Props> = ({ gameState, mySeat, myRole, myFaction, onUs
 
   return (
     <div
-      className={`werewolf-action-panel werewolf-prop-panel${iAmDead ? ' is-dead' : ''}${isCollapsed ? ' is-collapsed' : ''}`}
+      className={`werewolf-action-panel werewolf-prop-panel${iAmDead ? ' is-dead' : ''}${effectiveCollapsed ? ' is-collapsed' : ''}`}
       data-testid="werewolf-prop-panel"
       data-dead={iAmDead ? '1' : undefined}
     >
       {/* 2026-08-09 §20260808-03 — header 包含 title + 死亡徽章 + 折叠按钮。
           折叠/死亡正交:折叠只是收起列表,死态不强制折叠(用户可能想看历史)。
-          折叠后整个 props list / recent events 隐藏,header 仍可点。 */}
-      <div className="werewolf-prop-panel__header">
+          折叠后整个 props list / recent events 隐藏,header 仍可点。
+          2026-08-23 §20260823-02 P1 — header 整行可点 + 收起态单行摘要
+          (最近使用结果/余额),折叠按钮触控目标 44px(CSS 补齐)。 */}
+      <div
+        className="werewolf-prop-panel__header"
+        role="button"
+        tabIndex={0}
+        aria-expanded={!effectiveCollapsed}
+        onClick={toggleCollapsed}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleCollapsed();
+          }
+        }}
+      >
         <h4>
           🎴 {t('werewolf.prop.title')}
           {iAmDead && (
@@ -264,22 +294,33 @@ const PropPanel: React.FC<Props> = ({ gameState, mySeat, myRole, myFaction, onUs
             </span>
           )}
         </h4>
+        {effectiveCollapsed && (
+          <span className="ww-cap__summary">
+            {lastResult ??
+              (iAmDead
+                ? t('werewolf.prop.deadLockedHint')
+                : myBalance != null
+                  ? t('werewolf.prop.balance', { balance: myBalance })
+                  : t('werewolf.prop.balanceLoading'))}
+          </span>
+        )}
         <button
           type="button"
           className="werewolf-prop-panel__collapse-btn"
-          onClick={() => setIsCollapsed((v) => !v)}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleCollapsed();
+          }}
           data-testid="werewolf-prop-collapse"
-          aria-label={isCollapsed ? t('werewolf.prop.expand') : t('werewolf.prop.collapse')}
-          title={isCollapsed ? t('werewolf.prop.expand') : t('werewolf.prop.collapse')}
+          aria-expanded={!effectiveCollapsed}
+          aria-label={effectiveCollapsed ? t('werewolf.panel.expand') : t('werewolf.panel.collapse')}
+          title={effectiveCollapsed ? t('werewolf.panel.expand') : t('werewolf.panel.collapse')}
         >
-          {isCollapsed ? `▶ ${t('werewolf.prop.expand')}` : `▲ ${t('werewolf.prop.collapse')}`}
+          {effectiveCollapsed ? '▶' : '▼'}
         </button>
       </div>
-      {isCollapsed && (
-        <p className="werewolf-prop-panel__collapsed-hint">
-          {iAmDead ? t('werewolf.prop.deadLockedHint') : t('werewolf.prop.collapse')}
-        </p>
-      )}
+      {/* §20260823-02 P1 — 原 __collapsed-hint 段落已由 header 内联摘要取代,
+          收起态保持单行 ≤36px。 */}
       {/* v5 EconTier 5 档徽章 — 展示当前房间经济档位 + 销毁率。
           后端 ComputeEconTier 输出;UI 与 server docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.3 表格对齐 */}
       <p

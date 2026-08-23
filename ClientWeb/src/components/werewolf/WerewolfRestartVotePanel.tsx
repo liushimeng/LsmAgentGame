@@ -46,6 +46,10 @@ export const WerewolfRestartVotePanel: React.FC<PanelProps> = ({ gameState, onCa
   const mySeat = gameState.my_seat;
   const isSpectator = mySeat < 0 || mySeat >= gameState.players.length;
 
+  // §20260823-02 P8 — 我已投票后收起为单行摘要(可再展开);仅本局内存态,
+  // 不写 localStorage(投票是一次性动作,无跨局偏好)。
+  const [stripExpanded, setStripExpanded] = useState(false);
+
   const decided = !!rv?.decided;
   const result = rv?.result;
   const winner = rv?.winner ?? '';
@@ -91,6 +95,16 @@ export const WerewolfRestartVotePanel: React.FC<PanelProps> = ({ gameState, onCa
     return winner;
   }, [winner, t]);
 
+  // §20260823-02 P8 — 我已投票且尚未决定 → 主体(三列票数 + 投票按钮)收起为
+  // 单行摘要条「✅ 已投 {choice} · 当前票数」,点击可再展开;决定后恢复全量。
+  const collapsedStrip = !!myChoice && !decided && !isSpectator && !stripExpanded;
+  const myChoiceLabel =
+    myChoice === 'yes'
+      ? t('werewolf.restartVote.yesBtn')
+      : myChoice === 'no'
+        ? t('werewolf.restartVote.noBtn')
+        : t('werewolf.restartVote.abstainBtn');
+
   return (
     <div className="restart-vote" data-testid="werewolf-restart-vote">
       <div className={`restart-vote__banner ${bannerCls}`}>
@@ -110,7 +124,45 @@ export const WerewolfRestartVotePanel: React.FC<PanelProps> = ({ gameState, onCa
         )}
       </div>
 
-      {!decided && !isSpectator && (
+      {collapsedStrip && (
+        <div
+          className="restart-vote__strip"
+          role="button"
+          tabIndex={0}
+          aria-expanded={false}
+          onClick={() => setStripExpanded(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setStripExpanded(true);
+            }
+          }}
+          data-testid="restart-vote-strip"
+        >
+          <span className="restart-vote__strip-text">
+            {t('werewolf.panel.restartVoted', { choice: myChoiceLabel })}
+            {' · '}
+            {t('werewolf.restartVote.quorum', {
+              cur: yesSeats.length,
+              quota: rv?.yes_quota ?? 0,
+            })}
+          </span>
+          <button
+            type="button"
+            className="restart-vote__strip-toggle"
+            aria-label={t('werewolf.panel.expand')}
+            title={t('werewolf.panel.expand')}
+            onClick={(e) => {
+              e.stopPropagation();
+              setStripExpanded(true);
+            }}
+          >
+            ▶
+          </button>
+        </div>
+      )}
+
+      {!collapsedStrip && !decided && !isSpectator && (
         <div className="restart-vote__actions">
           <button
             type="button"
@@ -147,12 +199,13 @@ export const WerewolfRestartVotePanel: React.FC<PanelProps> = ({ gameState, onCa
         </div>
       )}
 
-      {isSpectator && !decided && (
+      {isSpectator && !decided && !collapsedStrip && (
         <div className="restart-vote__spectator">
           {t('werewolf.restartVote.spectatorHint')}
         </div>
       )}
 
+      {!collapsedStrip && (
       <div className="restart-vote__columns">
         <div className="restart-vote__col restart-vote__col--yes">
           <h3>{t('werewolf.restartVote.yesCol')}</h3>
@@ -182,6 +235,7 @@ export const WerewolfRestartVotePanel: React.FC<PanelProps> = ({ gameState, onCa
           </ul>
         </div>
       </div>
+      )}
 
       <p className="restart-vote__spec">
         {t('werewolf.restartVote.spec')}

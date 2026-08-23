@@ -12,7 +12,8 @@
  *   - 提交后 textarea 清空 + busy=true 锁住按钮 500ms(对齐其它 Action_* 节流)
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useT } from '@/hooks/useT';
 import type { WerewolfGameState } from '@/types/werewolf';
 
 interface Props {
@@ -25,9 +26,22 @@ interface Props {
 const MAX_TEXT = 200;
 
 export function LastWordsPanel({ gameState, onSpeak, onSkip, busy }: Props) {
+  const t = useT();
   const phase = gameState.phase;
   const mySeat = gameState.my_seat;
   const [text, setText] = useState('');
+  // §20260823-02 P9 — 提交成功后(busy 等待阶段推进期间)渲染紧凑「已提交」态,
+  // 避免全表单定格;若 busy 回落而阶段未推进(被拒/超时)则恢复表单可重试。
+  const [submitted, setSubmitted] = useState(false);
+  const busyRef = useRef(false);
+  useEffect(() => {
+    if (busy) {
+      busyRef.current = true;
+    } else if (busyRef.current) {
+      busyRef.current = false;
+      setSubmitted(false);
+    }
+  }, [busy]);
   // 1s tick for countdown (服务端给的是 1 帧快照)
   const [_, setTick] = useState(0);
   useEffect(() => {
@@ -41,6 +55,27 @@ export function LastWordsPanel({ gameState, onSpeak, onSkip, busy }: Props) {
   const currentSeat = gameState.phase_extra?.death_lyric?.current_seat ?? -1;
   if (mySeat !== currentSeat) return null;
 
+  // §20260823-02 P9 — 紧凑已提交态(点击可恢复表单重试,兜底服务端拒收场景)。
+  if (submitted) {
+    return (
+      <div
+        className="last-words-panel ww-cap-submitted"
+        role="button"
+        tabIndex={0}
+        onClick={() => setSubmitted(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setSubmitted(false);
+          }
+        }}
+        data-testid="last-words-submitted"
+      >
+        {t('werewolf.panel.submitted')}
+      </div>
+    );
+  }
+
   // 倒计时:用 phase_extra.remaining_sec(快照)+ 自 tick 同步刷新
   const remaining = Math.max(0, gameState.phase_extra?.remaining_sec ?? 30);
   const trimmed = text.trim();
@@ -51,6 +86,13 @@ export function LastWordsPanel({ gameState, onSpeak, onSkip, busy }: Props) {
     if (tooLong || tooShort || busy) return;
     onSpeak(trimmed);
     setText('');
+    setSubmitted(true);
+  };
+
+  const skip = () => {
+    if (busy) return;
+    onSkip();
+    setSubmitted(true);
   };
 
   return (
@@ -79,7 +121,7 @@ export function LastWordsPanel({ gameState, onSpeak, onSkip, busy }: Props) {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={onSkip}
+            onClick={skip}
             disabled={busy}
             data-testid="last-words-skip"
           >

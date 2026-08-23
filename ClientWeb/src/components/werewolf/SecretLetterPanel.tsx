@@ -25,7 +25,8 @@ interface SecretLetterPanelProps {
   mySeat: number; // -1 = observer
   aliveSeats: number[]; // 存活座位列表
   windowOpen: boolean; // 仅 speak 阶段可发
-  t: (k: any) => string;
+  // §20260823-02 P2 — 加宽类型以支持插值({seat}),与 useT 返回签名兼容。
+  t: (k: any, vars?: Record<string, string | number>) => string;
 }
 
 export const SecretLetterPanel: React.FC<SecretLetterPanelProps> = ({
@@ -41,14 +42,18 @@ export const SecretLetterPanel: React.FC<SecretLetterPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // §20260816-01 折叠态:默认折叠以节省中栏空间,持久化到 localStorage
+  // §20260823-02 P2 — 无存储值时一律默认收起(原 !windowOpen 会在 speak 阶段
+  // 首次进入时默认摊开,与「主界面优先」目标冲突);已有存储值的用户不动。
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
       const v = localStorage.getItem(LS_KEY);
-      return v !== null ? v === '1' : !windowOpen;
+      return v !== null ? v === '1' : true;
     } catch {
-      return !windowOpen;
+      return true;
     }
   });
+  // §20260823-02 P2 — 最近一次发送结果摘要(收起态单行展示「✅ 信件已发送至 #N」)。
+  const [lastSentSeat, setLastSentSeat] = useState<number | null>(null);
 
   const toggle = useCallback(() => {
     setCollapsed((c) => {
@@ -79,10 +84,8 @@ export const SecretLetterPanel: React.FC<SecretLetterPanelProps> = ({
     refresh();
   }, [refresh]);
 
-  // 窗口开启时自动展开,方便玩家直接使用;关闭时尊重用户折叠选择
-  useEffect(() => {
-    if (windowOpen) setCollapsed(false);
-  }, [windowOpen]);
+  // §20260823-02 P2 — 删除「窗口开启时自动展开」副作用:面板不再每轮 speak
+  // 被强制摊开,折叠偏好完全由用户控制(localStorage 持久化)。
 
   const send = useCallback(async () => {
     if (target === '' || !body.trim() || !windowOpen) return;
@@ -97,8 +100,14 @@ export const SecretLetterPanel: React.FC<SecretLetterPanelProps> = ({
         method: 'POST',
         body: JSON.stringify({ target_seat: target, body }),
       });
+      // §20260823-02 P2 — HTTP 2xx 成功 → 提交即收起 + 结果摘要;失败走 catch
+      // 保持展开 + 内联错误(§7.1)。
+      const sentSeat = target;
       setBody('');
       setTarget('');
+      setLastSentSeat(sentSeat);
+      setCollapsed(true);
+      try { localStorage.setItem(LS_KEY, '1'); } catch {}
       await refresh();
     } catch (e: any) {
       const msg = e?.message || '发送失败';
@@ -136,8 +145,15 @@ export const SecretLetterPanel: React.FC<SecretLetterPanelProps> = ({
           ✉️ {t('werewolf.letter.title')}
           {!windowOpen && <span className="ww-secret-letter__closed">· {t('werewolf.letter.window_closed')}</span>}
         </h4>
-        {/* §20260816-02 — strip 模式下额外展示未读徽章,玩家一眼能看到是否有新消息 */}
-        {forceStrip && unreadCount > 0 && (
+        {/* §20260823-02 P2 — 收起态单行摘要:最近一次发送结果 / 未读徽章。
+            点击 header 整行重新展开查看。 */}
+        {!showFullPanel && lastSentSeat !== null && (
+          <span className="ww-secret-letter__result">
+            {t('werewolf.panel.sentLetter', { seat: lastSentSeat + 1 })}
+          </span>
+        )}
+        {/* §20260816-02 — strip/折叠 模式下展示未读徽章,玩家一眼能看到是否有新消息 */}
+        {!showFullPanel && unreadCount > 0 && (
           <span className="ww-panel-strip__badge">{unreadCount}</span>
         )}
         <span className="ww-panel__arrow" aria-hidden="true">{showFullPanel ? '▼' : '▲'}</span>
