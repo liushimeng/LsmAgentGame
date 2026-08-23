@@ -352,6 +352,8 @@ const zhCN: Dict = {
   'texasholdem.createFirst': '点击上方按钮创建第一个房间',
   'texasholdem.joinRoom': '加入房间',
   'texasholdem.exitRoom': '退出房间',
+  // §20260823-01 — 玩家身份离开按钮文案（观战者仍显示 spectator.exitRoom「离开观战」）。
+  'texasholdem.exitRoomAsPlayer': '离开游戏',
   'texasholdem.waiting': '等待玩家加入…',
   'texasholdem.resign': '弃牌认输',
   'texasholdem.confirmResign': '确认认输？',

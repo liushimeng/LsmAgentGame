@@ -350,6 +350,8 @@ const en: Dict = {
   'texasholdem.createFirst': 'Click the button above to create the first room',
   'texasholdem.joinRoom': 'Join Room',
   'texasholdem.exitRoom': 'Exit Room',
+  // §20260823-01 — Player-mode leave button label (spectator still uses spectator.exitRoom).
+  'texasholdem.exitRoomAsPlayer': 'Leave Game',
   'texasholdem.waiting': 'Waiting for players…',
   'texasholdem.resign': 'Fold & Resign',
   'texasholdem.confirmResign': 'Confirm resign?',

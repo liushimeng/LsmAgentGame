@@ -78,8 +78,12 @@ export function GameInfoPanel({ gameState, mySeat, style, spectator, onResign, o
             {t('texasholdem.resign' as TKey)}
           </button>
         ) : null}
+        {/* §20260823-01 — 离开按钮按身份区分文案：
+            观战者显示「离开观战」，玩家显示「离开游戏」。
+            行为分支（onLeave 内部 unspectate vs leaveGame）由父组件 TexasHoldemGamePage
+            根据 spectator prop 处理，本按钮只负责渲染正确的语义文案。 */}
         <button className="btn btn-secondary" onClick={() => setConfirmLeave(true)}>
-          {t('spectator.exitRoom')}
+          {t(spectator ? ('spectator.exitRoom' as TKey) : ('texasholdem.exitRoomAsPlayer' as TKey))}
         </button>
         <RulesButton kind="texasholdem" />
       </div>

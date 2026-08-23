@@ -885,6 +885,9 @@ export interface Dict {
   'texasholdem.createFirst': string;
   'texasholdem.joinRoom': string;
   'texasholdem.exitRoom': string;
+  // §20260823-01 — 玩家身份的离开按钮文案（观战者仍使用 spectator.exitRoom）。
+  // 命名「AsPlayer」明确与 spectator.exitRoom 区分，避免 §130 「声明了却从不接线」。
+  'texasholdem.exitRoomAsPlayer': string;
   'texasholdem.waiting': string;
   'texasholdem.resign': string;
   'texasholdem.confirmResign': string;

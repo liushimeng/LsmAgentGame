@@ -104,7 +104,7 @@ const ja: Dict = {
   'doudizhu.spectating': '観戦中…',
   'texasholdem.spectating': '観戦中…',
   // §20260819-02 P1-3 — 観戦中、部屋はまだ待機中({count}/6 人在席)。
-  'texasholdem.spectatingWaiting': 'プレイヤー参加待ち({count}/6)',
+  'texasholdem.spectatingWaiting': 'プレイヤー待機中({count}/6)',
 
   'home.title': 'ロビー',
   'games.title': 'すべてのゲーム',
@@ -350,6 +350,8 @@ const ja: Dict = {
   'texasholdem.createFirst': '上のボタンをクリックして最初のルームを作成',
   'texasholdem.joinRoom': 'ルーム参加',
   'texasholdem.exitRoom': 'ルーム退出',
+  // §20260823-01 — プレイヤー身退出ボタン表示（観戦者は spectator.exitRoom を継続使用）。
+  'texasholdem.exitRoomAsPlayer': 'ゲーム退出',
   'texasholdem.waiting': 'プレイヤーを待機中…',
   'texasholdem.resign': 'フォールド',
   'texasholdem.confirmResign': 'リサインを確認？',
