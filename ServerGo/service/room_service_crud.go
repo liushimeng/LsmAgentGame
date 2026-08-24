@@ -1184,8 +1184,33 @@ func (s *RoomService) DeleteRoomIfEmpty(roomID string) (bool, *errcode.Error) {
 		return false, errcode.Code(errcode.ErrDB)
 	}
 	if remaining > 0 {
-		tx.Rollback()
-		return false, nil
+		// 2026-08-24 BUG-TEXAS-DISCARD-STALL (R17 P1): bot 座位在
+		// t_lsm_game_player 中持有 role='agent' 行。人类全部离开后,vacancy
+		// 删除此前会被这些 bot 行永远卡住("room no longer empty"),形成
+		// 「纯 bot 僵尸房」只能等 4h zombie janitor。bot 不持有 hub 连接,
+		// vacancy timer 触发即代表房间内已无任何在线人类玩家/观战者,
+		// 仅剩 agent 行的房间应视为空房:级联删 agent 行后继续删房。
+		var humanRows int64
+		if err := tx.Model(&models.TLsmGamePlayer{}).
+			Where("room_id = ? AND role <> ?", roomID, models.PlayerRoleAgent).
+			Count(&humanRows).Error; err != nil {
+			tx.Rollback()
+			logger.L().Error("delete room if empty: count non-agent players", zap.Error(err))
+			return false, errcode.Code(errcode.ErrDB)
+		}
+		if humanRows > 0 {
+			tx.Rollback()
+			return false, nil
+		}
+		if err := tx.Where("room_id = ?", roomID).
+			Delete(&models.TLsmGamePlayer{}).Error; err != nil {
+			tx.Rollback()
+			logger.L().Error("delete room if empty: delete agent rows", zap.Error(err))
+			return false, errcode.Code(errcode.ErrDB)
+		}
+		logger.L().Info("delete room if empty: cascading agent-only room",
+			zap.String("room_id", roomID),
+			zap.Int64("agent_rows", remaining))
 	}
 
 	// Cascade: drop the room's chat messages so an empty room doesn't leak

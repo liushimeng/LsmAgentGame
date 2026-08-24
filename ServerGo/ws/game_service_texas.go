@@ -148,6 +148,36 @@ func (s *GameService) sendTexasHoldemState(c *Client, seq int64, state *texashol
 	c.send <- Envelope{Type: "game.state", Seq: seq, Payload: mustMarshal(state)}
 }
 
+// HandleTexasPlayerRemoved 断线超时(15s)被踢出的人类玩家的德州扑克收尾
+// (2026-08-24 BUG-TEXAS-DISCARD-STALL,R17 P1)。
+//
+// 由 main.go 的 hub.SetLeaveRoomFunc 包装器在 RoomService.LeaveRoom 之前调用。
+// 此前断线移除路径只清 DB 行,in-memory 对局的回合仍停在已离线的人类座位上
+// —— bot 回合 watchdog 只管 bot 座位,手牌因此永久停滞(实测 ≥10min)。
+// 这里强制 fold 并摘除该座位,随后广播最新状态并链式驱动 bot 继续行动。
+// 非德扑房间 / 该用户不在座 / bot 座位时 ForceRemovePlayer 返回 removed=false,
+// 本函数 no-op。
+func (s *GameService) HandleTexasPlayerRemoved(roomID, userID string) {
+	if s.texasHoldemMgr == nil {
+		return
+	}
+	removed, handOver, handNum, delta := s.texasHoldemMgr.ForceRemovePlayer(roomID, userID)
+	if !removed {
+		return
+	}
+	// 被摘除的玩家已不在 SettleHandCoins 快照内,单独结算其本手净输赢,
+	// 保持「赢家 credit ↔ 输家 debit」守恒。
+	if delta != 0 {
+		s.texasHoldemMgr.SettlePlayerDelta(roomID, userID, handNum, delta)
+	}
+	s.broadcastTexasHoldemState(roomID)
+	if handOver {
+		s.broadcastTexasHoldemOver(roomID, nil)
+	}
+	// 回合可能落在 bot 座位上 —— 链式驱动(§B6: 异步 + 串行守卫)。
+	go s.ProcessBotTurn(roomID)
+}
+
 func (s *GameService) broadcastTexasHoldemState(roomID string) {
 	seats, ok := s.texasHoldemMgr.Seats(roomID)
 	if !ok {

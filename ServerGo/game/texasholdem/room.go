@@ -594,30 +594,175 @@ func (m *TexasHoldemManager) Resign(roomID, userID string) (*TexasHoldemRoom, *e
 		return nil, errcode.Code(errcode.ErrRoomNotFound)
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	if r.State == nil || r.State.Status != StatusPlaying {
+		r.mu.Unlock()
 		return nil, errcode.Code(errcode.ErrGameAlreadyOver)
 	}
 	seat, ok := r.State.GetSeat(userID)
 	if !ok {
+		r.mu.Unlock()
 		return nil, errcode.Code(errcode.ErrRoomNotIn)
 	}
 
 	// 2026-08-19 §德州扑克Agent: bot 座位不接受人类 resign(§92a 锁内守卫,
 	// 防止作弊绕过 BotDriver.ApplyBotAction)。
 	if r.BotSeats[seat] {
+		r.mu.Unlock()
 		return nil, errcode.CodeMsg(errcode.ErrInvalidMove, "seat is bot-controlled")
 	}
 
+	handOver := false
 	if !r.State.Players[seat].Folded {
 		r.State.Players[seat].Folded = true
 		// 检查是否只剩 1 人
 		if r.State.activePlayers() <= 1 {
 			r.State.endHandFold()
+			handOver = true
 		}
 	}
+	canNext := handOver && r.State.CanStartHand()
+	r.mu.Unlock()
+
+	// 2026-08-24 BUG-TEXAS-DISCARD-STALL 同族修复:resign 直接结束手牌时
+	// 此前不跑 runHandOverEpilogue —— 金币不结算、bot Memory 不记账、
+	// 5s 自动开下一手不触发,纯 bot 房会停在 PhaseOver 直到 vacancy 删除。
+	// 与 Action / ApplyBotAction / ForceRemovePlayer 对齐(§B6:锁外调用)。
+	if handOver {
+		m.runHandOverEpilogue(roomID, r, canNext)
+	}
 	return r, nil
+}
+
+// ForceRemovePlayer 强制移除断线超时(15s)被踢出的人类玩家座位
+// (2026-08-24 BUG-TEXAS-DISCARD-STALL,R17 P1)。
+//
+// 缺陷背景:hub.handleDisconnectTimeout → RoomService.LeaveRoom 只清 DB 行,
+// in-memory 对局的回合仍停在已离线的人类座位上 —— bot 回合 watchdog 只管
+// bot 座位(IsBotSeatTurn),人类座位没有任何超时推进机制,手牌永久停滞
+// (实测 ≥10min),底池与各方已投入筹码悬置。
+//
+// 语义:
+//  1. 手牌进行中(Street 在 preflop..river)且该座位未弃牌:
+//     - 当前正好轮到该座位 → 走 ApplyAction(fold) 正道,回合推进/街推进/
+//       结算与正常 fold 完全一致;
+//     - 未轮到 → 直接标记 Folded;只剩 1 名未弃牌玩家时 endHandFold 收尾。
+//  2. 无论手牌是否进行中,都把该座位从引擎(RemovePlayer)与 r.Seats 摘除,
+//     防止后续手牌继续给空座发牌、再次把回合停在幽灵座位上。
+//  3. bot 座位不从此路径移除(bot 没有 hub 连接,不会产生断线超时)。
+//
+// 返回 (removed, handOver, handNum, delta):
+//   - removed=false 表示房间不存在 / 该用户不在座 / 是 bot 座位(调用方 no-op);
+//   - delta 为该玩家本手筹码净变化(仅手牌进行中时有意义,恒 ≤ 0),
+//     供 ws 层单独结算钱包 —— 该玩家被摘除后已不在 SettleHandCoins 的
+//     快照内,不单独入账会破坏「赢家 credit ↔ 输家 debit」守恒。
+//
+// 锁语义:runHandOverEpilogue 在锁外调用(§B6 死锁教训)。
+func (m *TexasHoldemManager) ForceRemovePlayer(roomID, userID string) (removed bool, handOver bool, handNum int, delta int) {
+	r := m.getRoom(roomID)
+	if r == nil {
+		return false, false, 0, 0
+	}
+	r.mu.Lock()
+	if r.State == nil {
+		r.mu.Unlock()
+		return false, false, 0, 0
+	}
+	seat, ok := r.State.GetSeat(userID)
+	if !ok || r.BotSeats[seat] {
+		r.mu.Unlock()
+		return false, false, 0, 0
+	}
+
+	handNum = r.State.HandNumber
+	inHand := r.State.Status == StatusPlaying &&
+		r.State.Street != PhaseWaiting && r.State.Street != PhaseOver && r.State.Street != PhaseShowdown
+	if inHand {
+		delta = r.State.Players[seat].Stack - r.HandStartStacks[seat]
+		if !r.State.Players[seat].Folded {
+			if r.State.Turn == seat {
+				// 正道:fold 走 ApplyAction,回合推进/街推进/摊牌逻辑全部复用。
+				if ho, e := r.State.ApplyAction(seat, Action{Type: ActFold}); e == nil {
+					handOver = ho
+				} else {
+					// ApplyAction 对回合内玩家的 fold 不应失败;兜底直接标记,
+					// 绝不让移除动作被引擎拒绝而重新卡死。
+					logger.L().Warn("texasholdem force-remove fold rejected, marking folded directly",
+						zap.String("room_id", roomID),
+						zap.Int("seat", seat),
+						zap.Int("code", e.Code))
+					r.State.Players[seat].Folded = true
+					if r.State.activePlayers() <= 1 {
+						r.State.endHandFold()
+						handOver = true
+					}
+				}
+			} else {
+				r.State.Players[seat].Folded = true
+				if r.State.activePlayers() <= 1 {
+					r.State.endHandFold()
+					handOver = true
+				}
+			}
+		}
+	}
+
+	// 从引擎座位表与房间座位表摘除,后续手牌不再给该座位发牌。
+	r.State.RemovePlayer(userID)
+	r.Seats[seat] = ""
+	r.BotHeartThought[seat] = ""
+	r.BotThinking[seat] = false
+	r.HandStartStacks[seat] = 0
+	canNext := handOver && r.State.CanStartHand()
+	r.mu.Unlock()
+
+	logger.L().Warn("texasholdem disconnected player force-removed",
+		zap.String("room_id", roomID),
+		zap.String("user_id", userID),
+		zap.Int("seat", seat),
+		zap.Bool("hand_over", handOver),
+		zap.Int("hand", handNum),
+		zap.Int("delta", delta))
+
+	if handOver {
+		// §B6:回调与结算必须锁外(runHandOverEpilogue 内部自行取锁)。
+		m.runHandOverEpilogue(roomID, r, canNext)
+	}
+	return true, handOver, handNum, delta
+}
+
+// SettlePlayerDelta 为被 ForceRemovePlayer 摘除的玩家单独结算本手净输赢
+// (BUG-TEXAS-DISCARD-STALL)。该玩家已不在 SettleHandCoins 的 Players 快照
+// 内,若不单独入账,赢家 credit 将没有对应的输家 debit,金币凭空增发。
+//
+// 手牌进行中被移除的玩家 delta 恒 ≤ 0(底池只在手牌结束时分配,进行中的
+// 玩家不可能已赢池),因此只需 debit 路径;delta > 0 属异常,记录后按
+// credit(不抽水 —— 无法在不重扫房间的情况下计算 tier,且该场景本不应发生)。
+func (m *TexasHoldemManager) SettlePlayerDelta(roomID, userID string, handNum, delta int) {
+	if m.walletSvc == nil || userID == "" || delta == 0 {
+		return
+	}
+	refID := roomID + ":" + fmt.Sprintf("%d", handNum)
+	remark := fmt.Sprintf("texasholdem hand #%d settle (disconnect removal)", handNum)
+	if delta > 0 {
+		logger.L().Warn("texasholdem removed player has positive delta (unexpected mid-hand)",
+			zap.String("room_id", roomID),
+			zap.String("user_id", userID),
+			zap.Int("delta", delta))
+		if err := m.walletSvc.Credit(context.Background(), userID, "game_win", "texasholdem_settle", refID, "texasholdem", remark, int64(delta)); err != nil {
+			logger.L().Warn("texasholdem removed-player credit failed",
+				zap.String("room_id", roomID), zap.String("user_id", userID), zap.Error(err))
+		}
+		return
+	}
+	if err := m.walletSvc.Debit(context.Background(), userID, "game_lose", "texasholdem_settle", refID, "texasholdem", remark, int64(-delta)); err != nil {
+		// 与 SettleHandCoins 一致:钱包不足只记 shortfall,桌内筹码已流转。
+		logger.L().Warn("texasholdem removed-player debit failed (wallet shortfall, debt carried)",
+			zap.String("room_id", roomID),
+			zap.String("user_id", userID),
+			zap.Int("delta", delta),
+			zap.Error(err))
+	}
 }
 
 // GetState 返回某玩家可见的对局视图。

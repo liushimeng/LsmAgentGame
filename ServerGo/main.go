@@ -358,6 +358,10 @@ func main() {
 				zap.String("user_id", userID),
 				zap.Error(e))
 		}
+		// 2026-08-24 BUG-TEXAS-DISCARD-STALL (R17 P1): 德州扑克断线移除同样
+		// 需要 in-memory 收尾 —— 强制 fold 离线座位并推进手牌,否则回合永久
+		// 卡在幽灵座位上(纯 bot 房没有任何机制能推动它)。非德扑房间 no-op。
+		gameSvcWs.HandleTexasPlayerRemoved(roomID, userID)
 		return roomSvc.LeaveRoom(roomID, userID)
 	})
 	adminAPI := api.NewAdminAPI(userSvc, roomSvc, werewolfMgr, gormDB)
