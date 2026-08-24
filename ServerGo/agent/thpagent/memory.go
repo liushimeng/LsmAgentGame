@@ -94,6 +94,14 @@ func (m *Memory) RecentHandsSnapshot() []HandRecord {
 	return out
 }
 
+// RecentHandsSnapshotLength 返回 RecentHands 当前长度(避免调用方再走 Snapshot
+// 仅取 len 时付出整片切片拷贝成本,§20260824-01)。
+func (m *Memory) RecentHandsSnapshotLength() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.RecentHands)
+}
+
 // RecordAction 记录本手牌的一个动作。
 func (m *Memory) RecordAction(act ActionRecordForMemory) {
 	m.mu.Lock()

@@ -843,6 +843,18 @@ func (s *ChatService) SendFromBot(roomID, botUserID, botAccount, modelKey, text 
 	if display == "" {
 		display = s.lookupAccount(botUserID)
 	}
+	// 2026-08-24 §2.2 修复:lookupAccount 可能仍返回空字符串(新注册 bot
+	// user 在 t_lsm_game_user 表 nickname 还没写、或测试用例用 bot_user
+	// 形式直接构造),UI 上显示空昵称让用户"看不到"发言。兜底用 "Bot-" +
+	// user_id 后 6 位,确保 from_account 始终非空。DB row 的 FromAccount
+	// 仍按 lookupAccount 原值落库,不变更历史回放语义。
+	if display == "" && botUserID != "" {
+		suffix := botUserID
+		if len(suffix) > 6 {
+			suffix = suffix[len(suffix)-6:]
+		}
+		display = "Bot-" + suffix
+	}
 
 	// BUG-WEREWOLF-P1-NEW-32: 复述段落已压缩 — git blame 与 docs/ 索引可还原
 

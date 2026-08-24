@@ -261,6 +261,11 @@ func buildMemoryMDBlock(mem *Memory) string {
 }
 
 func buildRecentHandHistoryBlock(mem *Memory) string {
+	// 2026-08-24 §3.4 移植 memory_compact:若 LastCompactSummary 存在,优先
+	// 渲染 4 段结构化摘要(LLM 压缩产物);空则回退 RawHandHistory 渲染。
+	if summary := mem.LastCompactSummary(); strings.TrimSpace(summary) != "" {
+		return "【本局经验摘要(LLM 压缩)】\n" + summary + "\n\n"
+	}
 	hands := mem.RecentHandsSnapshot()
 	if len(hands) == 0 {
 		return "【最近手牌回顾】暂无\n\n"

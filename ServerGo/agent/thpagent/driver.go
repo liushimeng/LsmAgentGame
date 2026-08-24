@@ -402,6 +402,28 @@ func (d *Driver) DecideAction(ctx context.Context, roomID string, seat int, prom
 	latencyMs := time.Now().UnixMilli() - startMs
 	a.updateStats(latencyMs)
 
+	// 2026-08-24 §3.4 移植 wwplayer memory_compact:如果决策成功且 HandRecord
+	// 累积到 ≥ MinHands(默认 4),异步触发一次 LLM 压缩(失败静默,不影响
+	// 当前决策结果)。压缩产物挂 LastCompactSummary,buildRecentHandHistoryBlock
+	// 下次渲染优先读摘要。
+	if callErr == nil && mem != nil {
+		cfg := DefaultTexasCompactConfig()
+		if mem.RecentHandsSnapshotLength() >= cfg.MinHands {
+			go func(mem *Memory, provider types.LLMProvider, apiKey, modelKey string) {
+				compressCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+				defer cancel()
+				res := mem.CompactWithLLM(compressCtx, provider, apiKey, modelKey, cfg)
+				if !res.Success {
+					logger.L().Debug("texasholdem memory compact skipped",
+						zap.String("room_id", roomID),
+						zap.Int("seat", seat),
+						zap.Int("hands_before", res.HandsBefore),
+						zap.Error(res.Error))
+				}
+			}(mem, provider, apiKey, a.ModelKey)
+		}
+	}
+
 	if callErr != nil {
 		logger.L().Warn("texasholdem LLM call failed after retry, forcing fold",
 			zap.String("room_id", roomID),

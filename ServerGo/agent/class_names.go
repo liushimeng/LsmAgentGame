@@ -108,6 +108,16 @@ const (
 	// 写回 t_lsm_game_agent_memory(复用狼人杀的存储布局)。
 	// 详见 docs/德州扑克/德州扑克Agent聊天系统设计.md §3.4。
 	AgentClassTexasPokerMemoryIter AgentClassName = "LsmAgentGame-TexasPoker-MemoryIter"
+
+	// AgentClassTexasHoldemMemoryCompact 是德州扑克 Agent 决策 prompt LLM
+	// 压缩的 AgentClassName(2026-08-24 §3.4 移植狼人杀 memory_compact)。
+	// 由 ServerGo/agent/thpagent/memory_compact.go 的 Memory.CompactWithLLM
+	// 调用;把 HandRecord[] + OpponentStats 序列化为 4 段结构化摘要,挂回
+	// LastCompactSummary,失败走规则式 fallback。**注意**:与
+	// AgentClassTexasPokerMemoryIter 不同 — 前者是「本局内压缩」,后者
+	// 是「跨局 MEMORY.md 迭代」。
+	// 详见 docs/德州扑克/德州扑克Agent聊天系统设计.md §3.4。
+	AgentClassTexasHoldemMemoryCompact AgentClassName = "LsmAgentGame-TexasHoldem-MemoryCompact"
 )
 
 // AllAgentClassNames 返回当前已注册的全部 AgentClassName。
@@ -125,6 +135,7 @@ func AllAgentClassNames() []AgentClassName {
 		AgentClassTexasHoldemJudge,
 		AgentClassTexasHoldemProfileIter,
 		AgentClassTexasPokerMemoryIter,
+		AgentClassTexasHoldemMemoryCompact,
 	}
 }
 
