@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	agentroot "LsmAgentGame/agent"
 	agentcore "LsmAgentGame/agent/core"
 	"LsmAgentGame/llm"
 )
@@ -339,7 +340,7 @@ func (c *CommentatorAgent) chatOrFallback(
 		System:        []llm.SystemBlock{{Type: "text", Text: system}},
 		Messages:      []llm.Message{{Role: "user", Content: []llm.ContentBlock{{Type: "text", Text: user}}}},
 		MaxTokens:     300,
-		AgentClassName: "LsmAgentGame-Werewolf-Commentator",
+		AgentClassName: string(agentroot.AgentClassWerewolfCommentator),
 	}
 	resp, err := provider.Chat(ctx, apiKey, req)
 	if err != nil {

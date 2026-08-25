@@ -78,6 +78,15 @@ const (
 	// 详见 docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-09.md §U1。
 	AgentClassWerewolfCommentator AgentClassName = "LsmAgentGame-Werewolf-Commentator"
 
+	// AgentClassWerewolfMemoryCompact 是狼人杀 Agent 决策记忆 LLM 压缩的
+	// AgentClassName(2026-08-25 §20260825-01 §24 登记合规清理)。由
+	// ServerGo/agent/wwplayer/memory_compact.go 的 Memory.CompactWithLLM
+	// 调用;把 messages 数组压缩为 8 段结构化摘要,失败走规则式 fallback。
+	// **注意**:此前为硬编码字面量,现统一登记以对齐 §24「所有 Agent 都
+	// 必须登记 class_names.go」。德扑侧对应 AgentClassTexasHoldemMemoryCompact。
+	// 详见 docs/狼人杀-Agent与系统/狼人杀Agent设计.md。
+	AgentClassWerewolfMemoryCompact AgentClassName = "LsmAgentGame-Werewolf-MemoryCompact"
+
 	// AgentClassTexasHoldemPlayer 是德州扑克玩家 Bot 的 AgentClassName(2026-08-19 §德州扑克Agent)。
 	// 由 ServerGo/agent/thpagent/ 的 Agent struct 实现;驱动 TexasHoldem 引擎
 	// 参与对局(每轮押注 + 公屏聊天)。与狼人杀玩家的核心差异:
@@ -131,6 +140,7 @@ func AllAgentClassNames() []AgentClassName {
 		AgentClassWerewolfProfileIter,
 		AgentClassWerewolfRecall,
 		AgentClassWerewolfCommentator,
+		AgentClassWerewolfMemoryCompact,
 		AgentClassTexasHoldemPlayer,
 		AgentClassTexasHoldemJudge,
 		AgentClassTexasHoldemProfileIter,

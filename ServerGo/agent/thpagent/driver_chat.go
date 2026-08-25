@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	agentroot "LsmAgentGame/agent"
 	agentcore "LsmAgentGame/agent/core"
 	"LsmAgentGame/llm/types"
 	"LsmAgentGame/logger"
@@ -62,7 +63,7 @@ func compressChatWindowLLM(ctx context.Context, provider types.LLMProvider, apiK
 		System:         []types.SystemBlock{{Type: "text", Text: system}},
 		Messages:       []types.Message{{Role: "user", Content: []types.ContentBlock{{Type: "text", Text: user}}}},
 		MaxTokens:      1024,
-		AgentClassName: "LsmAgentGame-TexasHoldem-Player",
+		AgentClassName: string(agentroot.AgentClassTexasHoldemPlayer),
 	}
 	resp, err := provider.Chat(cctx, apiKey, req)
 	if err != nil {

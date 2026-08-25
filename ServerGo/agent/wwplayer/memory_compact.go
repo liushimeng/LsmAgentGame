@@ -25,6 +25,7 @@
 package wwplayer
 
 import (
+	agentroot "LsmAgentGame/agent"
 	"LsmAgentGame/agent/wwtypes"
 	"LsmAgentGame/llm"
 	"context"
@@ -449,7 +450,7 @@ func (m *Memory) CompactWithLLM(
 			{Role: "user", Content: []llm.ContentBlock{{Type: "text", Text: userPrompt}}},
 		},
 		System:         []llm.SystemBlock{{Type: "text", Text: sysPrompt}},
-		AgentClassName: "LsmAgentGame-Werewolf-MemoryCompact",
+		AgentClassName: string(agentroot.AgentClassWerewolfMemoryCompact),
 	}
 
 	resp, err := provider.Chat(compactCtx, apiKey, req)
