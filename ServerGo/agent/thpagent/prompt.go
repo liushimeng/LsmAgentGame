@@ -39,7 +39,10 @@ func BuildSystemPrompt(ctx *GameContextForAgent, mem *Memory) string {
 	b.WriteString("- 牌型从大到小: 皇家同花顺 > 同花顺 > 四条 > 葫芦 > 同花 > 顺子 > 三条 > 两对 > 一对 > 高牌。\n")
 	b.WriteString("- 翻前 UTG 先动,翻后庄家后第一存活者先动。\n")
 	b.WriteString("- 跟注所需最低胜率 = callAmount / (pot + callAmount)。\n")
-	b.WriteString("- 全押筹码 < 加注增量不算加注,只算跟注。\n\n")
+	b.WriteString("- 全押筹码 < 加注增量不算加注,只算跟注。\n")
+	// §R22-P1: 明确 check 合法性规则 —— LLM 曾在有 bet-to-call 时输出 check,
+	// 被 engine 拒绝(30007)后 bot driver 停止驱动,游戏永久卡死。
+	b.WriteString("- **check(过牌)仅当 callAmount=0 时合法**;若 callAmount>0 说明有人下注跟注未到,必须 call/fold/raise,绝对不可 check。\n\n")
 
 	// [CurrentState] 当前状态段
 	b.WriteString("[CurrentState]\n")
@@ -81,6 +84,13 @@ func BuildSystemPrompt(ctx *GameContextForAgent, mem *Memory) string {
 	b.WriteString("  * 介于两者之间 → 考虑位置与虚张频率\n")
 	b.WriteString(fmt.Sprintf("- 注意: raise 的 amount 是目标总注额,必须 ≥ 当前最高注 + 最小加注增量(当前为 %d)。\n",
 		ctx.CurrentBet+ctx.MinRaise))
+	// §R22-P1: 再次强调 check 合法性(StyleGuide 是 LLM 最后读的段,强化记忆)
+	if ctx.CallAmount > 0 {
+		b.WriteString(fmt.Sprintf("- **⚠️ 当前 callAmount=%d > 0,说明有人下注你必须跟注/加注/弃牌,绝对不可 check!**\n",
+			ctx.CallAmount))
+	} else {
+		b.WriteString("- 当前 callAmount=0,你可以 check(过牌)或 bet(下注)。\n")
+	}
 
 	result := b.String()
 	if len([]rune(result)) > SystemPromptMaxRunes {

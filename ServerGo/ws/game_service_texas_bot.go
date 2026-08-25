@@ -522,13 +522,18 @@ func (s *GameService) ProcessBotTurn(roomID string) {
 				zap.Int("seat", seat),
 				zap.String("action", action.Type),
 				zap.Int("code", e.Code), zap.String("msg", e.Message))
-			// bot 动作失败 → 强制 fold 兜底
+			// §R22-P1: bot 动作失败 → 强制 fold 兜底(引擎已拒绝原动作,
+			// 不再重试相同动作,直接 fold 避免游戏卡死)
 			foldOver, foldErr := s.texasHoldemMgr.ApplyBotAction(roomID, seat, texasholdem.Action{Type: texasholdem.ActFold})
 			if foldErr != nil {
-				logger.L().Error("ProcessBotTurn: forced fold also failed",
+				// §R22-P1: fold 也失败(状态已变化/手牌已结束) —— 不再 return,
+				// 而是触发 watchdog 链式推进,让后续 tick 自然恢复。
+				logger.L().Error("ProcessBotTurn: forced fold also failed, trigger chain advance",
 					zap.String("room_id", roomID),
 					zap.Int("seat", seat),
 					zap.Int("code", foldErr.Code), zap.String("msg", foldErr.Message))
+				// 不 return:触发链式推进让 watchdog 恢复(异步,不阻塞当前 goroutine)
+				go s.ProcessBotTurn(roomID)
 				return
 			}
 			handOver = foldOver

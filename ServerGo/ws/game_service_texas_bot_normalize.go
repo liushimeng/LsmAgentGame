@@ -22,10 +22,26 @@ import (
 
 // normalizeBotAction 按工具协议 §10 / 金币设计 §4.3 规范化 bot 动作。
 // snap 为决策时的房间快照(BotGameContext),action 为 LLM 原始决策。
+//
+// §R22-P1: check 合法性预检 —— 当 callAmount > 0 时 check 非法,自动转为 call,
+// 避免 engine 拒绝(30007)后 bot driver 停止驱动致游戏卡死。
 func normalizeBotAction(snap *texasholdem.BotGameContextSnapshot, a thpagent.Action) texasholdem.Action {
 	original := a
 	converted := convertToEngineAction(a)
 	out := converted
+
+	// §R22-P1: check 合法性预检(callAmount > 0 → 必须 call/fold/raise,不可 check)
+	if a.Type == thpagent.ActCheck && snap.CallAmount > 0 {
+		logger.L().Warn("texasholdem bot action pre-check: check illegal when bet-to-call>0, auto-convert to call",
+			zap.String("room_id", snap.RoomID),
+			zap.Int("seat", snap.MySeat),
+			zap.Int("call_amount", snap.CallAmount),
+			zap.Int("current_bet", snap.CurrentBet),
+			zap.Int("round_committed", snap.MyRoundCommitted))
+		out.Type = texasholdem.ActCall
+		out.Amount = 0
+		return out
+	}
 
 	// stackTotal = 本轮已下注 + 剩余筹码 = 本手可动用的绝对总注额上限
 	stackTotal := snap.MyRoundCommitted + snap.MyStack
