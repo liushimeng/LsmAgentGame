@@ -294,12 +294,22 @@ func main() {
 	// 凭据与邀请码必须从 LsmAgentGame.conf 读取,绝不在源码中硬编码。
 	// 空 DB 时若未配置 root.password,则随机生成一个强密码并仅通过 INFO 日志
 	// 输出一次(供运维首次登录后立即轮换)。RootInviteCode 同理:缺省随机生成。
+	// 2026-08-25 §首次运行引导 — root 生命周期(docs/通用功能/首次运行引导与超级管理员生命周期.md):
+	//   - 空库(首次启动):随机生成 用户名/密码/邀请码,种子落库后把明文凭据回写
+	//     LsmAgentGame.conf,运维直接从 conf 读取并首次登录;
+	//   - 已有用户(非首次):SeedRootUserIfEmpty no-op,把 conf 的 root_account /
+	//     root_password 回写为 "disable" 哨兵。登录/注册鉴权从不读取这两个字段
+	//     (AuthService 只走 DB bcrypt + 全员强制 CAPTCHA),不存在 conf 直登路径;
+	//     哨兵值在空库重装时会被识别并重新随机生成,不会种子出 "disable" 账号。
 	rootAccount := cfg.Server.RootAccount
 	rootPassword := cfg.Server.RootPassword
-	if rootAccount == "" {
-		rootAccount = "lsm_root"
+	if rootAccount == "" || rootAccount == config.RootDisabledSentinel {
+		// 用户名也随机(防扫描):lsm_root_<8位随机十六进制>。
+		randAcc := util.RandomStrongPassword(16)
+		sum := sha256.Sum256([]byte(randAcc))
+		rootAccount = fmt.Sprintf("lsm_root_%s", hex.EncodeToString(sum[:4]))
 	}
-	if cfg.Server.RootInviteCode != "" {
+	if cfg.Server.RootInviteCode != "" && cfg.Server.RootInviteCode != config.RootDisabledSentinel {
 		service.RootInviteCode = cfg.Server.RootInviteCode
 	}
 	inviteCode := service.RootInviteCode
@@ -308,33 +318,51 @@ func main() {
 		inviteCode = util.RandomStrongPassword(16)
 		service.RootInviteCode = inviteCode
 	}
-	if rootPassword == "" {
-		// 一次性随机生成(开发模式兜底)。生产部署必须显式设置 cfg.server.root_password。
+	if rootPassword == "" || rootPassword == config.RootDisabledSentinel {
+		// 一次性随机生成。首次种子成功后回写 conf,凭据以 conf 文件为唯一明文载体。
 		rootPassword = util.RandomStrongPassword(20)
-		logger.L().Warn("cfg.server.root_password 未配置,已随机生成并通过 INFO 日志输出一次,生产部署必须显式设置")
 	}
 	rootCtx, rootCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	if created, err := authSvc.SeedRootUserIfEmpty(rootCtx, rootAccount, rootPassword, inviteCode); err != nil {
-		logger.L().Warn("root user seed failed", zap.Error(err))
+	created, seedErr := authSvc.SeedRootUserIfEmpty(rootCtx, rootAccount, rootPassword, inviteCode)
+	rootCancel()
+	if seedErr != nil {
+		logger.L().Warn("root user seed failed", zap.Error(seedErr))
 	} else if created {
+		// 首次种子成功:把生成的凭据回写 conf(运维从 conf 读取明文)。
+		cfg.Server.RootAccount = rootAccount
+		cfg.Server.RootPassword = rootPassword
+		cfg.Server.RootInviteCode = inviteCode
+		if _, perr := cfg.PersistToFile("./LsmAgentGame.conf"); perr != nil {
+			logger.L().Warn("persist generated root credentials to LsmAgentGame.conf failed", zap.Error(perr))
+		}
 		// 2026-08-25 安全加固：明文密码仅 DevMode 下输出一次（本地开发引导）；
-		// 非 DevMode 只输出 SHA-256 指纹，避免生产日志落明文凭据。
+		// 非 DevMode 只输出 SHA-256 指纹，明文以 conf 文件为唯一载体。
 		if cfg.Server.DevMode {
-			logger.L().Info("root user seed created",
+			logger.L().Info("root user seed created（凭据已回写 LsmAgentGame.conf 的 server.root_account / root_password）",
 				zap.String("account", rootAccount),
 				zap.String("invite_code", inviteCode),
 				zap.String("generated_password", rootPassword),
 			)
 		} else {
 			sum := sha256.Sum256([]byte(rootPassword))
-			logger.L().Warn("root user seed created（密码为随机生成，日志仅输出指纹）— 请在 LsmAgentGame.conf 配置 root.password 后重启以固定凭据",
+			logger.L().Warn("root user seed created（密码为随机生成,明文已回写 LsmAgentGame.conf,日志仅输出指纹）",
 				zap.String("account", rootAccount),
 				zap.String("invite_code", inviteCode),
 				zap.String("password_sha256_prefix", hex.EncodeToString(sum[:])[:12]),
 			)
 		}
+	} else if cfg.Server.RootAccount != config.RootDisabledSentinel {
+		// 非首次启动(用户表已有记录):超管引导使命完成,conf 回写 disable 哨兵。
+		// root_invite_code 保留 —— 注册邀请码是持续需要的,不参与 disable。
+		cfg.Server.RootAccount = config.RootDisabledSentinel
+		cfg.Server.RootPassword = config.RootDisabledSentinel
+		if _, perr := cfg.PersistToFile("./LsmAgentGame.conf"); perr != nil {
+			logger.L().Warn("persist disabled root credentials to LsmAgentGame.conf failed", zap.Error(perr))
+		} else {
+			logger.L().Info("root 引导已完成(用户表已有记录),conf 的 server.root_account/root_password 已回写为 disable — 超管凭据不再由配置文件提供",
+				zap.String("invite_code", inviteCode))
+		}
 	}
-	rootCancel()
 
 	gameSvc := service.NewGameService(gormDB, cfg)
 	userSvc := service.NewUserService(gormDB)

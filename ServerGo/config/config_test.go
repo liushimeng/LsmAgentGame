@@ -245,6 +245,70 @@ func TestEnsureRuntimeConfigFile_SynthesizesBoth(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// 2026-08-25 §首次运行引导 — DB 默认值 + root disable 哨兵测试
+// (docs/通用功能/首次运行引导与超级管理员生命周期.md)
+// =============================================================================
+
+// TestDBConfig_DefaultsOnEmpty 验证 db 段为空时 applyDefaults 填充首次部署默认值。
+func TestDBConfig_DefaultsOnEmpty(t *testing.T) {
+	c := &Config{}
+	applyDefaults(c)
+	if c.DB.Host != "127.0.0.1" {
+		t.Errorf("DB.Host default = %q, want 127.0.0.1", c.DB.Host)
+	}
+	if c.DB.Port != 3306 {
+		t.Errorf("DB.Port default = %d, want 3306", c.DB.Port)
+	}
+	if c.DB.Name != "lsmDB" {
+		t.Errorf("DB.Name default = %q, want lsmDB", c.DB.Name)
+	}
+	if c.DB.User != "root" {
+		t.Errorf("DB.User default = %q, want root", c.DB.User)
+	}
+}
+
+// TestDBConfig_ExplicitValuesRespected 验证存量部署的显式 db 配置不被覆写。
+func TestDBConfig_ExplicitValuesRespected(t *testing.T) {
+	c := &Config{DB: DBConfig{Host: "10.0.0.5", Port: 3307, Name: "prodDB", User: "superuser", Password: "secret"}}
+	applyDefaults(c)
+	if c.DB.Host != "10.0.0.5" || c.DB.Port != 3307 || c.DB.Name != "prodDB" || c.DB.User != "superuser" || c.DB.Password != "secret" {
+		t.Errorf("explicit DB config was overwritten: %+v", c.DB)
+	}
+}
+
+// TestRootDisabledSentinel 验证哨兵值为固定字面量 "disable"(conf 契约)。
+func TestRootDisabledSentinel(t *testing.T) {
+	if RootDisabledSentinel != "disable" {
+		t.Errorf("RootDisabledSentinel = %q, want \"disable\"", RootDisabledSentinel)
+	}
+}
+
+// TestPersistToFile_RoundTripsRootDisable 验证 root disable 哨兵回写后可被
+// JSON 重新解析(main.go 下一次启动据此识别禁用状态)。
+func TestPersistToFile_RoundTripsRootDisable(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LsmAgentGame.conf")
+	c := &Config{}
+	applyDefaults(c)
+	c.Server.RootAccount = RootDisabledSentinel
+	c.Server.RootPassword = RootDisabledSentinel
+	if _, err := c.PersistToFile(path); err != nil {
+		t.Fatalf("PersistToFile failed: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	var reparsed Config
+	if err := json.Unmarshal(data, &reparsed); err != nil {
+		t.Fatalf("reparse: %v", err)
+	}
+	if reparsed.Server.RootAccount != "disable" || reparsed.Server.RootPassword != "disable" {
+		t.Errorf("disable sentinel lost in round-trip: %+v", reparsed.Server)
+	}
+}
+
 // TestNonEmptyOr 简单工具函数单测。
 func TestNonEmptyOr(t *testing.T) {
 	if got := nonEmptyOrLocal("hi", "fallback"); got != "hi" {

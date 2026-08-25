@@ -326,6 +326,12 @@ type TexasHoldemConfig struct {
 	MaxPotPerHand        int `json:"max_pot_per_hand"`          // 默认 100000
 }
 
+// RootDisabledSentinel 是 conf 中 root_account / root_password 的「禁用」哨兵值。
+// 用户表已有记录后 main.go 会把这两个字段回写为该值;引导逻辑识别到它时不会
+// 把它当账号/密码种子,而是重新随机生成(防删库重装后种子出 "disable" 账号)。
+// 详见 docs/通用功能/首次运行引导与超级管理员生命周期.md。
+const RootDisabledSentinel = "disable"
+
 // ServerConfig holds the listener addresses and TLS material.
 type ServerConfig struct {
 	HTTPSAddr      string `json:"https_addr"`
@@ -333,9 +339,9 @@ type ServerConfig struct {
 	TLSCert        string `json:"tls_cert"`
 	TLSKey         string `json:"tls_key"`
 	DevMode        bool   `json:"dev_mode"`         // true → 开发模式(启动 WARN + root 密码明文引导日志);生产必须 false。CAPTCHA 旁路已删除(20260825)
-	RootAccount    string `json:"root_account"`     // 首次启动时种子的 root 账号;默认 "lsm_root"
-	RootPassword   string `json:"root_password"`    // 首次启动时种子的 root 密码;空时由 main.go 随机生成并日志输出一次
-	RootInviteCode string `json:"root_invite_code"` // 首次启动时种子的邀请码;空时由 main.go 随机生成
+	RootAccount    string `json:"root_account"`     // 首次启动(空库)时随机生成并回写;用户表有记录后回写 "disable"。登录/注册鉴权不读此字段
+	RootPassword   string `json:"root_password"`    // 同上;仅首次种子这一个启动瞬间被消费
+	RootInviteCode string `json:"root_invite_code"` // 首次启动时种子的邀请码;空时随机生成。注册流程持续使用,不参与 disable
 }
 
 // DBConfig holds the MariaDB / MySQL connection.
@@ -734,6 +740,20 @@ func applyDefaults(c *Config) {
 	}
 	if c.Server.TLSKey == "" {
 		c.Server.TLSKey = "./server.key"
+	}
+	// 2026-08-25 §首次运行引导 — DB 默认值(docs/通用功能/首次运行引导与超级管理员生命周期.md)。
+	// 仅在字段为空时填充,存量部署不受影响;password 无安全默认值,必须由运维填写。
+	if c.DB.Host == "" {
+		c.DB.Host = "127.0.0.1"
+	}
+	if c.DB.Port == 0 {
+		c.DB.Port = 3306
+	}
+	if c.DB.Name == "" {
+		c.DB.Name = "lsmDB"
+	}
+	if c.DB.User == "" {
+		c.DB.User = "root"
 	}
 	if c.DB.MaxOpenConns == 0 {
 		c.DB.MaxOpenConns = 20

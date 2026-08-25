@@ -212,8 +212,21 @@ git submodule update --init --recursive  # optional
 # On first boot, if ./LsmAgentGame.conf is missing:
 #   - If LsmAgentGame.conf.example exists → automatically copy it to LsmAgentGame.conf
 #   - If neither file exists → synthesize both from the in-process defaults
+#     (since 2026-08-25 the synthesized file carries full defaults such as
+#      db.host=127.0.0.1 / db.port=3306 / db.name=lsmDB / db.user=root — see
+#      docs/通用功能/首次运行引导与超级管理员生命周期.md)
 # Edit LsmAgentGame.conf — set db.password, jwt.secret, llm.endpoint, etc.
 # Real secrets go only in LsmAgentGame.conf (excluded via .gitignore)
+
+# 2.5 Super admin on first boot (new in 2026-08-25)
+# On an empty database the server randomly generates the super-admin
+# "username + password" and writes them back into LsmAgentGame.conf at
+# server.root_account / root_password — open the file, read the plaintext
+# credentials, and log in at https://127.0.0.1:39001 to finish deployment.
+# On any later restart, once the users table has records, both fields are
+# rewritten to "disable". Login/registration auth NEVER reads super-admin
+# credentials from the config file — there is no config-file backdoor.
+# Full lifecycle: docs/通用功能/首次运行引导与超级管理员生命周期.md
 
 # 3. Install frontend dependencies
 cd ClientWeb && npm install && cd ..

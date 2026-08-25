@@ -216,8 +216,20 @@ git submodule update --init --recursive  # 可选
 # 首次启动时如果 ./LsmAgentGame.conf 缺失:
 #   - 若 LsmAgentGame.conf.example 存在 → 自动复制为 LsmAgentGame.conf
 #   - 若两者都不存在 → 用代码内默认值同时生成两份
+#     (2026-08-25 起生成文件自带 db.host=127.0.0.1 / db.port=3306 /
+#      db.name=lsmDB / db.user=root 等全套默认值,见
+#      docs/通用功能/首次运行引导与超级管理员生命周期.md)
 # 编辑 LsmAgentGame.conf —— 设置 db.password、jwt.secret、llm.endpoint 等
 # 真实密钥仅入 LsmAgentGame.conf(已在 .gitignore 中排除)
+
+# 2.5 首次启动的超级管理员(2026-08-25 新增)
+# 空数据库首次启动时,服务端会随机生成超级管理员的「用户名 + 密码」并回写
+# LsmAgentGame.conf 的 server.root_account / root_password —— 打开该文件
+# 即可读到明文凭据,用它登录 https://127.0.0.1:39001 完成部署。
+# 之后任何一次重启检测到用户表已有记录,会自动把这两个字段回写为
+# "disable"(禁用);登录/注册鉴权从不读取配置文件中的超管账密,
+# 不存在配置文件直登后门。详见
+# docs/通用功能/首次运行引导与超级管理员生命周期.md
 
 # 3. 安装前端依赖
 cd ClientWeb && npm install && cd ..
