@@ -41,6 +41,12 @@ type TexasHoldemRoom struct {
 	BotHeartThought [MaxPlayers]string
 	BotThinking     [MaxPlayers]bool
 
+	// 2026-08-25 §聊天升级 — bot 最近一条公屏发言(前端座位气泡渲染)。
+	// 由 ws/game_service_texas_bot.go::sendBotChat 广播成功后锁内写入;
+	// view.go::BuildClientStateWithRoom 读取透传 ClientGameState.BotLastChat。
+	// 公屏消息本就是公开信息,无需脱敏;前端按 AtMs 过期自动隐藏。
+	BotLastChat [MaxPlayers]BotChatBubble
+
 	// 2026-08-20 §B8 — bot 回合 watchdog 时钟。
 	// 每次 gs.Turn 变更（StartHand / ApplyAction 后）由 markTurnLocked 刷新;
 	// ws 层 watchdog 每 5s 检查「当前 bot 座位已思考 > timeout+10s」则强制 fold。
@@ -70,6 +76,15 @@ func (r *TexasHoldemRoom) SetBotHeartThoughtLocked(seat int, thought string) {
 		thought = thought[:maxLen]
 	}
 	r.BotHeartThought[seat] = thought
+}
+
+// SetBotLastChatLocked 设置指定 bot 座位的最近一条公屏发言(锁内变体,
+// 2026-08-25 §聊天升级 — sendBotChat 广播成功后调用,前端座位气泡渲染)。
+func (r *TexasHoldemRoom) SetBotLastChatLocked(seat int, text string, atMs int64) {
+	if seat < 0 || seat >= MaxPlayers {
+		return
+	}
+	r.BotLastChat[seat] = BotChatBubble{Text: text, AtMs: atMs}
 }
 
 // SetBotThinkingLocked 设置指定 bot 座位是否正在思考(锁内变体)。
@@ -809,7 +824,7 @@ func (m *TexasHoldemManager) GetState(roomID, userID string) (*ClientGameState, 
 	if !ok {
 		return nil, errcode.Code(errcode.ErrRoomNotIn)
 	}
-	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, seat, r.State, r.BotHeartThought, r.BotThinking), nil
+	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, seat, r.State, r.BotHeartThought, r.BotThinking, r.BotLastChat), nil
 }
 
 // StateForSeat 在已持有房间引用时构造指定座位视图。
@@ -820,7 +835,7 @@ func (m *TexasHoldemManager) StateForSeat(roomID string, seat int) *ClientGameSt
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, seat, r.State, r.BotHeartThought, r.BotThinking)
+	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, seat, r.State, r.BotHeartThought, r.BotThinking, r.BotLastChat)
 }
 
 // Seats 返回房间各座位 userID 的快照。
@@ -1413,7 +1428,7 @@ func (m *TexasHoldemManager) SpectatorState(roomID, userID string) (*ClientGameS
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, -1, r.State, r.BotHeartThought, r.BotThinking), nil
+	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, -1, r.State, r.BotHeartThought, r.BotThinking, r.BotLastChat), nil
 }
 
 // SpectatorView 同 SpectatorState 但省去 userID 参数；所有观察者共享同一
@@ -1425,5 +1440,5 @@ func (m *TexasHoldemManager) SpectatorView(roomID string) *ClientGameState {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, -1, r.State, r.BotHeartThought, r.BotThinking)
+	return BuildClientStateWithRoom(roomID, r.Seats, r.BotSeats, r.BotModels, -1, r.State, r.BotHeartThought, r.BotThinking, r.BotLastChat)
 }

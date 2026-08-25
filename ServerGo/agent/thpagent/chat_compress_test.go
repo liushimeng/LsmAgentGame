@@ -51,8 +51,8 @@ func TestBuildUserPrompt_ContainsChatWindowBlock(t *testing.T) {
 func TestBuildSystemPrompt_ChatGuidance(t *testing.T) {
 	ctx := &GameContextForAgent{RoomID: "r1", MySeat: 0, Street: "preflop"}
 	sys := BuildSystemPrompt(ctx, NewMemory())
-	// §3.2:每手 ≤3 次 + 回应他人 + 不泄露底牌 + 摊牌短评。
-	for _, want := range []string{"最多 3 次", "回应他人", "不要泄露自己的底牌", "情绪化短评"} {
+	// §20260825-03:每手 ≤4 次 + 回应他人 + 不泄露底牌 + 摊牌短评。
+	for _, want := range []string{"最多 4 次", "回应", "绝不直接泄露当前底牌", "情绪化短评"} {
 		if !strings.Contains(sys, want) {
 			t.Errorf("system prompt missing guidance %q", want)
 		}

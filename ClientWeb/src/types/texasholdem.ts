@@ -77,6 +77,12 @@ export interface TexasHoldemGameState {
    * 后端已脱敏,无底牌等敏感信息)。BotThoughtPanel「本手闲聊」小节数据源。
    */
   chat_window_preview?: string[];
+
+  /**
+   * 2026-08-25 §20260825-03 — 各 bot 座位最近一条公屏发言快照(座位气泡数据源
+   * 之一;与 chat.message 实时通道按 (seat, ts) 去重,覆盖断线重连/刷新恢复)。
+   */
+  bot_last_chat?: ReadonlyArray<{ text: string; at_ms: number }>;
 }
 
 export const RANK_LABELS: Record<number, string> = {

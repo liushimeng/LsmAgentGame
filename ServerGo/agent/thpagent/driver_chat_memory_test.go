@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 
 	"LsmAgentGame/llm/types"
@@ -109,8 +110,8 @@ func TestB5_ChatRateLimitedButActionApplied(t *testing.T) {
 	d.mu.RUnlock()
 
 	ctx := &GameContextForAgent{RoomID: "room1", Street: "preflop"}
-	// 第 1~3 次 chat 应通过(§3.2:每手 ≤3 次)
-	for i := 0; i < 3; i++ {
+	// 第 1~4 次 chat 应通过(§20260825-03:每手 ≤4 次)
+	for i := 0; i < 4; i++ {
 		action, err := d.DecideAction(context.Background(), "room1", 0, ctx)
 		if err != nil {
 			t.Fatalf("DecideAction #%d: %v", i, err)
@@ -120,7 +121,7 @@ func TestB5_ChatRateLimitedButActionApplied(t *testing.T) {
 		}
 		d.OnNewRoundLocked("room1", 0) // 每轮 poker_action 限流复位
 	}
-	// 第 4 次 chat 超限 → 丢弃,但 action 仍是 call
+	// 第 5 次 chat 超限 → 丢弃,但 action 仍是 call
 	action, err := d.DecideAction(context.Background(), "room1", 0, ctx)
 	if err != nil {
 		t.Fatalf("DecideAction #3: %v", err)
@@ -307,5 +308,63 @@ func TestB2_BluffHintFor(t *testing.T) {
 	// human1 foldRate = 1.0 → BluffFrequency(1.0) = 0.35
 	if got := d.BluffHintFor("room1", 0); got != 0.35 {
 		t.Errorf("sticky-opponent: BluffHintFor = %f, want 0.35", got)
+	}
+}
+
+// ─────────────────── §20260825-03: EventChat 场景化发言 ───────────────────
+
+// textResponse 构造纯 text 块响应(EventChat 的 LLM 输出形态)。
+func textResponse(s string) types.LLMResponse {
+	return types.LLMResponse{Content: []types.ContentBlock{{Type: "text", Text: s}}}
+}
+
+// TestEventChat_SpeaksOnSuccess: LLM 返回非空文本且限流通过 → 返回发言文本。
+func TestEventChat_SpeaksOnSuccess(t *testing.T) {
+	d := NewDriver()
+	registerAgentWithProvider(t, d, "room1", 1, &fakeProvider{resp: textResponse("这把我要了,你们随意")})
+	got := d.EventChat(context.Background(), "room1", 1, EventChatWinNoShowdown,
+		EventChatFacts{HandNumber: 5, Pot: 1200})
+	if got != "这把我要了,你们随意" {
+		t.Fatalf("EventChat = %q, want spoken text", got)
+	}
+}
+
+// TestEventChat_LLMFailureSilent: LLM 失败 → 静默返回空串(不影响游戏流程)。
+func TestEventChat_LLMFailureSilent(t *testing.T) {
+	d := NewDriver()
+	registerAgentWithProvider(t, d, "room1", 0, &fakeProvider{err: errors.New("boom")})
+	if got := d.EventChat(context.Background(), "room1", 0, EventChatHandStart, EventChatFacts{HandNumber: 1}); got != "" {
+		t.Fatalf("EventChat should be silent on LLM failure, got %q", got)
+	}
+}
+
+// TestEventChat_RateLimitedSilent: 本手发言额度用满 → 静默返回空串。
+func TestEventChat_RateLimitedSilent(t *testing.T) {
+	d := NewDriver()
+	registerAgentWithProvider(t, d, "room1", 0, &fakeProvider{resp: textResponse("话痨")})
+	d.mu.RLock()
+	disp := d.rooms["room1"].dispatch[0]
+	d.mu.RUnlock()
+	disp.chatCountThisHand = disp.maxChatPerHand
+	if got := d.EventChat(context.Background(), "room1", 0, EventChatAggressor, EventChatFacts{Action: "raise", Amount: 800, Pot: 1000}); got != "" {
+		t.Fatalf("EventChat should be silent when rate-limited, got %q", got)
+	}
+}
+
+// TestEventChat_UnknownScenario: 未知场景 → 空串,不调 LLM。
+func TestEventChat_UnknownScenario(t *testing.T) {
+	d := NewDriver()
+	if got := d.EventChat(context.Background(), "room1", 0, EventChatScenario("nope"), EventChatFacts{}); got != "" {
+		t.Fatalf("EventChat unknown scenario should return empty, got %q", got)
+	}
+}
+
+// TestEventChat_PromptsNonEmpty: 全部场景提示词必须非空(§130 防「声明了却从不接线」)。
+func TestEventChat_PromptsNonEmpty(t *testing.T) {
+	for _, sc := range []EventChatScenario{EventChatHandStart, EventChatAggressor, EventChatFacedBigBet, EventChatWinNoShowdown} {
+		p, ok := eventChatPrompts[sc]
+		if !ok || strings.TrimSpace(p.system) == "" || strings.TrimSpace(p.hint) == "" {
+			t.Errorf("scenario %q missing system/hint prompt", sc)
+		}
 	}
 }

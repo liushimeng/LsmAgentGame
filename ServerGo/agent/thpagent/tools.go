@@ -57,12 +57,16 @@ func pokerActionTool() types.ToolDef {
 
 // pokerChatTool 构造 poker_chat 工具定义。
 //
-// 限流：每手牌 ≤ 2 次 + 相邻 ≥ 30s。
+// 限流：每手牌 ≤ 4 次 + 相邻 ≥ 12s(§20260825-03 放宽)。
 func pokerChatTool() types.ToolDef {
 	return types.ToolDef{
 		Name: "poker_chat",
-		Description: "在公屏发言。每手牌最多 2 次,相邻 30s 节流。" +
-			"text 是广播给所有玩家的发言,internal_thought 是你内心的思考(不广播)。",
+		Description: "在公屏发言(强烈建议积极使用)。每手牌最多 4 次,相邻 12s 节流。" +
+			"当出现以下情况时,建议与 poker_action 在同一次响应中一并调用:" +
+			"① 牌桌闲聊中有人点名你/挑衅你;② 你刚做出大注/加注/全下,想放话造势;" +
+			"③ 你面对大注被压制,想示弱或反将一军;④ 关键手(大底池/深筹码)。" +
+			"text 是广播给所有玩家的发言(≤80字,像真人在牌桌上说话),internal_thought 是你内心的思考(不广播)。" +
+			"发言可以真话、假话、心理战,但绝不直接泄露你当前的底牌。",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

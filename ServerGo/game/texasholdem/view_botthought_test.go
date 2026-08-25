@@ -68,7 +68,7 @@ func TestBuildClientStateWithRoom_ThoughtSanity(t *testing.T) {
 
 	// 对局进行中(viewer=人类座位 0)→ 脱敏。
 	cs := BuildClientStateWithRoom("room1", [MaxPlayers]string{"human", "bot"},
-		botSeats, [MaxPlayers]string{}, 0, gs, botHeartThought, [MaxPlayers]bool{})
+		botSeats, [MaxPlayers]string{}, 0, gs, botHeartThought, [MaxPlayers]bool{}, [MaxPlayers]BotChatBubble{})
 	if cs.BotHeartThought[1] == botHeartThought[1] {
 		t.Errorf("preflop: thought 未脱敏,泄露底牌原文=%q", cs.BotHeartThought[1])
 	}
@@ -79,7 +79,7 @@ func TestBuildClientStateWithRoom_ThoughtSanity(t *testing.T) {
 	// showdown 阶段 → 保留原文(底牌已公开)。
 	gs.Street = PhaseShowdown
 	cs2 := BuildClientStateWithRoom("room1", [MaxPlayers]string{"human", "bot"},
-		botSeats, [MaxPlayers]string{}, 0, gs, botHeartThought, [MaxPlayers]bool{})
+		botSeats, [MaxPlayers]string{}, 0, gs, botHeartThought, [MaxPlayers]bool{}, [MaxPlayers]BotChatBubble{})
 	if cs2.BotHeartThought[1] != botHeartThought[1] {
 		t.Errorf("showdown: thought 应保留原文, got=%q", cs2.BotHeartThought[1])
 	}
@@ -87,7 +87,7 @@ func TestBuildClientStateWithRoom_ThoughtSanity(t *testing.T) {
 	// 观战者视角(viewer=-1)对局进行中 → 同样脱敏。
 	gs.Street = PhasePreflop
 	cs3 := BuildClientStateWithRoom("room1", [MaxPlayers]string{"human", "bot"},
-		botSeats, [MaxPlayers]string{}, -1, gs, botHeartThought, [MaxPlayers]bool{})
+		botSeats, [MaxPlayers]string{}, -1, gs, botHeartThought, [MaxPlayers]bool{}, [MaxPlayers]BotChatBubble{})
 	if cs3.BotHeartThought[1] == botHeartThought[1] {
 		t.Errorf("spectator preflop: thought 未脱敏,泄露底牌原文=%q", cs3.BotHeartThought[1])
 	}

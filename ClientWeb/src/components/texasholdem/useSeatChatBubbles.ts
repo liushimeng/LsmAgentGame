@@ -1,8 +1,12 @@
 // 2026-08-23 §德扑Agent聊天 — 座位级 bot 发言气泡 store/hook。
 //
-// 数据源:后端 SendFromBot 广播的 chat.message 帧(from_role === 'bot',
-// 携带 room_id + from_seat)。本 hook 按 (room_id, seat) 匹配,在座位旁显示
-// ≤3 秒的发言气泡(设计文档 §4.3),到期自动消隐。
+// 数据源(双通道,2026-08-25 §20260825-03 升级):
+//   1. 实时:后端 SendFromBot 广播的 chat.message 帧(from_role === 'bot',
+//      携带 room_id + from_seat);
+//   2. 快照:game.state 的 bot_last_chat[] 座位发言快照(TexasHoldemTable 在
+//      每次状态更新时调 ingestServerBubbles)—— 覆盖断线重连/刷新后恢复,
+//      同一 (seat, ts) 去重,不与实时通道重复冒泡。
+// 本 hook 按 (room_id, seat) 匹配,在座位旁显示 ≤8 秒的发言气泡,到期自动消隐。
 //
 // 实现复刻 useStreamingMessages 的模块级 useSyncExternalStore 模式:
 //   - 多房间按 room_id 二级 Map 隔离(不串扰);
@@ -22,7 +26,7 @@ export interface SeatChatBubble {
   ts: number;
 }
 
-const BUBBLE_TTL_MS = 3000;
+const BUBBLE_TTL_MS = 8000;
 const GC_INTERVAL_MS = 1000;
 
 // room_id -> (seat -> bubble)
@@ -56,12 +60,21 @@ function onFrame(env: { type: string; payload?: any }): void {
   const text = String(m.text ?? '').trim();
   if (!roomId || seat < 0 || !text) return;
   const now = Date.now();
+  upsertBubble(roomId, seat, text, Number(m.ts ?? now));
+}
+
+function upsertBubble(roomId: string, seat: number, text: string, ts: number): void {
   let room = bubblesByRoom.get(roomId);
   if (!room) {
     room = new Map<number, SeatChatBubble>();
     bubblesByRoom.set(roomId, room);
   }
-  room.set(seat, { seat, text, until: now + BUBBLE_TTL_MS, ts: Number(m.ts ?? now) });
+  const existing = room.get(seat);
+  // 同一 (seat, ts) 去重 —— 实时通道与快照通道双写时不重复冒泡。
+  if (existing && existing.ts >= ts) return;
+  const now = Date.now();
+  const until = now + BUBBLE_TTL_MS;
+  room.set(seat, { seat, text, until, ts });
   emit();
 }
 
@@ -110,7 +123,26 @@ function getServerSnapshot(): Record<number, SeatChatBubble> {
 }
 
 /**
- * 订阅指定房间「seat → 3s bot 发言气泡」映射;无气泡时对应座位无键。
+ * 快照通道入口:把 game.state 的 bot_last_chat[] 喂进气泡存储(§20260825-03)。
+ * 只会推进同座位更新的发言(ts 去重),过期快照(> BUBBLE_TTL_MS 前)被自然丢弃。
+ */
+export function ingestServerBubbles(
+  roomId: string,
+  lastChat: ReadonlyArray<{ text: string; at_ms: number }> | undefined,
+): void {
+  if (!roomId || !lastChat?.length) return;
+  const now = Date.now();
+  for (let seat = 0; seat < lastChat.length && seat < 6; seat++) {
+    const b = lastChat[seat];
+    const text = String(b?.text ?? '').trim();
+    const ts = Number(b?.at_ms ?? 0);
+    if (!text || ts <= 0 || now - ts >= BUBBLE_TTL_MS) continue;
+    upsertBubble(roomId, seat, text, ts);
+  }
+}
+
+/**
+ * 订阅指定房间「seat → 8s bot 发言气泡」映射;无气泡时对应座位无键。
  * 返回对象引用在快照不变时稳定(useSyncExternalStore 语义)。
  */
 export function useSeatChatBubbles(roomId: string): Record<number, SeatChatBubble> {

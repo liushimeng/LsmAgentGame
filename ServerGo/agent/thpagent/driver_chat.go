@@ -135,6 +135,123 @@ func (d *Driver) HandOverChat(ctx context.Context, roomID string, seat int, hand
 	return text
 }
 
+// EventChatScenario 场景化发言的场景枚举(§20260825-03)。
+type EventChatScenario string
+
+const (
+	// EventChatHandStart 新手牌开始的开场寒暄/策略观察。
+	EventChatHandStart EventChatScenario = "hand_start"
+	// EventChatAggressor bot 自身刚做出大注/加注/全下后的放话造势。
+	EventChatAggressor EventChatScenario = "aggressor"
+	// EventChatFacedBigBet bot 面对大注被压制时的示弱/反击放话。
+	EventChatFacedBigBet EventChatScenario = "faced_big_bet"
+	// EventChatWinNoShowdown 不摊牌赢下底池(诈唬成功/全员弃牌)的得意短评。
+	EventChatWinNoShowdown EventChatScenario = "win_no_showdown"
+)
+
+// eventChatPrompts 每场景的 (system, userHint) 精简提示词。
+// 统一约束:≤2 句短评、口语化、绝不泄露当前底牌、只输出文本本身。
+var eventChatPrompts = map[EventChatScenario]struct{ system, hint string }{
+	EventChatHandStart: {
+		system: "你是德州扑克玩家,新一手牌刚刚开始。用一两句口语化短评开场(观察牌桌局势/调整心态/调侃对手均可)。只输出短评文本本身,不要任何前缀、引号或解释,绝不透露你的底牌。",
+		hint:   "新手牌 #%d 开始,请说一句开场白。",
+	},
+	EventChatAggressor: {
+		system: "你是德州扑克玩家,刚刚做出一次激进的大动作(大注/加注/全下)。用一两句放话造势(自信施压/嘲讽均可,可真可假)。只输出短评文本本身,不要任何前缀、引号或解释,绝不透露你的底牌。",
+		hint:   "你刚刚做了「%s」(金额 %d,底池 %d),请放一句狠话或造势发言。",
+	},
+	EventChatFacedBigBet: {
+		system: "你是德州扑克玩家,正面对手的大注/加注压制。用一两句口语化短评回应(示弱/不服/反将一军均可)。只输出短评文本本身,不要任何前缀、引号或解释,绝不透露你的底牌。",
+		hint:   "对手下注 %d(底池 %d,你需要跟 %d),请回应一句。",
+	},
+	EventChatWinNoShowdown: {
+		system: "你是德州扑克玩家,刚刚不经过摊牌就赢下了底池(其他人都弃牌了)。用一两句得意短评(可以暗示自己是诈唬也可以暗示是真牌,真假由你)。只输出短评文本本身,不要任何前缀、引号或解释,绝不透露你的底牌。",
+		hint:   "手牌 #%d 所有人弃牌,你直接赢得底池 %d,请说一句得意短评。",
+	},
+}
+
+// EventChatFacts 场景化发言的事实参数(按场景取所需字段)。
+type EventChatFacts struct {
+	HandNumber int
+	Action     string // aggressor: 动作类型
+	Amount     int    // aggressor/faced_big_bet: 金额
+	Pot        int    // aggressor/faced_big_bet: 底池
+	CallAmount int    // faced_big_bet: 需跟注额
+}
+
+// EventChat 让指定 bot 座位做一次场景化公屏发言(§20260825-03)。
+// 单次 LLM 短调用(15s 超时,失败静默返回空串),产物经 DedupSpeakText +
+// DispatchPokerChat 统一限流(与决策发言共用每手 4 次预算)。
+// 不改引擎语义 — 纯额外 LLM 调用,不产生 poker_action。
+func (d *Driver) EventChat(ctx context.Context, roomID string, seat int, scenario EventChatScenario, facts EventChatFacts) string {
+	p, ok := eventChatPrompts[scenario]
+	if !ok {
+		return ""
+	}
+	d.mu.RLock()
+	ra, roomOk := d.rooms[roomID]
+	if !roomOk || seat < 0 || seat >= 6 {
+		d.mu.RUnlock()
+		return ""
+	}
+	a := ra.agents[seat]
+	disp := ra.dispatch[seat]
+	d.mu.RUnlock()
+	if a == nil || disp == nil || a.IsCancelled() {
+		return ""
+	}
+
+	a.mu.Lock()
+	provider := a.Provider
+	apiKey := a.apiKey
+	a.mu.Unlock()
+	if provider == nil || apiKey == "" {
+		return ""
+	}
+
+	var user string
+	switch scenario {
+	case EventChatHandStart:
+		user = fmt.Sprintf(p.hint, facts.HandNumber)
+	case EventChatAggressor:
+		user = fmt.Sprintf(p.hint, facts.Action, facts.Amount, facts.Pot)
+	case EventChatFacedBigBet:
+		user = fmt.Sprintf(p.hint, facts.Amount, facts.Pot, facts.CallAmount)
+	case EventChatWinNoShowdown:
+		user = fmt.Sprintf(p.hint, facts.HandNumber, facts.Pot)
+	default:
+		return ""
+	}
+
+	req := types.LLMRequest{
+		Model:          a.ModelKey,
+		System:         []types.SystemBlock{{Type: "text", Text: p.system}},
+		Messages:       []types.Message{{Role: "user", Content: []types.ContentBlock{{Type: "text", Text: user}}}},
+		MaxTokens:      256,
+		AgentClassName: a.AgentClass,
+	}
+	callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	resp, err := provider.Chat(callCtx, apiKey, req)
+	if err != nil {
+		logger.L().Debug("texasholdem event chat LLM failed, silent skip",
+			zap.String("room_id", roomID), zap.Int("seat", seat),
+			zap.String("scenario", string(scenario)), zap.Error(err))
+		return ""
+	}
+	text := strings.TrimSpace(resp.Text())
+	if text == "" {
+		return ""
+	}
+	if cleaned, _, _ := agentcore.DedupSpeakText(text); cleaned != "" {
+		text = cleaned
+	}
+	if err := disp.DispatchPokerChat(text); err != nil {
+		return "" // 限流拒绝 — 静默
+	}
+	return text
+}
+
 // SeatMemorySnapshot 是单个 bot 座位的局末记忆快照(供 MemoryIter)。
 type SeatMemorySnapshot struct {
 	Seat     int

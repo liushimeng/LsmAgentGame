@@ -138,6 +138,10 @@ type ClientGameState struct {
 	BotHeartThought [6]string `json:"bot_heart_thought"`
 	BotThinking     [6]bool   `json:"bot_thinking"`
 
+	// 2026-08-25 §聊天升级 — 各 bot 座位最近一条公屏发言(座位气泡渲染)。
+	// 公开信息,玩家/观战者均可见;前端按 at_ms 超时(10s)自动隐藏。
+	BotLastChat [6]BotChatBubble `json:"bot_last_chat"`
+
 	// 2026-08-20 §德州扑克Web端产品界面优化 — 新增 4 字段:
 	// - SbSeat/BbSeat:小盲/大盲座位(前端渲染 SB/BB 徽章)。
 	//   从 Button 顺时针推导,跳过空座。纯公开信息,观战者也可见。
@@ -155,13 +159,20 @@ type ClientGameState struct {
 	ChatWindowPreview []string `json:"chat_window_preview,omitempty"`
 }
 
+// BotChatBubble 是单个 bot 座位最近一条公屏发言快照(2026-08-25 §聊天升级)。
+// Text 为发言文本(公开信息,不脱敏);AtMs 为发送时刻 unix 毫秒,前端据此过期隐藏。
+type BotChatBubble struct {
+	Text string `json:"text"`
+	AtMs int64  `json:"at_ms"`
+}
+
 // BuildClientState 构造座位 viewer 的可见视图（向后兼容版本）。
 //
 // 内部委托到 BuildClientStateWithRoom 以支持 Bot 字段透传(2026-08-19 §德州扑克Agent)。
 // 保留旧签名(seat 数组+viewer+gs)是为了不破坏 engine_test.go 等测试夹具。
 // 生产路径统一走 BuildClientStateWithRoom(2026-08-19 起)。
 func BuildClientState(roomID string, seats [MaxPlayers]string, viewer int, gs *GameState) *ClientGameState {
-	return BuildClientStateWithRoom(roomID, seats, [MaxPlayers]bool{}, [MaxPlayers]string{}, viewer, gs, [MaxPlayers]string{}, [MaxPlayers]bool{})
+	return BuildClientStateWithRoom(roomID, seats, [MaxPlayers]bool{}, [MaxPlayers]string{}, viewer, gs, [MaxPlayers]string{}, [MaxPlayers]bool{}, [MaxPlayers]BotChatBubble{})
 }
 
 // BuildClientStateWithRoom 构造座位 viewer 的可见视图（含 Bot 字段透传）。
@@ -176,7 +187,7 @@ func BuildClientState(roomID string, seats [MaxPlayers]string, viewer int, gs *G
 // botHeartThought/botThinking 由 ws/game_service_texas_bot.go 写入(锁内调用
 // SetBotHeartThoughtLocked / SetBotThinkingLocked),此处直接读字段填充
 // ClientGameState.BotHeartThought/BotThinking — 不丢帧(已在 r.mu 保护下)。
-func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats [MaxPlayers]bool, botModels [MaxPlayers]string, viewer int, gs *GameState, botHeartThought [MaxPlayers]string, botThinking [MaxPlayers]bool) *ClientGameState {
+func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats [MaxPlayers]bool, botModels [MaxPlayers]string, viewer int, gs *GameState, botHeartThought [MaxPlayers]string, botThinking [MaxPlayers]bool, botLastChat [MaxPlayers]BotChatBubble) *ClientGameState {
 	cs := &ClientGameState{
 		RoomID:     roomID,
 		GameKind:   "texasholdem",
@@ -296,6 +307,7 @@ func BuildClientStateWithRoom(roomID string, seats [MaxPlayers]string, botSeats 
 			cs.BotHeartThought[i] = sanitizeBotThought(botHeartThought[i])
 		}
 		cs.BotThinking[i] = botThinking[i]
+		cs.BotLastChat[i] = botLastChat[i]
 	}
 
 	// 2026-08-20 §德州扑克Web端产品界面优化 — 透传 4 字段。

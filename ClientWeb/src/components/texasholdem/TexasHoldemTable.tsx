@@ -3,8 +3,8 @@ import { PlayerSeat } from './PlayerSeat';
 import { BotThoughtPanel } from './BotThoughtPanel';
 import { STYLE_COLORS, getBoardBg, type StyleKey } from '@/assets/images/texasholdem';
 import type { TexasHoldemGameState } from '@/types/texasholdem';
-import { useState } from 'react';
-import { useSeatChatBubbles } from './useSeatChatBubbles';
+import { useEffect, useState } from 'react';
+import { useSeatChatBubbles, ingestServerBubbles } from './useSeatChatBubbles';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 
@@ -23,8 +23,16 @@ export function TexasHoldemTable({ gameState, mySeat, style }: Props) {
   const [bgFailed, setBgFailed] = useState(false);
   const bgSrc = getBoardBg(style);
   const t = useT();
-  // 2026-08-23 §德扑Agent聊天 — 座位级 bot 发言气泡(chat.message,≤3s)。
+  // 2026-08-23 §德扑Agent聊天 — 座位级 bot 发言气泡(chat.message 实时通道,≤8s)。
   const chatBubbles = useSeatChatBubbles(gameState.room_id);
+  // §20260825-03 — 快照通道:game.state 的 bot_last_chat 覆盖重连/刷新恢复,
+  // 与实时通道按 (seat, ts) 去重。
+  const lastChat = gameState.bot_last_chat;
+  useEffect(() => {
+    if (gameState.room_id && lastChat) {
+      ingestServerBubbles(gameState.room_id, lastChat);
+    }
+  }, [gameState.room_id, lastChat]);
 
   const tableStyle: React.CSSProperties = {
     backgroundColor: bgFailed ? colors.boardBg : undefined,

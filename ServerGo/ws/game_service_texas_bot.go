@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"LsmAgentGame/agent/thpagent"
@@ -75,6 +76,8 @@ func (s *GameService) initTexasHoldemBotDriver(registry *llm.Registry, actionTim
 		s.broadcastTexasHoldemState(roomID)
 		// 3) 检查 bot 先行动(§B6: 异步 + 串行守卫)
 		go s.ProcessBotTurn(roomID)
+		// 4) §20260825-03 场景化发言:新手牌开场白(轮换 1 个 bot,异步)
+		go s.runTexasEventChatHandStart(roomID)
 	})
 	// §B2: 手牌结束回调 → 每个 bot 的 Memory 记账(AppendHand + 对手画像)
 	s.texasHoldemMgr.SetOnHandOver(func(roomID string) {
@@ -86,6 +89,7 @@ func (s *GameService) initTexasHoldemBotDriver(registry *llm.Registry, actionTim
 		// 2026-08-23 §3.2 摊牌局「结算闲聊」:摊牌(Status=showdown)且有 bot
 		// 参与本手时,允许一次结算闲聊(同样走 DispatchPokerChat 限流,
 		// LLM 失败静默)。不改引擎语义 — 纯额外异步 LLM 调用。
+		// §20260825-03:非摊牌局改为「不摊牌赢池」场景发言(win_no_showdown)。
 		go s.runHandOverEpilogueChat(roomID, handNum, winners, seats)
 	})
 	// 保存 driver 引用(供 RegisterAgentSeats / ProcessBotTurn 使用)
@@ -108,10 +112,40 @@ func (s *GameService) runHandOverEpilogueChat(roomID string, handNumber int, win
 	if s.thpDriver == nil || s.texasHoldemMgr == nil {
 		return
 	}
-	// 摊牌判定:OverSummary 的 status == "showdown"。
-	if _, status, _, ok := s.texasHoldemMgr.OverSummary(roomID); !ok || status != "showdown" {
+	// §20260825-03:非摊牌局(全员弃牌)→ 赢家 bot 做一次「不摊牌赢池」发言。
+	_, status, _, ok := s.texasHoldemMgr.OverSummary(roomID)
+	if !ok {
 		return
 	}
+	if status != "showdown" {
+		// 底池 ≈ 全桌净盈亏正值之和(结算快照推导,足够发言语境用)。
+		pot := 0
+		for _, st := range seats {
+			if st.NetDelta > 0 {
+				pot += st.NetDelta
+			}
+		}
+		if seatsArr, seatOk := s.texasHoldemMgr.Seats(roomID); seatOk {
+			for _, w := range winners {
+				if w < 0 || w >= 6 || seatsArr[w] == "" || s.texasHoldemMgr.BotSeatModelKey(roomID, w) == "" {
+					continue
+				}
+				for _, st := range seats {
+					if st.Seat != w {
+						continue
+					}
+					text := s.runTexasEventChat(roomID, w, st.UserID, thpagent.EventChatWinNoShowdown,
+						thpagent.EventChatFacts{HandNumber: handNumber, Pot: pot})
+					if text != "" {
+						return // 一次即可
+					}
+					break
+				}
+			}
+		}
+		return
+	}
+	// 摊牌判定:OverSummary 的 status == "showdown"。
 	botSeats := make(map[int]bool)
 	if seatsArr, ok := s.texasHoldemMgr.Seats(roomID); ok {
 		for i := 0; i < 6; i++ {
@@ -136,6 +170,62 @@ func (s *GameService) runHandOverEpilogueChat(roomID string, handNumber int, win
 			return // 一次结算闲聊,一个 bot 说即可
 		}
 	}
+}
+
+// ─────────────────── §20260825-03 场景化发言 ───────────────────
+
+// runTexasEventChatHandStart 新手牌开场白:按 per-room 轮换指针选 1 个存活
+// bot 做 hand_start 发言(每手牌只 1 个 bot 说,避免刷屏)。
+func (s *GameService) runTexasEventChatHandStart(roomID string) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.L().Warn("texasholdem hand-start chat panicked",
+				zap.String("room_id", roomID), zap.Any("panic", r))
+		}
+	}()
+	if s.thpDriver == nil || s.texasHoldemMgr == nil {
+		return
+	}
+	seats, ok := s.texasHoldemMgr.Seats(roomID)
+	if !ok {
+		return
+	}
+	botSeats := make([]int, 0, 6)
+	for i := 0; i < 6; i++ {
+		if seats[i] != "" && s.texasHoldemMgr.BotSeatModelKey(roomID, i) != "" {
+			botSeats = append(botSeats, i)
+		}
+	}
+	if len(botSeats) == 0 {
+		return
+	}
+	v, _ := s.thpHandStartRotators.LoadOrStore(roomID, new(int32))
+	idx := atomic.AddInt32(v.(*int32), 1) - 1
+	seat := botSeats[int(idx)%len(botSeats)]
+	handNum := 0
+	if snap := s.texasHoldemMgr.BotGameContext(roomID, seat); snap != nil {
+		handNum = snap.HandNumber
+	}
+	botUserID, _ := s.botUserIDForSeat(roomID, seat)
+	s.runTexasEventChat(roomID, seat, botUserID, thpagent.EventChatHandStart,
+		thpagent.EventChatFacts{HandNumber: handNum})
+}
+
+// runTexasEventChat 场景化发言统一入口:调 Driver.EventChat(限流/失败静默),
+// 成功则走 sendBotChat 流式广播。返回发言文本(空 = 未发言)。
+func (s *GameService) runTexasEventChat(roomID string, seat int, botUserID string, scenario thpagent.EventChatScenario, facts thpagent.EventChatFacts) string {
+	if s.thpDriver == nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 16*time.Second)
+	defer cancel()
+	text := s.thpDriver.EventChat(ctx, roomID, seat, scenario, facts)
+	if text == "" {
+		return ""
+	}
+	modelKey := s.texasHoldemMgr.BotSeatModelKey(roomID, seat)
+	s.sendBotChat(roomID, seat, botUserID, modelKey, text)
+	return text
 }
 
 // ─────────────────── Agent 座位注册 ───────────────────
@@ -262,6 +352,8 @@ func (s *GameService) cleanupTexasHoldemBotRuntime(roomID string) {
 		v.(*texasBotWatchdogHandle).cancel()
 	}
 	s.thpTurnGuards.Delete(roomID)
+	// §20260825-03: 清理 hand_start 发言轮换指针。
+	s.thpHandStartRotators.Delete(roomID)
 	// 2026-08-23 §3.4: 房间删除 → 异步 MemoryIter(必须先于 UnregisterAgents
 	// 快照记忆,快照在 Iterate 内完成,故先触发再注销)。
 	s.IterateTexasAgentMemoriesAsync(roomID)
@@ -379,6 +471,13 @@ func (s *GameService) ProcessBotTurn(roomID string) {
 		// 所有 bot 决策被拒并 fallback fold。
 		s.thpDriver.OnNewRoundLocked(roomID, seat)
 
+		// §20260825-03 场景化发言:面对大注被压制(CallAmount ≥ max(3×BB, pot/2))
+		// 时异步放话示弱/反击,不阻塞决策主链。
+		if bigBet := 3 * ctx.BigBlind; ctx.CallAmount >= bigBet && ctx.CallAmount*2 >= ctx.Pot {
+			go s.runTexasEventChat(roomID, seat, ctx.MyUserID, thpagent.EventChatFacedBigBet,
+				thpagent.EventChatFacts{Amount: ctx.CurrentBet, Pot: ctx.Pot, CallAmount: ctx.CallAmount})
+		}
+
 		// 调 LLM 决策(配置超时,默认 30s)
 		timeoutSec := s.thpActionTimeoutSec
 		if timeoutSec <= 0 {
@@ -439,6 +538,14 @@ func (s *GameService) ProcessBotTurn(roomID string) {
 		// §B2: 动作已应用 → 所有 bot 的 Memory 记录行动者统计
 		s.thpDriver.RecordPlayerAction(roomID, seat, ctx.MyUserID, engineAction.Type.String(), engineAction.Amount, ctx.Street)
 
+		// §20260825-03 场景化发言:bot 自身做出激进大注(raise/allin,或 bet ≥ 底池)
+		// 后异步放话造势,不阻塞链式推进。
+		if t := engineAction.Type; t == texasholdem.ActRaise || t == texasholdem.ActAllIn ||
+			(t == texasholdem.ActBet && engineAction.Amount >= ctx.Pot) {
+			go s.runTexasEventChat(roomID, seat, ctx.MyUserID, thpagent.EventChatAggressor,
+				thpagent.EventChatFacts{Action: engineAction.Type.String(), Amount: engineAction.Amount, Pot: ctx.Pot})
+		}
+
 		// 广播状态(把最新 thought/thinking 推到所有玩家)
 		s.broadcastTexasHoldemState(roomID)
 
@@ -494,6 +601,13 @@ func (s *GameService) sendBotChat(roomID string, seat int, botUserID, modelKey, 
 	}
 	// §3.1 写入点 2:bot 发言进 500K 共享队列(其他 bot 下次决策可见)。
 	s.RecordTexasBotChat(roomID, seat, botUserID, modelKey, text)
+	// §20260825-03: 写座位气泡快照(下次 game.state 广播透传 bot_last_chat)。
+	if s.texasHoldemMgr != nil {
+		nowMs := time.Now().UnixMilli()
+		s.texasHoldemMgr.WithRoomLocked(roomID, func(r *texasholdem.TexasHoldemRoom) {
+			r.SetBotLastChatLocked(seat, text, nowMs)
+		})
+	}
 	logger.L().Debug("texasholdem bot chat sent",
 		zap.String("room_id", roomID),
 		zap.Int("seat", seat),

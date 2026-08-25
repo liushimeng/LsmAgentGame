@@ -71,9 +71,9 @@ func BuildSystemPrompt(ctx *GameContextForAgent, mem *Memory) string {
 	// [StyleGuide] 风格指南段
 	b.WriteString("[StyleGuide]\n")
 	b.WriteString("- 使用 poker_action 工具(必填 internal_thought,描述你的真实思考)。\n")
-	// 2026-08-23 §3.2 发言策略放宽:每手 ≤3 次 + 间隔 ≥20s;新增回应/情绪短评指引。
-	b.WriteString("- poker_chat 是可选公屏发言,每手牌最多 3 次,相邻两次间隔至少 20 秒。\n")
-	b.WriteString("- 可以在 poker_chat 中回应他人的发言(被点名/被挑衅时应优先考虑回应),但注意不要泄露自己的底牌信息。\n")
+	// 2026-08-25 §20260825-03 发言升级:每手 ≤4 次 + 间隔 ≥12s;发言时机指引强化。
+	b.WriteString("- poker_chat 公屏发言每手牌最多 4 次(相邻 ≥12s),鼓励积极使用:像真人牌手一样,在大注/被压制/被点名/关键手时说一两句(可与 poker_action 同次响应给出)。\n")
+	b.WriteString("- 发言可心理战(示弱/造势/反讽),但绝不直接泄露当前底牌;被点名或挑衅时应优先回应。\n")
 	b.WriteString("- 摊牌后的 win/loss 关键手,鼓励用一句情绪化短评回应结果。\n")
 	b.WriteString("- fold/call/raise 决策基于牌力 vs required_equity:\n")
 	b.WriteString("  * 牌力 > required_equity + 5% → 跟注/加注\n")

@@ -2,7 +2,8 @@
 //
 // 关键约束（沿用 CLAUDE.md §92a + §20260812-04）：
 //   1. poker_action 每轮仅 1 次（强制, 第 2 次直接丢弃）
-//   2. poker_chat 每手牌 ≤ 3 次 + 相邻 ≥ 20s（§3.2 放宽,原 2 次/30s 过紧）
+//   2. poker_chat 每手牌 ≤ 4 次 + 相邻 ≥ 12s（§20260825-03 放宽,原 3 次/20s
+//      偏紧 —— 场景化发言上线后一手牌 4 条街需要更充裕的发言预算）
 //   3. 30s 决策超时服务端兜底 fold（与配置项 texasholdem.agent_action_timeout_sec 对齐）
 package thpagent
 
@@ -54,13 +55,13 @@ type Dispatcher struct {
 //
 // 默认配置：
 //   - 每轮 1 次 poker_action（强制）
-//   - 每手牌 3 次 poker_chat（限流,§3.2 放宽:德扑一手多街,2 次过紧）
-//   - 相邻 chat 间隔 ≥ 20s（§3.2:原 30s 过紧）
+//   - 每手牌 4 次 poker_chat（限流,§20260825-03 放宽:场景发言 + 决策发言共用预算）
+//   - 相邻 chat 间隔 ≥ 12s（§20260825-03:原 20s 过紧）
 //   - 30s 决策超时
 func NewDispatcher() *Dispatcher {
 	return &Dispatcher{
-		maxChatPerHand:     3,
-		minChatIntervalSec: 20,
+		maxChatPerHand:     4,
+		minChatIntervalSec: 12,
 		actionTimeout:      30 * time.Second,
 	}
 }
@@ -167,7 +168,7 @@ var (
 	ErrInvalidAmount       = dispatchError("bet/raise/allin 必须填合法 amount")
 	ErrUnknownAction       = dispatchError("未知 action 类型")
 	ErrTooManyChat         = dispatchError("本手牌已用满聊天次数")
-	ErrChatIntervalTooShort = dispatchError("聊天间隔过短, 需 ≥ 20s")
+	ErrChatIntervalTooShort = dispatchError("聊天间隔过短, 需 ≥ 12s")
 )
 
 type dispatchError string

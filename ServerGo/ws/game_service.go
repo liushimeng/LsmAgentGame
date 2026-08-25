@@ -61,6 +61,10 @@ type GameService struct {
 	// cleanupTexasHoldemBotRuntime 清理。
 	thpChatQueues sync.Map
 
+	// 2026-08-25 §20260825-03 场景化发言 — per-room hand_start 发言轮换指针
+	// (roomID → *int32,atomic 递增取模,保证每手牌只有 1 个 bot 说开场白)。
+	thpHandStartRotators sync.Map
+
 	// thpRegistry / thpMemoryStore:德扑 MemoryIter(§3.4)的 LLM 注册表与
 	// 持久记忆存取层(由 main.go / initTexasHoldemBotDriver 注入;nil 时 no-op)。
 	thpRegistry     *llm.Registry

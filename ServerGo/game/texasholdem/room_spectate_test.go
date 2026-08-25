@@ -166,7 +166,7 @@ func TestSpectateGame_SpectatorViewHidesHoleCards(t *testing.T) {
 		room.Seats, room.BotSeats, room.BotModels,
 		-1, // 观战者
 		room.State,
-		room.BotHeartThought, room.BotThinking,
+		room.BotHeartThought, room.BotThinking, room.BotLastChat,
 	)
 	if len(cs.MyHole) != 0 {
 		t.Fatalf("spectator view leaked MyHole: %+v", cs.MyHole)
@@ -247,7 +247,7 @@ func TestSpectatorView_SeatContractForClientRotation(t *testing.T) {
 		room.Seats, room.BotSeats, room.BotModels,
 		-1, // 观战者
 		room.State,
-		room.BotHeartThought, room.BotThinking,
+		room.BotHeartThought, room.BotThinking, room.BotLastChat,
 	)
 
 	if cs.MySeat != -1 {

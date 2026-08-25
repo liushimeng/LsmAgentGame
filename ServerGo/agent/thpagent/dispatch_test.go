@@ -59,15 +59,15 @@ func TestDispatcher_PokerChat_LimitPerHand(t *testing.T) {
 	d := NewDispatcher()
 	d.minChatIntervalSec = 0 // 测试时关掉时间限制
 
-	// 2026-08-23 §3.2 放宽:每手 ≤3 次。
-	for i := 1; i <= 3; i++ {
+	// 2026-08-25 §20260825-03 放宽:每手 ≤4 次。
+	for i := 1; i <= 4; i++ {
 		err := d.DispatchPokerChat("test")
 		if err != nil {
 			t.Errorf("chat %d should succeed, got: %v", i, err)
 		}
 	}
 
-	err := d.DispatchPokerChat("fourth")
+	err := d.DispatchPokerChat("fifth")
 	if err != ErrTooManyChat {
 		t.Errorf("fourth chat should fail with ErrTooManyChat, got: %v", err)
 	}
