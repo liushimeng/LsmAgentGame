@@ -12,7 +12,7 @@ import (
 // 现测试断言:delta 范围内 → 全额进钱包,pot 超 MaxPotPerHand → 比例缩放
 // 赢家,输家按真实 delta 扣款(失败时记 shortfall 由用户在下次入金结算)。
 
-// fakeWallet 记录所有 Credit/Debit 调用(净额)。
+// fakeWallet 记录所有 Credit/Debit 调用(净额)。余额充裕(不触发 clamp)。
 type fakeWallet struct {
 	mu      sync.Mutex
 	credits map[string]int64
@@ -26,6 +26,11 @@ func newFakeWallet() *fakeWallet {
 		debits:  make(map[string]int64),
 		rakes:   make(map[string]int64),
 	}
+}
+
+// GetBalance 返回充裕余额,使 debitClamped 走全额扣款路径。
+func (f *fakeWallet) GetBalance(ctx context.Context, userID string) (int64, error) {
+	return 1_000_000_000, nil
 }
 
 func (f *fakeWallet) Credit(ctx context.Context, userID, txType, refType, refID, gameKind, remark string, amount int64) error {
@@ -140,5 +145,49 @@ func TestSettle_004_SetMaxPotPerHandZeroKeepsDefault(t *testing.T) {
 	m.mu.RUnlock()
 	if got != 100000 {
 		t.Errorf("maxPotPerHand = %d, want default 100000", got)
+	}
+}
+
+// poorWallet 模拟余额不足的钱包(R18 P2 场景:Bot 连续全押后钱包见底)。
+type poorWallet struct {
+	fakeWallet
+	balance map[string]int64
+}
+
+func (p *poorWallet) GetBalance(ctx context.Context, userID string) (int64, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.balance[userID], nil
+}
+
+// TestSettle_005_ShortfallClampedToBalance: 输家钱包余额不足时,debit 被
+// clamp 到当前余额,债务就地吸收而非整笔欠账滚雪球(§20260825-P2)。
+// 输家 delta -300,钱包余额 120 → 实际 debit 120;余额 0 → 跳过 debit。
+func TestSettle_005_ShortfallClampedToBalance(t *testing.T) {
+	m := NewTexasHoldemManager()
+	pw := &poorWallet{balance: map[string]int64{"user-a": 500000, "user-b": 120}}
+	pw.credits = make(map[string]int64)
+	pw.debits = make(map[string]int64)
+	pw.rakes = make(map[string]int64)
+	m.SetWalletService(pw)
+	settleRoomWithStacks(t, m, "room-shortfall", 10000, [2]int{10300, 9700}) // delta +300 / -300
+
+	m.SettleHandCoins("room-shortfall")
+
+	if got := pw.debits["user-b"]; got != 120 {
+		t.Errorf("loser debit = %d, want 120 (clamped to balance)", got)
+	}
+
+	// 余额 0:不再尝试 Debit,债务清零。
+	pw2 := &poorWallet{balance: map[string]int64{"user-a": 500000, "user-b": 0}}
+	pw2.credits = make(map[string]int64)
+	pw2.debits = make(map[string]int64)
+	pw2.rakes = make(map[string]int64)
+	m2 := NewTexasHoldemManager()
+	m2.SetWalletService(pw2)
+	settleRoomWithStacks(t, m2, "room-zero", 10000, [2]int{10300, 9700})
+	m2.SettleHandCoins("room-zero")
+	if got := pw2.debits["user-b"]; got != 0 {
+		t.Errorf("zero-balance loser debit = %d, want 0 (skipped)", got)
 	}
 }

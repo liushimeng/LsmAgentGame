@@ -216,6 +216,9 @@ type texasRoomConfig struct {
 type WalletSettler interface {
 	Credit(ctx context.Context, userID, txType, refType, refID, gameKind, remark string, amount int64) error
 	Debit(ctx context.Context, userID, txType, refType, refID, gameKind, remark string, amount int64) error
+	// GetBalance 返回用户当前金币余额(无钱包行时返回 0 + nil,
+	// 与 service.WalletService.GetBalance 的防御性约定一致)。
+	GetBalance(ctx context.Context, userID string) (int64, error)
 }
 
 // NewTexasHoldemManager 创建空管理器。
@@ -755,12 +758,40 @@ func (m *TexasHoldemManager) SettlePlayerDelta(roomID, userID string, handNum, d
 		}
 		return
 	}
-	if err := m.walletSvc.Debit(context.Background(), userID, "game_lose", "texasholdem_settle", refID, "texasholdem", remark, int64(-delta)); err != nil {
-		// 与 SettleHandCoins 一致:钱包不足只记 shortfall,桌内筹码已流转。
-		logger.L().Warn("texasholdem removed-player debit failed (wallet shortfall, debt carried)",
+	m.debitClamped(roomID, userID, "game_lose", "texasholdem_settle", refID, "texasholdem", remark, int64(-delta), delta, handNum)
+}
+
+// debitClamped 先查余额,把 debit 金额 clamp 到当前钱包余额后扣款
+// (R18 P2 修复,2026-08-25 §20260825-P2)。此前全额 Debit 失败时整笔欠账
+// (debt carried),输家 Bot 连续多手全押会让债务滚雪球且永不结算 —— 因为
+// 下次结算仍全额尝试,钱包余额永远 0,坏账单调增长。改为「有多少扣多少,
+// 余额为 0 则跳过」,债务被就地吸收,不再累积。桌内筹码(引擎权威)不受影响,
+// 钱包只是上层投影;短缺部分记 shortfall 告警供运营审计。
+func (m *TexasHoldemManager) debitClamped(roomID, userID, txType, refType, refID, gameKind, remark string, amount int64, origDelta int, handNum int) {
+	ctx := context.Background()
+	balance, err := m.walletSvc.GetBalance(ctx, userID)
+	if err != nil {
+		logger.L().Warn("texasholdem settle get balance failed, fallback to full debit",
+			zap.String("room_id", roomID), zap.String("user_id", userID), zap.Error(err))
+	}
+	if err == nil && balance < amount {
+		logger.L().Warn("texasholdem settle debit clamped to wallet balance (shortfall absorbed)",
 			zap.String("room_id", roomID),
 			zap.String("user_id", userID),
-			zap.Int("delta", delta),
+			zap.Int("hand", handNum),
+			zap.Int("delta", origDelta),
+			zap.Int64("attempted", amount),
+			zap.Int64("balance", balance))
+		if balance <= 0 {
+			return
+		}
+		amount = balance
+	}
+	if err := m.walletSvc.Debit(ctx, userID, txType, refType, refID, gameKind, remark, amount); err != nil {
+		logger.L().Warn("texasholdem settle debit failed",
+			zap.String("room_id", roomID),
+			zap.String("user_id", userID),
+			zap.Int64("attempted", amount),
 			zap.Error(err))
 	}
 }
@@ -1238,19 +1269,11 @@ func (m *TexasHoldemManager) SettleHandCoins(roomID string) {
 				}
 			}
 		} else {
-			// 输家:Debit 失败时(余额不足)仅 logger.Warn 记录 shortfall,
-			// 桌内筹码已正确流转向赢家,钱包负债留在用户账上等下次结算。
-			//(2026-08-21 §20260821-P1-1:不再 clamp 到 -5000,直接尝试
-			// 全额 Debit,失败即欠账。引擎是筹码权威,钱包是上层投影。)
-			amount := int64(-s.delta)
-			if err := m.walletSvc.Debit(context.Background(), s.userID, "game_lose", "texasholdem_settle", refID, "texasholdem", remark, amount); err != nil {
-				logger.L().Warn("texasholdem settle debit failed (wallet shortfall, debt carried)",
-					zap.String("room_id", roomID),
-					zap.String("user_id", s.userID),
-					zap.Int("delta", s.delta),
-					zap.Int64("attempted", amount),
-					zap.Error(err))
-			}
+			// 输家:按钱包余额 clamp 后扣款(R18 P2 修复,§20260825-P2,
+			// 见 debitClamped)。此前全额 Debit 失败时整笔欠账(debt carried),
+			// 连续全押的 Bot 债务会滚雪球;现改为有多少扣多少,债务就地吸收。
+			// 引擎是筹码权威,钱包是上层投影。
+			m.debitClamped(roomID, s.userID, "game_lose", "texasholdem_settle", refID, "texasholdem", remark, int64(-s.delta), s.delta, handNum)
 		}
 	}
 	if len(settlements) > 0 {
