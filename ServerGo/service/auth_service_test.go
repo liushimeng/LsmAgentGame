@@ -19,51 +19,29 @@ import (
 // will panic — that's the desired early failure.
 func stubDB() *gorm.DB { return &gorm.DB{} }
 
-// TestLogin_AgentBypassesCaptcha verifies the agent bypass account has a
-// different code path. We exercise it twice:
-//
-//  1. With a *wrong* captcha answer: real users would be rejected with
-//     ErrAuthCaptchaWrong; the bypass account must NOT short-circuit to
-//     that code (we assert the error code is something else, e.g.
-//     ErrValidationFailed because we set no password, proving the bypass
-//     skipped captcha entirely and reached the password check).
-//
-//  2. With no password: bypass account must reach password validation
-//     (return ErrValidationFailed), proving it skipped captcha entirely.
-func TestLogin_AgentBypassesCaptcha(t *testing.T) {
-	// Bypass account + a *wrong* captcha answer must NOT short-circuit to a
-	// captcha error code. We use a stub DB that will panic on access; the
-	// test PASSES if we either (a) get a non-captcha coded error, or (b)
-	// panic in DB code (proving the captcha gate was traversed).
+// TestLogin_NoCaptchaBypass verifies that NO account (including former
+// test/automation accounts, and even with DevMode=true) can bypass the
+// CAPTCHA gate — 2026-08-25 安全加固回归测试。
+func TestLogin_NoCaptchaBypass(t *testing.T) {
 	store := util.NewCaptchaStore()
-	id, _, _ := store.Issue(5, time.Minute)
-	// 测试 bypass 行为需要 DevMode=true(§安全修复:仅 dev 模式放行)。
 	devCfg := &config.Config{}
 	devCfg.Server.DevMode = true
 	s2 := NewAuthService(stubDB(), devCfg, store)
 
-	gotCode := -1
-	func() {
-		defer func() {
-			recover() // swallow DB panic
-		}()
+	for _, account := range []string{"test_01", "test19082jauishf8", "autowork2026"} {
+		// 验证码一次性消费，每个账号签发新的。
+		id, _, _ := store.Issue(5, time.Minute)
+		// 错误验证码 + DevMode=true 也必须被 CAPTCHA gate 拒绝。
 		_, err := s2.Login(context.Background(), LoginInput{
-			Account:       AgentBypassAccount,
+			Account:       account,
 			Password:      "x",
 			CaptchaID:     id,
 			CaptchaAnswer: "ZZZZZ",
 		})
-		if err != nil {
-			gotCode = errcode.AsError(err).Code
+		ce := errcode.AsError(err)
+		if ce.Code != errcode.ErrAuthCaptchaWrong {
+			t.Fatalf("account %q should hit captcha gate even in DevMode, got code=%d (%s)", account, ce.Code, ce.Message)
 		}
-	}()
-	switch gotCode {
-	case -1:
-		// panic recovered — captcha was bypassed, DB code reached. Good.
-	case errcode.ErrAuthCaptchaMissing,
-		errcode.ErrAuthCaptchaExpired,
-		errcode.ErrAuthCaptchaWrong:
-		t.Fatalf("bypass account wrongly short-circuited on captcha gate: code=%d", gotCode)
 	}
 }
 

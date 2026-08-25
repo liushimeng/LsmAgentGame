@@ -109,9 +109,9 @@ func (a *AuthAPI) Register(c *gin.Context) {
 // Login POST /api/auth/login
 //
 // Request body:
-//   - For real users: {account|captcha_id, password, captcha_answer}
-//   - For agent-bypass (account = test19082jauishf8): {account, password}
+//   - {account, password, captcha_id, captcha_answer}
 //   - Or phone login: {phone, password, captcha_id, captcha_answer}
+//     (2026-08-25 起所有账号均需 CAPTCHA，无旁路)
 func (a *AuthAPI) Login(c *gin.Context) {
 	var req struct {
 		Account       string `json:"account"`

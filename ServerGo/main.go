@@ -21,6 +21,8 @@ import "C"
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -133,6 +135,16 @@ func main() {
 	logger.L().Info("LsmAgentGame starting",
 		zap.String("version", AppVersion),
 		zap.String("build_time", buildDateTime))
+
+	// 2026-08-25 安全加固：JWT secret 为空会导致空字节签名（任何人可伪造
+	// token），直接 Fatal 拒绝启动。
+	if cfg.JWT.Secret == "" {
+		logger.L().Fatal("cfg.jwt.secret 为空 — 拒绝启动，请在 LsmAgentGame.conf 配置强随机 secret")
+	}
+	// 2026-08-25 安全加固：DevMode 仅限本地开发，生产误开需醒目告警。
+	if cfg.Server.DevMode {
+		logger.L().Warn("cfg.server.dev_mode=true — 开发模式，仅限本地开发环境使用，生产部署必须显式设置为 false")
+	}
 
 	// DB init MUST come first now — the LLM registry is DB-first (loads from
 	// t_lsm_game_llm_provider, falls back to seeding from cfg.LLM.Providers on
@@ -305,11 +317,22 @@ func main() {
 	if created, err := authSvc.SeedRootUserIfEmpty(rootCtx, rootAccount, rootPassword, inviteCode); err != nil {
 		logger.L().Warn("root user seed failed", zap.Error(err))
 	} else if created {
-		logger.L().Info("root user seed created",
-			zap.String("account", rootAccount),
-			zap.String("invite_code", inviteCode),
-			zap.String("generated_password", rootPassword),
-		)
+		// 2026-08-25 安全加固：明文密码仅 DevMode 下输出一次（本地开发引导）；
+		// 非 DevMode 只输出 SHA-256 指纹，避免生产日志落明文凭据。
+		if cfg.Server.DevMode {
+			logger.L().Info("root user seed created",
+				zap.String("account", rootAccount),
+				zap.String("invite_code", inviteCode),
+				zap.String("generated_password", rootPassword),
+			)
+		} else {
+			sum := sha256.Sum256([]byte(rootPassword))
+			logger.L().Warn("root user seed created（密码为随机生成，日志仅输出指纹）— 请在 LsmAgentGame.conf 配置 root.password 后重启以固定凭据",
+				zap.String("account", rootAccount),
+				zap.String("invite_code", inviteCode),
+				zap.String("password_sha256_prefix", hex.EncodeToString(sum[:])[:12]),
+			)
+		}
 	}
 	rootCancel()
 

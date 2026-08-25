@@ -332,7 +332,7 @@ type ServerConfig struct {
 	WSSAddr        string `json:"wss_addr"`
 	TLSCert        string `json:"tls_cert"`
 	TLSKey         string `json:"tls_key"`
-	DevMode        bool   `json:"dev_mode"`         // true → 启用 AgentBypassAccounts 白名单(CAPTCHA 旁路);生产必须 false
+	DevMode        bool   `json:"dev_mode"`         // true → 开发模式(启动 WARN + root 密码明文引导日志);生产必须 false。CAPTCHA 旁路已删除(20260825)
 	RootAccount    string `json:"root_account"`     // 首次启动时种子的 root 账号;默认 "lsm_root"
 	RootPassword   string `json:"root_password"`    // 首次启动时种子的 root 密码;空时由 main.go 随机生成并日志输出一次
 	RootInviteCode string `json:"root_invite_code"` // 首次启动时种子的邀请码;空时由 main.go 随机生成

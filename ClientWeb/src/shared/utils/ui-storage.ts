@@ -1,26 +1,19 @@
 // Lightweight encrypted localStorage helper for the login form.
 //
-// Stores {account, password, phone, mode, accountPassword, phonePassword} as a
-// single AES-GCM-encrypted JSON blob keyed by lsm.auth.ui. The key is derived
-// from a deterministic per-browser passphrase (UA + location.host), wrapped with
-// PBKDF2 to slow offline brute force on a stolen localStorage dump.
-//
-// §20260821-05: 支持按登录模式分别保存凭证
+// 2026-08-25 安全加固：**不再持久化任何密码**。仅保存表单回填所需的
+// 非敏感字段 {account, phone, mode}。旧版本（≤v2）写入的密码字段在 load
+// 迁移时一律置空，且下次 save 用 v3 覆盖，存量密文随之失效。
 //   - account/phone: 通用字段，用于表单回填
-//   - accountPassword: 账号登录模式保存的密码
-//   - phonePassword: 手机号登录模式保存的密码
-//   - 这样切换登录模式时可以自动加载对应的密码
+//   - accountPassword/phonePassword: 兼容字段，恒为空串
 //
 // Important properties:
 //   - Fails silently to empty defaults on any crypto / parse error.
-//   - The passphrase is NOT user-supplied. It is derived from public browser
-//     attributes. That makes this obfuscation, not real confidentiality —
-//     the security model is "no plaintext password at rest," not
-//     "deny the attacker who has my localStorage."
+//   - Encryption (AES-GCM + PBKDF2, key from UA+host) is obfuscation only —
+//     这也是不再存密码的原因：同源脚本可复现密钥。
 
 const STORAGE_KEY = 'lsm.auth.ui';
 const PBKDF2_ITER = 50_000;
-const STORAGE_VERSION = 2; // §20260821-05: 版本标记，用于向前兼容
+const STORAGE_VERSION = 3; // 2026-08-25: v3 起不存密码（v2 及更早的密码字段 load 时清空）
 
 export interface SavedCredentials {
   account: string;
@@ -122,22 +115,16 @@ export const uiStorage = {
     if (!plain) return EMPTY;
     try {
       const obj = JSON.parse(plain) as Partial<SavedCredentials>;
-      // §20260821-05: 向前兼容旧格式（无 accountPassword/phonePassword）
-      const isV2 = obj.version === STORAGE_VERSION;
+      // 2026-08-25: v3 起不加载任何密码（含旧版本迁移），密码字段恒为空。
       return {
         account: typeof obj.account === 'string' ? obj.account : '',
-        password: typeof obj.password === 'string' ? obj.password : '',
+        password: '',
         phone: typeof obj.phone === 'string' ? obj.phone : '',
         mode: obj.mode === 'phone' ? 'phone' : 'account',
         savedAt: typeof obj.savedAt === 'number' ? obj.savedAt : 0,
-        // v2 新增字段，旧版本默认为空或使用旧的 password
-        accountPassword: isV2
-          ? (typeof obj.accountPassword === 'string' ? obj.accountPassword : '')
-          : (typeof obj.password === 'string' ? obj.password : ''),
-        phonePassword: isV2
-          ? (typeof obj.phonePassword === 'string' ? obj.phonePassword : '')
-          : '',
-        version: isV2 ? STORAGE_VERSION : 0,
+        accountPassword: '',
+        phonePassword: '',
+        version: STORAGE_VERSION,
       };
     } catch {
       return EMPTY;

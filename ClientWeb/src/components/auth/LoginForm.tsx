@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { authService, isAgentBypassAccount } from '@/services/auth.service';
+import { authService } from '@/services/auth.service';
 import { uiStorage } from '@/shared/utils/ui-storage';
 import { useT } from '@/hooks/useT';
 
@@ -54,8 +54,8 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
   const captcha = mode === 'account' ? accountCaptcha : phoneCaptcha;
   const setCaptcha = mode === 'account' ? setAccountCaptcha : setPhoneCaptcha;
 
-  const isAgentBypass = isAgentBypassAccount(mode === 'account' ? accountCreds.identifier : '');
-  const requireCaptcha = !isAgentBypass;
+  // 2026-08-25 安全加固：CAPTCHA 全员强制，无旁路账号。
+  const requireCaptcha = true;
 
   // Hydrate saved credentials once.
   useEffect(() => {
@@ -63,8 +63,9 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
     (async () => {
       const saved = await uiStorage.load();
       if (cancelled) return;
-      setAccountCreds({ identifier: saved.account, password: saved.accountPassword });
-      setPhoneCreds({ identifier: saved.phone, password: saved.phonePassword });
+      // 2026-08-25 安全加固：只回填账号/手机号，不回填密码。
+      setAccountCreds({ identifier: saved.account, password: '' });
+      setPhoneCreds({ identifier: saved.phone, password: '' });
       setMode(saved.mode);
     })();
     return () => {
@@ -74,7 +75,6 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
 
   // Fetch a captcha for the current mode.
   async function refreshCaptcha() {
-    if (isAgentBypass) return;
     try {
       const ch = await authService.getCaptcha();
       setCaptcha({ id: ch.captcha_id, svg: ch.svg, answer: '' });
@@ -84,19 +84,11 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
     }
   }
 
-  // Refresh captcha when mode changes or bypass status changes.
+  // Refresh captcha when mode changes.
   useEffect(() => {
     refreshCaptcha();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, isAgentBypass]);
-
-  // Clear captcha answer when entering bypass mode.
-  useEffect(() => {
-    if (isAgentBypass) {
-      setCaptcha((prev) => ({ ...prev, answer: '' }));
-      setErr('');
-    }
-  }, [isAgentBypass, setCaptcha]);
+  }, [mode]);
 
   function updateIdentifier(value: string) {
     setCreds((prev) => ({ ...prev, identifier: value }));
@@ -122,18 +114,17 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
         payload = { account: identifier, password: passwordValue, captcha_id: captchaId, captcha_answer: captchaAnswer };
       }
       await login(payload);
-      // §20260821-05: 按模式分别保存凭证
+      // §20260821-05 按模式保存账号；2026-08-25 安全加固：不再保存密码，
+      // 密码字段恒为空串（同时以 v3 覆盖旧存量密文）。
       const accountVal = mode === 'account' ? creds.identifier.trim() : accountCreds.identifier.trim();
       const phoneVal = mode === 'phone' ? creds.identifier.trim() : phoneCreds.identifier.trim();
-      const accountPwd = mode === 'account' ? creds.password : accountCreds.password;
-      const phonePwd = mode === 'phone' ? creds.password : phoneCreds.password;
       await uiStorage.save({
         account: accountVal,
         phone: phoneVal,
         password: '',
         mode,
-        accountPassword: accountPwd,
-        phonePassword: phonePwd
+        accountPassword: '',
+        phonePassword: ''
       });
     } catch (e) {
       const err = e as Error & { code?: number };

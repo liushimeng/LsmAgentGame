@@ -15,53 +15,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// AgentBypassAccounts is the whitelist of agent / automation-test accounts
-// that skip CAPTCHA verification on /api/auth/login.
-//
-// 重要:此白名单只在 cfg.Server.DevMode=true 时生效。生产部署必须显式设置
-// dev_mode=false,否则白名单失效 → CAPTCHA 全员强制。
-//
-// 白名单来源:由 cfg.Server.AgentBypassAccounts (LsmAgentGame.conf 配置)
-// 注入;空配置时回退到本常量作为开发模式兜底。**严禁**在生产 conf 中写入
-// 真实账号名,推荐使用 dev_mode 关闭以彻底禁用此旁路。
-//
-// 匹配大小写敏感 — 仅注册时的精确字符串可旁路。新增自动化账号时除更新
-// AgentBypassAccounts 默认值外,必须同步 docs/通用功能/测试账号凭证.md 与
-// CLAUDE.md §21。
-var AgentBypassAccounts = map[string]struct{}{
-	"test19082jauishf8": {}, // legacy single-account seed
-	"test_01":           {},
-	"test_02":           {},
-	"test_03":           {},
-	"test_04":           {},
-	"autowork2026":      {}, // 自动化截图/回归测试账号（DevMode 本地开发用）
-}
-
-// IsAgentBypassAccount reports whether the given login account string is on
-// the CAPTCHA-bypass whitelist **AND** cfg.Server.DevMode is true. It is the
-// single source of truth used by AuthService.Login; expose it so callers
-// (e.g. frontend detector, future tooling) can reuse the same predicate.
-//
-// 当 DevMode=false 时此函数永远返回 false,即白名单整体失效。
-func (s *AuthService) IsAgentBypassAccount(account string) bool {
-	if s == nil || s.cfg == nil || !s.cfg.Server.DevMode {
-		return false
-	}
-	_, ok := AgentBypassAccounts[account]
-	return ok
-}
-
-// IsAgentBypassAccountGlobal 是旧式全局函数,保留用于无法访问 AuthService
-// 实例的调用点(如测试 / 旧前端 detector)。它**不**检查 DevMode — 调用者
-// 必须自行保证仅在开发模式下使用。新代码一律改用 AuthService.IsAgentBypassAccount。
-func IsAgentBypassAccountGlobal(account string) bool {
-	_, ok := AgentBypassAccounts[account]
-	return ok
-}
-
-// AgentBypassAccount is retained for backwards-compatibility with older
-// call sites and tests. New code should use AuthService.IsAgentBypassAccount().
-const AgentBypassAccount = "test19082jauishf8"
+// 2026-08-25 安全加固：原 CAPTCHA 旁路白名单（AgentBypassAccounts /
+// IsAgentBypassAccount / IsAgentBypassAccountGlobal / AgentBypassAccount 常量）
+// 已全部删除。登录对**所有**账号强制 CAPTCHA，不存在任何绕过路径。
+// 详见 tmpPlan/安全信息和加固-20260825-02.md（不入库）。
 
 // AuthService is the user-account service.
 type AuthService struct {
@@ -114,9 +71,8 @@ type RegisterInput struct {
 }
 
 // LoginInput is the payload for login. Provide Account OR Phone (phone wins
-// when both are set), plus Password. Real users must also supply a valid
-// CaptchaID/CaptchaAnswer — accounts in AgentBypassAccounts skip that
-// requirement (see docs/测试账号凭证.md §6 & §7.2).
+// when both are set), plus Password. All callers must also supply a valid
+// CaptchaID/CaptchaAnswer（2026-08-25 起无任何旁路）.
 type LoginInput struct {
 	Account       string
 	Phone         string
@@ -346,9 +302,8 @@ func (s *AuthService) SeedRootUserIfEmpty(ctx context.Context, account, password
 //
 // Behavior matrix:
 //   - Account OR Phone required; phone wins when both are supplied.
-//   - Accounts in AgentBypassAccounts skip CAPTCHA verification; everyone
-//     else must supply matching CaptchaID/CaptchaAnswer (otherwise
-//     10301/10302/10303).
+//   - Every account must supply matching CaptchaID/CaptchaAnswer (otherwise
+//     10301/10302/10303). 2026-08-25 起无任何旁路。
 //   - bcrypt password verification is always required, even for the bypass.
 func (s *AuthService) Login(ctx context.Context, in LoginInput) (*AuthResponse, error) {
 	in.Account = strings.TrimSpace(in.Account)
@@ -360,21 +315,17 @@ func (s *AuthService) Login(ctx context.Context, in LoginInput) (*AuthResponse, 
 		return nil, errcode.Code(errcode.ErrValidationFailed)
 	}
 
-	// CAPTCHA gate. Whitelisted agent / automation accounts always skip
-	// (但仅在 cfg.Server.DevMode=true 时);every other caller must supply
-	// matching CaptchaID/CaptchaAnswer. 详见 AgentBypassAccounts 注释。
-	if !s.IsAgentBypassAccount(in.Account) {
-		if s.captcha == nil {
-			return nil, errcode.Code(errcode.ErrAuthCaptchaMissing)
-		}
-		switch s.captcha.Verify(in.CaptchaID, in.CaptchaAnswer) {
-		case util.CaptchaMissing:
-			return nil, errcode.Code(errcode.ErrAuthCaptchaMissing)
-		case util.CaptchaExpired:
-			return nil, errcode.Code(errcode.ErrAuthCaptchaExpired)
-		case util.CaptchaWrong:
-			return nil, errcode.Code(errcode.ErrAuthCaptchaWrong)
-		}
+	// CAPTCHA gate — 全员强制，无旁路（2026-08-25 安全加固）。
+	if s.captcha == nil {
+		return nil, errcode.Code(errcode.ErrAuthCaptchaMissing)
+	}
+	switch s.captcha.Verify(in.CaptchaID, in.CaptchaAnswer) {
+	case util.CaptchaMissing:
+		return nil, errcode.Code(errcode.ErrAuthCaptchaMissing)
+	case util.CaptchaExpired:
+		return nil, errcode.Code(errcode.ErrAuthCaptchaExpired)
+	case util.CaptchaWrong:
+		return nil, errcode.Code(errcode.ErrAuthCaptchaWrong)
 	}
 
 	// Look the user up. Phone takes precedence when both are provided.

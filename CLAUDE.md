@@ -394,22 +394,20 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 
 ## 21. Agent 自动化测试账号
 
-AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,**必须**使用
-[`docs/通用功能/测试账号凭证.md`](docs/通用功能/测试账号凭证.md) 中预置的账号:
+> **2026-08-25 安全加固：CAPTCHA 旁路已全部删除。** 后端
+> `AgentBypassAccounts` 白名单与前端 `AGENT_BYPASS_ACCOUNTS` 清单均已移除,
+> **所有账号登录一律需要 `captcha_id` / `captcha_answer`**,无任何绕过路径。
 
-| account | 验证码旁路 | 备注 |
-| --- | --- | --- |
-| `test19082jauishf8` | ✅ 可省略 `captcha_id` / `captcha_answer` | 旧版单账号种子(§6) |
-| `test_01` ~ `test_04` | ✅ 可省略 `captcha_id` / `captcha_answer` | 批量测试套件(§7,`test_04` 密码含 `;`) |
+AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,可使用
+[`docs/通用功能/测试账号凭证.md`](docs/通用功能/测试账号凭证.md) 中预置的账号
+(`test_01` ~ `test_04` 等;密码从仓库根目录 `test_account.json` 读取,
+该文件已被 `.gitignore` 排除):
 
-> **密码不在任何 git 跟踪的文件中**。请从仓库根目录的 `test_account.json`
-> (machine-readable,已在 `.gitignore` 排除)读取。
->
-> 旁路白名单定义于 `ServerGo/service/auth_service.go` 的 `AgentBypassAccounts`,
-> **仅在 `cfg.Server.DevMode=true` 时生效**。生产部署必须显式设置
-> `DevMode=false`,否则 CAPTCHA 旁路会被禁用(防御深度)。
->
-> 仅限本地/开发环境使用,**严禁**在生产环境复用。账号可能尚未落库:先 `GET /api/invites` 取公开邀请码,再 `POST /api/auth/register`。
+- 自动化脚本需先 `GET /api/captcha` 获取验证码 → 正常携带
+  `captcha_id` / `captcha_answer` 登录(与真实用户路径完全一致)。
+- 账号可能尚未落库:先 `GET /api/invites` 取公开邀请码,再 `POST /api/auth/register`。
+- 仅限本地/开发环境使用,**严禁**在生产环境复用。
+- `cfg.Server.DevMode=true` 仅有开发模式日志告警,**不再解锁任何认证旁路**。
 
 ## 22. 自动化测试报告处理流程
 

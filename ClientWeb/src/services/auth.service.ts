@@ -23,23 +23,9 @@ export interface CaptchaChallenge {
   length: number;
 }
 
-// Bypass accounts that skip CAPTCHA entirely. Must mirror
-// server.AgentBypassAccounts in ServerGo/service/auth_service.go and
-// docs/测试账号凭证.md §6/§7.2 — keep this list in sync with that map.
-export const AGENT_BYPASS_ACCOUNTS: ReadonlySet<string> = new Set([
-  'test19082jauishf8', // legacy single-account seed (§6)
-  'test_01',           // batch agent suite §7.1 + §7.2
-  'test_02',           // batch agent suite §7.1
-  'test_03',           // batch agent suite §7.1
-  'test_04',           // batch agent suite §7.1
-]);
-
-// Backwards-compatible alias for older call sites. Prefer isAgentBypassAccount().
-export const AGENT_BYPASS_ACCOUNT = 'test19082jauishf8';
-
-export function isAgentBypassAccount(account: string): boolean {
-  return AGENT_BYPASS_ACCOUNTS.has(account);
-}
+// 2026-08-25 安全加固：原 CAPTCHA 旁路账号清单（AGENT_BYPASS_ACCOUNTS /
+// AGENT_BYPASS_ACCOUNT / isAgentBypassAccount）已删除，所有账号登录一律
+// 需要 CAPTCHA，与后端 ServerGo/service/auth_service.go 保持一致。
 
 export const authService = {
   register(payload: {
