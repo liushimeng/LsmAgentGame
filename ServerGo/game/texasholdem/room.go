@@ -462,6 +462,26 @@ func (m *TexasHoldemManager) joinInternal(roomID, userID string, wantSeat int) (
 		logger.L().Warn("texasholdem add player failed", zap.String("room_id", roomID), zap.Error(e))
 	}
 
+	// 2026-08-25 §R20-B2-P1 中途加入者无牌可行动:
+	// 若手牌已在进行中(Preflop/Flop/Turn/River/Showdown),新加入玩家
+	// 没有底牌(Hole=[2]Card{}),但若 Folded=false 会被 nextActableSeat/
+	// activePlayerSeats 纳入本轮 turn queue,产生「无牌可行动却能 call/check」
+	// 的公平性漏洞。新玩家按「本手弃牌 + 下一手正式参与」处理:
+	//   - Folded=true:本手不参与 turn 轮转、不参与胜负判定
+	//   - StartHand 时 p.Folded = p.Stack <= 0 会无条件重置,下一手自动解除
+	//     Folded=true,正常发底牌入局
+	// 仅在玩家持有合法座位时操作 Folded(AddPlayerAt 返回 seat 即为最终座位)。
+	if r.State.Street != PhaseWaiting {
+		if joinedSeat, ok := r.State.GetSeat(userID); ok {
+			r.State.Players[joinedSeat].Folded = true
+			logger.L().Info("texasholdem late joiner marked folded until next hand",
+				zap.String("room_id", roomID),
+				zap.String("user_id", userID),
+				zap.Int("seat", joinedSeat),
+				zap.Int("phase", int(r.State.Street)))
+		}
+	}
+
 	// 满 2 人且当前阶段为 waiting，自动开首手
 	// (2026-08-20 §P0-NEW-1:含 bot 房间须等全部已标记 bot 座位入座后再开局,
 	// 否则后入座者本手底牌全零且 bot 驱动因 BotSeats 时序错位永久卡死)
