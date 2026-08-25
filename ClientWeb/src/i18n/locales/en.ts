@@ -353,8 +353,8 @@ const en: Dict = {
   // §20260823-01 — Player-mode leave button label (spectator still uses spectator.exitRoom).
   'texasholdem.exitRoomAsPlayer': 'Leave Game',
   'texasholdem.waiting': 'Waiting for players…',
-  'texasholdem.resign': 'Fold & Resign',
-  'texasholdem.confirmResign': 'Confirm resign?',
+  'texasholdem.resign': 'Resign & Leave',
+  'texasholdem.confirmResign': 'Resigning will immediately end your game in this room. Continue?',
   'texasholdem.confirmLeave': 'Leave the room? The game will end.',
   'texasholdem.yourTurn': 'Your turn',
   'texasholdem.opponentTurn': 'Opponent\'s turn',

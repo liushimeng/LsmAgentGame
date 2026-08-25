@@ -355,8 +355,8 @@ const zhCN: Dict = {
   // §20260823-01 — 玩家身份离开按钮文案（观战者仍显示 spectator.exitRoom「离开观战」）。
   'texasholdem.exitRoomAsPlayer': '离开游戏',
   'texasholdem.waiting': '等待玩家加入…',
-  'texasholdem.resign': '弃牌认输',
-  'texasholdem.confirmResign': '确认认输？',
+  'texasholdem.resign': '认输离场',
+  'texasholdem.confirmResign': '认输离场将立即结束您在本房间的对局，确认继续？',
   'texasholdem.confirmLeave': '确定要退出房间吗？对局将结束。',
   'texasholdem.yourTurn': '你的回合',
   'texasholdem.opponentTurn': '对手回合',

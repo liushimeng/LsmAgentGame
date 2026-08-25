@@ -353,8 +353,8 @@ const ja: Dict = {
   // §20260823-01 — プレイヤー身退出ボタン表示（観戦者は spectator.exitRoom を継続使用）。
   'texasholdem.exitRoomAsPlayer': 'ゲーム退出',
   'texasholdem.waiting': 'プレイヤーを待機中…',
-  'texasholdem.resign': 'フォールド',
-  'texasholdem.confirmResign': 'リサインを確認？',
+  'texasholdem.resign': 'リサインして退出',
+  'texasholdem.confirmResign': 'リサインするとこのルームの対局が直ちに終了します。続行しますか？',
   'texasholdem.confirmLeave': '部屋を退出しますか？対局が終了します。',
   'texasholdem.yourTurn': 'あなたの番',
   'texasholdem.opponentTurn': '相手の番',
