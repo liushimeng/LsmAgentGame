@@ -11,6 +11,7 @@
 package wwplayer
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -735,6 +736,14 @@ func BuildUserPrompt(ctx wwtypes.GameContext) string {
 		{Name: "影响力", Priority: PriorityLow, Text: InfluenceBlock(&ctx)},
 		// §20260811-05 U1 — 对手画像(人类玩家跨局打法记忆)。
 		{Name: "对手画像", Priority: PriorityLow, Text: PlayerProfileBlock(&ctx)},
+		// §20260826-01 U1 — 身份偏见(开局先验)。
+		{Name: "身份先验", Priority: PriorityMedium, Text: RolePriorBlock(&ctx)},
+		// §20260826-01 U2 — 记忆印象(5 维观感)。
+		{Name: "记忆印象", Priority: PriorityMedium, Text: ImpressionMemoryBlock(&ctx)},
+		// §20260826-01 U4 — 情绪影响推理。
+		{Name: "情绪推理", Priority: PriorityMedium, Text: EmotionReasoningBlock(&ctx)},
+		// §20260826-01 U5 — 博弈工具提示(probe/frame/follow_crowd)。
+		{Name: "博弈工具", Priority: PriorityLow, Text: PsychologyToolsBlock(&ctx)},
 		// §20260811-06 U4 — 行为一致性校验(仅参考,不强制修正)。
 		{Name: "一致性校验", Priority: PriorityLow, Text: ConsistencyCheckBlock(&ctx)},
 		// §20260811-06 U5 — 黎明流言(公共信息噪声,LLM 自行决定信不信)。
@@ -1222,4 +1231,173 @@ func ThreeReasonsBlock(ctx *wwtypes.GameContext) string {
 		"然后在 text 字段中给出对外发言 / 决策描述。\n" +
 		"internal_thought 字段不入公聊（§119 协议层隔离），仅作决策可解释性记录。\n" +
 		"若你不是该行动角色（例如你在 vote 阶段但不是投票方），可忽略此约束。\n"
+}
+
+// ─── 2026-08-26 §20260826-01 — 心理博弈增强 Block ───
+
+// RolePriorBlock 把本 bot 的身份先验表渲染到 user prompt 末尾（§20260826-01 U1）。
+//
+// 输出格式(LLM 可读):
+//   【身份先验(开局均匀 + 死亡公开 + 人格加权)】
+//   - 5 号: werewolf 31% / villager 23% / seer 11% / ...
+//   - 8 号: werewolf 45% / guard 8% / ...
+//
+// 设计动机:开局给 LLM 一个**先验锚点**,避免对所有座位均匀怀疑(违反人类直觉)。
+// §128:prior 由服务端纯计算,不调 LLM;LLM 后续推理只需关注"我比 prior 多/少"。
+func RolePriorBlock(ctx *wwtypes.GameContext) string {
+	if ctx == nil || ctx.RolePrior == nil {
+		return ""
+	}
+	p := ctx.RolePrior
+	if len(p.Entries) == 0 {
+		return ""
+	}
+	// 按 target_seat 聚合 → 单行多角色
+	byTarget := make(map[int][]wwtypes.RolePriorSingleSnapshot)
+	for _, e := range p.Entries {
+		byTarget[e.TargetSeat] = append(byTarget[e.TargetSeat], e)
+	}
+	seats := make([]int, 0, len(byTarget))
+	for s := range byTarget {
+		seats = append(seats, s)
+	}
+	sort.Ints(seats)
+	var sb strings.Builder
+	sb.WriteString("\n【身份先验(开局均匀+人格加权)】\n")
+	for _, s := range seats {
+		entries := byTarget[s]
+		// 按概率降序,只输出 ≥5% 的条目
+		sort.Slice(entries, func(i, j int) bool {
+			return entries[i].PriorProb > entries[j].PriorProb
+		})
+		sb.WriteString("- ")
+		sb.WriteString(itoa(s + 1))
+		sb.WriteString("号: ")
+		first := true
+		for _, e := range entries {
+			if e.PriorProb < 0.05 {
+				break
+			}
+			if !first {
+				sb.WriteString(" / ")
+			}
+			sb.WriteString(e.RoleGuess)
+			sb.WriteString(" ")
+			sb.WriteString(fmt.Sprintf("%.0f%%", e.PriorProb*100))
+			first = false
+		}
+		sb.WriteString("\n")
+	}
+	sb.WriteString("(后续推理以此为先验锚点;若 📊 假说与先验差距大,需在 internal_thought 解释)\n")
+	return sb.String()
+}
+
+// ImpressionMemoryBlock 把本 bot 的多维印象表渲染到 user prompt 末尾（§20260826-01 U2）。
+//
+// 输出格式:
+//   【记忆印象(5 维:Trust/Competence/Sincerity/Cooperation/Threat,48h 半衰期)】
+//   - 5 号: trust=0.72/compet=0.45/sincere=0.65/coop=0.58/threat=0.30 (n=12)
+//   - 8 号: trust=0.31/compet=0.78/sincere=0.45/coop=0.20/threat=0.85 (n=23)
+//
+// 设计动机:5 维人格观感比纯身份假说更细腻 — 同是 villager,trust>0.7 和 trust<0.3
+// 的投票权重应不同。Threat>0.7 → 即使没被点出也要警惕。
+func ImpressionMemoryBlock(ctx *wwtypes.GameContext) string {
+	if ctx == nil || ctx.ImpressionMemory == nil {
+		return ""
+	}
+	mem := ctx.ImpressionMemory
+	if len(mem.Entries) == 0 {
+		return ""
+	}
+	// 仅展示有过 ≥3 次观察或威胁 >0.7 的条目
+	var sb strings.Builder
+	sb.WriteString("\n【记忆印象(5 维:Trust/Competence/Sincerity/Cooperation/Threat,48h 半衰期)】\n")
+	count := 0
+	for _, e := range mem.Entries {
+		if e.EventCount < 3 && e.Dims.Threat < 0.7 {
+			continue
+		}
+		count++
+		sb.WriteString(fmt.Sprintf("- %d号: trust=%.2f/comp=%.2f/sincere=%.2f/coop=%.2f/threat=%.2f (n=%d",
+			e.TargetSeat+1,
+			e.Dims.Trust, e.Dims.Competence, e.Dims.Sincerity,
+			e.Dims.Cooperation, e.Dims.Threat,
+			e.EventCount))
+		if len(e.SampleEvents) > 0 {
+			sb.WriteString(", 最近:")
+			for i, s := range e.SampleEvents {
+				if i > 0 {
+					sb.WriteString("|")
+				}
+				sb.WriteString(s)
+			}
+		}
+		sb.WriteString(")\n")
+	}
+	if count == 0 {
+		return ""
+	}
+	sb.WriteString("指引 — threat>0.7 即使没被点出也要警惕;sincere<0.4 时考虑 ta 在撒谎。\n")
+	return sb.String()
+}
+
+// EmotionReasoningBlock 把当前情绪→推理权重渲染到 user prompt 末尾（§20260826-01 U4）。
+//
+// 输出格式:
+//   【情绪推理桥 — 当前 wary】
+//   - 假说 confidence 下限钳制 60(疑者偏疑)
+//   - Threat 倍率 1.2x
+//   - Trust 倍率 0.8x
+//
+// 设计动机:让 LLM 知道自己的推理正在被当前情绪"扭曲"(符合真人玩家状态)。
+func EmotionReasoningBlock(ctx *wwtypes.GameContext) string {
+	if ctx == nil || ctx.EmotionReasoningWeights == nil {
+		return ""
+	}
+	w := ctx.EmotionReasoningWeights
+	var sb strings.Builder
+	sb.WriteString("\n【情绪推理桥 — 当前 ")
+	sb.WriteString(w.SampleEvent)
+	sb.WriteString("】\n")
+	if w.HypothesisConfidenceFloor > 0 {
+		sb.WriteString(fmt.Sprintf("- 假说 confidence 下限钳制 %d\n", w.HypothesisConfidenceFloor))
+	}
+	if w.HypothesisConfidenceCeil > 0 {
+		sb.WriteString(fmt.Sprintf("- 假说 confidence 上限钳制 %d\n", w.HypothesisConfidenceCeil))
+	}
+	if w.ThreatMultiplier != 1.0 {
+		sb.WriteString(fmt.Sprintf("- Threat 倍率 %.2fx\n", w.ThreatMultiplier))
+	}
+	if w.TrustMultiplier != 1.0 {
+		sb.WriteString(fmt.Sprintf("- Trust/Sincerity/Cooperation 倍率 %.2fx\n", w.TrustMultiplier))
+	}
+	if w.StabilityBias != 0.5 {
+		if w.StabilityBias > 0.5 {
+			sb.WriteString("- 假说不轻易改(高稳定性)\n")
+		} else {
+			sb.WriteString("- 假说易变(低稳定性,新证据快速更新)\n")
+		}
+	}
+	return sb.String()
+}
+
+// PsychologyToolsBlock 渲染博弈工具使用提示（§20260826-01 U5）。
+//
+// 每天各 1 次限制 — 由服务端 Action_ProbePlayer / Action_FramePlayer / Action_FollowCrowd 强校验。
+func PsychologyToolsBlock(ctx *wwtypes.GameContext) string {
+	if ctx == nil {
+		return ""
+	}
+	seat := -1
+	if ctx.MySeat != 0 {
+		seat = ctx.MySeat
+	}
+	_ = seat
+	return "\n【博弈工具(§20260826-01,每天各 1 次)】\n" +
+		"- probe_player(target_seat, probe_text, expected_response_kind):\n" +
+		"    向目标座位抛试探问题(陷阱逻辑/细节追问),观察回应以调整印象分。\n" +
+		"- frame_player(target_seat, frame_narrative, evidence_anchor):\n" +
+		"    把怀疑引向第三方(嫁祸),需给出具体可疑行为依据,不能空喊。\n" +
+		"- follow_crowd(leader_seat, reason_summary):\n" +
+		"    公开跟随某玩家的怀疑(从众投票/从众发言),承诺下轮与 ta 一致。\n"
 }

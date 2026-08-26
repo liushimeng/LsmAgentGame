@@ -11,6 +11,7 @@ package werewolf
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -1707,4 +1708,75 @@ func normalizeChainItems(items []string, maxRunes, maxItems int) []string {
 		return nil
 	}
 	return out
+}
+
+// ─── 2026-08-26 §20260826-01 — 心理博弈增强工具实现 ───
+//
+// 实现 ToolRunner 接口的 3 个新方法：Action_ProbePlayer / Action_FramePlayer /
+// Action_FollowCrowd。所有方法都是 **无锁薄包装**，把分发交给 Action_*_Locked
+// （§92a 锁内变体）真正落库；公开方法只做参数校验 + 错误格式化。
+//
+// 频率限制：每天 1 次 / bot。Action_*_Locked 通过 r.PsychologyDailyCount 跟踪。
+
+// Action_ProbePlayer 是 probe_player 工具的无锁入口。
+//
+// 行为：
+//   - 校验 phase ∈ {speak, vote} 且 target 存活且不等于自己；
+//   - 调 r.mgr.probePlayerLocked(...) 真正落库；
+//   - 失败 → 返回 error；成功 → "probe dispatched → ..."
+func (r *agentRunner) Action_ProbePlayer(targetSeat int, probeText, expectedKind string) (string, error) {
+	if r == nil || r.mgr == nil {
+		return "", errors.New("agentRunner: mgr not initialized")
+	}
+	if targetSeat < 0 || targetSeat >= MaxPlayers {
+		return "", errors.New("invalid target_seat")
+	}
+	if len(probeText) == 0 || len(probeText) > 200 {
+		return "", errors.New("probe_text must be 1..200 chars")
+	}
+	if expectedKind == "" {
+		expectedKind = "any"
+	}
+	r.mgr.mu.Lock()
+	defer r.mgr.mu.Unlock()
+	return r.mgr.probePlayerLocked(r, targetSeat, probeText, expectedKind)
+}
+
+// Action_FramePlayer 是 frame_player 工具的无锁入口。
+//
+// 行为：写 RumorGraph（hop=0）+ 调 EmitImpressionOnFrameLocked + 频率校验。
+func (r *agentRunner) Action_FramePlayer(targetSeat int, narrative, evidence string) (string, error) {
+	if r == nil || r.mgr == nil {
+		return "", errors.New("agentRunner: mgr not initialized")
+	}
+	if targetSeat < 0 || targetSeat >= MaxPlayers {
+		return "", errors.New("invalid target_seat")
+	}
+	if len(narrative) == 0 || len(narrative) > 200 {
+		return "", errors.New("frame_narrative must be 1..200 chars")
+	}
+	if len(evidence) == 0 || len(evidence) > 120 {
+		return "", errors.New("evidence_anchor must be 1..120 chars")
+	}
+	r.mgr.mu.Lock()
+	defer r.mgr.mu.Unlock()
+	return r.mgr.framePlayerLocked(r, targetSeat, narrative, evidence)
+}
+
+// Action_FollowCrowd 是 follow_crowd 工具的无锁入口。
+//
+// 行为：写 commitment_ledger + 调 EmitImpressionOnFollowVoteLocked + 频率校验。
+func (r *agentRunner) Action_FollowCrowd(leaderSeat int, reason string) (string, error) {
+	if r == nil || r.mgr == nil {
+		return "", errors.New("agentRunner: mgr not initialized")
+	}
+	if leaderSeat < 0 || leaderSeat >= MaxPlayers {
+		return "", errors.New("invalid leader_seat")
+	}
+	if len(reason) == 0 || len(reason) > 120 {
+		return "", errors.New("reason_summary must be 1..120 chars")
+	}
+	r.mgr.mu.Lock()
+	defer r.mgr.mu.Unlock()
+	return r.mgr.followCrowdLocked(r, leaderSeat, reason)
 }

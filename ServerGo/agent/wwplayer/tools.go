@@ -62,6 +62,11 @@ type ToolRunner interface {
 	// 每晚可发动,无单局锁定(DemonHunterHuntUsed 仅作"曾发动"标记)。
 	// 枚举已剔除自己 + 已死;target=-1 表空过。
 	DemonHunterHunt(target int) (string, error)
+	// §20260826-01 — 心理博弈增强工具接口(probe / frame / follow_crowd)。
+	// 由 werewolf.agentRunner 实现;每天各 1 次 / bot 频率限制在 Action_*Locked 兜底。
+	Action_ProbePlayer(targetSeat int, probeText, expectedKind string) (string, error)
+	Action_FramePlayer(targetSeat int, narrative, evidence string) (string, error)
+	Action_FollowCrowd(leaderSeat int, reason string) (string, error)
 	Speak(text string) (string, error)
 	// 2026-07-13 §130 重构:SpeakAuto 是 text-block 自动发言入口,与 Speak
 	// 走完全相同的过滤链(rate-limit / identity-leak / death-fact / XML strip
@@ -398,6 +403,59 @@ func BuildTools(phase, role string, seat int, alive []int, speakTurn int, gc *ww
 				"只有毫无隐瞒的纯聊天(如首轮「过」「我同意楼上」)才考虑普通 speak。",
 				schema(map[string]any{"text": map[string]any{"type": "string", "description": "发言内容,≤80字,对所有人可见"}}, "text"))
 			add("finish_speak", "结束本轮发言。说完后必须调用此工具将发言权移交给下一位玩家。", schema(map[string]any{}))
+
+			// §20260826-01 — 心理博弈增强工具(probe / frame / follow_crowd)。
+			// 仅白天发言/投票阶段可用；每天各 1 次 / bot。
+			// 见 tools_psychology.go handler + DesignDoc §2.4。
+			add("probe_player",
+				"🔍 试探 (§20260826-01)。向特定玩家抛一个陷阱问题(≤80 字),观察 ta 回应以调整印象分。\n"+
+					"═══════════════════════════════════════════════════════════════\n"+
+					"【使用规则】\n"+
+					"❶ 仅白天发言/投票阶段可用;**每天 1 次** (服务端强校验)。\n"+
+					"❷ target_seat 必填 (1-indexed),不能是自己。\n"+
+					"❸ probe_text 会被服务端注入目标 bot 下一轮 prompt 高优先级问题块。\n"+
+					"❹ expected_response_kind: deflect | admit | counter_attack | silent | any。\n"+
+					"═══════════════════════════════════════════════════════════════\n"+
+					"💡 典型用法:在发言中嵌入「X 号 你对 Y 怎么看?」这种细节追问,\n"+
+					"   观察 ta 的回应是闪避/承认/反咬/沉默,以修正印象 Trust/Sincerity。",
+				schema(map[string]any{
+					"target_seat":             map[string]any{"type": "integer", "description": "试探目标座位号(0 起)", "enum": alive},
+					"probe_text":              map[string]any{"type": "string", "description": "试探问题文本(≤80 字)"},
+					"expected_response_kind":  map[string]any{"type": "string", "description": "期望回应类型", "enum": []any{"deflect", "admit", "counter_attack", "silent", "any"}},
+				}, "target_seat", "probe_text", "expected_response_kind"))
+			add("frame_player",
+				"🎭 嫁祸 (§20260826-01)。主动把怀疑引向第三方,需要给出具体可疑行为依据。\n"+
+					"═══════════════════════════════════════════════════════════════\n"+
+					"【使用规则】\n"+
+					"❶ 仅白天发言/投票阶段可用;**每天 1 次** (服务端强校验)。\n"+
+					"❷ target_seat 必填 (0 起),不能是自己。\n"+
+					"❸ frame_narrative ≤60 字 — 你的怀疑逻辑包装(故事化)。\n"+
+					"❹ evidence_anchor ≤40 字 — 具体行为证据(不能空喊)。\n"+
+					"═══════════════════════════════════════════════════════════════\n"+
+					"💡 典型用法:作为狼队掩护,把怀疑从队友引向第三方好人;\n"+
+					"   或作为平民,发现悍跳证据后主动揭发。\n"+
+					"⚠️ frame_narrative 会写入 RumorGraph(传闻传播图),target 听到后\n"+
+					"   对你的 Threat 维度会+0.15,Sincerity 会-0.10(谨慎使用)。",
+				schema(map[string]any{
+					"target_seat":       map[string]any{"type": "integer", "description": "嫁祸目标座位号(0 起)", "enum": alive},
+					"frame_narrative":   map[string]any{"type": "string", "description": "嫁祸叙事(≤60 字)"},
+					"evidence_anchor":   map[string]any{"type": "string", "description": "行为证据锚点(≤40 字)"},
+				}, "target_seat", "frame_narrative", "evidence_anchor"))
+			add("follow_crowd",
+				"👥 从众跟随 (§20260826-01)。公开声明跟随某玩家的怀疑。\n"+
+					"═══════════════════════════════════════════════════════════════\n"+
+					"【使用规则】\n"+
+					"❶ 仅白天发言/投票阶段可用;**每天 1 次** (服务端强校验)。\n"+
+					"❷ leader_seat 必填 (0 起),不能是自己。\n"+
+					"❸ reason_summary ≤40 字 — 为什么跟 ta。\n"+
+					"❹ 承诺下轮投票与 leader 一致;违反 → commitment_ledger 标记。\n"+
+					"═══════════════════════════════════════════════════════════════\n"+
+					"💡 典型用法:投票阶段你不确定,公开跟随某明确发言的玩家;\n"+
+					"   或发言阶段表达「我同意 X 的观点」以建立阵营感。",
+				schema(map[string]any{
+					"leader_seat":     map[string]any{"type": "integer", "description": "跟随领袖座位号(0 起)", "enum": alive},
+					"reason_summary":  map[string]any{"type": "string", "description": "跟随意图(≤40 字)"},
+				}, "leader_seat", "reason_summary"))
 			// 2026-07-10 §119「心口不一」机制：发言工具支持附 internal_thought 字段。
 			// LLM 在发言时可填一个"真实内心独白"(例如真实身份/真实怀疑),
 			// 该字段不会广播给其他玩家,只会被服务端记录到 BotTranscript.FullThinking
@@ -1295,6 +1353,14 @@ func dispatchToolInner(name string, input map[string]any, runner ToolRunner) (st
 			return r.WolfWhisper(text)
 		}
 		return "wolf_whisper rejected: runner does not support wolfpack", nil
+	// §20260826-01 — 心理博弈增强工具派发(probe / frame / follow_crowd)。
+	// 由 tools_psychology.go handler 实现; ToolRunner 扩展接口见 PsychologyRunner。
+	case "probe_player":
+		return handleProbePlayerLocked(input, runner)
+	case "frame_player":
+		return handleFramePlayerLocked(input, runner)
+	case "follow_crowd":
+		return handleFollowCrowdLocked(input, runner)
 	// v3 §G2 — prop_inspect/prop_status/prop_history 三个查询类工具。
 	// 纯查询,无副作用;由 PropInspectRunner 扩展接口提供数据(测试桩可实现)。
 	case "prop_inspect":

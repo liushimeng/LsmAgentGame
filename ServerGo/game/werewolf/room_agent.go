@@ -1540,6 +1540,80 @@ func buildAgentContextLocked(r *WerewolfRoom, seat int, driverSeat int) wwtypes.
 		gc.InfluenceScores = briefs
 	}
 
+	// 2026-08-26 §20260826-01 U1 — 身份偏见:把房间级 RolePriorStore 中本 bot 的
+	// 先验表拷贝到 GameContext.RolePrior;prompt.go::RolePriorBlock 据此渲染。
+	// §119 协议层隔离:不进 chat_message / chat_history / HeartThought。
+	// §135:玩家仅看自己 bot 的(本函数 seat=playerSeat 即本人);spectator 走 view.go。
+	// §128:不调 LLM,纯服务端计算。
+	if prior := r.rolePriorStoreLocked().GetLocked(seat); prior != nil {
+		snap := &wwtypes.RolePriorSnapshot{
+			Seat:       prior.Seat,
+			Entries:    make([]wwtypes.RolePriorSingleSnapshot, 0, len(prior.Entries)),
+			ComputedAt: prior.ComputedAt,
+		}
+		for _, e := range prior.Entries {
+			snap.Entries = append(snap.Entries, wwtypes.RolePriorSingleSnapshot{
+				TargetSeat:   e.TargetSeat,
+				RoleGuess:    e.RoleGuess,
+				PriorProb:    e.PriorProb,
+				EvidenceKind: e.EvidenceKind,
+				Note:         e.Note,
+				ComputedAt:   e.ComputedAt,
+			})
+		}
+		gc.RolePrior = snap
+	}
+
+	// 2026-08-26 §20260826-01 U2 — 记忆印象:把 ImpressionStore.GetLocked(seat, now)
+	// 拷贝到 GameContext.ImpressionMemory;ImpressionBlock 据此渲染。
+	// §119 协议层隔离:不进 chat_message / chat_history / HeartThought。
+	// §135:玩家仅看自己 bot 的(本函数已满足)。
+	if mem := r.impressionStoreLocked().GetLocked(seat, time.Now()); mem != nil {
+		snap := &wwtypes.ImpressionMemorySnapshot{
+			Seat:      mem.Seat,
+			Entries:   make([]wwtypes.ImpressionEntrySnapshot, 0, len(mem.Entries)),
+			UpdatedAt: mem.UpdatedAt,
+		}
+		for _, e := range mem.Entries {
+			snap.Entries = append(snap.Entries, wwtypes.ImpressionEntrySnapshot{
+				TargetSeat: e.TargetSeat,
+				Dims: wwtypes.ImpressionDimsSnapshot{
+					Trust:       e.Dims.Trust,
+					Competence:  e.Dims.Competence,
+					Sincerity:   e.Dims.Sincerity,
+					Cooperation: e.Dims.Cooperation,
+					Threat:      e.Dims.Threat,
+				},
+				LastUpdateMS: e.LastUpdateMS,
+				EventCount:   e.EventCount,
+				SampleEvents: append([]string(nil), e.SampleEvents...),
+			})
+		}
+		gc.ImpressionMemory = snap
+	}
+
+	// 2026-08-26 §20260826-01 U4 — 情绪→推理权重:根据当前 bot 情绪实时计算权重。
+	// 仅 bot 座位(真人玩家无 BotTranscript);prompt.go::EmotionReasoningBlock 据此渲染。
+	// Emotion 字段挂在 BotTranscript 上,经 r.BotAgents[seat] 访问。
+	if seat >= 0 && seat < len(r.State.Players) && r.State.Players[seat].IsBot &&
+		r.BotAgents != nil {
+		emo := ""
+		if ag, ok := r.BotAgents[seat]; ok && ag != nil {
+			if bt := ag.BotTranscript(); bt != nil {
+				emo = bt.Emotion
+			}
+		}
+		w := weightsForEmotion(emo)
+		gc.EmotionReasoningWeights = &wwtypes.EmotionReasoningWeightsSnapshot{
+			HypothesisConfidenceFloor: w.HypothesisConfidenceFloor,
+			HypothesisConfidenceCeil:  w.HypothesisConfidenceCeil,
+			ThreatMultiplier:          w.ThreatMultiplier,
+			TrustMultiplier:           w.TrustMultiplier,
+			StabilityBias:             w.StabilityBias,
+			SampleEvent:               w.SampleEvent,
+		}
+	}
+
 	// 2026-08-11 §20260811-05 U1 — 玩家行为画像注入(纯内存读房间缓存,
 	// 热路径零 DB 查询;缓存由 PrefetchPlayerProfiles 在开局/入座时预取)。
 	// 仅人类座位有值;全 AI 房间或无画像时 nil,PlayerProfileBlock 渲染空串。

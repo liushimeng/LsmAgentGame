@@ -178,6 +178,14 @@ type ClientGameState struct {
 	// 字段对齐 ClientWeb/src/types/werewolf.ts BotHypothesisJSON。
 	BotHypotheses []BotHypothesisJSON `json:"bot_hypotheses,omitempty"`
 
+	// 2026-08-26 §20260826-01 U1 — 身份偏见下发(§135 spectator 隔离)。
+	// 仅 spectator(viewer==-1)下发;玩家(viewer>=0)omitempty。
+	BotRolePriors []BotRolePriorJSON `json:"bot_role_priors,omitempty"`
+
+	// 2026-08-26 §20260826-01 U2 — 记忆印象下发(§135 spectator 隔离)。
+	// 仅 spectator(viewer==-1)下发;玩家(viewer>=0)omitempty。
+	BotImpressions []BotImpressionJSON `json:"bot_impressions,omitempty"`
+
 	// 2026-07-10 §123 增强 — Agent 法官上下文。挂在 game.state.judge_context;
 	// 前端 JudgePanel.tsx 渲染法官模型名 + 最近宣告 + quarantine 徽章。
 	// JudgeEnabled=false 时不渲染法官面板(走 host driver 旧路径)。
@@ -1210,6 +1218,121 @@ func (r *WerewolfRoom) populateHypotheses(cs *ClientGameState, viewer int) {
 	cs.BotHypotheses = out
 }
 
+// ─── 2026-08-26 §20260826-01 U1+U2 — spectator-only 下发入口 ───
+
+// RolePriorJSONForView 是 RolePriorSingle 的视图镜像（前端订阅用）。
+type RolePriorJSONForView struct {
+	TargetSeat   int     `json:"target_seat"`
+	RoleGuess    string  `json:"role_guess"`
+	PriorProb    float32 `json:"prior_prob"`
+	EvidenceKind string  `json:"evidence_kind"`
+	Note         string  `json:"note"`
+	ComputedAt   int64   `json:"computed_at"`
+}
+
+// BotRolePriorJSON 是 BotRolePriors 的单条。
+type BotRolePriorJSON struct {
+	Seat       int                     `json:"seat"`
+	Entries    []RolePriorJSONForView  `json:"entries"`
+	ComputedAt int64                   `json:"computed_at"`
+}
+
+// ImpressionDimsJSONForView 是 ImpressionDims 的视图镜像。
+type ImpressionDimsJSONForView struct {
+	Trust       float32 `json:"trust"`
+	Competence  float32 `json:"competence"`
+	Sincerity   float32 `json:"sincerity"`
+	Cooperation float32 `json:"cooperation"`
+	Threat      float32 `json:"threat"`
+}
+
+// ImpressionEntryJSONForView 是 ImpressionEntry 的视图镜像。
+type ImpressionEntryJSONForView struct {
+	TargetSeat   int                        `json:"target_seat"`
+	Dims         ImpressionDimsJSONForView  `json:"dims"`
+	LastUpdateMS int64                      `json:"last_update_ms"`
+	EventCount   int                        `json:"event_count"`
+	SampleEvents []string                   `json:"sample_events"`
+}
+
+// BotImpressionJSON 是 BotImpressions 的单条。
+type BotImpressionJSON struct {
+	Seat      int                          `json:"seat"`
+	Entries   []ImpressionEntryJSONForView `json:"entries"`
+	UpdatedAt int64                        `json:"updated_at"`
+}
+
+// populateRolePriors 把 RolePriorStore 全量快照下发到 cs.BotRolePriors。
+// §135:viewer>=0 整段 omitempty；viewer==-1 spectator 全量下发。
+// 调用前置：必须已持 r.mu（§92a）。
+func (r *WerewolfRoom) populateRolePriors(cs *ClientGameState, viewer int) {
+	if cs == nil || r == nil {
+		return
+	}
+	if viewer >= 0 && viewer < MaxPlayers {
+		return
+	}
+	snap := r.rolePriorStoreLocked().SnapshotAllLocked()
+	if len(snap) == 0 {
+		return
+	}
+	out := make([]BotRolePriorJSON, 0, len(snap))
+	for _, t := range snap {
+		row := BotRolePriorJSON{
+			Seat:       t.Seat,
+			Entries:    make([]RolePriorJSONForView, 0, len(t.Entries)),
+			ComputedAt: t.ComputedAt,
+		}
+		for _, e := range t.Entries {
+			row.Entries = append(row.Entries, RolePriorJSONForView{
+				TargetSeat:   e.TargetSeat,
+				RoleGuess:    e.RoleGuess,
+				PriorProb:    e.PriorProb,
+				EvidenceKind: e.EvidenceKind,
+				Note:         e.Note,
+				ComputedAt:   e.ComputedAt,
+			})
+		}
+		out = append(out, row)
+	}
+	cs.BotRolePriors = out
+}
+
+// populateImpressions 把 ImpressionStore 全量快照下发到 cs.BotImpressions。
+// §135:viewer>=0 整段 omitempty；viewer==-1 spectator 全量下发。
+// 调用前置：必须已持 r.mu（§92a）。
+func (r *WerewolfRoom) populateImpressions(cs *ClientGameState, viewer int) {
+	if cs == nil || r == nil {
+		return
+	}
+	if viewer >= 0 && viewer < MaxPlayers {
+		return
+	}
+	snap := r.impressionStoreLocked().SnapshotAllLocked(time.Now())
+	if len(snap) == 0 {
+		return
+	}
+	out := make([]BotImpressionJSON, 0, len(snap))
+	for _, t := range snap {
+		row := BotImpressionJSON{
+			Seat:      t.Seat,
+			Entries:   make([]ImpressionEntryJSONForView, 0, len(t.Entries)),
+			UpdatedAt: t.UpdatedAt,
+		}
+		for _, e := range t.Entries {
+			row.Entries = append(row.Entries, ImpressionEntryJSONForView{
+				TargetSeat:   e.TargetSeat,
+				Dims:         ImpressionDimsJSONForView(e.Dims),
+				LastUpdateMS: e.LastUpdateMS,
+				EventCount:   e.EventCount,
+				SampleEvents: append([]string(nil), e.SampleEvents...),
+			})
+		}
+		out = append(out, row)
+	}
+	cs.BotImpressions = out
+}
+
 // BuildWolfPeerView 返回狼人夜间投票视图。
 // 2026-07-17 扩展: 携带投票快照 + 计票结果。
 func BuildWolfPeerView(gs *GameState) *WolfPeerView {
@@ -1413,6 +1536,10 @@ func BuildClientStateWithRoom(roomID string, r *WerewolfRoom, viewer int) *Clien
 	// 仅 spectator(viewer<0)填充;玩家视图(viewer>=0)omitempty。
 	// 与 BotContexts / InfoLedger 的 spectator-only 语义对齐(§135 公平性)。
 	r.populateHypotheses(cs, viewer)
+	// 2026-08-26 §20260826-01 U1+U2 — 身份偏见 + 记忆印象 spectator 下发
+	// (与 populateHypotheses 同模式;§135 玩家侧 omitempty)。
+	r.populateRolePriors(cs, viewer)
+	r.populateImpressions(cs, viewer)
 	// §20260810-09 — 上帝视角观战快照。仅 spectator(viewer<0)填充;
 	// 玩家与 REST 房间视图**永远不**下发(§135 公平性)。
 	// ⚠️ §92a:populateGodModeLocked 是**锁内**变体 —— 本函数全部调用方

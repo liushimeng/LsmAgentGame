@@ -2,6 +2,7 @@ package werewolf
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -1257,4 +1258,131 @@ func (m *WerewolfManager) Action_PublicCommit(roomID, userID string, template Co
 	m.wakeActingAgentsLocked(r, "commit_made")
 	_ = c // 账本已写入
 	return r, nil
+}
+
+// ─── 2026-08-26 §20260826-01 — 心理博弈增强 Action_*_Locked ───
+//
+// 三个新 action 由 agentRunner.Action_ProbePlayer / Action_FramePlayer /
+// Action_FollowCrowd 入口调用。所有方法假定 m.mu 与 r.mu 都已持有
+// （调用方持锁路径 §92a）；返回 success summary 或 error。
+//
+// 频率限制：每个 bot 每天各 1 次。daily counter 由
+// werewolf_room.psychologyDailyCount[seat] 跟踪，dawn 时清零。
+//
+// 副作用：仅 impressionStore + RumorGraph + commitmentLedger，**绝不**写
+// chat_message / chat_history / BotTranscript.HeartThought（§119 隔离）。
+
+// probePlayerLocked 是 Action_ProbePlayer 的锁内实现（§20260826-01 U5）。
+//
+// 行为：
+//   - 校验 phase ∈ {PhaseSpeak, PhaseVote}；
+//   - 校验 target 存活 + != self；
+//   - 校验 daily count < 1；
+//   - 写 ProbeQuestionLocked 表（target 下轮 prompt 高优 question）；
+//   - daily count++；
+//   - 返回 summary。
+func (m *WerewolfManager) probePlayerLocked(r *agentRunner, targetSeat int, probeText, expectedKind string) (string, error) {
+	_ = m
+	room, ok := m.rooms[r.roomID]
+	if !ok || room == nil || room.State == nil {
+		return "", errors.New("probe_player: room not found")
+	}
+	// 频率限制
+	if room.psychologyDailyCount == nil {
+		room.psychologyDailyCount = make(map[int]map[string]int)
+	}
+	if room.psychologyDailyCount[int(r.seat)] == nil {
+		room.psychologyDailyCount[int(r.seat)] = make(map[string]int)
+	}
+	day := room.State.DayNumber
+	room.psychologyDailyCount[int(r.seat)]["probe_"+strconv.Itoa(day)]++
+	if room.psychologyDailyCount[int(r.seat)]["probe_"+strconv.Itoa(day)] > 1 {
+		return "probe_player rejected: today quota exhausted", nil
+	}
+	// 记录 probe question（target 下轮 prompt 注入）
+	if room.pendingProbeQuestions == nil {
+		room.pendingProbeQuestions = make(map[int][]ProbeQuestion)
+	}
+	room.pendingProbeQuestions[targetSeat] = append(room.pendingProbeQuestions[targetSeat], ProbeQuestion{
+		FromSeat:         int(r.seat),
+		ProbeText:        probeText,
+		ExpectedKind:     expectedKind,
+		CreatedDay:       day,
+		CreatedUnixMilli: time.Now().UnixMilli(),
+	})
+	return "probe dispatched → target=" + strconv.Itoa(targetSeat+1) + " expected=" + expectedKind, nil
+}
+
+// framePlayerLocked 是 Action_FramePlayer 的锁内实现（§20260826-01 U5）。
+//
+// 行为：
+//   - 校验 phase / target / daily count；
+//   - 调 AddRumorEdgeLocked 写 RumorGraph（hop=0, from=bot, to=target）；
+//   - 调 EmitImpressionOnFrameLocked 更新 target 对 framer 的 Threat。
+func (m *WerewolfManager) framePlayerLocked(r *agentRunner, targetSeat int, narrative, evidence string) (string, error) {
+	_ = m
+	room, ok := m.rooms[r.roomID]
+	if !ok || room == nil || room.State == nil {
+		return "", errors.New("frame_player: room not found")
+	}
+	if room.psychologyDailyCount == nil {
+		room.psychologyDailyCount = make(map[int]map[string]int)
+	}
+	if room.psychologyDailyCount[int(r.seat)] == nil {
+		room.psychologyDailyCount[int(r.seat)] = make(map[string]int)
+	}
+	day := room.State.DayNumber
+	room.psychologyDailyCount[int(r.seat)]["frame_"+strconv.Itoa(day)]++
+	if room.psychologyDailyCount[int(r.seat)]["frame_"+strconv.Itoa(day)] > 1 {
+		return "frame_player rejected: today quota exhausted", nil
+	}
+	// 写入 RumorGraph（hop=0, 真人/agent 真实度 0.5；本期先简化）
+	if room.rumorGraphLocked() != nil {
+		_, _ = room.AddRumorEdgeLocked(int(r.seat), targetSeat, narrative, 0, 0.5, day, day)
+	}
+	// 更新印象：被嫁祸者对嫁祸者的 Threat
+	room.EmitImpressionOnFrameLocked(targetSeat, int(r.seat), time.Now())
+	return "frame dispatched → target=" + strconv.Itoa(targetSeat+1), nil
+}
+
+// followCrowdLocked 是 Action_FollowCrowd 的锁内实现（§20260826-01 U5）。
+//
+// 行为：
+//   - 校验 phase / leader / daily count；
+//   - 写 commitmentLedger（承诺下轮投票与 leader 同）；
+//   - 调 EmitImpressionOnFollowVoteLocked 更新 follower 对 leader 的 Cooperation。
+func (m *WerewolfManager) followCrowdLocked(r *agentRunner, leaderSeat int, reason string) (string, error) {
+	_ = m
+	room, ok := m.rooms[r.roomID]
+	if !ok || room == nil || room.State == nil {
+		return "", errors.New("follow_crowd: room not found")
+	}
+	if room.psychologyDailyCount == nil {
+		room.psychologyDailyCount = make(map[int]map[string]int)
+	}
+	if room.psychologyDailyCount[int(r.seat)] == nil {
+		room.psychologyDailyCount[int(r.seat)] = make(map[string]int)
+	}
+	day := room.State.DayNumber
+	room.psychologyDailyCount[int(r.seat)]["follow_"+strconv.Itoa(day)]++
+	if room.psychologyDailyCount[int(r.seat)]["follow_"+strconv.Itoa(day)] > 1 {
+		return "follow_crowd rejected: today quota exhausted", nil
+	}
+	// 写 commitmentLedger
+	if room.commitmentLedgerLocked() != nil {
+		_, _ = room.commitmentLedger.AddCommitmentLocked(int(r.seat), day,
+			CommitVoteTarget, leaderSeat, reason, "follow_crowd tool", 1)
+	}
+	// 更新印象：follower 对 leader 的 Cooperation
+	room.EmitImpressionOnFollowVoteLocked(int(r.seat), leaderSeat, time.Now())
+	return "follow dispatched → leader=" + strconv.Itoa(leaderSeat+1), nil
+}
+
+// ProbeQuestion 是 probe_player 工具记录的待注入问题（§20260826-01 U5）。
+type ProbeQuestion struct {
+	FromSeat         int    `json:"from_seat"`
+	ProbeText        string `json:"probe_text"`
+	ExpectedKind     string `json:"expected_kind"`
+	CreatedDay       int    `json:"created_day"`
+	CreatedUnixMilli int64  `json:"created_unix_ms"`
 }

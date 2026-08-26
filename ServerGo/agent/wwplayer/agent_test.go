@@ -188,6 +188,20 @@ func (f *fakeRunner) ProposeVote() (string, error) {
 	return "ok", nil
 }
 
+// §20260826-01 — 心理博弈工具桩实现。
+func (f *fakeRunner) Action_ProbePlayer(targetSeat int, probeText, expectedKind string) (string, error) {
+	f.calls = append(f.calls, "probe_player")
+	return "probe dispatched", nil
+}
+func (f *fakeRunner) Action_FramePlayer(targetSeat int, narrative, evidence string) (string, error) {
+	f.calls = append(f.calls, "frame_player")
+	return "frame dispatched", nil
+}
+func (f *fakeRunner) Action_FollowCrowd(leaderSeat int, reason string) (string, error) {
+	f.calls = append(f.calls, "follow_crowd")
+	return "follow dispatched", nil
+}
+
 // TestDispatchTool_Vote verifies the vote tool maps to runner.Vote with the
 // correct target.
 func TestDispatchTool_Vote(t *testing.T) {

@@ -539,6 +539,32 @@ type WerewolfRoom struct {
 	// §92a:所有读写入口都是 *Locked 锁内变体,公开方法包一层加锁委托。
 	// restartGameLocked 原地重开时清零。
 	rumorGraph *RumorGraph
+
+	// 2026-08-26 §20260826-01 U1 — 身份偏见 RolePrior(开局先验)。
+	// 房间级 RolePriorStore:每 bot 维护"我对其他 12 个座位的身份先验分布"。
+	// 懒初始化(rolePriorStoreLocked),与 hypothesisStore 同模式。
+	// §119 协议层隔离:不进 chat_message / chat_history。
+	// §135 spectator 隔离:viewer>=0 omitempty;viewer==-1 全量下发。
+	// §128 对话即思考:不新独立 LLM 调用;纯服务端计算。
+	// restartGameLocked 原地重开时清零。
+	rolePriorStore *RolePriorStore
+
+	// 2026-08-26 §20260826-01 U2 — 记忆印象 ImpressionMemory(人格层观感)。
+	// 房间级 ImpressionStore:每 bot 对每位其他玩家维护 5 维印象分(Trust/Competence/
+	// Sincerity/Cooperation/Threat)。与 HypothesisTable 正交(身份层 vs 人格层)。
+	// 懒初始化(impressionStoreLocked),与 hypothesisStore 同模式。
+	// §119 协议层隔离:不进 chat_message / chat_history / HeartThought。
+	// §135 spectator 隔离:viewer>=0 omitempty;viewer==-1 全量下发。
+	// §128 对话即思考:5 类事件触发自动聚合;不新独立 LLM 调用。
+	// restartGameLocked 原地重开时清零。
+	impressionStore *ImpressionStore
+
+	// 2026-08-26 §20260826-01 U5 — 心理博弈工具的每日配额 + 待注入试探问题。
+	// psychologyDailyCount[seat][tool_day] = 计数;dawn 时清零。
+	// pendingProbeQuestions[target_seat] = 累积的试探问题(每轮 prompt 末尾消费后清空)。
+	// 仅 bot 座位有意义;§119 隔离。
+	psychologyDailyCount  map[int]map[string]int
+	pendingProbeQuestions map[int][]ProbeQuestion
 }
 
 // PropHistoryRecord 是一条公开道具使用记录（v3 §G5）。

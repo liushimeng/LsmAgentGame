@@ -345,6 +345,27 @@ type GameContext struct {
 	// §135:不含任何角色信息,只反映公开行为(票型/发言/被指向)。
 	InfluenceScores []InfluenceBrief `json:"influence_scores,omitempty"`
 	MyInfluence     *InfluenceBrief  `json:"my_influence,omitempty"`
+
+	// ─── 身份偏见 (2026-08-26 §20260826-01 U1) ───
+	// RolePrior 是本 bot 对其他 12 个座位的身份先验分布(开局均匀 + 死亡公开 + 人格加权)。
+	// buildAgentContextLocked 从房间 RolePriorStore.GetLocked(seat) 拷贝填充。
+	// §119 协议层隔离:不进 chat_message / chat_history / HeartThought。
+	// §128 对话即思考:不新独立 LLM 调用;纯服务端计算。
+	RolePrior *RolePriorSnapshot `json:"role_prior,omitempty"`
+
+	// ─── 记忆印象 (2026-08-26 §20260826-01 U2) ───
+	// ImpressionMemory 是本 bot 对其他 12 个玩家的多维人格观感
+	// (Trust/Competence/Sincerity/Cooperation/Threat + 衰减)。
+	// buildAgentContextLocked 从房间 ImpressionStore.GetLocked(seat) 拷贝填充。
+	// §119 协议层隔离:不进 chat_message / chat_history / HeartThought。
+	// §128 对话即思考:5 类事件触发自动聚合;不新独立 LLM 调用。
+	ImpressionMemory *ImpressionMemorySnapshot `json:"impression_memory,omitempty"`
+
+	// ─── 情绪→推理权重 (2026-08-26 §20260826-01 U4) ───
+	// EmotionReasoningWeights 是当前 bot 情绪对应的推理修正向量。
+	// 由 buildAgentContextLocked 根据 r.State.Players[seat].Emotion 实时计算。
+	// 仅供 prompt.go 渲染「情绪影响推理」段,LLM 自由决定是否遵守(§128)。
+	EmotionReasoningWeights *EmotionReasoningWeightsSnapshot `json:"emotion_reasoning_weights,omitempty"`
 }
 
 // SeerCheckRecord 是预言家一次查验的完整结果(座位 + 阵营 + 轮次)。
@@ -522,4 +543,62 @@ type PhaseStateContext struct {
 	VoteProposed bool `json:"vote_proposed"`
 	// VoteProposer 发起投票的座位号(-1=未发起)。
 	VoteProposer int `json:"vote_proposer"`
+}
+
+// ─── 2026-08-26 §20260826-01 — 心理博弈增强镜像类型 ───
+//
+// 为避免 agent→werewolf 循环导入,以下结构是 werewolf.{RolePriorTable,
+// ImpressionMemory, EmotionReasoningWeights} 的 agent 包本地镜像。
+// 由 buildAgentContextLocked 从房间 store 拷贝填充。
+
+// RolePriorSingleSnapshot 是 RolePriorSingle 的镜像（§20260826-01 U1）。
+type RolePriorSingleSnapshot struct {
+	TargetSeat   int     `json:"target_seat"`
+	RoleGuess    string  `json:"role_guess"`
+	PriorProb    float32 `json:"prior_prob"`
+	EvidenceKind string  `json:"evidence_kind"`
+	Note         string  `json:"note"`
+	ComputedAt   int64   `json:"computed_at"`
+}
+
+// RolePriorSnapshot 是 RolePriorTable 的镜像（§20260826-01 U1）。
+type RolePriorSnapshot struct {
+	Seat       int                        `json:"seat"`
+	Entries    []RolePriorSingleSnapshot  `json:"entries"`
+	ComputedAt int64                      `json:"computed_at"`
+}
+
+// ImpressionDimsSnapshot 是 ImpressionDims 的镜像（§20260826-01 U2）。
+type ImpressionDimsSnapshot struct {
+	Trust       float32 `json:"trust"`
+	Competence  float32 `json:"competence"`
+	Sincerity   float32 `json:"sincerity"`
+	Cooperation float32 `json:"cooperation"`
+	Threat      float32 `json:"threat"`
+}
+
+// ImpressionEntrySnapshot 是 ImpressionEntry 的镜像（§20260826-01 U2）。
+type ImpressionEntrySnapshot struct {
+	TargetSeat   int                     `json:"target_seat"`
+	Dims         ImpressionDimsSnapshot  `json:"dims"`
+	LastUpdateMS int64                   `json:"last_update_ms"`
+	EventCount   int                     `json:"event_count"`
+	SampleEvents []string                `json:"sample_events"`
+}
+
+// ImpressionMemorySnapshot 是 ImpressionMemory 的镜像（§20260826-01 U2）。
+type ImpressionMemorySnapshot struct {
+	Seat      int                       `json:"seat"`
+	Entries   []ImpressionEntrySnapshot `json:"entries"`
+	UpdatedAt int64                     `json:"updated_at"`
+}
+
+// EmotionReasoningWeightsSnapshot 是 EmotionReasoningWeights 的镜像（§20260826-01 U4）。
+type EmotionReasoningWeightsSnapshot struct {
+	HypothesisConfidenceFloor int     `json:"hypothesis_confidence_floor"`
+	HypothesisConfidenceCeil  int     `json:"hypothesis_confidence_ceil"`
+	ThreatMultiplier          float32 `json:"threat_multiplier"`
+	TrustMultiplier           float32 `json:"trust_multiplier"`
+	StabilityBias             float32 `json:"stability_bias"`
+	SampleEvent               string  `json:"sample_event"`
 }
