@@ -207,6 +207,10 @@ func (s *ImpressionStore) SnapshotAllLocked(now time.Time) []ImpressionMemory {
 		})
 		out = append(out, cp)
 	}
+	// 顶层按 seat 排序，保证输出确定性（map 遍历顺序非确定）
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Seat < out[j].Seat
+	})
 	return out
 }
 
