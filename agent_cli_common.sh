@@ -21,6 +21,7 @@
 #   pick_agent "<脚本名>"                     # 随机选一个可用 Agent
 #   pick_agent "<脚本名>" claude              # 首选 claude(§20260821-02)：可用则必选，
 #                                             # 不可用自动降级随机选（日志有 WARN）
+#   pick_agent_from_list "<脚本名>" claude opencode  # 从指定列表中随机选（专业任务用专业 Agent）
 #   run_agent_with_prompt "${SELECTED_AGENT}" "${PROMPT_FILE}"
 #
 # Agent 选择优先级（§20260821-02）：
@@ -130,6 +131,65 @@ pick_agent() {
         SELECTED_AGENT="${available[$idx]}"
         echo "[${caller_tag}] 随机选中 Agent : ${SELECTED_AGENT}（可用候选: ${available[*]}）"
     fi
+}
+
+# pick_agent_from_list <caller_tag> <agent1> [agent2] ... —— 从指定列表中随机选择可用 Agent。
+# 用于「专业任务用专业 Agent」场景：AutoDebugTestReport 只需 claude/opencode，
+# 不把 hermes/openclaw 纳入随机池。
+# 选择优先级：AGENT_CLI 环境变量强制指定 > 从指定列表中随机选择 >
+#   指定列表全部不可用时降级为全部可用 Agent 随机选择（日志有 WARN）。
+pick_agent_from_list() {
+    local caller_tag="${1:-AutoAgent}"
+    shift
+    local allowed=("$@")
+    local available=()
+    local a
+    while IFS= read -r a; do
+        [[ -n "${a}" ]] && available+=("${a}")
+    done < <(list_available_agents)
+
+    if [[ ${#available[@]} -eq 0 ]]; then
+        echo "[${caller_tag}] [ERROR] 未发现任何可用 Agent CLI（候选: ${AGENT_CANDIDATES[*]}），拒绝启动。" >&2
+        exit 3
+    fi
+
+    if [[ -n "${AGENT_CLI:-}" ]]; then
+        local found=""
+        for a in "${available[@]}"; do
+            if [[ "${a}" == "${AGENT_CLI}" ]]; then found="${a}"; break; fi
+        done
+        if [[ -z "${found}" ]]; then
+            echo "[${caller_tag}] [ERROR] AGENT_CLI=${AGENT_CLI} 不可用；当前可用: ${available[*]}" >&2
+            exit 3
+        fi
+        SELECTED_AGENT="${found}"
+        echo "[${caller_tag}] AGENT_CLI 强制指定 Agent : ${SELECTED_AGENT}"
+        return
+    fi
+
+    # 从 allowed 列表中筛选出当前可用的
+    local allowed_available=()
+    local b
+    for a in "${allowed[@]}"; do
+        for b in "${available[@]}"; do
+            if [[ "${a}" == "${b}" ]]; then
+                allowed_available+=("${a}")
+                break
+            fi
+        done
+    done
+
+    if [[ ${#allowed_available[@]} -eq 0 ]]; then
+        echo "[${caller_tag}] [WARN] 指定 Agent 列表 ${allowed[*]} 均不可用，降级为全部可用 Agent 随机选择（可用候选: ${available[*]}）" >&2
+        local idx=$(( RANDOM % ${#available[@]} ))
+        SELECTED_AGENT="${available[$idx]}"
+        echo "[${caller_tag}] 随机选中 Agent : ${SELECTED_AGENT}（可用候选: ${available[*]}）"
+        return
+    fi
+
+    local idx=$(( RANDOM % ${#allowed_available[@]} ))
+    SELECTED_AGENT="${allowed_available[$idx]}"
+    echo "[${caller_tag}] 从指定列表随机选中 Agent : ${SELECTED_AGENT}（指定: ${allowed[*]}，可用: ${allowed_available[*]}）"
 }
 
 # opencode_model_arg —— 推导 opencode 的 provider/model 参数。
