@@ -3,4 +3,4 @@
 	url = /usr/local/git-local-repos/python-generate-image-tool.git
 [submodule "go-web-debug-tool"]
 	path = go-web-debug-tool
-	url = /usr/local/git-local-repos/go-web-debug-tool.git
+	url = git@gitee.com:liushimeng109117198_admin/go-web-debug-tool.git
