@@ -38,7 +38,8 @@ func (m *WerewolfManager) ManagerAddPlayerAt(roomID, userID string, seat Seat) (
 		return r, nil
 	}
 	if r.State == nil {
-		r.State = NewGame(m.seedFn())
+		// §20260830-01: 经 newGameStateLocked 拷贝房间级「死亡亮身份」开关。
+		r.State = r.newGameStateLocked(m.seedFn())
 	}
 	_, e := r.State.AddPlayerAt(userID, seat)
 	if e != nil {

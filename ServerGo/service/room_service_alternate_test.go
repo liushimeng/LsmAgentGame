@@ -176,7 +176,7 @@ func TestCreateRoomWithAgents_LLMUnavailable(t *testing.T) {
 	s := &RoomService{cfg: &config.Config{LLM: config.LLMConfig{Providers: pcs}}}
 
 	_, err := s.CreateRoomWithAgents(context.Background(), "werewolf", "user-x", "test-room",
-		[]AgentSeatConfig{{Seat: 0, ModelKey: "ph1"}, {Seat: 1, ModelKey: "ph2"}}, nil, "", nil, "", nil)
+		[]AgentSeatConfig{{Seat: 0, ModelKey: "ph1"}, {Seat: 1, ModelKey: "ph2"}}, nil, "", nil, "", nil, nil)
 	if err == nil {
 		t.Fatalf("expected ErrLLMUnavailable, got nil")
 	}
@@ -196,7 +196,7 @@ func TestCreateRoomWithAgents_LLMUnavailable_AllEmptyKeys(t *testing.T) {
 	s := &RoomService{cfg: &config.Config{LLM: config.LLMConfig{Providers: pcs}}}
 
 	_, err := s.CreateRoomWithAgents(context.Background(), "werewolf", "user-y", "test-room",
-		[]AgentSeatConfig{{Seat: 0, ModelKey: "e1"}}, nil, "", nil, "", nil)
+		[]AgentSeatConfig{{Seat: 0, ModelKey: "e1"}}, nil, "", nil, "", nil, nil)
 	if err == nil {
 		t.Fatalf("expected ErrLLMUnavailable for empty-key registry")
 	}
@@ -235,6 +235,11 @@ func (f *fakeAgentSeater) SetSeatRolePrefs(gameKind, roomID string, prefs map[in
 
 // SetAgentDifficulty 2026-08-11 §20260811-09 U2 — 接口新方法,测试替身空实现。
 func (f *fakeAgentSeater) SetAgentDifficulty(gameKind, roomID string, difficulty string) *errcode.Error {
+	return nil
+}
+
+// SetRevealRoleOnDeath §20260830-01 — 接口新方法,测试替身空实现。
+func (f *fakeAgentSeater) SetRevealRoleOnDeath(gameKind, roomID string, enabled bool) *errcode.Error {
 	return nil
 }
 
@@ -280,7 +285,7 @@ func TestCreateRoomWithAgents_InvalidAgentSeatModelKey_FailsValidation(t *testin
 		{Seat: 1, ModelKey: "GPT-4o"},        // unknown
 		{Seat: 2, ModelKey: "Claude-3.5"},    // unknown
 	}
-	_, err := s.CreateRoomWithAgents(context.Background(), "werewolf", "user-x", "test-room", seats, nil, "", nil, "", nil)
+	_, err := s.CreateRoomWithAgents(context.Background(), "werewolf", "user-x", "test-room", seats, nil, "", nil, "", nil, nil)
 	if err == nil {
 		t.Fatalf("expected ErrValidationFailed for unknown model_keys, got nil")
 	}

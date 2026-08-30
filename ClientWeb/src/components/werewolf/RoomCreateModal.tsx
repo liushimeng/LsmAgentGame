@@ -53,6 +53,9 @@ interface Props {
     judge?: NonNullable<CreateRoomOptions['judge']>;
     // 2026-08-11 §20260811-09 U2 — Agent 难度档位。undefined = 后端默认 normal。
     agent_difficulty?: NonNullable<CreateRoomOptions['agent_difficulty']>;
+    // 2026-08-30 §20260830-01 — 房间级「死亡亮身份」开关(默认 true;
+    // false = §135 竞技规则,死者身份牌不翻开)。恒提交,后端 *bool 兜底。
+    reveal_role_on_death?: boolean;
     // 2026-08-11 §20260811-09 U1 — AI 实时解说(仅观战者可见)。可选。
     commentary?: { enabled?: boolean; style?: 'pro' | 'fun'; model_key?: string };
     // 2026-08-06 §20260806-03 — 创建者(人类座位)角色偏好;'random'/'' = 随机。
@@ -85,6 +88,10 @@ const RoomCreateModal: React.FC<Props> = ({ open, onClose, onSubmit, submitting 
   // 2026-08-11 §20260811-09 U1 — AI 实时解说开关(默认关闭)。
   const [commentaryEnabled, setCommentaryEnabled] = useState(false);
   const [commentaryStyle, setCommentaryStyle] = useState<'pro' | 'fun'>('pro');
+  // 2026-08-30 §20260830-01 — 房间级「死亡亮身份」开关(默认开启)。
+  // true = 任何玩家死亡时身份对全场公开(娱乐/教学局);false = §135
+  // 竞技规则(死者身份牌不翻开)。建房一次性写入,局中不可改。
+  const [revealRoleOnDeath, setRevealRoleOnDeath] = useState(true);
   // 2026-08-06 §20260806-03 — 创建者(人类座位)角色偏好,默认随机。
   const [creatorRole, setCreatorRole] = useState<string>('random');
   // BUG-R210-04 (2026-07-30): 内联表单错误条。父组件 onSubmit 返回 false
@@ -487,6 +494,25 @@ const RoomCreateModal: React.FC<Props> = ({ open, onClose, onSubmit, submitting 
             </div>
           )}
 
+          {/* ROW 4 — §20260830-01 房间级「死亡亮身份」开关(默认勾选)。
+              独立简单 row,无折叠行为(不像 commentary 那样展开二级选项)。
+              规则级开关,与 AI 数量无关(全人类房同样生效),故不套
+              agentCount > 0 条件。UI 模式照抄 commentary toggle。 */}
+          <div className="ww-create-modal__row--reveal">
+            <label className="ww-create-modal__reveal-toggle">
+              <input
+                type="checkbox"
+                checked={revealRoleOnDeath}
+                onChange={(e) => setRevealRoleOnDeath(e.target.checked)}
+                data-testid="ww-create-modal__reveal-role-on-death"
+              />
+              {t('werewolf.reveal_role_on_death.label')}
+            </label>
+            <span className="ww-create-modal__hint">
+              {t('werewolf.reveal_role_on_death.hint')}
+            </span>
+          </div>
+
           {loading && <p className="ww-create-modal__hint">{t('werewolf.createModal.loadingModels')}</p>}{error && (
             <p className="ww-create-modal__error">
               {t('werewolf.createModal.modelsUnavailable', { error })}
@@ -633,6 +659,9 @@ const RoomCreateModal: React.FC<Props> = ({ open, onClose, onSubmit, submitting 
                   ...(agentCount > 0 && agentDifficulty !== 'normal'
                     ? { agent_difficulty: agentDifficulty }
                     : {}),
+                  // §20260830-01 — 死亡亮身份开关恒提交(后端 *bool 三态,
+                  // true/false 均为显式语义;不提交才回落默认 true)。
+                  reveal_role_on_death: revealRoleOnDeath,
                   // §20260811-09 U1 — AI 解说(默认关闭)。关闭时不提交请求体。
                   ...(commentaryEnabled
                     ? { commentary: { enabled: true, style: commentaryStyle } }

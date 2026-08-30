@@ -92,7 +92,7 @@ func TestBuildSystemPrompt_PersonalityCacheHit(t *testing.T) {
 	//          → 输出与 BuildSystemPrompt(selfPortrait) 字节级别一致
 	// (确保 Anthropic prompt cache 前缀命中,无 Personality 字段时零回归)
 	zero := PersonalityVector{}
-	base := BuildSystemPrompt("", zero, "", "")
+	base := BuildSystemPrompt("", zero, "", "", false)
 	// §20260810-10 U2 已知 base 末尾只有 rules+roleAbilities+...+PropSystemPrompt+空 portrait
 	if strings.Contains(base[0].Text, "【🎭 人设倾向") {
 		t.Errorf("zero-vector personality must not inject Personality block")
@@ -103,8 +103,8 @@ func TestBuildSystemPrompt_PersonalityAppends(t *testing.T) {
 	// 不变式:非零 personality 必须追加 PersonalityBlock;且 selfPortrait 段字节不变。
 	zero := PersonalityVector{}
 	personality := PersonalityVector{Aggressiveness: 0.7, TrustTendency: 0.3, BluffFrequency: 0.5, CollaborationStyle: 0.6, RiskTolerance: 0.4}
-	withPersonality := BuildSystemPrompt("", personality, "aggressive", "")
-	withPersonalityCustom := BuildSystemPrompt("", personality, "custom", "")
+	withPersonality := BuildSystemPrompt("", personality, "aggressive", "", false)
+	withPersonalityCustom := BuildSystemPrompt("", personality, "custom", "", false)
 
 	if !strings.Contains(withPersonality[0].Text, "【🎭 人设倾向 — 激进冲锋】") {
 		t.Errorf("expected personality label in system prompt, got tail: %q",
@@ -123,7 +123,7 @@ func TestBuildSystemPrompt_PersonalityAppends(t *testing.T) {
 	}
 	// 验证 selfPortrait 段前缀(空时)字节不变:
 	// withPersonality[0].Text[:idxPersonality] 应与 zero 版前 min(idxPersonality, len(zeroText)) 字节一致。
-	zeroText := BuildSystemPrompt("", zero, "", "")[0].Text
+	zeroText := BuildSystemPrompt("", zero, "", "", false)[0].Text
 	commonLen := len(zeroText)
 	if commonLen > idxPersonality {
 		commonLen = idxPersonality

@@ -342,6 +342,22 @@ func (f *fakeRecorderAgentSeater) ValidateAgentSeats(seats []AgentSeatConfig) *e
 	return nil
 }
 
+// SetAgentDifficulty / SetCommentaryConfig / SetSeatRolePrefs /
+// SetRevealRoleOnDeath(§20260830-01)— 接口其余方法空实现(fake 仅在
+// 座位边界 / JudgeConfig 断言中使用,不涉及其余配置)。
+func (f *fakeRecorderAgentSeater) SetAgentDifficulty(_ string, _ string, _ string) *errcode.Error {
+	return nil
+}
+func (f *fakeRecorderAgentSeater) SetCommentaryConfig(_ string, _ string, _ *CommentaryConfig) *errcode.Error {
+	return nil
+}
+func (f *fakeRecorderAgentSeater) SetSeatRolePrefs(_ string, _ string, _ map[int]string, _ string) *errcode.Error {
+	return nil
+}
+func (f *fakeRecorderAgentSeater) SetRevealRoleOnDeath(_ string, _ string, _ bool) *errcode.Error {
+	return nil
+}
+
 // TestCreateRoomWithAgents_SeatBoundaries_13_Accepted is a structural
 // guard: 13 agent seats must NOT trip the range check (which caps at
 // maxAgentSeats = 13, exclusive of 13 itself when the check was

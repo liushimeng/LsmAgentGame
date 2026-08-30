@@ -375,7 +375,9 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 		// 定义(~5-10KB)。DouBao 等小窗口模型的上下文窗口只有 ~128K-256K,这部分
 		// "隐形开销"在极端场景下可能导致实际 payload 超限但字节预算未触发
 		// (如 ID 1225 的 651816 tokens)。
-		system := BuildSystemPrompt(a.SelfPortraitText, a.Personality, a.PersonalityPresetKey, a.DifficultyDirective)
+		// §20260830-01 §6.2 — §135 身份公开规则段按本局「死亡亮身份」开关双模式
+		// (Agent 冻结快照同源,invariant I11 一致)。
+		system := BuildSystemPrompt(a.SelfPortraitText, a.Personality, a.PersonalityPresetKey, a.DifficultyDirective, a.RevealRoleOnDeath())
 		a.Memory.SetSystemTools(system, tools)
 		// §20260811-10 U1 — 照妖镜一次性强制真实身份:消费 flag 并追加指令。
 		// flag 由 mirror_check 道具命中后 prop_engine.SetMirrorExposeActiveLocked
@@ -1459,7 +1461,8 @@ alive:
 	}
 	req := llm.LLMRequest{
 		Model:    resolveModelName(a.ModelKey),
-		System:   BuildSystemPrompt(a.SelfPortraitText, a.Personality, a.PersonalityPresetKey, a.DifficultyDirective),
+		// §20260830-01 §6.2 — 与主 handleEvent 路径同源(死亡亮身份双模式)。
+		System:   BuildSystemPrompt(a.SelfPortraitText, a.Personality, a.PersonalityPresetKey, a.DifficultyDirective, a.RevealRoleOnDeath()),
 		Messages: msgs,
 		Tools:    tools,
 		// 2026-08-06 §AgentClassName 增强:让上游 / 网关 / 日志按"哪一类 Agent"

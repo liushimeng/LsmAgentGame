@@ -277,3 +277,31 @@ func CipherBundleForPrompt(b CipherBundle) string {
 // 未来扩展 AgentPersonality + Cipher 联动会需要；保留引用避免后续
 // import 循环问题）。
 var _ = wwplayer.PersonalityPresets
+// ─── §4 行数治理搬移(2026-08-30 §20260830-01 同批):以下三个
+// WerewolfRoom 暗号访问器原位于 room.go,纯代码搬移,零逻辑改动。 ───
+
+// cipherLocked 返回房间暗号索引,懒初始化(与 wolfPack/informationLedger 同模式)。
+// §92a 锁约束:调用方必须已持 r.mu。
+func (r *WerewolfRoom) cipherLocked() *WolfPackCipher {
+	if r.wolfPackCipher == nil {
+		r.wolfPackCipher = NewWolfPackCipher()
+	}
+	return r.wolfPackCipher
+}
+
+// WolfPackCipherSnapshotLocked 返回暗号索引(供 buildAgentContextLocked / view.go 透传)。
+// nil room 安全;非 nil room 返回懒初始化后的索引。
+func (r *WerewolfRoom) WolfPackCipherSnapshotLocked() *WolfPackCipher {
+	if r == nil {
+		return nil
+	}
+	return r.cipherLocked()
+}
+
+// ResetWolfPackCipherLocked 清空暗号索引(restartGameLocked 重开局时调用)。
+func (r *WerewolfRoom) ResetWolfPackCipherLocked() {
+	if r == nil || r.wolfPackCipher == nil {
+		return
+	}
+	r.wolfPackCipher.Reset()
+}

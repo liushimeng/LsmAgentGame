@@ -217,7 +217,8 @@ func (m *WerewolfManager) SpectateGame(roomID, userID string) (*WerewolfRoom, *e
 		// Post-restart State loss: synthesise a fresh game and start it
 		// immediately so the spectator sees the running phase (night_wolves
 		// / speak / …) rather than the spinner-equivalent.
-		r.State = NewGame(m.seedFn())
+		// §20260830-01: 经 newGameStateLocked 拷贝房间级「死亡亮身份」开关。
+		r.State = r.newGameStateLocked(m.seedFn())
 		needStart = true
 	}
 	if r.State != nil && r.State.Phase == PhaseFilling && r.IsReady() {
@@ -286,7 +287,8 @@ func (m *WerewolfManager) SpectateGame(roomID, userID string) (*WerewolfRoom, *e
 		// reached, e.g. partial AI + partial human spectators). The spectator
 		// sees a benign empty board; the standard broadcastWerewolfState will
 		// start the game the moment the last human player joins.
-		r.State = NewGame(time.Now().UnixNano())
+		// §20260830-01: 经 newGameStateLocked 拷贝房间级「死亡亮身份」开关。
+		r.State = r.newGameStateLocked(time.Now().UnixNano())
 	}
 	for i := range r.Seats {
 		if r.Seats[i] == "" && r.State.Players[i].UserID != "" {

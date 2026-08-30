@@ -405,3 +405,328 @@ func TestReveal_R15_HunterNightShootResumesDay(t *testing.T) {
 		t.Fatalf("不应递增 DayNumber(那意味着白天被吞掉): %d → %d", dayBefore, gs.DayNumber)
 	}
 }
+
+// ─────────────────────────────────────────────────────────────
+// §20260830-01 「死亡亮身份」模式(设计文档 §10.1 R-14~R-23 后端部分)。
+//
+// 命名说明:本文件已有历史 R-14/R-15(自爆狼视图 / 猎人夜枪回白天),故本批
+// 用 TestRevealOn_Rxx(开启模式)与 TestRevealMode_Rxx(开/关对照)前缀,
+// 编号仍对齐设计文档 §10.1。
+// ─────────────────────────────────────────────────────────────
+
+// newRevealModeGame 起一局并显式开启「死亡亮身份」开关。
+func newRevealModeGame(t *testing.T, seed int64) *GameState {
+	t.Helper()
+	gs := newFairnessGame(t, seed)
+	gs.RevealRoleOnDeath = true
+	return gs
+}
+
+// TestRevealOn_R14_WolfKillRevealsRole 开启:狼刀死亡 → 公开,角色名正确。
+func TestRevealOn_R14_WolfKillRevealsRole(t *testing.T) {
+	gs := newRevealModeGame(t, 4201)
+	victim := firstLivingNonWolfNonSeer(gs)
+	if victim == NoSeat {
+		t.Skip("no suitable victim")
+	}
+	if e := gs.killPlayer(victim, DeathCauseWolf); e != nil {
+		t.Fatalf("kill: %v", e)
+	}
+	if !gs.RolePubliclyRevealed(victim) {
+		t.Fatalf("死亡亮身份开启:狼刀死亡必须公开身份")
+	}
+	if got := publicRoleName(gs, victim); got != gs.Roles[victim].String() {
+		t.Fatalf("公开角色名 = %q, want %q", got, gs.Roles[victim].String())
+	}
+}
+
+// TestRevealOn_R15_WitchPoisonRevealsRole 开启:女巫毒杀 → 公开。
+func TestRevealOn_R15_WitchPoisonRevealsRole(t *testing.T) {
+	gs := newRevealModeGame(t, 4202)
+	victim := firstLivingNonWolfNonSeer(gs)
+	if victim == NoSeat {
+		t.Skip("no suitable victim")
+	}
+	if e := gs.killPlayer(victim, DeathCauseWitchPoison); e != nil {
+		t.Fatalf("kill: %v", e)
+	}
+	if !gs.RolePubliclyRevealed(victim) {
+		t.Fatalf("死亡亮身份开启:毒杀死亡必须公开身份")
+	}
+}
+
+// TestRevealOn_R16_VoteExecutionRevealsRole 开启:白天投票放逐 → 公开。
+func TestRevealOn_R16_VoteExecutionRevealsRole(t *testing.T) {
+	gs := newRevealModeGame(t, 4203)
+	victim := firstLivingNonWolfNonSeer(gs)
+	if victim == NoSeat {
+		t.Skip("no suitable victim")
+	}
+	if e := gs.killPlayer(victim, DeathCauseVote); e != nil {
+		t.Fatalf("kill: %v", e)
+	}
+	if !gs.RolePubliclyRevealed(victim) {
+		t.Fatalf("死亡亮身份开启:投票放逐必须公开身份")
+	}
+}
+
+// TestRevealOn_R17_HunterTargetRevealsRole 开启:被猎人带走者 → 公开
+// (现行 R-04 的镜像:关闭时被带走者身份保密)。
+func TestRevealOn_R17_HunterTargetRevealsRole(t *testing.T) {
+	gs := newRevealModeGame(t, 4204)
+	hunter := ensureHunterSeat(t, gs)
+	if hunter == NoSeat {
+		t.Skip("no hunter seat")
+	}
+	// 目标任取一个存活非猎人座位(狼也可被带走,HunterShoot 仅要求 target 存活;
+	// ensureHunterSeat 可能已把唯一的非神职座位改成猎人,故不用 firstLivingNonWolfNonSeer)。
+	var victim Seat = NoSeat
+	for i := 0; i < MaxPlayers; i++ {
+		if Seat(i) != hunter && gs.HasActorAt(Seat(i)) && gs.AliveSeat(Seat(i)) {
+			victim = Seat(i)
+			break
+		}
+	}
+	if victim == NoSeat {
+		t.Skip("no suitable victim")
+	}
+	// HunterShoot 前置:猎人处于待开枪状态(夜间被刀)。
+	gs.HunterPendingShoot = true
+	gs.HunterPendingFrom = "wolf"
+	if e := gs.HunterShoot(hunter, victim); e != nil {
+		t.Fatalf("hunter shoot: %v", e)
+	}
+	if gs.AliveSeat(victim) {
+		t.Fatalf("被猎人带走者应已死亡")
+	}
+	if !gs.RolePubliclyRevealed(victim) {
+		t.Fatalf("死亡亮身份开启:被猎人带走者必须公开身份")
+	}
+}
+
+// TestRevealOn_R18_IdiotNightKilledRevealsRole 开启:白痴夜间被刀 → 公开
+// (身份=白痴;夜间死亡不触发 ② 翻牌,但 ⑦ 覆盖)。
+func TestRevealOn_R18_IdiotNightKilledRevealsRole(t *testing.T) {
+	gs := newRevealModeGame(t, 4205)
+	// 找/造一个白痴座位。
+	idiot := NoSeat
+	for i := 0; i < MaxPlayers; i++ {
+		if gs.AliveSeat(Seat(i)) && gs.Roles[i] == RoleIdiot {
+			idiot = Seat(i)
+			break
+		}
+	}
+	if idiot == NoSeat {
+		for i := 0; i < MaxPlayers; i++ {
+			if gs.AliveSeat(Seat(i)) && gs.Roles[i] != RoleWerewolf && gs.Roles[i] != RoleSeer &&
+				gs.Roles[i] != RoleWitch && gs.Roles[i] != RoleHunter && gs.Roles[i] != RoleGuard {
+				gs.Roles[i] = RoleIdiot
+				gs.Players[i].Role = RoleIdiot
+				idiot = Seat(i)
+				break
+			}
+		}
+	}
+	if idiot == NoSeat {
+		t.Skip("no idiot seat")
+	}
+	if e := gs.killPlayer(idiot, DeathCauseWolf); e != nil {
+		t.Fatalf("kill: %v", e)
+	}
+	if !gs.RolePubliclyRevealed(idiot) {
+		t.Fatalf("死亡亮身份开启:白痴夜间被刀必须公开身份")
+	}
+	if got := publicRoleName(gs, idiot); got != "idiot" {
+		t.Fatalf("公开角色名 = %q, want \"idiot\"", got)
+	}
+}
+
+// TestRevealOn_R19_DuelAndDemonHunterRevealsRole 开启:骑士决斗 /
+// 猎魔人误杀死亡 → 公开(⑥ 白名单之外的死者在 ⑦ 下也公开)。
+func TestRevealOn_R19_DuelAndDemonHunterRevealsRole(t *testing.T) {
+	gs := newRevealModeGame(t, 4206)
+	victim := firstLivingNonWolfNonSeer(gs)
+	if victim == NoSeat {
+		t.Skip("no suitable victim")
+	}
+	// duel 死因(verdict=execution)。
+	if e := gs.killPlayer(victim, DeathCauseDuel); e != nil {
+		t.Fatalf("kill duel: %v", e)
+	}
+	if !gs.RolePubliclyRevealed(victim) {
+		t.Fatalf("死亡亮身份开启:决斗死亡必须公开身份")
+	}
+	// demon_hunter_misjudge 死因(verdict=execution)。
+	other := firstLivingNonWolfNonSeer(gs)
+	if other == NoSeat {
+		t.Skip("no second victim")
+	}
+	if e := gs.killPlayer(other, DeathCauseDemonHunterMisjudge); e != nil {
+		t.Fatalf("kill misjudge: %v", e)
+	}
+	if !gs.RolePubliclyRevealed(other) {
+		t.Fatalf("死亡亮身份开启:猎魔人误杀死亡必须公开身份")
+	}
+}
+
+// TestRevealMode_R20_Disabled_ZeroRegression 显式关闭(gs.RevealRoleOnDeath=false)
+// 时普通死亡仍不公开 —— 与 R-01~R-03/R-12 断言完全一致,零回归。
+func TestRevealMode_R20_Disabled_ZeroRegression(t *testing.T) {
+	for _, tc := range []struct {
+		cause string
+		name  string
+	}{
+		{DeathCauseWolf, "wolf"},
+		{DeathCauseWitchPoison, "witch_poison"},
+		{DeathCauseVote, "vote"},
+		{DeathCauseHunter, "hunter"},
+	} {
+		gs := newFairnessGame(t, 4207)
+		gs.RevealRoleOnDeath = false
+		victim := firstLivingNonWolfNonSeer(gs)
+		if victim == NoSeat {
+			t.Skip("no suitable victim")
+		}
+		if e := gs.killPlayer(victim, tc.cause); e != nil {
+			t.Fatalf("kill %s: %v", tc.name, e)
+		}
+		if gs.RolePubliclyRevealed(victim) {
+			t.Fatalf("关闭开关:%s 普通死亡不得公开身份(§135 竞技规则零回归)", tc.name)
+		}
+		cs := BuildClientState("r", gs.Seats, 0, gs)
+		if int(victim) != 0 && (cs.Players[victim].Role != "" || cs.Players[victim].RoleRevealed) {
+			t.Fatalf("关闭开关:%s 死者 players[].role 不得泄露", tc.name)
+		}
+	}
+}
+
+// TestRevealMode_R21_AliveIdiotNotDoubleRevealed 白痴翻牌免死存活
+// (Alive=true && DeathCause=="")不进 ⑦,由 ② 覆盖;关闭 ⑦ 后 ② 仍独立生效。
+func TestRevealMode_R21_AliveIdiotNotDoubleRevealed(t *testing.T) {
+	gs := newFairnessGame(t, 4208)
+	idiot := NoSeat
+	for i := 0; i < MaxPlayers; i++ {
+		if gs.AliveSeat(Seat(i)) && gs.Roles[i] == RoleIdiot {
+			idiot = Seat(i)
+			break
+		}
+	}
+	if idiot == NoSeat {
+		for i := 0; i < MaxPlayers; i++ {
+			if gs.AliveSeat(Seat(i)) && gs.Roles[i] != RoleWerewolf && gs.Roles[i] != RoleSeer &&
+				gs.Roles[i] != RoleWitch && gs.Roles[i] != RoleHunter && gs.Roles[i] != RoleGuard {
+				gs.Roles[i] = RoleIdiot
+				gs.Players[i].Role = RoleIdiot
+				idiot = Seat(i)
+				break
+			}
+		}
+	}
+	if idiot == NoSeat {
+		t.Skip("no idiot seat")
+	}
+	// 白天翻牌免死:Alive 保持 true,DeathCause 为空。
+	gs.Players[idiot].IdiotRevealed = true
+	if !gs.RolePubliclyRevealed(idiot) {
+		t.Fatalf("白痴翻牌(②)必须独立于 ⑦ 生效")
+	}
+	if gs.Players[idiot].DeathCause != "" || !gs.Players[idiot].Alive {
+		t.Fatalf("白痴翻牌免死:Alive=true 且 DeathCause==\"\" 前置失败")
+	}
+	// 死亡公开 drain(W03 同款语义)必须排除该存活座位 —— 由 wiring 测试覆盖;
+	// 此处断言判定面:开启 ⑦ 也不改变(仍由 ② 覆盖,无重复副作用)。
+	gs.RevealRoleOnDeath = true
+	if !gs.RolePubliclyRevealed(idiot) || publicRoleName(gs, idiot) != "idiot" {
+		t.Fatalf("白痴翻牌公开身份不应被 ⑦ 干扰")
+	}
+}
+
+// TestRevealMode_R22_AllViewChannelsConsistent 同一 gs 下五通道一致(开/关两轮):
+// players[].role / dead_list / all_dead_list_verbose / last_night_deaths_verbose
+// 全部经 publicRoleName → RolePubliclyRevealed 单点判定;REST PublicPlayerState
+// 亦走同一判定(room_state.go GetPublicPlayerStates,本测试以同一函数断言替代)。
+func TestRevealMode_R22_AllViewChannelsConsistent(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		gs := newFairnessGame(t, 4209)
+		gs.RevealRoleOnDeath = enabled
+		victim := firstLivingNonWolfNonSeer(gs)
+		if victim == NoSeat {
+			t.Skip("no suitable victim")
+		}
+		if e := gs.killPlayer(victim, DeathCauseWolf); e != nil {
+			t.Fatalf("kill: %v", e)
+		}
+		gs.LastNightDeaths = []Seat{victim}
+
+		wantRole := ""
+		if enabled {
+			wantRole = gs.Roles[victim].String()
+		}
+		// 通道 1:players[].role(每个非本人 viewer 视角)。
+		for _, v := range []int{-1, 0, 1, 2} {
+			cs := BuildClientState("r", gs.Seats, v, gs)
+			if int(victim) == v {
+				continue
+			}
+			if cs.Players[victim].Role != wantRole {
+				t.Fatalf("enabled=%v viewer=%d players[].role=%q want %q",
+					enabled, v, cs.Players[victim].Role, wantRole)
+			}
+		}
+		// 通道 2:dead_list(遗言阶段)。
+		for _, d := range buildDeadListLocked(gs) {
+			if d.Seat == int(victim) && d.Role != wantRole {
+				t.Fatalf("enabled=%v dead_list role=%q want %q", enabled, d.Role, wantRole)
+			}
+		}
+		// 通道 3:all_dead_list_verbose。
+		for _, d := range buildAllDeadListLocked(gs) {
+			if d.Seat == int(victim) && d.Role != wantRole {
+				t.Fatalf("enabled=%v all_dead_list_verbose role=%q want %q", enabled, d.Role, wantRole)
+			}
+		}
+		// 通道 4:last_night_deaths_verbose(黎明公告)。
+		for _, d := range buildDeadListForSeatsLocked(gs, gs.LastNightDeaths) {
+			if d.Seat == int(victim) && d.Role != wantRole {
+				t.Fatalf("enabled=%v last_night_deaths_verbose role=%q want %q", enabled, d.Role, wantRole)
+			}
+		}
+		// 通道 5:单点判定(REST PublicPlayerState 的同一事实来源)。
+		if got := gs.RolePubliclyRevealed(victim); got != enabled {
+			t.Fatalf("enabled=%v RolePubliclyRevealed=%v", enabled, got)
+		}
+	}
+}
+
+// TestRevealMode_R23_DeathFactIndependence 关闭时死亡事实(alive=false /
+// cause / verdict)仍照常下发,仅 role 脱敏。
+func TestRevealMode_R23_DeathFactIndependence(t *testing.T) {
+	gs := newFairnessGame(t, 4210)
+	gs.RevealRoleOnDeath = false
+	victim := firstLivingNonWolfNonSeer(gs)
+	if victim == NoSeat {
+		t.Skip("no suitable victim")
+	}
+	if e := gs.killPlayer(victim, DeathCauseVote); e != nil {
+		t.Fatalf("kill: %v", e)
+	}
+	cs := BuildClientState("r", gs.Seats, 2, gs)
+	if cs.Players[victim].Alive {
+		t.Fatalf("死亡事实必须公开")
+	}
+	found := false
+	for _, d := range cs.AllDeadListVerbose {
+		if d.Seat == int(victim) {
+			found = true
+			if d.Cause != DeathCauseVote || d.Verdict != DeathVerdictExecution {
+				t.Fatalf("cause/verdict 必须保留, got %q/%q", d.Cause, d.Verdict)
+			}
+			if d.Role != "" {
+				t.Fatalf("关闭开关:role 必须脱敏")
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("死者必须出现在 all_dead_list_verbose")
+	}
+}

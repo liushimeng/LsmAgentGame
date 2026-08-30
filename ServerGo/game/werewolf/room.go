@@ -124,6 +124,16 @@ type WerewolfRoom struct {
 	// RolePubliclyRevealed 单点判定不受影响。0 = 立即揭晓(零回归)。
 	deathRevealDelayMin int
 
+	// revealRoleOnDeath §20260830-01 房间级「死亡亮身份」开关;创建房间时经
+	// SetRevealRoleOnDeath 一次性写入,发牌时经 newGameStateLocked 拷贝进
+	// GameState(death_reveal.go)。nil = 未显式配置(纯人类直建 / 观战者懒建
+	// 房间),发牌时走 cfgWerewolfRevealRoleOnDeathDefault(默认 true)。
+	revealRoleOnDeath *bool
+	// deathRevealEmitted §20260830-01 幂等簿记:该座位的死亡身份公开已写入
+	// RolePriorStore(syncDeathRevealPriorsLocked 用,重开一局时随
+	// resetDeathRevealBookkeepingLocked 清零)。
+	deathRevealEmitted [MaxPlayers]bool
+
 	// §20260811-09 U2 — Agent 难度分级房间级配置(easy/normal/hard/hell)。
 	// 由 RoomConfig.AgentDifficulty 创建房间时一次性写入;空串 = normal(默认)。
 	// 影响 4 个生产注入点(§130 接线验证):
@@ -628,101 +638,6 @@ type WerewolfRoom struct {
 // 失败不抛错,仅 best-effort;锁竞争失败时下次调用时由 allowSeatSpeakThisPhase
 // 在阶段切换时重新对齐。
 
-// ─── 道具系统方法 (2026-07-21) ───
-
-// propCooldownRemainLocked 返回座位距离下次可使用道具的剩余秒数（0 = 可用）。
-// 必须在 r.mu 已持锁状态下调用。
-
-// isPropCooldownLocked 检查座位是否在道具冷却中。
-
-// propCountForSeatLocked 返回座位本局已使用道具次数。
-// 必须在 r.mu 已持锁状态下调用。
-
-// PropPerSeatSnapshotLocked 在 r.mu 已持锁状态下,回填某座位的道具 per-room 状态:
-//   - *remaining = MaxPerGame - 已用次数(负值截断到 0)
-//   - *cooldownSec = 距离下次可使用道具的剩余秒数(0 = 立即可用)
-//
-// 是读取侧的"前端 PropPanel / REST ListProps"权威数据源;无副作用。
-//
-// R173 之前 ListProps 只返 {props,total},前端 PropPanel 的余额/剩余/冷却全部
-// 显示 0 — 修复:ListProps 内先调 RoomPropPerSeatSnapshot(短线持锁)进入本方法。
-
-// RoomPropPerSeatSnapshot 是 PropPerSeatSnapshotLocked 的导出版 — 供 api 包
-// (等外部包)短线持锁后回填 per-seat 道具状态。
-// 持锁失败(例如 200ms 超时)时,*remaining/*cooldownSec 不被修改,返回 false。
-
-// recordPropUseLocked 记录一次道具使用（冷却重置 + 计数累加 + 彩池累加 + 预算累加）。
-// price 是本次消耗的道具完整价格（用于 v2 全局/个人预算累加）；potReturn
-// 是回滚到彩池的部分（price 的 50%）。必须在 r.mu 已持锁状态下调用。
-
-// enqueuePropInjectLocked 把道具注入文本加入目标座位的注入队列。
-// buildAgentContextLocked 在构造 GameContext 时消费此队列。
-// 必须在 r.mu 已持锁状态下调用。
-
-// schedulePropEffectStepLocked 把一条 v4 链式效果 step 加入延迟调度表。
-// 仅在 PropEffectStep.DelayTurns > 0 时调用,即时 step 走 ApplyEffects 直接落地。
-// R176 P2 补缺：补回 v4 commit 描述的"效果链"延迟调度路径。
-// 必须在 r.mu 已持锁状态下调用。
-
-// tickPropEffectScheduleLocked 把到期的链式效果应用到目标 GameContext。
-// 由 buildAgentContextLocked 入口处调用(增加 propEffectRoundCounter 并检查到期项)。
-// 返回:已应用的 step 数量(用于日志)。必须在 r.mu 已持锁状态下调用。
-
-// evaluatePropStepCondition 评估 v4 chain step 的 Condition 字符串。
-//   - "always" / "" → 始终应用
-//   - "target_alive" → 仅当目标在 ctx.AliveSeats 中
-//   - "target_in_speak" → 暂等同于 always(发言阶段已在 buildAgentContextLocked 触发,
-//     延迟 step 落地的具体 phase 校验留作 v4.1)
-//   - 其他 / 不识别 → 默认 always(允许宽松扩展)
-
-// drainPropInjectQueueLocked 消费并返回座位的待注入道具队列（取出后清空）。
-// 必须在 r.mu 已持锁状态下调用。
-
-// resetPropStateLocked 在 restartGameLocked / 房间重置时清零道具系统状态。
-// 必须在 r.mu 已持锁状态下调用。
-
-// roomTotalCoin 返回房间内所有存活玩家的钱包余额总和（v4 §13.2 经济档位判定入参）。
-// 必须在 r.mu 已持锁状态下调用。返回 0 表示无钱包服务或房间内无余额数据。
-//
-// 实现：仅累加存活玩家的余额；人类 + Bot 都包含。r.propEngine 提供 walletSvc 句柄;
-// 若 walletSvc 为 nil（如测试桩）则返回 0 → ComputeEconTier → EconDanger（最严档）。
-
-// enqueuePropHitLocked 把一次命中的道具效果入队（注入文本 + 干扰信号）。
-// 由 agent_runner.UseProp / ws handleWerewolfUseProp 在持锁后调用。
-// effectTypes: 逗号分隔的效果类型列表；twistSeat: target_twist 引导座位（-1=无）。
-// 必须在 r.mu 已持锁状态下调用。
-
-// computeTwistSeatLocked 按道具的 TwistSeatSrc 计算 target_twist 的引导座位（v2）。
-// 返回 -1 表示不引导。必须在 r.mu 已持锁状态下调用。
-//   - "from_seat": 引导目标打使用者（fromSeat）。
-//   - "random_enemy": 引导打目标所在阵营的随机敌对阵营玩家；找不到敌人 → -1。
-//   - "most_trusted": 不指定具体座位（返回 -1），由注入文本的隐藏任务引导
-//     "做决策时最想选的那个"（注意力失焦专用，实现"杀错人"）。
-
-// cfgWerewolfHumanWaitSec 读取人类等待窗口秒数。
-// 0 = 禁用等待窗口(默认全 AI 房间);60(默认) = 混合房间等待 60s。
-
-// quarantineSkipDepthLimit is the maximum number of recursive
-// tryDispatchQuarantinedActingSkip calls allowed in a single lock-held chain
-// before we bail out. Empirically a healthy chain dispatches at most a
-// handful of skips before the phase transitions; 50 is well above normal
-// traffic but still bounded — every recursive call was identical (same seat,
-// same skip) meaning a self-loop, which is exactly what we want to break.
-// BUG-WEREWOLF-P0-NEW-43.
-
-// cfgWerewolfRoomLLMConcurrency 读取房间级 LLM 并发上限(BUG-R242-P1-01)。
-// 0 / 负值 = 禁用(完全并发,§130 行为,仅用于调试)。见 room_config.go。
-
-// cfgWerewolfJudgeMode 2026-07-10 §125 增强 — 读取法官模式。
-
-// cfgWerewolfJudgeModelKey 2026-07-10 §125 增强 — 法官使用的 LLM model_key。
-
-// judgeKindForPhase 把对局 phase 映射为法官唤醒事件 kind(对齐 docs/狼人杀-重构方案/主持人Agent重构设计.md
-// §6.3 映射表)。秘密阶段(NightWolves/Seer/Witch)返回空字符串 → phaseWatchdogTick 不调
-// wake,法官在夜间静默观察。
-
-// cfgWerewolfEnableModelMemoryRecap 2026-07-10 §125 增强 — 是否注入上一局记忆。
-
 // ─────────────────── 观战者 Wake (2026-07-08 §13) ───────────────────
 
 // spectatorWakeInterval 是同一房间内"观战者发言触发 Agent wake"的最短间隔。
@@ -761,115 +676,6 @@ func (r *WerewolfRoom) SetOnTranscriptPublished(cb func(roomID string)) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.onTranscriptPublished = cb
-}
-
-// SetDeathRevealDelayMin 设置 §20260810-12 D2 死者身份「终局延时揭晓」配置(0/5/15)。
-// 由 RoomService.CreateRoomWithAgents 在房间创建时一次性调用;锁内变体,公开
-// 入口包锁委托。非法值自动归一化为 0(零回归)。仅影响前端 UI 层,SettlementModal
-// 倒计时;§135 RolePubliclyRevealed 单点判定不受影响。
-func (r *WerewolfRoom) SetDeathRevealDelayMin(min int) {
-	r.setDeathRevealDelayMinLocked(min)
-}
-
-// SetAgentDifficulty 设置 §20260811-09 U2 Agent 难度分级配置(easy/normal/hard/hell)。
-// 由 RoomService.CreateRoomWithAgents 在房间创建时一次性调用;锁内变体,公开
-// 入口包锁委托。非法 / 空值自动归一化为 normal(零回归)。
-func (r *WerewolfRoom) SetAgentDifficulty(difficulty string) {
-	r.setAgentDifficultyLocked(difficulty)
-}
-
-// setAgentDifficultyLocked 锁内变体(§92a)。调用方必须已持 r.mu。
-func (r *WerewolfRoom) setAgentDifficultyLocked(difficulty string) {
-	r.agentDifficulty = string(NormalizeAgentDifficulty(difficulty))
-}
-
-// DifficultyCoinMultiplierX10Locked 返回当前房间难度档位对应的胜方金币倍率(×10)。
-// 必须在持有 r.mu 时调用(§92a);由 EmitGameOver 内 settleBots/settleHumans
-// 读取作为结算因子。败方扣款不受倍率影响 —— 仅胜方收益被放大。
-func (r *WerewolfRoom) DifficultyCoinMultiplierX10Locked() int64 {
-	return int64(ProfileFor(AgentDifficulty(r.agentDifficulty)).CoinMultiplierX10)
-}
-
-// SetDeathRevealDelayMinLocked 锁内变体(§92a)。调用方必须已持 r.mu。
-func (r *WerewolfRoom) setDeathRevealDelayMinLocked(min int) {
-	switch min {
-	case 0, 5, 15:
-		r.deathRevealDelayMin = min
-	default:
-		r.deathRevealDelayMin = 0
-	}
-}
-
-// §20260811-04 U2 — 人设倾向参数 setter。
-// 由 RoomService.CreateRoomWithAgents 在房间创建时一次性调用。
-// mode/presetKey 非枚举值自动归一化为默认(uniform + logical);
-// customVec 仅 mode="custom" 时使用,其他模式忽略。
-func (r *WerewolfRoom) SetAgentPersonality(mode, presetKey string, customVec *wwplayer.PersonalityVector) {
-	r.setAgentPersonalityLocked(mode, presetKey, customVec)
-}
-
-// setAgentPersonalityLocked 是 SetAgentPersonality 的锁内变体(§92a)。
-func (r *WerewolfRoom) setAgentPersonalityLocked(mode, presetKey string, customVec *wwplayer.PersonalityVector) {
-	switch mode {
-	case PersonalityModeUniform, PersonalityModeRandom, PersonalityModeCustom:
-		r.personalityMode = mode
-	default:
-		r.personalityMode = PersonalityModeUniform
-	}
-	switch presetKey {
-	case "logical", "emotional", "aggressive", "cautious", "showman":
-		r.personalityPresetKey = presetKey
-	default:
-		r.personalityPresetKey = "logical"
-	}
-	if r.personalityMode == PersonalityModeCustom && customVec != nil {
-		clamped := customVec.Clamp()
-		r.personalityCustomVec = &clamped
-	} else {
-		r.personalityCustomVec = nil
-	}
-}
-
-// PersonalitySnapshotLocked 返回房间级人设配置(供 view.go / 前端展示)。
-// 返回值是 (mode, preset_key, custom_vector 副本);调用方不持有 r.mu。
-func (r *WerewolfRoom) PersonalitySnapshotLocked() (string, string, *wwplayer.PersonalityVector) {
-	if r == nil {
-		return PersonalityModeUniform, "logical", nil
-	}
-	if r.personalityMode == "" {
-		return PersonalityModeUniform, "logical", nil
-	}
-	if r.personalityMode == PersonalityModeCustom && r.personalityCustomVec != nil {
-		vecCopy := *r.personalityCustomVec
-		return r.personalityMode, r.personalityPresetKey, &vecCopy
-	}
-	return r.personalityMode, r.personalityPresetKey, nil
-}
-
-// cipherLocked 返回房间暗号索引,懒初始化(与 wolfPack/informationLedger 同模式)。
-// §92a 锁约束:调用方必须已持 r.mu。
-func (r *WerewolfRoom) cipherLocked() *WolfPackCipher {
-	if r.wolfPackCipher == nil {
-		r.wolfPackCipher = NewWolfPackCipher()
-	}
-	return r.wolfPackCipher
-}
-
-// WolfPackCipherSnapshotLocked 返回暗号索引(供 buildAgentContextLocked / view.go 透传)。
-// nil room 安全;非 nil room 返回懒初始化后的索引。
-func (r *WerewolfRoom) WolfPackCipherSnapshotLocked() *WolfPackCipher {
-	if r == nil {
-		return nil
-	}
-	return r.cipherLocked()
-}
-
-// ResetWolfPackCipherLocked 清空暗号索引(restartGameLocked 重开局时调用)。
-func (r *WerewolfRoom) ResetWolfPackCipherLocked() {
-	if r == nil || r.wolfPackCipher == nil {
-		return
-	}
-	r.wolfPackCipher.Reset()
 }
 
 func (r *WerewolfRoom) SeatOf(userID string) (Seat, bool) {

@@ -57,6 +57,11 @@ func (f *texSeaterRecorder) SetAgentDifficulty(gameKind, roomID string, difficul
 	return nil
 }
 
+// SetRevealRoleOnDeath §20260830-01 — 接口新方法,测试替身空实现。
+func (f *texSeaterRecorder) SetRevealRoleOnDeath(gameKind, roomID string, enabled bool) *errcode.Error {
+	return nil
+}
+
 func (f *texSeaterRecorder) SetCommentaryConfig(gameKind, roomID string, cfg *CommentaryConfig) *errcode.Error {
 	f.setCommentaryCalls++
 	return nil

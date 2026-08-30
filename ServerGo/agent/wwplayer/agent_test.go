@@ -724,7 +724,7 @@ func TestShouldAutoSkip_SpeakPhase(t *testing.T) {
 // 三段,且包含核心的 13 人配置、胜利条件、工具列表关键字。历史冗长引导(
 // 复盘 / 欺骗 / 情绪 / 阶段时钟)已删除,不再要求出现在 system 字段中。
 func TestSystemPrompt_ContainsCoreSections(t *testing.T) {
-	blocks := wwplayer.BuildSystemPrompt("", wwplayer.PersonalityVector{}, "", "")
+	blocks := wwplayer.BuildSystemPrompt("", wwplayer.PersonalityVector{}, "", "", false)
 	if len(blocks) == 0 {
 		t.Fatal("BuildSystemPrompt returned no blocks")
 	}
@@ -779,7 +779,7 @@ func TestSystemPrompt_ContainsCoreSections(t *testing.T) {
 // 此前该函数已定义但从未调用(grep prompt.go 返回 0),LLM 只靠 tool schema description,
 // 调用率 <30%。加入 system 级硬约束后应推到 90%+。
 func TestSystemPrompt_ContainsEmotionSwitchSpeakRule(t *testing.T) {
-	blocks := wwplayer.BuildSystemPrompt("", wwplayer.PersonalityVector{}, "", "")
+	blocks := wwplayer.BuildSystemPrompt("", wwplayer.PersonalityVector{}, "", "", false)
 	if len(blocks) == 0 {
 		t.Fatal("BuildSystemPrompt returned no blocks")
 	}

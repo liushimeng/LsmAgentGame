@@ -258,6 +258,14 @@ type WerewolfConfig struct {
 	// 可选值:0(立即揭晓,旧行为零回归)/ 5 / 15。=0 走代码内常量 0。
 	DeathRevealDelayMinDefault int `json:"death_reveal_delay_min_default"`
 
+	// RevealRoleOnDeathDefault §20260830-01 — 「死亡亮身份」建房默认值。
+	// nil(未配置)= true(死亡即公开身份,娱乐局默认);显式 false = 新建房
+	// 默认保留 §135 竞技规则(死者身份牌不翻开)。建房请求携带
+	// reveal_role_on_death 时以请求为准(三态 *bool),本默认仅兜底。
+	// 采用 *bool 而非裸 bool:bool 零值无法区分「未写」与「显式 false」,
+	// 沿用 WerewolfRoom.RumorsEnabled 的三态指针惯用法。
+	RevealRoleOnDeathDefault *bool `json:"reveal_role_on_death_default,omitempty"`
+
 	// 2026-07-23 R187-1 新增 — filling 阶段房间回收阈值(秒)。
 	// 狼人杀房间创建后停在 PhaseFilling(等人入座)超过该秒数、且
 	// hub 上无任何人类玩家/观察者连接时,由 janitor 周期的
@@ -1116,6 +1124,13 @@ func applyDefaults(c *Config) {
 	// 2026-07-23 R187-1 新增 — filling 阶段回收阈值默认 5 分钟。
 	if c.Werewolf.FillingReaperSec == 0 {
 		c.Werewolf.FillingReaperSec = 300
+	}
+
+	// §20260830-01 — 「死亡亮身份」建房默认 true(nil = 未配置 → 显式置 true;
+	// conf 显式写 false 时保留指针值,使竞技局可全局默认关闭)。
+	if c.Werewolf.RevealRoleOnDeathDefault == nil {
+		v := true
+		c.Werewolf.RevealRoleOnDeathDefault = &v
 	}
 
 	// 2026-07-14 BUG-R116-03 — 同一座位单轮发言最小间隔默认 60s。

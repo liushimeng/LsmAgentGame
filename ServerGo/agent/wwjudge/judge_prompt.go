@@ -67,6 +67,20 @@ const judgeSystemBase = `【法官身份 — 硬约束】(2026-07-10 §123 + 202
 // 动态追加「当前应宣告什么」的引导。
 func BuildJudgeSystemPrompt(phase string, snap GameSnapshot) []llm.SystemBlock {
 	body := judgeSystemBase
+	// §20260830-01 §5.2 — ❹ 公告术语块的双模式补充段:
+	//   开启 = ❹b(死亡亮身份):死亡/处决宣告必须当场公布身份牌,角色名只能取
+	//          user prompt 的 revealed_dead_roles 服务端权威清单;
+	//   关闭 = ❹c(竞技规则 §135):宣告严禁出现任何角色名,仅事件本身即公开
+	//          身份(白名单)时除外。零回归(旧版无此段,关闭语义与旧版一致)。
+	if snap.RevealRoleOnDeath {
+		body += "\n❹b 【死亡亮身份 — 本局开启】任何玩家死亡/处决时,你必须当场公布其身份牌," +
+			"格式「N 号〔处决/死亡〕〔死因〕,身份是〔角色名〕」。user prompt 的 revealed_dead_roles" +
+			"是服务端权威已公开清单,直接引用;禁止编造未在清单中的身份。\n"
+	} else {
+		body += "\n❹c 【死亡亮身份 — 本局关闭(§135 竞技规则)】普通死亡的宣告只公布座位与死因," +
+			"严禁在宣告中出现任何角色名;仅事件本身即公开身份(白痴翻牌/狼人自爆/猎人开枪/" +
+			"骑士决斗/猎魔人发动/终局复盘)时才可出现角色名。\n"
+	}
 	body += "\n═══════════════════════════════════════════════════════════════\n【当前阶段】" + phase
 	if len(snap.AliveSeats) > 0 {
 		body += " · 存活 " + itoa(len(snap.AliveSeats)) + " 人 / 死亡 " + itoa(len(snap.DeadSeats)) + " 人"
@@ -100,7 +114,14 @@ func BuildJudgeSystemPrompt(phase string, snap GameSnapshot) []llm.SystemBlock {
 	case "night_demon_hunter", "PhaseNightDemonHunter":
 		body += "【应宣告】猎魔人狩猎阶段(秘密阶段)。猎魔人狩猎 — 狩猎目标对所有人不可见,法官本阶段保持静默。"
 	case JudgePendingDawnAnnounce:
-		body += "【应宣告】黎明已至,公布昨夜伤亡(若有人死亡)。简洁地告知:昨夜 X 号 / Y 号死亡。"
+		// §20260830-01 §5.2 — 黎明宣告双模式:开启时公布死因**与身份**
+		// (角色名只能取 revealed_dead_roles 权威清单);关闭时保持现行措辞。
+		if snap.RevealRoleOnDeath {
+			body += "【应宣告】黎明已至,公布昨夜伤亡(若有人死亡)。简洁地告知:昨夜 X 号死亡(死因)," +
+				"身份是〔角色名〕 — 角色名只能取 user prompt 的 revealed_dead_roles 服务端权威清单,严禁凭空猜测。"
+		} else {
+			body += "【应宣告】黎明已至,公布昨夜伤亡(若有人死亡)。简洁地告知:昨夜 X 号 / Y 号死亡。"
+		}
 	case JudgePendingSheriffStart:
 		body += "【应宣告】进入警长竞选阶段(Day 1)。提醒玩家:有技能的警长/预言家优先参选。"
 	case JudgePendingSpeakStart:
@@ -108,7 +129,15 @@ func BuildJudgeSystemPrompt(phase string, snap GameSnapshot) []llm.SystemBlock {
 	case JudgePendingVoteStart:
 		body += "【应宣告】进入投票放逐阶段。提醒玩家:全员投票后由 host driver 结算。"
 	case JudgePendingDeathAnnounce:
-		body += "【应宣告】玩家死亡。用\"处决\"或\"死亡\"区分语义(主动投票=处决;夜间=死亡)。"
+		// §20260830-01 §5.2 — 死亡宣告双模式:开启时 declare_cause 的 text
+		// 必须同时含身份(格式同 ❹b);关闭时保持现行措辞(不得出现身份)。
+		if snap.RevealRoleOnDeath {
+			body += "【应宣告】玩家死亡。用\"处决\"或\"死亡\"区分语义(主动投票=处决;夜间=死亡)," +
+				"并当场公布死者身份,格式「N 号〔处决/死亡〕〔死因〕,身份是〔角色名〕」" +
+				" — 角色名只能取 user prompt 的 revealed_dead_roles 服务端权威清单,严禁编造未在清单中的身份。"
+		} else {
+			body += "【应宣告】玩家死亡。用\"处决\"或\"死亡\"区分语义(主动投票=处决;夜间=死亡)。"
+		}
 	case JudgePendingSheriffStreamSettle:
 		body += "【应宣告】警徽流结算完成。简述:警徽已移交 X 号 / 警徽被撕。"
 	case JudgePendingIdiotReveal:
@@ -242,6 +271,16 @@ func BuildJudgeUserPrompt(phase string, snap GameSnapshot) string {
 		s.WriteString(snap.LastDeathCause)
 		s.WriteString(" verdict=")
 		s.WriteString(snap.LastDeathVerdict)
+		s.WriteString("\n")
+	}
+	// §20260830-01 §5.2 — 死亡亮身份开启时,把服务端权威「已公开死者身份」清单
+	// 写进 user prompt:法官宣告的角色名只能取自这里(❹b/黎明/死亡宣告指令均
+	// 引用本清单,禁止凭空猜测)。关闭时不渲染(关闭 = 竞技规则零改动)。
+	if snap.RevealRoleOnDeath && len(snap.RevealedDeadRoles) > 0 {
+		s.WriteString("revealed_dead_roles(已公开死者身份,宣告可直接引用):")
+		for _, f := range snap.RevealedDeadRoles {
+			s.WriteString(fmt.Sprintf(" %d号=%s(%s/%s)", f.Seat+1, f.Role, f.Verdict, f.Cause))
+		}
 		s.WriteString("\n")
 	}
 	if snap.IsHumanInRoom {

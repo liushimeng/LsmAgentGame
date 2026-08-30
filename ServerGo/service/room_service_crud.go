@@ -8,10 +8,13 @@ import (
 	"fmt"
 	mrand "math/rand/v2"
 	"strings"
+
+	"LsmAgentGame/config"
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/logger"
 	"LsmAgentGame/models"
 	"LsmAgentGame/util"
+
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -161,10 +164,25 @@ func (s *RoomService) getOrCreateBotUserID(ctx context.Context, suffix string) (
 }
 
 func (s *RoomService) CreateRoom(gameKind, userID, name string) (*RoomDetail, *errcode.Error) {
-	return s.CreateRoomWithAgents(context.Background(), gameKind, userID, name, nil, nil, "", nil, "", nil)
+	return s.CreateRoomWithAgents(context.Background(), gameKind, userID, name, nil, nil, "", nil, "", nil, nil)
 }
 
-func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID, name string, agentSeats []AgentSeatConfig, judge *JudgeConfig, agentDifficulty string, commentary *CommentaryConfig, creatorRole string, texasCfg *TexasTableConfig) (*RoomDetail, *errcode.Error) {
+// resolveRevealRoleOnDeath §20260830-01 — 三态解析建房请求的「死亡亮身份」开关。
+//   - 显式 true / false → 以请求为准;
+//   - nil(未传 / 旧客户端)→ cfg.Werewolf.RevealRoleOnDeathDefault(默认 true;
+//     cfg 为 nil 或字段未配置时同样 true)。
+// 单独成函数以便单测覆盖三态(service 层全链路测试需 DB)。
+func resolveRevealRoleOnDeath(revealRoleOnDeath *bool, cfg *config.Config) bool {
+	if revealRoleOnDeath != nil {
+		return *revealRoleOnDeath
+	}
+	if cfg == nil || cfg.Werewolf.RevealRoleOnDeathDefault == nil {
+		return true
+	}
+	return *cfg.Werewolf.RevealRoleOnDeathDefault
+}
+
+func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID, name string, agentSeats []AgentSeatConfig, judge *JudgeConfig, agentDifficulty string, commentary *CommentaryConfig, creatorRole string, texasCfg *TexasTableConfig, revealRoleOnDeath *bool) (*RoomDetail, *errcode.Error) {
 	// creatorRole (2026-08-06 §20260806-03 自选角色):空/"random" = 随机。
 	// (原为可变参;2026-08-19 §德州扑克盲注透传 追加 texasCfg 参数时归一化为
 	// 普通参数 — Go 仅允许一个可变参且必须在末位。)
@@ -560,6 +578,25 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		zap.Int("agent_seats", len(agentSeats)),
 		zap.Int("creator_seat", creatorSeat),
 		zap.Any("seat_model_keys", seatModelSummary(agentSeats)))
+
+	// §20260830-01 — 房间级「死亡亮身份」开关落地。
+	// 必须在 RegisterAgentSeats 与下方 SyncSeat(→ JoinGame → ForceStartIfReady
+	// 发牌,newGameStateLocked 要读到开关)之前;独立于 agent_seats 分支是为了
+	// 纯人类狼人杀房间也能拿到解析后的开关(设计文档 §0.2:默认开启面向普通
+	// 玩家,不限于 AI 房)。werewolf_12/werewolf_7 历史兼容局同样生效。
+	// 显式 false → §135 竞技规则;nil → cfg 默认 true。
+	switch gameKind {
+	case "werewolf", "werewolf_13", "werewolf_12", "werewolf_7":
+		if s.agentSeater != nil {
+			enabled := resolveRevealRoleOnDeath(revealRoleOnDeath, s.cfg)
+			if e := s.agentSeater.SetRevealRoleOnDeath(gameKind, room.ID, enabled); e != nil {
+				// Non-fatal:房间 DB 行已创建;仅记录,不阻断建房。
+				logger.L().Warn("agent seater set reveal-role-on-death failed",
+					zap.String("room_id", room.ID),
+					zap.Int("code", e.Code))
+			}
+		}
+	}
 
 	// Mirror seats into the in-memory game manager. For rooms with agent
 	// seats, ORDER matters: we pre-register each occupied seat via the agent

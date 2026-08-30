@@ -47,6 +47,8 @@ import ReasoningChainsPanel from '@/components/werewolf/ReasoningChainsPanel';
 import GodModeView from '@/components/werewolf/GodModeView';
 // §20260812-03 U1 — 阵营胜率热力图面板。仅观战者可见,§132 隐私隔离。
 import { WinRateHeatmapPanel } from '@/components/werewolf/WinRateHeatmap';
+// §20260830-01 — 死亡身份公开:⚰ 死亡页 role chip 的阵营三档配色。
+import { roleTierOf } from '@/components/werewolf/roleFaction';
 // §20260813-02 U4 — 夜间血迹图(S2)。spectator-only 夜间行动空间可视化。
 import { NightBloodMap } from '@/components/werewolf/NightBloodMap';
 // §20260814-01 U1 — 三个「写好了却从未被 import」的面板接线(§126/§130 清算)。
@@ -294,22 +296,56 @@ function DeathsPanel({ gs, t, spectator }: SubPanelProps) {
   if (dead.length === 0) {
     return <div className="ww-history-panel__empty">{t('werewolf.history.deaths.empty')}</div>;
   }
+  // BUG-R233-P2-01 语义对齐(与上方 buildTimeline 同源):观战者仅终局
+  // (status==='over')放行角色名,对局中保持 R204 纵深防御。原实现无条件
+  // 遮蔽,终局复盘时 ⚱ 页全是「未知」与时间轴不一致 —— 随 §20260830-01
+  // 死亡身份公开一并对齐。
+  const isGameOver = gs.status === 'over';
+  const hideRole = spectator && !isGameOver;
   return (
     <div className="ww-history-deaths">
       <h4>{t('werewolf.history.deaths.title')}</h4>
       <ul className="ww-history-deaths__list">
-        {dead.map((d) => (
-          <li key={`${d.seat}-${d.day}`} className={`ww-history-deaths__row verdict-${d.verdict || 'death'}`}>
-            <span className="ww-history-deaths__day">D{d.day}</span>
-            <span className="ww-history-deaths__seat">#{d.seat + 1}</span>
-            {/* BUG-R204-SEC-01: 观战者不显示死亡玩家角色名。 */}
-            <span className="ww-history-deaths__role">{spectator ? t('werewolf.role.unknown' as any) : (d.role ? t(`werewolf.role.${d.role}` as any) : '?')}</span>
-            <span className="ww-history-deaths__cause">{d.cause}</span>
-            {d.verdict && (
-              <span className={`ww-history-deaths__verdict verdict-${d.verdict}`}>{d.verdict === 'execution' ? t('werewolf.verdict.execution' as any) : t('werewolf.verdict.death' as any)}</span>
-            )}
-          </li>
-        ))}
+        {dead.map((d) => {
+          // §20260830-01 — d.role 非空(服务端脱敏字段,RolePubliclyRevealed
+          // 单点判定)= 身份已对全场公开 → 阵营三档 chip;空 → 「身份未公开」
+          // 灰 chip 占位,避免空白被误读为缺数据。前端不得用
+          // reveal_role_on_death 布尔自行推导可见性(§1.2 不变式 1)。
+          // 未知角色枚举(已退役角色的历史回放)时 translate 回落为 key 原文,
+          // 改显原始枚举值。
+          const roleI18nKey = `werewolf.role.${d.role}` as any;
+          const translated = d.role ? t(roleI18nKey) : '';
+          const roleLabel = d.role
+            ? (translated !== `werewolf.role.${d.role}` ? translated : d.role)
+            : '';
+          const tier = roleTierOf(d.role);
+          const showRoleChip = !hideRole && !!roleLabel;
+          return (
+            <li key={`${d.seat}-${d.day}`} className={`ww-history-deaths__row verdict-${d.verdict || 'death'}`}>
+              <span className="ww-history-deaths__day">D{d.day}</span>
+              <span className="ww-history-deaths__seat">#{d.seat + 1}</span>
+              {showRoleChip ? (
+                <span
+                  className={
+                    'ww-history-deaths__role werewolf-seat__role-badge' +
+                    (tier ? ` werewolf-seat__role-badge--${tier}` : '')
+                  }
+                  title={t('werewolf.dead_list.role_revealed' as any)}
+                >
+                  {roleLabel}
+                </span>
+              ) : (
+                <span className="ww-history-deaths__role werewolf-seat__role-badge werewolf-seat__role-badge--hidden">
+                  {t('werewolf.dead_list.role_hidden' as any)}
+                </span>
+              )}
+              <span className="ww-history-deaths__cause">{d.cause}</span>
+              {d.verdict && (
+                <span className={`ww-history-deaths__verdict verdict-${d.verdict}`}>{d.verdict === 'execution' ? t('werewolf.verdict.execution' as any) : t('werewolf.verdict.death' as any)}</span>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

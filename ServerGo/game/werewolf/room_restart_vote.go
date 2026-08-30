@@ -275,7 +275,10 @@ func (m *WerewolfManager) restartGameLocked(r *WerewolfRoom) *errcode.Error {
 	prevSeatCount := r.State.SeatCount // 保留本局人数(7 / 12 / 13)
 
 	// 重新分配角色 + 进 PhasePreWoles(StartGame)
-	newState := NewGame(oldSeed)
+	// §20260830-01: 经 newGameStateLocked 拷贝房间级「死亡亮身份」开关,
+	// 同时清零死亡公开幂等簿记(新一局重新累计)。
+	newState := r.newGameStateLocked(oldSeed)
+	r.resetDeathRevealBookkeepingLocked()
 	// 复用上一局人数(发牌选择 7 / 12 / 13 人牌组)
 	switch prevSeatCount {
 	case 7:

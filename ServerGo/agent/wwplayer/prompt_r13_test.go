@@ -29,7 +29,7 @@ import (
 
 func TestBuildSystemPrompt_R13_FutureTenseConstraintPresent(t *testing.T) {
 	zero := PersonalityVector{}
-	blocks := BuildSystemPrompt("", zero, "", "")
+	blocks := BuildSystemPrompt("", zero, "", "", false)
 	if len(blocks) != 1 {
 		t.Fatalf("want 1 system block, got %d", len(blocks))
 	}
@@ -44,7 +44,7 @@ func TestBuildSystemPrompt_R13_FutureTenseConstraintPresent(t *testing.T) {
 
 func TestBuildSystemPrompt_R13_PastTenseGuidance(t *testing.T) {
 	zero := PersonalityVector{}
-	blocks := BuildSystemPrompt("", zero, "", "")
+	blocks := BuildSystemPrompt("", zero, "", "", false)
 	text := blocks[0].Text
 
 	// 必含过去时引导:「昨夜我查验了 X 号」是预言家标准播报句式
@@ -62,7 +62,7 @@ func TestBuildSystemPrompt_R13_PastTenseGuidance(t *testing.T) {
 
 func TestBuildSystemPrompt_R13_SkillVerbsCoverage(t *testing.T) {
 	zero := PersonalityVector{}
-	blocks := BuildSystemPrompt("", zero, "", "")
+	blocks := BuildSystemPrompt("", zero, "", "", false)
 	text := blocks[0].Text
 
 	// 6 类神职动词必须全部出现在禁词表中(查/验/守/毒/解/护)
@@ -89,7 +89,7 @@ func TestBuildSystemPrompt_R13_SkillVerbsCoverage(t *testing.T) {
 
 func TestBuildSystemPrompt_R13_RejectHint(t *testing.T) {
 	zero := PersonalityVector{}
-	blocks := BuildSystemPrompt("", zero, "", "")
+	blocks := BuildSystemPrompt("", zero, "", "", false)
 	text := blocks[0].Text
 
 	// reject hint 引导:LLM 失败时知道往哪改
@@ -103,9 +103,9 @@ func TestBuildSystemPrompt_R13_DoesNotBreakCachePrefix(t *testing.T) {
 	// difficulty 段字节级缓存命中。
 	zero := PersonalityVector{}
 	// 零版(无 portrait/无 personality/无 difficultyDirective)
-	zeroVer := BuildSystemPrompt("", zero, "", "")
+	zeroVer := BuildSystemPrompt("", zero, "", "", false)
 	// portrait 版(只 portrait 段变,前缀不变)
-	portraitVer := BuildSystemPrompt("本模型 100 局胜率 60%", zero, "", "")
+	portraitVer := BuildSystemPrompt("本模型 100 局胜率 60%", zero, "", "", false)
 	// prefix 校验:portraitVer 必须以 zeroVer 为前缀(只追加,不在中间插入)
 	if !strings.HasPrefix(portraitVer[0].Text, zeroVer[0].Text) {
 		t.Errorf("portrait 必须追加到末尾(§20260810-10 U2 cache 纪律),R13 段插入破坏了 prefix")

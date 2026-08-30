@@ -25,16 +25,17 @@ import (
 // BuildSystemPromptBytes 构造期一次性调用,返回冻结的 system prompt 字节快照。
 //
 // 字节稳定保证:
-//   - 同一 selfPortrait / personality / personalityPresetKey / difficultyDirective
-//     多次调用返回**完全相同**的 []byte (sha256 一致)。
+//   - 同一 selfPortrait / personality / personalityPresetKey / difficultyDirective /
+//     revealRoleOnDeath(§20260830-01,整局不变)多次调用返回**完全相同**的
+//     []byte (sha256 一致)。
 //   - BuildSystemPrompt 内部依序拼接:身份 → 任务目标 → 规则 → persona → 自画像
 //     → 难度指令;每次拼接都用 fmt.Sprintf + 常量字符串,无随机 / 无时间 / 无 seat
 //     依赖 → 跨局字节稳定 → provider cache 自动命中。
 //
 // 返回值供 Agent.systemPromptBytes 字段保存,运行时 invariant I11 比对 req.System
 // 字节与该快照,保证跨轮字节一致。
-func BuildSystemPromptBytes(selfPortrait string, personality PersonalityVector, personalityPresetKey string, difficultyDirective string) []byte {
-	blocks := BuildSystemPrompt(selfPortrait, personality, personalityPresetKey, difficultyDirective)
+func BuildSystemPromptBytes(selfPortrait string, personality PersonalityVector, personalityPresetKey string, difficultyDirective string, revealRoleOnDeath bool) []byte {
+	blocks := BuildSystemPrompt(selfPortrait, personality, personalityPresetKey, difficultyDirective, revealRoleOnDeath)
 	// SystemBlock 没有自带 MarshalJSON,直接用 json.Marshal 序列化即可
 	// (json 字段 tag 与 Anthropic wire 一致)。
 	var total []byte
@@ -47,8 +48,8 @@ func BuildSystemPromptBytes(selfPortrait string, personality PersonalityVector, 
 
 // HashSystemPromptBytes 返回 BuildSystemPromptBytes 的 sha256 hex,用于
 // 跨构造期一致性断言(测试用)。
-func HashSystemPromptBytes(selfPortrait string, personality PersonalityVector, personalityPresetKey string, difficultyDirective string) string {
-	b := BuildSystemPromptBytes(selfPortrait, personality, personalityPresetKey, difficultyDirective)
+func HashSystemPromptBytes(selfPortrait string, personality PersonalityVector, personalityPresetKey string, difficultyDirective string, revealRoleOnDeath bool) string {
+	b := BuildSystemPromptBytes(selfPortrait, personality, personalityPresetKey, difficultyDirective, revealRoleOnDeath)
 	sum := sha256.Sum256(b)
 	return hexEncode(sum[:])
 }

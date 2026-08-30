@@ -940,7 +940,8 @@ func roleMatchesPhase(p Phase, role Role) bool {
 
 func (r *WerewolfRoom) State_Begin() *GameState {
 	if r.State == nil {
-		r.State = NewGame(time.Now().UnixNano())
+		// §20260830-01: 经 newGameStateLocked 拷贝房间级「死亡亮身份」开关。
+		r.State = r.newGameStateLocked(time.Now().UnixNano())
 	}
 	return r.State
 }

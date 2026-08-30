@@ -424,6 +424,15 @@ export interface CreateRoomOptions {
   // 2026-08-11 §20260811-09 U2 — Agent 难度分级。easy=新手 / normal=默认 /
   // hard=熟练 / hell=高手。未知值后端归一化为 normal(零回归)。
   agent_difficulty?: 'easy' | 'normal' | 'hard' | 'hell';
+  // 2026-08-30 §20260830-01 — 房间级「死亡亮身份」开关(仅 werewolf 生效)。
+  // true(默认)= 任何玩家死亡时身份对全场公开;false = §135 竞技规则
+  // (死者身份牌不翻开)。后端 *bool 三态:不传 = 默认 true。
+  reveal_role_on_death?: boolean;
+  // 2026-08-11 §20260811-09 U1 — AI 实时解说(仅观战者可见,仅 werewolf)。
+  // 形状对齐后端 service.CommentaryConfig(wire: commentary{enabled,style,
+  // model_key});后端 *Commentary 指针语义:未勾选不传(nil = 关闭默认),
+  // style 空/未知归一化为 "pro",model_key 空则复用法官模型再随机。
+  commentary?: { enabled?: boolean; style?: 'pro' | 'fun'; model_key?: string };
   // 2026-08-19 §德州扑克盲注透传 — texasholdem only。两字段必须同时设置或
   // 同时缺省;缺省后端用默认值 big_blind=200 / start_stack=10000。
   // big_blind ∈ {10,50,200,1000,5000};start_stack ∈ [20bb,100bb]。

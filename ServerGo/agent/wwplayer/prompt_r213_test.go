@@ -25,7 +25,7 @@ import (
 // 已注入「观战者私聊」引导,且引导文案与 formatWhisperLabel 渲染的
 // 「观战-XX → 你」标签完全一致(标签不一致 = bot 学不到正确的识别特征)。
 func TestR213_SystemPrompt_ContainsSpectatorWhisperGuidance(t *testing.T) {
-	blocks := BuildSystemPrompt("", PersonalityVector{}, "", "")
+	blocks := BuildSystemPrompt("", PersonalityVector{}, "", "", false)
 	if len(blocks) == 0 {
 		t.Fatal("BuildSystemPrompt 返回空 blocks")
 	}

@@ -95,6 +95,14 @@ export function WerewolfLobbyPage() {
     judge?: NonNullable<CreateRoomOptions['judge']>,
     creatorRole?: string,
     agentDifficulty?: NonNullable<CreateRoomOptions['agent_difficulty']>,
+    // 2026-08-30 §20260830-01 — 房间级「死亡亮身份」开关(undefined = 不提交,
+    // 后端 *bool 缺省默认 true;RoomCreateModal 恒显式提交 true/false)。
+    revealRoleOnDeath?: boolean,
+    // 2026-08-30 — AI 实时解说配置(RoomCreateModal ROW3 勾选启用才有值;
+    // undefined = 不提交,后端 *Commentary nil = 关闭默认)。
+    // §130 修复:onSubmit 适配器此前丢弃 req.commentary,弹窗勾选
+    // 「AI 解说」从未到达后端。
+    commentary?: NonNullable<CreateRoomOptions['commentary']>,
   ): Promise<boolean> => {
     setLoading(true);
     setErr('');
@@ -112,8 +120,22 @@ export function WerewolfLobbyPage() {
             ...(agentDifficulty && agentDifficulty !== 'normal'
               ? { agent_difficulty: agentDifficulty }
               : {}),
+            // §20260830-01 — 死亡亮身份开关透传(RoomCreateModal ROW4)。
+            ...(revealRoleOnDeath !== undefined
+              ? { reveal_role_on_death: revealRoleOnDeath }
+              : {}),
+            // 2026-08-30 — AI 解说透传(仅勾选启用才有值;弹窗 UI 本就只在
+            // agentCount>0 时渲染解说开关,与 judge 同策略落 agent 分支)。
+            ...(commentary ? { commentary } : {}),
           }
-        : { name, ...(creatorRole ? { creator_role: creatorRole } : {}) };
+        : {
+            name,
+            ...(creatorRole ? { creator_role: creatorRole } : {}),
+            // §20260830-01 — 全人类房同样生效(规则级开关,与 AI 数量无关)。
+            ...(revealRoleOnDeath !== undefined
+              ? { reveal_role_on_death: revealRoleOnDeath }
+              : {}),
+          };
       const detail = await roomService.create('werewolf', opts);
       setGameOver(null);
       setCreateModalOpen(false);
@@ -290,7 +312,7 @@ export function WerewolfLobbyPage() {
       <RoomCreateModal
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
-        onSubmit={(req) => handleCreateWithAgents(req.agent_seats, req.name, req.judge, req.creator_role, req.agent_difficulty)}
+        onSubmit={(req) => handleCreateWithAgents(req.agent_seats, req.name, req.judge, req.creator_role, req.agent_difficulty, req.reveal_role_on_death, req.commentary)}
         submitting={loading}
       />
       {err && <div className="error">{err}</div>}

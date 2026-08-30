@@ -373,6 +373,15 @@ export interface WerewolfGameState {
   trust_trace?: Array<{ seat: number; day: number; score: number }>;
   /** 死者身份终局延时揭晓分钟数（0/5/15；0 时 omitempty）。 */
   death_reveal_delay_min?: number;
+  /**
+   * §20260830-01 — 房间级「死亡亮身份」开关（true = 死亡即公开身份）。
+   * 后端恒定下发（非 omitempty）。
+   *
+   * ⚠️ §135 / §20260830-01 §1.2 不变式 1：前端**不得**据此布尔自行推导某座位
+   * 身份是否可见 —— 身份可见性以服务端脱敏字段（`players[].role` /
+   * `dead_list[].role` 非空）为唯一事实来源；本字段仅用于文案/回显。
+   */
+  reveal_role_on_death?: boolean;
   /** §20260811-09 U2 — Agent 难度档位（easy/normal/hard/hell；normal 时 omitempty）。 */
   agent_difficulty?: 'easy' | 'normal' | 'hard' | 'hell';
   /** §20260811-09 U1 — AI 实时解说 feed（spectator 专属；最近 20 条 + seq 单调递增）。 */

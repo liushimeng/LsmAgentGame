@@ -36,6 +36,11 @@ type createRoomRequest struct {
 	// 200/10000。big_blind ∈ {10,50,200,1000,5000};start_stack ∈ [20bb,100bb]。
 	BigBlind   int `json:"big_blind,omitempty"`
 	StartStack int `json:"start_stack,omitempty"`
+	// RevealRoleOnDeath §20260830-01 — 房间级「死亡亮身份」开关(仅 werewolf
+	// 生效,其他 kind 静默忽略,与 agent_seats 同策略)。
+	// *bool 三态:nil(未传 / 旧客户端)= 走 cfg.Werewolf.RevealRoleOnDeathDefault
+	// (默认 true,死亡即公开身份);显式 false = 关闭(保留 §135 竞技规则)。
+	RevealRoleOnDeath *bool `json:"reveal_role_on_death,omitempty"`
 }
 
 // RoomAPI serves the room management endpoints.
@@ -119,7 +124,7 @@ func (a *RoomAPI) Create(c *gin.Context) {
 	if req.BigBlind != 0 || req.StartStack != 0 {
 		texasCfg = &service.TexasTableConfig{BigBlind: req.BigBlind, StartStack: req.StartStack}
 	}
-	detail, e := a.svc.CreateRoomWithAgents(c.Request.Context(), kind, userID, req.Name, req.AgentSeats, req.Judge, req.AgentDifficulty, req.Commentary, req.CreatorRole, texasCfg)
+	detail, e := a.svc.CreateRoomWithAgents(c.Request.Context(), kind, userID, req.Name, req.AgentSeats, req.Judge, req.AgentDifficulty, req.Commentary, req.CreatorRole, texasCfg, req.RevealRoleOnDeath)
 	if e != nil {
 		c.JSON(http.StatusOK, gin.H{"code": e.Code, "message": e.Message})
 		return

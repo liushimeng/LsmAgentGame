@@ -325,6 +325,42 @@ type GameSnapshot struct {
 	Winner       string   // 对局胜方(仅当 Status=over 时有意义;否则空)
 	IsHumanInRoom bool    // 房间是否有真人玩家(影响 prompt 文案)
 	PhaseDeadlineSec int  // 当前 phase 距离 deadline 还剩多少秒(由 room 端 timestamp 换算)
+
+	// RevealRoleOnDeath §20260830-01 — 本局「死亡亮身份」开关。
+	// true = 黎明/死亡宣告必须带身份,格式「N 号〔处决/死亡〕〔死因〕,身份是〔角色名〕」;
+	// false = §135 竞技规则,宣告严禁出现任何角色名(白名单事件除外)。
+	// prompt 双模式与 fallback 拼装均由此驱动。
+	RevealRoleOnDeath bool
+	// RevealedDeadRoles §20260830-01 — 已对全场公开身份的死亡座位(按座位序)。
+	// 开关关闭时仅含 ②~⑥ 白名单命中者(自爆/猎人开枪/骑士决斗/猎魔人/白痴翻牌后死亡);
+	// 开启时含全部确已死亡座位。法官全知(WolfSeats),但宣告引用的角色名
+	// **只能**取自本清单(服务端权威,禁止编造)。
+	RevealedDeadRoles []DeadRoleFact
+}
+
+// DeadRoleFact §20260830-01 — 一条已公开的死亡身份事实(法官宣告与 prompt 用)。
+// 数据由 game/werewolf.buildDeadRoleFactsLocked(单点判定 RolePubliclyRevealed 派生)
+// 准备,buildJudgeSnapshotLocked 投影进 GameSnapshot;此处独立定义避免
+// agent→werewolf 循环 import(同 InfluenceBrief 镜像模式,§133)。
+type DeadRoleFact struct {
+	Seat    int    // 座位号(0-indexed;宣告时 +1 转对外 1-indexed)
+	Role    string // 角色 key(werewolf/seer/witch/hunter/idiot/guard/knight/demon_hunter/villager)
+	Cause   string // wolf/vote/witch_poison/hunter/suicide/duel/demon_hunter_misjudge/disconnected
+	Verdict string // execution / death
+}
+
+// judgeRoleNameCN §20260830-01 §5.4 — 法官 fallback 宣告(fallback 文本直达公屏,
+// 人类可读)用的角色中文名;engine roleNameCN 的 wwjudge 镜像。未命中回退原 key。
+var judgeRoleNameCN = map[string]string{
+	"werewolf":     "狼人",
+	"seer":         "预言家",
+	"witch":        "女巫",
+	"hunter":       "猎人",
+	"idiot":        "白痴",
+	"guard":        "守卫",
+	"knight":       "骑士",
+	"demon_hunter": "猎魔人",
+	"villager":     "平民",
 }
 
 // Run 法官主循环:从 events channel 读事件 → 调 LLM → 执行工具 → 记录 transcript。
@@ -671,10 +707,39 @@ func JudgeFallbackTextWithSnapshot(kind string, snap GameSnapshot) string {
 		}
 		facts += "存活 " + itoa(len(snap.AliveSeats)) + " / 死亡 " + itoa(len(snap.DeadSeats))
 	}
-	if facts == "" {
+	out := base
+	if facts != "" {
+		out += "(" + facts + ")"
+	}
+	// §20260830-01 §5.4 — 死亡亮身份 fallback(服务端拼装,不依赖 LLM):
+	// 开启时 dawn / death 两类宣告的 fallback 追加「已公开身份」段,数据取自
+	// 快照 RevealedDeadRoles(单点判定派生的服务端权威清单)—— 保证 LLM
+	// 挂掉/超时/quarantine 时公平性不塌(公共通道仍带身份)。
+	// 关闭时零改动:不追加任何角色名(与旧版输出一致)。
+	if snap.RevealRoleOnDeath && len(snap.RevealedDeadRoles) > 0 &&
+		(kind == JudgePendingDawnAnnounce || kind == JudgePendingDeathAnnounce) {
+		const maxShow = 3
+		seg := " 已公开身份:"
+		for i, f := range snap.RevealedDeadRoles {
+			if i >= maxShow {
+				seg += "等" + itoa(len(snap.RevealedDeadRoles)-maxShow) + "人"
+				break
+			}
+			if i > 0 {
+				seg += "、"
+			}
+			if cn, ok := judgeRoleNameCN[f.Role]; ok {
+				seg += itoa(f.Seat+1) + "号·" + cn
+			} else {
+				seg += itoa(f.Seat+1) + "号·" + f.Role
+			}
+		}
+		out += seg + "。"
+	}
+	if out == base {
 		return base
 	}
-	return base + "(" + facts + ")"
+	return out
 }
 
 // appendRecentString 把 x 追加到 s 末尾,保留最近 max 个。

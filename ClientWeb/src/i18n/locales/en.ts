@@ -1081,6 +1081,11 @@ const en: Dict = {
   // 2026-08-17 §20260817-02 — ROW2 all-human empty-state + ROW3 commentary collapsed hint.
   'werewolf.createModal.allHumanEmptyState': 'All-human room: no AI, no judge, pure human reasoning.',
   'werewolf.createModal.commentaryRowHint': 'Check to enable AI live commentary (spectator-only).',
+  // 2026-08-30 §20260830-01 — Room-level "reveal role on death" toggle (create modal ROW4) + dead-list role chip texts.
+  'werewolf.reveal_role_on_death.label': 'Reveal role on death',
+  'werewolf.reveal_role_on_death.hint': 'When enabled, the judge announces each victim\'s role the moment they die. Off keeps competitive rules (dead players\' roles stay hidden).',
+  'werewolf.dead_list.role_hidden': 'Role hidden',
+  'werewolf.dead_list.role_revealed': 'Role revealed',
   'werewolf.judge.activity.title': '📋 Activity',
   'werewolf.judge.activity.open': 'Expand▼',
   'werewolf.judge.activity.llmMs': 'LLM {ms} ms',

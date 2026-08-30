@@ -365,6 +365,20 @@ type GameContext struct {
 	// 由 buildAgentContextLocked 根据 r.State.Players[seat].Emotion 实时计算。
 	// 仅供 prompt.go 渲染「情绪影响推理」段,LLM 自由决定是否遵守(§128)。
 	EmotionReasoningWeights *EmotionReasoningWeightsSnapshot `json:"emotion_reasoning_weights,omitempty"`
+
+	// ─── 死亡亮身份 (2026-08-30 §20260830-01) ───
+	// RevealRoleOnDeath 本局房间级「死亡亮身份」开关(system prompt §135 规则段
+	// 双模式切换用)。true = 任何玩家死亡/处决时身份对全场公开;false = §135
+	// 竞技规则(死者身份牌不翻开)。由 buildAgentContextLocked 从
+	// gs.RevealRoleOnDeath 拷贝,整局不变(prompt 字节稳定,§20260813-05 U5)。
+	RevealRoleOnDeath bool `json:"reveal_role_on_death,omitempty"`
+	// RevealedRoles 已对全场公开身份的座位(0-indexed)→ 角色名(role key,
+	// 如 "werewolf"/"hunter")。§135 单点判定:仅 RolePubliclyRevealed 命中的
+	// 座位进入(引擎侧 revealedRolesSnapshotLocked 备好),未公开座位不在 map
+	// 中 —— 禁止任何一侧直接读 gs.Roles 原始数组推导。prompt 的【死亡白名单】
+	// 据此为死亡座位附带「(身份:X,已公开)」;关闭模式下普通死亡不在 map,
+	// 输出与现状逐字节一致。
+	RevealedRoles map[int]string `json:"revealed_roles,omitempty"`
 }
 
 // SeerCheckRecord 是预言家一次查验的完整结果(座位 + 阵营 + 轮次)。

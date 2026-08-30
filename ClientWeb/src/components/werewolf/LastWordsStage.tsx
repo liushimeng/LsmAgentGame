@@ -15,14 +15,20 @@
  *   - 倒计时:phase_extra.remaining_sec(1s 本地 setInterval tick,与 LastWordsPanel 同机制)
  *
  * 不做的事(方案 §3.1 / §4.8):
- *   - 不显示死者角色(dead_list[].role 由服务端按 §135 RolePubliclyRevealed 白名单
- *     脱敏裁决,前端不透传角色到该组件)。
  *   - 无本地持久 state,阶段结束组件立即卸载,倒计时 tick 随卸载清理。
+ *
+ * 2026-08-30 §20260830-01 — 死亡身份公开:死者条目追加身份小徽章(阵营三档
+ * 配色)。渲染条件是服务端脱敏字段 dead_list[].role 非空(后端
+ * RolePubliclyRevealed 单点判定:6 类白名单 + 房间开关 reveal_role_on_death),
+ * 为空则不显示(遗言条目以紧凑为先,不加「身份未公开」占位,对齐设计 §7.4);
+ * 前端不得用开关布尔自行推导可见性(§1.2 不变式 1)。原「不显示死者角色」
+ * 约束由服务端脱敏继续保证,此处只消费已公开字段。
  */
 
 import { useEffect, useState } from 'react';
 import type { WerewolfGameState } from '@/types/werewolf';
 import { useT } from '@/hooks/useT';
+import { roleTierOf } from '@/components/werewolf/roleFaction';
 
 interface Props {
   gameState: WerewolfGameState;
@@ -132,6 +138,15 @@ export function LastWordsStage({ gameState }: Props) {
                     ? 'skipped'
                     : 'pending';
             const meta = chipMeta(status);
+            // §20260830-01 — 身份徽章派生值(渲染条件 = d.role 非空)。
+            // 未知角色枚举(已退役角色的历史回放)时 translate 回落为 key
+            // 原文,改显原始枚举值。
+            const roleI18nKey = `werewolf.role.${d.role}` as any;
+            const roleTranslated = d.role ? t(roleI18nKey) : '';
+            const roleLabel = d.role
+              ? (roleTranslated !== `werewolf.role.${d.role}` ? roleTranslated : d.role)
+              : '';
+            const tier = roleTierOf(d.role);
             return (
               <li
                 key={d.seat}
@@ -144,6 +159,17 @@ export function LastWordsStage({ gameState }: Props) {
                 <span className="last-words-stage__chip-name">
                   #{d.seat + 1} {seatName(d.seat, d.account)}
                 </span>
+                {roleLabel && (
+                  <span
+                    className={
+                      'werewolf-seat__role-badge' +
+                      (tier ? ` werewolf-seat__role-badge--${tier}` : '')
+                    }
+                    title={t('werewolf.dead_list.role_revealed' as any)}
+                  >
+                    {roleLabel}
+                  </span>
+                )}
                 <span className="last-words-stage__chip-status">
                   {t(chipStatusKey(status) as any)}
                 </span>

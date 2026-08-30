@@ -590,6 +590,41 @@
   flex: none;
 }
 
+/* §20260830-01 — ROW4 房间级「死亡亮身份」开关。
+   独立简单 row(无 data-open 折叠行为),布局沿用 commentary row 的
+   「左控件 160px / 右说明 1fr」两列契约。 */
+.ww-create-modal__row--reveal {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 24px;
+}
+
+.ww-create-modal__reveal-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ww-create-modal__reveal-toggle input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  flex: none;
+  /* §26.2 反模式 5:不用 opacity 表示状态;原生 checkbox 走 accent-color
+     (系统级选中/未选差异 ≥ 1.5 倍明度),不额外叠半透明。 */
+  accent-color: var(--ww-accent, #8b5cf6);
+}
+
+/* §26.2 反模式 4:focus 光晕用 box-shadow(不被暗色滤镜衰减)。 */
+.ww-create-modal__reveal-toggle:focus-within {
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.55);
+}
+
 .ww-create-modal__commentary-styles {
   display: flex;
   gap: 12px;
@@ -711,6 +746,11 @@
 
   /* §20260817-02 — ROW3 commentary 行同样降为单列。 */
   .ww-create-modal__row--commentary {
+    grid-template-columns: 1fr;
+  }
+
+  /* §20260830-01 — ROW4 死亡亮身份行同样降为单列。 */
+  .ww-create-modal__row--reveal {
     grid-template-columns: 1fr;
   }
 

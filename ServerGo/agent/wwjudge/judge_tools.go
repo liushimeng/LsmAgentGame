@@ -41,7 +41,12 @@ func BuildJudgeTools() []llm.ToolDef {
 			Name: "declare_cause",
 			Description: "宣告玩家死亡原因 + 决断(execution/death)。" +
 				"\n适用:玩家被处决/死亡时,把死因广播给全体玩家。" +
-				"\nverdict 必须是 \"execution\"(处决,玩家集体决策)或 \"death\"(死亡,夜间/技能)。",
+				"\nverdict 必须是 \"execution\"(处决,玩家集体决策)或 \"death\"(死亡,夜间/技能)。" +
+				// §20260830-01 §5.3 — 双模式说明:身份直接写进 text(schema 不加新参数,
+				// 避免 LLM 拼接错位);死因/verdict 仍走结构化字段供 transcript 审计。
+				"\n死亡亮身份:房间开启 reveal_role_on_death 时,text 必须同时公布死者身份,格式:" +
+				"「N 号〔处决/死亡〕〔死因〕,身份是〔角色名〕」(角色名只取 user prompt 的 " +
+				"revealed_dead_roles 清单);关闭时严禁在 text 中出现任何角色名。",
 			InputSchema: schema(map[string]any{
 				"seat":    map[string]any{"type": "integer", "description": "死亡座位号(0-indexed)"},
 				"cause":   map[string]any{"type": "string", "description": "wolf/vote/hunter/witch_poison/suicide"},

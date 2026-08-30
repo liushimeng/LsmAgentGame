@@ -1196,6 +1196,56 @@
   background: rgba(120,120,120,0.3);
 }
 
+/* ─── §20260830-01 死座身份徽章(房间级「死亡亮身份」) ───────────────
+ * 阵营三档配色:狼=深红 / 神=深紫 / 民(好人)=深蓝(设计 §7.2 配色表)。
+ * 基类是通用内联 pill —— WerewolfTable 头像角标 / HistoryDrawer ⚱ 死亡页
+ * chip / LastWordsStage 死者条徽章 三处复用;头像角落的绝对定位由
+ * .werewolf-seat__avatar 作用域规则单独给,避免在列表场景误生效。
+ * §26 对比度:底色 ≥ 45% 不透明 + 白字,暗卡底上实测 ≥ 8:1(阈值 4.5:1)。
+ * 静态徽章无动画 → 无 @keyframes,亦无需 prefers-reduced-motion 兜底。 */
+.werewolf-seat__role-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #ffffff;
+  background: var(--ww-role-badge-bg, rgba(63, 63, 76, 0.62));
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+/* 座位卡头像左下角标(verdict 徽章在右下,互不遮挡);压住底图但不挡交互。 */
+.werewolf-seat__avatar .werewolf-seat__role-badge {
+  position: absolute;
+  bottom: -4px;
+  left: -4px;
+  max-width: 150%;
+  z-index: 2;
+  pointer-events: none;
+}
+.werewolf-seat__role-badge--wolf {
+  --ww-role-badge-bg: rgba(153, 27, 27, 0.55);
+}
+.werewolf-seat__role-badge--god {
+  --ww-role-badge-bg: rgba(88, 28, 135, 0.55);
+}
+.werewolf-seat__role-badge--good {
+  --ww-role-badge-bg: rgba(30, 58, 138, 0.55);
+}
+/* HistoryDrawer ⚱ 页「身份未公开」灰 chip 占位:弱化但不隐形
+ * (§26:灰底 ≥ 45% 不透明,文字对比 ≥ 4.5:1)。 */
+.werewolf-seat__role-badge--hidden {
+  --ww-role-badge-bg: rgba(71, 71, 82, 0.5);
+  color: rgba(226, 226, 232, 0.92);
+  font-weight: 500;
+  text-shadow: none;
+}
+
 /* §128 — 角色名 + agent 名(3 列布局下字号放大) */
 .werewolf-seat__role {
   font-size: 12px;

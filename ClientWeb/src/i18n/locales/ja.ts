@@ -1080,6 +1080,11 @@ const ja: Dict = {
   // 2026-08-17 §20260817-02 — 全人類ルームの ROW2 右側埋め + ROW3 解説折りたたみヒント。
   'werewolf.createModal.allHumanEmptyState': '全人類ルーム:AI なし、審判なし、純粋な人狼推理。',
   'werewolf.createModal.commentaryRowHint': 'AI 実況を有効化するにはチェック(観覧者専用)。',
+  // 2026-08-30 §20260830-01 — 死亡時身分公開ルームスイッチ(作成ダイアログ ROW4)+ 死亡リスト身分 chip 文言。
+  'werewolf.reveal_role_on_death.label': '死亡時の身分公開',
+  'werewolf.reveal_role_on_death.hint': '誰かが死亡した際、審判がその場で身分札を公開します。オフなら競技ルール(死者の身分札は非公開)を維持します。',
+  'werewolf.dead_list.role_hidden': '身分未公開',
+  'werewolf.dead_list.role_revealed': '身分公開済み',
   'werewolf.judge.activity.title': '📋 アクティビティ',
   'werewolf.judge.activity.open': '展開▼',
   'werewolf.judge.activity.llmMs': 'LLM {ms} ms',

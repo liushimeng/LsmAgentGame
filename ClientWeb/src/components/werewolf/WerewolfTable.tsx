@@ -48,6 +48,7 @@ import { AgentCallTimeBadge } from '@/components/werewolf/AgentCallTimeBadge';
 import { IdentityGuessBadge } from '@/components/werewolf/IdentityGuessBadge';
 import { EmotionAvatar } from '@/components/werewolf/EmotionAvatar';
 import { modelStyleOf } from '@/components/werewolf/modelStyle';
+import { roleTierOf } from '@/components/werewolf/roleFaction';
 
 interface WerewolfTableProps {
   gameState: WerewolfGameState;
@@ -330,6 +331,17 @@ const SeatCell: React.FC<SeatCellProps> = ({
   const isQuarantined = botCtx?.quarantined === true;
   const decision = botCtx?.last_decision_summary || '';
   const verdict = deadInfo?.verdict;
+  // §20260830-01 — 死座身份(服务端脱敏字段 role 非空 = 已对全场公开)。
+  // 派生:阵营三档配色 + i18n 角色名(未知枚举如已退役角色的历史回放时,
+  // translate 回落为 key 原文,此时改显原始枚举值,避免渲染出整段 i18n key)。
+  const deadRole = deadInfo?.role || '';
+  const deadRoleTier = roleTierOf(deadRole);
+  const deadRoleLabel = (() => {
+    if (!deadRole) return '';
+    const key = `werewolf.role.${deadRole}` as any;
+    const translated = t(key);
+    return typeof translated === 'string' && translated !== key ? translated : deadRole;
+  })();
   // §重构 — 决定是否渲染 BotPhaseIndicator:有活跃 phase 或被 quarantine。
   const phase = botCtx?.llm_call_phase ?? 'idle';
   const hasPhaseIndicator =
@@ -440,6 +452,24 @@ const SeatCell: React.FC<SeatCellProps> = ({
                title={verdict === 'execution' ? '处决' : '死亡'}>
             {verdict === 'execution' ? '⚖️' : '💀'}
           </div>
+        )}
+        {/* §20260830-01 — 死座身份徽章(verdict 徽章旁,阵营三档配色)。
+            渲染条件**必须**是服务端脱敏字段 deadInfo.role 非空(后端
+            RolePubliclyRevealed 单点判定:6 类白名单 + 房间开关
+            reveal_role_on_death)。前端不得用 reveal_role_on_death 布尔自行
+            推导身份可见性(§20260830-01 §1.2 不变式 1);观战者也无需额外
+            守卫 —— 后端对 viewer=-1 走同一判定(开关对称,不变式 4)。 */}
+        {showDead && deadRoleLabel && (
+          <span
+            className={
+              'werewolf-seat__role-badge' +
+              (deadRoleTier ? ` werewolf-seat__role-badge--${deadRoleTier}` : '')
+            }
+            data-testid={`werewolf-role-badge-${seatIdx}`}
+            title={t('werewolf.dead_list.role_revealed' as any)}
+          >
+            {deadRoleLabel}
+          </span>
         )}
       </div>
       <div className="werewolf-seat__info">

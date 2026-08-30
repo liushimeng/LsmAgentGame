@@ -1082,6 +1082,11 @@ const zhCN: Dict = {
   // 2026-08-17 §20260817-02 — 全人类房 ROW2 右列填满说明 + ROW3 commentary 折叠提示。
   'werewolf.createModal.allHumanEmptyState': '全人类房:无 AI,无法官,纯人类推理对局。',
   'werewolf.createModal.commentaryRowHint': '勾选启用 AI 实时解说(仅观战者可见)。',
+  // 2026-08-30 §20260830-01 — 房间级「死亡亮身份」开关(创建弹窗 ROW4)+ 死亡列表身份 chip 文案。
+  'werewolf.reveal_role_on_death.label': '死亡亮身份',
+  'werewolf.reveal_role_on_death.hint': '开启后任何人死亡时,法官当场公布其身份牌;关闭则保留竞技规则(死者身份牌不翻开)。',
+  'werewolf.dead_list.role_hidden': '身份未公开',
+  'werewolf.dead_list.role_revealed': '身份已公开',
   'werewolf.judge.activity.title': '📋 一举一动',
   'werewolf.judge.activity.open': '展开▼',
   'werewolf.judge.activity.llmMs': 'LLM {ms} ms',

@@ -113,6 +113,11 @@ func TestGetPublicPlayerStates_OrdinaryDeadPlayerRoleHidden(t *testing.T) {
 	// outcome is reproducible — but we don't depend on which exact seat is
 	// alive, we just pick one that is.
 	r.mu.Lock()
+	// §20260830-01:本测试 pin 的是 §135 竞技规则 = 「死亡亮身份」**关闭**形态的
+	// 契约(开关开启时普通死亡按设计公开,见 engine_reveal_fairness_test.go
+	// TestRevealOn_R14)。fillAndStart 走 newGameStateLocked,未显式配置时按
+	// cfg 默认(默认开启),故此处显式关闭以保持原断言语义。
+	r.State.RevealRoleOnDeath = false
 	victimSeat := -1
 	for i := 0; i < MaxPlayers; i++ {
 		if r.State.Players[i].Alive && r.Seats[i] != "" {

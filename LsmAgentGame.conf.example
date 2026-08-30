@@ -140,8 +140,14 @@
     // true(默认)终局后开放 POST /api/games/werewolf/rooms/:roomId/recall_chat。
     "recall_chat_enabled": true,
     "recall_chat_max_tokens": 1024,
-    "recall_chat_per_user_limit": 10
+    "recall_chat_per_user_limit": 10,
     // §130 重构(2026-07-13):agent_parallel 块已删除 (§128 已移除 ParallelThink 机制)。
+
+    // §20260830-01 — 「死亡亮身份」建房默认值。true(默认):任何玩家死亡/处决
+    // 的同一 tick,法官当场公布其身份牌,Web 界面与 Agent 视图同步亮身份;
+    // false:新建房默认保留 §135 竞技规则(死者身份牌不翻开)。建房请求携带
+    // reveal_role_on_death 时以请求为准,本默认仅兜底未传字段的旧客户端。
+    "reveal_role_on_death_default": true
   }
 }
 

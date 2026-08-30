@@ -381,6 +381,24 @@ func (s *GameService) SetAgentDifficulty(gameKind, roomID string, difficulty str
 	return nil
 }
 
+// SetRevealRoleOnDeath §20260830-01 — 实现 service.AgentSeater 接口,把房间级
+// 「死亡亮身份」开关透传到 in-memory WerewolfRoom。调用方必须在
+// RegisterAgentSeats / SyncSeat 之前调用(发牌入口 newGameStateLocked 要读到)。
+// 非 werewolf kind 静默忽略;werewolf_12 / werewolf_7 / werewolf_13 历史兼容局
+// 同样生效(设计文档 §0.2:同一开关覆盖 13/12/7 人局)。
+func (s *GameService) SetRevealRoleOnDeath(gameKind, roomID string, enabled bool) *errcode.Error {
+	switch gameKind {
+	case "werewolf", "werewolf_13", "werewolf_12", "werewolf_7":
+	default:
+		return nil
+	}
+	if s.werewolfMgr == nil {
+		return nil
+	}
+	s.werewolfMgr.SetRevealRoleOnDeath(roomID, enabled)
+	return nil
+}
+
 // SetCommentaryConfig 2026-08-11 §20260811-09 U1 — 实现 service.AgentSeater
 // 接口,把房间级 AI 解说配置透传到 in-memory WerewolfRoom。非 werewolf 房间忽略。
 // 调用方必须在 RegisterAgentSeats 之前调用(同 SetJudgeConfig 时序约束)。

@@ -20,7 +20,7 @@ func newTexasCfgSvc() *RoomService {
 func TestTexasCfg_001_InvalidBigBlind(t *testing.T) {
 	s := newTexasCfgSvc()
 	_, err := s.CreateRoomWithAgents(context.Background(), "texasholdem", "user-x", "test-room",
-		nil, nil, "", nil, "", &TexasTableConfig{BigBlind: 30, StartStack: 1500})
+		nil, nil, "", nil, "", &TexasTableConfig{BigBlind: 30, StartStack: 1500}, nil)
 	if err == nil || err.Code != errcode.ErrValidationFailed {
 		t.Fatalf("expected ErrValidationFailed, got %v", err)
 	}
@@ -31,13 +31,13 @@ func TestTexasCfg_002_StackOutOfRange(t *testing.T) {
 	s := newTexasCfgSvc()
 	// 低于下限: 500 < 20*50=1000
 	_, err := s.CreateRoomWithAgents(context.Background(), "texasholdem", "user-x", "test-room",
-		nil, nil, "", nil, "", &TexasTableConfig{BigBlind: 50, StartStack: 500})
+		nil, nil, "", nil, "", &TexasTableConfig{BigBlind: 50, StartStack: 500}, nil)
 	if err == nil || err.Code != errcode.ErrValidationFailed {
 		t.Fatalf("below-min: expected ErrValidationFailed, got %v", err)
 	}
 	// 高于上限: 50001 > 100*50=5000
 	_, err = s.CreateRoomWithAgents(context.Background(), "texasholdem", "user-x", "test-room",
-		nil, nil, "", nil, "", &TexasTableConfig{BigBlind: 50, StartStack: 5001})
+		nil, nil, "", nil, "", &TexasTableConfig{BigBlind: 50, StartStack: 5001}, nil)
 	if err == nil || err.Code != errcode.ErrValidationFailed {
 		t.Fatalf("above-max: expected ErrValidationFailed, got %v", err)
 	}
@@ -47,7 +47,7 @@ func TestTexasCfg_002_StackOutOfRange(t *testing.T) {
 func TestTexasCfg_003_NonTexasGameRejected(t *testing.T) {
 	s := newTexasCfgSvc()
 	_, err := s.CreateRoomWithAgents(context.Background(), "xiangqi", "user-x", "test-room",
-		nil, nil, "", nil, "", &TexasTableConfig{BigBlind: 50, StartStack: 2500})
+		nil, nil, "", nil, "", &TexasTableConfig{BigBlind: 50, StartStack: 2500}, nil)
 	if err == nil || err.Code != errcode.ErrValidationFailed {
 		t.Fatalf("expected ErrValidationFailed, got %v", err)
 	}
@@ -60,12 +60,12 @@ func TestTexasCfg_003_NonTexasGameRejected(t *testing.T) {
 func TestTexasCfg_004_PartialConfigRejected(t *testing.T) {
 	s := newTexasCfgSvc()
 	_, err := s.CreateRoomWithAgents(context.Background(), "texasholdem", "user-x", "test-room",
-		nil, nil, "", nil, "", &TexasTableConfig{BigBlind: 50})
+		nil, nil, "", nil, "", &TexasTableConfig{BigBlind: 50}, nil)
 	if err == nil || err.Code != errcode.ErrValidationFailed {
 		t.Fatalf("bb-only: expected ErrValidationFailed, got %v", err)
 	}
 	_, err = s.CreateRoomWithAgents(context.Background(), "texasholdem", "user-x", "test-room",
-		nil, nil, "", nil, "", &TexasTableConfig{StartStack: 2500})
+		nil, nil, "", nil, "", &TexasTableConfig{StartStack: 2500}, nil)
 	if err == nil || err.Code != errcode.ErrValidationFailed {
 		t.Fatalf("stack-only: expected ErrValidationFailed, got %v", err)
 	}

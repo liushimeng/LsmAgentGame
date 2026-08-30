@@ -232,6 +232,11 @@ type ClientGameState struct {
 	// 仅影响前端 UI 显示时机;RolePubliclyRevealed 单点判定(§135)不受影响。
 	// 0 = 立即揭晓(零回归,与旧行为完全一致);5 / 15 = 倒计时后揭晓。
 	DeathRevealDelayMin int `json:"death_reveal_delay_min,omitempty"`
+	// RevealRoleOnDeath §20260830-01 房间级「死亡亮身份」开关(true = 死亡即
+	// 公开身份)。恒定下发(不用 omitempty —— bool 零值 false 有语义,避免三态
+	// 歧义);前端仅用于文案区分(「身份未公开」)与建房回显,**不得**据此自行
+	// 推导某座位身份 —— 身份可见性以服务端脱敏字段 role 非空为准(§135)。
+	RevealRoleOnDeath bool `json:"reveal_role_on_death"`
 	// §20260811-09 U2 — Agent 难度档位(easy/normal/hard/hell),全员可见,
 	// 前端 Room 信息面板 + 座位徽章渲染。omitempty 保证 normal(默认值)
 	// 不污染老客户端。
@@ -961,109 +966,6 @@ func publicRoleName(gs *GameState, seat Seat) string {
 	return gs.Roles[seat].String()
 }
 
-// buildDeadListLocked 构造已死亡玩家列表(含遗言状态)。全部玩家 + 观战者可见。
-//
-// BUG-R227-P2-01 (2026-08-01): 历史抽屉 ⚰ 死亡 / ⏱ 时间轴渲染的
-// DeadPlayerJSON.Account 字段原先填的是 Player.UserID (即
-// t_lsm_game_user.id UUID),玩家看到的是
-// `#2 ea9587d5-ffe0-4b17-b2b2-534aac5164df`,既丑陋又构成不必要的
-// 用户标识符暴露。修复:在三个 buildDeadList*Locked 函数里把 Account
-// 改成**座位派生昵称**(bot → "Bot #N号",人类 → "玩家N号"),
-// 然后 BuildClientStateWithRoom::enrichDeadListAccountsLocked 在
-// populateAgentNames 之后用 cs.Players[i].AgentName 把 bot 昵称升级为
-// "agent_name #N号" (与 GameChatPanel.toRoomPlayers 完全一致的策略)。
-// 单一事实来源在 enrichDeadListAccountsLocked,此处仅保证 Account 不是 UUID。
-func buildDeadListLocked(gs *GameState) []DeadPlayerJSON {
-	out := make([]DeadPlayerJSON, 0, MaxPlayers)
-	// 当天号 → 死因:辅助判断(死亡顺序的近似)。
-	for i := 0; i < MaxPlayers; i++ {
-		p := &gs.Players[i]
-		if p.Alive || gs.Seats[i] == "" {
-			continue
-		}
-		status := "ineligible"
-		if p.LastWords {
-			// LastWords 仍为 true 表示还未消费(仍在队列或待发言)。
-			if gs.DeathLyricDone[Seat(i)] {
-				// 防御性:已完成但 LastWords 未清(不应发生)。
-				status = "spoken"
-			} else {
-				status = "pending"
-			}
-		} else {
-			// LastWords=false:可能已发言/跳过,也可能 ineligible(毒杀/自爆/Day≥3)。
-			if gs.DeathLyricDone[Seat(i)] {
-				// 在 done map 中,但需区分 spoken / skipped。引擎未分开记录,
-				// 统一标 spoken(前端显示"已发言/跳过"通用徽章)。
-				status = "spoken"
-			} else {
-				status = "ineligible"
-			}
-		}
-		out = append(out, DeadPlayerJSON{
-			Seat:            i,
-			Account:         seatDisplayAccount(p),
-			Role:            publicRoleName(gs, Seat(i)),
-			LastWordsStatus: status,
-			Cause:           p.DeathCause,
-			Verdict:         p.DeathVerdict,
-			Day:             gs.DayNumber,
-		})
-	}
-	return out
-}
-
-// buildAllDeadListLocked 构造全阶段可用的"全部历史死亡"列表(2026-07-11 R96-P1)。
-//
-// 与 buildDeadListLocked(仅 PhaseDeathLyric)、buildDeadListForSeatsLocked(仅 LastNightDeaths 涉及的座位)
-// 不同:本函数扫描 gs.Players 全表,纳入所有 !p.Alive 的座位,**不依赖** LastNightDeaths(每晚重置)
-// 与 DeathLyricDone(仅死亡时更新),让 day2/3/4 已死座位始终带 §123 verdict 字段。
-//
-// LastWordsStatus 留空(本字段专为遗言进度设计,与 verdict 徽章无关)。
-//
-// BUG-R227-P2-01: Account 走 seatDisplayAccount 而非 UserID(详见 buildDeadListLocked 注释)。
-func buildAllDeadListLocked(gs *GameState) []DeadPlayerJSON {
-	out := make([]DeadPlayerJSON, 0, MaxPlayers)
-	for i := 0; i < MaxPlayers; i++ {
-		p := &gs.Players[i]
-		if p.Alive || gs.Seats[i] == "" {
-			continue
-		}
-		out = append(out, DeadPlayerJSON{
-			Seat:    i,
-			Account: seatDisplayAccount(p),
-			Role:    publicRoleName(gs, Seat(i)),
-			Cause:   p.DeathCause,
-			Verdict: p.DeathVerdict,
-			Day:     gs.DayNumber,
-		})
-	}
-	return out
-}
-
-// buildDeadListForSeatsLocked 构造指定座位列表的死亡信息(用于 LastNightDeathsVerbose)。
-// 2026-07-10 §123: 即使座位仍存活(理论上不应发生),也返回空 verdict,便于前端容错。
-//
-// BUG-R227-P2-01: Account 走 seatDisplayAccount 而非 UserID(详见 buildDeadListLocked 注释)。
-func buildDeadListForSeatsLocked(gs *GameState, seats []Seat) []DeadPlayerJSON {
-	out := make([]DeadPlayerJSON, 0, len(seats))
-	for _, s := range seats {
-		if s < 0 || s >= MaxPlayers || gs.Seats[s] == "" {
-			continue
-		}
-		p := &gs.Players[s]
-		out = append(out, DeadPlayerJSON{
-			Seat:    int(s),
-			Account: seatDisplayAccount(p),
-			Role:    publicRoleName(gs, s),
-			Cause:   p.DeathCause,
-			Verdict: p.DeathVerdict,
-			Day:     gs.DayNumber,
-		})
-	}
-	return out
-}
-
 // seatDisplayAccount 把 Player 派生为前端可读的显示昵称(非 UUID)。
 //
 // BUG-R227-P2-01 (2026-08-01): 原本 DeadPlayerJSON.Account 直接填
@@ -1523,6 +1425,12 @@ func BuildClientStateWithRoom(roomID string, r *WerewolfRoom, viewer int) *Clien
 	// RoomConfig.DeathRevealDelayMin(0/5/15) — 0 时 omitempty 不下发,前端走
 	// 立即揭晓分支(零回归);5 / 15 时 SettlementModal 启动倒计时。
 	cs.DeathRevealDelayMin = r.deathRevealDelayMin
+	// §20260830-01 — 房间级「死亡亮身份」开关下发(恒定下发,不用 omitempty:
+	// false 有语义 = 竞技规则)。身份可见性本身仍由 RolePubliclyRevealed 第 ⑦
+	// 分支派生进 dead_list / players[].role 等脱敏字段,本布尔仅作文案/回显。
+	if r.State != nil {
+		cs.RevealRoleOnDeath = r.State.RevealRoleOnDeath
+	}
 	// §20260811-09 U2 — Agent 难度档位全员可见。
 	cs.AgentDifficulty = r.agentDifficulty
 	// §20260811-01 U3 — 投票半公开计票悬念配置下发。

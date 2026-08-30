@@ -181,6 +181,13 @@ type Agent struct {
 	// 让 provider 自动 cache 命中。运行时仅比对 invariant I11,不发 HTTP 时复用。
 	systemPromptBytes []byte
 
+	// revealRoleOnDeath §20260830-01 §6.2 — 本局「死亡亮身份」开关(system
+	// prompt §135 规则段双模式)。构造期默认 false(竞技规则文案),由
+	// buildAgentContextLocked 在**每次 wake** 幂等同步(SetRevealRoleOnDeath),
+	// 首次 wake 即切到本局模式并重算 systemPromptBytes → invariant I11 保持一致。
+	// setter/getter 见 agent_reveal_20260830.go(§4 拆分,agent.go 已超限)。
+	revealRoleOnDeath bool
+
 	// onTranscriptPublished is an optional callback fired (in a goroutine) after
 	// recordTranscript publishes a fresh BotTranscript snapshot. The room
 	// manager registers this so it can broadcast game.state (with the new
@@ -903,7 +910,9 @@ func NewWithRoom(seat int, modelKey string, role, faction, win string, registry 
 	// 构造期一次性计算 + 冻结 system prompt 字节,跨局不变 → provider
 	// server-side KV cache 自动命中。runtime invariant I11 比对 req.System
 	// 字节与本快照,任何漂移立即 Debug 日志 + 计数器。
-	a.systemPromptBytes = BuildSystemPromptBytes(a.SelfPortraitText, a.Personality, a.PersonalityPresetKey, a.DifficultyDirective)
+	// §20260830-01:构造期按关闭模式(零值 false)冻结;若本局开启死亡亮身份,
+	// SetRevealRoleOnDeath 在首次 wake 前同步并重算本快照(I11 一致)。
+	a.systemPromptBytes = BuildSystemPromptBytes(a.SelfPortraitText, a.Personality, a.PersonalityPresetKey, a.DifficultyDirective, a.revealRoleOnDeath)
 
 	// §128 对话即思考重构:loadAgentParallelInto 已删除(原 §122 配置注入)。
 

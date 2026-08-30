@@ -88,7 +88,7 @@ func TestPortrait_BalancedAdvice(t *testing.T) {
 
 func TestPortrait_SystemPromptPrefixStable(t *testing.T) {
 	// 空串 → 与旧版逐字节一致(回归断言)。
-	base := BuildSystemPrompt("", PersonalityVector{}, "", "")
+	base := BuildSystemPrompt("", PersonalityVector{}, "", "", false)
 	if len(base) != 1 {
 		t.Fatalf("want 1 system block, got %d", len(base))
 	}
@@ -98,7 +98,7 @@ func TestPortrait_SystemPromptPrefixStable(t *testing.T) {
 		GoodGames: 5, GoodWinRate: 0.4,
 		AvgWinRateAll: 0.4,
 	})
-	withPortrait := BuildSystemPrompt(portrait, PersonalityVector{}, "", "")
+	withPortrait := BuildSystemPrompt(portrait, PersonalityVector{}, "", "", false)
 	if !strings.HasPrefix(withPortrait[0].Text, base[0].Text) {
 		t.Fatal("portrait must be appended at END (prefix must stay byte-identical for cache)")
 	}

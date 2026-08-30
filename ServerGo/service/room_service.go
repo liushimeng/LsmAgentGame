@@ -111,6 +111,13 @@ type AgentSeater interface {
 	// difficulty: easy/normal/hard/hell;空 / 未知值在 manager 内归一化为 normal。
 	SetAgentDifficulty(gameKind, roomID string, difficulty string) *errcode.Error
 
+	// SetRevealRoleOnDeath §20260830-01 — 房间级「死亡亮身份」开关落地
+	// (enabled 已在 service 层完成三态解析,nil 请求 → cfg 默认 true)。
+	// 由 CreateRoomWithAgents 在 RegisterAgentSeats / SyncSeat(→ ForceStartIfReady
+	// 发牌,newGameStateLocked 要读到它)之前调用;非 werewolf kind 由实现方
+	// 静默忽略(与 SetJudgeConfig 同策略)。
+	SetRevealRoleOnDeath(gameKind, roomID string, enabled bool) *errcode.Error
+
 	// 2026-08-11 §20260811-09 U1 — AI 实时解说(观战模式 🎙️ 解说席)。
 	// 由 CreateRoomWithAgents 在 SetJudgeConfig 之后、RegisterAgentSeats 之前
 	// 调用;manager.SetCommentaryConfig 把房间级 commentary* 写入 WerewolfRoom。

@@ -478,6 +478,10 @@ func (r *WerewolfRoom) wakeJudgeLocked(kind string, extra map[string]any) {
 	if !lockRoomBriefly(r, 500*time.Millisecond) {
 		// 锁争用 — 仍投递事件但快照为空,judge 会走 fallback 文本兜底。
 	} else {
+		// §20260830-01 — 死亡亮身份先验 drain(幂等):死亡宣告同一 tick,
+		// 先于 buildJudgeSnapshotLocked 把已公开死者写入 RolePriorStore。
+		// 汇聚点 1/2(另一处在 wakeAllAgentsLocked);此处已持 r.mu(§92a)。
+		r.syncDeathRevealPriorsLocked()
 		snap = r.buildJudgeSnapshotLocked(kind)
 		r.mu.Unlock()
 	}
@@ -600,6 +604,21 @@ func (r *WerewolfRoom) buildJudgeSnapshotLocked(eventKind string) wwjudge.GameSn
 	if !r.State.PhaseDeadlineAt.IsZero() {
 		remain := time.Until(r.State.PhaseDeadlineAt)
 		snap.PhaseDeadlineSec = int(remain.Seconds())
+	}
+	// §20260830-01 §5.1 — 死亡亮身份接线(werewolf-agent 职责线,death_reveal.go
+	// 头注释 TODO 的落地):开关 + 已公开死者身份事实注入法官快照。数据由本包
+	// buildDeadRoleFactsLocked(death_reveal.go,§135 单点判定派生)备好,此处投影为
+	// wwjudge.DeadRoleFact 同形结构(§133 镜像模式,避免 agent↔werewolf 循环 import)。
+	// 法官全知但唯一出口是公屏宣告;prompt 双模式与 fallback 拼装均由这两个字段驱动,
+	// 宣告引用的角色名只能取自本清单(服务端权威,禁止编造)。
+	snap.RevealRoleOnDeath = r.State.RevealRoleOnDeath
+	for _, f := range buildDeadRoleFactsLocked(r.State) {
+		snap.RevealedDeadRoles = append(snap.RevealedDeadRoles, wwjudge.DeadRoleFact{
+			Seat:    f.Seat,
+			Role:    f.Role,
+			Cause:   f.Cause,
+			Verdict: f.Verdict,
+		})
 	}
 	return snap
 }

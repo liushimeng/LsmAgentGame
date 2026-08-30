@@ -177,7 +177,9 @@ func (m *WerewolfManager) GetPublicPlayerStates(roomID string) []PublicPlayerSta
 				pj.DeathCause = p.DeathCause
 				pj.DeathVerdict = p.DeathVerdict
 				// §135 角色揭示规则与 view.go::BuildClientState 一致,统一走
-				// RolePubliclyRevealed 白名单(终局 / 白痴翻牌 / 狼自爆 / 猎人开枪)。
+				// RolePubliclyRevealed 单点判定(6 类白名单:终局 / 白痴翻牌 /
+				// 狼自爆 / 猎人开枪 / 骑士决斗 / 猎魔人发动 + §20260830-01 房间级
+				// 「死亡亮身份」开关第 ⑦ 分支 —— 开启时任何死亡即公开,自动生效)。
 				// 这里**不**暴露给"自己" —— 调用方是 REST 详情接口,而非某一座位
 				// 的玩家视图。
 				//

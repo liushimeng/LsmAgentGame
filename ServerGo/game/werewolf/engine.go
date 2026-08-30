@@ -228,10 +228,13 @@ func verdictFor(cause string) string {
 //	                身份依旧隐藏;主动选择"不开枪"同样不亮身份
 //	⑤ 骑士决斗   —— §198 发动即亮身份;无论结果(命中狼 / 自决)都立即公开
 //	⑥ 猎魔人发动 —— §猎魔人 发动即亮身份;无论结果(命中狼 / 误杀好人)都立即公开
+//	⑦ 死亡亮身份 —— §20260830-01 房间级开关(默认开启):任何玩家死亡结算的
+//	                同一 tick,身份对全场公开(娱乐局 / 教学局)
 //
-// ⚠️ 本函数**不得**加入 `!Alive` 分支 —— 那正是 §135 之前的核心违规:
-// 死亡即全场翻牌,使女巫毒药沦为免费验人、狼刀预言家的悍跳博弈价值归零。
-// 所有视图层(BuildClientState / buildAllDeadListLocked / REST 房间详情)
+// ⚠️ 本函数**不得**加入**未经 `RevealRoleOnDeath` 房间开关门控**的裸 `!Alive`
+// 分支 —— 那正是 §135 之前的核心违规(死亡即全场翻牌,使女巫毒药沦为免费验人、
+// 狼刀预言家的悍跳博弈价值归零)。死亡身份公开必须且只能经第 ⑦ 分支的开关门控
+// 进入。所有视图层(BuildClientState / buildAllDeadListLocked / REST 房间详情)
 // 必须统一走本函数,禁止各自复制判定。
 func (gs *GameState) RolePubliclyRevealed(seat Seat) bool {
 	if seat < 0 || seat >= MaxPlayers {
@@ -265,6 +268,15 @@ func (gs *GameState) RolePubliclyRevealed(seat Seat) bool {
 	if p.DemonHunterHuntUsed {
 		return true
 	}
+	// ⑦ §20260830-01 房间级「死亡亮身份」模式(默认开启)。开启时任何确已
+	// 死亡(DeathCause != "")的座位,身份随死亡结算的同一 tick 对全场公开。
+	//   - DeathCause != "" 是「确已死亡」判据:排除白痴翻牌免死(Alive=true
+	//     且 DeathCause=="")等未死亡情形;白痴翻牌本身已在 ② 覆盖。
+	//   - 关闭(false)时本分支短路,完整保留 §135 竞技规则,零回归。
+	// ⚠️ 注意:裸 `!Alive`(不带本开关门控)分支仍然禁止 —— 见函数头注释。
+	if gs.RevealRoleOnDeath && !p.Alive && p.DeathCause != "" {
+		return true
+	}
 	return false
 }
 
@@ -292,6 +304,13 @@ type GameState struct {
 	Seats      [MaxPlayers]string // 座位 → userID
 	Players    [MaxPlayers]Player // 座位 → Player
 	PlayerByID map[string]Seat    // userID → 座位(快查)
+
+	// RevealRoleOnDeath §20260830-01 房间级「死亡亮身份」开关。
+	// 由房间创建时按 RoomConfig 一次性写入(发牌入口 newGameStateLocked 拷贝,
+	// 未显式配置时走 cfgWerewolfRevealRoleOnDeathDefault 默认 true),局中不可
+	// 修改。true = 任何玩家死亡结算的同一 tick,身份对全场公开(RolePubliclyRevealed
+	// 第 ⑦ 分支);false = 完整保留 §135 竞技规则(死者身份牌不翻开)。默认 true。
+	RevealRoleOnDeath bool
 
 	// 角色身份(座位 → 角色)。为与 Player.Role 冗余便于视图过滤,这里保留
 	Roles       [MaxPlayers]Role

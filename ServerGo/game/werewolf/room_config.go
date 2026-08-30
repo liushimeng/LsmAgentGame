@@ -6,6 +6,33 @@ import (
 	"LsmAgentGame/config"
 )
 
+// ─── §4 行数治理搬移(2026-08-30 §20260830-01 同批):以下 doc 注释
+// 原漂浮在 room.go,现搬至各自实现所在文件,零逻辑改动。 ───
+
+// cfgWerewolfHumanWaitSec 读取人类等待窗口秒数。
+// 0 = 禁用等待窗口(默认全 AI 房间);60(默认) = 混合房间等待 60s。
+
+// quarantineSkipDepthLimit is the maximum number of recursive
+// tryDispatchQuarantinedActingSkip calls allowed in a single lock-held chain
+// before we bail out. Empirically a healthy chain dispatches at most a
+// handful of skips before the phase transitions; 50 is well above normal
+// traffic but still bounded — every recursive call was identical (same seat,
+// same skip) meaning a self-loop, which is exactly what we want to break.
+// BUG-WEREWOLF-P0-NEW-43.
+
+// cfgWerewolfRoomLLMConcurrency 读取房间级 LLM 并发上限(BUG-R242-P1-01)。
+// 0 / 负值 = 禁用(完全并发,§130 行为,仅用于调试)。见 room_config.go。
+
+// cfgWerewolfJudgeMode 2026-07-10 §125 增强 — 读取法官模式。
+
+// cfgWerewolfJudgeModelKey 2026-07-10 §125 增强 — 法官使用的 LLM model_key。
+
+// judgeKindForPhase 把对局 phase 映射为法官唤醒事件 kind(对齐 docs/狼人杀-重构方案/主持人Agent重构设计.md
+// §6.3 映射表)。秘密阶段(NightWolves/Seer/Witch)返回空字符串 → phaseWatchdogTick 不调
+// wake,法官在夜间静默观察。
+
+// cfgWerewolfEnableModelMemoryRecap 2026-07-10 §125 增强 — 是否注入上一局记忆。
+
 func cfgWerewolfHumanWaitSec() int {
 	defer func() { _ = recover() }()
 	return config.Load().Werewolf.HumanWaitSec
@@ -137,6 +164,25 @@ func (r *WerewolfRoom) ensureLLMSemaphoreLocked() {
 func cfgWerewolfDeathRevealDelayMinDefault() int {
 	defer func() { _ = recover() }()
 	return config.Load().Werewolf.DeathRevealDelayMinDefault
+}
+
+// cfgWerewolfRevealRoleOnDeathDefault 读取 §20260830-01 「死亡亮身份」建房默认值。
+// conf 未显式写 false 时一律 true(默认开启,旧客户端/旧 conf 零回归面为「新默认
+// 行为」);测试环境 config.Load() panic 时兜底 true(照抄
+// cfgWerewolfDeathRevealDelayMinDefault 的 recover 模式,布尔语义取「开启」)。
+// 由 WerewolfRoom.revealRoleOnDeathEffectiveLocked(未显式配置的房间)与
+// service 层建房解析共同消费 —— 两侧读同一 cfg,单一事实来源。
+func cfgWerewolfRevealRoleOnDeathDefault() (enabled bool) {
+	enabled = true
+	defer func() {
+		if recover() != nil {
+			enabled = true
+		}
+	}()
+	if v := config.Load().Werewolf.RevealRoleOnDeathDefault; v != nil {
+		enabled = *v
+	}
+	return enabled
 }
 
 // cfgWerewolfDeathRevealDelayMinAllowed 返回合法值集合,前端下拉与后端校验共用。

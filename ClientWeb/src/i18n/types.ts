@@ -453,6 +453,11 @@ export interface Dict {
   // 2026-08-17 §20260817-02 — ROW2 全人类空态 + ROW3 commentary 折叠提示。
   'werewolf.createModal.allHumanEmptyState': string;
   'werewolf.createModal.commentaryRowHint': string;
+  // 2026-08-30 §20260830-01 — 房间级「死亡亮身份」开关(创建弹窗 ROW4)+ 死亡列表身份 chip 文案。
+  'werewolf.reveal_role_on_death.label': string;
+  'werewolf.reveal_role_on_death.hint': string;
+  'werewolf.dead_list.role_hidden': string;
+  'werewolf.dead_list.role_revealed': string;
   'werewolf.judge.activity.title': string;
   'werewolf.judge.activity.open': string;
   'werewolf.judge.activity.llmMs': string; // {ms}
