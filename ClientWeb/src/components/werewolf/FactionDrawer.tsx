@@ -95,6 +95,10 @@ function buildTasks(gs: WerewolfGameState, mySeat: number, spectator: boolean, t
       if (role === 'hunter') push('hunter', '🔫 猎人开枪 — 决定是否带走一名玩家');
       else push('hunter_wait', '🔫 猎人行动中');
       break;
+    // §20260830-02 — 自爆带走:自爆狼(已死)选目标,其余等待。
+    case 'suicide_take':
+      push('suicide_take', '🧨 自爆带走 — 自爆狼正在选择带走一名玩家');
+      break;
     case 'restart_vote':
       push('restart', '🔄 重开局投票 — 决定是否原地重开一局');
       break;

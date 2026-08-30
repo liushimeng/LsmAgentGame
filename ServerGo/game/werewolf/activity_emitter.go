@@ -78,6 +78,8 @@ const (
 	ActivityEventKindGuardProtect      = "guard_protect"      // §134 守卫守护事件
 	ActivityEventKindKnightDuel        = "knight_duel"        // §198 骑士决斗事件
 	ActivityEventKindDemonHunterHunt   = "demon_hunter_hunt"  // §猎魔人 猎魔人狩猎事件
+	// §20260830-02 — 自爆带走事件(自爆狼遗言后选择带走/放弃)。
+	ActivityEventKindSuicideTake = "suicide_take"
 	// 2026-08-10 §20260810-06 — 行为承诺事件
 	ActivityEventKindCommitMade      = "commit_made"      // 承诺已做出
 	ActivityEventKindCommitEvaluated = "commit_evaluated" // 承诺已判定
@@ -392,6 +394,28 @@ func (m *WerewolfManager) EmitHunterShoot(r *WerewolfRoom, target int) {
 	}
 	m.emitActivity(r, ActivityEventKindHunterShoot, text, phase, roundN,
 		"warn", "🏹", target, -1, false)
+}
+
+// EmitSuicideTake §20260830-02 — 自爆带走结算后调用(suicideTakeLocked 内)。
+// actor 为自爆狼座位;target<0 表示放弃带走。
+func (m *WerewolfManager) EmitSuicideTake(r *WerewolfRoom, actor int, target int) {
+	if r == nil {
+		return
+	}
+	var text string
+	if target < 0 {
+		text = "🧨 " + strconv.Itoa(actor+1) + "号 自爆狼放弃带走"
+	} else {
+		text = "🧨 自爆狼 " + strconv.Itoa(actor+1) + "号 带走:" + strconv.Itoa(target+1) + "号"
+	}
+	phase := ""
+	roundN := 0
+	if r.State != nil {
+		phase = r.State.Phase.String()
+		roundN = r.State.DayNumber
+	}
+	m.emitActivity(r, ActivityEventKindSuicideTake, text, phase, roundN,
+		"warn", "🧨", actor, target, false)
 }
 
 // EmitCommitMade 在玩家做出承诺时调用（§20260810-06）。

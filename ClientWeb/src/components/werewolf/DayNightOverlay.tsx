@@ -51,6 +51,7 @@ const DAY_PHASES = new Set<string>([
   'death_lyric',
   'hunter_shoot',
   'idiot_reveal',
+  'suicide_take', // §20260830-02 自爆带走 —— 白天结算阶段
 ]);
 
 function pickOverlay(phase: string): OverlayKind {

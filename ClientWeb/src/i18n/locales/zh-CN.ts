@@ -794,6 +794,8 @@ const zhCN: Dict = {
   'werewolf.phase.idiot_reveal': '白痴翻牌',
   'werewolf.phase.death_lyric': '遗言阶段',
   'werewolf.phase.hunter_shoot': '猎人开枪中',
+  // §20260830-02 — 自爆带走阶段。
+  'werewolf.phase.suicide_take': '🧨 自爆带走中',
   'werewolf.phase.over': '对局结束',
   'werewolf.phase.restart_vote': '投票 · 是否原地重开一局',
   // 2026-07-10 §重构 + §128 对话即思考 — LLM 调用相位状态机文案
@@ -1160,6 +1162,21 @@ const zhCN: Dict = {
   'werewolf.dead.actions.title': '本阶段存活玩家正在 {phase},你可以:',
   'werewolf.dead.actions.watch': '📺 观看聊天面板与其他玩家动作',
   'werewolf.dead.actions.lastwords': '💀 等待遗言阶段发表最后的话',
+  // §20260830-02 — 死亡玩家常驻横幅。
+  'werewolf.dead.banner.title': '你已出局',
+  'werewolf.dead.banner.ghostHint': '已进入幽灵观战 · 可继续观看对局与聊天',
+  'werewolf.dead.banner.lastWordsActing': '轮到你发表遗言 — 请在下方面板输入',
+  'werewolf.dead.banner.lastWordsWaiting': '等待其他死者发表遗言…',
+  'werewolf.dead.banner.hunterHint': '你是猎人 — 可开枪带走一名存活玩家',
+  'werewolf.dead.banner.suicideTakeHint': '你是自爆狼 — 可带走一名存活玩家',
+  // §20260830-02 — 自爆确认弹窗 + 自爆带走。
+  'werewolf.suicideConfirm.body': '自爆将立即出局并公开狼人身份(不可逆)。自爆后你可以留遗言,并选择带走一名玩家。确认自爆?',
+  'werewolf.suicideConfirm.confirm': '确认自爆',
+  'werewolf.suicideTake.title': '自爆带走 · 最后一击',
+  'werewolf.suicideTake.deadHint': '☠ 你已自爆出局 — 点选一名存活玩家带走(不可撤回);若目标是猎人,对方会立刻反枪。',
+  'werewolf.suicideTake.decline': '放弃带走',
+  'werewolf.suicideTake.declineShoot': '不开枪',
+  'werewolf.suicideTake.stageHint': '自爆狼正在选择带走目标 ·',
   // v2 重设计 — 干扰信号 / 全局预算 / 经济文案。
   'werewolf.prop.survivalTitle': '道具系统 v2 · 长期金币生存',
   'werewolf.prop.survivalBody': '金币 = 生命力。道具消耗 30% 永久销毁,只有「翻盘/阻止翻盘」时才用;余额接近底注(100)时绝对不用。你和对手共用本局道具池。',

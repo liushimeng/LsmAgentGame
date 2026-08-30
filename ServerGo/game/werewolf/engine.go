@@ -37,6 +37,10 @@ const (
 	// docs/狼人杀-Agent与系统/狼人杀重开局投票设计.md。
 	PhaseRestartVote
 	PhaseGameOver // 对局结束
+	// §20260830-02 — 自爆带走阶段:自爆狼遗言结束后选择带走一名存活玩家
+	// (target=-1 放弃)。枚举追加在末尾,不重排既有值。
+	// 设计文档:docs/狼人杀-角色设计/狼人杀自爆遗言与带走设计-20260830-02.md
+	PhaseSuicideTake
 )
 
 func (p Phase) String() string {
@@ -85,6 +89,9 @@ func (p Phase) String() string {
 		return "restart_vote"
 	case PhaseGameOver:
 		return "over"
+	case PhaseSuicideTake:
+		// §20260830-02 — 自爆带走:自爆狼(已死)选择带走一名存活玩家。
+		return "suicide_take"
 	default:
 		return "unknown"
 	}
@@ -190,6 +197,9 @@ const (
 	DeathCauseSuicide             = "suicide"
 	DeathCauseDuel                = "duel"                  // §198 骑士决斗猜错自决出
 	DeathCauseDemonHunterMisjudge = "demon_hunter_misjudge" // §猎魔人 猎魔人误杀好人自决出
+	// §20260830-02 — 被自爆狼带走出局。verdict=death(非自主决策,与猎枪
+	// 同语义);身份**不**进 RolePubliclyRevealed 白名单(§4-2 不变式)。
+	DeathCauseSuicideTake = "suicide_take"
 )
 
 // DeathVerdict 死因决断(execution / death)。
@@ -201,11 +211,12 @@ const (
 )
 
 // verdictFor cause → verdict 查表函数(单一事实来源)。
-// wolf/hunter/witch_poison → death;vote/suicide/duel(§198)/demon_hunter_misjudge(§猎魔人) → execution。
+// wolf/hunter/witch_poison/suicide_take(§20260830-02) → death;
+// vote/suicide/duel(§198)/demon_hunter_misjudge(§猎魔人) → execution。
 // 未知 cause 兜底为 death(更安全,避免误把"夜间被狼杀"判为"处决")。
 func verdictFor(cause string) string {
 	switch cause {
-	case DeathCauseWolf, DeathCauseHunter, DeathCauseWitchPoison:
+	case DeathCauseWolf, DeathCauseHunter, DeathCauseWitchPoison, DeathCauseSuicideTake:
 		return DeathVerdictDeath
 	case DeathCauseVote, DeathCauseSuicide, DeathCauseDuel, DeathCauseDemonHunterMisjudge:
 		return DeathVerdictExecution
@@ -924,10 +935,15 @@ func (gs *GameState) killPlayer(seat Seat, cause string) *errcode.Error {
 	// 计算遗言权(LastWordsRounds 内)
 	allowLW := false
 	switch cause {
-	case "wolf", "vote", "hunter":
+	case "wolf", "vote", "hunter", "suicide_take":
+		// §20260830-02 — 被自爆带走者遗言权与猎枪目标一致:Day≤2 有遗言。
 		allowLW = gs.DayNumber <= LastWordsRounds
-	case "witch_poison", "suicide", "duel", "demon_hunter_misjudge":
-		// §198 duel 自决无遗言;§猎魔人 misjudge 自决也无遗言(自爆语义一致)
+	case "suicide":
+		// §20260830-02 — 自爆强化开启时自爆狼必有遗言(不受 LastWordsRounds
+		// 限制);关闭时维持旧规则(无遗言)。设计文档 §3.1。
+		allowLW = isSuicideTakeEnabled()
+	case "witch_poison", "duel", "demon_hunter_misjudge":
+		// §198 duel 自决无遗言;§猎魔人 misjudge 自决也无遗言(旧自爆语义一致)
 		allowLW = false
 	}
 	gs.Players[seat].LastWords = allowLW

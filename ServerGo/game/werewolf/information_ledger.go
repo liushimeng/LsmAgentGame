@@ -44,6 +44,8 @@ const (
 	InfoSourceIdiotReveal   InfoSource = "idiot_reveal"    // 白痴翻牌(公开)
 	InfoSourceDemonHunter   InfoSource = "demon_hunter"    // 猎魔人狩猎(公开)
 	InfoSourceRoleDeal      InfoSource = "role_deal"       // 开局发牌(仅本人)
+	// §20260830-02 — 自爆带走(全房公开事件;与 hunter_shot 同级公开)。
+	InfoSourceSuicideTake InfoSource = "suicide_take"
 )
 
 // AllInfoSources 返回全部来源常量(注册表),供测试断言「每个来源至少一个写入点」。

@@ -169,7 +169,12 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 	if doneCheck {
 		return
 	}
-	if !containsSeat(aliveList, mySeat) {
+	// §20260830-02 — 死者行动白名单放行:death_lyric(遗言当前座位)/
+	// hunter_shoot(待开枪死亡猎人)/ suicide_take(待带走自爆狼)三类
+	// 「死亡触发的合法行动」必须真实调 LLM。此前死者一律被拦,死亡 Agent
+	// 永远发不出遗言、开不出猎枪,只能被 watchdog 代打 skip —— 与人类
+	// 玩家可操作同阶段形成不对称(公平性违反)。
+	if !containsSeat(aliveList, mySeat) && !evt.Context.DeadActorTurn {
 		logger.L().Debug("agent: dead seat; ignoring wake (no LLM call, no tool dispatch)",
 			zap.Int("seat", a.Seat),
 			zap.Int("alive_count", len(aliveList)),

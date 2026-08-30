@@ -3,6 +3,7 @@ package wwplayer_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -137,6 +138,12 @@ func (f *fakeRunner) IdiotReveal(choice string) (string, error) {
 }
 func (f *fakeRunner) WolfSuicide() (string, error) {
 	f.calls = append(f.calls, "wolf_suicide")
+	return "ok", nil
+}
+
+// §20260830-02 — 自爆带走工具测试桩。
+func (f *fakeRunner) SuicideTake(target int) (string, error) {
+	f.calls = append(f.calls, fmt.Sprintf("wolf_suicide_take:%d", target))
 	return "ok", nil
 }
 func (f *fakeRunner) Whisper(toSeat int, text string) (string, error) {
@@ -1245,4 +1252,57 @@ func TestBuildTools_IdleSilent_DescriptionConstraint(t *testing.T) {
 		}
 	}
 	// idle_silent 不在 speak 阶段暴露也没关系(设计选择)
+}
+
+// §20260830-02 — 自爆带走工具暴露/派发测试。
+// wolf_suicide_take 仅在 suicide_take 阶段 + 本座位是自爆狼时暴露;
+// DispatchTool 把 target 透传 runner.SuicideTake。
+func TestBuildTools_SuicideTake(t *testing.T) {
+	// 自爆狼(seat=2)在 suicide_take 阶段,gc.SuicideTakeSeat=2 → 应有工具。
+	gc := &wwtypes.GameContext{SuicideTakeSeat: 2, MyTurn: true}
+	tools := wwplayer.BuildTools("suicide_take", "werewolf", 2, []int{0, 1, 3}, -1, gc)
+	names := map[string]bool{}
+	for _, tl := range tools {
+		names[tl.Name] = true
+	}
+	if !names["wolf_suicide_take"] {
+		t.Errorf("suicided wolf must see wolf_suicide_take, got %v", names)
+	}
+
+	// 非自爆狼座位 → 不暴露。
+	gc2 := &wwtypes.GameContext{SuicideTakeSeat: 2}
+	tools2 := wwplayer.BuildTools("suicide_take", "werewolf", 5, []int{0, 1, 3}, -1, gc2)
+	for _, tl := range tools2 {
+		if tl.Name == "wolf_suicide_take" {
+			t.Error("non-suicided seat must NOT see wolf_suicide_take")
+		}
+	}
+
+	// 其它阶段(gc=nil)→ 不暴露。
+	tools3 := wwplayer.BuildTools("speak", "werewolf", 2, []int{0, 1, 3}, 2, nil)
+	for _, tl := range tools3 {
+		if tl.Name == "wolf_suicide_take" {
+			t.Error("wolf_suicide_take must NOT be exposed outside suicide_take phase")
+		}
+	}
+}
+
+// TestDispatchTool_SuicideTake 验证 wolf_suicide_take 派发到 runner.SuicideTake。
+func TestDispatchTool_SuicideTake(t *testing.T) {
+	f := &fakeRunner{}
+	res, err := wwplayer.DispatchTool("wolf_suicide_take", map[string]any{"target": float64(4)}, f)
+	if err != nil {
+		t.Fatalf("DispatchTool(wolf_suicide_take): %v", err)
+	}
+	_ = res
+	want := "wolf_suicide_take:4"
+	found := false
+	for _, c := range f.calls {
+		if c == want {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("runner.SuicideTake not called with target 4; calls=%v", f.calls)
+	}
 }

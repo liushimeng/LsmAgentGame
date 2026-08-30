@@ -791,6 +791,8 @@ const en: Dict = {
   'werewolf.phase.idiot_reveal': 'Idiot Reveal',
   'werewolf.phase.death_lyric': 'Last Words',
   'werewolf.phase.hunter_shoot': 'Hunter Shooting',
+  // §20260830-02 — suicide-take phase.
+  'werewolf.phase.suicide_take': '🧨 Suicide Take',
   'werewolf.phase.over': 'Game Over',
   'werewolf.phase.restart_vote': 'Vote · Restart this room?',
   // 2026-07-10 §重构 + §128 对话即思考 — LLM call phase state machine copy
@@ -1159,6 +1161,21 @@ const en: Dict = {
   'werewolf.dead.actions.title': 'Living players are {phase}. You may:',
   'werewolf.dead.actions.watch': '📺 Watch chat & player actions',
   'werewolf.dead.actions.lastwords': '💀 Wait for the last-words phase',
+  // §20260830-02 — persistent dead-player banner.
+  'werewolf.dead.banner.title': 'You are out',
+  'werewolf.dead.banner.ghostHint': 'Ghost mode · keep watching the game and chat',
+  'werewolf.dead.banner.lastWordsActing': 'It is your last words — use the panel below',
+  'werewolf.dead.banner.lastWordsWaiting': 'Waiting for other dead players’ last words…',
+  'werewolf.dead.banner.hunterHint': 'You are the Hunter — you may shoot one living player',
+  'werewolf.dead.banner.suicideTakeHint': 'You are the suicided wolf — you may take one living player',
+  // §20260830-02 — suicide confirm modal + suicide take.
+  'werewolf.suicideConfirm.body': 'Self-destruct will eliminate you and reveal your wolf identity (irreversible). Afterwards you may leave last words and take one player with you. Confirm?',
+  'werewolf.suicideConfirm.confirm': 'Confirm self-destruct',
+  'werewolf.suicideTake.title': 'Suicide Take · Final Strike',
+  'werewolf.suicideTake.deadHint': '☠ You are out — pick one living player to take with you (irreversible); if the target is the Hunter, they will fire back immediately.',
+  'werewolf.suicideTake.decline': 'Decline take',
+  'werewolf.suicideTake.declineShoot': 'Hold fire',
+  'werewolf.suicideTake.stageHint': 'The suicided wolf is choosing a target ·',
   // v2 redesign — interference signals / global economy copy.
   'werewolf.prop.survivalTitle': 'Prop System v2 · Long-term coin survival',
   'werewolf.prop.survivalBody': 'Coins = lifeforce. 30% of prop cost is permanently destroyed — only spend to swing/block a swing game. Never spend when your balance is near the ante (100). You share this room\'s prop pool with opponents.',

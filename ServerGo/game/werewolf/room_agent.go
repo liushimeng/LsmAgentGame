@@ -689,6 +689,11 @@ func (m *WerewolfManager) dispatchQuarantinedSkipLocked(r *WerewolfRoom, seat in
 		// phase, call HunterShoot(hunterSeat, NoSeat) = "don't
 		// shoot", which advances the day via advanceDay().
 		return m.hunterShootLocked(r, userID, NoSeat)
+	case "wolf_suicide_take":
+		// §20260830-02 — 自爆狼被 quarantine / watchdog 兜底时,
+		// 派发放弃带走(NoSeat),直接入夜。随机带走期望为负,
+		// 与 SkipPhaseAction("suicide_take") 的 (-1) 语义一致。
+		return m.suicideTakeLocked(r, userID, NoSeat)
 	case "last_words_skip":
 		// BUG 2026-07-09: 遗言 actor 被 quarantine 时,watchdog 强制跳过其遗言,
 		// 推进遗言队列直至清空,恢复原路径。

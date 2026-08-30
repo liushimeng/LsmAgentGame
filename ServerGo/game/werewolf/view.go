@@ -929,12 +929,20 @@ func fillMyTurnExtra(gs *GameState, cs *ClientGameState, mySeat Seat) {
 		}
 	case PhaseHunterShoot:
 		// 猎人开枪:毒杀不开枪,其它情况猎人必开枪。
-		if myAlive && gs.Roles[mySeat] == RoleHunter && gs.HunterPendingShoot && gs.HunterPendingFrom != "poison" {
+		// §20260830-02 修复:去掉 myAlive 守卫 —— 猎人死亡后才开枪(能力
+		// 由死亡触发),此前死亡猎人 my_turn_now 永远 false,MyTurnIndicator
+		// 不亮。与 room_agent_context.go 的 BUG-WEREWOLF-P0-2 修复对齐。
+		if gs.Roles[mySeat] == RoleHunter && gs.HunterPendingShoot && gs.HunterPendingFrom != "poison" {
 			myTurn = true
 		}
 	case PhaseDeathLyric:
 		// 遗言:死人专属,且仅当本座位是当前遗言座位。
 		if !myAlive && gs.DeathLyricCurrent == mySeat {
+			myTurn = true
+		}
+	case PhaseSuicideTake:
+		// §20260830-02 — 自爆带走:死人专属(自爆狼),选择带走目标/放弃。
+		if !myAlive && mySeat == gs.SuicidedWolfSeat {
 			myTurn = true
 		}
 	}

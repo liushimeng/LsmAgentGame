@@ -156,6 +156,15 @@ var phaseConfigs = map[string]*PhaseConfig{
 		PromptHint:    "你即将死亡，可以留下遗言。",
 		AllowSpeech:   true,
 	},
+	// §20260830-02 — 自爆带走:自爆狼(已死)选择带走一名存活玩家。
+	"suicide_take": {
+		Phase:            "suicide_take",
+		ToolKeys:         []string{"wolf_suicide_take"},
+		SkipAction:       "wolf_suicide_take",
+		SkipActionTarget: -1, // 放弃带走
+		DeadlineSec:      60,
+		PromptHint:       "你已自爆出局，现在可以选择带走一名存活玩家。选择 -1 表示放弃带走。",
+	},
 	"idiot_reveal": {
 		Phase:            "idiot_reveal",
 		ToolKeys:         []string{"idiot_reveal"},

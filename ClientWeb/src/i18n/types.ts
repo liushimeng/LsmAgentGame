@@ -110,6 +110,8 @@ export interface Dict {
   'werewolf.phase.idiot_reveal': string;
   'werewolf.phase.death_lyric': string;
   'werewolf.phase.hunter_shoot': string;
+  // §20260830-02 — 自爆带走:自爆狼(已死)选择带走一名存活玩家。
+  'werewolf.phase.suicide_take': string;
   'werewolf.phase.over': string;
   'werewolf.phase.restart_vote': string;
 
@@ -534,6 +536,22 @@ export interface Dict {
   'werewolf.dead.actions.title': string; // {phase}
   'werewolf.dead.actions.watch': string;
   'werewolf.dead.actions.lastwords': string;
+  // §20260830-02 — 死亡玩家常驻横幅(DeadPlayerBanner):出局后按阶段指引。
+  'werewolf.dead.banner.title': string;
+  'werewolf.dead.banner.ghostHint': string;
+  'werewolf.dead.banner.lastWordsActing': string;
+  'werewolf.dead.banner.lastWordsWaiting': string;
+  'werewolf.dead.banner.hunterHint': string;
+  'werewolf.dead.banner.suicideTakeHint': string;
+  // §20260830-02 — 自爆确认弹窗 + 自爆带走面板 + 全员提示条。
+  'werewolf.suicideConfirm.body': string;
+  'werewolf.suicideConfirm.confirm': string;
+  'werewolf.suicideTake.title': string;
+  'werewolf.suicideTake.deadHint': string;
+  'werewolf.suicideTake.decline': string;
+  /** §20260830-02 — 猎人「不开枪」弃枪按钮(补齐此前缺失的出口)。 */
+  'werewolf.suicideTake.declineShoot': string;
+  'werewolf.suicideTake.stageHint': string;
   // v2 重设计 2026-07-21：道具命中干扰信号 / 全局预算 / 经济文案。
   'werewolf.prop.survivalTitle': string;
   'werewolf.prop.survivalBody': string;

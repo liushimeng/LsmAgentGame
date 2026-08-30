@@ -490,8 +490,28 @@ func TestWolfSuicideImmediatelyToNight(t *testing.T) {
 	if gs.AliveSeat(wolf) {
 		t.Fatalf("wolf should be dead")
 	}
+	// §20260830-02 — 新链路:自爆 → 遗言(death_lyric)→ 带走(suicide_take)
+	// → …→ night_wolves。此处只断言"不再直接进夜";完整链路见
+	// engine_suicide_take_test.go。
+	if gs.Phase == PhaseDeathLyric {
+		if !gs.Players[wolf].LastWords {
+			t.Fatalf("suicide wolf should have last words (§20260830-02)")
+		}
+		if e := gs.SayLastWords(wolf, "我是狼,认了"); e != nil {
+			t.Fatalf("say last words: %v", e)
+		}
+	}
+	if gs.Phase != PhaseSuicideTake && gs.Phase != PhaseNightWolves && gs.Phase != PhaseGameOver {
+		t.Fatalf("phase after suicide chain = %v", gs.Phase)
+	}
+	if gs.Phase == PhaseSuicideTake {
+		// 放弃带走 → 直接入夜。
+		if e := gs.SuicideTake(wolf, NoSeat); e != nil {
+			t.Fatalf("suicide take decline: %v", e)
+		}
+	}
 	if gs.Phase != PhaseNightWolves && gs.Phase != PhaseGameOver {
-		t.Fatalf("phase after suicide = %v", gs.Phase)
+		t.Fatalf("phase after decline = %v", gs.Phase)
 	}
 }
 

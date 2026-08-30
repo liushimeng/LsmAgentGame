@@ -169,7 +169,8 @@ func isActingPhase(phase string) bool {
 		"speak", "PhaseSpeak",
 		"vote", "PhaseVote",
 		"idiot_reveal", "PhaseIdiotReveal",
-		"hunter_shoot", "PhaseHunterShoot":
+		"hunter_shoot", "PhaseHunterShoot",
+		"suicide_take", "PhaseSuicideTake": // §20260830-02 — 自爆带走
 		return true
 	}
 	return false
@@ -203,6 +204,13 @@ func defaultPhaseDeadlineSec(phase string, human bool) int {
 		// 真人只需选 2 个单选框;watchdog 兜底走默认值不需要更长 deadline)。
 		return 30
 	case "hunter_shoot", "PhaseHunterShoot":
+		if human {
+			return 120
+		}
+		return 300
+	case "suicide_take", "PhaseSuicideTake":
+		// §20260830-02 — 自爆带走 deadline 与 hunter_shoot 对齐(单决策,
+		// 真人 120s / 全 AI 300s 覆盖慢模型 LLM + 重试)。
 		if human {
 			return 120
 		}

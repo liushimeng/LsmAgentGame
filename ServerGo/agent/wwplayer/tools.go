@@ -125,6 +125,10 @@ type ToolRunner interface {
 	// 映射引擎 Action_IdiotReveal。
 	IdiotReveal(choice string) (string, error)
 	WolfSuicide() (string, error)
+	// SuicideTake §20260830-02 — 自爆带走工具。仅自爆狼(已死)在
+	// PhaseSuicideTake 可调;target=-1 表示放弃带走。
+	// 映射引擎 WerewolfManager.Action_SuicideTake(与人类 WS 帧同源)。
+	SuicideTake(target int) (string, error)
 	Whisper(toSeat int, text string) (string, error)
 	// Interject allows a non-current-speaker bot to broadcast a short
 	// chat-room message during the speak phase (e.g. follow-up question,
@@ -521,13 +525,14 @@ func BuildTools(phase, role string, seat int, alive []int, speakTurn int, gc *ww
 		if role == "werewolf" {
 			// 自爆是"终止发言"动作，只有当前发言者才需要；其他人不需要。
 			if speakTurn == seat {
-				add("wolf_suicide", "⚠️ 狼人自爆(慎用,不可逆,会失去发言机会)。立即终止发言进入黑夜,自爆狼死亡且无遗言。\n"+
+				add("wolf_suicide", "⚠️ 狼人自爆(慎用,不可逆)。立即终止发言;自爆狼出局、身份公开,**但可留遗言并带走一名玩家**(§20260830-02)。\n"+
 					"═══════════════════════════════════════════════════════════════\n"+
-					"【自爆阻断剧本 — 2026-07-10 §123】\n"+
+					"【自爆阻断剧本 — 2026-07-10 §123 / §20260830-02 强化】\n"+
 					"❶ **触发时机**:Day2/Day3 真预言家即将公布对所有狼的查验、悍跳即将暴露、我方票型即将崩盘。\n"+
 					"❷ **目的**:抢在「好人放逐我方一狼」之前**用一狼换一晚**(晚上狼刀可以继续屠杀)。\n"+
 					"❸ **自爆前的故事**:在 self-speak 文本中给一个「我认了,但你们别得意太早」的对抗性发言,然后再调自爆工具;不要裸调工具不说理由。\n"+
-					"❹ **慎用**:自爆狼无遗言,等同于「免费送走一狼」,需权衡:如果悍跳暴露在即,自爆可能值得;如果票型还能救,留着悍跳狼更划算。\n"+
+					"❹ **自爆后**:你可以留遗言(继续带节奏/掩护队友),然后在「带走」环节**点杀一名好人**(预言家/猎人优先);也可放弃带走。\n"+
+					"❺ **权衡**:自爆会亮身份+送一狼,但遗言+带人让它从「纯亏」变成「一换一」;若票型还能救,留着悍跳狼仍可能更划算。\n"+
 					"═══════════════════════════════════════════════════════════════",
 					schema(map[string]any{}))
 			}
@@ -626,6 +631,20 @@ func BuildTools(phase, role string, seat int, alive []int, speakTurn int, gc *ww
 		if role == "hunter" {
 			add("hunter_shoot", "猎人开枪。猎人死亡时可以选择带走一名存活玩家。选择 target=-1 表示放弃开枪（被毒杀时不能开枪）。",
 				schema(map[string]any{"target": map[string]any{"type": "integer", "description": "开枪目标座位号（-1=放弃开枪）", "enum": append(targetEnum, -1)}}, "target"))
+		}
+	// §20260830-02 — 自爆带走:仅自爆狼(已死)可调;gc.SuicideTakeSeat 由
+	// buildAgentContextLocked 在 PhaseSuicideTake 填充(其余阶段 -1)。
+	case "PhaseSuicideTake", "suicide_take":
+		if gc != nil && gc.SuicideTakeSeat == seat {
+			add("wolf_suicide_take", "🧨 自爆带走 — 你自爆出局后的最后一击,可选择带走一名存活玩家(不可撤回)。\n"+
+				"═══════════════════════════════════════════════════════════════\n"+
+				"【选择策略】\n"+
+				"❶ 优先带走你判断的**神职**(跳预言家/女巫/猎人者),直接削减好人核心战力。\n"+
+				"❷ 若无把握,带走发言最强势的好人领袖(归票核心)。\n"+
+				"❸ 注意:被带走者若是**猎人**,他会立刻开枪反带走一人 — 慎选猎人!\n"+
+				"❹ target=-1 = 放弃带走(当场无合适目标时保留体面,直接入夜)。\n"+
+				"═══════════════════════════════════════════════════════════════",
+				schema(map[string]any{"target": map[string]any{"type": "integer", "description": "带走目标座位号(-1=放弃带走)", "enum": append(targetEnum, -1)}}, "target"))
 		}
 	// §124: 复述段落已压缩 — git blame 与 docs/ 索引可还原
 
@@ -1208,6 +1227,9 @@ func dispatchToolInner(name string, input map[string]any, runner ToolRunner) (st
 		return runner.IdiotReveal("skip")
 	case "wolf_suicide":
 		return runner.WolfSuicide()
+	// §20260830-02 — 自爆带走(watchdog 兜底亦派发 wolf_suicide_take,target=-1)。
+	case "wolf_suicide_take":
+		return runner.SuicideTake(intInput(input, "target"))
 	case "whisper":
 		to, _ := input["to_seat"].(float64)
 		txt, _ := input["text"].(string)

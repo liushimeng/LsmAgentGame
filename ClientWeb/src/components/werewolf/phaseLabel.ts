@@ -36,6 +36,8 @@ const PHASE_OVERRIDES: Record<string, string> = {
   idiot_reveal: 'Idiot Reveal',
   death_lyric: 'Last Words',
   hunter_shoot: 'Hunter Shooting',
+  // §20260830-02 — 自爆带走:自爆狼(已死)选择带走一名存活玩家。
+  suicide_take: 'Suicide Take',
   over: 'Game Over',
 };
 
@@ -81,6 +83,8 @@ export const PHASE_ICONS: Record<string, string> = {
   idiot_reveal: '🃏',
   death_lyric: '🪦',
   hunter_shoot: '🔫',
+  // §20260830-02 — 自爆带走
+  suicide_take: '🧨',
   over: '🏁',
 };
 

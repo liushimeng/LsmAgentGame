@@ -1,0 +1,144 @@
+/* werewolf-suicide-take.css — §20260830-02 自爆带走 + 死亡横幅样式
+ *
+ * 设计文档:docs/狼人杀-角色设计/狼人杀自爆遗言与带走设计-20260830-02.md §7-6。
+ *
+ * 组件:SuicideTakeInline(自爆狼操作面板)/ DeadPlayerBanner(死亡横幅)/
+ *       .suicide-take-stage(全员可见提示条)。
+ *
+ * 对比度遵循 §26:正文 ≥4.5:1;警示红底白字;倒计时临届态加光晕;
+ * prefers-reduced-motion 兜底关闭所有动画。
+ */
+
+/* ─── 自爆狼操作面板(与 HunterShootInline 同骨架,警示更强) ─── */
+.suicide-take-panel {
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  background: rgba(127, 29, 29, 0.45);
+}
+
+.suicide-take-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.suicide-take-panel__header h4 {
+  margin: 0;
+  color: #fecaca;
+  font-size: 15px;
+}
+
+.suicide-take-panel__countdown {
+  color: #fde68a;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.suicide-take-panel__countdown.is-critical {
+  color: #fecaca;
+  animation: suicide-take-pulse 1s ease-in-out infinite;
+}
+
+.suicide-take-panel__hint {
+  margin: 6px 0 8px;
+  color: #fecaca;
+  font-size: 12.5px;
+  line-height: 1.55;
+  background: rgba(0, 0, 0, 0.35);
+  border-left: 3px solid #ef4444;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.suicide-take-panel__chip {
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #fff;
+}
+
+.suicide-take-panel__chip:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.45);
+}
+
+.suicide-take-panel__footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+@keyframes suicide-take-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ─── 全员可见提示条(自爆狼正在选择) ─── */
+.suicide-take-stage {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin: 6px 0;
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.45);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fecaca;
+  font-size: 13px;
+}
+
+.suicide-take-stage__icon {
+  font-size: 18px;
+}
+
+.suicide-take-stage__text {
+  font-weight: 600;
+  color: #fee2e2;
+}
+
+.suicide-take-stage__countdown {
+  margin-left: auto;
+  color: #fde68a;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── 死亡玩家常驻横幅 ─── */
+.dead-player-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 7px 12px;
+  margin: 6px 0;
+  border-radius: 8px;
+  background: rgba(52, 64, 75, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: #e2e8f0;
+  font-size: 12.5px;
+}
+
+.dead-player-banner__icon {
+  font-size: 16px;
+}
+
+.dead-player-banner__title {
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.dead-player-banner__hint {
+  color: #cbd5e1;
+}
+
+/* ─── 动效兜底:用户偏好减少动效时关闭脉冲 ─── */
+@media (prefers-reduced-motion: reduce) {
+  .suicide-take-panel__countdown.is-critical {
+    animation: none;
+  }
+}

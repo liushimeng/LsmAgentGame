@@ -445,6 +445,11 @@ func SkipPhaseAction(phase, role string) (string, int) {
 		// phase has no acting seat and permanently stalls. Skip via
 		// hunter_shoot(-1) = "don't shoot", which advances the day.
 		return "hunter_shoot", -1
+	case "suicide_take", "PhaseSuicideTake":
+		// §20260830-02 — 自爆带走兜底**永远放弃**(target=-1)而非随机带走:
+		// 随机带走期望收益为负(场上好人占多数时误带队友概率高),与猎魔人
+		// 兜底空过(demon_hunter_hunt_skip)同一决策原则。放弃后直接入夜。
+		return "wolf_suicide_take", -1
 	case "death_lyric", "PhaseDeathLyric":
 		// BUG 2026-07-09: 遗言 actor 被 quarantine 时,watchdog / skip 路径
 		// 派发 last_words_skip 放弃遗言,推进队列直至清空后恢复原路径。

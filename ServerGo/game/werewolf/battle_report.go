@@ -21,9 +21,10 @@ const (
 	HighlightKindGuardianShield  = "guardian_shield"  // 守卫守对
 	HighlightKindWitchSave       = "witch_save"       // 女巫救人成功
 	HighlightKindWitchPoisonWolf = "witch_poison_wolf" // 女巫毒杀命中狼
-	HighlightKindCloseVote       = "close_vote"       // 票数差 ≤1 险胜票
-	HighlightKindHunterKillWolf  = "hunter_kill_wolf" // 猎人带走狼
-	HighlightKindWolfSuicide     = "wolf_suicide"     // 狼自爆
+	HighlightKindCloseVote       = "close_vote"        // 票数差 ≤1 险胜票
+	HighlightKindHunterKillWolf  = "hunter_kill_wolf"  // 猎人带走狼
+	HighlightKindWolfSuicide     = "wolf_suicide"      // 狼自爆
+	HighlightKindSuicideTake     = "suicide_take"      // §20260830-02 自爆狼带走玩家
 )
 
 // BattleReportTriggersMax 是 FIFO 上限(§20260811-07 U2,防 13 人局触发失控)。

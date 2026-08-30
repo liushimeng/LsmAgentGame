@@ -1394,6 +1394,18 @@ func (r *agentRunner) WolfSuicide() (string, error) {
 	return "ok", nil
 }
 
+// SuicideTake §20260830-02 — 自爆带走。自爆狼(已死)在 suicide_take 阶段
+// 选择带走一名存活玩家(target=-1 放弃)。与人类 WS 帧同源进
+// Action_SuicideTake(公平性不变式 3)。
+func (r *agentRunner) SuicideTake(target int) (string, error) {
+	_, e := r.mgr.Action_SuicideTake(r.roomID, r.botUserID, Seat(target))
+	if e != nil {
+		return r.errStr(e), e
+	}
+	r.wakeAll()
+	return "ok", nil
+}
+
 // IdleThink 2026-07-08 §13.2 / Round 39 §94: LLM 主动选择沉默思考的
 // 工具回调。语义:不广播任何消息,仅由 run.go handleEvent 路径在
 // BotTranscript 追加审计行(LLM 主动调 idle_think 时,通过 tools.go

@@ -32,6 +32,8 @@ const KIND_ICON: Record<string, string> = {
   close_vote: '⚖️',
   hunter_kill_wolf: '🔫',
   wolf_suicide: '💥',
+  // §20260830-02 — 自爆带走
+  suicide_take: '🧨',
 };
 
 const KIND_COLOR: Record<string, string> = {
@@ -41,6 +43,8 @@ const KIND_COLOR: Record<string, string> = {
   close_vote: 'battle-report--vote',
   hunter_kill_wolf: 'battle-report--hunter',
   wolf_suicide: 'battle-report--wolf',
+  // §20260830-02 — 自爆带走(红色系与 wolf_suicide 同档)
+  suicide_take: 'battle-report--wolf',
 };
 
 export function BattleReportHighlights({ highlights }: BattleReportHighlightsProps) {

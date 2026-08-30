@@ -545,6 +545,31 @@ func (m *WerewolfManager) phaseWatchdogTick(r *WerewolfRoom) error {
 			return nil
 		}
 
+		// §20260830-02 — 自爆带走 120s 早期兜底(镜像 hunter_shoot 模式):
+		// deadline 一到立即派发 wolf_suicide_take(-1) 放弃带走,阶段推进入夜。
+		// 兜底永远放弃而非随机带走(期望收益为负,与猎魔人兜底空过同原则)。
+		if r.State.Phase == PhaseSuicideTake && actingSeat >= 0 &&
+			actingSeat < MaxPlayers &&
+			Seat(actingSeat) == r.State.SuicidedWolfSeat &&
+			elapsed >= phaseWatchdogHunterDeadline {
+			logger.L().Warn("werewolf: phase watchdog — suicide_take early skip (120s)",
+				zap.String("room_id", r.RoomID),
+				zap.Int("acting_seat", actingSeat),
+				zap.Duration("elapsed", elapsed))
+			roleName := r.State.Roles[actingSeat].String()
+			if skipName, skipArg := wwplayer.SkipPhaseAction(r.State.Phase.String(), roleName); skipName != "" {
+				if derr := m.dispatchQuarantinedSkipLocked(r, actingSeat, skipName, skipArg); derr != nil {
+					logger.L().Warn("werewolf: suicide_take early skip dispatch failed",
+						zap.String("room_id", r.RoomID),
+						zap.String("skip_tool", skipName), zap.Error(derr))
+				}
+			}
+			r.phaseWatchdog.enteredAt = now
+			r.phaseWatchdog.lastLog = now
+			r.phaseWatchdog.skipCount++
+			return nil
+		}
+
 		if elapsed >= phaseWatchdogDeadlineFor(r.State.SeatCount) {
 			// BUG-HUNTER2-P0-01 (2026-08-07): 警长竞选阶段是「并发行动」阶段
 			// —— 所有存活玩家同时举手参选 + 同时投票,**没有 acting_seat**。
@@ -861,6 +886,15 @@ func watchdogActingSeat(r *WerewolfRoom) int {
 		// 中体现,本处只负责"phase 是 hunter_shoot → 找到猎人"的
 		// 单一职责。
 		return findHunterSeat(r)
+	case PhaseSuicideTake:
+		// §20260830-02 — 自爆带走:acting seat = 自爆狼(已死)。
+		// SuicidedWolfSeat 由 WolfSuicide 置位、startNight 重置;异常
+		// (NoSeat 但 phase 仍是 suicide_take)时回退 lowestActiveBot,
+		// 派发放弃带走进阶段推进。
+		if gs.SuicidedWolfSeat >= 0 {
+			return int(gs.SuicidedWolfSeat)
+		}
+		return lowestActiveBotSeatLocked(r)
 	case PhaseIdiotReveal:
 		// 2026-07-10: 白痴翻牌阶段,acting seat 为最高票白痴(DayEliminated)。
 		if r.State.DayEliminated >= 0 {

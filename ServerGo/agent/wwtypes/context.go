@@ -99,6 +99,18 @@ type GameContext struct {
 	// 与 agent/tools.go 的 last_words 工具暴露判定都基于此字段。
 	DeathLyricCurrent int
 
+	// §20260830-02 — 死者行动白名单。
+	//
+	// DeadActorTurn:当前座位是「死亡触发的合法行动者」(遗言当前座位 /
+	// 待开枪的死亡猎人 / 待带走的自爆狼)。run.go 的死者守卫
+	// (dead seat; ignoring wake)据此放行 —— 此前死者一律被拦,死亡 Agent
+	// 永远发不出遗言、开不出猎枪,只能被 watchdog 代打 skip。
+	DeadActorTurn bool
+	// SuicideTakeSeat:自爆狼座位(0-indexed)。仅在 phase == "suicide_take"
+	// 时 >= 0;其余阶段为 -1。tools.go 的 wolf_suicide_take 暴露判定与
+	// prompt.go 的【自爆带走】引导块都基于此字段。
+	SuicideTakeSeat int
+
 	// 2026-07-10: 重开局投票阶段状态(由 manager.buildAgentContextLocked
 	// 在 phase == "restart_vote" 时填充)。BuildUserPrompt 据此渲染【重开局投票】块。
 	LastWinner              string // 上一局 winner ("wolf"/"good"/"")

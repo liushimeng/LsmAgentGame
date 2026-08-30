@@ -121,15 +121,16 @@ func buildAgentContextLocked(r *WerewolfRoom, seat int, driverSeat int) wwtypes.
 	}
 	gs := r.State
 	gc := wwtypes.GameContext{
-		Round:         gs.DayNumber,
-		Phase:         gs.Phase.String(),
-		Role:          gs.Roles[seat].String(),
-		MySeat:        seat, // BUG-WEREWOLF-P0-NEW-10: prompt uses seat+1 as the 1-indexed 玩家编号
-		SpeakTurn:     -1,
-		MySeerCheck:   -1,
-		WolfTarget:    -1,
-		IsDriver:      seat == driverSeat,
-		GameStartedAt: r.gameStartedAt,
+		Round:           gs.DayNumber,
+		Phase:           gs.Phase.String(),
+		Role:            gs.Roles[seat].String(),
+		MySeat:          seat, // BUG-WEREWOLF-P0-NEW-10: prompt uses seat+1 as the 1-indexed 玩家编号
+		SpeakTurn:       -1,
+		MySeerCheck:     -1,
+		WolfTarget:      -1,
+		SuicideTakeSeat: -1, // §20260830-02 — 仅 suicide_take 阶段 >= 0
+		IsDriver:        seat == driverSeat,
+		GameStartedAt:   r.gameStartedAt,
 		// 2026-07-10 §13: 本局实际人数(13/12/7),prompt.go 据此选择对应规则摘要渲染。
 		SeatCount: gs.SeatCount,
 	}
@@ -150,15 +151,15 @@ func buildAgentContextLocked(r *WerewolfRoom, seat int, driverSeat int) wwtypes.
 	gc.PhaseState = getPhaseStateContext(r, seat, gs.Phase.String(), func() *wwtypes.PhaseStateContext {
 		cands := gs.SheriffCandidates()
 		sc := &wwtypes.PhaseStateContext{
-			Phase:            gs.Phase.String(),
-			SheriffSeat:      int(gs.SheriffSeat),
-			SheriffStream:    [2]int{int(gs.SheriffStreams[0]), int(gs.SheriffStreams[1])},
+			Phase:              gs.Phase.String(),
+			SheriffSeat:        int(gs.SheriffSeat),
+			SheriffStream:      [2]int{int(gs.SheriffStreams[0]), int(gs.SheriffStreams[1])},
 			IdiotRevealedSeats: gs.idiotRevealedSeats(),
-			DivineCnt:        gs.DivineCnt,
-			PlainCnt:         gs.PlainCnt,
-			WolfAliveCnt:     gs.WolfAliveCnt,
-			VoteProposed:     gs.VoteProposed,
-			VoteProposer:     int(gs.VoteProposer),
+			DivineCnt:          gs.DivineCnt,
+			PlainCnt:           gs.PlainCnt,
+			WolfAliveCnt:       gs.WolfAliveCnt,
+			VoteProposed:       gs.VoteProposed,
+			VoteProposer:       int(gs.VoteProposer),
 		}
 		if len(cands) > 0 {
 			sc.SheriffCandidates = make([]int, len(cands))
@@ -325,11 +326,23 @@ func buildAgentContextLocked(r *WerewolfRoom, seat int, driverSeat int) wwtypes.
 		// hunter, leaving the room permanently stuck with no
 		// acting seat and watchdogActingSeat returning -1.
 		gc.MyTurn = gs.Roles[seat] == RoleHunter && gs.HunterPendingShoot
+		// §20260830-02 — 死者行动白名单:run.go 死者守卫据 DeadActorTurn
+		// 放行 LLM 调用(此前 MyTurn 修了、守卫没修,死亡 Agent 猎人
+		// 仍永远开不出枪)。
+		gc.DeadActorTurn = gc.MyTurn
 	case PhaseDeathLyric:
 		// BUG 2026-07-09: 遗言阶段。仅当前遗言座位(已是死者)可发遗言;
 		// alive=false 不再 §86 acting-bot 逻辑,改用权威字段 DeathLyricCurrent。
 		gc.MyTurn = Seat(seat) == gs.DeathLyricCurrent
 		gc.DeathLyricCurrent = int(gs.DeathLyricCurrent)
+		// §20260830-02 — 死者行动白名单(遗言当前座位放行)。
+		gc.DeadActorTurn = gc.MyTurn
+	case PhaseSuicideTake:
+		// §20260830-02 — 自爆带走:仅自爆狼(已死)可行动。与遗言/猎枪
+		// 同为「死亡触发的合法行动」,走死者行动白名单放行。
+		gc.MyTurn = Seat(seat) == gs.SuicidedWolfSeat
+		gc.SuicideTakeSeat = int(gs.SuicidedWolfSeat)
+		gc.DeadActorTurn = gc.MyTurn
 	case PhaseRestartVote:
 		// 2026-07-10: 重开局投票阶段。每个有资格的入座座位都可以调
 		// restart_vote (即使已死),因此 MyTurn=true 让 BuildUserPrompt

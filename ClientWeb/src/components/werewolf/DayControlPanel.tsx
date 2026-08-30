@@ -26,6 +26,10 @@ interface Props {
   // §198 骑士决斗:白天发言阶段由 onDuel(target) 触发, target=-1 = 放弃本轮。
   // 服务端 action='knight_duel',target 字段与 guard_protect/witch_act 一致。
   onDuel?: (target: number) => void;
+  // §20260830-02 修复:猎人「不开枪」此前误发 onFinish('vote') →
+  // Action_FinishVote 在 hunter_shoot 阶段被拒,人类猎人永远无法主动弃枪。
+  // 现改走 onShoot(-1) → game.werewolf_shoot {target:-1} 正确弃枪路径。
+  onShoot?: (target: number) => void;
   busy: boolean;
 }
 
@@ -34,7 +38,7 @@ const DAWN_AUTO_START_MS = 8000;
 // §20260823-02 P4 — 白天发言/投票面板折叠 localStorage 键(speak/vote 共用)。
 const LS_DAY_CONTROL_COLLAPSED = 'ww_panel_collapsed_day_control';
 
-export function DayControlPanel({ gameState, mySeat, onVote, onSheriff, onFinish, onOpenSheriffStream, onProposeVote, onDuel, busy }: Props) {
+export function DayControlPanel({ gameState, mySeat, onVote, onSheriff, onFinish, onOpenSheriffStream, onProposeVote, onDuel, onShoot, busy }: Props) {
   const t = useT();
   const phase = gameState.phase;
   const [target, setTarget] = useState<number | null>(null);
@@ -596,6 +600,8 @@ export function DayControlPanel({ gameState, mySeat, onVote, onSheriff, onFinish
   if (phase === 'hunter_shoot' && gameState.my_role === 'hunter') {
     // 2026-08-09 §20260808-03 — 缺陷 F:hunter_shoot 必然是死亡触发的合法操作,
     // 但需要在顶部加死态 hint,明示「死前的最后一击」。
+    // §20260830-02 修复:「不开枪」改走 onShoot(-1)(弃枪帧),此前误发
+    // onFinish('vote') 在 hunter_shoot 阶段必被服务端拒绝。
     return (
       <div className="werewolf-action-panel" data-testid="werewolf-hunter-shoot-panel">
         <h4>🎯 猎人请决定开枪</h4>
@@ -607,7 +613,7 @@ export function DayControlPanel({ gameState, mySeat, onVote, onSheriff, onFinish
         <div className="action-row">
           <button
             className="btn btn-secondary"
-            onClick={() => onFinish('vote')} // 不开枪等同放弃
+            onClick={() => (onShoot ? onShoot(-1) : onFinish('vote'))}
             disabled={busy}
           >
             不开枪
@@ -618,7 +624,9 @@ export function DayControlPanel({ gameState, mySeat, onVote, onSheriff, onFinish
                 key={s}
                 type="button"
                 className={`seat-chip ${target === s ? 'is-selected' : ''}`}
-                onClick={() => setTarget(s)}
+                // §20260830-02:有 onShoot 时点选即开枪(与 HunterShootInline
+                // 一致);旧调用方退化为纯选中(保持向后兼容)。
+                onClick={() => (onShoot ? onShoot(s) : setTarget(s))}
                 disabled={busy}
               >
                 #{s + 1}

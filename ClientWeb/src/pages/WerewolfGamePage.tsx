@@ -44,6 +44,10 @@ import { RecallChatPanel, type BotSeatOption } from '@/components/werewolf/Recal
 import { MyTurnIndicator } from '@/components/werewolf/MyTurnIndicator';
 import { LastWordsPanel } from '@/components/werewolf/LastWordsPanel';
 import { LastWordsStage } from '@/components/werewolf/LastWordsStage';
+// §20260830-02 — 自爆确认弹窗(共用 UI 组件)+ 自爆带走面板。
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { SuicideTakeInline } from '@/components/werewolf/SuicideTakeInline';
+import { DeadPlayerBanner } from '@/components/werewolf/DeadPlayerBanner';
 import PropPanel from '@/components/werewolf/PropPanel';
 // 2026-08-10 §20260810-06 — 行为承诺面板 + 按钮。
 import { CommitmentPanel } from '@/components/werewolf/CommitmentPanel';
@@ -103,7 +107,7 @@ export function WerewolfGamePage() {
   const showQueueBtn = (myUserType ?? 1) >= 2;
   const {
     joinGame, spectate, unspectate,
-    sendAction, vote, suicide, shoot,
+    sendAction, vote, suicide, suicideTake, shoot,
     sheriff, finish,
     leaveGame, requestState,
     castRestartVote, fastRestart, sheriffStream, idiotReveal, proposeVote,
@@ -120,6 +124,9 @@ export function WerewolfGamePage() {
   // 2026-07-10 12 人局: 警徽流声明面板显隐 + 白痴翻牌结果已观看标记。
   const [sheriffStreamOpen, setSheriffStreamOpen] = useState(false);
   const [idiotRevealWatched, setIdiotRevealWatched] = useState(false);
+  // §20260830-02 — 自爆确认弹窗(高危操作防误触):点击「💣 狼人自爆」先弹
+  // 确认,明确告知后果(亮身份+出局+遗言+带走),确认后才发帧。
+  const [suicideConfirmOpen, setSuicideConfirmOpen] = useState(false);
   useEffect(() => {
     // 离开 idiot_reveal 阶段时重置观看标记。
     if (gameState?.phase !== 'idiot_reveal') {
@@ -371,8 +378,15 @@ export function WerewolfGamePage() {
                      gameState?.my_role === 'werewolf' && mySeatAlive;
 
   const handleSuicide = useCallback(() => {
-    suicide();
-  }, [suicide]);
+    // §20260830-02 — 高危操作先弹确认(设计文档 §7-3①)。
+    setSuicideConfirmOpen(true);
+  }, []);
+
+  const handleSuicideTake = useCallback((target: number) => {
+    setBusy(true);
+    suicideTake(target);
+    setTimeout(() => setBusy(false), 500);
+  }, [suicideTake, setBusy]);
 
   const handleShoot = useCallback((target: number) => {
     setBusy(true);
@@ -659,6 +673,25 @@ export function WerewolfGamePage() {
                   观战者无分支差异。LastWordsPanel(本人操作面板)仍在下方 !spectator
                   块内单独渲染。 */}
               <LastWordsStage gameState={gameState!} />
+              {/* §20260830-02 — 死亡玩家常驻横幅:出局后每个阶段都能看到
+                  「我已出局 + 当前还能做什么」指引(遗言/猎枪/带走/幽灵观战)。 */}
+              {!spectator && (
+                <DeadPlayerBanner gameState={gameState!} mySeat={mySeat} />
+              )}
+              {/* §20260830-02 — 自爆带走全员可见提示:自爆狼正在选择带走
+                  目标(含倒计时);操作面板 SuicideTakeInline 在下方按座位渲染。 */}
+              {gameState!.phase === 'suicide_take' && (
+                <div className="suicide-take-stage" data-testid="suicide-take-stage">
+                  <span className="suicide-take-stage__icon">🧨</span>
+                  <span className="suicide-take-stage__text">
+                    {t('werewolf.suicideTake.stageHint')} #
+                    {(gameState!.suicided_wolf_seat ?? -1) + 1}
+                  </span>
+                  <span className="suicide-take-stage__countdown">
+                    ⏱ {Math.max(0, gameState!.phase_extra?.remaining_sec ?? 0)}s
+                  </span>
+                </div>
+              )}
               {!spectator && !showFillingOverlay && (
                 <>
                   {/* v20260830-01: 非角色卡牌模块统一折叠，减少留白，让座位表占用更多空间 */}
@@ -690,6 +723,7 @@ export function WerewolfGamePage() {
                       onOpenSheriffStream={() => setSheriffStreamOpen(true)}
                       onProposeVote={handleProposeVote}
                       onDuel={handleDuel}
+                      onShoot={handleShoot}
                       busy={busy}
                     />
                   </CollapsibleActionPanel>
@@ -792,6 +826,16 @@ export function WerewolfGamePage() {
                   {gameState!.hunter_pending && gameState!.my_role === 'hunter' && (
                     <HunterShootInline gameState={gameState!} onShoot={handleShoot} />
                   )}
+                  {/* §20260830-02 — 自爆带走面板:自爆狼(已死)在 suicide_take
+                      阶段选择带走目标/放弃。仅本人是自爆狼时渲染操作区。 */}
+                  {gameState!.phase === 'suicide_take' &&
+                    gameState!.suicided_wolf_seat === mySeat && (
+                      <SuicideTakeInline
+                        gameState={gameState!}
+                        onTake={handleSuicideTake}
+                        busy={busy}
+                      />
+                    )}
                   {/* 2026-07-21 §人类玩家操作重构 — 人类遗言面板。
                       仅 death_lyric + my_seat === DeathLyricCurrent 时渲染。 */}
                   {!spectator && (
@@ -988,6 +1032,22 @@ export function WerewolfGamePage() {
           players={gameState.players.map((p, i) => (p ? { seat: i, name: p.agent_name } : null))}
         />
       )}
+
+      {/* §20260830-02 — 自爆确认弹窗:高危操作(不可逆,亮身份+出局)。
+          确认文案明确新规则:自爆后有遗言,并可带走一名玩家。 */}
+      {suicideConfirmOpen && (
+        <ConfirmModal
+          message={t('werewolf.suicideConfirm.body')}
+          confirmLabel={t('werewolf.suicideConfirm.confirm')}
+          cancelLabel={t('common.cancel' as any)}
+          danger
+          onConfirm={() => {
+            setSuicideConfirmOpen(false);
+            suicide();
+          }}
+          onCancel={() => setSuicideConfirmOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1045,6 +1105,21 @@ function HunterShootInline({
             </button>
           );
         })}
+      </div>
+      {/* §20260830-02 修复:补「不开枪」出口(此前人类猎人无法主动弃枪,
+          只能等 watchdog 兜底代打)。target=-1 = 放弃且不亮身份(§135)。 */}
+      <div className="action-row" style={{ marginTop: 8 }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => {
+            onShoot(-1);
+            setSubmitted(true);
+          }}
+          data-testid="werewolf-hunter-decline"
+        >
+          🕊 {t('werewolf.suicideTake.declineShoot')}
+        </button>
       </div>
     </div>
   );

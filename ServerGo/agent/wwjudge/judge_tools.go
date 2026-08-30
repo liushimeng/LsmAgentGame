@@ -49,7 +49,7 @@ func BuildJudgeTools() []llm.ToolDef {
 				"revealed_dead_roles 清单);关闭时严禁在 text 中出现任何角色名。",
 			InputSchema: schema(map[string]any{
 				"seat":    map[string]any{"type": "integer", "description": "死亡座位号(0-indexed)"},
-				"cause":   map[string]any{"type": "string", "description": "wolf/vote/hunter/witch_poison/suicide"},
+				"cause":   map[string]any{"type": "string", "description": "wolf/vote/hunter/witch_poison/suicide/suicide_take/duel/demon_hunter_misjudge"},
 				"verdict": map[string]any{"type": "string", "enum": []string{"execution", "death"}, "description": "处决或死亡"},
 				"text":    map[string]any{"type": "string", "description": "宣告文本,≤80字"},
 			}, "seat", "verdict", "text"),

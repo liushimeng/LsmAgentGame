@@ -48,6 +48,8 @@ export type WerewolfPhase =
   | 'idiot_reveal'
   | 'death_lyric'
   | 'hunter_shoot'
+  // §20260830-02 — 自爆带走:自爆狼(已死)遗言后选择带走一名存活玩家。
+  | 'suicide_take'
   // 2026-07-10: 一局结束后 5 分钟内投票决定是否原地重开。
   | 'restart_vote'
   | 'over';
@@ -904,6 +906,9 @@ export type WerewolfAction =
   | 'demon_hunter_hunt'
   | 'vote'
   | 'suicide'
+  // §20260830-02 — 自爆带走动作,帧 game.werewolf_suicide_take
+  // 携带 { room_id, target: <seat|-1> };target=-1 = 放弃带走。
+  | 'suicide_take'
   | 'shoot'
   | 'sheriff_candidate'
   | 'sheriff_vote'

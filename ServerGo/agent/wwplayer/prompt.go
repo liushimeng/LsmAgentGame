@@ -370,6 +370,16 @@ func BuildUserPrompt(ctx wwtypes.GameContext) string {
 			s += "当前 " + itoa(ctx.DeathLyricCurrent+1) + " 号正在发表遗言。你可以用插话(interject)/私聊(whisper)自由讨论。\n"
 		}
 	}
+	// §20260830-02 — 自爆带走阶段提示块。自爆狼(已死)看到强提示,
+	// 其他座位看到"自爆狼正在选择带走目标"弱提示。
+	if ctx.Phase == "suicide_take" || ctx.Phase == "PhaseSuicideTake" {
+		if ctx.MyTurn && ctx.SuicideTakeSeat >= 0 {
+			s += "【自爆带走】你已自爆出局,现在可以带走一名存活玩家(不可撤回)。优先带走你判断的神职;" +
+				"注意被带走者若是猎人会立刻反枪。无合适目标可调 wolf_suicide_take(target=-1) 放弃。\n"
+		} else if ctx.SuicideTakeSeat >= 0 {
+			s += "自爆狼 " + itoa(ctx.SuicideTakeSeat+1) + " 号正在选择带走目标,稍后直接进入黑夜。\n"
+		}
+	}
 	if ctx.MyTurn {
 		s += "【现在轮到你行动】。\n"
 	}
@@ -738,7 +748,8 @@ func BuildUserPrompt(ctx wwtypes.GameContext) string {
 				s += " ⚠️ 时间紧迫:立即完成发言并调用 finish_speak,不要继续推理。"
 			}
 		case "vote", "PhaseVote", "night_wolves", "PhaseNightWolves", "night_seer", "PhaseNightSeer",
-			"night_witch", "PhaseNightWitch", "hunter_shoot", "PhaseHunterShoot", "idiot_reveal", "PhaseIdiotReveal":
+			"night_witch", "PhaseNightWitch", "hunter_shoot", "PhaseHunterShoot", "idiot_reveal", "PhaseIdiotReveal",
+			"suicide_take", "PhaseSuicideTake": // §20260830-02 — 自爆带走同属关键决策
 			if ctx.PhaseDeadlineRemainingSec <= 10 {
 				s += " ⚠️ 时间紧迫:立即做出合法选择,若无法判断请调 idle_silent (role=player)。"
 			}
@@ -911,6 +922,9 @@ func phaseDesc(p string) string {
 	case "PhaseDeathLyric", "death_lyric":
 		// BUG 2026-07-09: 遗言阶段。LastWords=true 的出局玩家按座位升序发言。
 		return "💀 遗言阶段"
+	case "PhaseSuicideTake", "suicide_take":
+		// §20260830-02 — 自爆带走:自爆狼选择带走一名存活玩家。
+		return "🧨 自爆带走"
 	case "PhaseIdiotReveal", "idiot_reveal":
 		// 2026-07-10 §3.5 / §12:白痴翻牌结算。
 		return "白痴翻牌"

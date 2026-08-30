@@ -836,6 +836,9 @@ func (s *GameService) HandleClientFrame(c *Client, env Envelope) {
 		s.handleWerewolfVote(c, env)
 	case "game.werewolf_suicide":
 		s.handleWerewolfSuicide(c, env)
+	case "game.werewolf_suicide_take":
+		// §20260830-02 — 自爆带走:自爆狼(已死)选择带走一名存活玩家。
+		s.handleWerewolfSuicideTake(c, env)
 	case "game.werewolf_shoot":
 		s.handleWerewolfShoot(c, env)
 	case "game.werewolf_sheriff":

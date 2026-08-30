@@ -379,6 +379,15 @@ export function useWerewolf(roomId: string) {
     wsClient.send('game.werewolf_suicide', { room_id: roomId });
   }, [roomId]);
 
+  // §20260830-02 — 自爆带走:自爆狼(已死)在 suicide_take 阶段选择带走目标;
+  // target=-1 = 放弃带走。
+  const suicideTake = useCallback(
+    (target: number) => {
+      wsClient.send('game.werewolf_suicide_take', { room_id: roomId, target });
+    },
+    [roomId],
+  );
+
   // 2026-07-11: 预言家发起投票
   const proposeVote = useCallback(() => {
     wsClient.send('game.werewolf_propose_vote', { room_id: roomId });
@@ -490,7 +499,7 @@ export function useWerewolf(roomId: string) {
   }, [roomId]);
 
   return {
-    joinGame, spectate, unspectate, sendAction, vote, suicide, shoot, sheriff, finish, resign, leaveGame,
+    joinGame, spectate, unspectate, sendAction, vote, suicide, suicideTake, shoot, sheriff, finish, resign, leaveGame,
     castRestartVote, fastRestart, sheriffStream, idiotReveal, requestState, proposeVote, lastWords, useProp,
   };
 }

@@ -345,7 +345,7 @@ type GameSnapshot struct {
 type DeadRoleFact struct {
 	Seat    int    // 座位号(0-indexed;宣告时 +1 转对外 1-indexed)
 	Role    string // 角色 key(werewolf/seer/witch/hunter/idiot/guard/knight/demon_hunter/villager)
-	Cause   string // wolf/vote/witch_poison/hunter/suicide/duel/demon_hunter_misjudge/disconnected
+	Cause   string // wolf/vote/witch_poison/hunter/suicide/suicide_take(§20260830-02)/duel/demon_hunter_misjudge/disconnected
 	Verdict string // execution / death
 }
 

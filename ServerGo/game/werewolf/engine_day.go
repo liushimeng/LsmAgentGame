@@ -387,13 +387,23 @@ func (gs *GameState) WolfSuicide(actor Seat) *errcode.Error {
 		return errcode.Code(errcode.ErrPermissionDenied)
 	}
 	gs.SuicidedWolfSeat = actor
-	gs.Players[actor].LastWords = false
+	// §20260830-02 — 自爆遗言权交由 killPlayer 按 cause="suicide" 计算
+	// (开关开启 → 必有遗言;关闭 → false,旧行为)。此处不再硬置 false。
 	if err := gs.killPlayer(actor, "suicide"); err != nil {
 		return errcode.CodeMsg(errcode.ErrValidationFailed, err.Message)
 	}
 	if gs.checkWinner() {
 		return nil
 	}
+	if isSuicideTakeEnabled() {
+		// 新链路:自爆狼遗言 → suicide_take 带走 → (目标遗言/猎反枪) → advanceDay 入夜。
+		gs.tryEnterDeathLyricRound([]Seat{actor}, func() *errcode.Error {
+			return gs.startSuicideTake()
+		})
+		return nil
+	}
+	// 旧行为(开关关闭):无遗言,直接入夜。注意保留历史行为 —— 裸调
+	// startNight 不递增 DayNumber(回退优先于顺手修复,设计文档 §4-8)。
 	gs.startNight()
 	return nil
 }

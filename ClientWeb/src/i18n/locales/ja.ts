@@ -790,6 +790,8 @@ const ja: Dict = {
   'werewolf.phase.idiot_reveal': '白痴オープン',
   'werewolf.phase.death_lyric': '遺言フェーズ',
   'werewolf.phase.hunter_shoot': 'ハンター発砲',
+  // §20260830-02 — 自爆道連れフェーズ。
+  'werewolf.phase.suicide_take': '🧨 自爆道連れ中',
   'werewolf.phase.over': '対局終了',
   'werewolf.phase.restart_vote': '投票・同部屋リスタート',
   // 2026-07-10 §重构 + §128 対話即思考 — LLM 呼び出しフェーズ状態マシンの文言
@@ -1158,6 +1160,21 @@ const ja: Dict = {
   'werewolf.dead.actions.title': '生存プレイヤーが{phase}中です。あなたができること:',
   'werewolf.dead.actions.watch': '📺 チャットと他プレイヤーの行動を視聴',
   'werewolf.dead.actions.lastwords': '💀 遺言フェーズを待つ',
+  // §20260830-02 — 死亡プレイヤー常駐バナー。
+  'werewolf.dead.banner.title': 'あなたは脱落しました',
+  'werewolf.dead.banner.ghostHint': 'ゴースト観戦モード · 対局とチャットを視聴できます',
+  'werewolf.dead.banner.lastWordsActing': 'あなたの遺言の番です — 下のパネルから入力してください',
+  'werewolf.dead.banner.lastWordsWaiting': '他の死者の遺言を待っています…',
+  'werewolf.dead.banner.hunterHint': 'あなたはハンター — 生存者を 1 人撃って道連れにできます',
+  'werewolf.dead.banner.suicideTakeHint': 'あなたは自爆した人狼 — 生存者を 1 人道連れにできます',
+  // §20260830-02 — 自爆確認ダイアログ + 自爆道連れ。
+  'werewolf.suicideConfirm.body': '自爆すると即座に脱落し、人狼の正体が公開されます(不可逆)。自爆後は遺言を残し、1 人を道連れにできます。実行しますか?',
+  'werewolf.suicideConfirm.confirm': '自爆する',
+  'werewolf.suicideTake.title': '自爆道連れ · 最後の一撃',
+  'werewolf.suicideTake.deadHint': '☠ あなたは自爆脱落済み — 生存者を 1 人選んで道連れにします(取り消し不可);相手がハンターなら即座に撃ち返されます。',
+  'werewolf.suicideTake.decline': '道連れを諦める',
+  'werewolf.suicideTake.declineShoot': '撃たない',
+  'werewolf.suicideTake.stageHint': '自爆した人狼が道連れを選択中 ·',
   // v2 リデザイン — 干渉信号 / 全体経済文言。
   'werewolf.prop.survivalTitle': '道具システム v2 · 長期的なコイン生存',
   'werewolf.prop.survivalBody': 'コイン = 生命力。道具消費の 30% は永久破棄——逆転/逆転阻止時にのみ使用。アンティ(100) に近い残高では絶対に使わない。対戦相手とルームの道具プールを共有します。',

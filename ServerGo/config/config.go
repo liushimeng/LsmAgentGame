@@ -109,6 +109,12 @@ type WerewolfConfig struct {
 	DeathLyricEnabled     bool `json:"death_lyric_enabled"`      // 启用遗言阶段,默认 true
 	DeathLyricDeadlineSec int  `json:"death_lyric_deadline_sec"` // 遗言每座位截止秒数,默认 30
 
+	// §20260830-02 — 自爆强化(遗言+带走)总开关,默认 true。
+	// true : 狼人自爆 → 遗言 → 自爆带走(suicide_take 阶段)→ 入夜。
+	// false: 回退旧行为(自爆无遗言,直接 startNight)。
+	// 设计文档:docs/狼人杀-角色设计/狼人杀自爆遗言与带走设计-20260830-02.md
+	SuicideTakeEnabled bool `json:"suicide_take_enabled"`
+
 	// 2026-07-14 BUG-R116-03 — 同一座位在一轮发言阶段的最小发言间隔(秒)。
 	// 防止单个 Agent 因响应快/思考预算松而在同一轮内刷屏发言。默认 60s。
 	SameSeatSpeakCooldownSec int `json:"same_seat_speak_cooldown_sec"`
@@ -941,6 +947,11 @@ func applyDefaults(c *Config) {
 	if c.Werewolf.DeathLyricDeadlineSec == 0 {
 		c.Werewolf.DeathLyricDeadlineSec = 30
 	}
+	// §20260830-02 — 自爆强化(遗言+带走)默认启用;operator 置 false
+	// 可完整回退旧行为(自爆无遗言、直接入夜)。
+	if !c.Werewolf.SuicideTakeEnabled {
+		c.Werewolf.SuicideTakeEnabled = true
+	}
 	// 2026-07-10: 重开局投票默认启用; DeadlineSec=300(5 分钟);
 	// 通过比例 ≥ 2/3 + 1 票 (实现里 +1); MinPlayers=2 (单人不进入投票)。
 	if !c.Werewolf.RestartVote.Enabled {
@@ -1161,6 +1172,8 @@ func applyDefaults(c *Config) {
 			// watchdog 兜底 90s 太久; R70 Day 1 death_lyric 95s 才 skip。
 			// 使用专用 DeathLyricDeadlineSec(默认 30s),与单座位发言节流匹配。
 			"death_lyric": c.Werewolf.DeathLyricDeadlineSec,
+			// §20260830-02 — 自爆带走:单决策阶段,与 hunter_shoot 同档。
+			"suicide_take": 240,
 		}
 	}
 }

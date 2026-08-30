@@ -307,6 +307,43 @@ func (s *GameService) handleWerewolfSuicide(c *Client, env Envelope) {
 	s.checkWerewolfGameOver(req.RoomID)
 }
 
+// handleWerewolfSuicideTake §20260830-02 — 自爆带走(人类玩家路径)。
+// payload { room_id, target? };target 缺省/-1 = 放弃带走。
+// 与 Agent 工具 wolf_suicide_take 同源进 Action_SuicideTake(公平性不变式 3)。
+func (s *GameService) handleWerewolfSuicideTake(c *Client, env Envelope) {
+	var req struct {
+		RoomID string `json:"room_id"`
+		Target *int   `json:"target"`
+	}
+	if err := json.Unmarshal(env.Payload, &req); err != nil || req.RoomID == "" {
+		s.sendError(c, env.Seq, 20001, "invalid game.werewolf_suicide_take payload")
+		return
+	}
+	if s.rejectIfSpectator(c, env, req.RoomID) {
+		return
+	}
+	var t werewolf.Seat = werewolf.NoSeat
+	if req.Target != nil {
+		t = werewolf.Seat(*req.Target)
+	}
+	if _, e := s.werewolfMgr.Action_SuicideTake(req.RoomID, c.UserID, t); e != nil {
+		s.sendError(c, env.Seq, e.Code, e.Message)
+		return
+	}
+	s.hub.BroadcastRoom(req.RoomID, Envelope{
+		Type: "game.action_accepted",
+		Payload: mustMarshal(map[string]any{
+			"room_id":   req.RoomID,
+			"game_kind": "werewolf",
+			"by":        c.UserID,
+			"action":    "suicide_take",
+			"target":    req.Target,
+		}),
+	})
+	s.broadcastWerewolfState(req.RoomID)
+	s.checkWerewolfGameOver(req.RoomID)
+}
+
 func (s *GameService) handleWerewolfShoot(c *Client, env Envelope) {
 	var req struct {
 		RoomID string `json:"room_id"`
