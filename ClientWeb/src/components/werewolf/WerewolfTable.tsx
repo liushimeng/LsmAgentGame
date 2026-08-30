@@ -273,6 +273,13 @@ interface SeatCellProps {
    * (第 1 天首次投票结算前),此时不渲染徽章。
    */
   influence?: InfluenceScoreJSON;
+  /**
+   * v20260830-01 — 当前座位是否是我的「狼队友」。
+   * 由父 WerewolfTable 基于 cs.my_faction === "wolf" 与 cs.wolf_teammate_seats
+   * 计算后注入。仅对狼人本人渲染,其他玩家/观战者均无此标识。
+   * 注:当 isMySeat=true 时(自己也是狼人)也会渲染此徽章,以提示「同属狼人阵营」。
+   */
+  isWolfTeammate?: boolean;
 }
 
 /** §20260811-02 U1 — 影响力分档(⭐高 / ◉中 / ○低),与 CSS 类名 is-* 对应。 */
@@ -298,6 +305,7 @@ const SeatCell: React.FC<SeatCellProps> = ({
   compact = false,
   isLastWordsSpeaking = false,
   influence,
+  isWolfTeammate = false,
 }) => {
   const t = useT();
   // §R178-OBS1: 区分「空座位(无人)」与「死亡玩家」 — 后端 view.go:357 对空座位
@@ -394,6 +402,8 @@ const SeatCell: React.FC<SeatCellProps> = ({
         isLastRow ? 'is-last-row' : '',
         isPropTarget ? 'is-prop-target' : '',
         isLastWordsSpeaking ? 'werewolf-seat--last-words-speaking' : '',
+        // v20260830-01：狼人本人看到自己阵营队友时给紫色高亮（包含自己也是狼人时也高亮）
+        isWolfTeammate ? 'is-wolf-teammate' : '',
       ].filter(Boolean).join(' ')}
       data-testid={`werewolf-seat-${seatIdx}`}
     >
@@ -444,6 +454,15 @@ const SeatCell: React.FC<SeatCellProps> = ({
             {isEmptySeat ? '空' : (displayRevealed ? roleText : unknownRole)}
           </span>
           {isMySeat && <span className="werewolf-seat__self-badge">(我)</span>}
+          {isWolfTeammate && !isEmptySeat && (
+            <span
+              className="werewolf-seat__wolf-teammate-badge"
+              title={t('werewolf.wolfTeammate')}
+              data-testid={`wolf-teammate-${seatIdx}`}
+            >
+              🐺
+            </span>
+          )}
           {player.is_sheriff && <span className="werewolf-seat__sheriff-badge" title="警长">★</span>}
           {isIdiotRevealed && <span className="werewolf-seat__idiot-badge" title="白痴翻牌">🃏</span>}
           {/* §20260811-02 U1 — 发言影响力徽章。全员可见(分数只由公开信息计算,
@@ -641,6 +660,19 @@ export function WerewolfTable({ gameState, mySeat, identityGuess, spectator = fa
   const total = gameState.max_seat ?? 13;
   const phase = String(gameState.phase ?? 'filling');
   const isNight = NIGHT_PHASES.has(phase);
+
+  // v20260830-01：狼人本人查看时的「狼队友座位」set。仅在 my_faction==="wolf" 时由
+  // 后端下发 wolf_teammate_seats；非狼人 / 观战者此字段为 undefined，下发到 Set 为空
+  // 不渲染任何狼队友高亮。合规检查:仅狼人本人能拿到 wolf_teammate_seats(后端 §135)。
+  const wolfTeammateSet = useMemo(() => {
+    const set = new Set<number>();
+    if (gameState.my_faction === 'wolf' && Array.isArray(gameState.wolf_teammate_seats)) {
+      for (const s of gameState.wolf_teammate_seats) {
+        if (typeof s === 'number' && s >= 0 && s < total) set.add(s);
+      }
+    }
+    return set;
+  }, [gameState.my_faction, gameState.wolf_teammate_seats, total]);
 
   // §126 §123 死亡信息:三源合并构建 seat → DeadPlayerJSON 映射。
   const deadInfoMap = useMemo(() => {
@@ -867,6 +899,7 @@ export function WerewolfTable({ gameState, mySeat, identityGuess, spectator = fa
                 influence={influenceMap.get(seatIdx)}
                 gameStatus={gameState.status}
                 isLastWordsSpeaking={seatIdx === lastWordsCurrentSeat}
+                isWolfTeammate={wolfTeammateSet.has(seatIdx)}
               />
             );
           }),

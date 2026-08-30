@@ -76,8 +76,8 @@ func TestEmotionSwitchSpeak_T1_LegacyNotExposed(t *testing.T) {
 	alive := []int{0, 1, 2, 3}
 	gcs := []*wwtypes.GameContext{
 		nil,
-		{DeathLyricCurrent: -1, GuardLastProtect: -1, SheriffSeat: -1, WolfTeammateSeat: -1, Round: 3},
-		{DeathLyricCurrent: 0, GuardLastProtect: -1, SheriffSeat: 0, WolfTeammateSeat: -1, Round: 3},
+		{DeathLyricCurrent: -1, GuardLastProtect: -1, SheriffSeat: -1, WolfTeammateSeats: nil, Round: 3},
+		{DeathLyricCurrent: 0, GuardLastProtect: -1, SheriffSeat: 0, WolfTeammateSeats: nil, Round: 3},
 	}
 	for _, phase := range phases {
 		for _, role := range roles {
@@ -123,7 +123,7 @@ func TestEmotionSwitchSpeak_T2_ExposedInActivePhases(t *testing.T) {
 	alive := []int{0, 1, 2, 3}
 	gcs := []*wwtypes.GameContext{
 		nil,
-		{DeathLyricCurrent: 0, GuardLastProtect: -1, SheriffSeat: 0, WolfTeammateSeat: -1, Round: 3},
+		{DeathLyricCurrent: 0, GuardLastProtect: -1, SheriffSeat: 0, WolfTeammateSeats: nil, Round: 3},
 	}
 	for _, phase := range phases {
 		found := false

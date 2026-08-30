@@ -129,14 +129,14 @@ func TestAddWolfWhisperTool_Gating(t *testing.T) {
 
 	// Case 3: wolf but no teammate
 	tools = tools[:0]
-	addWolfWhisperTool(add, &wwtypes.GameContext{Faction: "wolf", WolfTeammateSeat: -1})
+	addWolfWhisperTool(add, &wwtypes.GameContext{Faction: "wolf", WolfTeammateSeats: nil})
 	if len(tools) != 0 {
 		t.Fatalf("wolf without teammate should not mount wolf_whisper, got: %v", tools)
 	}
 
 	// Case 4: wolf with teammate
 	tools = tools[:0]
-	addWolfWhisperTool(add, &wwtypes.GameContext{Faction: "wolf", WolfTeammateSeat: 3})
+	addWolfWhisperTool(add, &wwtypes.GameContext{Faction: "wolf", WolfTeammateSeats: []int{0, 1, 3}})
 	if len(tools) != 1 || tools[0] != "wolf_whisper" {
 		t.Fatalf("wolf with teammate should mount wolf_whisper, got: %v", tools)
 	}

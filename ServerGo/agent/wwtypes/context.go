@@ -260,10 +260,9 @@ type GameContext struct {
 	// ─── 狼人小队交流 v4 §13.1 ───
 	// Faction 是本 bot 所属阵营（"wolf"/"good"/""）。仅在狼 bot 时挂载 wolf_whisper 工具。
 	Faction string
-	// WolfTeammateSeat 是开局系统随机注入的已知狼队友座位（0-indexed, -1=未启用）。
-	// §20260810-04 U1 起仅控制「是否互知身份」,不再门控 wolf_whisper 挂载
-	// (通道本身对所有狼 bot 开放,speak + night_wolves 两阶段均可用)。
-	WolfTeammateSeat int
+	// WolfTeammateSeats 是开局系统注入的所有狼队友座位列表（0-indexed, 空=非狼人）。
+	// v20260830-01 起所有狼人可知全部狼队友身份，无随机性，保证公平。
+	WolfTeammateSeats []int
 	// WolfPackSnapshot 是最近 20 条狼小队留言（buildAgentContextLocked 从房间 WolfPackRoom.Snapshot 填充）。
 	// 仅狼 bot 在 user prompt 中看到(协议层隔离 — 不入 HeartThought/公屏/观众)。
 	WolfPackSnapshot []WolfPackMsg

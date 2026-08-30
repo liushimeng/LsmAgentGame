@@ -507,6 +507,18 @@ export interface Dict {
   'werewolf.panel.voted': string; // {seat}
   'werewolf.panel.submitted': string;
   'werewolf.panel.restartVoted': string; // {choice}
+  // v20260830-01: 非角色卡牌模块折叠标题
+  'werewolf.panel.nightAction': string;
+  'werewolf.panel.dayControl': string;
+  'werewolf.panel.prop': string;
+  'werewolf.panel.secretLetter': string;
+  'werewolf.panel.factionBet': string;
+  'werewolf.panel.commitments': string;
+  'werewolf.panel.lastWords': string;
+  // v20260830-01: 狼队友标注
+  'werewolf.wolfTeammate': string;
+  'werewolf.wolfIdentity.human': string;
+  'werewolf.wolfIdentity.agent': string;
   // 2026-08-09 §20260808-03 — 死亡玩家在各阶段看到的观察者提示。
   'werewolf.dead.title': string; // {phase}
   'werewolf.dead.nightHint': string;

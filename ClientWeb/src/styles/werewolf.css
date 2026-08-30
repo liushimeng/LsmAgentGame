@@ -456,6 +456,31 @@
 }
 .werewolf-table__grid {
   overflow-y: auto;
+  /* v20260830-01: 让座位表在 board-container 中撑满剩余空间,
+     其他可折叠面板(投票/道具/夜晚行动等)默认折叠后,
+     角色卡牌模块占据绝大部分高度,减少留白 */
+  flex: 1 1 auto;
+  min-height: 320px;
+}
+
+/* v20260830-01: 狼人阵营玩家查看队友时的紫色高亮边框。
+   仅 my_faction==="wolf" + 座位在 wolf_teammate_seats 时挂 is-wolf-teammate 类 */
+.werewolf-seat.is-wolf-teammate {
+  border-color: #b266ff;
+  box-shadow: 0 0 0 2px rgba(178, 102, 255, 0.45),
+              0 0 18px rgba(178, 102, 255, 0.25);
+}
+.werewolf-seat__wolf-teammate-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  margin: 0 2px;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: rgba(178, 102, 255, 0.18);
+  color: #d4a4ff;
+  border: 1px solid rgba(178, 102, 255, 0.5);
 }
 .werewolf-game .werewolf-action-panel {
   flex-shrink: 0;

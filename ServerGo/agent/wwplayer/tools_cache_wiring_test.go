@@ -119,7 +119,7 @@ func TestToolsCacheWiring_U2_05_EquivalenceMatrix(t *testing.T) {
 		speakTurn   int
 		gc          *wwtypes.GameContext
 	}{
-		{"night_wolves", "werewolf", 1, -1, &wwtypes.GameContext{MySeat: 1, Round: 1, Faction: "wolf", WolfTeammateSeat: 3}},
+		{"night_wolves", "werewolf", 1, -1, &wwtypes.GameContext{MySeat: 1, Round: 1, Faction: "wolf", WolfTeammateSeats: []int{0, 1, 3}}},
 		{"night_seer", "seer", 2, -1, &wwtypes.GameContext{MySeat: 2, Round: 2}},
 		{"night_witch", "witch", 3, -1, &wwtypes.GameContext{MySeat: 3, Round: 2}},
 		{"speak", "villager", 4, 4, &wwtypes.GameContext{MySeat: 4, Round: 3}},

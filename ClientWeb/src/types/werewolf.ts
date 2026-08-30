@@ -182,6 +182,12 @@ export interface WerewolfGameState {
    */
   my_preferred_role?: string;
   my_role_pref_unmet?: boolean;
+  /**
+   * v20260830-01：狼人阵营玩家可见的所有狼队友座位列表（仅本人可见）。
+   * 0-indexed seat 数组；非狼人玩家 / 观战者无此字段。
+   * 前端 WerewolfTable 据此高亮标注所有狼队友座位，让狼玩家快速识别。
+   */
+  wolf_teammate_seats?: number[];
   phase: WerewolfPhase | string;
   day: number;
   status: 'playing' | 'over' | string;

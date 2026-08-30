@@ -245,7 +245,7 @@ func toolsShapeExtra(seat, speakTurn int, gc *wwtypes.GameContext) string {
 	if round > 2 {
 		round = 2 // Round 只以 <2 / >=2 影响 demon_hunter 首夜文案,归一化提升命中率
 	}
-	return fmt.Sprintf("s%d|t%d|g%d|r%d|ss%d|st%d,%d|vp%d|dl%d|sc%s|f%s|wt%d|wk%d|ps%s|ph%d|rc%d",
+	return fmt.Sprintf("s%d|t%d|g%d|r%d|ss%d|st%d,%d|vp%d|dl%d|sc%s|f%s|wt%s|wk%d|ps%s|ph%d|rc%d",
 		seat, mySpeakTurn,
 		gc.GuardLastProtect,
 		round,
@@ -255,7 +255,7 @@ func toolsShapeExtra(seat, speakTurn int, gc *wwtypes.GameContext) string {
 		gc.DeathLyricCurrent,
 		intSliceHash(gc.SheriffCandidates),
 		gc.Faction,
-		gc.WolfTeammateSeat,
+		intSliceHash(gc.WolfTeammateSeats),
 		gc.WolfKingSeat,
 		propSnapshotHash(gc.PropSnapshot),
 		boolToInt(len(gc.PropHistorySnapshot) > 0),

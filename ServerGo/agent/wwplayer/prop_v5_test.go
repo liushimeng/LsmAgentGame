@@ -115,16 +115,16 @@ func TestWolfWhisperMountsOnlyForWolfFaction(t *testing.T) {
 		t.Fatalf("wolf_whisper should not mount for good faction")
 	}
 	// §20260810-04 U1 — WolfTeammateSeat=-1 现在应挂载(通道对所有狼 bot 开放)。
-	wolfNoTeammate := MountTools(ToolPhaseSpeak, &wwtypes.GameContext{Faction: "wolf", WolfTeammateSeat: -1})
+	wolfNoTeammate := MountTools(ToolPhaseSpeak, &wwtypes.GameContext{Faction: "wolf", WolfTeammateSeats: nil})
 	if !containsName(wolfNoTeammate, "wolf_whisper") {
 		t.Fatalf("wolf_whisper should mount when faction=wolf regardless of WolfTeammateSeat (U1)")
 	}
-	wolfWithTeammate := MountTools(ToolPhaseSpeak, &wwtypes.GameContext{Faction: "wolf", WolfTeammateSeat: 3})
+	wolfWithTeammate := MountTools(ToolPhaseSpeak, &wwtypes.GameContext{Faction: "wolf", WolfTeammateSeats: []int{0, 1, 3}})
 	if !containsName(wolfWithTeammate, "wolf_whisper") {
 		t.Fatalf("wolf_whisper should mount when faction=wolf")
 	}
 	// §20260810-04 U1 — 同样挂载在 night 阶段(配套 mountFromRegistry call)。
-	wolfNight := MountTools(ToolPhaseNight, &wwtypes.GameContext{Faction: "wolf", WolfTeammateSeat: -1})
+	wolfNight := MountTools(ToolPhaseNight, &wwtypes.GameContext{Faction: "wolf", WolfTeammateSeats: nil})
 	if !containsName(wolfNight, "wolf_whisper") {
 		t.Fatalf("wolf_whisper should mount at ToolPhaseNight when faction=wolf (U1)")
 	}

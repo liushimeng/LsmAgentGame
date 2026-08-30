@@ -1133,6 +1133,17 @@ const en: Dict = {
   'werewolf.panel.voted': '✅ Voted #{seat}',
   'werewolf.panel.submitted': '✅ Submitted, awaiting phase',
   'werewolf.panel.restartVoted': '✅ Voted {choice}, waiting others',
+  'werewolf.panel.nightAction': 'Night Action',
+  'werewolf.panel.dayControl': 'Day Control',
+  'werewolf.panel.prop': 'Props',
+  'werewolf.panel.secretLetter': 'Secret Letter',
+  'werewolf.panel.factionBet': 'Faction Bet',
+  'werewolf.panel.commitments': 'Commitments',
+  'werewolf.panel.lastWords': 'Last Words',
+  // v20260830-01: 狼队友标注
+  'werewolf.wolfTeammate': 'Wolf Teammate',
+  'werewolf.wolfIdentity.human': 'Human',
+  'werewolf.wolfIdentity.agent': 'Agent',
   // 2026-08-09 §20260808-03 — Dead-player observer hints
   'werewolf.dead.title': 'You are dead · {phase}',
   'werewolf.dead.nightHint': 'Night actions belong to living players (wolf/guard/seer/witch). Await dawn.',

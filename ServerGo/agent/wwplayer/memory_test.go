@@ -91,13 +91,13 @@ func TestPickWolfTeammateHint_Deterministic(t *testing.T) {
 // TestIdentityPromptWithWolfHint_NoHint 验证未注入提示时与原 identityPrompt 行为一致。
 func TestIdentityPromptWithWolfHint_NoHint(t *testing.T) {
 	base := identityPrompt("werewolf", "wolf", "屠边", 0)
-	explicit := identityPromptWithWolfHint("werewolf", "wolf", "屠边", 0, -1)
+	explicit := identityPromptWithWolfHint("werewolf", "wolf", "屠边", 0, nil)
 	if base != explicit {
-		t.Errorf("wolfTeammateSeat=-1 should produce identical text to identityPrompt")
+		t.Errorf("wolfTeammateSeats=nil should produce identical text to identityPrompt")
 	}
-	// 非狼人:即使 wolfTeammateSeat >= 0 也不注入。
-	withHint := identityPromptWithWolfHint("villager", "good", "放逐全部狼人", 0, 5)
-	if strings.Contains(withHint, "开局互认队友") {
+	// 非狼人:即使 WolfTeammateSeats 非空也不注入。
+	withHint := identityPromptWithWolfHint("villager", "good", "放逐全部狼人", 0, []int{5})
+	if strings.Contains(withHint, "开局互认所有狼队友") {
 		t.Errorf("non-wolf should not get the hint section, got: %s", withHint)
 	}
 }
@@ -105,8 +105,8 @@ func TestIdentityPromptWithWolfHint_NoHint(t *testing.T) {
 // TestIdentityPromptWithWolfHint_HasHint 验证狼人 + wolfTeammateSeat >= 0 时
 // 正确注入提示(包含 1-indexed 玩家编号与 0-indexed 座位)。
 func TestIdentityPromptWithWolfHint_HasHint(t *testing.T) {
-	out := identityPromptWithWolfHint("werewolf", "wolf", "屠边", 4, 7)
-	if !strings.Contains(out, "开局互认队友") {
+	out := identityPromptWithWolfHint("werewolf", "wolf", "屠边", 4, []int{0, 1, 7})
+	if !strings.Contains(out, "开局互认所有狼队友") {
 		t.Errorf("wolf should get the §5.2 hint section, got: %s", out)
 	}
 	// 提示应包含 1-indexed 玩家编号(8)与 0-indexed 座位(7)。
@@ -125,12 +125,12 @@ func TestReplaceIdentity_PreservesHistory(t *testing.T) {
 	m.Push(llm.Message{Role: "assistant", Content: []llm.ContentBlock{{Type: "text", Text: "首夜: 狼队决定击杀 5 号"}}})
 	m.Push(llm.Message{Role: "user", Content: []llm.ContentBlock{{Type: "text", Text: "wolf_chat: 收到,确认"}}})
 
-	m.ReplaceIdentity("werewolf", "wolf", "屠边", 0, 7)
+	m.ReplaceIdentity("werewolf", "wolf", "屠边", 0, []int{0, 1, 7})
 	msgs, _ := m.Snapshot()
 	if len(msgs) != 3 {
 		t.Fatalf("expected 3 messages (identity + 2 turns), got %d", len(msgs))
 	}
-	if !strings.Contains(msgs[0].Content[0].Text, "开局互认队友") {
+	if !strings.Contains(msgs[0].Content[0].Text, "开局互认所有狼队友") {
 		t.Errorf("first msg should now contain wolf hint, got: %s", msgs[0].Content[0].Text)
 	}
 	if msgs[1].Role != "assistant" || !strings.Contains(msgs[1].Content[0].Text, "首夜") {
@@ -144,7 +144,7 @@ func TestReplaceIdentity_PreservesHistory(t *testing.T) {
 // TestReplaceIdentity_EmptyMemoryIsNoop 验证 m.messages 为空时不 panic、不写入。
 func TestReplaceIdentity_EmptyMemoryIsNoop(t *testing.T) {
 	m := &Memory{}
-	m.ReplaceIdentity("werewolf", "wolf", "屠边", 0, 7)
+	m.ReplaceIdentity("werewolf", "wolf", "屠边", 0, []int{0, 1, 7})
 	msgs, _ := m.Snapshot()
 	if len(msgs) != 0 {
 		t.Errorf("empty memory should remain empty after ReplaceIdentity, got %d msgs", len(msgs))
@@ -153,7 +153,7 @@ func TestReplaceIdentity_EmptyMemoryIsNoop(t *testing.T) {
 
 // TestNewMemoryWithWolfHint_HintText 验证工厂函数产出含提示的 identity。
 func TestNewMemoryWithWolfHint_HintText(t *testing.T) {
-	m := NewMemoryWithWolfHint("werewolf", "wolf", "屠边", 4, 7)
+	m := NewMemoryWithWolfHint("werewolf", "wolf", "屠边", 4, []int{0, 1, 7})
 	msgs, _ := m.Snapshot()
 	if len(msgs) != 1 {
 		t.Fatalf("NewMemoryWithWolfHint should produce 1 identity message, got %d", len(msgs))
@@ -161,7 +161,7 @@ func TestNewMemoryWithWolfHint_HintText(t *testing.T) {
 	if msgs[0].Role != "user" {
 		t.Errorf("identity should be role=user, got %s", msgs[0].Role)
 	}
-	if !strings.Contains(msgs[0].Content[0].Text, "开局互认队友") {
+	if !strings.Contains(msgs[0].Content[0].Text, "开局互认所有狼队友") {
 		t.Errorf("NewMemoryWithWolfHint with seat=7 should embed hint, got: %s", msgs[0].Content[0].Text)
 	}
 }
@@ -173,7 +173,7 @@ func TestNewMemory_NoHint(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("NewMemory should produce 1 identity message, got %d", len(msgs))
 	}
-	if strings.Contains(msgs[0].Content[0].Text, "开局互认队友") {
+	if strings.Contains(msgs[0].Content[0].Text, "开局互认所有狼队友") {
 		t.Errorf("NewMemory without hint should NOT embed hint, got: %s", msgs[0].Content[0].Text)
 	}
 }

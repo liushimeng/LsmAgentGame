@@ -133,14 +133,13 @@ func CheckGameContextInvariant(gc *GameContext) []InvariantViolation {
 		})
 	}
 
-	// I3: WolfTeammateSeat ⇒ Role == "werewolf"
-//    适配说明:WolfTeammateSeat=0 是合法值(队友是 0 号玩家),所以用 != -1 判断;
-//    但 -1 是初始化值,生产路径会赋 0+ 真实值。改用 Role 识别。
-	if gc.WolfTeammateSeat != -1 && gc.Role != "werewolf" {
+	// I3: WolfTeammateSeats 非空 ⇒ Role == "werewolf"
+//    v20260830-01：所有狼人可知全部狼队友身份，空列表表示非狼人。
+	if len(gc.WolfTeammateSeats) > 0 && gc.Role != "werewolf" {
 		out = append(out, InvariantViolation{
 			Kind:    InvariantKindContext,
 			Code:    "I3",
-			Message: "WolfTeammateSeat=" + itoa(gc.WolfTeammateSeat) + " 但 Role=" + gc.Role + " ≠ werewolf (§133)",
+			Message: "WolfTeammateSeats非空 但 Role=" + gc.Role + " ≠ werewolf (v20260830-01)",
 		})
 	}
 

@@ -1132,6 +1132,17 @@ const ja: Dict = {
   'werewolf.panel.voted': '✅ #{seat} に投票済み',
   'werewolf.panel.submitted': '✅ 送信済み・フェーズ待ち',
   'werewolf.panel.restartVoted': '✅ {choice} 投票済み',
+  'werewolf.panel.nightAction': '夜間行動',
+  'werewolf.panel.dayControl': '白天操作',
+  'werewolf.panel.prop': '道具',
+  'werewolf.panel.secretLetter': '秘密の手紙',
+  'werewolf.panel.factionBet': '陣営ベット',
+  'werewolf.panel.commitments': '公約',
+  'werewolf.panel.lastWords': '遺言',
+  // v20260830-01: 狼队友标注
+  'werewolf.wolfTeammate': '狼仲間',
+  'werewolf.wolfIdentity.human': '人間',
+  'werewolf.wolfIdentity.agent': 'エージェント',
   // 2026-08-09 §20260808-03 — 死亡プレイヤーのオブザーバーヒント
   'werewolf.dead.title': '死亡しています · {phase}',
   'werewolf.dead.nightHint': '夜間は生存プレイヤーの行動(狼/守卫/預言家/魔女)。明け方の遺言をお待ちください。',

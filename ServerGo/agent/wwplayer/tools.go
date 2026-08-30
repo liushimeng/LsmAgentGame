@@ -1626,9 +1626,9 @@ func addPropHistoryTool(add func(name, desc string, s map[string]any), gc *wwtyp
 }
 
 // addWolfWhisperTool thin wrapper(向后兼容 v4 测试)。仅挂 wolf_whisper。
-// 校验:仅 faction=="wolf" 且 WolfTeammateSeat>=0 时挂载(MountIf 也做同样校验)。
+// 校验:仅 faction=="wolf" 且 len(WolfTeammateSeats)>0 时挂载(MountIf 也做同样校验)。
 func addWolfWhisperTool(add func(name, desc string, s map[string]any), gc *wwtypes.GameContext) {
-	if gc == nil || gc.Faction != "wolf" || gc.WolfTeammateSeat < 0 {
+	if gc == nil || gc.Faction != "wolf" || len(gc.WolfTeammateSeats) == 0 {
 		return
 	}
 	mountOneTool(add, "wolf_whisper", gc)

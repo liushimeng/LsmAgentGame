@@ -112,11 +112,11 @@ type Agent struct {
 	// setter / clamp / limiter 重算逻辑在 difficulty_speak.go。
 	difficultySpeakScale float64
 
-	// v4 §13.1：开局狼队友座位（>=0 表示本 bot 是狼人 + 系统随机选了 1 个队友）。
-	// -1 = 未启用（如非狼人 / 概率未中 / 队友已死）。
-	// wolf_whisper 工具仅在 wolfTeammateSeat >= 0 时挂载；wolfpack prompt
-	// 仅在 wolfTeammateSeat >= 0 时渲染，避免身份未确认的狼误用。
-	WolfTeammateSeat int
+	// v20260830-01：所有狼队友座位列表（非空表示本 bot 是狼人，可看到所有狼队友身份）。
+	// 空切片 = 非狼人身份，不可见狼人阵营信息。
+	// wolf_whisper 工具仅在 len(WolfTeammateSeats)>0 时挂载；wolfpack prompt
+	// 仅在 len(WolfTeammateSeats)>0 时渲染，避免身份未确认的狼误用。
+	WolfTeammateSeats []int
 
 	WhisperLimiter *agentcore.SpeakLimiter // 私聊限流：≤1 次/90秒 (90s 间隔，2026-07-08 从 60s 调高)，
 	// 比发言更严，防止 Agent 用 whisper 私聊替代推理或绕过发言限流。
@@ -1865,9 +1865,9 @@ func (a *Agent) DifficultyRoundCap() int {
 	return a.difficultyRoundCap
 }
 
-// SetWolfTeammateSeat 注入"开局互认狼队友"提示(2026-07-21 §5.2)。
+// SetWolfTeammateSeats 注入"开局互知所有狼队友身份"提示(v20260830-01)。
 // 在 NewWithRoom 之后由 StartAgentsLocked 同步调用一次:
-//   - wolfTeammateSeat < 0  → no-op(等价于禁用本设计的注入路径)
+//   - len(wolfTeammateSeats)==0 → no-op(等价于禁用本设计的注入路径)
 //   - Faction != "wolf"     → no-op(本设计仅作用于狼人)
 //   - Agent / Memory 为 nil → no-op(测试构造期防御)
 //
@@ -1875,19 +1875,19 @@ func (a *Agent) DifficultyRoundCap() int {
 // 锁安全:Memory.ReplaceIdentity 内部持 m.mu,本方法不持 r.mu;
 // StartAgentsLocked 在持 r.mu 调用本方法是安全的(只动单条 user message,
 // 无 LLM / DB / WS IO),符合 §92a 自死锁约束。
-func (a *Agent) SetWolfTeammateSeat(wolfTeammateSeat int) {
+func (a *Agent) SetWolfTeammateSeats(wolfTeammateSeats []int) {
 	if a == nil || a.Memory == nil {
 		return
 	}
-	if wolfTeammateSeat < 0 {
+	if len(wolfTeammateSeats) == 0 {
 		return
 	}
 	if a.Faction != "wolf" {
 		return
 	}
-	a.Memory.ReplaceIdentity(a.Role, a.Faction, a.Win, a.Seat, wolfTeammateSeat)
-	// v4 §13.1：同步保存到 Agent 结构体,供 wolf_whisper 工具挂载判断。
-	a.WolfTeammateSeat = wolfTeammateSeat
+	a.Memory.ReplaceIdentity(a.Role, a.Faction, a.Win, a.Seat, wolfTeammateSeats)
+	// v20260830-01：同步保存到 Agent 结构体,供 wolf_whisper/wolfpack工具挂载判断。
+	a.WolfTeammateSeats = wolfTeammateSeats
 }
 
 // recordSpeakDaytime 把当前时间戳记录进 60s 滑动窗口(speak / interject

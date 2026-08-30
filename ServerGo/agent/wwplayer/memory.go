@@ -59,20 +59,20 @@ type Memory struct {
 // NewMemory seeds the conversation with the opening user turn that fixes the
 // agent's identity, role, faction and win condition.
 func NewMemory(role, faction, win string, seat int) *Memory {
-	return NewMemoryWithWolfHint(role, faction, win, seat, -1)
+	return NewMemoryWithWolfHint(role, faction, win, seat, nil)
 }
 
 // NewMemoryWithWolfHint seeds the conversation with the opening user turn,
-// optionally injecting a "you know X 号 is your wolf teammate" hint into the
-// identity prompt. Used by StartAgentsLocked to wire the 30% partial-wolf-
-// knowledge design (docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §5.2): in ~30% of games,
-// 2 of the wolves are pre-paired at game start. wolfTeammateSeat must be the
-// 0-indexed seat of the teammate; pass -1 to skip the hint entirely.
-func NewMemoryWithWolfHint(role, faction, win string, seat, wolfTeammateSeat int) *Memory {
+// optionally injecting a "you know all your wolf teammates" hint into the
+// identity prompt. Used by StartAgentsLocked to wire the v20260830-01 all-wolf-
+// knowledge design: all wolves know all other wolves' identities at game start.
+// wolfTeammateSeats is the list of all wolf seats (including self); pass empty slice
+// to skip the hint entirely (non-wolf role).
+func NewMemoryWithWolfHint(role, faction, win string, seat int, wolfTeammateSeats []int) *Memory {
 	m := &Memory{maxPromptBytes: DefaultMaxPromptBytes}
 	identity := llm.Message{
 		Role:    "user",
-		Content: []llm.ContentBlock{{Type: "text", Text: identityPromptWithWolfHint(role, faction, win, seat, wolfTeammateSeat)}},
+		Content: []llm.ContentBlock{{Type: "text", Text: identityPromptWithWolfHint(role, faction, win, seat, wolfTeammateSeats)}},
 	}
 	m.messages = append(m.messages, identity)
 	return m
@@ -95,7 +95,7 @@ func (m *Memory) MaxPromptBytes() int {
 }
 
 func identityPrompt(role, faction, win string, seat int) string {
-	return identityPromptWithWolfHint(role, faction, win, seat, -1)
+	return identityPromptWithWolfHint(role, faction, win, seat, nil)
 }
 
 // roleAbilityDescription 返回某身份对应的技能说明,在身份注入时让 Agent 立即
@@ -165,9 +165,9 @@ func roleAbilityDescription(role string) string {
 }
 
 // identityPromptWithWolfHint 是 identityPrompt 的可注入版本。
-// 当 wolfTeammateSeat >= 0 且 faction == "wolf" 时,追加一段"你知道 X 号
-// 是你的狼队友"提示;否则与原 identityPrompt 行为一致。
-func identityPromptWithWolfHint(role, faction, win string, seat, wolfTeammateSeat int) string {
+// 当 len(wolfTeammateSeats)>0 且 faction == "wolf" 时,追加一段"你知道所有狼队友
+// 身份"提示;否则与原 identityPrompt 行为一致。
+func identityPromptWithWolfHint(role, faction, win string, seat int, wolfTeammateSeats []int) string {
 	playerNo := seat + 1 // 1-indexed "玩家编号" 与 UI 标签 #1~#13 一致
 	// 2026-07-10 §7 / §3.5:12 人标准竞技局。座位号 0..11(内部),玩家编号 1..12(对外)。
 	// 2026-07-15: 升级到 13 人标准竞技局,玩家编号 1..13。
@@ -191,15 +191,21 @@ func identityPromptWithWolfHint(role, faction, win string, seat, wolfTeammateSea
 		"首要目标：不择手段地赢得本局（狼屠边 / 好人放逐全部狼），胜利是金币的唯一来源。\n" +
 		"长期目标：每局都要设法赚到比其他 Agent 模型更多的金币（彩池制下：胜方分输家底注，平局 0，负方输底注）。\n" +
 		"策略：无论阵营，优先追求胜利；同等胜算下优先选择能让自己留在胜方阵营的决策。"
-	// 2026-07-21 §狼队友 30% 互知：仅在 faction == "wolf" 且 wolfTeammateSeat >= 0
-	// 时追加"开局即互认队友"段。该提示只对 LLM 自己可见(进 identity prompt),
+	// v20260830-01 全员互知：仅在 faction == "wolf" 且 len(wolfTeammateSeats)>0
+	// 时追加"开局即知所有狼队友身份"段。该提示只对 LLM 自己可见(进 identity prompt),
 	// 不会进入任何 chat 消息 / broadcast / BotTranscript.HeartThought。
-	if faction == "wolf" && wolfTeammateSeat >= 0 {
-		out += "\n【开局互认队友(§5.2 30% 互知设计)】\n" +
-			"系统开局随机给你注入一个狼队友身份:" + itoa(wolfTeammateSeat+1) + " 号玩家(座位 " + itoa(wolfTeammateSeat) + ")是本局你的狼队友。\n" +
-			"这是开局即知的信息,首夜/首日可直接信任 +1号 的发言与投票(但请按需 verify 防御假冒)。\n" +
-			"其他狼人是否互认身份未知,需通过私聊/发言节奏自行确认。\n" +
-			"硬约束:此信息仅你可见,不可在公屏/插话/HeartThought 透露该编号就是你的狼队友。"
+	if faction == "wolf" && len(wolfTeammateSeats) > 0 {
+		out += "\n【开局互认所有狼队友(v20260830-01 全员互知设计)】\n" +
+			"系统开局注入所有狼队友身份:"
+		for _, ws := range wolfTeammateSeats {
+			if ws == seat {
+				continue
+			}
+			out += itoa(ws+1) + " 号玩家(座位 " + itoa(ws) + ")、"
+		}
+		out = strings.TrimRight(out, "、") + " 都是本局你的狼队友。\n" +
+			"这是开局即知的信息,首夜/首日可直接信任他们的发言与投票(但请按需 verify 防御假冒)。\n" +
+			"硬约束:此信息仅你可见,不可在公屏/插话/HeartThought 透露任何玩家的狼队友身份。"
 	}
 	return out
 }
@@ -308,7 +314,7 @@ func (m *Memory) Mu() *sync.RWMutex {
 // 用于 StartAgentsLocked 阶段注入"开局互认狼队友"提示(2026-07-21 §5.2)。
 // 若 m.messages 为空,no-op;若首条非 user role,no-op(避免覆盖已经发生的对话)。
 // 锁安全:本函数本身已持有 m.mu,不允许调用者外层持锁(避免双锁)。
-func (m *Memory) ReplaceIdentity(role, faction, win string, seat, wolfTeammateSeat int) {
+func (m *Memory) ReplaceIdentity(role, faction, win string, seat int, wolfTeammateSeats []int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if len(m.messages) == 0 {
@@ -321,7 +327,7 @@ func (m *Memory) ReplaceIdentity(role, faction, win string, seat, wolfTeammateSe
 		Role: "user",
 		Content: []llm.ContentBlock{{
 			Type: "text",
-			Text: identityPromptWithWolfHint(role, faction, win, seat, wolfTeammateSeat),
+			Text: identityPromptWithWolfHint(role, faction, win, seat, wolfTeammateSeats),
 		}},
 	}
 }

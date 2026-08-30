@@ -48,7 +48,7 @@ func TestInvariant_I2_OKWhenAntidoteWithWolfTarget(t *testing.T) {
 }
 
 func TestInvariant_I3_WolfTeammateRequiresWerewolfRole(t *testing.T) {
-	gc := &GameContext{WolfTeammateSeat: 4, Role: "villager"}
+	gc := &GameContext{WolfTeammateSeats: []int{4}, Role: "villager"}
 	v := CheckGameContextInvariant(gc)
 	if len(v) == 0 || v[0].Code != "I3" {
 		t.Fatalf("期望 I3 违反，实际=%v", v)
@@ -57,7 +57,7 @@ func TestInvariant_I3_WolfTeammateRequiresWerewolfRole(t *testing.T) {
 }
 
 func TestInvariant_I3_OKWhenWerewolf(t *testing.T) {
-	gc := &GameContext{WolfTeammateSeat: 0, Role: "werewolf"}
+	gc := &GameContext{WolfTeammateSeats: []int{0, 1, 2}, Role: "werewolf"}
 	v := CheckGameContextInvariant(gc)
 	for _, x := range v {
 		if x.Code == "I3" {
@@ -69,7 +69,7 @@ func TestInvariant_I3_OKWhenWerewolf(t *testing.T) {
 func TestInvariant_I4_WolfPackRequiresWolfFaction(t *testing.T) {
 	gc := &GameContext{
 		Faction:         "good",
-		WolfTeammateSeat: -1,
+		WolfTeammateSeats: nil,
 		WolfPackSnapshot: []WolfPackMsg{{FromSeat: 1, Text: "hi"}},
 	}
 	v := CheckGameContextInvariant(gc)
@@ -82,7 +82,7 @@ func TestInvariant_I4_WolfPackRequiresWolfFaction(t *testing.T) {
 func TestInvariant_I5_HumanDebuffRequiresHuman(t *testing.T) {
 	gc := &GameContext{
 		HumanDebuff:     &HumanDebuffSpec{},
-		WolfTeammateSeat: -1,
+		WolfTeammateSeats: nil,
 		Static: &StaticContext{
 			MySeat: 0,
 			AllPlayers: []PlayerBrief{
@@ -118,7 +118,7 @@ func TestInvariant_I5_OKWhenHuman(t *testing.T) {
 func TestInvariant_I6_SeerHistoryLengthCap(t *testing.T) {
 	gc := &GameContext{
 		Round:              2,
-		WolfTeammateSeat:   -1,
+		WolfTeammateSeats:   nil,
 		MySeerCheckHistory: make([]SeerCheckRecord, 5), // > Round+1=3
 	}
 	v := CheckGameContextInvariant(gc)

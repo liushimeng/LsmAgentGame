@@ -62,6 +62,13 @@ type ClientGameState struct {
 	MyRole    string `json:"my_role,omitempty"`    // 仅自己可见
 	MyFaction string `json:"my_faction,omitempty"` // "wolf" | "good"
 
+	// v20260830-01：狼人阵营玩家可见的所有狼队友座位列表（仅本人可见，好人/观战者不下发）
+	WolfTeammateSeats []int `json:"wolf_teammate_seats,omitempty"`
+
+	// v20260830-01：狼队友身份详情列表（含昵称 / 人类 or Agent / 模型展示名）。
+	// 仅本人是狼人阵营时下发，好人/观战者不下发。
+	WolfIdentities []WolfIdentityInfoJSON `json:"wolf_identities,omitempty"`
+
 	// 2026-08-11 BUG-ROLE-MISMATCH-P0 — 「自选角色未生效」仅对本人下发。
 	// 玩家创建房间时选了角色(creator_role / agent_seats[].role),但本局
 	// 随机牌组未抽到该角色(13 人局 2~3 张神职,骑士/守卫/猎魔人常缺席)
@@ -622,6 +629,17 @@ func BuildClientState(roomID string, seats [MaxPlayers]string, viewer int, gs *G
 		myRole := gs.Roles[viewer]
 		cs.MyRole = myRole.String()
 		cs.MyFaction = FactionOf(myRole).String()
+		// v20260830-01：狼人阵营玩家下发所有狼队友座位列表，仅本人可见
+		if cs.MyFaction == "wolf" {
+			cs.WolfTeammateSeats = make([]int, 0)
+			for i := 0; i < MaxPlayers; i++ {
+				if gs.Roles[i] == RoleWerewolf {
+					cs.WolfTeammateSeats = append(cs.WolfTeammateSeats, i)
+				}
+			}
+			// v20260830-01:狼队友详情(昵称/人类或Agent),好人/观战者无此字段。
+			cs.WolfIdentities = buildWolfIdentitiesLocked(gs)
+		}
 		// 2026-08-11 BUG-ROLE-MISMATCH-P0:自选角色未满足时向本人显式下发
 		// 「你想要的角色名 + 未生效标记」。仅本人可见(身份保密 §135);
 		// PreferredRoles 本身不下发,只暴露「我这一座」的偏好与偏差。
@@ -1066,6 +1084,38 @@ func seatDisplayAccount(p *Player) string {
 	return fmt.Sprintf("玩家%d号", n)
 }
 
+// buildWolfIdentitiesLocked (2026-08-30 §v20260830-01)
+// 构造存活狼队友身份详情列表，仅供狼人玩家本人调用者使用。
+// 不在此处过滤阵营——调用方(BuildClientState / BuildWolfPeerView)已判定调用者是狼人。
+// 锁安全:本函数只读 gs.Roles / gs.Players / gs.Seats / gs.AliveSeat，无副作用。
+func buildWolfIdentitiesLocked(gs *GameState) []WolfIdentityInfoJSON {
+	if gs == nil {
+		return nil
+	}
+	out := make([]WolfIdentityInfoJSON, 0, 4)
+	for i := 0; i < MaxPlayers; i++ {
+		if gs.Roles[i] != RoleWerewolf || !gs.AliveSeat(Seat(i)) || gs.Seats[i] == "" {
+			continue
+		}
+		p := &gs.Players[i]
+		info := WolfIdentityInfoJSON{
+			Seat:     i,
+			IsAgent:  p.IsBot,
+			Nickname: seatDisplayAccount(p),
+		}
+		// AgentName(LLM 模型展示名)由 populateAgentNames 阶段填充 cs.Players[i].AgentName。
+		// view 层不强制依赖该阶段,由前端在收到 cs 后自行补全；
+		// 为保持纯粹,这里留空(omitempty 不会下发),前端会落到 cs.Players[i].agent_name
+		// 上合并渲染。
+		_ = p
+		out = append(out, info)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // seatKey 把座位序列化为字典键(JSON map 不允许整型 key 直接序列化为字符串)。
 func seatKey(s int) string {
 	return intToA(s)
@@ -1147,6 +1197,20 @@ type WolfPeerView struct {
 	TotalWolves int            `json:"total_wolves"`      // 存活狼总数
 	Voting      bool           `json:"voting"`            // true=投票中;false=已结算
 	Tally       *WolfVoteTally `json:"tally,omitempty"`   // 计票结果(Voting=false 时)
+
+	// v20260830-01：存活狼队友身份详情（含昵称/AgentName/人类或Agent标记），
+	// 仅狼人玩家 night_wolves 阶段可见，方便投票界面识别队友。
+	WolfIdentities []WolfIdentityInfoJSON `json:"wolf_identities,omitempty"`
+}
+
+// WolfIdentityInfoJSON 是狼队友身份详情(2026-08-30 §v20260830-01)。
+// 仅狼人阵营玩家本人可见：座位/是否Agent/昵称(座位派生#N号)/Agent模型展示名。
+// 不含 Role/Faction（已是狼队上下文不必再发）。
+type WolfIdentityInfoJSON struct {
+	Seat       int    `json:"seat"`        // 0-indexed
+	IsAgent    bool   `json:"is_agent"`    // true=AI bot,false=人类
+	Nickname   string `json:"nickname"`    // bot→"AgentName #N号";人类→"玩家N号"
+	AgentName  string `json:"agent_name,omitempty"` // bot 专属:模型展示名;人类无此字段
 }
 
 // TrustTraceEntryJSON 是 ClientGameState 对外的单座位单日信任度
@@ -1350,6 +1414,9 @@ func BuildWolfPeerView(gs *GameState) *WolfPeerView {
 			out.TotalWolves++
 		}
 	}
+	// v20260830-01：填充所有存活狼队友身份(便于夜间投票 UI 识别)。
+	// 与 BuildClientState 共享座位派生昵称逻辑(seatDisplayAccount)。
+	out.WolfIdentities = buildWolfIdentitiesLocked(gs)
 	// 分类: 已投票 / 已弃权 / 未投票
 	for _, ws := range out.WolfSeats {
 		if gs.WolfVoteCast[ws] {

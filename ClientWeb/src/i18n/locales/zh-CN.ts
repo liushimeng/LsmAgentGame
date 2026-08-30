@@ -1134,6 +1134,17 @@ const zhCN: Dict = {
   'werewolf.panel.voted': '✅ 已投票 #{seat}',
   'werewolf.panel.submitted': '✅ 已提交,等待阶段推进',
   'werewolf.panel.restartVoted': '✅ 已投 {choice},等待其他玩家',
+  'werewolf.panel.nightAction': '夜晚行动',
+  'werewolf.panel.dayControl': '白天操作',
+  'werewolf.panel.prop': '道具',
+  'werewolf.panel.secretLetter': '暗线信件',
+  'werewolf.panel.factionBet': '阵营赌注',
+  'werewolf.panel.commitments': '公开承诺',
+  'werewolf.panel.lastWords': '临终遗言',
+  // v20260830-01: 狼队友标注
+  'werewolf.wolfTeammate': '狼队友',
+  'werewolf.wolfIdentity.human': '人类玩家',
+  'werewolf.wolfIdentity.agent': 'Agent',
   // 2026-08-09 §20260808-03 — 死亡玩家观察者提示
   'werewolf.dead.title': '你已阵亡 · {phase}',
   'werewolf.dead.nightHint': '夜间由存活玩家行动(狼人/守卫/预言家/女巫)。等待黎明遗言。',

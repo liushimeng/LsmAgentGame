@@ -85,19 +85,10 @@ func (m *WerewolfManager) StartAgentsLocked(r *WerewolfRoom) {
 			}
 		}
 	}
-	hintPairs := wwplayer.PickWolfTeammatePairs(
-		allWolfSeats,
-		cfgWerewolfWolfTeammateHintRate(),
-		cfgWerewolfWolfTeammateHintMaxPairs(),
-		nil,
-	)
-	if len(hintPairs) > 0 {
-		for _, pair := range hintPairs {
-			logger.L().Info("werewolf: v3 §G4 wolf teammate pair selected",
-				zap.String("room_id", r.RoomID),
-				zap.Ints("pair", []int{pair[0], pair[1]}))
-		}
-	}
+	// v20260830-01：所有狼人Agent开局100%可知所有狼队友身份，无随机性，保证公平
+	logger.L().Info("werewolf: v20260830-01 all wolf teammates visible",
+		zap.String("room_id", r.RoomID),
+		zap.Ints("all_wolf_seats", allWolfSeats))
 	for seat, modelKey := range r.seatModelKeys {
 		if modelKey == "" {
 			continue
@@ -161,16 +152,11 @@ func (m *WerewolfManager) StartAgentsLocked(r *WerewolfRoom) {
 		// §5: 复述段落已压缩 — git blame 与 docs/ 索引可还原
 
 		if faction == "wolf" {
-			for _, pair := range hintPairs {
-				if pair[0] == seat {
-					ag.SetWolfTeammateSeat(pair[1])
-					logger.L().Info("werewolf: v3 §G4 wolf teammate hint injected",
-						zap.String("room_id", r.RoomID),
-						zap.Int("seat", seat),
-						zap.Int("wolf_teammate_seat", pair[1]))
-					break
-				}
-			}
+			ag.SetWolfTeammateSeats(allWolfSeats)
+			logger.L().Info("werewolf: v20260830-01 wolf teammates injected",
+				zap.String("room_id", r.RoomID),
+				zap.Int("seat", seat),
+				zap.Ints("wolf_teammate_seats", allWolfSeats))
 		}
 		// 2026-07-20 §131 新增 — 加载持久化记忆(MEMORY.md)。
 		// 一次性同步 Load(2s timeout);失败仅 log 不阻塞 agent 启动。
@@ -1317,7 +1303,7 @@ func buildAgentContextLocked(r *WerewolfRoom, seat int, driverSeat int) wwtypes.
 			}
 			if r.State.Roles[seat] == RoleWerewolf {
 				if ag, ok := r.BotAgents[seat]; ok && ag != nil {
-					gc.WolfTeammateSeat = ag.WolfTeammateSeat
+					gc.WolfTeammateSeats = ag.WolfTeammateSeats
 				}
 				if r.wolfPack != nil {
 					if rawMsgs := r.wolfPack.Snapshot(WolfPackSnapshotMax); len(rawMsgs) > 0 {

@@ -60,6 +60,7 @@ import { ReadCachedRoomRole } from '@/services/sessionRoomRole';
 import { reportGlobalError } from '@/services/globalError';
 import { useT } from '@/hooks/useT';
 import { phaseLabel } from '@/components/werewolf/phaseLabel';
+import { CollapsibleActionPanel } from '@/components/werewolf/CollapsibleActionPanel';
 // 2026-07-22 §任务2 — 身份猜测本地存储 hook(纯前端,不入服务端状态)。
 import { useIdentityGuess } from '@/hooks/useIdentityGuess';
 
@@ -660,30 +661,53 @@ export function WerewolfGamePage() {
               <LastWordsStage gameState={gameState!} />
               {!spectator && !showFillingOverlay && (
                 <>
-                  <NightActionPanel
-                    gameState={gameState!}
-                    onAction={handleAction}
-                    busy={busy}
-                  />
-                  <DayControlPanel
-                    gameState={gameState!}
-                    mySeat={effectiveSeat}
-                    onVote={handleVote}
-                    onSheriff={handleSheriff}
-                    onFinish={handleFinish}
-                    onOpenSheriffStream={() => setSheriffStreamOpen(true)}
-                    onProposeVote={handleProposeVote}
-                    onDuel={handleDuel}
-                    busy={busy}
-                  />
+                  {/* v20260830-01: 非角色卡牌模块统一折叠，减少留白，让座位表占用更多空间 */}
+                  <CollapsibleActionPanel
+                    icon="🌙"
+                    title={t('werewolf.panel.nightAction')}
+                    storageKey="ww_panel_collapsed_night_action"
+                    defaultCollapsed={true}
+                    forceExpand={!!gameState?.phase_extra?.my_turn_now}
+                  >
+                    <NightActionPanel
+                      gameState={gameState!}
+                      onAction={handleAction}
+                      busy={busy}
+                    />
+                  </CollapsibleActionPanel>
+                  <CollapsibleActionPanel
+                    icon="🗳"
+                    title={t('werewolf.panel.dayControl')}
+                    storageKey="ww_panel_collapsed_day_control"
+                    defaultCollapsed={true}
+                  >
+                    <DayControlPanel
+                      gameState={gameState!}
+                      mySeat={effectiveSeat}
+                      onVote={handleVote}
+                      onSheriff={handleSheriff}
+                      onFinish={handleFinish}
+                      onOpenSheriffStream={() => setSheriffStreamOpen(true)}
+                      onProposeVote={handleProposeVote}
+                      onDuel={handleDuel}
+                      busy={busy}
+                    />
+                  </CollapsibleActionPanel>
                   {/* 2026-08-10 §20260810-06 — 承诺面板（白天发言阶段展开）。
                       观众可见全部承诺真实状态；玩家仅见自己的承诺+他人 pending。 */}
                   {gameState!.phase === 'speak' && gameState!.commitments && gameState!.commitments.length > 0 && (
-                    <CommitmentPanel
-                      commitments={gameState!.commitments}
-                      mySeat={effectiveSeat}
-                      isSpectator={spectator}
-                    />
+                    <CollapsibleActionPanel
+                      icon="🤝"
+                      title={t('werewolf.panel.commitments')}
+                      storageKey="ww_panel_collapsed_commitments"
+                      defaultCollapsed={true}
+                    >
+                      <CommitmentPanel
+                        commitments={gameState!.commitments}
+                        mySeat={effectiveSeat}
+                        isSpectator={spectator}
+                      />
+                    </CollapsibleActionPanel>
                   )}
                   {/* 2026-08-10 §20260810-06 — 承诺按钮（存活人类玩家白天可用）。 */}
                   {!spectator && !iAmDead && gameState!.phase === 'speak' && (
@@ -701,15 +725,22 @@ export function WerewolfGamePage() {
                       2026-08-09 §20260808-03 — 死后本局仍可见道具面板(显示 ☠ 徽章 +
                       余额/历史 + 全按钮 disabled),便于玩家查看本局道具历史与最终结算。 */}
                   {!spectator && gameState!.phase === 'speak' && (
-                    <PropPanel
-                      gameState={gameState!}
-                      mySeat={effectiveSeat}
-                      myRole={gameState!.my_role}
-                      myFaction={gameState!.my_faction}
-                      onUseProp={handleUseProp}
-                      busy={busy}
-                      iAmDead={iAmDead}
-                    />
+                    <CollapsibleActionPanel
+                      icon="🎁"
+                      title={t('werewolf.panel.prop')}
+                      storageKey="ww_panel_collapsed_prop"
+                      defaultCollapsed={true}
+                    >
+                      <PropPanel
+                        gameState={gameState!}
+                        mySeat={effectiveSeat}
+                        myRole={gameState!.my_role}
+                        myFaction={gameState!.my_faction}
+                        onUseProp={handleUseProp}
+                        busy={busy}
+                        iAmDead={iAmDead}
+                      />
+                    </CollapsibleActionPanel>
                   )}
                   {/* 2026-08-14 §20260814-01 U1 — 接线修复:暗线信件 + 阵营赌注。
                       两个组件自 §20260812-03 U2/U3 落地起**从未被任何文件 import**
@@ -719,20 +750,34 @@ export function WerewolfGamePage() {
                       窗口与后端校验一致:白天 speak 阶段 + 存活人类玩家。 */}
                   {!spectator && !iAmDead && (
                     <>
-                      <SecretLetterPanel
-                        roomId={roomId!}
-                        mySeat={effectiveSeat}
-                        aliveSeats={gameState!.players?.map((p, i) => p.alive ? i : -1).filter(i => i >= 0) ?? []}
-                        windowOpen={gameState!.phase === 'speak'}
-                        t={t}
-                      />
-                      <FactionBetPanel
-                        roomId={roomId!}
-                        mySeat={effectiveSeat}
-                        aliveSeats={gameState!.players?.map((p, i) => p.alive ? i : -1).filter(i => i >= 0) ?? []}
-                        windowOpen={gameState!.phase === 'speak'}
-                        t={t}
-                      />
+                      <CollapsibleActionPanel
+                        icon="✉"
+                        title={t('werewolf.panel.secretLetter')}
+                        storageKey="ww_panel_collapsed_secret_letter"
+                        defaultCollapsed={true}
+                      >
+                        <SecretLetterPanel
+                          roomId={roomId!}
+                          mySeat={effectiveSeat}
+                          aliveSeats={gameState!.players?.map((p, i) => p.alive ? i : -1).filter(i => i >= 0) ?? []}
+                          windowOpen={gameState!.phase === 'speak'}
+                          t={t}
+                        />
+                      </CollapsibleActionPanel>
+                      <CollapsibleActionPanel
+                        icon="💰"
+                        title={t('werewolf.panel.factionBet')}
+                        storageKey="ww_panel_collapsed_faction_bet"
+                        defaultCollapsed={true}
+                      >
+                        <FactionBetPanel
+                          roomId={roomId!}
+                          mySeat={effectiveSeat}
+                          aliveSeats={gameState!.players?.map((p, i) => p.alive ? i : -1).filter(i => i >= 0) ?? []}
+                          windowOpen={gameState!.phase === 'speak'}
+                          t={t}
+                        />
+                      </CollapsibleActionPanel>
                     </>
                   )}
                   {canSuicide && (
@@ -750,12 +795,20 @@ export function WerewolfGamePage() {
                   {/* 2026-07-21 §人类玩家操作重构 — 人类遗言面板。
                       仅 death_lyric + my_seat === DeathLyricCurrent 时渲染。 */}
                   {!spectator && (
-                    <LastWordsPanel
-                      gameState={gameState!}
-                      onSpeak={handleLastWordsSpeak}
-                      onSkip={handleLastWordsSkip}
-                      busy={busy}
-                    />
+                    <CollapsibleActionPanel
+                      icon="💀"
+                      title={t('werewolf.panel.lastWords')}
+                      storageKey="ww_panel_collapsed_last_words"
+                      defaultCollapsed={false}
+                      forceExpand={true}
+                    >
+                      <LastWordsPanel
+                        gameState={gameState!}
+                        onSpeak={handleLastWordsSpeak}
+                        onSkip={handleLastWordsSkip}
+                        busy={busy}
+                      />
+                    </CollapsibleActionPanel>
                   )}
                 </>
               )}
