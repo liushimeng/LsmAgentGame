@@ -171,22 +171,38 @@ func (e *DebateEngine) runCrossExamPhase() {
 		}
 		// 提问方:round 0 = 队 0, round 1 = 队 1
 		askerTeam := &teams[round%len(teams)]
-		answererTeam := &teams[(round+1)%len(teams)]
-
 		askerSeat := findFirstRole(askerTeam, RoleThird)
-		answererSeat := findFirstRole(answererTeam, RoleSecond)
-		if answererSeat < 0 {
-			answererSeat = findFirstRole(answererTeam, RoleThird)
-		}
-		if askerSeat < 0 || answererSeat < 0 {
+		if askerSeat < 0 {
 			continue
 		}
 
-		// 触发提问方 Bot 发起 cross_exam_question
+		// 清上一轮残留(未回答的旧 pair 不得影响本轮 target 判定)
+		e.room.ClearCrossExamActive()
+
+		// 触发提问方 Bot 发起 cross_exam_question(等待 LLM 返回并落库)
 		e.driveSpeaker(PhaseCrossExamination, askerTeam.TeamID, askerSeat)
 
-		// 触发回答方 Bot 回答
-		e.driveSpeaker(PhaseCrossExamination, answererTeam.TeamID, answererSeat)
+		// §20260831-02 — 回答方以提问工具实际指定的 target 为准
+		// (LLM 选的 target_seat 与预选可能不同;以 CrossExamActive 为权威)。
+		_, answererKey, ok := e.room.CrossExamActive()
+		if !ok {
+			continue
+		}
+		at, as, parsed := ParseSeatKey(answererKey)
+		// target_seat=-1(任意)或越界时回退到对方二辩,再退三辩
+		_, hasAgent := e.room.AgentByTeamSeat(at, as)
+		if !parsed || as < 0 || !hasAgent {
+			if s := findFirstRole(findTeam(e.room, at), RoleSecond); s >= 0 {
+				as = s
+			} else if s := findFirstRole(findTeam(e.room, at), RoleThird); s >= 0 {
+				as = s
+			} else {
+				e.room.ClearCrossExamActive()
+				continue
+			}
+		}
+		e.driveSpeaker(PhaseCrossExamination, at, as)
+		e.room.ClearCrossExamActive()
 	}
 	e.advanceTo(PhaseCrossExamSummary)
 }
@@ -305,6 +321,36 @@ func (e *DebateEngine) runJudgingPhase() {
 		}
 		break
 	}
+
+	// §20260831-02 — 聚合裁判评分 → 写入最终结果。
+	// 首期版本漏了这一步:BuildResult 从未被调用,result 恒为 nil,
+	// PhaseResult 阶段前端永远拿不到胜负与分数。
+	scores := e.room.JudgeScores()
+	if len(scores) > 0 {
+		res := BuildResult(scores, e.room.TeamCount())
+		// §20260831-02 — 胜方名/最佳辩手名用真实队伍立场与辩手名
+		// (BuildResult 只有 teamCount,拿不到名字;此前显示「队伍N」占位)。
+		if t := findTeam(e.room, res.WinnerTeamID); t != nil {
+			res.WinnerTeamName = StanceLabel(t.Stance)
+		}
+		res.BestDebater.Name = e.room.SpeakerName(res.BestDebater.TeamID, res.BestDebater.Seat)
+		if res.BestDebater.Name == "" {
+			// 座位越界兜底(裁判提交非法值且未被执行前钳制时)
+			if t := findTeam(e.room, res.BestDebater.TeamID); t != nil && len(t.Agents) > 0 {
+				res.BestDebater.Seat = t.Agents[0].SeatID
+				res.BestDebater.Name = e.room.SpeakerName(res.BestDebater.TeamID, res.BestDebater.Seat)
+			}
+		}
+		for i := range res.TeamScores {
+			if t := findTeam(e.room, res.TeamScores[i].TeamID); t != nil {
+				res.TeamScores[i].TeamName = StanceLabel(t.Stance)
+			}
+		}
+		e.room.SetResult(res)
+		if fn := e.manager.resultHook(); fn != nil {
+			go fn(e.room.RoomID, res)
+		}
+	}
 	e.advanceTo(PhaseResult)
 }
 
@@ -328,13 +374,20 @@ func (e *DebateEngine) runResultPhase() {
 	}
 }
 
-// driveSpeaker 触发指定 Bot 发言(由 driver 监听 BotEventChan)。
+// driveSpeaker 触发指定 Bot 发言并阻塞等待其本轮完成(§20260831-02)。
+//
+// 必须:触发前 beginTurn 换新 done chan → TriggerBot → waitTurnDone。
+// 若不等,Bot 的 LLM 调用(数秒~数十秒)尚未返回,引擎已 advanceTo 下一
+// 阶段,SubmitSpeech 会被阶段校验全部拒绝 —— 首期版本实测即此缺陷。
 func (e *DebateEngine) driveSpeaker(phase Phase, teamID, seat int) {
 	if e.ctx.Err() != nil {
 		return
 	}
-	e.room.SetCurrentSpeaker(SeatKey(teamID, seat))
+	key := SeatKey(teamID, seat)
+	done := e.beginTurn(key)
+	e.room.SetCurrentSpeaker(key)
 	e.TriggerBot(teamID, seat)
+	e.waitTurnDone(done)
 }
 
 // ============================================================================

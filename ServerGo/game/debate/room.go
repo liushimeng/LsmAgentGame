@@ -229,8 +229,10 @@ func (r *DebateRoom) CrossExamEntries() []CrossExamEntry {
 // AddJudgeScore 追加一份裁判评分。
 func (r *DebateRoom) AddJudgeScore(s JudgeScore) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.judgeScores = append(r.judgeScores, s)
+	r.mu.Unlock()
+	// §20260831-02 — 实时推送 debate.judge_vote 帧(锁外外抛,避免与广播回调死锁)
+	r.emitJudgeScore(s)
 }
 
 // JudgeScores 返回已收集的裁判评分副本。

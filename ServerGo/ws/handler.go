@@ -29,7 +29,7 @@ var upgrader = websocket.Upgrader{
 // 对 39002 (WSS) 端口请直接用 ServeWS —— gin.CreateTestContext 会在
 // gorilla 接管连接后把 responseWriter 留在半 hijacked 状态,导致部分客户端
 // 的 game.spectate ack 丢失。Handler 本身只是 ServeWS 的薄封装。
-func Handler(cfg *config.Config, hub *Hub, chat *ChatService, game *GameService, room *RoomWsService, user *UserWsService) gin.HandlerFunc {
+func Handler(cfg *config.Config, hub *Hub, chat *ChatService, game *GameService, room *RoomWsService, user *UserWsService, debate *DebateService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Recover from any panic to avoid crashing the entire connection handler.
 		defer func() {
@@ -40,7 +40,7 @@ func Handler(cfg *config.Config, hub *Hub, chat *ChatService, game *GameService,
 			}
 		}()
 
-		ServeWS(cfg, hub, chat, game, room, user, c.Writer, c.Request)
+		ServeWS(cfg, hub, chat, game, room, user, debate, c.Writer, c.Request)
 	}
 }
 
@@ -49,7 +49,7 @@ func Handler(cfg *config.Config, hub *Hub, chat *ChatService, game *GameService,
 // in a gin.Context — required for the dedicated WSS server (port 39002) where
 // gin.CreateTestContext leaves the responseWriter in a half-hijacked state
 // after gorilla upgrades the connection (BUG-WEREWOLF-P0-NEW-37).
-func ServeWS(cfg *config.Config, hub *Hub, chat *ChatService, game *GameService, room *RoomWsService, user *UserWsService, w http.ResponseWriter, r *http.Request) {
+func ServeWS(cfg *config.Config, hub *Hub, chat *ChatService, game *GameService, room *RoomWsService, user *UserWsService, debate *DebateService, w http.ResponseWriter, r *http.Request) {
 	// Recover from any panic to avoid crashing the entire connection handler.
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -109,6 +109,7 @@ func ServeWS(cfg *config.Config, hub *Hub, chat *ChatService, game *GameService,
 	client.AttachGame(game)
 	client.AttachRoom(room)
 	client.AttachUser(user)
+	client.AttachDebate(debate)
 	hub.Register(client)
 
 	// Cancel any pending disconnect timer for this user in a separate

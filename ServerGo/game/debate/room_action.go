@@ -120,6 +120,9 @@ func (r *DebateRoom) SubmitSpeech(teamID, seat int, params SpeechParams) ActionR
 	}
 	r.AppendSpeech(speech)
 
+	// §20260831-02 — 实时推送 debate.speech 帧(经 manager 钩子外抛)
+	r.emitSpeech(speech)
+
 	return ActionResult{
 		OK:       true,
 		Message:  "speech accepted",
@@ -275,6 +278,7 @@ func (r *DebateRoom) SubmitCrossExamQuestion(teamID, seat int, params CrossExamQ
 		Timestamp:  WallNowMS(),
 	}
 	r.AppendCrossExam(entry)
+	r.emitCrossExam(entry)
 
 	// 标记质询对(下一对答方为 target)
 	r.SetCrossExamActive(SeatKey(teamID, seat), SeatKey(params.TargetTeam, params.TargetSeat))
@@ -350,6 +354,7 @@ func (r *DebateRoom) SubmitCrossExamAnswer(seat int, params CrossExamAnswerParam
 		Timestamp:  WallNowMS(),
 	}
 	r.AppendCrossExam(entry)
+	r.emitCrossExam(entry)
 
 	// 一轮结束:清空 active,让质询方可以再问或切换发言权
 	r.ClearCrossExamActive()
@@ -412,6 +417,7 @@ func (r *DebateRoom) SubmitFreeDebateSpeech(teamID, seat int, params FreeDebateP
 		ModelKey:    r.agentModelKey(teamID, seat),
 	}
 	r.AppendSpeech(speech)
+	r.emitSpeech(speech)
 
 	// 切换发言权给对方队伍
 	r.SetFreeDebateTurnOwner("team:" + fmtInt((teamID+1)%r.TeamCount()))

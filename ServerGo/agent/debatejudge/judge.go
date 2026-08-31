@@ -172,6 +172,14 @@ func (j *AgentJudge) dispatchSubmitScore(input json.RawMessage) {
 		IsFallback:     false,
 	}
 
+	// §20260831-02 — 钳制 best_debater 到该队合法座位区间。
+	// 实测有模型把「四辩」当 1-based 提交 4,越界座位号导致
+	// 最终结果 BestDebater.Name 查空。
+	for i := range score.Rankings {
+		score.Rankings[i].BestDebater = j.clampBestDebater(
+			score.Rankings[i].TeamID, score.Rankings[i].BestDebater)
+	}
+
 	// 补齐缺失队伍
 	if len(score.Rankings) < teamCount {
 		for t := 0; t < teamCount; t++ {
@@ -207,6 +215,29 @@ func (j *AgentJudge) dispatchSubmitScore(input json.RawMessage) {
 func (j *AgentJudge) useFallback() {
 	score := debate.FallbackJudgeScore(j.JudgeID, j.ModelKey, j.room.TeamCount())
 	j.room.AddJudgeScore(score)
+}
+
+// clampBestDebater 把裁判提交的最佳辩手座位号钳制到该队合法区间。
+//
+// LLM 可能按 1-based 提交(「四辩」→4)或直接幻觉越界值;
+// 找不到座位时回退 0(一辩)。队伍不存在时返回 0。
+func (j *AgentJudge) clampBestDebater(teamID, seat int) int {
+	for _, t := range j.room.Config.Teams {
+		if t.TeamID != teamID || len(t.Agents) == 0 {
+			continue
+		}
+		for _, a := range t.Agents {
+			if a.SeatID == seat {
+				return seat
+			}
+		}
+		// 命中队伍但座位越界 → 尝试 1-based 换算,再退一辩
+		if seat >= 1 && seat <= len(t.Agents) {
+			return seat - 1
+		}
+		return t.Agents[0].SeatID
+	}
+	return 0
 }
 
 // buildJudgeSystemPrompt 裁判系统提示词。

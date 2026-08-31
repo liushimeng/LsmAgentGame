@@ -34,10 +34,11 @@ type Client struct {
 	send       chan Envelope  // JSON 发送队列（legacy）
 	protoSend  chan []byte    // Proto 二进制发送队列（新增）
 	hub        *Hub
-	chat       *ChatService   // may be nil until the main loop wires it
-	game       *GameService   // may be nil until the main loop wires it
-	room       *RoomWsService // may be nil until the main loop wires it
-	user       *UserWsService // may be nil until the main loop wires it
+	chat       *ChatService    // may be nil until the main loop wires it
+	game       *GameService    // may be nil until the main loop wires it
+	room       *RoomWsService  // may be nil until the main loop wires it
+	user       *UserWsService  // may be nil until the main loop wires it
+	debate     *DebateService  // §20260831-02 may be nil until the main loop wires it
 
 	// protoEnabled 客户端是否已协商启用 proto 二进制模式
 	// 启用后，服务端会主动通过 proto 通道推送消息
@@ -72,6 +73,11 @@ func (c *Client) AttachGame(svc *GameService) {
 // AttachRoom wires the room WS service after construction.
 func (c *Client) AttachRoom(svc *RoomWsService) {
 	c.room = svc
+}
+
+// AttachDebate wires the debate WS service after construction (§20260831-02).
+func (c *Client) AttachDebate(svc *DebateService) {
+	c.debate = svc
 }
 
 // AttachUser wires the user list WS service after construction.
@@ -169,6 +175,13 @@ func (c *Client) ReadPump() {
 		// User-list frames are routed to the user WS service.
 		if c.user != nil && len(env.Type) >= 5 && env.Type[:5] == "user." {
 			c.user.HandleClientFrame(c, env)
+			continue
+		}
+		// Debate frames are routed to the debate WS service (§20260831-02).
+		// 注意 "debate." 是 7 个字符 —— 首版误写 [:8] 截出 "debate.s",
+		// 比较恒 false 导致所有 debate.* 帧落入 ack 兜底。
+		if c.debate != nil && len(env.Type) >= 7 && env.Type[:7] == "debate." {
+			c.debate.HandleClientFrame(c, env)
 			continue
 		}
 		// Echo back as a minimal ack so the client can verify round-trip in dev.

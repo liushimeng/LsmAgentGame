@@ -205,6 +205,27 @@
   border-left-color: #8b5cf6;
 }
 
+/* §20260831-04 — 五队发散模式角度立场专属配色(五色相区分,边框对暗底 ≥ 3:1) */
+.team-card--angle_1 {
+  border-left-color: #4dd0e1;
+}
+
+.team-card--angle_2 {
+  border-left-color: #f5c518;
+}
+
+.team-card--angle_3 {
+  border-left-color: #7bd47b;
+}
+
+.team-card--angle_4 {
+  border-left-color: #ff9d5c;
+}
+
+.team-card--angle_5 {
+  border-left-color: #e070c8;
+}
+
 .team-card__header {
   font-weight: 600;
   margin-bottom: 8px;
@@ -299,6 +320,55 @@
 .team-score__header .total {
   font-size: 18px;
   color: #fbbf24;
+}
+
+/* §20260831-04 — 雷达图 + 分数条并排布局(窄栏时上下堆叠) */
+.team-score__body {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.team-score__body .team-score__bars {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 1500px) {
+  .team-score__body {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* §20260831-04 — 5 维评分雷达图(DebateRadarChart) */
+.debate-radar {
+  flex-shrink: 0;
+  display: block;
+}
+
+.debate-radar__ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1;
+}
+
+.debate-radar__axis {
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1;
+}
+
+/* 填充 ≥ 45% 不透明度叠描边,保证暗底可读(§26.2 反模式 2) */
+.debate-radar__poly {
+  fill-opacity: 0.45;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.debate-radar__label {
+  fill: #d1d5db;
+  font-size: 11px;
+  user-select: none;
 }
 
 .score-bar {

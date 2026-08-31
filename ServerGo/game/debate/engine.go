@@ -37,6 +37,13 @@ type DebateEngine struct {
 	// 裁判启动状态
 	judgeEvents    map[int]chan struct{}
 	judgeEventsMu  sync.RWMutex
+
+	// §20260831-02 — turn-done 同步:engine 触发 Bot 后必须等该 Bot 本轮
+	// 结束(发言已提交 / fallback / 放弃)才能推进阶段;否则引擎瞬间跑完
+	// 所有阶段,Bot 的 LLM 调用回来时 SubmitSpeech 全部被阶段校验拒绝。
+	// key = "team:seat",每轮 beginTurn 换新 chan(吸收上一轮残留信号)。
+	turnDoneMu sync.Mutex
+	turnDone   map[string]chan struct{}
 }
 
 // NewDebateEngine 构造引擎(由 DebateManager.StartGame 调用)。
@@ -47,6 +54,7 @@ func NewDebateEngine(room *DebateRoom, mgr *DebateManager) *DebateEngine {
 		startedAt:   WallNow(),
 		botEvents:   make(map[string]chan struct{}),
 		judgeEvents: make(map[int]chan struct{}),
+		turnDone:    make(map[string]chan struct{}),
 	}
 }
 
@@ -99,6 +107,67 @@ func (e *DebateEngine) TriggerJudge(idx int) {
 	select {
 	case ch <- struct{}{}:
 	default:
+	}
+}
+
+// ============================================================================
+// §20260831-02 turn-done 同步(engine ↔ Bot driver)
+// ============================================================================
+
+// beginTurn 为指定 Bot 开启新一轮等待,返回新鲜的 done chan。
+//
+// 每次 driveSpeaker 触发 Bot 前调用;旧 chan 直接丢弃(即使其上还有残留
+// 信号也不会误唤醒新的一轮)。
+func (e *DebateEngine) beginTurn(key string) chan struct{} {
+	ch := make(chan struct{}, 1)
+	e.turnDoneMu.Lock()
+	e.turnDone[key] = ch
+	e.turnDoneMu.Unlock()
+	return ch
+}
+
+// NotifyTurnDone Bot driver 通知引擎「本轮已完成」。
+//
+// 由 debateplayer.Agent 在 runTurn 结束(defer)时调用 —— 无论成功发言、
+// fallback、放弃还是失败都必须调,否则引擎只能等阶段超时。
+func (e *DebateEngine) NotifyTurnDone(teamID, seat int) {
+	key := SeatKey(teamID, seat)
+	e.turnDoneMu.Lock()
+	ch := e.turnDone[key]
+	e.turnDoneMu.Unlock()
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
+}
+
+// perSpeakerWaitBudget 单个 Bot 一轮的等待预算。
+//
+// §20260831-02 实测教训:真 LLM 单次调用 20~90s( DouBao 曾命中 90s 上限),
+// 一个 2 人发言阶段实际需要 40~180s。若用「阶段 deadline」做等待上限,
+// 后发言的 Bot 完成时阶段已被引擎推进,SubmitSpeech 全部被阶段校验拒绝
+// (首期 e2e:rebuttal 0 发言 / closing 1/2 发言)。
+// 因此发言阶段的等待预算固定为 110s(LLM 超时 90s + 派发余量),
+// 与阶段 deadline 解耦 —— 阶段时长是名义节奏,「发言必须完成」优先。
+// deadline 仍约束:准备期倒计时 / 自由辩循环 / 评审收集。
+const perSpeakerWaitBudget = 110 * time.Second
+
+// waitTurnDone 阻塞等待 Bot 本轮完成。
+//
+// 返回是否正常等到(done);false = 超时或引擎 ctx 取消。
+func (e *DebateEngine) waitTurnDone(ch chan struct{}) bool {
+	t := time.NewTimer(perSpeakerWaitBudget)
+	defer t.Stop()
+	select {
+	case <-ch:
+		return true
+	case <-e.ctx.Done():
+		return false
+	case <-t.C:
+		return false
 	}
 }
 

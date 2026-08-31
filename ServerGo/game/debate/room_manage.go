@@ -44,6 +44,13 @@ type DebateManager struct {
 	onRoomRemove func(roomID string)
 	onPhaseChange func(roomID string, phase Phase)
 
+	// §20260831-02 — 比赛事件广播钩子(由 main.go 接到 ws.DebateService)。
+	// game/debate 包不得 import ws(循环引用),所有实时推送经此回调外抛。
+	onSpeech    func(roomID string, speech Speech)
+	onCrossExam func(roomID string, entry CrossExamEntry)
+	onJudgeScore func(roomID string, score JudgeScore)
+	onResult    func(roomID string, result *DebateResult)
+
 	// agentStarter Agent 启动器(由 main.go 注入)。
 	// 签名:room + engine + registry → 返回任意可 Stop() 的对象。
 	// 该函数由 agent/debaterun 包提供,实际启动辩方 + 裁判 Agent goroutine。
@@ -111,6 +118,81 @@ func (m *DebateManager) SetOnPhaseChange(fn func(roomID string, phase Phase)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onPhaseChange = fn
+}
+
+// SetOnSpeech 注入发言广播钩子(SubmitSpeech / SubmitFreeDebateSpeech 成功后触发)。
+func (m *DebateManager) SetOnSpeech(fn func(roomID string, speech Speech)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onSpeech = fn
+}
+
+// SetOnCrossExam 注入质询广播钩子(提问 / 回答提交后触发)。
+func (m *DebateManager) SetOnCrossExam(fn func(roomID string, entry CrossExamEntry)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onCrossExam = fn
+}
+
+// SetOnJudgeScore 注入单裁判评分广播钩子(AddJudgeScore 后触发)。
+func (m *DebateManager) SetOnJudgeScore(fn func(roomID string, score JudgeScore)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onJudgeScore = fn
+}
+
+// SetOnResult 注入最终结果广播钩子(BuildResult 后触发)。
+func (m *DebateManager) SetOnResult(fn func(roomID string, result *DebateResult)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onResult = fn
+}
+
+// resultHook 锁内读取 onResult 钩子(供 engine_judge / engine_phase 调用)。
+func (m *DebateManager) resultHook() func(roomID string, result *DebateResult) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.onResult
+}
+
+// emitSpeech 安全外抛 onSpeech 钩子(房间未挂 manager 或钩子未注入时静默跳过)。
+// 钩子函数在 manager.mu 读锁内取值,与 SetOnSpeech 写入互斥,无数据竞争。
+func (r *DebateRoom) emitSpeech(sp Speech) {
+	if r.manager == nil {
+		return
+	}
+	r.manager.mu.RLock()
+	fn := r.manager.onSpeech
+	r.manager.mu.RUnlock()
+	if fn != nil {
+		fn(r.RoomID, sp)
+	}
+}
+
+// emitCrossExam 安全外抛 onCrossExam 钩子。
+func (r *DebateRoom) emitCrossExam(entry CrossExamEntry) {
+	if r.manager == nil {
+		return
+	}
+	r.manager.mu.RLock()
+	fn := r.manager.onCrossExam
+	r.manager.mu.RUnlock()
+	if fn != nil {
+		fn(r.RoomID, entry)
+	}
+}
+
+// emitJudgeScore 安全外抛 onJudgeScore 钩子。
+func (r *DebateRoom) emitJudgeScore(score JudgeScore) {
+	if r.manager == nil {
+		return
+	}
+	r.manager.mu.RLock()
+	fn := r.manager.onJudgeScore
+	r.manager.mu.RUnlock()
+	if fn != nil {
+		fn(r.RoomID, score)
+	}
 }
 
 // SetAgentStarter 注入 Agent 启动器(由 main.go 调用 agent/debaterun.StartAgents)。

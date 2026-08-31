@@ -229,10 +229,14 @@ func AllowedToolsForPhaseRole(phase Phase, role Role) []ToolName {
 			allowed = append(allowed, ToolSpeech)
 		}
 	case PhaseCrossExamination:
-		// 三辩提问,对方二/三辩回答
+		// 三辩可提问;二辩/三辩都可被质询作答(§05 §1.2:
+		// 三辩同时拥有 question + answer 两件工具 —— 提问方与被质询方
+		// 都可能是三辩,else-if 写法曾让三辩拿不到 answer 工具,
+		// 实测造成「有问无答」,§20260831-02 修复)。
 		if role == RoleThird {
 			allowed = append(allowed, ToolCrossExamQuestion)
-		} else if role == RoleSecond || role == RoleThird {
+		}
+		if role == RoleSecond || role == RoleThird {
 			allowed = append(allowed, ToolCrossExamAnswer)
 		}
 	case PhaseCrossExamSummary:

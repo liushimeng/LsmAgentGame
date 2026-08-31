@@ -575,8 +575,28 @@ func main() {
 				zap.String("room_id", rid), zap.Error(err))
 		}
 	})
+	// §20260831-02 — 辩论 WS 服务实例化 + 全量广播钩子接线。
+	// 首期版本 DebateService 从未被创建:debate.* 帧无路由、phase/speech/
+	// judge_vote/game_over 均不广播,前端对局页只能靠 HTTP 轮询详情兜底。
+	debateWsSvc := ws.NewDebateService(hub, debateMgr)
+	debateMgr.SetOnPhaseChange(func(rid string, ph debate.Phase) {
+		if r, ok := debateMgr.Get(rid); ok {
+			debateWsSvc.BroadcastPhase(rid, ph, r.PhaseTimeRemainingSec())
+		}
+	})
+	debateMgr.SetOnSpeech(func(rid string, sp debate.Speech) {
+		debateWsSvc.BroadcastSpeech(rid, sp)
+	})
+	debateMgr.SetOnCrossExam(func(rid string, entry debate.CrossExamEntry) {
+		debateWsSvc.BroadcastCrossExam(rid, entry)
+	})
+	debateMgr.SetOnJudgeScore(func(rid string, sc debate.JudgeScore) {
+		debateWsSvc.BroadcastJudgeScore(rid, sc)
+	})
+	debateMgr.SetOnResult(func(rid string, res *debate.DebateResult) {
+		debateWsSvc.BroadcastResult(rid, res)
+	})
 	debateAPI := api.NewDebateAPI(debateMgr, llmRegistry)
-	_ = debateAPI
 
 	// 2026-07-10 §125 增强 — 注入法官总结所需回调。
 	// 1) Manager 单例(让 judge goroutine 内部能拿到 registry 调 LLM)。
@@ -804,8 +824,8 @@ func main() {
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.
-	httpHandler.GET("/ws", ws.Handler(cfg, hub, chatSvc, gameSvcWs, roomWsSvc, userWsSvc))
-	wssHandler := wsHandler(cfg, hub, chatSvc, gameSvcWs, roomWsSvc, userWsSvc)
+	httpHandler.GET("/ws", ws.Handler(cfg, hub, chatSvc, gameSvcWs, roomWsSvc, userWsSvc, debateWsSvc))
+	wssHandler := wsHandler(cfg, hub, chatSvc, gameSvcWs, roomWsSvc, userWsSvc, debateWsSvc)
 
 	httpsSrv := &http.Server{
 		Addr:              cfg.Server.HTTPSAddr,
@@ -941,10 +961,10 @@ func main() {
 // BUG-WEREWOLF-P0-NEW-37: 直接调用 ws.ServeWS 而非 gin.CreateTestContext 包装,
 // 避免 gorilla 接管连接后 responseWriter 留在半 hijacked 状态导致部分客户端
 // game.spectate ack 丢失。
-func wsHandler(cfg *config.Config, hub *ws.Hub, chat *ws.ChatService, game *ws.GameService, room *ws.RoomWsService, user *ws.UserWsService) http.Handler {
+func wsHandler(cfg *config.Config, hub *ws.Hub, chat *ws.ChatService, game *ws.GameService, room *ws.RoomWsService, user *ws.UserWsService, debate *ws.DebateService) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		ws.ServeWS(cfg, hub, chat, game, room, user, w, r)
+		ws.ServeWS(cfg, hub, chat, game, room, user, debate, w, r)
 	})
 	return mux
 }

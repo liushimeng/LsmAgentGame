@@ -1,14 +1,18 @@
 // Package debateplayer — 辩方 Agent 驱动(2026-08-31 §20260831-01)。
 //
-// 简化设计:
+// 设计:
 //   - 每个 Bot 是一个独立 goroutine,监听 DebateEngine.BotEventChan(team, seat)
-//   - 收到事件后:拉取 DebateContext → 构造 prompt → 调 LLM → 解析 tool_use → 调 DebateRoom.SubmitSpeech/CrossExam*/SubmitFreeDebateSpeech
-//   - 简化:Memory 单段线性追加,无复杂压缩(由阶段四 §2.7 设计文档 §4.1 指导)
+//   - 收到事件后:拉取 DebateContext → 构造 prompt → 多轮 tool_use 循环
+//     (§20260831-02:≤ 5 轮,失败把错误作为 tool_result 喂回 LLM 自纠错)
+//     → 调 DebateRoom.SubmitSpeech/CrossExam*/SubmitFreeDebateSpeech
+//   - Memory 跨轮持久(assistant/tool_result 全量入记忆),
+//     超阈值(>50 条 / >300KB)触发 8 段结构化摘要压缩(§20260831-03)
+//   - 每轮结束 NotifyTurnDone 通知引擎推进(§20260831-02 同步语义)
 //
 // 与狼人杀 Agent 区别:
 //   - 单一角色驱动(立论/驳论/质询/总结),无角色切换
 //   - 工具集随 phase + role 动态过滤
-//   - 无记忆压缩 / 跨局 MEMORY.md 迭代(本版本)
+//   - 跨局 MEMORY.md 迭代仍未实现(本版本)
 //
 // 详细设计见 docs/辩论比赛/02-辩论比赛Agent设计.md。
 package debateplayer
@@ -101,6 +105,9 @@ func (a *Agent) ClassName() agent.AgentClassName {
 //
 // 本版本:每收到一次事件 = 一次"轮到我"提示,执行一次完整的 tool_use 循环
 // (最多 5 次 tool_use),完成后退出本轮,等待下次事件。
+//
+// §20260831-02 — 每轮结束(含隔离跳过)必须 NotifyTurnDone,
+// 否则引擎 waitTurnDone 只能干等阶段超时。
 func (a *Agent) Run(ctx context.Context) {
 	a.ctx, a.cancel = context.WithCancel(ctx)
 	defer a.cancel()
@@ -114,16 +121,28 @@ func (a *Agent) Run(ctx context.Context) {
 			return
 		case <-ch:
 			if a.isQuarantined() {
+				a.engine.NotifyTurnDone(a.TeamID, a.Seat)
 				continue
 			}
 			a.runTurn()
+			a.engine.NotifyTurnDone(a.TeamID, a.Seat)
 		}
 	}
 }
 
-// runTurn 执行一轮:调 LLM → 解析 tool_use → 派发。
+// runTurn 执行一轮完整的多轮 tool_use 循环(§20260831-02)。
+//
+// 流程(对齐 docs/辩论比赛/02 §2.3 + §5.1):
+//
+//	user prompt 入 memory → 循环(≤ maxToolUseRounds):
+//	  Chat(memory 快照) → 无 tool_use:
+//	    · 本轮已派发过终态工具 → 结束(把文本当补充发言忽略)
+//	    · 未派发 → 纯文本按 speech 提交(视为口语化发言),结束
+//	  有 tool_use → 逐个派发 → tool_result(含错误信息)回填 memory:
+//	    · 任一工具 OK(成功落库) → 终态,结束
+//	    · 全部失败 → 把错误喂回 LLM 重试(下一轮循环)
+//	LLM 调用失败 / 超过轮次上限 → fallback 模板发言。
 func (a *Agent) runTurn() {
-	// 1) 取引擎事件(已经触发,跳过)
 	if a.provider == nil {
 		logger.L().Warn("debate agent: llm provider is nil, skipping turn",
 			zap.String("room_id", a.RoomID),
@@ -133,72 +152,127 @@ func (a *Agent) runTurn() {
 		return
 	}
 
-	// 2) 构造 system prompt
 	systemPrompt := a.buildSystemPrompt()
-
-	// 3) 构造 user prompt(基于 DebateContext)
 	gc := a.collectContext()
 	userPrompt := a.buildUserPrompt(gc)
-
-	// 4) 取工具集
 	tools := a.buildTools(gc.Phase)
 
-	// 5) 调 LLM(限流 + 超时)
 	if !a.engine.Manager().AcquireLLM(a.ctx) {
 		logger.L().Warn("debate agent: failed to acquire LLM slot",
 			zap.String("room_id", a.RoomID))
+		a.useFallbackResponse()
 		return
 	}
 	defer a.engine.Manager().ReleaseLLM()
 
-	llmCtx, cancel := context.WithTimeout(a.ctx, 90*time.Second)
-	defer cancel()
-
-	// 6) 调 LLM(简化:仅 1 次 Chat;不循环 tool_use)
-	messages := []llm.Message{
-		{Role: "user", Content: []llm.ContentBlock{{Type: "text", Text: userPrompt}}},
+	// §20260831-03 — 记忆压缩触发点(§05 §5.1:消息数 > 50 或字节 > 300KB)。
+	// 压缩失败不阻塞发言:保留原记忆继续本轮。
+	if a.memory.ShouldCompact() {
+		a.compactMemory()
 	}
 
-	req := llm.LLMRequest{
-		AgentClassName: string(a.ClassName()),
-		Model:          a.ModelKey,
-		System:         []llm.SystemBlock{{Type: "text", Text: systemPrompt}},
-		Messages:       messages,
-		Tools:          tools,
-		MaxTokens:      1024,
-	}
+	// 本轮 user prompt 追加进记忆(跨轮持久;失败重试轮不重复追加)
+	a.memory.Append(llm.Message{
+		Role:    "user",
+		Content: []llm.ContentBlock{{Type: "text", Text: userPrompt}},
+	})
 
-	resp, err := a.provider.Chat(llmCtx, a.apiKey, req)
-	if err != nil {
-		logger.L().Warn("debate agent: LLM call failed, using fallback",
-			zap.String("room_id", a.RoomID),
-			zap.String("model", a.ModelKey),
-			zap.Error(err))
-		a.useFallbackResponse()
-		return
-	}
+	anyDispatchedOK := false
+	for round := 0; round < maxToolUseRounds; round++ {
+		messages := sanitizeDebateMessages(a.memory.Snapshot())
 
-	// 7) 解析 tool_use(简化:取第一个 tool_use 块)
-	toolUsed := false
-	for _, blk := range resp.Content {
-		if blk.Type != "tool_use" {
-			continue
+		llmCtx, cancel := context.WithTimeout(a.ctx, llmTurnTimeoutSec*time.Second)
+		req := llm.LLMRequest{
+			AgentClassName: string(a.ClassName()),
+			Model:          a.ModelKey,
+			System:         []llm.SystemBlock{{Type: "text", Text: systemPrompt}},
+			Messages:       messages,
+			Tools:          tools,
+			MaxTokens:      1024,
 		}
-		a.dispatchTool(blk)
-		toolUsed = true
-		break
+		resp, err := a.provider.Chat(llmCtx, a.apiKey, req)
+		cancel()
+		if err != nil {
+			logger.L().Warn("debate agent: LLM call failed, using fallback",
+				zap.String("room_id", a.RoomID),
+				zap.String("model", a.ModelKey),
+				zap.Int("round", round),
+				zap.Error(err))
+			if !anyDispatchedOK {
+				a.useFallbackResponse()
+			}
+			return
+		}
+
+		// assistant 回复原样入记忆(text + tool_use 块保持配对来源)
+		a.memory.Append(llm.Message{Role: "assistant", Content: cloneBlocks(resp.Content)})
+
+		var toolUses []llm.ContentBlock
+		for _, blk := range resp.Content {
+			if blk.Type == "tool_use" {
+				toolUses = append(toolUses, blk)
+			}
+		}
+
+		if len(toolUses) == 0 {
+			// 纯文本回复:本轮尚未成功派发 → 把文本当发言提交;否则仅作补充说明忽略
+			if !anyDispatchedOK {
+				if text := joinTextBlocks(resp.Content); strings.TrimSpace(text) != "" {
+					a.submitPlainTextAsSpeech(text)
+				} else {
+					a.useFallbackResponse()
+				}
+			}
+			return
+		}
+
+		// 逐个派发 tool_use,并构造 tool_result 回填
+		results := make([]llm.ContentBlock, 0, len(toolUses))
+		for _, blk := range toolUses {
+			res := a.dispatchTool(blk)
+			if res.OK {
+				anyDispatchedOK = true
+			}
+			results = append(results, llm.ContentBlock{
+				Type:      "tool_result",
+				ToolUseID: blk.ID,
+				Content:   []llm.ContentBlock{{Type: "text", Text: resultText(res)}},
+				IsError:   !res.OK,
+			})
+		}
+		a.memory.Append(llm.Message{Role: "user", Content: results})
+
+		if anyDispatchedOK {
+			// 辩论工具全部是一次性动作(speech/质询/沉默/交还发言权),
+			// 任一成功即本轮终态 —— 防止 LLM 连发两次 speech 造成重复发言。
+			return
+		}
+		// 全部派发失败 → 错误已作为 tool_result 喂回,进入下一轮重试
+		logger.L().Warn("debate agent: all tool_use failed, retrying",
+			zap.String("room_id", a.RoomID),
+			zap.Int("team", a.TeamID),
+			zap.Int("seat", a.Seat),
+			zap.Int("round", round))
 	}
-	if !toolUsed {
-		// LLM 直接返回文本 → fallback 当作 speech
+
+	// 超过轮次上限仍未成功 → fallback
+	if !anyDispatchedOK {
 		a.useFallbackResponse()
 	}
 }
 
-// dispatchTool 派发 LLM 返回的 tool_use。
-func (a *Agent) dispatchTool(blk llm.ContentBlock) {
+// maxToolUseRounds 单轮最多 tool_use 重试轮次(§02 §5.1:单轮最多 5 次 tool_use)。
+const maxToolUseRounds = 5
+
+// llmTurnTimeoutSec 单次 LLM 调用超时(秒)。
+const llmTurnTimeoutSec = 90
+
+// dispatchTool 派发 LLM 返回的 tool_use,返回 ActionResult(含失败原因,
+// 供 tool_result 回填让 LLM 自纠错)。
+func (a *Agent) dispatchTool(blk llm.ContentBlock) debate.ActionResult {
 	r := a.engine.Room()
 	if r == nil {
-		return
+		return debate.ActionResult{OK: false, Message: "room not available"}
 	}
 
 	// tool_use.input 是 map[string]any(由 provider 反序列化);二次解析时
@@ -207,7 +281,7 @@ func (a *Agent) dispatchTool(blk llm.ContentBlock) {
 	if err != nil {
 		logger.L().Warn("debate agent: marshal tool input failed",
 			zap.Error(err))
-		return
+		return debate.ActionResult{OK: false, Message: "invalid tool input"}
 	}
 
 	switch blk.Name {
@@ -218,11 +292,9 @@ func (a *Agent) dispatchTool(blk llm.ContentBlock) {
 			InternalThought string   `json:"internal_thought,omitempty"`
 		}
 		if err := json.Unmarshal(inputBytes, &input); err != nil {
-			logger.L().Warn("debate agent: invalid speech input",
-				zap.Error(err))
-			return
+			return debate.ActionResult{OK: false, Message: "invalid speech input json"}
 		}
-		r.SubmitSpeech(a.TeamID, a.Seat, debate.SpeechParams{
+		return r.SubmitSpeech(a.TeamID, a.Seat, debate.SpeechParams{
 			Content:         input.Content,
 			References:      input.References,
 			InternalThought: input.InternalThought,
@@ -234,9 +306,9 @@ func (a *Agent) dispatchTool(blk llm.ContentBlock) {
 			Question   string `json:"question"`
 		}
 		if err := json.Unmarshal(inputBytes, &input); err != nil {
-			return
+			return debate.ActionResult{OK: false, Message: "invalid cross_exam_question input json"}
 		}
-		r.SubmitCrossExamQuestion(a.TeamID, a.Seat, debate.CrossExamQuestionParams{
+		return r.SubmitCrossExamQuestion(a.TeamID, a.Seat, debate.CrossExamQuestionParams{
 			TargetTeam: input.TargetTeam,
 			TargetSeat: input.TargetSeat,
 			Question:   input.Question,
@@ -247,9 +319,9 @@ func (a *Agent) dispatchTool(blk llm.ContentBlock) {
 			Answer     string `json:"answer"`
 		}
 		if err := json.Unmarshal(inputBytes, &input); err != nil {
-			return
+			return debate.ActionResult{OK: false, Message: "invalid cross_exam_answer input json"}
 		}
-		r.SubmitCrossExamAnswer(a.Seat, debate.CrossExamAnswerParams{
+		return r.SubmitCrossExamAnswer(a.Seat, debate.CrossExamAnswerParams{
 			QuestionID: input.QuestionID,
 			Answer:     input.Answer,
 		})
@@ -258,21 +330,70 @@ func (a *Agent) dispatchTool(blk llm.ContentBlock) {
 			Content string `json:"content"`
 		}
 		if err := json.Unmarshal(inputBytes, &input); err != nil {
-			return
+			return debate.ActionResult{OK: false, Message: "invalid free_debate_speak input json"}
 		}
-		r.SubmitFreeDebateSpeech(a.TeamID, a.Seat, debate.FreeDebateParams{
+		return r.SubmitFreeDebateSpeech(a.TeamID, a.Seat, debate.FreeDebateParams{
 			Content: input.Content,
 		})
 	case string(debate.ToolFinishSpeak):
-		r.FinishSpeak(a.TeamID, "finished")
+		return r.FinishSpeak(a.TeamID, "finished")
 	case string(debate.ToolIdleSilent):
-		r.IdleSilent(a.Seat, "idle")
+		return r.IdleSilent(a.Seat, "idle")
+	default:
+		return debate.ActionResult{OK: false, Message: "unknown tool: " + blk.Name}
+	}
+}
+
+// resultText 把 ActionResult 转成回填给 LLM 的 tool_result 文本。
+func resultText(res debate.ActionResult) string {
+	if res.OK {
+		if res.SpeechID != "" {
+			return "ok: " + res.Message + " (id=" + res.SpeechID + ")"
+		}
+		return "ok: " + res.Message
+	}
+	return "error: " + res.Message
+}
+
+// joinTextBlocks 拼接 Content 中的全部 text 块。
+func joinTextBlocks(blocks []llm.ContentBlock) string {
+	var b strings.Builder
+	for _, blk := range blocks {
+		if blk.Type == "text" {
+			b.WriteString(blk.Text)
+		}
+	}
+	return b.String()
+}
+
+// cloneBlocks 深拷贝 content 块(避免与 provider 内部缓冲共享底层数组)。
+func cloneBlocks(blocks []llm.ContentBlock) []llm.ContentBlock {
+	out := make([]llm.ContentBlock, len(blocks))
+	copy(out, blocks)
+	return out
+}
+
+// submitPlainTextAsSpeech 把 LLM 的纯文本回复(未走工具)按 speech 提交。
+//
+// 适配阶段:仅正式发言阶段有效;质询/自由辩阶段文本无法映射时由
+// SubmitSpeech 的阶段校验拒绝,此时退回 useFallbackResponse。
+func (a *Agent) submitPlainTextAsSpeech(text string) {
+	res := a.dispatchTool(llm.ContentBlock{
+		Type:  "tool_use",
+		ID:    "plain_" + fmt.Sprint(debate.WallNowMS()),
+		Name:  string(debate.ToolSpeech),
+		Input: map[string]any{"content": text},
+	})
+	if !res.OK {
+		a.useFallbackResponse()
 	}
 }
 
 // useFallbackResponse LLM 失败 / 返回纯文本时使用 fallback 发言。
 //
-// 简化策略:输出一段固定模板,直接通过 SubmitSpeech 提交。
+// 简化策略:输出一段固定模板,直接通过 SubmitSpeech 提交;
+// 同时把 fallback 文本以 assistant 消息入记忆,保持 user/assistant 交替
+// (否则下一轮 user prompt 会紧跟上一轮 user prompt,违反 §14.1)。
 func (a *Agent) useFallbackResponse() {
 	r := a.engine.Room()
 	if r == nil {
@@ -280,6 +401,10 @@ func (a *Agent) useFallbackResponse() {
 	}
 	phase := r.Phase()
 	content := buildFallbackText(phase, a.Stance, a.Role)
+	a.memory.Append(llm.Message{
+		Role:    "assistant",
+		Content: []llm.ContentBlock{{Type: "text", Text: content}},
+	})
 	r.SubmitSpeech(a.TeamID, a.Seat, debate.SpeechParams{
 		Content:         content,
 		InternalThought: "[fallback]",
@@ -401,8 +526,14 @@ func (a *Agent) buildUserPrompt(gc DebateContext) string {
 		b.WriteString("\n")
 	}
 
+	// 待答质询(§20260831-02:被质询方必须知道问题才能回答)
+	if gc.PendingQuestionText != "" {
+		b.WriteString(fmt.Sprintf("【⚠ 待答质询 — 必须正面回答】\n问题(id=%s):%s\n请调用 cross_exam_answer(question_id=\"%s\", answer=...),≤ 100 字,不得回避或反问。\n\n",
+			gc.PendingQuestionID, gc.PendingQuestionText, gc.PendingQuestionID))
+	}
+
 	// 当前轮次任务
-	b.WriteString(fmt.Sprintf("【本轮任务】\n%s\n", phaseTaskGuide(gc.Phase, gc.MyRole)))
+	b.WriteString(fmt.Sprintf("【本轮任务】\n%s\n", phaseTaskGuide(gc.Phase, gc.MyRole, gc.PendingQuestionText != "")))
 	return b.String()
 }
 
@@ -433,18 +564,21 @@ func truncateRunes(s string, max int) string {
 	return s
 }
 
-// phaseTaskGuide 阶段任务指引(基于阶段+辩位)。
-func phaseTaskGuide(phase debate.Phase, role string) string {
+// phaseTaskGuide 阶段任务指引(基于阶段+辩位;hasPendingQuestion 区分质询提问/回答)。
+func phaseTaskGuide(phase debate.Phase, role string, hasPendingQuestion bool) string {
 	switch phase {
 	case debate.PhaseOpeningArgument:
 		return "请以一辩身份发表立论:清晰定义辩题概念,明确判定标准,抛出 2-3 个核心论点并提供论据。"
 	case debate.PhaseRebuttal:
 		return "请以二辩身份发表驳论:针对对方一辩发言中的具体观点,指出逻辑漏洞或论据不足。"
 	case debate.PhaseCrossExamination:
-		if role == string(debate.RoleThird) {
-			return "请以三辩身份发起质询:向对方辩手提出精准问题,挖掘其逻辑漏洞。"
+		if hasPendingQuestion {
+			return "对方三辩已向你发起质询,请立即调用 cross_exam_answer 正面回答(≤100 字)。"
 		}
-		return "请回答对方三辩的质询:正面回应,不得回避或反问。"
+		if role == string(debate.RoleThird) {
+			return "请以三辩身份发起质询:调用 cross_exam_question 向对方辩手提出精准问题(target_team 填对方队号),挖掘其逻辑漏洞。"
+		}
+		return "当前无质询任务,若无待答问题可选择 idle_silent。"
 	case debate.PhaseCrossExamSummary:
 		return "请做质询小结:梳理质询战果,归纳交锋焦点,固化己方优势。"
 	case debate.PhaseFreeDebate:
@@ -468,6 +602,7 @@ const debaterSystemBase = `【辩论比赛 — 硬约束】
 ① 定义权:对辩题核心概念的定义是立论的基础,要抢占有利定义。
 ② 判准:明确衡量胜负的标准,引导辩论方向。
 ③ 论点-论据-论证:每个论点必须有论据支撑,论证链条完整。
+④ 反驳三要素:指出对方错误 + 说明为什么错 + 给出正确观点。
 ⑤ 团队配合:与队友论点一致、互相补充,不自我矛盾。
 ═══════════════════════════════════════════════════════════════
 【输出格式】

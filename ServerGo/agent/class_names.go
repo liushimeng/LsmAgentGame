@@ -149,6 +149,7 @@ func AllAgentClassNames() []AgentClassName {
 		// 2026-08-31 §20260831-01 — 辩论比赛 Agent 类别
 		AgentClassDebatePlayer,
 		AgentClassDebateJudge,
+		AgentClassDebateMemoryCompact,
 	}
 }
 
@@ -178,4 +179,12 @@ const (
 	// 5 维度评分 + 评语 + 多数决投票。**不**参与辩论发言。
 	// 详见 docs/辩论比赛/02 §3 + 06 §4。
 	AgentClassDebateJudge AgentClassName = "LsmAgentGame-Debate-Judge"
+
+	// AgentClassDebateMemoryCompact 是辩论比赛 Agent 决策记忆 LLM 压缩的
+	// AgentClassName(2026-08-31 §20260831-03 §05 §5 落地)。由
+	// ServerGo/agent/debateplayer/memory_compact.go 的 compactMemory 调用;
+	// 把 messages 压缩为 8 段结构化摘要(辩题立场/双方论点/交锋点/局势),
+	// 失败保留原记忆下次再试。
+	// 详见 docs/辩论比赛/05-辩论比赛工具与记忆系统设计.md §5。
+	AgentClassDebateMemoryCompact AgentClassName = "LsmAgentGame-Debate-MemoryCompact"
 )
