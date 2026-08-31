@@ -18,7 +18,13 @@ export default function DebateJudgeScoreboardPanel() {
   const scoreboards = useDebateStore((s) => s.scoreboards);
   const judges = useDebateStore((s) => s.currentRoom?.judges ?? []);
 
-  const entries = Object.values(scoreboards);
+  // §20260901-01(P0 修复 — R9 result 阶段 React 崩溃):
+  // scoreboards 在 WS 帧 / 切房间 race condition 下可能为 null,
+  // Object.values(null) 抛 "Cannot convert undefined or null to object",
+  // 导致整棵树被 ErrorBoundary 隔离。这里统一兜底为 {}。
+  const entries = scoreboards && typeof scoreboards === 'object'
+    ? Object.values(scoreboards).filter((b): b is DebateJudgeScoreboard => !!b)
+    : [];
   if (entries.length === 0) {
     return (
       <div className="debate-judge-scoreboard-panel debate-judge-scoreboard-panel--empty">
@@ -52,7 +58,13 @@ function JudgeScoreboardCard({
   board: DebateJudgeScoreboard;
   judgeName: string;
 }) {
-  const teamEntries = Object.values(board.team_scores);
+  // §20260901-01(P0 修复 — R9 result 阶段 React 崩溃):
+  // board.team_scores 为 map[int]*AccumulatedTeamScore,Go nil map 序列化为 null,
+  // Object.values(null) 会抛错,导致整个 Judge 列表崩溃。
+  const teamScores = board.team_scores && typeof board.team_scores === 'object'
+    ? board.team_scores
+    : {};
+  const teamEntries = Object.values(teamScores).filter((ts): ts is NonNullable<typeof ts> => !!ts);
 
   return (
     <div className={`judge-scoreboard-card${board.is_final ? ' judge-scoreboard-card--final' : ''}`}>
@@ -73,18 +85,22 @@ function JudgeScoreboardCard({
               <span className="judge-scoreboard-card__total">{ts.total_score.toFixed(1)}</span>
             </div>
             <div className="judge-scoreboard-card__dims">
-              {(['argument_quality', 'logic_rigor', 'language_expression', 'team_coordination', 'rebuttal_effectiveness'] as const).map((dim) => (
-                <div key={dim} className="judge-scoreboard-card__dim">
-                  <span className="judge-scoreboard-card__dim-label">{DIM_LABELS[dim] ?? dim}</span>
-                  <div className="judge-scoreboard-card__dim-track">
-                    <div
-                      className="judge-scoreboard-card__dim-fill"
-                      style={{ width: `${(ts[dim] / 10) * 100}%` }}
-                    />
+              {(['argument_quality', 'logic_rigor', 'language_expression', 'team_coordination', 'rebuttal_effectiveness'] as const).map((dim) => {
+                const raw = (ts as unknown as Record<string, unknown>)[dim];
+                const value = typeof raw === 'number' && !Number.isNaN(raw) ? raw : 0;
+                return (
+                  <div key={dim} className="judge-scoreboard-card__dim">
+                    <span className="judge-scoreboard-card__dim-label">{DIM_LABELS[dim] ?? dim}</span>
+                    <div className="judge-scoreboard-card__dim-track">
+                      <div
+                        className="judge-scoreboard-card__dim-fill"
+                        style={{ width: `${(value / 10) * 100}%` }}
+                      />
+                    </div>
+                    <span className="judge-scoreboard-card__dim-value">{value.toFixed(1)}</span>
                   </div>
-                  <span className="judge-scoreboard-card__dim-value">{ts[dim].toFixed(1)}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
             {ts.latest_comment && (
               <div className="judge-scoreboard-card__comment" title={ts.latest_comment}>
@@ -101,6 +117,7 @@ function JudgeScoreboardCard({
           <summary>📜 阶段历史({board.stage_history.length})</summary>
           <ul>
             {board.stage_history
+              .filter((h): h is NonNullable<typeof h> => !!h)
               .slice()
               .reverse()
               .map((h, idx) => (

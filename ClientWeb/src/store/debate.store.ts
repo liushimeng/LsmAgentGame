@@ -252,8 +252,10 @@ export const useDebateStore = create<DebateStore>((set) => ({
   setAgentStatsDetail: (detail) => set({ agentStatsDetail: detail }),
 
   // §20260831-09 — 裁判实时打分看板(debate.judge_scoreboard)按 judge_id 合并。
+  // §20260901-01(P0 修复 — R9 result 阶段 React 崩溃):
+  //   保证 scoreboards 永不为 null;若误传 null/undefined 则安全降级为 {}。
   setJudgeScoreboard: (judgeId, board) => set((s) => ({
-    scoreboards: { ...s.scoreboards, [judgeId]: board },
+    scoreboards: { ...(s.scoreboards ?? {}), [judgeId]: board },
   })),
 
   reset: () => set(initial),

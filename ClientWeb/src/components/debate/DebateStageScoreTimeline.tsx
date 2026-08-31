@@ -27,15 +27,25 @@ interface TimelineEntry {
 
 /** 把所有裁判的 stage_history 合并成时间线条目(按 submitted_at_ms 倒序)。 */
 function buildTimeline(
-  scoreboards: Record<number, DebateJudgeScoreboard>,
+  scoreboards: Record<number, DebateJudgeScoreboard> | null | undefined,
   judges: { judge_id: number; name?: string }[],
 ): TimelineEntry[] {
+  // §20260901-01(P0 修复 — R9 result 阶段 React 崩溃):
+  // scoreboards 在 WS 帧 / 切房间 race condition 下可能为 null,
+  // Object.values(null) 会抛 "Cannot convert undefined or null to object";
+  // board.stage_history 缺失时 for-of 也会抛;ss.team_scores 为 null 时
+  // 直接 .map() 抛 "Cannot read properties of null (reading 'map')"。
+  // 此处统一兜底,避免整棵 Timeline 子树崩溃。
+  if (!scoreboards || typeof scoreboards !== 'object') return [];
+  const boards = Object.values(scoreboards).filter((b): b is DebateJudgeScoreboard => !!b);
   const entries: TimelineEntry[] = [];
-  for (const board of Object.values(scoreboards)) {
+  for (const board of boards) {
     const judge = judges.find((j) => j.judge_id === board.judge_id);
     const judgeName = judge?.name ?? `裁判 ${board.judge_id + 1}`;
-    for (const ss of board.stage_history) {
-      const teamTotals = ss.team_scores.map((ts: DebateTeamRanking) => ({
+    const history = Array.isArray(board.stage_history) ? board.stage_history : [];
+    for (const ss of history) {
+      const teamScoresRaw = Array.isArray(ss.team_scores) ? ss.team_scores : [];
+      const teamTotals = teamScoresRaw.map((ts: DebateTeamRanking) => ({
         team_id: ts.team_id,
         total: ts.total_score,
       }));

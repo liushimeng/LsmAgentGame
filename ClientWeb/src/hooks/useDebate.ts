@@ -122,11 +122,15 @@ export function useDebate(roomId: string) {
           if (state.room_id !== roomId) return;
           setGameState(state);
           // §20260831-09 — 首次订阅时注入完整打分看板数据。
+          // §20260901-01(P0 修复 — R9 result 阶段 React 崩溃):
+          //   scoreboards 为 null 时(后端 BuildClientState 走 allScoreboards → nil 路径),
+          //   JSON 反序列化为 null,Array.isArray(null) === false → 安全跳过;
+          //   但元素本身可能为 null,需逐项过滤。同时保证 setState 时 scoreboards 永不为 null。
           if (Array.isArray(state.scoreboards) && state.scoreboards.length > 0) {
-            const sbs = useDebateStore.getState().scoreboards;
-            const updated = { ...sbs };
+            const sbs = useDebateStore.getState().scoreboards ?? {};
+            const updated: Record<number, DebateJudgeScoreboard> = { ...sbs };
             for (const board of state.scoreboards) {
-              if (board && board.judge_id != null) {
+              if (board && typeof board === 'object' && board.judge_id != null) {
                 updated[board.judge_id] = board;
               }
             }
@@ -240,9 +244,10 @@ export function useDebate(roomId: string) {
         case 'debate.judge_scoreboard': {
           // service 广播完整 JudgeScoreboard 结构(含 team_scores + stage_history)。
           // 直接写入 store.scoreboards[judge_id] 覆盖旧值。
+          // §20260901-01(P0 修复):防御空 board 与非对象 board,避免后续组件调用 .map 崩溃。
           if (p && typeof p === 'object' && 'judge_id' in p) {
             const board = p as unknown as DebateJudgeScoreboard;
-            if (board.judge_id != null) {
+            if (board && typeof board === 'object' && board.judge_id != null) {
               setJudgeScoreboard(board.judge_id, board);
             }
           }

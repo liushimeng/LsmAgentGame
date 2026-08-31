@@ -65,7 +65,19 @@ export default function DebateRadarChart({
   const cy = size / 2;
   const r = size / 2 - 18; // 留出标签空间
 
-  const scores = DIMENSIONS.map((d) => Number(dimensionScores?.[d.key] ?? 0));
+  // §20260901-01(P0 修复 — R9 result 阶段 React 崩溃):
+  // dimensionScores 在后端 fallback 路径下可能为 null(Go nil map → JSON null),
+  // 此时 dimensionScores?.[d.key] 仍返回 undefined,Number(undefined) === NaN,
+  // polygonPoints 内的 Math.min(10, Math.max(0, NaN)) === NaN,SVG 渲染空白但不崩;
+  // 真正脆弱的是上层父组件的 Object.entries(null).map 链路,已加防御,此处亦加兜底。
+  const safeDims = dimensionScores && typeof dimensionScores === 'object'
+    ? dimensionScores
+    : ({} as Record<string, number>);
+  const scores = DIMENSIONS.map((d) => {
+    const raw = safeDims[d.key];
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  });
 
   return (
     <svg
