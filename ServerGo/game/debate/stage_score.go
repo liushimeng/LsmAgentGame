@@ -187,6 +187,17 @@ func (r *DebateRoom) Scoreboards() []*JudgeScoreboard {
 	return r.scoreboards.allScoreboards()
 }
 
+// scoreboardsCopyLocked 是 Scoreboards 的**锁内变体**(§92a 范式)。
+//
+// 调用方必须已持有 r.mu(读锁或写锁)。
+// 仅读 r.scoreboards,内部取 scoreboards.mu(不同层级锁,无锁序倒置)。
+func (r *DebateRoom) scoreboardsCopyLocked() []*JudgeScoreboard {
+	if r.scoreboards == nil {
+		return nil
+	}
+	return r.scoreboards.allScoreboards()
+}
+
 // MarkJudgeFinalized 把指定裁判的看板标记为 IsFinal=true(供 submit_score 派发调用)。
 func (r *DebateRoom) MarkJudgeFinalized(judgeID int) {
 	if r.scoreboards == nil {

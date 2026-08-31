@@ -226,6 +226,8 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		debateGames.POST("/rooms/:id/start", debateAPI.Start)
 		debateGames.GET("/rooms/:id/history", debateAPI.History)
 		debateGames.DELETE("/rooms/:id", debateAPI.Disband)
+		// §20260831-09 — 裁判实时打分看板(前端首次订阅 / WS 断线重连后拉取完整数据)。
+		debateGames.GET("/rooms/:id/scoreboards", debateAPI.Scoreboards)
 
 		// §20260831-08 — 历史对局(已结束比赛分页列表 + 复盘详情,
 		// 数据来自 t_lsm_game_debate_* 表)。

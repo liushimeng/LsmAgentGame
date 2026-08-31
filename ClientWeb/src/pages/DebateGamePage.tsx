@@ -32,6 +32,7 @@ import DebateHostControls from '@/components/debate/DebateHostControls';
 import DebateSpectatorQuestionPanel from '@/components/debate/DebateSpectatorQuestionPanel';
 import DebateAgentStatsPanel from '@/components/debate/DebateAgentStatsPanel';
 import DebateJudgeScoreboardPanel from '@/components/debate/DebateJudgeScoreboardPanel';
+import DebateStageScoreTimeline from '@/components/debate/DebateStageScoreTimeline';
 import { GameChatPanel } from '@/components/chat/GameChatPanel';
 
 export function DebateGamePage() {
@@ -128,6 +129,7 @@ export function DebateGamePage() {
                 <DebateJudgePanel />
                 <DebateJudgeScoreboardPanel />
                 <DebateScorePanel />
+                <DebateStageScoreTimeline />
                 {isGameOver && (
                   <div className="post-game-actions">
                     <button

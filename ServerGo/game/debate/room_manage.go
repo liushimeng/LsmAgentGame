@@ -473,6 +473,24 @@ func (m *DebateManager) Room(roomID string) (*DebateRoom, bool) {
 	return m.Get(roomID)
 }
 
+// ScoreboardCopy 返回指定房间的指定裁判实时打分看板副本(§20260831-09)。
+//
+// 用于 WS 广播 debate.judge_scoreboard 帧时附带完整累计数据,
+// 前端无需再发 REST 请求补全。roomID 不存在 / judgeID 未找到时返回 nil。
+func (m *DebateManager) ScoreboardCopy(roomID string, judgeID int) *JudgeScoreboard {
+	r, ok := m.Get(roomID)
+	if !ok {
+		return nil
+	}
+	boards := r.Scoreboards()
+	for _, b := range boards {
+		if b.JudgeID == judgeID {
+			return b
+		}
+	}
+	return nil
+}
+
 // List 返回所有 DebateRoom 副本(供大厅列表)。
 func (m *DebateManager) List() []*DebateRoom {
 	m.mu.RLock()

@@ -641,6 +641,29 @@ func (a *DebateAPI) Stats(c *gin.Context) {
 }
 
 // ============================================================================
+// Scoreboards GET /api/games/debate/rooms/:id/scoreboards
+// ============================================================================
+
+// Scoreboards GET /api/games/debate/rooms/:id/scoreboards — 裁判实时打分看板。
+//
+// 返回该房间所有裁判的累计 5 维度打分 + 阶段历史(§20260831-09)。
+// 前端首次订阅或 WS 断线重连后通过此端点拉取完整看板数据。
+// 房间不存在返回 ErrRoomNotFound。
+func (a *DebateAPI) Scoreboards(c *gin.Context) {
+	roomID := c.Param("id")
+	r, ok := a.mgr.Get(roomID)
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"code": errcode.ErrRoomNotFound, "message": "debate room not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    errcode.OK,
+		"message": "ok",
+		"data":    r.Scoreboards(),
+	})
+}
+
+// ============================================================================
 // helpers
 // ============================================================================
 

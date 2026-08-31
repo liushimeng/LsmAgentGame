@@ -9,6 +9,7 @@ import type {
   DebateCreateRoomRequest,
   DebateHistoryDetail,
   DebateHistoryListData,
+  DebateJudgeScoreboard,
   DebateModelStats,
   DebateRoomSummary,
   DebateTopic,
@@ -107,6 +108,13 @@ export const debateService = {
     return http<{ ok: true }>(
       `/api/games/debate/rooms/${encodeURIComponent(roomId)}`,
       { method: "DELETE" },
+    );
+  },
+
+  // GET /api/games/debate/rooms/:id/scoreboards (§20260831-09 裁判实时打分看板)
+  scoreboards(roomId: string) {
+    return http<DebateJudgeScoreboard[]>(
+      `/api/games/debate/rooms/${encodeURIComponent(roomId)}/scoreboards`,
     );
   },
 };

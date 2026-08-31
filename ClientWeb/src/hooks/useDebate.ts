@@ -31,6 +31,7 @@ import type {
   DebateAgentStatsDetail,
   DebateClientState,
   DebateCrossExamEntry,
+  DebateJudgeScoreboard,
   DebateJudgeScore,
   DebateResult,
   DebateSpectatorAnswer,
@@ -120,6 +121,19 @@ export function useDebate(roomId: string) {
           const state = p as unknown as DebateClientState;
           if (state.room_id !== roomId) return;
           setGameState(state);
+          // §20260831-09 — 首次订阅时注入完整打分看板数据。
+          if (Array.isArray(state.scoreboards) && state.scoreboards.length > 0) {
+            const sbs = useDebateStore.getState().scoreboards;
+            const updated = { ...sbs };
+            for (const board of state.scoreboards) {
+              if (board && board.judge_id != null) {
+                updated[board.judge_id] = board;
+              }
+            }
+            if (Object.keys(updated).length > Object.keys(sbs).length) {
+              useDebateStore.setState({ scoreboards: updated });
+            }
+          }
           break;
         }
         case 'debate.phase': {
@@ -224,10 +238,13 @@ export function useDebate(roomId: string) {
         }
         // §20260831-09 — 裁判实时打分看板更新帧(debate.judge_scoreboard)。
         case 'debate.judge_scoreboard': {
-          const jid = (p.judge_id ?? -1) as number;
-          if (jid >= 0) {
-            // service 广播时只发了 room_id + judge_id(全量需 REST 拉);
-            // 此处存一个标记,前端用 room.Scoreboards REST 兜底补全。
+          // service 广播完整 JudgeScoreboard 结构(含 team_scores + stage_history)。
+          // 直接写入 store.scoreboards[judge_id] 覆盖旧值。
+          if (p && typeof p === 'object' && 'judge_id' in p) {
+            const board = p as unknown as DebateJudgeScoreboard;
+            if (board.judge_id != null) {
+              setJudgeScoreboard(board.judge_id, board);
+            }
           }
           break;
         }

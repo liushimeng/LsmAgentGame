@@ -83,6 +83,10 @@ type ClientState struct {
 	// 由 BuildClientState 锁内变体 aggregateAgentStatsLocked() 填充;
 	// 字段命名对齐前端 DebateRoomAgentStats。
 	AgentStats *DebateRoomAgentStats `json:"agent_stats,omitempty"`
+
+	// §20260831-09 — 裁判实时打分看板(首次订阅时下发完整数据;
+	// 后续增量通过 debate.judge_scoreboard WS 帧更新)。
+	Scoreboards []*JudgeScoreboard `json:"scoreboards,omitempty"`
 }
 
 // BuildClientState 由 DebateRoom 投影得到 ClientState。
@@ -141,6 +145,9 @@ func (r *DebateRoom) BuildClientState(forUserID string, includeSpeeches, include
 	if detail := r.aggregateAgentStatsLocked(); detail != nil {
 		cs.AgentStats = &detail.Aggregate
 	}
+
+	// §20260831-09 — 裁判实时打分看板(首次订阅时下发完整数据)。
+	cs.Scoreboards = r.scoreboardsCopyLocked()
 
 	return cs
 }

@@ -390,10 +390,8 @@ func (s *DebateService) BroadcastStageScore(roomID string, ss *debate.StageScore
 	})
 
 	// 同步推送该裁判的最新 scoreboard
-	boardPayload, _ := json.Marshal(map[string]any{
-		"room_id":  roomID,
-		"judge_id": ss.JudgeID,
-	})
+	board := s.mgr.ScoreboardCopy(roomID, ss.JudgeID)
+	boardPayload, _ := json.Marshal(board)
 	s.hub.BroadcastRoom(roomID, Envelope{
 		Type:    "debate.judge_scoreboard",
 		Payload: boardPayload,

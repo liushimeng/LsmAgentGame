@@ -237,6 +237,9 @@ export interface DebateClientState {
   spectator_config: DebateSpectatorConfig;
   /** §20260831-09 — 房间级 Agent Token 统计聚合(辩方 + 裁判)。 */
   agent_stats?: DebateRoomAgentStats;
+
+  /** §20260831-09 — 裁判实时打分看板(首次订阅时下发完整数据)。 */
+  scoreboards?: DebateJudgeScoreboard[];
 }
 
 /** §20260831-06 — 裁判回答观众提问帧 (debate.spectator_answer)。 */

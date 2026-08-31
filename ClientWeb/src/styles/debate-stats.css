@@ -461,3 +461,102 @@
     grid-template-columns: 64px 1fr 28px;
   }
 }
+
+/* ==========================================================================
+ * §5. 阶段打分时间线 (.debate-stage-score-timeline)
+ * ========================================================================== */
+
+.debate-stage-score-timeline {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  padding: 8px 12px;
+}
+
+.debate-stage-score-timeline h3 {
+  color: #f3f4f6;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.debate-stage-score-timeline--empty p {
+  color: #9ca3af;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.timeline-item {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(55, 65, 81, 0.6);
+}
+
+.timeline-item:last-child {
+  border-bottom: none;
+}
+
+.timeline-item--final {
+  background: rgba(251, 191, 36, 0.06);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.timeline-item__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.timeline-item__phase {
+  color: #fbbf24;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.timeline-item__judge {
+  color: #d1d5db;
+  font-size: 0.75rem;
+}
+
+.timeline-item__time {
+  color: #9ca3af;
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-item__final-badge {
+  background: #fbbf24;
+  color: #1f2937;
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.timeline-item__scores {
+  display: flex;
+  gap: 12px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.timeline-item__score {
+  color: #9ca3af;
+  font-size: 0.72rem;
+}
+
+.timeline-item__score strong {
+  color: #93c5fd;
+  font-weight: 600;
+}
