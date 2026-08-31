@@ -146,6 +146,9 @@ func AllAgentClassNames() []AgentClassName {
 		AgentClassTexasHoldemProfileIter,
 		AgentClassTexasPokerMemoryIter,
 		AgentClassTexasHoldemMemoryCompact,
+		// 2026-08-31 §20260831-01 — 辩论比赛 Agent 类别
+		AgentClassDebatePlayer,
+		AgentClassDebateJudge,
 	}
 }
 
@@ -158,3 +161,21 @@ func IsValidAgentClassName(s string) bool {
 	}
 	return false
 }
+
+// 辩论比赛(Debate)Agent 类别 — 2026-08-31 §20260831-01。
+const (
+	// AgentClassDebatePlayer 是辩论比赛玩家 Bot 的 AgentClassName。
+	// 由 ServerGo/agent/debateplayer/ 的 Agent struct 实现;驱动 DebateManager
+	// 引擎参与比赛(立论/驳论/质询/小结/自由辩/总结)。与狼人杀玩家的核心差异:
+	//   - 单一角色(立论/驳论/质询/总结),无角色切换
+	//   - 工具集随 phase + role 动态过滤(详见 docs/辩论比赛/05 §1.2)
+	//   - 无夜间行动 / 投票 / 阵营博弈
+	// 详见 docs/辩论比赛/02-辩论比赛Agent设计.md。
+	AgentClassDebatePlayer AgentClassName = "LsmAgentGame-Debate-Player"
+
+	// AgentClassDebateJudge 是辩论比赛裁判 Bot 的 AgentClassName。
+	// 由 ServerGo/agent/debatejudge/ 的 AgentJudge struct 实现;负责
+	// 5 维度评分 + 评语 + 多数决投票。**不**参与辩论发言。
+	// 详见 docs/辩论比赛/02 §3 + 06 §4。
+	AgentClassDebateJudge AgentClassName = "LsmAgentGame-Debate-Judge"
+)

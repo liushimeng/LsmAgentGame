@@ -1,0 +1,696 @@
+/* 辩论比赛样式 (2026-08-31 §20260831-01)
+ *
+ * 对齐 docs/辩论比赛/04 §7 可视化设计 + docs/狼人杀-前端UI/前端UI颜色对比度与可读性规范.md
+ * (暗色主题 / 4.5:1 文字对比度)。
+ */
+
+.debate-lobby {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.debate-lobby .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.debate-lobby .page-header h1 {
+  margin: 0;
+  color: #f3f4f6;
+}
+
+.debate-lobby .error-bar {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.debate-lobby .loading,
+.debate-lobby .empty {
+  text-align: center;
+  padding: 48px;
+  color: #9ca3af;
+}
+
+.room-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.room-card {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 16px;
+  transition: border-color 0.2s;
+}
+
+.room-card:hover {
+  border-color: #4b5563;
+}
+
+.room-card__topic h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: #f3f4f6;
+}
+
+.room-card__topic .mode-tag {
+  font-size: 12px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.room-card__meta {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 16px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.room-card__meta .status {
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.room-card__meta .status--waiting {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+.room-card__meta .status--playing {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+}
+
+.room-card__meta .status--over {
+  background: rgba(107, 114, 128, 0.2);
+  color: #d1d5db;
+}
+
+.room-card__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ========= 对局页 ========= */
+
+.debate-game-page {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  background: #111827;
+}
+
+.game-header {
+  padding: 16px 24px;
+  background: #1f2937;
+  border-bottom: 1px solid #374151;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.game-header h1 {
+  margin: 0;
+  font-size: 18px;
+  color: #f3f4f6;
+}
+
+.game-header .room-id {
+  font-size: 12px;
+  color: #9ca3af;
+  font-family: monospace;
+}
+
+.game-main {
+  display: grid;
+  grid-template-columns: 280px 1fr 320px;
+  gap: 16px;
+  padding: 16px;
+  overflow: auto;
+}
+
+@media (max-width: 1280px) {
+  .game-main {
+    grid-template-columns: 240px 1fr 280px;
+  }
+}
+
+@media (max-width: 768px) {
+  .game-main {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chat-col {
+  border-top: 1px solid #374151;
+  background: #1f2937;
+  height: 280px;
+}
+
+/* ========= 队伍面板 ========= */
+
+.debate-team-panel,
+.debate-judge-panel,
+.debate-score-panel,
+.debate-speech-panel {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.debate-team-panel h3,
+.debate-judge-panel h3,
+.debate-score-panel h3 {
+  margin: 0 0 12px;
+  color: #f3f4f6;
+  font-size: 14px;
+}
+
+.team-card {
+  margin-bottom: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  border-left: 4px solid #4b5563;
+}
+
+.team-card--pro,
+.team-card--gov_upper,
+.team-card--gov_lower {
+  border-left-color: #3b82f6;
+}
+
+.team-card--con,
+.team-card--opp_upper,
+.team-card--opp_lower {
+  border-left-color: #ef4444;
+}
+
+.team-card--neutral {
+  border-left-color: #8b5cf6;
+}
+
+.team-card__header {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #f3f4f6;
+}
+
+.team-card__agents {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agent-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  color: #d1d5db;
+  font-size: 13px;
+}
+
+.agent-row--speaking {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+/* ========= 裁判面板 ========= */
+
+.judge-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.judge-card {
+  padding: 8px;
+  margin-bottom: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+}
+
+.judge-card__name {
+  font-size: 13px;
+  color: #f3f4f6;
+}
+
+.judge-card__comment {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #d1d5db;
+  line-height: 1.4;
+}
+
+/* ========= 评分面板 ========= */
+
+.debate-score-panel--pending {
+  text-align: center;
+  color: #9ca3af;
+}
+
+.winner-banner {
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.1));
+  color: #fcd34d;
+  padding: 12px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.team-score {
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.team-score--winner {
+  border: 2px solid #fbbf24;
+}
+
+.team-score__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  color: #f3f4f6;
+  margin-bottom: 8px;
+}
+
+.team-score__header .total {
+  font-size: 18px;
+  color: #fbbf24;
+}
+
+.score-bar {
+  display: grid;
+  grid-template-columns: 100px 1fr 40px;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.score-bar__label {
+  color: #d1d5db;
+}
+
+.score-bar__track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.score-bar__fill {
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  height: 100%;
+  transition: width 0.3s;
+}
+
+.score-bar__value {
+  text-align: right;
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.best-debater {
+  margin-top: 12px;
+  padding: 8px;
+  background: rgba(245, 158, 11, 0.15);
+  border-radius: 6px;
+  color: #fcd34d;
+  font-size: 14px;
+  text-align: center;
+}
+
+.judge-comments {
+  margin-top: 12px;
+}
+
+.judge-comments summary {
+  cursor: pointer;
+  color: #93c5fd;
+  font-size: 13px;
+}
+
+.judge-comments ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+
+.judge-comments li {
+  padding: 8px;
+  margin-bottom: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+.judge-comments strong {
+  color: #93c5fd;
+}
+
+.judge-comments p {
+  margin: 4px 0 0;
+  color: #d1d5db;
+  font-size: 12px;
+}
+
+/* ========= 主舞台 ========= */
+
+.debate-stage {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 24px;
+  min-height: 280px;
+}
+
+.debate-stage--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  color: #9ca3af;
+}
+
+.stage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #374151;
+  margin-bottom: 16px;
+}
+
+.stage-header .topic {
+  margin: 0;
+  font-size: 20px;
+  color: #f3f4f6;
+  flex: 1;
+}
+
+.phase-info {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.phase-tag {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.timer {
+  font-family: monospace;
+  font-size: 18px;
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.current-speaker {
+  margin-top: 16px;
+}
+
+.speaker-tag {
+  color: #f3f4f6;
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.speech-content {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 16px;
+  color: #e5e7eb;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.preparation,
+.free-debate-idle,
+.result-pending {
+  text-align: center;
+  padding: 32px;
+  color: #9ca3af;
+}
+
+/* ========= 发言历史 ========= */
+
+.speech-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  color: #f3f4f6;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.speech-panel__header .toggle {
+  color: #9ca3af;
+}
+
+.speech-panel__body {
+  margin-top: 12px;
+}
+
+.phase-section {
+  margin-bottom: 8px;
+}
+
+.phase-section__header {
+  cursor: pointer;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  color: #d1d5db;
+  font-size: 13px;
+}
+
+.speech-list {
+  list-style: none;
+  padding: 8px 0;
+  margin: 0;
+}
+
+.speech-item {
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  border-left: 4px solid #4b5563;
+}
+
+.speech-item.pro,
+.speech-item.gov_upper,
+.speech-item.gov_lower {
+  border-left-color: #3b82f6;
+}
+
+.speech-item.con,
+.speech-item.opp_upper,
+.speech-item.opp_lower {
+  border-left-color: #ef4444;
+}
+
+.speech-item.neutral {
+  border-left-color: #8b5cf6;
+}
+
+.speech-item__speaker {
+  color: #93c5fd;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.speech-item__content {
+  color: #e5e7eb;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.speech-item__thought {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.speech-item__thought summary {
+  cursor: pointer;
+  color: #9ca3af;
+}
+
+.speech-item__thought div {
+  margin-top: 4px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  color: #d1d5db;
+}
+
+/* ========= Modal ========= */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-card {
+  background: #1f2937;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 640px;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid #374151;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #f3f4f6;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-body fieldset {
+  border: 1px solid #374151;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.modal-body legend {
+  padding: 0 8px;
+  color: #f3f4f6;
+  font-weight: 600;
+}
+
+.modal-body .form-row,
+.modal-body .form-grid,
+.modal-body .radio-group,
+.modal-body .checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.modal-body label {
+  color: #d1d5db;
+  font-size: 13px;
+}
+
+.modal-body input,
+.modal-body select {
+  background: #111827;
+  border: 1px solid #4b5563;
+  color: #f3f4f6;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.modal-body .info-line {
+  color: #93c5fd;
+  font-size: 13px;
+}
+
+.modal-body .form-error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #374151;
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.btn-primary:disabled {
+  background: #4b5563;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #374151;
+  color: #f3f4f6;
+}
+
+.btn-secondary:hover {
+  background: #4b5563;
+}

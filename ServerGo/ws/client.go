@@ -79,6 +79,21 @@ func (c *Client) AttachUser(svc *UserWsService) {
 	c.user = svc
 }
 
+// Send enqueues an envelope to the client. Safe to call from any goroutine;
+// the WritePump drains the channel. If the send queue is full the envelope
+// is dropped (WritePump will unregister the client if it stays stuck).
+//
+// §20260831-01 — 由 ws.DebateService 等跨包服务调用,把广播帧塞回
+// Client 的内部 send 通道。
+func (c *Client) Send(env Envelope) {
+	select {
+	case c.send <- env:
+	default:
+		// 队列已满:丢弃 + 触发 WritePump 退出
+		// (WritePump 在 send 满时会自然 unregister,这里不强行 close)
+	}
+}
+
 // ReadPump reads messages from the socket and dispatches them. Run in its own goroutine.
 func (c *Client) ReadPump() {
 	defer func() {

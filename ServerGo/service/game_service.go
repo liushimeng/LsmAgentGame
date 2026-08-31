@@ -42,6 +42,8 @@ func (s *GameService) ListGames() []GameInfo {
 		{ID: "lobby-doudizhu", Name: "斗地主", Kind: "doudizhu", Category: "traditional"},
 		{ID: "lobby-texasholdem", Name: "德州扑克", Kind: "texasholdem", Category: "agent"},
 		{ID: "lobby-werewolf", Name: "狼人杀13人标准竞技局", Kind: "werewolf", Category: "agent"},
+		// 2026-08-31 §20260831-01 — 辩论比赛纯 Agent 驱动,人类仅观战。
+		{ID: "lobby-debate", Name: "辩论比赛", Kind: "debate", Category: "agent"},
 	}
 
 	// Compute online counts from rooms + players.

@@ -17,6 +17,8 @@ import { DoudizhuLobbyPage } from './pages/DoudizhuLobbyPage';
 import { DoudizhuGamePage } from './pages/DoudizhuGamePage';
 import { WerewolfLobbyPage } from './pages/WerewolfLobbyPage';
 import { WerewolfGamePage } from './pages/WerewolfGamePage';
+import { DebateLobbyPage } from './pages/DebateLobbyPage';
+import { DebateGamePage } from './pages/DebateGamePage';
 import { TexasHoldemLobbyPage } from './pages/TexasHoldemLobbyPage';
 import { TexasHoldemGamePage } from './pages/TexasHoldemGamePage';
 import { AdminUsersPage } from './pages/AdminUsersPage';
@@ -61,6 +63,8 @@ export default function App() {
           <Route path="/werewolf" element={<WerewolfLobbyPage />} />
           <Route path="/werewolf/:roomId" element={<WerewolfGamePage />} />
           <Route path="/werewolf/spectate/:roomId" element={<WerewolfGamePage />} />
+          <Route path="/debate" element={<DebateLobbyPage />} />
+          <Route path="/debate/:roomId" element={<DebateGamePage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />

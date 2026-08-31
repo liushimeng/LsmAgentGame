@@ -33,11 +33,13 @@ import (
 	"syscall"
 	"time"
 
+	"LsmAgentGame/agent/debaterun"
 	"LsmAgentGame/agent/wwjudge"
 	"LsmAgentGame/api"
 	"LsmAgentGame/config"
 	"LsmAgentGame/db"
 	"LsmAgentGame/errcode"
+	"LsmAgentGame/game/debate"
 	"LsmAgentGame/game/texasholdem"
 	"LsmAgentGame/game/werewolf"
 	"LsmAgentGame/llm"
@@ -552,6 +554,30 @@ func main() {
 	// 投票准确率 / 发言暴露度 / 道具效率 / Agent 互动质量四维评分。
 	werewolfReviewAPI := api.NewWerewolfReviewAPI(gameSvcWs.WerewolfManager())
 
+	// 2026-08-31 §20260831-01 — 辩论比赛 REST 入口(独立 DebateManager,
+	// 不与狼人杀 / 德扑的 in-memory 引擎共享)。WS 帧派发由 ws/debate_service.go
+	// 完成,详见 docs/辩论比赛/00 §4.1。
+	debateMgr := debate.NewDebateManagerWithRegistry(llmRegistry)
+	// 注入 Agent 启动器(独立包 debaterun 避免循环引用)。
+	debateMgr.SetAgentStarter(func(room *debate.DebateRoom, engine *debate.DebateEngine, registry *llm.Registry) interface{ Stop() } {
+		return debaterun.StartAgents(room, engine, registry)
+	})
+	// 注入生命周期钩子(对齐狼人杀的 SetOnGameStart/SetOnGameOver)。
+	debateMgr.SetOnGameStart(func(rid string) {
+		if err := roomSvc.UpdateRoomStatus(rid, "playing"); err != nil {
+			logger.L().Warn("debate: update room status to playing failed",
+				zap.String("room_id", rid), zap.Error(err))
+		}
+	})
+	debateMgr.SetOnGameOver(func(rid string) {
+		if err := roomSvc.UpdateRoomStatus(rid, "over"); err != nil {
+			logger.L().Warn("debate: update room status to over failed",
+				zap.String("room_id", rid), zap.Error(err))
+		}
+	})
+	debateAPI := api.NewDebateAPI(debateMgr, llmRegistry)
+	_ = debateAPI
+
 	// 2026-07-10 §125 增强 — 注入法官总结所需回调。
 	// 1) Manager 单例(让 judge goroutine 内部能拿到 registry 调 LLM)。
 	werewolf.SetSummaryManagerInstance(gameSvcWs.WerewolfManager())
@@ -774,7 +800,7 @@ func main() {
 	})
 	hub.SetGameManagerCleanupFunc(gameSvcWs.RemoveRoomState)
 
-	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI)
+	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI)
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.

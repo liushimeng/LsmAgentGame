@@ -1,0 +1,411 @@
+// Package debate — DebateManager 房间池 + 生命周期管理。
+//
+// 2026-08-31 §20260831-01 — DebateManager 首期实现:
+//
+//   - NewDebateManager():空房间池
+//   - NewDebateManagerWithRegistry(registry):注入 LLM Registry 用于驱动 Agent
+//   - CreateRoom():基于 RoomConfig 创建房间
+//   - Get(id) / Room(id):查询房间
+//   - List():列出所有房间(供 lobby)
+//   - Remove(id):强制删除(运维 / 解散)
+//   - StartGame():房主点击开始 → 触发引擎
+//   - WipeAllRooms():清空全部(进程关闭兜底)
+//
+// 线程安全:由 mu 保护 rooms map。
+//
+// 设计模式对齐:
+//   - 狼人杀 WerewolfManager / 德州扑克 TexasHoldemManager(同目录同 package)
+//   - 由 service.RoomService 通过 SetGameServiceHook / SetRoomJoiner 注入
+package debate
+
+import (
+	"context"
+	"fmt"
+	"math/rand"
+	"sync"
+	"time"
+
+	"LsmAgentGame/errcode"
+	"LsmAgentGame/llm"
+)
+
+// DebateManager 辩论房间池。
+type DebateManager struct {
+	mu sync.RWMutex
+
+	rooms map[string]*DebateRoom
+
+	// 配置注入(由 main.go 调用 NewDebateManagerWithRegistry 注入)
+	registry *llm.Registry
+
+	// 房间生命周期钩子(由 service.RoomService 注入)
+	onGameStart  func(roomID string)
+	onGameOver   func(roomID string)
+	onRoomRemove func(roomID string)
+	onPhaseChange func(roomID string, phase Phase)
+
+	// agentStarter Agent 启动器(由 main.go 注入)。
+	// 签名:room + engine + registry → 返回任意可 Stop() 的对象。
+	// 该函数由 agent/debaterun 包提供,实际启动辩方 + 裁判 Agent goroutine。
+	// 设计动机:避免 debate 包 → agent/debateplayer → debate 包循环引用。
+	agentStarter func(room *DebateRoom, engine *DebateEngine, registry *llm.Registry) interface {
+		Stop()
+	}
+
+	// 引擎实例(per room):每个 DebateRoom 对应一个 DebateEngine。
+	// 引擎常驻,负责阶段推进 + watchdog。
+	engines map[string]*DebateEngine
+
+	// 全局 LLM 并发上限(防止一时刻占用太多上游)。
+	llmSema chan struct{}
+}
+
+// NewDebateManager 创建一个空 DebateManager。
+//
+// 不注入 LLM Registry:Bot 发言将降级为占位/fallback 文本。
+func NewDebateManager() *DebateManager {
+	return &DebateManager{
+		rooms:   make(map[string]*DebateRoom),
+		engines: make(map[string]*DebateEngine),
+		llmSema: make(chan struct{}, 8), // 默认 8 路并发
+	}
+}
+
+// NewDebateManagerWithRegistry 注入 LLM Registry。
+func NewDebateManagerWithRegistry(registry *llm.Registry) *DebateManager {
+	m := NewDebateManager()
+	m.registry = registry
+	return m
+}
+
+// SetLLMRegistry 后注入 Registry(允许 nil,纯 fallback)。
+func (m *DebateManager) SetLLMRegistry(r *llm.Registry) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.registry = r
+}
+
+// SetOnGameStart 注入比赛开始钩子(由 service.RoomService 注入)。
+func (m *DebateManager) SetOnGameStart(fn func(roomID string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onGameStart = fn
+}
+
+// SetOnGameOver 注入比赛结束钩子。
+func (m *DebateManager) SetOnGameOver(fn func(roomID string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onGameOver = fn
+}
+
+// SetOnRoomRemove 注入房间移除钩子。
+func (m *DebateManager) SetOnRoomRemove(fn func(roomID string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onRoomRemove = fn
+}
+
+// SetOnPhaseChange 注入阶段切换钩子(由 DebateEngine.advanceTo 触发)。
+func (m *DebateManager) SetOnPhaseChange(fn func(roomID string, phase Phase)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onPhaseChange = fn
+}
+
+// SetAgentStarter 注入 Agent 启动器(由 main.go 调用 agent/debaterun.StartAgents)。
+//
+// 参数 fn 返回任意可 Stop() 的对象;DebateRoom.agentRegistry 持有其引用,
+// 房间被 Remove/StopGame 时调用 Stop() 关闭所有 Bot + 裁判 goroutine。
+func (m *DebateManager) SetAgentStarter(fn func(room *DebateRoom, engine *DebateEngine, registry *llm.Registry) interface{ Stop() }) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.agentStarter = fn
+}
+
+// NewRoomID 生成新的辩论房间 ID(纯客户端占位;真 ID 由 service 层分配)。
+func NewRoomID() string {
+	// 简洁随机 ID,避免和 service.RoomService 的 16-byte UUID 冲突。
+	// 实际生产中,房间 ID 由 service.RoomService.CreateRoom 分配,这里仅备用。
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 10)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return "debate_" + string(b)
+}
+
+// ============================================================================
+// 房间 CRUD
+// ============================================================================
+
+// CreateRoom 基于 RoomConfig 创建房间。
+//
+// 校验项:
+//   - Topic 必填
+//   - Mode ∈ {2,3,4,5}
+//   - Teams 长度 == teamCount;每队 Agents 长度 ∈ [2,4]
+//   - Judges 长度 >= 1
+//   - 创建者 CreatedBy 非空
+//
+// 校验通过 → 返回房间;失败 → 返回错误。
+func (m *DebateManager) CreateRoom(cfg RoomConfig) (*DebateRoom, *errcode.Error) {
+	if cfg.CreatedBy == "" {
+		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "debate: createdBy is required")
+	}
+	if cfg.Topic.Text == "" {
+		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "debate: topic.text is required")
+	}
+	teamCount := len(cfg.Teams)
+	if teamCount < 2 || teamCount > 5 {
+		return nil, errcode.CodeMsg(errcode.ErrValidationFailed,
+			fmt.Sprintf("debate: invalid team count %d (must be 2..5)", teamCount))
+	}
+	for i, team := range cfg.Teams {
+		if len(team.Agents) < 2 || len(team.Agents) > 4 {
+			return nil, errcode.CodeMsg(errcode.ErrValidationFailed,
+				fmt.Sprintf("debate: team %d has %d agents (must be 2..4)", i, len(team.Agents)))
+		}
+	}
+	if len(cfg.Judges) < 1 {
+		return nil, errcode.CodeMsg(errcode.ErrValidationFailed,
+			"debate: at least 1 judge is required (default: 3)")
+	}
+	if cfg.CreatedAt == 0 {
+		cfg.CreatedAt = WallNow()
+	}
+
+	roomID := NewRoomID()
+	room := NewDebateRoom(roomID, cfg, m)
+
+	m.mu.Lock()
+	m.rooms[roomID] = room
+	m.mu.Unlock()
+
+	return room, nil
+}
+
+// Get 返回房间指针(读锁保护)。
+func (m *DebateManager) Get(roomID string) (*DebateRoom, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	r, ok := m.rooms[roomID]
+	return r, ok
+}
+
+// Room Get 的别名(对齐 werewolf 接口)。
+func (m *DebateManager) Room(roomID string) (*DebateRoom, bool) {
+	return m.Get(roomID)
+}
+
+// List 返回所有 DebateRoom 副本(供大厅列表)。
+func (m *DebateManager) List() []*DebateRoom {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]*DebateRoom, 0, len(m.rooms))
+	for _, r := range m.rooms {
+		out = append(out, r)
+	}
+	return out
+}
+
+// ListByFilter 返回筛选后的房间列表(给 lobby 用)。
+//
+// 过滤维度:topic_type / mode / status(进行中/等待)。
+func (m *DebateManager) ListByFilter(topicType, mode, status string) []*DebateRoom {
+	all := m.List()
+	out := make([]*DebateRoom, 0, len(all))
+	for _, r := range all {
+		if topicType != "" && r.Config.Topic.Type != topicType {
+			continue
+		}
+		if mode != "" && string(r.Config.Mode) != mode {
+			continue
+		}
+		if status != "" && string(r.Phase()) != status {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// RoomIDs 返回所有房间 ID 快照。
+func (m *DebateManager) RoomIDs() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]string, 0, len(m.rooms))
+	for id := range m.rooms {
+		out = append(out, id)
+	}
+	return out
+}
+
+// Remove 强制删除房间(供 admin/解散)。
+//
+// 返回是否真正删除(房间不存在返回 false)。
+func (m *DebateManager) Remove(roomID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, ok := m.rooms[roomID]
+	if !ok {
+		return false
+	}
+	r.cancelSetClosed() // 先取消 ctx,再清 map
+	// 取消 Agent 句柄
+	if r.agentRegistry != nil {
+		r.agentRegistry.Stop()
+		r.agentRegistry = nil
+	}
+	delete(m.rooms, roomID)
+	if eng, ok2 := m.engines[roomID]; ok2 {
+		eng.Stop()
+		delete(m.engines, roomID)
+	}
+	if m.onRoomRemove != nil {
+		go m.onRoomRemove(roomID)
+	}
+	return true
+}
+
+// WipeAllRooms 清空全部房间(进程退出兜底)。返回被清理的 ID 列表。
+func (m *DebateManager) WipeAllRooms() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ids := make([]string, 0, len(m.rooms))
+	for id, r := range m.rooms {
+		r.cancelSetClosed()
+		if r.agentRegistry != nil {
+			r.agentRegistry.Stop()
+		}
+		if eng, ok := m.engines[id]; ok {
+			eng.Stop()
+		}
+		ids = append(ids, id)
+	}
+	m.rooms = make(map[string]*DebateRoom)
+	m.engines = make(map[string]*DebateEngine)
+	return ids
+}
+
+// IsRoomActive 报告房间是否处于活跃状态(供 RoomService.JanitorSweepStale)。
+func (m *DebateManager) IsRoomActive(roomID string) bool {
+	r, ok := m.Get(roomID)
+	if !ok {
+		return false
+	}
+	p := r.Phase()
+	return p != PhaseFilling && p != PhaseGameOver
+}
+
+// Engine 返回房间对应的引擎(可能 nil,房间刚创建还未启动比赛时)。
+func (m *DebateManager) Engine(roomID string) (*DebateEngine, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	e, ok := m.engines[roomID]
+	return e, ok
+}
+
+// ============================================================================
+// 比赛启动 / 关闭
+// ============================================================================
+
+// StartGame 房主点击开始 → 启动引擎。
+//
+// 启动失败回滚(回 PhaseFilling)。
+func (m *DebateManager) StartGame(roomID, callerUserID string) *errcode.Error {
+	r, ok := m.Get(roomID)
+	if !ok {
+		return errcode.CodeMsg(errcode.ErrRoomNotFound, "debate: room not found")
+	}
+	if !r.IsOwner(callerUserID) {
+		return errcode.CodeMsg(errcode.ErrPermissionDenied, "debate: only owner can start the game")
+	}
+	if r.IsGameStarted() {
+		return errcode.CodeMsg(errcode.ErrValidationFailed, "debate: game already started")
+	}
+
+	// 启动引擎
+	eng := NewDebateEngine(r, m)
+	m.mu.Lock()
+	m.engines[roomID] = eng
+	m.mu.Unlock()
+
+	// 启动 Agent(辩方 + 裁判);由 main.go 通过 SetAgentStarter 注入的函数完成
+	if m.agentStarter != nil {
+		r.agentRegistry = m.agentStarter(r, eng, m.registry)
+	}
+
+	r.MarkStarted()
+	r.SetPhase(PhasePreparation)
+
+	// 触发 onGameStart 钩子
+	if m.onGameStart != nil {
+		go m.onGameStart(roomID)
+	}
+
+	// 异步启动引擎 goroutine
+	ctx, cancel := context.WithCancel(context.Background())
+	eng.ctx = ctx
+	eng.cancel = cancel
+	go eng.Run()
+
+	return nil
+}
+
+// StopGame 强制结束比赛(运维 / 房主解散)。
+func (m *DebateManager) StopGame(roomID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, ok := m.rooms[roomID]
+	if !ok {
+		return false
+	}
+	if r.agentRegistry != nil {
+		r.agentRegistry.Stop()
+	}
+	if eng, ok2 := m.engines[roomID]; ok2 {
+		eng.Stop()
+	}
+	r.SetPhase(PhaseGameOver)
+	r.SetClosed()
+	if m.onGameOver != nil {
+		go m.onGameOver(roomID)
+	}
+	return true
+}
+
+// Registry 返回 LLM Registry(供 Agent / 裁判使用)。
+func (m *DebateManager) Registry() *llm.Registry {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.registry
+}
+
+// AcquireLLM 占用全局 LLM 并发槽位(带 5s 超时)。
+//
+// 防止一时刻所有 bot 同时调用 LLM 把上游打挂。
+func (m *DebateManager) AcquireLLM(ctx context.Context) bool {
+	if m.llmSema == nil {
+		return true
+	}
+	select {
+	case m.llmSema <- struct{}{}:
+		return true
+	case <-ctx.Done():
+		return false
+	case <-time.After(5 * time.Second):
+		return false
+	}
+}
+
+// ReleaseLLM 释放 LLM 槽位。
+func (m *DebateManager) ReleaseLLM() {
+	if m.llmSema == nil {
+		return
+	}
+	select {
+	case <-m.llmSema:
+	default:
+	}
+}

@@ -26,7 +26,7 @@ import (
 )
 
 // New constructs the *gin.Engine.
-func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI) *gin.Engine {
+func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery(), middleware.RequestID(), middleware.Logging(), middleware.CORS(cfg))
@@ -203,6 +203,24 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		// 路径与前端 PersonalReviewPanel.tsx:81 已写死的 URL 逐字符对齐;
 		// §135:只能查看自己的复盘(handler 内校验 :userId == 调用者)。
 		werewolfGames.GET("/rooms/:roomId/review/:userId", werewolfReviewAPI.GetPersonalReview)
+	}
+
+	// 2026-08-31 §20260831-01 — 辩论比赛 REST 入口。
+	// 路径设计对齐 docs/辩论比赛/00 §4.1;HTTP 入口保护由 AuthRequired 中间件保证。
+	debateGames := r.Group("/api/games/debate")
+	debateGames.Use(middleware.AuthRequired(cfg))
+	{
+		// 辩题池
+		debateGames.GET("/topics", debateAPI.Topics)
+
+		// 房间管理
+		debateGames.POST("/rooms", debateAPI.Create)
+		debateGames.GET("/rooms", debateAPI.List)
+		debateGames.GET("/rooms/:id", debateAPI.Detail)
+		debateGames.POST("/rooms/:id/spectate", debateAPI.Spectate)
+		debateGames.POST("/rooms/:id/leave_spectate", debateAPI.LeaveSpectate)
+		debateGames.POST("/rooms/:id/start", debateAPI.Start)
+		debateGames.GET("/rooms/:id/history", debateAPI.History)
 	}
 
 	// LLM model metadata — protected, returns the safe (key-free) list of
