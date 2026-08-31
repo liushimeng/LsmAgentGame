@@ -74,6 +74,16 @@ var exemptAgentFields = map[string]string{
 	// systemPromptBytes 在 NewWithRoom 构造期一次性写入 (BuildSystemPromptBytes 冻结
 	// 字节快照),后续不再修改。invariant I11 在发请求前只读比对。nil = 旧行为不变。
 	"systemPromptBytes": "U5 字节稳定:构造期一次性写入,运行时仅 invariant 读取比对",
+
+	// 2026-08-31 agent.go 拆分后,这些字段的 setter/赋值位于其他文件:
+	// - OnLLMStream* 回调 setter 使用 "OnXxx" 命名惯例(非 Set/With 前缀),
+	//   在 agent_llm_stats.go 中定义;lint 的 setter 模式只识别 Set/With 前缀
+	// - lastTranscript 在 agent_transcript.go 中赋值(recordTranscript),
+	//   lint 的赋值搜索仅限 agent.go
+	"lastTranscript":     "agent_transcript.go 中 recordTranscript 赋值(OnXxx 回调模式)",
+	"onLLMStreamStart":   "agent_llm_stats.go OnLLMStreamStart 回调 setter(OnXxx 命名惯例)",
+	"onLLMStreamDelta":   "agent_llm_stats.go OnLLMStreamDelta 回调 setter(OnXxx 命名惯例)",
+	"onLLMStreamEnd":     "agent_llm_stats.go OnLLMStreamEnd 回调 setter(OnXxx 命名惯例)",
 }
 
 // TestWiringLintField_AgentPrivateRefFieldsHaveSetter 断言 Agent struct 的每个
