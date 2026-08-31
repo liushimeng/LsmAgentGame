@@ -1,8 +1,15 @@
 // Package debatejudge — 裁判 Agent 驱动(2026-08-31 §20260831-01)。
 //
-// 简化设计:
+// 设计:
 //   - 每个裁判是一个独立 goroutine,监听 DebateEngine.JudgeEventChan(idx)
-//   - 收到事件后:拉取 DebateContext(全部发言)→ 构造 prompt → 调 LLM → 解析 submit_score → 调 DebateRoom.AddJudgeScore
+//   - 收到事件后:拉取 DebateContext(全部发言)→ 构造 prompt → 多轮 tool_use 循环
+//     (§20260831-03:≤ 5 轮,失败把错误作为 tool_result 喂回 LLM 自纠错)
+//     → 调 DebateRoom.AddJudgeScore
+//
+// 与辩方 Agent 区别:
+//   - 评审是单次动作(submit_score),不需要跨轮持久记忆
+//   - 多轮循环主要用于:LLM 首次未调 submit_score 时,把错误喂回重试
+//   - 工具集固定:submit_score + announce + idle_silent
 //
 // 详细设计见 docs/辩论比赛/02 §3 + 06 §4。
 package debatejudge
@@ -82,7 +89,24 @@ func (j *AgentJudge) Run(ctx context.Context) {
 	}
 }
 
-// runJudgeTurn 执行一轮评审。
+// maxToolUseRounds 裁判单轮最多 tool_use 重试轮次(§20260831-03)。
+const maxToolUseRounds = 5
+
+// llmTurnTimeoutSec 单次 LLM 调用超时(秒)。
+const llmTurnTimeoutSec = 90
+
+// runJudgeTurn 执行一轮评审(多轮 tool_use 循环)。
+//
+// 流程(对齐 docs/辩论比赛/02 §3.5 + §5.1):
+//
+//	user prompt 入 memory → 循环(≤ maxToolUseRounds):
+//	  Chat(memory 快照) → 无 tool_use:
+//	    · 本轮已派发过 submit_score → 结束
+//	    · 未派发 → 把错误喂回 LLM 重试
+//	  有 tool_use → 逐个派发 → tool_result(含错误信息)回填 memory:
+//	    · submit_score 成功 → 终态,结束
+//	    · 全部失败 → 把错误喂回 LLM 重试(下一轮循环)
+//	LLM 调用失败 / 超过轮次上限 → fallback 评分。
 func (j *AgentJudge) runJudgeTurn() {
 	if j.provider == nil {
 		j.useFallback()
@@ -96,59 +120,132 @@ func (j *AgentJudge) runJudgeTurn() {
 	speeches := j.room.Speeches()
 	userPrompt := buildJudgeUserPrompt(j.room, speeches)
 
-	// 3) 工具集(只 submit_score + announce)
+	// 3) 工具集(submit_score + announce + idle_silent)
 	tools := judgeTools()
 
-	// 4) 调 LLM(限流 + 超时)
 	if !j.engine.Manager().AcquireLLM(j.ctx) {
 		j.useFallback()
 		return
 	}
 	defer j.engine.Manager().ReleaseLLM()
 
-	llmCtx, cancel := context.WithTimeout(j.ctx, 90*time.Second)
-	defer cancel()
-
+	// 4) 多轮 tool_use 循环
 	messages := []llm.Message{
 		{Role: "user", Content: []llm.ContentBlock{{Type: "text", Text: userPrompt}}},
 	}
-	req := llm.LLMRequest{
-		AgentClassName: string(j.ClassName()),
-		Model:          j.ModelKey,
-		System:         []llm.SystemBlock{{Type: "text", Text: systemPrompt}},
-		Messages:       messages,
-		Tools:          tools,
-		MaxTokens:      2048,
-	}
 
-	resp, err := j.provider.Chat(llmCtx, j.apiKey, req)
-	if err != nil {
-		logger.L().Warn("debate judge: LLM call failed, using fallback",
-			zap.String("room_id", j.RoomID),
-			zap.String("model", j.ModelKey),
-			zap.Error(err))
-		j.useFallback()
-		return
-	}
-
-	// 5) 解析 tool_use
-	for _, blk := range resp.Content {
-		if blk.Type != "tool_use" {
-			continue
+	scoreSubmitted := false
+	for round := 0; round < maxToolUseRounds; round++ {
+		llmCtx, cancel := context.WithTimeout(j.ctx, llmTurnTimeoutSec*time.Second)
+		req := llm.LLMRequest{
+			AgentClassName: string(j.ClassName()),
+			Model:          j.ModelKey,
+			System:         []llm.SystemBlock{{Type: "text", Text: systemPrompt}},
+			Messages:       sanitizeJudgeMessages(messages),
+			Tools:          tools,
+			MaxTokens:      2048,
 		}
-		if blk.Name == string(debate.ToolJudgeSubmitScore) {
-			// tool_use.input 是 map[string]any;marshal 后解析
-			inputBytes, _ := json.Marshal(blk.Input)
-			j.dispatchSubmitScore(inputBytes)
+		resp, err := j.provider.Chat(llmCtx, j.apiKey, req)
+		cancel()
+		if err != nil {
+			logger.L().Warn("debate judge: LLM call failed, using fallback",
+				zap.String("room_id", j.RoomID),
+				zap.String("model", j.ModelKey),
+				zap.Int("round", round),
+				zap.Error(err))
+			if !scoreSubmitted {
+				j.useFallback()
+			}
 			return
 		}
+
+		// assistant 回复原样入 memory
+		messages = append(messages, llm.Message{Role: "assistant", Content: cloneBlocks(resp.Content)})
+
+		var toolUses []llm.ContentBlock
+		for _, blk := range resp.Content {
+			if blk.Type == "tool_use" {
+				toolUses = append(toolUses, blk)
+			}
+		}
+
+		if len(toolUses) == 0 {
+			// 纯文本回复:本轮尚未成功提交评分 → 把错误喂回 LLM 重试
+			if !scoreSubmitted {
+				messages = append(messages, llm.Message{
+					Role: "user",
+					Content: []llm.ContentBlock{{Type: "text", Text: "你必须调用 submit_score 工具提交评分。请重新调用 submit_score 提交完整评分。"}},
+				})
+				continue
+			}
+			return
+		}
+
+		// 逐个派发 tool_use,并构造 tool_result 回填
+		results := make([]llm.ContentBlock, 0, len(toolUses))
+		for _, blk := range toolUses {
+			res := j.dispatchTool(blk)
+			if res.OK && blk.Name == string(debate.ToolJudgeSubmitScore) {
+				scoreSubmitted = true
+			}
+			results = append(results, llm.ContentBlock{
+				Type:      "tool_result",
+				ToolUseID: blk.ID,
+				Content:   []llm.ContentBlock{{Type: "text", Text: judgeResultText(res)}},
+				IsError:   !res.OK,
+			})
+		}
+		messages = append(messages, llm.Message{Role: "user", Content: results})
+
+		if scoreSubmitted {
+			// submit_score 已成功提交,本轮终态
+			return
+		}
+		// 全部派发失败 → 错误已作为 tool_result 喂回,进入下一轮重试
+		logger.L().Warn("debate judge: all tool_use failed, retrying",
+			zap.String("room_id", j.RoomID),
+			zap.Int("judge", j.JudgeID),
+			zap.Int("round", round))
 	}
-	// LLM 未调 submit_score → 用 fallback
-	j.useFallback()
+
+	// 超过轮次上限仍未成功 → fallback
+	if !scoreSubmitted {
+		j.useFallback()
+	}
+}
+
+// dispatchTool 派发 LLM 返回的 tool_use。
+func (j *AgentJudge) dispatchTool(blk llm.ContentBlock) judgeActionResult {
+	switch blk.Name {
+	case string(debate.ToolJudgeSubmitScore):
+		inputBytes, _ := json.Marshal(blk.Input)
+		return j.dispatchSubmitScore(inputBytes)
+	case string(debate.ToolJudgeAnnounce):
+		// announce 是公开宣告,不影响评分流程
+		return judgeActionResult{OK: true, Message: "announce received"}
+	case string(debate.ToolIdleSilent):
+		return judgeActionResult{OK: true, Message: "idle"}
+	default:
+		return judgeActionResult{OK: false, Message: "unknown tool: " + blk.Name}
+	}
+}
+
+// judgeActionResult 裁判工具派发结果。
+type judgeActionResult struct {
+	OK      bool
+	Message string
+}
+
+// judgeResultText 把 judgeActionResult 转成回填给 LLM 的 tool_result 文本。
+func judgeResultText(res judgeActionResult) string {
+	if res.OK {
+		return "ok: " + res.Message
+	}
+	return "error: " + res.Message
 }
 
 // dispatchSubmitScore 派发 submit_score。
-func (j *AgentJudge) dispatchSubmitScore(input json.RawMessage) {
+func (j *AgentJudge) dispatchSubmitScore(input json.RawMessage) judgeActionResult {
 	var payload struct {
 		Rankings       []debate.TeamRanking `json:"rankings"`
 		OverallComment string               `json:"overall_comment"`
@@ -157,8 +254,7 @@ func (j *AgentJudge) dispatchSubmitScore(input json.RawMessage) {
 	if err := json.Unmarshal(input, &payload); err != nil {
 		logger.L().Warn("debate judge: invalid submit_score input",
 			zap.Error(err))
-		j.useFallback()
-		return
+		return judgeActionResult{OK: false, Message: "invalid submit_score input: " + err.Error()}
 	}
 
 	// 校验每个 team 都有评分
@@ -209,6 +305,7 @@ func (j *AgentJudge) dispatchSubmitScore(input json.RawMessage) {
 	}
 
 	j.room.AddJudgeScore(score)
+	return judgeActionResult{OK: true, Message: "score submitted"}
 }
 
 // useFallback LLM 失败时使用默认评分。
@@ -239,6 +336,80 @@ func (j *AgentJudge) clampBestDebater(teamID, seat int) int {
 	}
 	return 0
 }
+
+// ============================================================================
+// 消息清洗(对齐 CLAUDE.md §14.1)
+// ============================================================================
+
+// sanitizeJudgeMessages 把裁判 messages 清洗为可直接下发的格式:
+//
+//  1. 收集 assistant 消息中的全部 tool_use id;
+//  2. user 消息里引用未知 id 的 tool_result 块(悬空孤儿)直接剔除;
+//  3. 相邻同 role 消息合并(user+user / assistant+assistant → 单条拼接);
+//  4. 剔除后为空的消息丢弃;首条若为 assistant 则丢弃(对话必须 user 开头)。
+func sanitizeJudgeMessages(msgs []llm.Message) []llm.Message {
+	if len(msgs) == 0 {
+		return msgs
+	}
+
+	// Pass 1: 收集已知 tool_use id
+	knownUseIDs := map[string]bool{}
+	for _, m := range msgs {
+		if m.Role != "assistant" {
+			continue
+		}
+		for _, c := range m.Content {
+			if c.Type == "tool_use" && c.ID != "" {
+				knownUseIDs[c.ID] = true
+			}
+		}
+	}
+
+	// Pass 2: 剔除悬空 tool_result 块 + 过滤空消息
+	cleaned := make([]llm.Message, 0, len(msgs))
+	for _, m := range msgs {
+		var content []llm.ContentBlock
+		for _, c := range m.Content {
+			if c.Type == "tool_result" && c.ToolUseID != "" && !knownUseIDs[c.ToolUseID] {
+				continue
+			}
+			content = append(content, c)
+		}
+		if len(content) == 0 {
+			continue
+		}
+		cm := m
+		cm.Content = content
+		cleaned = append(cleaned, cm)
+	}
+
+	// Pass 3: 相邻同 role 合并
+	merged := make([]llm.Message, 0, len(cleaned))
+	for _, m := range cleaned {
+		if n := len(merged); n > 0 && merged[n-1].Role == m.Role {
+			merged[n-1].Content = append(merged[n-1].Content, m.Content...)
+			continue
+		}
+		merged = append(merged, m)
+	}
+
+	// Pass 4: 对话必须以 user 开头
+	for len(merged) > 0 && merged[0].Role != "user" {
+		merged = merged[1:]
+	}
+	return merged
+}
+
+// cloneBlocks 深拷贝 content 块。
+func cloneBlocks(blocks []llm.ContentBlock) []llm.ContentBlock {
+	out := make([]llm.ContentBlock, len(blocks))
+	copy(out, blocks)
+	return out
+}
+
+// ============================================================================
+// Prompt 构建
+// ============================================================================
 
 // buildJudgeSystemPrompt 裁判系统提示词。
 func buildJudgeSystemPrompt() string {
@@ -356,6 +527,17 @@ func judgeTools() []llm.ToolDef {
 					"text": map[string]any{"type": "string", "description": "宣告文本,≤ 100 字"},
 				},
 				"required": []string{"text"},
+			},
+		},
+		{
+			Name:        string(debate.ToolIdleSilent),
+			Description: "本轮不出声。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"reason": map[string]any{"type": "string"},
+				},
+				"required": []string{"reason"},
 			},
 		},
 	}

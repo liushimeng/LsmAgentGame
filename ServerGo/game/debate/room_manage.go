@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"LsmAgentGame/agent/debatecommentator"
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/llm"
 )
@@ -53,7 +54,7 @@ type DebateManager struct {
 
 	// agentStarter Agent 启动器(由 main.go 注入)。
 	// 签名:room + engine + registry → 返回任意可 Stop() 的对象。
-	// 该函数由 agent/debaterun 包提供,实际启动辩方 + 裁判 Agent goroutine。
+	// 该函数由 agent/debaterun 包提供,实际启动辩方 + 裁判 + 解说 Agent goroutine。
 	// 设计动机:避免 debate 包 → agent/debateplayer → debate 包循环引用。
 	agentStarter func(room *DebateRoom, engine *DebateEngine, registry *llm.Registry) interface {
 		Stop()
@@ -65,6 +66,13 @@ type DebateManager struct {
 
 	// 全局 LLM 并发上限(防止一时刻占用太多上游)。
 	llmSema chan struct{}
+
+	// §20260831-03 — 解说 Agent 配置。
+	// commentatorModelKey 解说使用的 LLM 模型 key(空 = 不启用解说)。
+	commentatorModelKey string
+
+	// commentatorBroadcast 解说广播回调(由 main.go 注入,走 spectator-only 通道)。
+	commentatorBroadcast func(roomID, text, style string)
 }
 
 // NewDebateManager 创建一个空 DebateManager。
@@ -146,6 +154,46 @@ func (m *DebateManager) SetOnResult(fn func(roomID string, result *DebateResult)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.onResult = fn
+}
+
+// SetCommentatorModelKey 设置解说 Agent 使用的 LLM 模型 key(空 = 不启用解说)。
+func (m *DebateManager) SetCommentatorModelKey(modelKey string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.commentatorModelKey = modelKey
+}
+
+// SetCommentatorBroadcast 注入解说广播回调(走 spectator-only 通道)。
+func (m *DebateManager) SetCommentatorBroadcast(fn func(roomID, text, style string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.commentatorBroadcast = fn
+}
+
+// CommentatorModelKey 锁内读取解说模型 key(供 starter 使用)。
+func (m *DebateManager) CommentatorModelKey() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.commentatorModelKey
+}
+
+// CommentatorBroadcast 锁内读取解说广播回调(供 starter 使用)。
+func (m *DebateManager) CommentatorBroadcast() func(roomID, text, style string) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.commentatorBroadcast
+}
+
+// LLMSemaChannel 返回 LLM 并发信号量(供解说 Agent 使用)。
+func (m *DebateManager) LLMSemaChannel() chan struct{} {
+	return m.llmSema
+}
+
+// CommentatorSnapProvider 返回解说快照提供者(闭包,锁内构造)。
+func (m *DebateManager) CommentatorSnapProvider(room *DebateRoom) func() *debatecommentator.CommentarySnapshot {
+	return func() *debatecommentator.CommentarySnapshot {
+		return buildCommentarySnapshot(room)
+	}
 }
 
 // resultHook 锁内读取 onResult 钩子(供 engine_judge / engine_phase 调用)。
@@ -490,4 +538,47 @@ func (m *DebateManager) ReleaseLLM() {
 	case <-m.llmSema:
 	default:
 	}
+}
+
+// ============================================================================
+// §20260831-03 — 解说快照构造
+// ============================================================================
+
+// buildCommentarySnapshot 从 DebateRoom 构造解说快照(锁内调用)。
+func buildCommentarySnapshot(room *DebateRoom) *debatecommentator.CommentarySnapshot {
+	room.mu.RLock()
+	defer room.mu.RUnlock()
+
+	snap := &debatecommentator.CommentarySnapshot{
+		RoomID:    room.RoomID,
+		Phase:     string(room.currentPhase),
+		PhaseCN:   PhaseCN(room.currentPhase),
+		Topic:     room.Config.Topic.Text,
+		TeamCount: len(room.Config.Teams),
+	}
+
+	// 最近 5 条发言
+	recentSpeeches := room.speeches.lastN(5)
+	for _, sp := range recentSpeeches {
+		snap.RecentSpeeches = append(snap.RecentSpeeches, debatecommentator.SpeechSummary{
+			SpeakerName: sp.SpeakerName,
+			StanceLabel: string(sp.Stance),
+			RoleCN:      RoleCN(sp.Role),
+			Content:     sp.Content,
+			PhaseCN:     PhaseCN(sp.Phase),
+		})
+	}
+
+	// 当前比分(评审阶段后)
+	if room.result != nil {
+		for _, ts := range room.result.TeamScores {
+			snap.TeamScores = append(snap.TeamScores, debatecommentator.TeamScoreSummary{
+				TeamID:     ts.TeamID,
+				TeamName:   ts.TeamName,
+				TotalScore: ts.TotalScore,
+			})
+		}
+	}
+
+	return snap
 }

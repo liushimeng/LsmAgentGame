@@ -307,6 +307,9 @@ func (r *DebateRoom) IsGameOver() bool {
 	return p == PhaseGameOver || p == PhaseResult
 }
 
+// Manager 返回房间关联的 DebateManager(供 starter / 解说使用)。
+func (r *DebateRoom) Manager() *DebateManager { return r.manager }
+
 // TeamCount 队伍数。
 func (r *DebateRoom) TeamCount() int { return len(r.Config.Teams) }
 

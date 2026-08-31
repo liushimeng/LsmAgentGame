@@ -150,6 +150,8 @@ func AllAgentClassNames() []AgentClassName {
 		AgentClassDebatePlayer,
 		AgentClassDebateJudge,
 		AgentClassDebateMemoryCompact,
+		// 2026-08-31 §20260831-03 — 辩论比赛解说 Agent
+		AgentClassDebateCommentator,
 	}
 }
 
@@ -187,4 +189,11 @@ const (
 	// 失败保留原记忆下次再试。
 	// 详见 docs/辩论比赛/05-辩论比赛工具与记忆系统设计.md §5。
 	AgentClassDebateMemoryCompact AgentClassName = "LsmAgentGame-Debate-MemoryCompact"
+
+	// AgentClassDebateCommentator 是辩论比赛「AI 实时解说」的 AgentClassName。
+	// 由 ServerGo/agent/debatecommentator/ 的 CommentatorAgent struct 实现;
+	// 观战模式新增 🎙️ 解说席,事件驱动 + 双风格(pro 严谨 / fun 吐槽),
+	// 仅推送给观战者(spectator-only),玩家与 Agent 不可见。
+	// 详见 docs/辩论比赛/辩论比赛总体的流程设计.md §20260831-03。
+	AgentClassDebateCommentator AgentClassName = "LsmAgentGame-Debate-Commentator"
 )
