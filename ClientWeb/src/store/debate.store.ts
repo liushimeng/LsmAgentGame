@@ -15,10 +15,12 @@
  */
 import { create } from 'zustand';
 import type {
+  DebateAgentStatsDetail,
   DebateClientState,
   DebateCrossExamEntry,
   DebateJudgeAnnounce,
   DebateJudgeScore,
+  DebateJudgeScoreboard,
   DebateResult,
   DebateRoomSummary,
   DebateSpectatorAnswer,
@@ -63,6 +65,12 @@ interface DebateStore {
   // §20260831-06 — 裁判公开宣告(最近 10 条)
   judgeAnnouncements: DebateJudgeAnnounce[];
 
+  // §20260831-09 — Agent 统计增量(debate.stats_update 帧)
+  agentStatsDetail: DebateAgentStatsDetail | null;
+
+  // §20260831-09 — 裁判实时打分看板(debate.judge_scoreboard 帧,按 judge_id 索引)
+  scoreboards: Record<number, DebateJudgeScoreboard>;
+
   // UI
   spectatorCount: number;
   currentSpeaker: string;
@@ -87,6 +95,10 @@ interface DebateStore {
 
   patchRoom: (room: Partial<DebateRoomSummary> & { room_id: string }) => void;
   removeRoom: (roomId: string) => void;
+
+  // §20260831-09 — Agent 统计 / 裁判实时打分 actions
+  setAgentStatsDetail: (detail: DebateAgentStatsDetail) => void;
+  setJudgeScoreboard: (judgeId: number, board: DebateJudgeScoreboard) => void;
 }
 
 const initial: Pick<
@@ -105,6 +117,8 @@ const initial: Pick<
   | 'likedSpeeches'
   | 'spectatorAnswers'
   | 'judgeAnnouncements'
+  | 'agentStatsDetail'
+  | 'scoreboards'
   | 'spectatorCount'
   | 'currentSpeaker'
 > = {
@@ -122,6 +136,8 @@ const initial: Pick<
   likedSpeeches: {},
   spectatorAnswers: {},
   judgeAnnouncements: [],
+  agentStatsDetail: null,
+  scoreboards: {},
   spectatorCount: 0,
   currentSpeaker: '',
 };
@@ -207,6 +223,14 @@ export const useDebateStore = create<DebateStore>((set) => ({
   })),
 
   setSpectatorCount: (n) => set({ spectatorCount: n }),
+
+  // §20260831-09 — Agent 统计增量(debate.stats_update)替换旧快照。
+  setAgentStatsDetail: (detail) => set({ agentStatsDetail: detail }),
+
+  // §20260831-09 — 裁判实时打分看板(debate.judge_scoreboard)按 judge_id 合并。
+  setJudgeScoreboard: (judgeId, board) => set((s) => ({
+    scoreboards: { ...s.scoreboards, [judgeId]: board },
+  })),
 
   reset: () => set(initial),
 }));

@@ -1,0 +1,459 @@
+/*
+ * debate-stats.css — 辩论比赛 Agent 统计 + 裁判实时打分看板样式。
+ *
+ * 2026-08-31 §20260831-09 — 新增组件:
+ *   - .debate-stats (Agent 统计面板,可折叠)
+ *   - .debate-bot-token-card (单个 Bot Token 卡片)
+ *   - .debate-judge-scoreboard-panel (裁判实时打分看板)
+ *   - .judge-scoreboard-card (单裁判打分卡)
+ *
+ * 设计语言对齐狼人杀 GameStatusHeader 的 chip 风格(§26 对比度要求):
+ *   - 背景 #1f2937 + 边框 #374151
+ *   - chip 背景带透明色 + 边框
+ *   - 文字色 #f3f4f6 / #d1d5db / #9ca3af 三档
+ *   - 重点数字(Token 总量 / 速率)用蓝色高亮
+ *
+ * 对比度自检(所有正文均 ≥ WCAG AA 4.5:1):
+ *   - #f3f4f6 on #1f2937  ≈ 12.5:1  ✅
+ *   - #d1d5db on #1f2937  ≈ 8.0:1   ✅
+ *   - #93c5fd on #1f2937  ≈ 8.6:1   ✅
+ *   - #fbbf24 on #1f2937  ≈ 9.4:1   ✅
+ */
+
+/* ==========================================================================
+ * §1. Agent 统计面板 (.debate-stats)
+ * ========================================================================== */
+
+.debate-stats {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.debate-stats__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.debate-stats__title {
+  color: #f3f4f6;
+  font-weight: 600;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.debate-stats__chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.debate-stats__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-family: ui-monospace, monospace;
+  background: rgba(55, 65, 81, 0.5);
+  border: 1px solid rgba(75, 85, 99, 0.6);
+  color: #d1d5db;
+  white-space: nowrap;
+}
+
+.debate-stats__chip--clock {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+  background: rgba(251, 191, 36, 0.08);
+  font-weight: 600;
+}
+
+.debate-stats__chip--total-tokens {
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.1);
+  font-weight: 600;
+}
+
+.debate-stats__chip--tokenrate {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(52, 211, 153, 0.1);
+  font-weight: 600;
+}
+
+.debate-stats__chip--api {
+  color: #e5e7eb;
+}
+
+.debate-stats__chip--judge-api {
+  color: #c4b5fd;
+  border-color: rgba(139, 92, 246, 0.4);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.debate-stats__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 4px;
+  margin-left: 4px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.debate-stats__badge--fail {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.debate-stats__fold {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.debate-stats__fold:hover {
+  background: rgba(75, 85, 99, 0.5);
+  color: #e5e7eb;
+}
+
+/* 折叠态:仅留标题 + chip 行 */
+.debate-stats--collapsed .debate-stats__details {
+  display: none;
+}
+
+.debate-stats__details {
+  padding: 0 12px 12px;
+  border-top: 1px solid #374151;
+}
+
+.debate-stats__bot-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  padding-top: 10px;
+}
+
+/* ==========================================================================
+ * §2. 单个 Bot Token 卡片 (.debate-bot-token-card)
+ * ========================================================================== */
+
+.debate-bot-token-card {
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid #374151;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.75rem;
+  transition: border-color 0.2s;
+}
+
+.debate-bot-token-card:hover {
+  border-color: #4b5563;
+}
+
+.debate-bot-token-card--fail {
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.debate-bot-token-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #374151;
+}
+
+.debate-bot-token-card__role {
+  color: #f3f4f6;
+  font-weight: 600;
+}
+
+.debate-bot-token-card__model {
+  color: #9ca3af;
+  font-size: 0.6875rem;
+  font-family: ui-monospace, monospace;
+}
+
+.debate-bot-token-card__body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.debate-bot-token-card__stat {
+  color: #d1d5db;
+}
+
+.debate-bot-token-card__stat--total {
+  color: #93c5fd;
+  font-weight: 600;
+}
+
+.debate-bot-token-card__badge {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+ * §3. 裁判实时打分看板 (.debate-judge-scoreboard-panel)
+ * ========================================================================== */
+
+.debate-judge-scoreboard-panel {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.debate-judge-scoreboard-panel h3 {
+  margin: 0 0 10px;
+  font-size: 0.9375rem;
+  color: #f3f4f6;
+}
+
+.debate-judge-scoreboard-panel--empty {
+  color: #9ca3af;
+  text-align: center;
+  font-size: 0.8125rem;
+}
+
+.debate-judge-scoreboard-panel--empty p {
+  margin: 0;
+  color: #9ca3af;
+}
+
+/* --------------------------------------------------------------------------
+ * §3.1 单裁判打分卡 (.judge-scoreboard-card)
+ * -------------------------------------------------------------------------- */
+
+.judge-scoreboard-card {
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid #374151;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  padding: 10px;
+  transition: border-color 0.2s;
+}
+
+.judge-scoreboard-card:last-child {
+  margin-bottom: 0;
+}
+
+.judge-scoreboard-card--final {
+  border-color: rgba(52, 211, 153, 0.5);
+}
+
+.judge-scoreboard-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #374151;
+}
+
+.judge-scoreboard-card__name {
+  color: #f3f4f6;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.judge-scoreboard-card__model {
+  color: #9ca3af;
+  font-size: 0.75rem;
+  font-family: ui-monospace, monospace;
+}
+
+.judge-scoreboard-card__teams {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.judge-scoreboard-card__team {
+  background: rgba(31, 41, 55, 0.5);
+  border: 1px solid #374151;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.judge-scoreboard-card__team-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  color: #e5e7eb;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.judge-scoreboard-card__total {
+  color: #93c5fd;
+  font-weight: 700;
+  font-family: ui-monospace, monospace;
+  font-size: 0.9375rem;
+}
+
+.judge-scoreboard-card__dims {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.judge-scoreboard-card__dim {
+  display: grid;
+  grid-template-columns: 80px 1fr 32px;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+}
+
+.judge-scoreboard-card__dim-label {
+  color: #9ca3af;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.judge-scoreboard-card__dim-track {
+  background: rgba(55, 65, 81, 0.5);
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.judge-scoreboard-card__dim-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.judge-scoreboard-card__dim-value {
+  color: #d1d5db;
+  text-align: right;
+  font-family: ui-monospace, monospace;
+}
+
+.judge-scoreboard-card__comment {
+  margin-top: 6px;
+  color: #d1d5db;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  padding-top: 4px;
+  border-top: 1px dashed #374151;
+}
+
+.judge-scoreboard-card__phase {
+  color: #6b7280;
+  font-size: 0.6875rem;
+}
+
+/* --------------------------------------------------------------------------
+ * §3.2 阶段历史
+ * -------------------------------------------------------------------------- */
+
+.judge-scoreboard-card__history {
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.judge-scoreboard-card__history summary {
+  cursor: pointer;
+  padding: 4px 0;
+  color: #9ca3af;
+}
+.judge-scoreboard-card__history summary:hover {
+  color: #d1d5db;
+}
+
+.judge-scoreboard-card__history ul {
+  margin: 6px 0 0;
+  padding-left: 0;
+  list-style: none;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.judge-scoreboard-card__history-item {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid #374151;
+}
+.judge-scoreboard-card__history-item:last-child {
+  border-bottom: none;
+}
+
+.judge-scoreboard-card__history-phase {
+  color: #93c5fd;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.judge-scoreboard-card__history-comment {
+  color: #d1d5db;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.judge-scoreboard-card__final-badge {
+  background: rgba(52, 211, 153, 0.2);
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  border-radius: 999px;
+  padding: 0 6px;
+  margin-left: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+ * §4. 响应式
+ * ========================================================================== */
+
+@media (max-width: 900px) {
+  .debate-stats__header {
+    gap: 6px;
+  }
+  .debate-stats__chips {
+    gap: 6px;
+  }
+  .debate-stats__chip {
+    padding: 3px 8px;
+    font-size: 0.7rem;
+  }
+  .debate-stats__bot-list {
+    grid-template-columns: 1fr;
+  }
+  .judge-scoreboard-card__dim {
+    grid-template-columns: 64px 1fr 28px;
+  }
+}

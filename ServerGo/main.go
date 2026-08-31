@@ -559,7 +559,12 @@ func main() {
 	// 完成,详见 docs/辩论比赛/00 §4.1。
 	debateMgr := debate.NewDebateManagerWithRegistry(llmRegistry)
 	// 注入 Agent 启动器(独立包 debaterun 避免循环引用)。
-	debateMgr.SetAgentStarter(func(room *debate.DebateRoom, engine *debate.DebateEngine, registry *llm.Registry) interface{ Stop() } {
+	// §20260831-09 — 返回类型增 BotStats / JudgeStats(房间级 Token 聚合用)。
+	debateMgr.SetAgentStarter(func(room *debate.DebateRoom, engine *debate.DebateEngine, registry *llm.Registry) interface {
+		Stop()
+		BotStats() []debate.AgentTokenSnapshot
+		JudgeStats() []debate.JudgeTokenSnapshot
+	} {
 		return debaterun.StartAgents(room, engine, registry)
 	})
 	// 注入生命周期钩子(对齐狼人杀的 SetOnGameStart/SetOnGameOver)。
@@ -626,6 +631,14 @@ func main() {
 		// §20260831-04 — 解说帧走 DebateService.BroadcastCommentary spectator-only 通道,
 		// 前端 useDebate 订阅 debate.commentary 帧,不与狼人杀的 chat.commentary 混淆。
 		debateWsSvc.BroadcastCommentary(roomID, text, style)
+	})
+	// §20260831-09 — Agent 统计增量帧接线:debate.stats_update。
+	debateMgr.SetOnAgentStats(func(rid string, detail *debate.DebateAgentStatsDetail) {
+		debateWsSvc.BroadcastAgentStats(rid, detail)
+	})
+	// §20260831-09 — 裁判阶段打分帧接线:debate.stage_score + debate.judge_scoreboard。
+	debateMgr.SetOnStageScore(func(rid string, ss *debate.StageScore) {
+		debateWsSvc.BroadcastStageScore(rid, ss)
 	})
 	// §20260831-08 — 辩论比赛数据库持久化接线(发言/评审/房间记录/模型统计落库 +
 	// 启动回读模型胜率)。必须在上述 WS 广播钩子全部注入之后调用:persistence

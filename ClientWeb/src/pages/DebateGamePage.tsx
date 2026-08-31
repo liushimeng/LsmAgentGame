@@ -29,6 +29,8 @@ import DebateScorePanel from '@/components/debate/DebateScorePanel';
 import DebateCommentaryPanel from '@/components/debate/DebateCommentaryPanel';
 import DebateHostControls from '@/components/debate/DebateHostControls';
 import DebateSpectatorQuestionPanel from '@/components/debate/DebateSpectatorQuestionPanel';
+import DebateAgentStatsPanel from '@/components/debate/DebateAgentStatsPanel';
+import DebateJudgeScoreboardPanel from '@/components/debate/DebateJudgeScoreboardPanel';
 import { GameChatPanel } from '@/components/chat/GameChatPanel';
 
 export function DebateGamePage() {
@@ -82,6 +84,8 @@ export function DebateGamePage() {
         </aside>
 
         <section className="stage-col">
+          {/* §20260831-09 — Agent 统计面板(运行时长 + 总 Token + 每小时速率 + 调用次数) */}
+          <DebateAgentStatsPanel />
           <DebateStage />
           <DebateCommentaryPanel />
           <DebateSpeechPanel />
@@ -90,6 +94,8 @@ export function DebateGamePage() {
 
         <aside className="judge-col">
           <DebateJudgePanel />
+          {/* §20260831-09 — 裁判实时打分看板(阶段式累计 5 维度 + 总分) */}
+          <DebateJudgeScoreboardPanel />
           <DebateScorePanel />
           {isGameOver && (
             <div className="post-game-actions">

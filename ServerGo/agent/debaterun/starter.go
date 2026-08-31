@@ -23,17 +23,22 @@ import (
 	"go.uber.org/zap"
 )
 
-// BotHandle 单个 Bot 句柄(用于 Stop)。
+// BotHandle 单个 Bot 句柄(用于 Stop + Stats)。
 type BotHandle struct {
 	TeamID int
 	Seat   int
 	cancel context.CancelFunc
+	// §20260831-09 — Bot 实例引用(供房间级 Token 聚合读 stats)。
+	// 仅在 Stop() 前非 nil;由 StartAgents 注入。
+	agent *debateplayer.Agent
 }
 
 // JudgeHandle 单个裁判句柄。
 type JudgeHandle struct {
 	JudgeID int
 	cancel  context.CancelFunc
+	// §20260831-09 — 裁判实例引用(供房间级 Token 聚合读 stats)。
+	judge *debatejudge.AgentJudge
 }
 
 // CommentatorHandle 解说着句柄。
@@ -84,11 +89,61 @@ func (ar *Registry) Stop() {
 	}
 }
 
+// BotStats 返回每个 Bot 的 Token + API 统计快照(§20260831-09)。
+//
+// 由 DebateRoom.AggregateAgentStats 调用;返回 AgentTokenSnapshot 列表
+// (room → ws → frontend → DebateAgentStatsPanel 渲染)。
+func (ar *Registry) BotStats() []debate.AgentTokenSnapshot {
+	ar.mu.RLock()
+	defer ar.mu.RUnlock()
+	out := make([]debate.AgentTokenSnapshot, 0, len(ar.bots))
+	for _, b := range ar.bots {
+		if b == nil || b.agent == nil {
+			continue
+		}
+		ts := b.agent.AgentTokenStats()
+		out = append(out, debate.AgentTokenSnapshot{
+			TeamID:         b.TeamID,
+			Seat:           b.Seat,
+			LLMCallCount:   b.agent.TotalLLMCalls(),
+			InputTokens:    ts.TotalInputTokens,
+			OutputTokens:   ts.TotalOutputTokens,
+			APITokens:      ts.TotalAPITokens,
+			APISuccessCount: ts.APISuccessCount,
+			APIFailCount:    ts.APIFailCount,
+		})
+	}
+	return out
+}
+
+// JudgeStats 返回每个裁判的 Token + API 统计快照(§20260831-09)。
+func (ar *Registry) JudgeStats() []debate.JudgeTokenSnapshot {
+	ar.mu.RLock()
+	defer ar.mu.RUnlock()
+	out := make([]debate.JudgeTokenSnapshot, 0, len(ar.judges))
+	for _, j := range ar.judges {
+		if j == nil || j.judge == nil {
+			continue
+		}
+		ts := j.judge.JudgeTokenStats()
+		out = append(out, debate.JudgeTokenSnapshot{
+			JudgeID:         j.JudgeID,
+			LLMCallCount:    j.judge.TotalLLMCalls(),
+			InputTokens:     ts.TotalInputTokens,
+			OutputTokens:    ts.TotalOutputTokens,
+			APITokens:       ts.TotalAPITokens,
+			APISuccessCount: ts.APISuccessCount,
+			APIFailCount:    ts.APIFailCount,
+		})
+	}
+	return out
+}
+
 // StartAgents 为房间启动所有辩方 Bot + 裁判 + 解说。
 //
 // 启动顺序:
 //  1. 遍历 RoomConfig.Teams → 每队每个 Agent → 启动 debateplayer.Agent
-//  2. 注册到 room.agentRegistry(供 Stop)
+//  2. 注册到 room.agentRegistry(供 Stop + Stats)
 //  3. Bot Run goroutine 阻塞监听直到 ctx 取消
 //  4. 启动解说 Agent(如有 commentatorModelKey)
 func StartAgents(room *debate.DebateRoom, engine *debate.DebateEngine, registry *llm.Registry) *Registry {
@@ -109,7 +164,7 @@ func StartAgents(room *debate.DebateRoom, engine *debate.DebateEngine, registry 
 			ctx, cancel := context.WithCancel(reg.rootCtx)
 			reg.mu.Lock()
 			reg.bots = append(reg.bots, &BotHandle{
-				TeamID: team.TeamID, Seat: ag.SeatID, cancel: cancel,
+				TeamID: team.TeamID, Seat: ag.SeatID, cancel: cancel, agent: a,
 			})
 			reg.mu.Unlock()
 			go a.Run(ctx)
@@ -127,7 +182,7 @@ func StartAgents(room *debate.DebateRoom, engine *debate.DebateEngine, registry 
 		judge := debatejudge.NewJudge(room, engine, j.JudgeID, j.ModelKey, registry)
 		ctx, cancel := context.WithCancel(reg.rootCtx)
 		reg.mu.Lock()
-		reg.judges = append(reg.judges, &JudgeHandle{JudgeID: j.JudgeID, cancel: cancel})
+		reg.judges = append(reg.judges, &JudgeHandle{JudgeID: j.JudgeID, cancel: cancel, judge: judge})
 		reg.mu.Unlock()
 		go judge.Run(ctx)
 		logger.L().Info("debate judge started",

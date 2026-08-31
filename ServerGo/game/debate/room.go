@@ -106,10 +106,16 @@ type DebateRoom struct {
 	spectatorQuestions []SpectatorQuestion
 	questionSeq        int
 
+	// §20260831-09 — 裁判实时打分看板存储(详见 stage_score.go)。
+	scoreboards *scoreboardsStore
+
 	// agentRegistry Agent 句柄集合(详见 agent/debaterun/starter.go)。
 	// 实际类型为 *debaterun.Registry;为避免 debate 包循环引用,这里用 interface。
+	// §20260831-09 — 增补 BotStats / JudgeStats 方法(aggregate_stats.go 锁内变体调用)。
 	agentRegistry interface {
 		Stop()
+		BotStats() []AgentTokenSnapshot
+		JudgeStats() []JudgeTokenSnapshot
 	}
 }
 

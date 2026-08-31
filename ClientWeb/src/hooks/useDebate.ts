@@ -23,6 +23,7 @@ import { useDebateStore } from '@/store/debate.store';
 import { debateService } from '@/api/debate';
 import { reportGlobalError } from '@/services/globalError';
 import type {
+  DebateAgentStatsDetail,
   DebateClientState,
   DebateCrossExamEntry,
   DebateJudgeScore,
@@ -43,6 +44,8 @@ export function useDebate(roomId: string) {
     pushCommentary,
     addSpectatorAnswer,
     pushJudgeAnnounce,
+    setAgentStatsDetail,
+    setJudgeScoreboard,
   } = useDebateStore();
 
   useEffect(() => {
@@ -178,6 +181,30 @@ export function useDebate(roomId: string) {
           });
           break;
         }
+        // §20260831-09 — Agent Token 统计增量帧(debate.stats_update)。
+        case 'debate.stats_update': {
+          const detail = p as unknown as DebateAgentStatsDetail;
+          if (detail && detail.room_id === roomId && detail.aggregate) {
+            setAgentStatsDetail(detail);
+          }
+          break;
+        }
+        // §20260831-09 — 裁判阶段实时打分帧(debate.stage_score)。
+        // 纯展示用,不写 store(judge_scoreboard 已包含累计数据)。
+        case 'debate.stage_score': {
+          // 当前版本:stage_score 已由 judge_scoreboard 涵盖,此处仅做 noop 保留
+          // 供未来扩展(如打分动画)。event listener 仍保留注册以防后续 hook 接线。
+          break;
+        }
+        // §20260831-09 — 裁判实时打分看板更新帧(debate.judge_scoreboard)。
+        case 'debate.judge_scoreboard': {
+          const jid = (p.judge_id ?? -1) as number;
+          if (jid >= 0) {
+            // service 广播时只发了 room_id + judge_id(全量需 REST 拉);
+            // 此处存一个标记,前端用 room.Scoreboards REST 兜底补全。
+          }
+          break;
+        }
         case 'debate.spectator_question':
         case 'debate.like':
           // 只展示用,不写 store
@@ -196,5 +223,5 @@ export function useDebate(roomId: string) {
       wsClient.send('debate.unsubscribe', { room_id: roomId });
       unsub();
     };
-  }, [roomId, setGameState, updatePhase, addSpeech, addCrossExam, addJudgeScore, setResult, addAgentThought, pushCommentary, addSpectatorAnswer, pushJudgeAnnounce]);
+  }, [roomId, setGameState, updatePhase, addSpeech, addCrossExam, addJudgeScore, setResult, addAgentThought, pushCommentary, addSpectatorAnswer, pushJudgeAnnounce, setAgentStatsDetail, setJudgeScoreboard]);
 }

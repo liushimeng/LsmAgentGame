@@ -78,6 +78,11 @@ type ClientState struct {
 	// 配置(供前端 lobby / 设置弹窗使用)
 	PhaseConfig     PhaseConfig      `json:"phase_config"`
 	SpectatorConfig SpectatorConfig `json:"spectator_config"`
+
+	// §20260831-09 — Agent Token + API 统计(聚合层)。
+	// 由 BuildClientState 锁内变体 aggregateAgentStatsLocked() 填充;
+	// 字段命名对齐前端 DebateRoomAgentStats。
+	AgentStats *DebateRoomAgentStats `json:"agent_stats,omitempty"`
 }
 
 // BuildClientState 由 DebateRoom 投影得到 ClientState。
@@ -128,6 +133,13 @@ func (r *DebateRoom) BuildClientState(forUserID string, includeSpeeches, include
 	// Agent thoughts 仅在 reveal_agent_thought=true 且 phase 已开始时下发
 	if r.Config.SpectatorConfig.RevealAgentThought && r.currentPhase != PhaseFilling {
 		cs.AgentThoughts = r.collectAgentThoughts()
+	}
+
+	// §20260831-09 — 房间级 Agent 统计聚合(锁内变体,§92a 范式)。
+	// BotStats / JudgeStats 完整详情走 debate.stats_update WS 帧增量下发,
+	// 此处仅填充聚合层(Aggregate 子结构)节省带宽。
+	if detail := r.aggregateAgentStatsLocked(); detail != nil {
+		cs.AgentStats = &detail.Aggregate
 	}
 
 	return cs

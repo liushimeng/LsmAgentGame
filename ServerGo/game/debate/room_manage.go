@@ -55,9 +55,12 @@ type DebateManager struct {
 	// agentStarter Agent 启动器(由 main.go 注入)。
 	// 签名:room + engine + registry → 返回任意可 Stop() 的对象。
 	// 该函数由 agent/debaterun 包提供,实际启动辩方 + 裁判 + 解说 Agent goroutine。
+	// §20260831-09 — 接口增 BotStats / JudgeStats 方法(房间级 Token 聚合用)。
 	// 设计动机:避免 debate 包 → agent/debateplayer → debate 包循环引用。
 	agentStarter func(room *DebateRoom, engine *DebateEngine, registry *llm.Registry) interface {
 		Stop()
+		BotStats() []AgentTokenSnapshot
+		JudgeStats() []JudgeTokenSnapshot
 	}
 
 	// 引擎实例(per room):每个 DebateRoom 对应一个 DebateEngine。
@@ -83,6 +86,14 @@ type DebateManager struct {
 
 	// §20260831-06 — 模型胜率统计(进程内,§06 §9)。
 	stats *statsStore
+
+	// §20260831-09 — Agent 统计增量帧广播钩子(debate.stats_update)。
+	// 触发时机:阶段切换、每 10s ticker、Agent goroutine 任意 LLM 调用后回调。
+	// 由 main.go 注入到 ws.DebateService.BroadcastAgentStats。
+	onAgentStats func(roomID string, detail *DebateAgentStatsDetail)
+
+	// §20260831-09 — 裁判阶段打分广播钩子(debate.stage_score / debate.judge_scoreboard)。
+	onStageScore func(roomID string, ss *StageScore)
 }
 
 // NewDebateManager 创建一个空 DebateManager。
@@ -224,6 +235,52 @@ func (m *DebateManager) SetOnSpectatorAnswer(fn func(roomID string, q SpectatorQ
 	m.onSpectatorAnswer = fn
 }
 
+// SetOnAgentStats 注入 Agent 统计增量广播钩子(§20260831-09)。
+//
+// 触发时机:阶段切换 / 10s ticker / Agent LLM 调用结束。由 DebateService
+// 把 payload 推成 debate.stats_update 帧给房间全员。
+func (m *DebateManager) SetOnAgentStats(fn func(roomID string, detail *DebateAgentStatsDetail)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onAgentStats = fn
+}
+
+// SetOnStageScore 注入裁判阶段打分广播钩子(§20260831-09)。
+func (m *DebateManager) SetOnStageScore(fn func(roomID string, ss *StageScore)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onStageScore = fn
+}
+
+// EmitAgentStats 外抛 Agent 统计增量帧(§20260831-09)。
+//
+// 由 DebateEngine 阶段切换 + ticker 触发,DebateService 收到后转
+// debate.stats_update 帧广播给全员。nil-safe;无订阅者时静默。
+func (m *DebateManager) EmitAgentStats(roomID string, detail *DebateAgentStatsDetail) {
+	if m == nil || detail == nil {
+		return
+	}
+	m.mu.RLock()
+	fn := m.onAgentStats
+	m.mu.RUnlock()
+	if fn != nil {
+		fn(roomID, detail)
+	}
+}
+
+// EmitStageScore 外抛裁判阶段打分帧(§20260831-09)。
+func (m *DebateManager) EmitStageScore(roomID string, ss *StageScore) {
+	if m == nil || ss == nil {
+		return
+	}
+	m.mu.RLock()
+	fn := m.onStageScore
+	m.mu.RUnlock()
+	if fn != nil {
+		fn(roomID, ss)
+	}
+}
+
 // Stats 返回模型胜率统计快照(§20260831-06,§06 §9)。
 //
 // 供 GET /api/games/debate/stats 使用;按胜率降序。
@@ -327,7 +384,12 @@ func (r *DebateRoom) emitJudgeScore(score JudgeScore) {
 //
 // 参数 fn 返回任意可 Stop() 的对象;DebateRoom.agentRegistry 持有其引用,
 // 房间被 Remove/StopGame 时调用 Stop() 关闭所有 Bot + 裁判 goroutine。
-func (m *DebateManager) SetAgentStarter(fn func(room *DebateRoom, engine *DebateEngine, registry *llm.Registry) interface{ Stop() }) {
+// §20260831-09 — 返回对象额外实现 BotStats / JudgeStats(房间级 Token 聚合用)。
+func (m *DebateManager) SetAgentStarter(fn func(room *DebateRoom, engine *DebateEngine, registry *llm.Registry) interface {
+	Stop()
+	BotStats() []AgentTokenSnapshot
+	JudgeStats() []JudgeTokenSnapshot
+}) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.agentStarter = fn

@@ -61,6 +61,24 @@ type Agent struct {
 	// 状态
 	mu         sync.Mutex
 	quarantined bool
+
+	// §20260831-09 — LLM 调用统计(对齐狼人杀 wwplayer.Agent 字段语义)。
+	// 加锁 a.mu 保护;广播路径 / transcript 读取与本字段并发。
+	totalInputTokens  int
+	totalOutputTokens int
+	totalAPITokens    int
+	apiCallCount      int
+	apiSuccessCount   int
+	apiFailCount      int
+	lastInputTokens   int
+	lastOutputTokens  int
+	lastAPITokens     int
+	totalLLMCalls     int
+	lastLLMLatencyMs  int64
+	avgLLMLatencyMs   int64
+	lastLLMCallAt     time.Time
+	llmCallInProgress bool
+	llmCallStartedAt  time.Time
 }
 
 // cancel 内部 cancel func 类型(避免 context 字段名冲突)。
@@ -160,6 +178,7 @@ func (a *Agent) runTurn() {
 	if !a.engine.Manager().AcquireLLM(a.ctx) {
 		logger.L().Warn("debate agent: failed to acquire LLM slot",
 			zap.String("room_id", a.RoomID))
+		a.RecordAPIFailure()
 		a.useFallbackResponse()
 		return
 	}
@@ -181,6 +200,9 @@ func (a *Agent) runTurn() {
 	for round := 0; round < maxToolUseRounds; round++ {
 		messages := sanitizeDebateMessages(a.memory.Snapshot())
 
+		// §20260831-09 — 记录 LLM 调用开始时间(供 MarkLLMCallEndWithUsage 计算延迟)。
+		a.MarkLLMCallStart()
+
 		llmCtx, cancel := context.WithTimeout(a.ctx, llmTurnTimeoutSec*time.Second)
 		req := llm.LLMRequest{
 			AgentClassName: string(a.ClassName()),
@@ -192,6 +214,11 @@ func (a *Agent) runTurn() {
 		}
 		resp, err := a.provider.Chat(llmCtx, a.apiKey, req)
 		cancel()
+		if err != nil {
+			a.RecordAPIFailure()
+		} else {
+			a.MarkLLMCallEndWithUsage(resp.Usage)
+		}
 		if err != nil {
 			logger.L().Warn("debate agent: LLM call failed, using fallback",
 				zap.String("room_id", a.RoomID),

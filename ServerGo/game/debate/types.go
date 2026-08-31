@@ -212,6 +212,9 @@ const (
 	// §20260831-06 — 裁判回答观众提问(观众提问闭环,
 	// docs/辩论比赛/01 §6.1「可向裁判 Agent 提问,裁判可选择性回应」)。
 	ToolJudgeAnswerSpectator ToolName = "answer_spectator"     // 回答观众提问
+	// §20260831-09 — 裁判实时打分(阶段性);可在每个发言阶段后调用,
+	// 累计到该裁判对各队的加权平均,IsFinal=false;最终通过 submit_score 提交。
+	ToolJudgeSubmitStageScore ToolName = "submit_stage_score"
 )
 
 // AllowedToolsForPhaseRole 返回「辩位 × 阶段」下辩方 Bot 可调用的工具集。
@@ -259,6 +262,8 @@ func AllowedToolsForPhaseRole(phase Phase, role Role) []ToolName {
 		// 评审阶段辩方只能沉默
 	}
 
+	// §20260831-09 — submit_stage_score 在任何阶段对辩方均可用(由裁判调用,非辩方),
+	// 本函数仅处理辩方工具;裁判工具由 judgeTools() 统一定义,不经过此过滤。
 	return allowed
 }
 
@@ -545,6 +550,63 @@ type DebateResult struct {
 	JudgeDetails   []JudgeScore     `json:"judge_details"`
 	IsAbnormal     bool             `json:"is_abnormal"`
 	AbnormalReason string           `json:"abnormal_reason,omitempty"`
+}
+
+// ============================================================================
+// §20260831-09 — 裁判实时打分(阶段性)
+// ============================================================================
+
+// StageScore 单裁判在某个阶段的临时打分(可被同裁判后续阶段覆盖累计)。
+//
+// 与 submit_score 的区别:
+//   - submit_score IsFinal=true:整局最终锁定;
+//   - submit_stage_score IsFinal=false:本阶段临时打分,可被后续阶段覆盖累计。
+//
+// 阶段历史(StageScoreBoard.StageHistory)保留最近 10 条,前端时间线展示。
+type StageScore struct {
+	JudgeID        int           `json:"judge_id"`
+	ModelKey       string        `json:"model_key"`
+	Phase          Phase         `json:"phase"`
+	PhaseCN        string        `json:"phase_cn"`
+	TeamScores     []TeamRanking `json:"team_scores"`
+	WinnerTeamID   int           `json:"winner_team_id"`
+	OverallComment string        `json:"overall_comment"`
+	SubmittedAtMS  int64         `json:"submitted_at_ms"`
+	IsFinal        bool          `json:"is_final"`
+}
+
+// AccumulatedTeamScore 单裁判对单队的累计实时打分(多次 stage_score 加权平均)。
+//
+// 累计算法(每次收到 stage_score):
+//
+//	旧累计 = TeamScores[team].TotalScore
+//	新维度分 = (旧维度分 × 旧 submission_count + 本次维度分) / (旧 submission_count + 1)
+//	新 total = 5 个新维度分之和
+//	submission_count += 1
+type AccumulatedTeamScore struct {
+	TeamID                int     `json:"team_id"`
+	ArgumentQuality       float64 `json:"argument_quality"`
+	LogicRigor            float64 `json:"logic_rigor"`
+	LanguageExpression    float64 `json:"language_expression"`
+	TeamCoordination      float64 `json:"team_coordination"`
+	RebuttalEffectiveness float64 `json:"rebuttal_effectiveness"`
+	TotalScore            float64 `json:"total_score"`
+	LatestComment         string  `json:"latest_comment"`
+	LatestPhase           Phase   `json:"latest_phase"`
+	LatestPhaseCN         string  `json:"latest_phase_cn"`
+	SubmissionCount       int     `json:"submission_count"`
+}
+
+// JudgeScoreboard 单裁判实时打分看板。
+//
+// 字段命名对齐前端 DebateJudgeScoreboard:每个裁判一张卡,
+// 卡内按队伍分块展示累计 5 维度 + 总分 + 最近评语。
+type JudgeScoreboard struct {
+	JudgeID      int                            `json:"judge_id"`
+	ModelKey     string                         `json:"model_key"`
+	TeamScores   map[int]*AccumulatedTeamScore  `json:"team_scores"`
+	StageHistory []StageScore                   `json:"stage_history"` // 该裁判的提交历史(最近 10 条)
+	IsFinal      bool                           `json:"is_final"`      // 该裁判已通过 submit_score 提交最终分数
 }
 
 // ============================================================================

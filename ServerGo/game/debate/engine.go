@@ -191,11 +191,18 @@ func (e *DebateEngine) Stop() {
 //   5. 进入下一位发言者 / 下一阶段
 //
 // 完整推进逻辑详见 engine_phase.go 的各阶段实现。
+//
+// §20260831-09 — 同时启动 statsTicker goroutine,每 10s 推送一次
+// debate.stats_update 帧(debate.stage_score / debate.judge_scoreboard
+// 由裁判提交时实时推送,不需要 ticker)。
 func (e *DebateEngine) Run() {
 	defer func() {
 		// 引擎退出时清理
 		e.Stop()
 	}()
+
+	// §20260831-09 — Agent 统计 10s 定时推送(独立 goroutine,不阻塞阶段推进)。
+	go e.statsTickerLoop()
 
 	// 阶段推进循环
 	for {
@@ -272,6 +279,34 @@ func (e *DebateEngine) runPreparationPhase() {
 	}
 }
 
+// statsTickerLoop 每10秒推送一次 debate.stats_update 帧(§20260831-09)。
+//
+// 独立 goroutine,由 Run() 启动,引擎 ctx 取消时退出。
+// 不阻塞阶段推进;阶段切换时 advanceTo() 已额外推送一次,
+// 此处 ticker 只负责阶段进行中的"10s 刷新"(确保前端实时看到 Token 增量)。
+//
+// ticker 间隔选择 10s 而非 1s:
+//   - AggregateAgentStats 锁内遍历所有 Bot/Judge,1s 频率对房间数 × 每房 Bot 数 > 30 时
+//     CPU 占用偏高(尤其 5 队 4 辩 = 20 Bot + 3 Judge = 23 次加锁/解锁每秒);
+//   - 10s 与狼人杀 WerewolfTable/StatusHeader 的 ~10s 轮询频率对齐,前后端负载均可控;
+//   - 阶段切换 advanceTo 已推一次,10s 间隔的额外 0~5s 延迟对"Token 增量"观察无感知影响。
+func (e *DebateEngine) statsTickerLoop() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-e.ctx.Done():
+			return
+		case <-ticker.C:
+			// 仅在游戏未结束时推送;结束时 aggregate 仍有效但频率无意义,退出节省资源。
+			if e.room.IsGameOver() {
+				return
+			}
+			e.emitAgentStatsIfPossible()
+		}
+	}
+}
+
 // advanceTo 推进到指定阶段(写房间状态 + 触发对应阶段逻辑)。
 func (e *DebateEngine) advanceTo(next Phase) {
 	e.room.SetPhase(next)
@@ -279,4 +314,18 @@ func (e *DebateEngine) advanceTo(next Phase) {
 	if e.manager.onPhaseChange != nil {
 		go e.manager.onPhaseChange(e.room.RoomID, next)
 	}
+	// §20260831-09 — 每次阶段切换时推送一次 Agent 统计帧(debate.stats_update)。
+	// 给前端在阶段切换后获得最新 Token / 调用次数(否则要等 10s ticker 或下次阶段切换)。
+	e.emitAgentStatsIfPossible()
+}
+
+// emitAgentStatsIfPossible 读取房间级 Agent 统计并推送给全员(§20260831-09)。
+//
+// 仅在 agentRegistry 已初始化(房间已启动)时调用;nil / closed 时 no-op。
+func (e *DebateEngine) emitAgentStatsIfPossible() {
+	if e.room.IsClosed() {
+		return
+	}
+	detail := e.room.AggregateAgentStats()
+	e.manager.EmitAgentStats(e.room.RoomID, detail)
 }

@@ -45,6 +45,24 @@ type AgentJudge struct {
 	ctx    context.Context
 	cancel  context.CancelFunc
 	mu      sync.Mutex
+
+	// §20260831-09 — 裁判 LLM 调用统计(对齐狼人杀 wwjudge.AgentJudge 字段语义)。
+	// 加锁 j.mu 保护;聚合路径与本字段并发。
+	totalInputTokens  int
+	totalOutputTokens int
+	totalAPITokens    int
+	apiCallCount      int
+	apiSuccessCount   int
+	apiFailCount      int
+	lastInputTokens   int
+	lastOutputTokens  int
+	lastAPITokens     int
+	totalLLMCalls     int
+	lastLLMLatencyMs  int64
+	avgLLMLatencyMs   int64
+	lastLLMCallAt     time.Time
+	llmCallInProgress bool
+	llmCallStartedAt  time.Time
 }
 
 // NewJudge 构造裁判。
@@ -136,6 +154,9 @@ func (j *AgentJudge) runJudgeTurn() {
 
 	scoreSubmitted := false
 	for round := 0; round < maxToolUseRounds; round++ {
+		// §20260831-09 — 记录 LLM 调用开始(供 MarkLLMCallEndWithUsage 计算延迟)。
+		j.MarkLLMCallStart()
+
 		llmCtx, cancel := context.WithTimeout(j.ctx, llmTurnTimeoutSec*time.Second)
 		req := llm.LLMRequest{
 			AgentClassName: string(j.ClassName()),
@@ -147,6 +168,11 @@ func (j *AgentJudge) runJudgeTurn() {
 		}
 		resp, err := j.provider.Chat(llmCtx, j.apiKey, req)
 		cancel()
+		if err != nil {
+			j.RecordAPIFailure()
+		} else {
+			j.MarkLLMCallEndWithUsage(resp.Usage)
+		}
 		if err != nil {
 			logger.L().Warn("debate judge: LLM call failed, using fallback",
 				zap.String("room_id", j.RoomID),
@@ -220,6 +246,11 @@ func (j *AgentJudge) dispatchTool(blk llm.ContentBlock) judgeActionResult {
 	case string(debate.ToolJudgeSubmitScore):
 		inputBytes, _ := json.Marshal(blk.Input)
 		return j.dispatchSubmitScore(inputBytes)
+	case string(debate.ToolJudgeSubmitStageScore):
+		// §20260831-09 — 阶段式实时打分(每个发言阶段可调一次)。
+		// IsFinal=false;最终通过 submit_score 提交(IsFinal=true)。
+		inputBytes, _ := json.Marshal(blk.Input)
+		return j.dispatchSubmitStageScore(inputBytes)
 	case string(debate.ToolJudgeAnnounce):
 		// §20260831-06 — announce 不再是空操作:经 manager 钩子广播
 		// debate.judge_announce 帧给全体观众(首期实现文本被吞掉)。
@@ -290,6 +321,88 @@ func extractAnnounceText(input map[string]any) string {
 	return strings.TrimSpace(text)
 }
 
+// dispatchSubmitStageScore 派发 submit_stage_score(§20260831-09)。
+//
+// 裁判在非评审阶段调用本工具提交「阶段临时打分」:
+//   - IsFinal=false:不锁最终结果,可被后续 stage_score 覆盖累计;
+//   - 数据经 room.AddStageScore 写入 stage_score.go 的 scoreboardsStore;
+//   - 5 维度每个 1-10 分钳制;team_scores 长度不足时补齐。
+//
+// 与 submit_score 关键区别:submit_score 在 PhaseJudging 阶段派发,
+// IsFinal=true → AddStageScore 冻结看板 + AddJudgeScore 写最终结果。
+// submit_stage_score 在任何阶段均可调用(由 LLM 自主判断时机)。
+func (j *AgentJudge) dispatchSubmitStageScore(input json.RawMessage) judgeActionResult {
+	var payload struct {
+		Rankings       []debate.TeamRanking `json:"rankings"`
+		OverallComment string               `json:"overall_comment"`
+		WinnerTeamID   int                  `json:"winner_team_id"`
+	}
+	if err := json.Unmarshal(input, &payload); err != nil {
+		return judgeActionResult{OK: false, Message: "invalid submit_stage_score input: " + err.Error()}
+	}
+
+	teamCount := j.room.TeamCount()
+
+	// 5 维度钳制到 [1,10]
+	for i := range payload.Rankings {
+		r := &payload.Rankings[i]
+		r.Scores.ArgumentQuality = clamp1to10(r.Scores.ArgumentQuality)
+		r.Scores.LogicRigor = clamp1to10(r.Scores.LogicRigor)
+		r.Scores.LanguageExpression = clamp1to10(r.Scores.LanguageExpression)
+		r.Scores.TeamCoordination = clamp1to10(r.Scores.TeamCoordination)
+		r.Scores.RebuttalEffectiveness = clamp1to10(r.Scores.RebuttalEffectiveness)
+		r.TotalScore = float64(r.Scores.TotalDimension())
+		r.BestDebater = j.clampBestDebater(r.TeamID, r.BestDebater)
+	}
+
+	// 补齐缺失队伍(全 5 分中位默认)
+	for t := 0; t < teamCount; t++ {
+		found := false
+		for _, r := range payload.Rankings {
+			if r.TeamID == t {
+				found = true
+				break
+			}
+		}
+		if !found {
+			payload.Rankings = append(payload.Rankings, debate.TeamRanking{
+				TeamID:       t,
+				Scores:       debate.ScoreDimensions{ArgumentQuality: 5, LogicRigor: 5, LanguageExpression: 5, TeamCoordination: 5, RebuttalEffectiveness: 5},
+				TotalScore:   25.0,
+				Comment:      "未评分",
+				BestDebater:  0,
+			})
+		}
+	}
+
+	currentPhase := j.room.Phase()
+	ss := &debate.StageScore{
+		JudgeID:        j.JudgeID,
+		ModelKey:       j.ModelKey,
+		Phase:          currentPhase,
+		PhaseCN:        debate.PhaseCN(currentPhase),
+		TeamScores:     payload.Rankings,
+		WinnerTeamID:   payload.WinnerTeamID,
+		OverallComment: payload.OverallComment,
+		SubmittedAtMS:  debate.WallNowMS(),
+		IsFinal:        false,
+	}
+
+	j.room.AddStageScore(ss)
+	return judgeActionResult{OK: true, Message: "stage_score submitted for phase " + string(currentPhase)}
+}
+
+// clamp1to10 把整数钳制到 [1,10]。
+func clamp1to10(v int) int {
+	if v < 1 {
+		return 1
+	}
+	if v > 10 {
+		return 10
+	}
+	return v
+}
+
 // dispatchSubmitScore 派发 submit_score。
 func (j *AgentJudge) dispatchSubmitScore(input json.RawMessage) judgeActionResult {
 	var payload struct {
@@ -351,6 +464,20 @@ func (j *AgentJudge) dispatchSubmitScore(input json.RawMessage) judgeActionResul
 	}
 
 	j.room.AddJudgeScore(score)
+	// §20260831-09 — submit_score 成功后冻结该裁判的实时打分看板,
+	// 并追加一条 IsFinal=true 的 StageScore 到阶段历史。
+	j.room.MarkJudgeFinalized(j.JudgeID)
+	j.room.AddStageScore(&debate.StageScore{
+		JudgeID:        j.JudgeID,
+		ModelKey:       j.ModelKey,
+		Phase:          j.room.Phase(),
+		PhaseCN:        debate.PhaseCN(j.room.Phase()),
+		TeamScores:     payload.Rankings,
+		WinnerTeamID:   payload.WinnerTeamID,
+		OverallComment: payload.OverallComment,
+		SubmittedAtMS:  debate.WallNowMS(),
+		IsFinal:        true,
+	})
 	return judgeActionResult{OK: true, Message: "score submitted"}
 }
 
@@ -602,6 +729,45 @@ func judgeTools() []llm.ToolDef {
 					"answer":      map[string]any{"type": "string", "description": "回答内容,≤ 100 字"},
 				},
 				"required": []string{"question_id", "answer"},
+			},
+		},
+		// §20260831-09 — 裁判实时阶段打分(可在任何阶段调用,不锁定最终结果)。
+		// 与 submit_score 区别:submit_stage_score 的数据实时累加到该裁判对各队
+		// 的加权平均(观众可实时看到),但不会产生最终结果;最终结果由 submit_score 产生。
+		{
+			Name: string(debate.ToolJudgeSubmitStageScore),
+			Description: "提交阶段式实时打分 — 在辩论各阶段(立论/驳论/质询/总结等)均可调用。\n" +
+				"数据实时累计展示给观众,不锁定最终结果。最终结果仍需 submit_score 提交。\n" +
+				"建议在每个重要阶段结束时调用一次,让观众实时了解裁判的打分趋势。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"rankings": map[string]any{
+						"type": "array",
+						"items": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"team_id": map[string]any{"type": "integer"},
+								"scores": map[string]any{
+									"type": "object",
+									"properties": map[string]any{
+										"argument_quality":       map[string]any{"type": "number", "minimum": 1, "maximum": 10},
+										"logic_rigor":            map[string]any{"type": "number", "minimum": 1, "maximum": 10},
+										"language_expression":    map[string]any{"type": "number", "minimum": 1, "maximum": 10},
+										"team_coordination":      map[string]any{"type": "number", "minimum": 1, "maximum": 10},
+										"rebuttal_effectiveness": map[string]any{"type": "number", "minimum": 1, "maximum": 10},
+									},
+								},
+								"comment":      map[string]any{"type": "string", "description": "该队本阶段评语,≤ 200 字"},
+								"best_debater": map[string]any{"type": "integer", "description": "该队本阶段最佳辩手座位号"},
+							},
+							"required": []string{"team_id", "scores", "comment"},
+						},
+					},
+					"overall_comment": map[string]any{"type": "string", "description": "本阶段整体评语,≤ 200 字"},
+					"winner_team_id":  map[string]any{"type": "integer", "description": "本阶段倾向胜方"},
+				},
+				"required": []string{"rankings", "overall_comment", "winner_team_id"},
 			},
 		},
 		{

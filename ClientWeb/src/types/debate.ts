@@ -231,6 +231,8 @@ export interface DebateClientState {
   agent_thoughts?: Record<string, string>;
   phase_config: DebatePhaseConfig;
   spectator_config: DebateSpectatorConfig;
+  /** §20260831-09 — 房间级 Agent Token 统计聚合(辩方 + 裁判)。 */
+  agent_stats?: DebateRoomAgentStats;
 }
 
 /** §20260831-06 — 裁判回答观众提问帧 (debate.spectator_answer)。 */
@@ -378,4 +380,105 @@ export interface DebateCreateRoomRequest {
     judge_id: number;
     model_key: string;
   }[];
+}
+
+/* ==========================================================================
+ * §20260831-09 — Agent Token + API 统计 / 裁判实时打分
+ * ========================================================================== */
+
+/** 房间级 Agent 统计聚合(debate.stats_update 帧的 aggregate 子结构)。 */
+export interface DebateRoomAgentStats {
+  bot_count: number;
+  bot_total_input_tokens: number;
+  bot_total_output_tokens: number;
+  bot_total_api_tokens: number;
+  bot_api_call_count: number;
+  bot_api_success_count: number;
+  bot_api_fail_count: number;
+  judge_count: number;
+  judge_total_input_tokens: number;
+  judge_total_output_tokens: number;
+  judge_total_api_tokens: number;
+  judge_api_call_count: number;
+  judge_api_success_count: number;
+  judge_api_fail_count: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_api_tokens: number;
+  total_api_call_count: number;
+  elapsed_sec: number;
+  tokens_per_hour: number;
+  show_token_rate: boolean;
+}
+
+/** 单 Bot 详细统计(debate.stats_update 帧的 bots[] 子结构)。 */
+export interface DebateAgentTokenSnapshot {
+  team_id: number;
+  seat: number;
+  role: string;
+  role_name?: string;
+  model_key?: string;
+  llm_call_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  api_tokens: number;
+  api_success_count: number;
+  api_fail_count: number;
+}
+
+/** 单裁判详细统计(debate.stats_update 帧的 judges[] 子结构)。 */
+export interface DebateJudgeTokenSnapshot {
+  judge_id: number;
+  model_key?: string;
+  llm_call_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  api_tokens: number;
+  api_success_count: number;
+  api_fail_count: number;
+}
+
+/** 完整 Agent 统计帧(debate.stats_update)。 */
+export interface DebateAgentStatsDetail {
+  room_id: string;
+  aggregate: DebateRoomAgentStats;
+  bots: DebateAgentTokenSnapshot[];
+  judges: DebateJudgeTokenSnapshot[];
+}
+
+/** 单裁判对单队的累计实时打分。 */
+export interface DebateAccumulatedTeamScore {
+  team_id: number;
+  argument_quality: number;
+  logic_rigor: number;
+  language_expression: number;
+  team_coordination: number;
+  rebuttal_effectiveness: number;
+  total_score: number;
+  latest_comment: string;
+  latest_phase: string;
+  latest_phase_cn: string;
+  submission_count: number;
+}
+
+/** 裁判阶段打分帧(debate.stage_score)。 */
+export interface DebateStageScore {
+  judge_id: number;
+  model_key: string;
+  phase: string;
+  phase_cn: string;
+  team_scores: DebateTeamRanking[];
+  winner_team_id: number;
+  overall_comment: string;
+  submitted_at_ms: number;
+  is_final: boolean;
+}
+
+/** 单裁判实时打分看板(debate.judge_scoreboard payload)。 */
+export interface DebateJudgeScoreboard {
+  judge_id: number;
+  model_key: string;
+  team_scores: Record<number, DebateAccumulatedTeamScore>;
+  stage_history: DebateStageScore[];
+  is_final: boolean;
 }

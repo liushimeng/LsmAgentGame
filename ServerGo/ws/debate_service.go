@@ -360,6 +360,46 @@ func (s *DebateService) BroadcastJudgeAnnounce(roomID string, judgeID int, text 
 	})
 }
 
+// BroadcastAgentStats §20260831-09 — 广播房间级 Agent 统计帧。
+//
+// 帧:debate.stats_update(payload = DebateAgentStatsDetail 完整结构)。
+// 触发时机:阶段切换 / 10s ticker / Agent LLM 调用结束时经 DebateManager.EmitAgentStats。
+func (s *DebateService) BroadcastAgentStats(roomID string, detail *debate.DebateAgentStatsDetail) {
+	if detail == nil {
+		return
+	}
+	payload, _ := json.Marshal(detail)
+	s.hub.BroadcastRoom(roomID, Envelope{
+		Type:    "debate.stats_update",
+		Payload: payload,
+	})
+}
+
+// BroadcastStageScore §20260831-09 — 广播裁判阶段实时打分帧。
+//
+// 帧:debate.stage_score(payload = StageScore)。
+// 同时推送 debate.judge_scoreboard(payload = 更新后的 JudgeScoreboard)。
+func (s *DebateService) BroadcastStageScore(roomID string, ss *debate.StageScore) {
+	if ss == nil {
+		return
+	}
+	stagePayload, _ := json.Marshal(ss)
+	s.hub.BroadcastRoom(roomID, Envelope{
+		Type:    "debate.stage_score",
+		Payload: stagePayload,
+	})
+
+	// 同步推送该裁判的最新 scoreboard
+	boardPayload, _ := json.Marshal(map[string]any{
+		"room_id":  roomID,
+		"judge_id": ss.JudgeID,
+	})
+	s.hub.BroadcastRoom(roomID, Envelope{
+		Type:    "debate.judge_scoreboard",
+		Payload: boardPayload,
+	})
+}
+
 // ============================================================================
 // helpers
 // ============================================================================
