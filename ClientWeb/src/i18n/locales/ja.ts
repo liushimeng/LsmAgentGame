@@ -344,6 +344,14 @@ const ja: Dict = {
 
   // テキサスホールデム
   'nav.texasholdem': 'テキサスホールデム',
+
+
+  // ディベート
+  'nav.debate': 'ディベート',
+  'debate.title': 'ディベート',
+  'debate.createRoom': 'ルーム作成',
+  'debate.noRooms': '参加可能なルームがありません',
+  'debate.createFirst': '上のボタンをクリックして最初のルームを作成',
   'texasholdem.title': 'テキサスホールデム',
   'texasholdem.createRoom': 'ルーム作成',
   'texasholdem.noRooms': '参加可能なルームがありません',

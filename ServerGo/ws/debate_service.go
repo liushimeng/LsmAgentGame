@@ -18,6 +18,7 @@ package ws
 import (
 	"encoding/json"
 	"sync"
+	"time"
 
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/game/debate"
@@ -289,6 +290,24 @@ func (s *DebateService) BroadcastState(roomID string, state *debate.ClientState)
 	payload, _ := json.Marshal(state)
 	s.hub.BroadcastRoom(roomID, Envelope{
 		Type:    "debate.state",
+		Payload: payload,
+	})
+}
+
+// BroadcastCommentary 2026-08-31 §20260831-04 — 把 AI 解说文本推送给房间观战者。
+//
+// 走 hub.BroadcastRoomSpectators(spectator-only 通道),玩家收不到。
+// 与狼人杀的 chat.commentary 隔离(命名空间 debate.commentary),便于
+// useDebate hook 精确订阅。
+func (s *DebateService) BroadcastCommentary(roomID, text, style string) {
+	payload, _ := json.Marshal(map[string]any{
+		"room_id":   roomID,
+		"text":      text,
+		"style":     style,
+		"timestamp": time.Now().UnixMilli(),
+	})
+	s.hub.BroadcastRoomSpectators(roomID, Envelope{
+		Type:    "debate.commentary",
 		Payload: payload,
 	})
 }

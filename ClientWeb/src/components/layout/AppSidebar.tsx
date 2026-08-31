@@ -52,11 +52,12 @@ const MENU_GROUPS: MenuGroup[] = [
   // ── Agent 游戏 ──
   // §20260819-02 德州扑克已支持 Agent,与狼人杀并列于 Agent 分组。
   {
-    id: 'agent', labelKey: 'nav.group.agent', icon: '🤖', items: [
-      { to: '/texasholdem', labelKey: 'nav.texasholdem', icon: '🎰' },
-      { to: '/werewolf',    labelKey: 'nav.werewolf',    icon: '🐺' },
-    ],
-  },
+   id: 'agent', labelKey: 'nav.group.agent', icon: '🤖', items: [
+     { to: '/texasholdem', labelKey: 'nav.texasholdem', icon: '🎰' },
+     { to: '/werewolf',    labelKey: 'nav.werewolf',    icon: '🐺' },
+     { to: '/debate',      labelKey: 'nav.debate',      icon: '🎓' },
+   ],
+ },
 
   // ── 其他 ──
   {

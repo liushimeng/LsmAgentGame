@@ -1,7 +1,11 @@
 /**
- * 辩论比赛 WS 帧订阅与发送 hook (2026-08-31 §20260831-01)
+ * 辩论比赛 WS 帧订阅与发送 hook (2026-08-31 §20260831-01 + §20260831-04)
  *
  * 对齐 ServerGo/ws/debate_service.go 帧类型 + docs/辩论比赛/00 §4.2。
+ *
+ * §20260831-04 — 增补:
+ *   - debate.commentary 帧订阅:把 AI 解说追加到 store.commentaries
+ *   - debate.agent_thought 帧:单个 Bot 的思考过程写入 agent_thoughts
  */
 import { useEffect } from 'react';
 import { wsClient, type WsEnvelope } from '@/services/ws';
@@ -25,6 +29,7 @@ export function useDebate(roomId: string) {
     addJudgeScore,
     setResult,
     addAgentThought,
+    pushCommentary,
   } = useDebateStore();
 
   useEffect(() => {
@@ -96,6 +101,17 @@ export function useDebate(roomId: string) {
           addAgentThought(seat, thought);
           break;
         }
+        // §20260831-04 — 解说帧(spectator-only 通道)。
+        case 'debate.commentary': {
+          const text = (p.text ?? '') as string;
+          if (!text) return;
+          pushCommentary({
+            text,
+            style: (p.style ?? 'pro') as string,
+            timestamp: (p.timestamp ?? Date.now()) as number,
+          });
+          break;
+        }
         case 'debate.spectator_question':
         case 'debate.like':
           // 只展示用,不写 store
@@ -113,5 +129,5 @@ export function useDebate(roomId: string) {
       wsClient.send('debate.unsubscribe', { room_id: roomId });
       unsub();
     };
-  }, [roomId, setGameState, updatePhase, addSpeech, addCrossExam, addJudgeScore, setResult, addAgentThought]);
+  }, [roomId, setGameState, updatePhase, addSpeech, addCrossExam, addJudgeScore, setResult, addAgentThought, pushCommentary]);
 }

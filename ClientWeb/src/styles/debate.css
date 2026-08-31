@@ -764,3 +764,480 @@
 .btn-secondary:hover {
   background: #4b5563;
 }
+
+/* ============================================================================
+ * §20260831-04 — AI 实时解说面板 + 房主操作 + 点赞 + 阶段折叠样式
+ * ============================================================================ */
+
+/* 房主操作 */
+.debate-host-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 6px;
+}
+
+.debate-host-controls--readonly {
+  background: rgba(107, 114, 128, 0.08);
+  border-color: rgba(107, 114, 128, 0.25);
+  color: #d1d5db;
+}
+
+.debate-host-controls .host-badge {
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 2px 8px;
+  background: rgba(251, 191, 36, 0.18);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 4px;
+  color: #fde68a;
+}
+
+.debate-host-controls .host-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.debate-host-controls .host-running {
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+.debate-host-controls .host-error {
+  color: #fca5a5;
+  font-size: 0.875rem;
+}
+
+/* 按钮尺寸变体 */
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 0.875rem;
+}
+
+.btn-block {
+  width: 100%;
+  padding: 10px 16px;
+  font-weight: 600;
+}
+
+/* 危险按钮(解散) */
+.btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.btn-danger:disabled {
+  background: #4b5563;
+  cursor: not-allowed;
+}
+
+/* 点赞按钮 */
+.like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(107, 114, 128, 0.18);
+  border: 1px solid rgba(107, 114, 128, 0.4);
+  border-radius: 999px;
+  color: #e5e7eb;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.like-btn:hover {
+  background: rgba(107, 114, 128, 0.32);
+  border-color: rgba(156, 163, 175, 0.7);
+}
+
+.like-btn--active {
+  background: rgba(251, 191, 36, 0.22);
+  border-color: rgba(251, 191, 36, 0.6);
+  color: #fde68a;
+}
+
+.like-btn--sm {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+}
+
+.like-btn .like-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* 立场徽章 */
+.stance-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-left: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.stance-tag--pro,
+.stance-tag--gov_upper,
+.stance-tag--gov_lower {
+  color: #93c5fd;
+}
+
+.stance-tag--con,
+.stance-tag--opp_upper,
+.stance-tag--opp_lower {
+  color: #fca5a5;
+}
+
+.stance-tag--neutral,
+.stance-tag--angle_1,
+.stance-tag--angle_2,
+.stance-tag--angle_3,
+.stance-tag--angle_4,
+.stance-tag--angle_5 {
+  color: #c4b5fd;
+}
+
+/* AI 实时解说面板 */
+.debate-commentary {
+  margin-top: 12px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.debate-commentary--empty {
+  background: rgba(107, 114, 128, 0.06);
+  border-color: rgba(107, 114, 128, 0.25);
+}
+
+.debate-commentary .commentary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.debate-commentary .commentary-icon {
+  font-size: 1.25rem;
+}
+
+.debate-commentary h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #fde68a;
+  font-weight: 600;
+}
+
+.debate-commentary .commentary-style-tag {
+  margin-left: auto;
+  padding: 1px 8px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: 3px;
+  letter-spacing: 0.04em;
+}
+
+.debate-commentary .commentary-style-tag--pro {
+  background: rgba(59, 130, 246, 0.22);
+  color: #bfdbfe;
+}
+
+.debate-commentary .commentary-style-tag--fun {
+  background: rgba(236, 72, 153, 0.22);
+  color: #fbcfe8;
+}
+
+.debate-commentary .commentary-empty-text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.debate-commentary .commentary-latest {
+  padding: 8px 12px;
+  background: rgba(245, 158, 11, 0.1);
+  border-left: 3px solid #f59e0b;
+  border-radius: 4px;
+  position: relative;
+}
+
+.debate-commentary .commentary-text {
+  margin: 0;
+  color: #fef3c7;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.debate-commentary .commentary-time {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 0.6875rem;
+  color: #d1d5db;
+  font-variant-numeric: tabular-nums;
+}
+
+.debate-commentary .commentary-history {
+  margin-top: 8px;
+  font-size: 0.8125rem;
+}
+
+.debate-commentary .commentary-history summary {
+  cursor: pointer;
+  color: #d1d5db;
+  padding: 4px 0;
+}
+
+.debate-commentary .commentary-history-item {
+  list-style: none;
+  padding: 6px 0;
+  border-top: 1px dashed rgba(245, 158, 11, 0.18);
+  position: relative;
+  color: #f3f4f6;
+}
+
+.debate-commentary .commentary-history-item p {
+  margin: 0;
+  padding-right: 64px;
+}
+
+/* 发言阶段分组折叠 */
+.debate-speech-panel .phase-group {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(31, 41, 55, 0.5);
+  border: 1px solid rgba(75, 85, 99, 0.45);
+  border-radius: 6px;
+}
+
+.debate-speech-panel .phase-group[open] {
+  background: rgba(31, 41, 55, 0.85);
+  border-color: rgba(156, 163, 175, 0.55);
+}
+
+.debate-speech-panel .phase-group summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #f3f4f6;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debate-speech-panel .phase-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.debate-speech-panel .phase-group-icon {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  width: 14px;
+  text-align: center;
+}
+
+.debate-speech-panel .phase-group-count {
+  margin-left: auto;
+  font-size: 0.8125rem;
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+.debate-speech-panel .phase-group-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.debate-speech-panel .speech-item {
+  margin: 8px 0;
+  padding: 10px 14px;
+  background: rgba(17, 24, 39, 0.5);
+  border-left: 3px solid #4b5563;
+  border-radius: 4px;
+}
+
+.debate-speech-panel .speech-item--pro,
+.debate-speech-panel .speech-item--gov_upper,
+.debate-speech-panel .speech-item--gov_lower {
+  border-left-color: #3b82f6;
+}
+
+.debate-speech-panel .speech-item--con,
+.debate-speech-panel .speech-item--opp_upper,
+.debate-speech-panel .speech-item--opp_lower {
+  border-left-color: #ef4444;
+}
+
+.debate-speech-panel .speech-item--neutral,
+.debate-speech-panel .speech-item--angle_1,
+.debate-speech-panel .speech-item--angle_2,
+.debate-speech-panel .speech-item--angle_3,
+.debate-speech-panel .speech-item--angle_4,
+.debate-speech-panel .speech-item--angle_5 {
+  border-left-color: #8b5cf6;
+}
+
+.debate-speech-panel .speech-item--question {
+  border-left-color: #f59e0b;
+}
+
+.debate-speech-panel .speech-item--answer {
+  border-left-color: #14b8a6;
+  margin-left: 16px;
+}
+
+.debate-speech-panel .speech-item-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.debate-speech-panel .speaker {
+  font-weight: 600;
+  color: #f3f4f6;
+  font-size: 0.875rem;
+}
+
+.debate-speech-panel .speech-item-content {
+  margin: 0 0 6px;
+  color: #e5e7eb;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.debate-speech-panel .speech-item-thought {
+  margin: 6px 0;
+  font-size: 0.8125rem;
+}
+
+.debate-speech-panel .speech-item-thought summary {
+  cursor: pointer;
+  color: #d1d5db;
+  font-weight: 500;
+}
+
+.debate-speech-panel .speech-item-thought p {
+  margin: 4px 0 0;
+  padding: 6px 10px;
+  background: rgba(107, 114, 128, 0.08);
+  border-left: 2px solid #6b7280;
+  color: #d1d5db;
+  font-style: italic;
+  border-radius: 3px;
+}
+
+.debate-speech-panel .speech-item-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* 比赛结束后的快捷操作 */
+.post-game-actions {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(31, 41, 55, 0.4);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 主舞台空挡变体 */
+.debate-stage .filling-pending,
+.debate-stage .judging-pending,
+.debate-stage .result-pending {
+  text-align: center;
+  padding: 32px 16px;
+  color: #d1d5db;
+  background: rgba(31, 41, 55, 0.5);
+  border-radius: 6px;
+  font-size: 0.9375rem;
+}
+
+/* Header 元数据 */
+.debate-game-page .game-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.debate-game-page .header-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: #d1d5db;
+  font-size: 0.875rem;
+}
+
+.debate-game-page .header-meta .topic-text {
+  font-weight: 500;
+  color: #f3f4f6;
+}
+
+.debate-game-page .header-meta .spectator-count {
+  padding: 2px 8px;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+}
+/* ========= §20260831-01 — 大厅页补齐样式 ========= */
+
+.debate-lobby .empty-hint {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.room-card--mine {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* ========= §20260831-01 — 对局页房主操作区 ========= */
+
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid #374151;
+}
+
+.game-header__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.game-header .room-id {
+  font-family: monospace;
+  font-size: 12px;
+  color: #9ca3af;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px 8px;
+  border-radius: 4px;
+}

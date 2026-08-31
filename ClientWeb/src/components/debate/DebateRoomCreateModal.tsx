@@ -214,7 +214,6 @@ export default function DebateRoomCreateModal({ onClose, onCreated }: Props) {
             <div className="radio-group">
               {[
                 { v: 'two_team', l: '双队对抗 (2队×4人)' },
-                { v: 'two_team' as DebateMode, l: '双队精简 (2队×3人)' },
                 { v: 'three_team', l: '三队辩论 (3队×3人)' },
                 { v: 'four_team', l: 'BP 制 (4队×2人)' },
                 { v: 'five_team', l: '五队发散 (5队×2人)' },

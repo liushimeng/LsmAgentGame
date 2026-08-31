@@ -596,6 +596,27 @@ func main() {
 	debateMgr.SetOnResult(func(rid string, res *debate.DebateResult) {
 		debateWsSvc.BroadcastResult(rid, res)
 	})
+
+	// §20260831-04 — 辩论比赛 AI 实时解说主线接线。
+	// 此前 (§20260831-03) CommentatorAgent 与 DebateManager.SetCommentatorModelKey /
+	// SetCommentatorBroadcast 钩子均已实现,但 main.go 未注入:
+	//   - 解说不会启动(modelKey 为空 → starter 跳过)
+	//   - 即便启动也不会广播给观战者(broadcast 钩子为 nil)
+	// 此处从 LLM Provider 中挑选第一个 enabled 模型作为解说默认 model_key;
+	// 观战者专属广播钩子走 gameSvcWs.BroadcastCommentarySpectator(spectator-only)。
+	if llmRegistry != nil {
+		enabled := llmRegistry.ListEnabled()
+		if len(enabled) > 0 {
+			debateMgr.SetCommentatorModelKey(enabled[0].Model)
+			logger.L().Info("debate commentator enabled",
+				zap.String("model_key", enabled[0].Model))
+		}
+	}
+	debateMgr.SetCommentatorBroadcast(func(roomID, text, style string) {
+		// §20260831-04 — 解说帧走 DebateService.BroadcastCommentary spectator-only 通道,
+		// 前端 useDebate 订阅 debate.commentary 帧,不与狼人杀的 chat.commentary 混淆。
+		debateWsSvc.BroadcastCommentary(roomID, text, style)
+	})
 	debateAPI := api.NewDebateAPI(debateMgr, llmRegistry)
 
 	// 2026-07-10 §125 增强 — 注入法官总结所需回调。

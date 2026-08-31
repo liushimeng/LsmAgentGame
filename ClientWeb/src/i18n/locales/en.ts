@@ -344,6 +344,14 @@ const en: Dict = {
 
   // Texas Hold'em
   'nav.texasholdem': 'Texas Hold\'em',
+
+
+  // Debate
+  'nav.debate': 'Debate',
+  'debate.title': 'Debate',
+  'debate.createRoom': 'Create Room',
+  'debate.noRooms': 'No rooms available',
+  'debate.createFirst': 'Click the button above to create the first room',
   'texasholdem.title': 'Texas Hold\'em',
   'texasholdem.createRoom': 'Create Room',
   'texasholdem.noRooms': 'No rooms available',

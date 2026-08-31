@@ -346,6 +346,13 @@ const zhCN: Dict = {
 
   // 德州扑克 — texasholdem
   'nav.texasholdem': '德州扑克',
+
+  // 辩论比赛 — debate (第 7 款游戏)
+  'nav.debate': '辩论比赛',
+  'debate.title': '辩论比赛',
+  'debate.createRoom': '创建房间',
+  'debate.noRooms': '暂无可加入的房间',
+  'debate.createFirst': '点击上方按钮创建第一个房间',
   'texasholdem.title': '德州扑克',
   'texasholdem.createRoom': '创建房间',
   'texasholdem.noRooms': '暂无可加入的房间',

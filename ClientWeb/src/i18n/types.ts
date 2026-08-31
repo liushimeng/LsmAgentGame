@@ -922,6 +922,14 @@ export interface Dict {
   // 德州扑克 — texasholdem
   'nav.texasholdem': string;
 
+  // 辩论比赛 — debate (第 7 款游戏)
+  'nav.debate': string;
+
+  'debate.title': string;
+  'debate.createRoom': string;
+  'debate.noRooms': string;
+  'debate.createFirst': string;
+
   // 狼人杀 7 人局 — werewolf (第 6 款游戏)
   'nav.werewolf': string;
   'texasholdem.title': string;

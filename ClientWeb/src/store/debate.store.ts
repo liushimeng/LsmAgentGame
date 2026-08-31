@@ -1,9 +1,13 @@
 /**
- * 辩论比赛 Zustand store (2026-08-31 §20260831-01)
+ * 辩论比赛 Zustand store (2026-08-31 §20260831-01 + §20260831-04)
  *
  * 与 store/{werewolf,texasholdem}.store.ts 同构:
  *   - 进入对局页前 reset() 清掉上一个会话残留
  *   - 通过 WebSocket 帧增量更新 state
+ *
+ * §20260831-04 — 增补:
+ *   - likedSpeeches 记录当前用户点过赞的发言 ID(避免重复点赞)
+ *   - commentaries 解说缓冲(§02 §3.5 解说向观众推送)
  */
 import { create } from 'zustand';
 import type {
@@ -14,6 +18,12 @@ import type {
   DebateRoomSummary,
   DebateSpeech,
 } from '@/types/debate';
+
+export interface DebateCommentaryEntry {
+  text: string;
+  style: string;
+  timestamp: number;
+}
 
 interface DebateStore {
   // 房间列表 / 当前房间
@@ -36,6 +46,12 @@ interface DebateStore {
   // Agent 思考(按 team:seat key)
   agentThoughts: Record<string, string>;
 
+  // 解说(§20260831-04)
+  commentaries: DebateCommentaryEntry[];
+
+  // 用户操作(§20260831-04)
+  likedSpeeches: Record<string, number>;
+
   // UI
   spectatorCount: number;
   currentSpeaker: string;
@@ -51,13 +67,31 @@ interface DebateStore {
   addJudgeScore: (score: DebateJudgeScore) => void;
   setResult: (result: DebateResult) => void;
   addAgentThought: (seat: string, thought: string) => void;
+  pushCommentary: (entry: DebateCommentaryEntry) => void;
+  toggleLike: (speechId: string) => boolean;
   setSpectatorCount: (n: number) => void;
   reset: () => void;
+
+  patchRoom: (room: Partial<DebateRoomSummary> & { room_id: string }) => void;
+  removeRoom: (roomId: string) => void;
 }
 
 const initial: Pick<
   DebateStore,
-  'rooms' | 'currentRoom' | 'phase' | 'timeRemaining' | 'speeches' | 'crossExam' | 'currentSpeech' | 'judgeScores' | 'result' | 'agentThoughts' | 'spectatorCount' | 'currentSpeaker'
+  | 'rooms'
+  | 'currentRoom'
+  | 'phase'
+  | 'timeRemaining'
+  | 'speeches'
+  | 'crossExam'
+  | 'currentSpeech'
+  | 'judgeScores'
+  | 'result'
+  | 'agentThoughts'
+  | 'commentaries'
+  | 'likedSpeeches'
+  | 'spectatorCount'
+  | 'currentSpeaker'
 > = {
   rooms: [],
   currentRoom: null,
@@ -69,6 +103,8 @@ const initial: Pick<
   judgeScores: [],
   result: null,
   agentThoughts: {},
+  commentaries: [],
+  likedSpeeches: {},
   spectatorCount: 0,
   currentSpeaker: '',
 };
@@ -110,6 +146,39 @@ export const useDebateStore = create<DebateStore>((set) => ({
   addAgentThought: (seat, thought) => set((s) => ({
     agentThoughts: { ...s.agentThoughts, [seat]: thought },
   })),
+  // §20260831-04 — 解说帧追加(最多保留最近 20 条,环形覆盖)。
+  pushCommentary: (entry) => set((s) => {
+    const next = [...s.commentaries, entry];
+    if (next.length > 20) {
+      return { commentaries: next.slice(next.length - 20) };
+    }
+    return { commentaries: next };
+  }),
+  // §20260831-04 — 点赞(返回是否本次切换为"已点赞")。
+  toggleLike: (speechId) => {
+    let added = false;
+    set((s) => {
+      const cur = s.likedSpeeches[speechId] ?? 0;
+      const next = cur > 0 ? 0 : 1;
+      added = next > 0;
+      return { likedSpeeches: { ...s.likedSpeeches, [speechId]: next } };
+    });
+    return added;
+  },
+
+  // §20260831-04 — 大厅房间状态补丁(WS room.state 帧实时更新)。
+  patchRoom: (room) => set((s) => {
+    const idx = s.rooms.findIndex((r) => r.room_id === room.room_id);
+    if (idx < 0) return {};
+    const copy = [...s.rooms];
+    copy[idx] = { ...copy[idx], ...room };
+    return { rooms: copy };
+  }),
+  removeRoom: (roomId) => set((s) => ({
+    rooms: s.rooms.filter((r) => r.room_id !== roomId),
+  })),
+
   setSpectatorCount: (n) => set({ spectatorCount: n }),
+
   reset: () => set(initial),
 }));
