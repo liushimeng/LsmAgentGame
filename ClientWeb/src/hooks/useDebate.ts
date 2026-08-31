@@ -6,6 +6,10 @@
  * §20260831-04 — 增补:
  *   - debate.commentary 帧订阅:把 AI 解说追加到 store.commentaries
  *   - debate.agent_thought 帧:单个 Bot 的思考过程写入 agent_thoughts
+ *
+ * §20260831-06 — 增补:
+ *   - debate.spectator_answer 帧:裁判回答观众提问 → store.spectatorAnswers
+ *   - debate.judge_announce 帧:裁判公开宣告 → store.judgeAnnouncements
  */
 import { useEffect } from 'react';
 import { wsClient, type WsEnvelope } from '@/services/ws';
@@ -17,6 +21,7 @@ import type {
   DebateCrossExamEntry,
   DebateJudgeScore,
   DebateResult,
+  DebateSpectatorAnswer,
   DebateSpeech,
 } from '@/types/debate';
 
@@ -30,6 +35,8 @@ export function useDebate(roomId: string) {
     setResult,
     addAgentThought,
     pushCommentary,
+    addSpectatorAnswer,
+    pushJudgeAnnounce,
   } = useDebateStore();
 
   useEffect(() => {
@@ -112,6 +119,32 @@ export function useDebate(roomId: string) {
           });
           break;
         }
+        // §20260831-06 — 裁判回答观众提问(观众提问闭环)。
+        case 'debate.spectator_answer': {
+          if (p.room_id !== roomId) return;
+          const ans = {
+            room_id: roomId,
+            question_id: (p.question_id ?? '') as string,
+            question: (p.question ?? '') as string,
+            answer: (p.answer ?? '') as string,
+            answer_judge_id: (p.answer_judge_id ?? -1) as number,
+            timestamp: (p.timestamp ?? Date.now()) as number,
+          } as DebateSpectatorAnswer;
+          if (ans.question_id && ans.answer) addSpectatorAnswer(ans);
+          break;
+        }
+        // §20260831-06 — 裁判公开宣告(announce 工具)。
+        case 'debate.judge_announce': {
+          if (p.room_id !== roomId) return;
+          const text = (p.text ?? '') as string;
+          if (!text) return;
+          pushJudgeAnnounce({
+            judge_id: (p.judge_id ?? 0) as number,
+            text,
+            timestamp: (p.timestamp ?? Date.now()) as number,
+          });
+          break;
+        }
         case 'debate.spectator_question':
         case 'debate.like':
           // 只展示用,不写 store
@@ -129,5 +162,5 @@ export function useDebate(roomId: string) {
       wsClient.send('debate.unsubscribe', { room_id: roomId });
       unsub();
     };
-  }, [roomId, setGameState, updatePhase, addSpeech, addCrossExam, addJudgeScore, setResult, addAgentThought, pushCommentary]);
+  }, [roomId, setGameState, updatePhase, addSpeech, addCrossExam, addJudgeScore, setResult, addAgentThought, pushCommentary, addSpectatorAnswer, pushJudgeAnnounce]);
 }

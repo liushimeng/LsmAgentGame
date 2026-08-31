@@ -596,6 +596,16 @@ func main() {
 	debateMgr.SetOnResult(func(rid string, res *debate.DebateResult) {
 		debateWsSvc.BroadcastResult(rid, res)
 	})
+	// §20260831-06 — 观众提问闭环 + 裁判宣告广播接线:
+	//   - 裁判 answer_spectator 工具成功 → debate.spectator_answer 帧(spectator-only)
+	//   - 裁判 announce 工具 → debate.judge_announce 帧(房间全体)
+	// 首期(§20260831-01)提问只广播不入队、announce 是空操作,两条链路在此补齐。
+	debateMgr.SetOnSpectatorAnswer(func(rid string, q debate.SpectatorQuestion) {
+		debateWsSvc.BroadcastSpectatorAnswer(rid, q)
+	})
+	debateMgr.SetOnJudgeAnnounce(func(rid string, judgeID int, text string) {
+		debateWsSvc.BroadcastJudgeAnnounce(rid, judgeID, text)
+	})
 
 	// §20260831-04 — 辩论比赛 AI 实时解说主线接线。
 	// 此前 (§20260831-03) CommentatorAgent 与 DebateManager.SetCommentatorModelKey /

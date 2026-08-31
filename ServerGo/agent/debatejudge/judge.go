@@ -221,8 +221,17 @@ func (j *AgentJudge) dispatchTool(blk llm.ContentBlock) judgeActionResult {
 		inputBytes, _ := json.Marshal(blk.Input)
 		return j.dispatchSubmitScore(inputBytes)
 	case string(debate.ToolJudgeAnnounce):
-		// announce 是公开宣告,不影响评分流程
-		return judgeActionResult{OK: true, Message: "announce received"}
+		// §20260831-06 — announce 不再是空操作:经 manager 钩子广播
+		// debate.judge_announce 帧给全体观众(首期实现文本被吞掉)。
+		text := extractAnnounceText(blk.Input)
+		if mgr := j.engine.Manager(); mgr != nil {
+			mgr.EmitJudgeAnnounce(j.RoomID, j.JudgeID, text)
+		}
+		return judgeActionResult{OK: true, Message: "announce broadcasted"}
+	case string(debate.ToolJudgeAnswerSpectator):
+		// §20260831-06 — 回答观众提问(观众提问闭环)。
+		inputBytes, _ := json.Marshal(blk.Input)
+		return j.dispatchAnswerSpectator(inputBytes)
 	case string(debate.ToolIdleSilent):
 		return judgeActionResult{OK: true, Message: "idle"}
 	default:
@@ -242,6 +251,43 @@ func judgeResultText(res judgeActionResult) string {
 		return "ok: " + res.Message
 	}
 	return "error: " + res.Message
+}
+
+// dispatchAnswerSpectator 派发 answer_spectator(§20260831-06)。
+//
+// 观众提问闭环:提问在评审 prompt 的【观众提问】段注入;裁判选择性回答,
+// 回答写回房间提问队列并经 debate.spectator_answer 帧广播给观众。
+// 已回答的提问幂等返回成功(不重复广播)。
+func (j *AgentJudge) dispatchAnswerSpectator(input json.RawMessage) judgeActionResult {
+	var payload struct {
+		QuestionID string `json:"question_id"`
+		Answer     string `json:"answer"`
+	}
+	if err := json.Unmarshal(input, &payload); err != nil {
+		return judgeActionResult{OK: false, Message: "invalid answer_spectator input: " + err.Error()}
+	}
+	if payload.QuestionID == "" {
+		return judgeActionResult{OK: false, Message: "question_id is required"}
+	}
+	if strings.TrimSpace(payload.Answer) == "" {
+		return judgeActionResult{OK: false, Message: "answer is required"}
+	}
+	q, err := j.room.AnswerSpectatorQuestion(j.JudgeID, payload.QuestionID, payload.Answer)
+	if err != nil {
+		return judgeActionResult{OK: false, Message: "answer failed: " + err.Error()}
+	}
+	return judgeActionResult{OK: true, Message: "answered question " + q.ID}
+}
+
+// extractAnnounceText 从 announce 工具 input 中取 text 字段。
+//
+// blk.Input 是 map[string]any(tool_use wire 解码结果),直接取键。
+func extractAnnounceText(input map[string]any) string {
+	if input == nil {
+		return ""
+	}
+	text, _ := input["text"].(string)
+	return strings.TrimSpace(text)
 }
 
 // dispatchSubmitScore 派发 submit_score。
@@ -463,7 +509,22 @@ func buildJudgeUserPrompt(room *debate.DebateRoom, speeches []debate.Speech) str
 		b.WriteString(fmt.Sprintf("    %s\n\n", truncateForJudge(sp.Content, 200)))
 	}
 
+	// §20260831-06 — 注入未回答的观众提问(观众提问闭环,§01 §6.1)。
+	// 裁判可选择性回答:调 answer_spectator 工具;不值得回答的可跳过。
+	unanswered := room.UnansweredSpectatorQuestions()
+	if len(unanswered) > 0 {
+		if len(unanswered) > 10 {
+			unanswered = unanswered[len(unanswered)-10:] // 只注入最近 10 条
+		}
+		b.WriteString("\n【观众提问】(观众向裁判的现场提问,可选择性回应)\n")
+		for _, q := range unanswered {
+			b.WriteString(fmt.Sprintf("  - [%s] %s\n", q.ID, truncateForJudge(q.Text, 100)))
+		}
+		b.WriteString("  说明:值得回应的提问请用 answer_spectator 工具简短回答(≤100 字);与评审无关的提问可忽略。\n")
+	}
+
 	b.WriteString("\n【任务】\n请按 submit_score 工具的格式,对每支队伍进行 5 维度评分(1-10),并给出评语 + 整体评语 + 胜方。\n")
+	b.WriteString("提交评分前,可先调用 announce 向观众播报评审开始,并用 answer_spectator 回应值得回答的观众提问。\n")
 	return b.String()
 }
 
@@ -527,6 +588,20 @@ func judgeTools() []llm.ToolDef {
 					"text": map[string]any{"type": "string", "description": "宣告文本,≤ 100 字"},
 				},
 				"required": []string{"text"},
+			},
+		},
+		{
+			Name: string(debate.ToolJudgeAnswerSpectator),
+			Description: "回答观众提问 — 对【观众提问】中的某条提问给出简短回应。\n" +
+				"选择性使用:只回答与评审/辩论相关、值得回应的问题;每条 ≤ 100 字;\n" +
+				"回答必须客观中立,不得透露其他裁判的评分倾向。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"question_id": map[string]any{"type": "string", "description": "被回答的提问 ID(来自【观众提问】段)"},
+					"answer":      map[string]any{"type": "string", "description": "回答内容,≤ 100 字"},
+				},
+				"required": []string{"question_id", "answer"},
 			},
 		},
 		{

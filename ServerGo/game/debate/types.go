@@ -209,6 +209,9 @@ const (
 	// 裁判专属工具
 	ToolJudgeSubmitScore  ToolName = "submit_score"            // 提交评分
 	ToolJudgeAnnounce     ToolName = "announce"                // 公开宣告
+	// §20260831-06 — 裁判回答观众提问(观众提问闭环,
+	// docs/辩论比赛/01 §6.1「可向裁判 Agent 提问,裁判可选择性回应」)。
+	ToolJudgeAnswerSpectator ToolName = "answer_spectator"     // 回答观众提问
 )
 
 // AllowedToolsForPhaseRole 返回「辩位 × 阶段」下辩方 Bot 可调用的工具集。
@@ -501,6 +504,38 @@ type BestDebaterInfo struct {
 	Votes     int    `json:"votes"`
 }
 
+// ============================================================================
+// §20260831-06 — 观众提问 / 模型胜率统计
+// ============================================================================
+
+// SpectatorQuestion 观众向裁判的提问(§01 §6.1 / §03 §6.2)。
+//
+// 生命周期:观众发 debate.spectator_question 帧 → ws 层写入房间提问队列
+// → 评审阶段注入裁判 prompt → 裁判可选调 answer_spectator 工具回答
+// → 回答以 debate.spectator_answer 帧广播给全体观众。
+type SpectatorQuestion struct {
+	ID            string `json:"id"`                         // "q_<seq>"
+	UserID        string `json:"user_id"`                    // 提问者(前端脱敏展示)
+	Text          string `json:"text"`                       // 问题正文(≤200 字)
+	TimestampMS   int64  `json:"timestamp_ms"`               // 提问时间(毫秒)
+	Answer        string `json:"answer,omitempty"`           // 裁判回答(未回答为空)
+	AnswerJudgeID int    `json:"answer_judge_id"`            // 回答的裁判 ID(-1=未回答)
+	AnsweredAtMS  int64  `json:"answered_at_ms,omitempty"`   // 回答时间(毫秒)
+}
+
+// ModelStats 模型辩论统计(docs/辩论比赛/06 §9.1)。
+//
+// 每局结束(评审结果产出)时由 DebateManager.recordGameResult 累加;
+// GET /api/games/debate/stats 返回全量快照(按胜率降序)。
+type ModelStats struct {
+	ModelKey         string  `json:"model_key"`
+	TotalGames       int     `json:"total_games"`
+	WinCount         int     `json:"win_count"`
+	BestDebaterCount int     `json:"best_debater_count"`
+	AvgTotalScore    float64 `json:"avg_total_score"` // 所在队伍场均总分(0-50)
+	WinRate          float64 `json:"win_rate"`        // WinCount / TotalGames
+}
+
 // DebateResult 对局最终结果。
 type DebateResult struct {
 	WinnerTeamID   int              `json:"winner_team_id"`
@@ -616,6 +651,10 @@ func CountRune(s string) int {
 }
 
 // TruncateRune 把 s 截断到 ≤ max 个 rune(避免截半个字符)。
+//
+// §20260831-06 修复:首期实现用 `for i, r := range s` 的 i(字节索引)
+// 与 max(rune 数)比较,中文 3 字节/字导致实际只截出约 1/3 长度
+// (立论 500 字上限实测只保留 ~167 字)。改为按 rune 计数截断。
 func TruncateRune(s string, max int) string {
 	if max <= 0 {
 		return ""
@@ -623,10 +662,9 @@ func TruncateRune(s string, max int) string {
 	if CountRune(s) <= max {
 		return s
 	}
-	// 逐 rune 截断
-	out := []rune{}
-	for i, r := range s {
-		if i >= max {
+	out := make([]rune, 0, max)
+	for _, r := range s {
+		if len(out) >= max {
 			break
 		}
 		out = append(out, r)

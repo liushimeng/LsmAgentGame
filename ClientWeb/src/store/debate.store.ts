@@ -8,14 +8,20 @@
  * §20260831-04 — 增补:
  *   - likedSpeeches 记录当前用户点过赞的发言 ID(避免重复点赞)
  *   - commentaries 解说缓冲(§02 §3.5 解说向观众推送)
+ *
+ * §20260831-06 — 增补:
+ *   - spectatorAnswers 裁判回答观众提问(debate.spectator_answer 帧)
+ *   - judgeAnnouncements 裁判公开宣告(debate.judge_announce 帧)
  */
 import { create } from 'zustand';
 import type {
   DebateClientState,
   DebateCrossExamEntry,
+  DebateJudgeAnnounce,
   DebateJudgeScore,
   DebateResult,
   DebateRoomSummary,
+  DebateSpectatorAnswer,
   DebateSpeech,
 } from '@/types/debate';
 
@@ -52,6 +58,11 @@ interface DebateStore {
   // 用户操作(§20260831-04)
   likedSpeeches: Record<string, number>;
 
+  // §20260831-06 — 观众提问闭环:裁判回答(按 question_id 索引)
+  spectatorAnswers: Record<string, DebateSpectatorAnswer>;
+  // §20260831-06 — 裁判公开宣告(最近 10 条)
+  judgeAnnouncements: DebateJudgeAnnounce[];
+
   // UI
   spectatorCount: number;
   currentSpeaker: string;
@@ -68,6 +79,8 @@ interface DebateStore {
   setResult: (result: DebateResult) => void;
   addAgentThought: (seat: string, thought: string) => void;
   pushCommentary: (entry: DebateCommentaryEntry) => void;
+  addSpectatorAnswer: (answer: DebateSpectatorAnswer) => void;
+  pushJudgeAnnounce: (announce: DebateJudgeAnnounce) => void;
   toggleLike: (speechId: string) => boolean;
   setSpectatorCount: (n: number) => void;
   reset: () => void;
@@ -90,6 +103,8 @@ const initial: Pick<
   | 'agentThoughts'
   | 'commentaries'
   | 'likedSpeeches'
+  | 'spectatorAnswers'
+  | 'judgeAnnouncements'
   | 'spectatorCount'
   | 'currentSpeaker'
 > = {
@@ -105,6 +120,8 @@ const initial: Pick<
   agentThoughts: {},
   commentaries: [],
   likedSpeeches: {},
+  spectatorAnswers: {},
+  judgeAnnouncements: [],
   spectatorCount: 0,
   currentSpeaker: '',
 };
@@ -154,6 +171,17 @@ export const useDebateStore = create<DebateStore>((set) => ({
     }
     return { commentaries: next };
   }),
+  // §20260831-06 — 裁判回答观众提问(按 question_id 索引,幂等覆盖)。
+  addSpectatorAnswer: (answer) => set((s) => ({
+    spectatorAnswers: { ...s.spectatorAnswers, [answer.question_id]: answer },
+  })),
+
+  // §20260831-06 — 裁判公开宣告(最多保留最近 10 条)。
+  pushJudgeAnnounce: (announce) => set((s) => {
+    const next = [...s.judgeAnnouncements, announce];
+    return { judgeAnnouncements: next.length > 10 ? next.slice(next.length - 10) : next };
+  }),
+
   // §20260831-04 — 点赞(返回是否本次切换为"已点赞")。
   toggleLike: (speechId) => {
     let added = false;

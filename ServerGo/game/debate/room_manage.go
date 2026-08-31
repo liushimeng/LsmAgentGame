@@ -73,6 +73,16 @@ type DebateManager struct {
 
 	// commentatorBroadcast 解说广播回调(由 main.go 注入,走 spectator-only 通道)。
 	commentatorBroadcast func(roomID, text, style string)
+
+	// §20260831-06 — 裁判公开宣告广播钩子(裁判 announce 工具不再是空操作:
+	// docs/辩论比赛/05 §1.2 裁判全阶段持有 announce 工具)。
+	onJudgeAnnounce func(roomID string, judgeID int, text string)
+
+	// §20260831-06 — 裁判回答观众提问广播钩子(answer_spectator 工具成功后)。
+	onSpectatorAnswer func(roomID string, q SpectatorQuestion)
+
+	// §20260831-06 — 模型胜率统计(进程内,§06 §9)。
+	stats *statsStore
 }
 
 // NewDebateManager 创建一个空 DebateManager。
@@ -83,6 +93,7 @@ func NewDebateManager() *DebateManager {
 		rooms:   make(map[string]*DebateRoom),
 		engines: make(map[string]*DebateEngine),
 		llmSema: make(chan struct{}, 8), // 默认 8 路并发
+		stats:   newStatsStore(),        // §20260831-06 模型胜率统计
 	}
 }
 
@@ -193,6 +204,75 @@ func (m *DebateManager) LLMSemaChannel() chan struct{} {
 func (m *DebateManager) CommentatorSnapProvider(room *DebateRoom) func() *debatecommentator.CommentarySnapshot {
 	return func() *debatecommentator.CommentarySnapshot {
 		return buildCommentarySnapshot(room)
+	}
+}
+
+// SetOnJudgeAnnounce 注入裁判公开宣告广播钩子(§20260831-06)。
+//
+// 裁判 announce 工具派发成功后由 EmitJudgeAnnounce 触发,
+// ws 层转成 debate.judge_announce 帧推给房间全体观众。
+func (m *DebateManager) SetOnJudgeAnnounce(fn func(roomID string, judgeID int, text string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onJudgeAnnounce = fn
+}
+
+// SetOnSpectatorAnswer 注入「裁判回答观众提问」广播钩子(§20260831-06)。
+func (m *DebateManager) SetOnSpectatorAnswer(fn func(roomID string, q SpectatorQuestion)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onSpectatorAnswer = fn
+}
+
+// Stats 返回模型胜率统计快照(§20260831-06,§06 §9)。
+//
+// 供 GET /api/games/debate/stats 使用;按胜率降序。
+func (m *DebateManager) Stats() []ModelStats {
+	if m.stats == nil {
+		return []ModelStats{}
+	}
+	return m.stats.snapshot()
+}
+
+// RecordGameResult 按一局评审结果累加模型胜率统计(§20260831-06)。
+//
+// 由 DebateEngine.runJudgingPhase 在 SetResult 之后调用(与 resultHook 同一时机)。
+func (m *DebateManager) RecordGameResult(room *DebateRoom, res *DebateResult) {
+	if m.stats == nil {
+		return
+	}
+	m.stats.recordGameResult(room, res)
+}
+
+// EmitJudgeAnnounce 裁判公开宣告外抛(供 agent/debatejudge 调用)。
+//
+// §20260831-06:首期 announce 工具派发只返回 "announce received",
+// 文本被吞掉;现在经此钩子广播给观众。
+func (m *DebateManager) EmitJudgeAnnounce(roomID string, judgeID int, text string) {
+	text = TruncateRune(text, 100)
+	if CountRune(text) == 0 {
+		return
+	}
+	m.mu.RLock()
+	fn := m.onJudgeAnnounce
+	m.mu.RUnlock()
+	if fn != nil {
+		fn(roomID, judgeID, text)
+	}
+}
+
+// emitSpectatorAnswer 安全外抛 onSpectatorAnswer 钩子(§20260831-06)。
+//
+// 由 DebateRoom.AnswerSpectatorQuestion 在锁外调用。
+func (r *DebateRoom) emitSpectatorAnswer(q SpectatorQuestion) {
+	if r.manager == nil {
+		return
+	}
+	r.manager.mu.RLock()
+	fn := r.manager.onSpectatorAnswer
+	r.manager.mu.RUnlock()
+	if fn != nil {
+		fn(r.RoomID, q)
 	}
 }
 

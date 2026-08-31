@@ -2,6 +2,7 @@
  * 辩论比赛 — 大厅 (2026-08-31 §20260831-01)
  *
  * 对齐 docs/辩论比赛/04 §2 大厅页设计 + 复用 5 款游戏大厅页风格。
+ * §20260831-06 — 增补模型胜率统计面板(§06 §9 历史统计)。
  * 与 TexasHoldemLobbyPage / WerewolfLobbyPage 同构:
  *   - 5s HTTP 轮询 + room.state WS 推送(useLobbyLiveUpdate)
  *   - myRoles 状态(供房间卡片渲染「进入房间」/「👁 观战」按钮)
@@ -19,7 +20,7 @@ import { useLobbyLiveUpdate } from '@/hooks/useLobbyLiveUpdate';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import DebateRoomCreateModal from '@/components/debate/DebateRoomCreateModal';
-import type { DebateRoomSummary } from '@/types/debate';
+import type { DebateModelStats, DebateRoomSummary } from '@/types/debate';
 
 export function DebateLobbyPage() {
   const nav = useNavigate();
@@ -28,7 +29,18 @@ export function DebateLobbyPage() {
   const [err, setErr] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [myRoles, setMyRoles] = useState<Record<string, 'player' | 'spectator'>>({});
+  // §20260831-06 — 模型胜率统计(§06 §9 历史统计)
+  const [modelStats, setModelStats] = useState<DebateModelStats[]>([]);
+  const [statsOpen, setStatsOpen] = useState(false);
   const t = useT();
+
+  // 大厅挂载时拉取模型胜率统计(失败静默:统计缺失不影响主流程)
+  useEffect(() => {
+    debateService
+      .stats()
+      .then((s) => setModelStats(s ?? []))
+      .catch(() => { /* best-effort */ });
+  }, []);
 
   const fetchRooms = useCallback(() => {
     return debateService
@@ -180,6 +192,46 @@ export function DebateLobbyPage() {
         ))}
       </section>
 
+      <section className="debate-model-stats">
+        <button
+          type="button"
+          className="model-stats-toggle"
+          onClick={() => setStatsOpen((v) => !v)}
+        >
+          📊 模型胜率统计{statsOpen ? ' ▲' : ' ▼'}
+        </button>
+        {statsOpen && (
+          modelStats.length === 0 ? (
+            <p className="model-stats-empty">暂无比赛数据 — 完成一场辩论后这里会展示各模型胜率。</p>
+          ) : (
+            <table className="model-stats-table">
+              <thead>
+                <tr>
+                  <th>模型</th>
+                  <th>场次</th>
+                  <th>胜场</th>
+                  <th>胜率</th>
+                  <th>最佳辩手</th>
+                  <th>场均总分</th>
+                </tr>
+              </thead>
+              <tbody>
+                {modelStats.map((s) => (
+                  <tr key={s.model_key}>
+                    <td className="model-stats-name">{shortModelKey(s.model_key)}</td>
+                    <td>{s.total_games}</td>
+                    <td>{s.win_count}</td>
+                    <td className="model-stats-winrate">{(s.win_rate * 100).toFixed(0)}%</td>
+                    <td>{s.best_debater_count}</td>
+                    <td>{s.avg_total_score.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+        )}
+      </section>
+
       {createOpen && (
         <DebateRoomCreateModal
           onClose={() => setCreateOpen(false)}
@@ -188,4 +240,10 @@ export function DebateLobbyPage() {
       )}
     </div>
   );
+}
+
+// shortModelKey "MeiTuan-model" → "MeiTuan"(与后端口径一致)。
+function shortModelKey(key: string): string {
+  const idx = key.lastIndexOf('-');
+  return idx > 0 ? key.slice(0, idx) : key;
 }

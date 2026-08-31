@@ -233,6 +233,33 @@ export interface DebateClientState {
   spectator_config: DebateSpectatorConfig;
 }
 
+/** §20260831-06 — 裁判回答观众提问帧 (debate.spectator_answer)。 */
+export interface DebateSpectatorAnswer {
+  room_id: string;
+  question_id: string;
+  question: string;
+  answer: string;
+  answer_judge_id: number;
+  timestamp: number;
+}
+
+/** §20260831-06 — 裁判公开宣告帧 (debate.judge_announce)。 */
+export interface DebateJudgeAnnounce {
+  judge_id: number;
+  text: string;
+  timestamp: number;
+}
+
+/** §20260831-06 — 模型胜率统计 (GET /api/games/debate/stats)。 */
+export interface DebateModelStats {
+  model_key: string;
+  total_games: number;
+  win_count: number;
+  best_debater_count: number;
+  avg_total_score: number;
+  win_rate: number;
+}
+
 export interface DebateCreateRoomRequest {
   name?: string;
   topic_id?: string;

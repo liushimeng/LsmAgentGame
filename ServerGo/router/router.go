@@ -212,6 +212,7 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 	{
 		// 辩题池
 		debateGames.GET("/topics", debateAPI.Topics)
+		debateGames.GET("/stats", debateAPI.Stats) // §20260831-06 模型胜率统计
 
 		// 房间管理
 		debateGames.POST("/rooms", debateAPI.Create)

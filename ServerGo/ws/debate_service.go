@@ -5,6 +5,7 @@
 //	C → S: debate.subscribe / debate.unsubscribe / debate.spectator_question / debate.like
 //	S → C: debate.state / debate.phase / debate.speech / debate.cross_exam / debate.score
 //	      debate.judge_vote / debate.game_over / debate.agent_thought / debate.error
+//	      debate.commentary / debate.spectator_answer / debate.judge_announce (§20260831-04/06)
 //
 // 派发:本服务只关心订阅/取消订阅与少量旁路帧;agent action 由 Agent driver
 // 走 in-process 通道(与狼人杀一致,见 werewolf game_service.go §"Phase 4 wiring")。
@@ -163,12 +164,21 @@ func (s *DebateService) handleSpectatorQuestion(c *Client, env Envelope) {
 		return
 	}
 
-	// 广播给裁判(通过 hub)
+	// §20260831-06 — 提问写入房间队列(首期只广播未入队,裁判永远看不到)。
+	// 评审阶段裁判 prompt 注入未回答提问,裁判可选调 answer_spectator 回答。
+	q, err := r.AddSpectatorQuestion(c.UserID, payload.Text)
+	if err != nil {
+		s.sendError(c, env.Seq, errcode.ErrValidationFailed, err.Error())
+		return
+	}
+
+	// 广播给全体观众(含 question_id,便于前端与回答配对)
 	data, _ := json.Marshal(map[string]any{
-		"room_id":   payload.RoomID,
-		"user_id":   c.UserID,
-		"text":      payload.Text,
-		"timestamp": debate.WallNowMS(),
+		"room_id":     payload.RoomID,
+		"question_id": q.ID,
+		"user_id":     c.UserID,
+		"text":        q.Text,
+		"timestamp":   q.TimestampMS,
 	})
 	s.hub.BroadcastRoomSpectators(payload.RoomID, Envelope{
 		Type:    "debate.spectator_question",
@@ -176,6 +186,7 @@ func (s *DebateService) handleSpectatorQuestion(c *Client, env Envelope) {
 	})
 	logger.L().Info("debate spectator question",
 		zap.String("room_id", payload.RoomID),
+		zap.String("question_id", q.ID),
 		zap.String("user_id", c.UserID))
 }
 
@@ -308,6 +319,43 @@ func (s *DebateService) BroadcastCommentary(roomID, text, style string) {
 	})
 	s.hub.BroadcastRoomSpectators(roomID, Envelope{
 		Type:    "debate.commentary",
+		Payload: payload,
+	})
+}
+
+// BroadcastSpectatorAnswer §20260831-06 — 广播裁判对观众提问的回答。
+//
+// 帧:debate.spectator_answer(payload 含完整 SpectatorQuestion)。
+// 走 spectator-only 通道(与提问帧同通道)。
+func (s *DebateService) BroadcastSpectatorAnswer(roomID string, q debate.SpectatorQuestion) {
+	payload, _ := json.Marshal(map[string]any{
+		"room_id":         roomID,
+		"question_id":     q.ID,
+		"question":        q.Text,
+		"answer":          q.Answer,
+		"answer_judge_id": q.AnswerJudgeID,
+		"timestamp":       q.AnsweredAtMS,
+	})
+	s.hub.BroadcastRoomSpectators(roomID, Envelope{
+		Type:    "debate.spectator_answer",
+		Payload: payload,
+	})
+}
+
+// BroadcastJudgeAnnounce §20260831-06 — 广播裁判公开宣告(announce 工具)。
+//
+// 帧:debate.judge_announce(payload 含 judge_id + text)。
+// 首期 announce 工具派发是空操作,文本被吞;现在经 DebateManager.EmitJudgeAnnounce
+// → 本方法推给房间全体观众(裁判宣告属于比赛进程,玩家/观众均可见)。
+func (s *DebateService) BroadcastJudgeAnnounce(roomID string, judgeID int, text string) {
+	payload, _ := json.Marshal(map[string]any{
+		"room_id":   roomID,
+		"judge_id":  judgeID,
+		"text":      text,
+		"timestamp": time.Now().UnixMilli(),
+	})
+	s.hub.BroadcastRoom(roomID, Envelope{
+		Type:    "debate.judge_announce",
 		Payload: payload,
 	})
 }

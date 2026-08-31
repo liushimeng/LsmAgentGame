@@ -101,6 +101,11 @@ type DebateRoom struct {
 	// viewers 观战者集合(详见 room_spectator.go)。
 	viewers *spectatorRegistry
 
+	// §20260831-06 — 观众提问队列(详见 room_question.go)。
+	// spectatorQuestions 提问环形队列(≤ 20);questionSeq 提问 ID 自增序号。
+	spectatorQuestions []SpectatorQuestion
+	questionSeq        int
+
 	// agentRegistry Agent 句柄集合(详见 agent/debaterun/starter.go)。
 	// 实际类型为 *debaterun.Registry;为避免 debate 包循环引用,这里用 interface。
 	agentRegistry interface {

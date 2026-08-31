@@ -1650,3 +1650,131 @@
   font-size: 11px;
   margin-top: 4px;
 }
+
+/* ============================================================================
+   §20260831-06 — 观众提问闭环(裁判回答) + 裁判宣告 + 模型胜率统计
+   ============================================================================ */
+
+/* 观众提问:问题行 + 裁判回答 */
+.spectator-question-item .question-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.question-answer {
+  margin-top: 4px;
+  margin-left: 12px;
+  padding: 4px 8px;
+  border-left: 2px solid #f59e0b;
+  background-color: rgba(245, 158, 11, 0.08);
+  border-radius: 0 4px 4px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.question-answer-badge {
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.question-answer-text {
+  color: #e5e7eb;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 裁判公开宣告(裁判面板上方) */
+.judge-announcements {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.judge-announce-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 4px;
+  background-color: rgba(245, 158, 11, 0.06);
+}
+
+.judge-announce-badge {
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.judge-announce-text {
+  color: #e5e7eb;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 大厅模型胜率统计 */
+.debate-model-stats {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  background-color: #1f2937;
+}
+
+.model-stats-toggle {
+  background: none;
+  border: none;
+  color: #e5e7eb;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.model-stats-toggle:hover {
+  color: #fbbf24;
+}
+
+.model-stats-empty {
+  color: #9ca3af;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.model-stats-table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.model-stats-table th {
+  color: #9ca3af;
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #374151;
+}
+
+.model-stats-table td {
+  color: #e5e7eb;
+  padding: 6px 8px;
+  border-bottom: 1px solid #273243;
+}
+
+.model-stats-name {
+  font-weight: 600;
+}
+
+.model-stats-winrate {
+  color: #fbbf24;
+  font-weight: 600;
+}

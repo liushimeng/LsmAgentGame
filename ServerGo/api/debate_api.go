@@ -10,6 +10,8 @@
 //   GET    /api/games/debate/topics                 获取辩题池
 //   POST   /api/games/debate/rooms/:id/start        开始比赛(仅房主)
 //   GET    /api/games/debate/rooms/:id/history      发言历史
+//   DELETE /api/games/debate/rooms/:id              房主解散房间
+//   GET    /api/games/debate/stats                  模型胜率统计(§20260831-06)
 //
 // 路由在 router.go 注册。
 package api
@@ -585,6 +587,22 @@ func (a *DebateAPI) Topics(c *gin.Context) {
 		"code":    errcode.OK,
 		"message": "ok",
 		"data":    topics,
+	})
+}
+
+// ============================================================================
+// Stats GET /api/games/debate/stats (§20260831-06)
+// ============================================================================
+
+// Stats GET /api/games/debate/stats — 模型胜率统计。
+//
+// 设计依据:docs/辩论比赛/06-辩论比赛公平性与评审系统设计.md §9「历史统计」。
+// 返回按胜率降序的 ModelStats 列表(进程内累计,§06 §9.2 平衡调整的数据基础)。
+func (a *DebateAPI) Stats(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"code":    errcode.OK,
+		"message": "ok",
+		"data":    a.mgr.Stats(),
 	})
 }
 

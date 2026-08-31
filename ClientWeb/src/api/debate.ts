@@ -7,6 +7,7 @@ import { http } from '@/services/http';
 import type {
   DebateClientState,
   DebateCreateRoomRequest,
+  DebateModelStats,
   DebateRoomSummary,
   DebateTopic,
 } from '@/types/debate';
@@ -81,6 +82,11 @@ export const debateService = {
       cross_exam: import('@/types/debate').DebateCrossExamEntry[];
       results: import('@/types/debate').DebateResult | null;
     }>(`/api/games/debate/rooms/${encodeURIComponent(roomId)}/history`);
+  },
+
+  // GET /api/games/debate/stats (§20260831-06 模型胜率统计)
+  stats() {
+    return http<DebateModelStats[]>('/api/games/debate/stats');
   },
 
   // DELETE /api/games/debate/rooms/:id

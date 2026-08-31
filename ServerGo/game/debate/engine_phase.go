@@ -347,6 +347,9 @@ func (e *DebateEngine) runJudgingPhase() {
 			}
 		}
 		e.room.SetResult(res)
+		// §20260831-06 — 累加模型胜率统计(§06 §9 历史统计)。
+		// 与 resultHook 同一时机;进程内统计,无 IO 不阻塞阶段推进。
+		e.manager.RecordGameResult(e.room, res)
 		if fn := e.manager.resultHook(); fn != nil {
 			go fn(e.room.RoomID, res)
 		}

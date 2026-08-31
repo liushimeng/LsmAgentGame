@@ -227,11 +227,16 @@ func TestCountRune(t *testing.T) {
 
 func TestTruncateRune(t *testing.T) {
 	s := "辩论比赛真精彩"
-	if got := TruncateRune(s, 4); got != "辩论" {
-		t.Errorf("TruncateRune(%q, 4) = %q, want %q", s, got, "辩论")
+	// §20260831-06 修复:按 rune 计数截断(首期用例锁定了字节索引 bug,
+	// max=4 时误期望 2 字;正确语义是保留前 4 个字符)。
+	if got := TruncateRune(s, 4); got != "辩论比赛" {
+		t.Errorf("TruncateRune(%q, 4) = %q, want %q", s, got, "辩论比赛")
 	}
 	if got := TruncateRune(s, 100); got != s {
 		t.Errorf("TruncateRune(%q, 100) should be unchanged", s)
+	}
+	if got := TruncateRune(s, 0); got != "" {
+		t.Errorf("TruncateRune(%q, 0) = %q, want empty", s, got)
 	}
 }
 
