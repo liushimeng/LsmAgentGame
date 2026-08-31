@@ -31,6 +31,14 @@ export interface AdminDisbandButtonProps {
   busy?: boolean;
   /** 二次确认失败时把错误向上抛(默认在按钮旁显示红字)。 */
   onError?: (msg: string) => void;
+  /**
+   * 自定义解散实现(可选)。
+   * 不传时走通用 forceDisbandRoom(/api/admin/rooms/:id);
+   * 传入时使用传入的函数(用于辩论等不走通用 RoomService 的游戏)。
+   */
+  onDisband?: (roomId: string, reason: string) => Promise<void>;
+  /** 按钮文案(默认:⛔ 强制解散)。 */
+  label?: string;
 }
 
 export function AdminDisbandButton({
@@ -40,6 +48,8 @@ export function AdminDisbandButton({
   onDisbanded,
   busy = false,
   onError,
+  onDisband,
+  label = '⛔ 强制解散',
 }: AdminDisbandButtonProps) {
   const userType = useAuthStore((s) => s.userType);
   const isSuperAdmin = (userType ?? 1) >= 3;
@@ -52,8 +62,15 @@ export function AdminDisbandButton({
     setSubmitting(true);
     setLocalErr('');
     try {
-      const res = await forceDisbandRoom(roomId, 'admin-force-disband');
-      onDisbanded?.(res.room_id);
+      if (onDisband) {
+        // 自定义解散逻辑
+        await onDisband(roomId, 'admin-force-disband');
+        onDisbanded?.(roomId);
+      } else {
+        // 默认:走通用 forceDisbandRoom
+        const res = await forceDisbandRoom(roomId, 'admin-force-disband');
+        onDisbanded?.(res.room_id);
+      }
       setPending(false);
     } catch (e: unknown) {
       if (isSessionExpiredError(e)) {
@@ -69,7 +86,7 @@ export function AdminDisbandButton({
     } finally {
       setSubmitting(false);
     }
-  }, [roomId, onDisbanded, onError]);
+  }, [roomId, onDisbanded, onError, onDisband]);
 
   if (!isSuperAdmin) return null;
   if (hideWhenOver && roomStatus === 'over') return null;
@@ -88,7 +105,7 @@ export function AdminDisbandButton({
         data-testid={`admin-disband-${roomId}`}
         title="强制解散该房间(所有玩家/观战者会被踢回大厅)"
       >
-        ⛔ 强制解散
+        {label}
       </button>
       {pending && (
         <ConfirmModal

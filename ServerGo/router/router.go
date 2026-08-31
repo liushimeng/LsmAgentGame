@@ -267,6 +267,9 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		// query parameter is forwarded to the audit log and the
 		// client-side frame.
 		admin.DELETE("/rooms/:room_id", adminAPI.ForceDisbandRoom)
+		// §20260831-12 — 辩论比赛超管强制解散房间(辩论走独立 DebateManager,
+		// 不复用上面的通用 ForceDisbandRoom)。
+		admin.DELETE("/debate/rooms/:room_id", adminAPI.ForceDisbandDebateRoom)
 		// Chat cleanup: admin + super admin can delete lobby chat messages by time range.
 		admin.POST("/chat/cleanup", adminAPI.CleanupChatMessages)
 		// Werewolf 500K chat history queue viewer (2026-07-09 §13-bugfix)

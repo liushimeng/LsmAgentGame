@@ -601,6 +601,10 @@ func main() {
 	debateMgr.SetOnResult(func(rid string, res *debate.DebateResult) {
 		debateWsSvc.BroadcastResult(rid, res)
 	})
+	// §20260831-12 — 超管强制解散房间广播钩子。
+	debateMgr.SetOnForceRemove(func(rid string, reason string) {
+		debateWsSvc.BroadcastRoomRemoved(rid, reason)
+	})
 	// §20260831-06 — 观众提问闭环 + 裁判宣告广播接线:
 	//   - 裁判 answer_spectator 工具成功 → debate.spectator_answer 帧(spectator-only)
 	//   - 裁判 announce 工具 → debate.judge_announce 帧(房间全体)
@@ -650,6 +654,8 @@ func main() {
 	// gormDB / userSvc 注入历史对局查询(t_lsm_game_debate_*)与
 	// 自定义辩题读写 + 管理员校验;nil 时对应端点返回 ErrDB 降级。
 	debateAPI := api.NewDebateAPI(debateMgr, llmRegistry, gormDB, userSvc)
+	// §20260831-12 — 注入 debateMgr 到 adminAPI(超管强制解散辩论房间)。
+	adminAPI.SetDebateManager(debateMgr)
 
 	// 2026-07-10 §125 增强 — 注入法官总结所需回调。
 	// 1) Manager 单例(让 judge goroutine 内部能拿到 registry 调 LLM)。

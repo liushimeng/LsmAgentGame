@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { isSessionExpiredError } from '@/services/http';
 import { reportGlobalError } from '@/services/globalError';
 import { debateService } from '@/api/debate';
+import { forceDisbandDebateRoom } from '@/api/admin';
 import { useDebateStore } from '@/store/debate.store';
 import { useLobbyLiveUpdate } from '@/hooks/useLobbyLiveUpdate';
 import { useT } from '@/hooks/useT';
@@ -24,6 +25,7 @@ import type { TKey } from '@/i18n';
 import DebateRoomCreateModal from '@/components/debate/DebateRoomCreateModal';
 import DebateHistoryListPanel from '@/components/debate/DebateHistoryListPanel';
 import DebateReplayModal from '@/components/debate/DebateReplayModal';
+import { AdminDisbandButton } from '@/components/ui/AdminDisbandButton';
 import type { DebateModelStats, DebateRoomSummary } from '@/types/debate';
 
 export function DebateLobbyPage() {
@@ -194,6 +196,15 @@ export function DebateLobbyPage() {
                   👁 观战
                 </button>
               )}
+              <AdminDisbandButton
+                roomId={r.room_id}
+                roomStatus={r.status}
+                hideWhenOver
+                onDisbanded={removeRoom}
+                onDisband={async (rid, reason) => {
+                  await forceDisbandDebateRoom(rid, reason);
+                }}
+              />
             </div>
           </div>
         ))}

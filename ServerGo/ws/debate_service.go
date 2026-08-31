@@ -400,6 +400,39 @@ func (s *DebateService) BroadcastStageScore(roomID string, ss *debate.StageScore
 	})
 }
 
+// BroadcastRoomRemoved §20260831-12 — 超管强制解散房间时广播 debate.room_removed 帧。
+//
+// 对齐 GameService.BroadcastRoomRemoved 的语义:先广播帧,再取消所有订阅,
+// 确保客户端收到「房间已被解散」的通知后再被踢出去。
+//
+// 帧:debate.room_removed
+// payload: { room_id, reason, removed_at }
+//
+// 走 hub.BroadcastRoomIncludingSpectators(辩论房间所有人都在 spectators 集合里,
+// 因为辩论是纯 Agent 参赛,人类全是观战者),但也兼容 rooms 集合里的连接。
+func (s *DebateService) BroadcastRoomRemoved(roomID, reason string) {
+	if roomID == "" {
+		return
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"room_id":    roomID,
+		"reason":     reason,
+		"removed_at": time.Now().UTC().Format(time.RFC3339Nano),
+	})
+	// 先广播(确保所有人都能收到帧)
+	s.hub.BroadcastRoomIncludingSpectators(roomID, Envelope{
+		Type:    "debate.room_removed",
+		Payload: payload,
+	})
+	// 再取消所有订阅
+	s.hub.UnsubscribeRoomAll(roomID)
+	// 从 manager 的观战者集合中清理(内存侧资源释放)
+	if r, ok := s.mgr.Get(roomID); ok {
+		// 房间可能已经被 ForceDisband 从 map 中移除了,这里 best-effort
+		_ = r
+	}
+}
+
 // ============================================================================
 // helpers
 // ============================================================================

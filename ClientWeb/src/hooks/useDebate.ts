@@ -22,6 +22,7 @@
  *   - debate.game_over 帧与 store 现值字段级 merge(P2-B:保住 judge_details)
  */
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { wsClient, type WsEnvelope } from '@/services/ws';
 import { useDebateStore } from '@/store/debate.store';
 import { debateService } from '@/api/debate';
@@ -37,6 +38,7 @@ import type {
 } from '@/types/debate';
 
 export function useDebate(roomId: string) {
+  const navigate = useNavigate();
   const {
     setGameState,
     updatePhase,
@@ -50,6 +52,7 @@ export function useDebate(roomId: string) {
     pushJudgeAnnounce,
     setAgentStatsDetail,
     setJudgeScoreboard,
+    reset,
   } = useDebateStore();
 
   useEffect(() => {
@@ -232,6 +235,19 @@ export function useDebate(roomId: string) {
         case 'debate.like':
           // 只展示用,不写 store
           break;
+        // §20260831-12 — 超管强制解散房间通知。
+        case 'debate.room_removed': {
+          if (p.room_id !== roomId) return;
+          const reason = (p.reason ?? 'room removed') as string;
+          reportGlobalError({
+            message: `房间已被管理员解散：${reason}`,
+            severity: 'warning',
+          });
+          reset();
+          // 延迟跳转,让 toast 先显示出来
+          setTimeout(() => navigate('/debate'), 100);
+          break;
+        }
         case 'debate.error': {
           const msg = (p.message ?? 'unknown debate error') as string;
           reportGlobalError({ message: msg, severity: 'error' });
@@ -246,7 +262,7 @@ export function useDebate(roomId: string) {
       wsClient.send('debate.unsubscribe', { room_id: roomId });
       unsub();
     };
-  }, [roomId, setGameState, updatePhase, addSpeech, addCrossExam, addJudgeScore, setResult, addAgentThought, pushCommentary, addSpectatorAnswer, pushJudgeAnnounce, setAgentStatsDetail, setJudgeScoreboard]);
+  }, [roomId, navigate, reset, setGameState, updatePhase, addSpeech, addCrossExam, addJudgeScore, setResult, addAgentThought, pushCommentary, addSpectatorAnswer, pushJudgeAnnounce, setAgentStatsDetail, setJudgeScoreboard]);
 }
 
 /**

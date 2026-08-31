@@ -46,6 +46,31 @@ export async function forceDisbandRoom(
 }
 
 /**
+ * 超级管理员强制解散辩论房间。
+ *
+ * DELETE /api/admin/debate/rooms/:room_id?reason=...
+ * - 200 + { code:0, data: {...} } → 成功
+ * - 200 + { code:0, data:..., message:"room already absent" } → 房间已经不在了
+ * - 401 / 403 → 通过 ApiError 抛出
+ *
+ * 后端会广播 debate.room_removed 帧;前端 useDebate hook 收到后 navigate 回大厅。
+ */
+export async function forceDisbandDebateRoom(
+  roomId: string,
+  reason = 'admin-force-disband',
+): Promise<{ room_id: string; reason: string; removed_at: string; spectators: number }> {
+  try {
+    return await http<{ room_id: string; reason: string; removed_at: string; spectators: number }>(
+      `/api/admin/debate/rooms/${encodeURIComponent(roomId)}?reason=${encodeURIComponent(reason)}`,
+      { method: 'DELETE' },
+    );
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
+    throw e;
+  }
+}
+
+/**
  * 管理员按时间范围清理大厅聊天消息。
  *
  * POST /api/admin/chat/cleanup

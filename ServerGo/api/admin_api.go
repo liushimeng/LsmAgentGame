@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"LsmAgentGame/errcode"
+	"LsmAgentGame/game/debate"
 	"LsmAgentGame/game/werewolf"
 	"LsmAgentGame/logger"
 	"LsmAgentGame/models"
@@ -28,15 +29,24 @@ import (
 
 // AdminAPI is the admin resource handler.
 type AdminAPI struct {
-	svc     *service.UserService
-	roomSvc *service.RoomService
-	wm      *werewolf.WerewolfManager
-	db      *gorm.DB
+	svc      *service.UserService
+	roomSvc  *service.RoomService
+	wm       *werewolf.WerewolfManager
+	debateMgr *debate.DebateManager // §20260831-12 — 辩论比赛超管管理
+	db       *gorm.DB
 }
 
 // NewAdminAPI wires the handler with its service.
 func NewAdminAPI(svc *service.UserService, roomSvc *service.RoomService, wm *werewolf.WerewolfManager, db *gorm.DB) *AdminAPI {
 	return &AdminAPI{svc: svc, roomSvc: roomSvc, wm: wm, db: db}
+}
+
+// SetDebateManager 后注入 DebateManager(§20260831-12)。
+//
+// 因为 debateMgr 在 adminAPI 构造之后才创建(main.go 初始化顺序),
+// 所以提供 setter 延迟注入,避免改动 main.go 的初始化顺序。
+func (a *AdminAPI) SetDebateManager(dm *debate.DebateManager) {
+	a.debateMgr = dm
 }
 
 // ListUsers GET /api/admin/users (admin + super admin).
@@ -455,6 +465,104 @@ func (a *AdminAPI) ForceDisbandRoom(c *gin.Context) {
 			"players_deleted": res.PlayersDeleted,
 			"reason":          res.Reason,
 			"removed_at":      res.RemovedAt,
+		},
+	})
+}
+
+// ForceDisbandDebateRoom DELETE /api/admin/debate/rooms/:room_id?reason=...
+//
+// §20260831-12 — 超级管理员强制解散辩论房间。
+//
+// 辩论比赛使用独立的 DebateManager(不走 t_lsm_game_room 表 / GameService),
+// 因此通用 ForceDisbandRoom 对辩论房间无效,需要独立端点。
+//
+// 权限:super admin(userType >= UserTypeSuper)。
+// 幂等:房间不存在时返回 200 + message "room already absent"。
+//
+// 资源释放:
+//   - 停止所有 Agent goroutine(辩手 + 裁判 + 解说)
+//   - 停止阶段引擎
+//   - 从内存 rooms map 删除
+//   - 广播 debate.room_removed 帧给所有订阅者
+//   - 触发 onRoomRemove 钩子(DB 清理)
+func (a *AdminAPI) ForceDisbandDebateRoom(c *gin.Context) {
+	uid := uidFromContext(c)
+	if uid == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    errcode.ErrAuthMissingToken,
+			"message": errcode.DefaultMessages[errcode.ErrAuthMissingToken],
+		})
+		return
+	}
+	userType, err := a.svc.GetUserType(c.Request.Context(), uid)
+	if err != nil {
+		ce := errcode.AsError(err)
+		c.JSON(http.StatusBadRequest, gin.H{"code": ce.Code, "message": ce.Message})
+		return
+	}
+	if userType < models.UserTypeSuper {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":    errcode.ErrPermissionDenied,
+			"message": "需要超级管理员权限",
+		})
+		return
+	}
+
+	roomID := c.Param("room_id")
+	if roomID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    errcode.ErrValidationFailed,
+			"message": "room_id required",
+		})
+		return
+	}
+
+	reason := c.Query("reason")
+	if reason == "" {
+		reason = "admin force disband"
+	}
+
+	if a.debateMgr == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    errcode.ErrInternal,
+			"message": "debate manager not wired",
+		})
+		return
+	}
+
+	specCount, ok := a.debateMgr.ForceDisband(roomID, reason)
+	removedAt := time.Now().UTC()
+
+	if !ok {
+		// 房间不存在:幂等返回 200(对齐通用 ForceDisbandRoom 语义)
+		c.JSON(http.StatusOK, gin.H{
+			"code":    errcode.OK,
+			"message": "room already absent",
+			"data": gin.H{
+				"room_id":    roomID,
+				"reason":     reason,
+				"removed_at": removedAt,
+				"spectators": 0,
+			},
+		})
+		return
+	}
+
+	logger.L().Warn("admin force-disbanded debate room",
+		zap.String("room_id", roomID),
+		zap.String("admin_id", uid),
+		zap.String("reason", reason),
+		zap.Int("spectators", specCount),
+		zap.Time("removed_at", removedAt))
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    errcode.OK,
+		"message": "ok",
+		"data": gin.H{
+			"room_id":    roomID,
+			"reason":     reason,
+			"removed_at": removedAt,
+			"spectators": specCount,
 		},
 	})
 }

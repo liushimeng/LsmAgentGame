@@ -40,10 +40,13 @@ type DebateManager struct {
 	registry *llm.Registry
 
 	// 房间生命周期钩子(由 service.RoomService 注入)
-	onGameStart  func(roomID string)
-	onGameOver   func(roomID string)
-	onRoomRemove func(roomID string)
-	onPhaseChange func(roomID string, phase Phase)
+	onGameStart    func(roomID string)
+	onGameOver     func(roomID string)
+	onRoomRemove   func(roomID string)
+	onPhaseChange  func(roomID string, phase Phase)
+	// §20260831-12 — 超管强制解散钩子(带 reason,用于 WS 广播 debate.room_removed 帧)。
+	// 与 onRoomRemove 正交:房主 Disband 触发 onRoomRemove,超管 ForceDisband 同时触发两者。
+	onForceRemove func(roomID string, reason string)
 
 	// §20260831-02 — 比赛事件广播钩子(由 main.go 接到 ws.DebateService)。
 	// game/debate 包不得 import ws(循环引用),所有实时推送经此回调外抛。
@@ -647,6 +650,18 @@ func (m *DebateManager) StopGame(roomID string) bool {
 	return true
 }
 
+// SetOnForceRemove 注入超管强制解散钩子(§20260831-12)。
+//
+// 与 SetOnRoomRemove 的区别:onRoomRemove 只有 roomID,用于通用生命周期通知;
+// onForceRemove 带 reason 参数,用于 WS 广播 debate.room_removed 帧,
+// 让前端能展示「房间被管理员解散,原因:xxx」的提示。
+// ForceDisband 会同时触发 onRoomRemove + onForceRemove;房主 Disband 只触发 onRoomRemove。
+func (m *DebateManager) SetOnForceRemove(fn func(roomID string, reason string)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.onForceRemove = fn
+}
+
 // Disband 房主解散房间(彻底删除,不同于 StopGame 仅结束比赛)。
 // 仅房主可操作,房间存在且未在删除中时返回 true。
 func (m *DebateManager) Disband(roomID, callerUserID string) (*errcode.Error, bool) {
@@ -675,6 +690,54 @@ func (m *DebateManager) Disband(roomID, callerUserID string) (*errcode.Error, bo
 		go m.onRoomRemove(roomID)
 	}
 	return nil, true
+}
+
+// ForceDisband 超级管理员强制解散房间(§20260831-12)。
+//
+// 与 Disband 的区别:
+//   - Disband: 仅房主可调用, 校验 IsOwner
+//   - ForceDisband: 超管可调用, 不校验身份, 带 reason 参数
+//
+// 资源释放顺序(与 Disband 一致, 额外触发 onForceRemove 钩子):
+//   1. 停止 Agent goroutine(辩手 + 裁判 + 解说)
+//   2. 停止引擎阶段机
+//   3. 设 PhaseGameOver + closed
+//   4. 从 rooms map 删除
+//   5. 触发 onRoomRemove 钩子(DB 清理等)
+//   6. 触发 onForceRemove 钩子(WS 广播 debate.room_removed 帧)
+//
+// 返回值: spectatorCount = 解散时观战者人数(含房主); ok = 是否真正执行了删除
+// 房间不存在时 ok=false, 调用方应返回 200 + "room already absent"。
+func (m *DebateManager) ForceDisband(roomID, reason string) (spectatorCount int, ok bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, ok := m.rooms[roomID]
+	if !ok {
+		return 0, false
+	}
+	// 记录观战者数(返回给前端作审计)
+	specCount := r.SpectatorCount()
+	// 停止 Agent + 引擎
+	if r.agentRegistry != nil {
+		r.agentRegistry.Stop()
+		r.agentRegistry = nil
+	}
+	if eng, ok2 := m.engines[roomID]; ok2 {
+		eng.Stop()
+		delete(m.engines, roomID)
+	}
+	r.SetPhase(PhaseGameOver)
+	r.SetClosed()
+	delete(m.rooms, roomID)
+	// 触发通用移除钩子(DB 清理)
+	if m.onRoomRemove != nil {
+		go m.onRoomRemove(roomID)
+	}
+	// 触发超管强制移除钩子(WS 广播 debate.room_removed 帧)
+	if m.onForceRemove != nil {
+		go m.onForceRemove(roomID, reason)
+	}
+	return specCount, true
 }
 
 // Registry 返回 LLM Registry(供 Agent / 裁判使用)。
