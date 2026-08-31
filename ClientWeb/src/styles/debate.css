@@ -2,6 +2,12 @@
  *
  * 对齐 docs/辩论比赛/04 §7 可视化设计 + docs/狼人杀-前端UI/前端UI颜色对比度与可读性规范.md
  * (暗色主题 / 4.5:1 文字对比度)。
+ *
+ * §20260831-03 — 布局重构 (三栏自适应 + 侧栏折叠):
+ *   .debate-game-page → grid rows: auto 1fr (100vh)
+ *   .game-main → flex (左栏 | 中栏 | 右栏)
+ *   .sidebar-left / .sidebar-right → 可折叠
+ *   .main-col → flex 自适应核心区
  */
 
 .debate-lobby {
@@ -106,26 +112,32 @@
 
 /* ========= 对局页 ========= */
 
+/* §20260831-03 — 页面根容器: 100vh 完整占满, 无多余滚动 */
 .debate-game-page {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   height: 100vh;
   background: #111827;
+  overflow: hidden;
 }
 
 .game-header {
-  padding: 16px 24px;
+  padding: 10px 20px;
   background: #1f2937;
   border-bottom: 1px solid #374151;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .game-header h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   color: #f3f4f6;
+  white-space: nowrap;
 }
 
 .game-header .room-id {
@@ -134,30 +146,154 @@
   font-family: monospace;
 }
 
+/* §20260831-03 — 主区域: flex 三栏布局, 自适应占满 */
 .game-main {
-  display: grid;
-  grid-template-columns: 280px 1fr 320px;
-  gap: 16px;
-  padding: 16px;
-  overflow: auto;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
 }
 
-@media (max-width: 1280px) {
-  .game-main {
-    grid-template-columns: 240px 1fr 280px;
-  }
-}
+/* ========= 左栏 ========= */
 
-@media (max-width: 768px) {
-  .game-main {
-    grid-template-columns: 1fr;
-  }
-}
-
-.chat-col {
-  border-top: 1px solid #374151;
+.sidebar-left {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
   background: #1f2937;
-  height: 280px;
+  border-right: 1px solid #374151;
+  overflow: hidden;
+  transition: width 0.25s ease;
+  position: relative;
+}
+
+.sidebar-left.sidebar-collapsed {
+  width: 36px;
+}
+
+.sidebar-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-left-content {
+  overflow-y: auto;
+}
+
+/* ========= 折叠按钮 ========= */
+
+.sidebar-toggle {
+  background: #111827;
+  border: none;
+  border-left: 1px solid #374151;
+  border-right: 1px solid #374151;
+  color: #9ca3af;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  min-width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-toggle:hover {
+  background: #374151;
+  color: #f3f4f6;
+}
+
+.sidebar-toggle-left {
+  border-left: none;
+  writing-mode: horizontal-tb;
+}
+
+.sidebar-toggle-right {
+  border-right: none;
+  order: -1;
+}
+
+/* 折叠按钮在折叠态时竖排显示 */
+.sidebar-collapsed .sidebar-toggle {
+  writing-mode: vertical-rl;
+  padding: 8px 4px;
+  letter-spacing: 1px;
+}
+
+/* ========= 中栏 ========= */
+
+.main-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: #111827;
+  padding: 12px 16px;
+  gap: 12px;
+}
+
+/* ========= 右栏 ========= */
+
+.sidebar-right {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  background: #1f2937;
+  border-left: 1px solid #374151;
+  overflow: hidden;
+  transition: width 0.25s ease;
+  position: relative;
+}
+
+.sidebar-right.sidebar-collapsed {
+  width: 36px;
+}
+
+.sidebar-right-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 聊天面板占右栏上方 55%, 辅助面板占下方 45% */
+.sidebar-chat {
+  flex: 5;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid #374151;
+  overflow: hidden;
+}
+
+/* §20260831-03 — 右栏 GameChatPanel 自适应高度覆盖 */
+.sidebar-chat .game-chat {
+  max-height: none;
+  flex: 1;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.sidebar-chat .game-chat__list {
+  min-height: 0;
+}
+
+.sidebar-aux {
+  flex: 4;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* ========= 队伍面板 ========= */
@@ -169,24 +305,55 @@
   background: #1f2937;
   border: 1px solid #374151;
   border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+/* 左栏队伍面板更紧凑 */
+.sidebar-left .debate-team-panel {
+  background: rgba(31, 41, 55, 0.6);
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid #374151;
+  margin-bottom: 0;
+  padding: 8px 12px;
+}
+
+.sidebar-left .debate-speech-panel {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  margin-bottom: 0;
+  padding: 8px 12px;
 }
 
 .debate-team-panel h3,
 .debate-judge-panel h3,
 .debate-score-panel h3 {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   color: #f3f4f6;
-  font-size: 14px;
+  font-size: 13px;
+}
+
+.sidebar-left .debate-speech-panel h3,
+.sidebar-left .debate-team-panel h3 {
+  font-size: 12px;
+  margin-bottom: 8px;
 }
 
 .team-card {
-  margin-bottom: 12px;
-  padding: 12px;
+  margin-bottom: 8px;
+  padding: 8px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 6px;
   border-left: 4px solid #4b5563;
+}
+
+/* 左栏队伍卡片更紧凑 */
+.sidebar-left .team-card {
+  margin-bottom: 4px;
+  padding: 6px 8px;
+  border-left-width: 3px;
 }
 
 .team-card--pro,
@@ -228,8 +395,9 @@
 
 .team-card__header {
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   color: #f3f4f6;
+  font-size: 12px;
 }
 
 .team-card__agents {
@@ -240,11 +408,11 @@
 
 .agent-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-  padding: 4px 0;
+  padding: 2px 0;
   color: #d1d5db;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .agent-row--speaking {
@@ -261,20 +429,20 @@
 }
 
 .judge-card {
-  padding: 8px;
-  margin-bottom: 8px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 6px;
 }
 
 .judge-card__name {
-  font-size: 13px;
+  font-size: 12px;
   color: #f3f4f6;
 }
 
 .judge-card__comment {
-  margin-top: 6px;
-  font-size: 12px;
+  margin-top: 4px;
+  font-size: 11px;
   color: #d1d5db;
   line-height: 1.4;
 }
@@ -452,8 +620,8 @@
   background: #1f2937;
   border: 1px solid #374151;
   border-radius: 8px;
-  padding: 24px;
-  min-height: 280px;
+  padding: 16px;
+  min-height: 180px;
 }
 
 .debate-stage--loading {
@@ -468,29 +636,25 @@
 /* §20260831-07 — R6 报告 §3.5 修复:
    顶部 stage-header(辩题 + phase-tag + timer)1920×1080 视口下常被
    DebateSpeechPanel 内容挤出首屏。改为 sticky 定位 + 暗背景 + z-index,
-   保证滚动时阶段/计时始终可见。
-   注意:仅作用于 stage-header 本身(不是整个 .debate-stage),因为下方
-   发言气泡 + 思考面板仍需自然滚动;sticky 元素离开容器即失效,
-   所以这里 sticky 容器 = .debate-stage,父容器可滚动时元素相对视口贴顶。 */
+   保证滚动时阶段/计时始终可见。 */
 .stage-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 16px;
+  padding-bottom: 12px;
   border-bottom: 1px solid #374151;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   position: sticky;
   top: 0;
   z-index: 10;
   background-color: #1f2937;
-  /* padding-top:8 抵消父容器 24px padding,使 sticky 边缘贴齐容器内壁 */
-  margin-top: -8px;
-  padding-top: 8px;
+  margin-top: -4px;
+  padding-top: 4px;
 }
 
 .stage-header .topic {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   color: #f3f4f6;
   flex: 1;
 }
@@ -518,7 +682,7 @@
 }
 
 .current-speaker {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .speaker-tag {
@@ -531,7 +695,7 @@
 .speech-content {
   background: rgba(0, 0, 0, 0.2);
   border-radius: 6px;
-  padding: 16px;
+  padding: 14px;
   color: #e5e7eb;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -541,7 +705,7 @@
 .free-debate-idle,
 .result-pending {
   text-align: center;
-  padding: 32px;
+  padding: 28px;
   color: #9ca3af;
 }
 
@@ -585,8 +749,8 @@
 }
 
 .speech-item {
-  padding: 12px;
-  margin-bottom: 8px;
+  padding: 10px;
+  margin-bottom: 6px;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.15);
   border-left: 4px solid #4b5563;
@@ -616,8 +780,9 @@
 
 .speech-item__content {
   color: #e5e7eb;
-  line-height: 1.6;
+  line-height: 1.5;
   white-space: pre-wrap;
+  font-size: 13px;
 }
 
 .speech-item__thought {
@@ -788,7 +953,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 16px;
+  padding: 6px 14px;
   background: rgba(59, 130, 246, 0.08);
   border: 1px solid rgba(59, 130, 246, 0.25);
   border-radius: 6px;
@@ -924,11 +1089,10 @@
 
 /* AI 实时解说面板 */
 .debate-commentary {
-  margin-top: 12px;
   background: rgba(245, 158, 11, 0.06);
   border: 1px solid rgba(245, 158, 11, 0.3);
   border-radius: 8px;
-  padding: 12px 16px;
+  padding: 12px 14px;
 }
 
 .debate-commentary--empty {
@@ -939,17 +1103,17 @@
 .debate-commentary .commentary-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 .debate-commentary .commentary-icon {
-  font-size: 1.25rem;
+  font-size: 1rem;
 }
 
 .debate-commentary h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.9375rem;
   color: #fde68a;
   font-weight: 600;
 }
@@ -981,7 +1145,7 @@
 }
 
 .debate-commentary .commentary-latest {
-  padding: 8px 12px;
+  padding: 8px 10px;
   background: rgba(245, 158, 11, 0.1);
   border-left: 3px solid #f59e0b;
   border-radius: 4px;
@@ -1030,8 +1194,8 @@
 
 /* 发言阶段分组折叠 */
 .debate-speech-panel .phase-group {
-  margin-top: 8px;
-  padding: 8px 12px;
+  margin-top: 6px;
+  padding: 6px 10px;
   background: rgba(31, 41, 55, 0.5);
   border: 1px solid rgba(75, 85, 99, 0.45);
   border-radius: 6px;
@@ -1050,6 +1214,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  font-size: 12px;
 }
 
 .debate-speech-panel .phase-group summary::-webkit-details-marker {
@@ -1072,13 +1237,13 @@
 
 .debate-speech-panel .phase-group-list {
   list-style: none;
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   padding: 0;
 }
 
 .debate-speech-panel .speech-item {
-  margin: 8px 0;
-  padding: 10px 14px;
+  margin: 6px 0;
+  padding: 8px 12px;
   background: rgba(17, 24, 39, 0.5);
   border-left: 3px solid #4b5563;
   border-radius: 4px;
@@ -1117,26 +1282,26 @@
 .debate-speech-panel .speech-item-header {
   display: flex;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .debate-speech-panel .speaker {
   font-weight: 600;
   color: #f3f4f6;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 .debate-speech-panel .speech-item-content {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   color: #e5e7eb;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   line-height: 1.5;
   white-space: pre-wrap;
 }
 
 .debate-speech-panel .speech-item-thought {
-  margin: 6px 0;
-  font-size: 0.8125rem;
+  margin: 4px 0;
+  font-size: 0.75rem;
 }
 
 .debate-speech-panel .speech-item-thought summary {
@@ -1147,7 +1312,7 @@
 
 .debate-speech-panel .speech-item-thought p {
   margin: 4px 0 0;
-  padding: 6px 10px;
+  padding: 4px 8px;
   background: rgba(107, 114, 128, 0.08);
   border-left: 2px solid #6b7280;
   color: #d1d5db;
@@ -1163,8 +1328,8 @@
 
 /* 比赛结束后的快捷操作 */
 .post-game-actions {
-  margin-top: 12px;
-  padding: 12px;
+  margin-top: 8px;
+  padding: 10px;
   background: rgba(31, 41, 55, 0.4);
   border-radius: 6px;
   display: flex;
@@ -1177,7 +1342,7 @@
 .debate-stage .judging-pending,
 .debate-stage .result-pending {
   text-align: center;
-  padding: 32px 16px;
+  padding: 24px 16px;
   color: #d1d5db;
   background: rgba(31, 41, 55, 0.5);
   border-radius: 6px;
@@ -1188,22 +1353,26 @@
 .debate-game-page .game-header {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .debate-game-page .header-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
   color: #d1d5db;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 .debate-game-page .header-meta .topic-text {
   font-weight: 500;
   color: #f3f4f6;
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .debate-game-page .header-meta .spectator-count {
@@ -1237,7 +1406,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
+  padding: 10px 20px;
   border-bottom: 1px solid #374151;
 }
 
@@ -1410,23 +1579,23 @@
    ============================================================================ */
 
 .debate-spectator-questions {
-  margin-top: 16px;
-  padding: 12px;
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: rgba(31, 41, 55, 0.5);
+  border: 1px solid #374151;
   border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
 }
 
 .spectator-questions-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .spectator-questions-header h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: #f1f5f9;
 }
 
@@ -1436,9 +1605,9 @@
 }
 
 .spectator-questions-list {
-  max-height: 160px;
+  max-height: 140px;
   overflow-y: auto;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .spectator-questions-empty {
@@ -1500,14 +1669,6 @@
   font-size: 11px;
   margin-top: 4px;
 }
-
-/* ============================================================================
-   §20260831-07 — R6 报告 §3.4 修复:
-   .history-col + .debate-history-panel + .history-* 一组发言历史面板 CSS
-   已全部移除。原因:DebateSpeechPanel(中列 WS 实时推送)与
-   DebateHistoryPanel(REST 拉取)展示同一份数据,造成双历史面板。
-   页面层 §20260831-07 只保留 SpeechPanel;.history-col 等 CSS 不再被引用。
-   ============================================================================ */
 
 /* ============================================================================
    §20260831-05 — 房主操作(危险按钮)
@@ -1587,7 +1748,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .judge-announce-item {
@@ -1670,4 +1831,85 @@
 .model-stats-winrate {
   color: #fbbf24;
   font-weight: 600;
+}
+
+/* ============================================================================
+   §20260831-03 — 响应式布局断点
+   ============================================================================ */
+
+/* 中屏 1024px - 1279px: 缩小侧栏宽度 */
+@media (max-width: 1279px) {
+  .sidebar-left {
+    width: 220px;
+  }
+  .sidebar-right {
+    width: 260px;
+  }
+}
+
+/* 窄屏 <1024px: 侧栏变 overlay 抽屉 */
+@media (max-width: 1023px) {
+  .sidebar-left {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 50;
+    width: 280px;
+    transform: translateX(-100%);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+  }
+  .sidebar-left.open {
+    transform: translateX(0);
+  }
+  .sidebar-left.sidebar-collapsed {
+    width: 280px; /* 窄屏下不使用折叠态,直接用抽屉 */
+  }
+  .sidebar-right {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 50;
+    width: 300px;
+    transform: translateX(100%);
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3);
+  }
+  .sidebar-right.open {
+    transform: translateX(0);
+  }
+  .sidebar-right.sidebar-collapsed {
+    width: 300px;
+  }
+  /* 折叠按钮在窄屏隐藏 */
+  .sidebar-toggle {
+    display: none;
+  }
+  /* 中栏撑满全屏 */
+  .main-col {
+    width: 100%;
+  }
+}
+
+/* 超小屏 <768px: 进一步精简 */
+@media (max-width: 767px) {
+  .game-header {
+    padding: 8px 12px;
+  }
+  .game-header h1 {
+    font-size: 14px;
+  }
+  .debate-game-page .header-meta .topic-text {
+    max-width: 200px;
+  }
+  .main-col {
+    padding: 8px;
+    gap: 8px;
+  }
+  .debate-stage {
+    padding: 12px;
+  }
+  .stage-header .topic {
+    font-size: 16px;
+  }
 }

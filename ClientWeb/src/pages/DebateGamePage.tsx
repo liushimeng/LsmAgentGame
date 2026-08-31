@@ -1,11 +1,11 @@
 /**
- * 辩论比赛 — 对局页 (2026-08-31 §20260831-01 + §20260831-04 + §20260831-05 + §20260831-07)
+ * 辩论比赛 — 对局页 (2026-08-31 §20260831-01 + §20260831-04 + §20260831-05 + §20260831-07 + §20260831-03)
  *
- * 对齐 docs/辩论比赛/04 §3 对局页设计 + 复用 §6.2 zustand store / §6.3 useDebate hook。
- *
- * §20260831-05 增补:
- *   - 评委列加入 DebateSpectatorQuestionPanel(观众向裁判提问)
- *   - 聊天行上方加入 DebateHistoryPanel(完整发言历史 + 质询记录)
+ * §20260831-03 — 布局重构 (三栏自适应 + 侧栏折叠):
+ *   - 左栏: 发言历史 + 队伍信息 (可折叠)
+ *   - 中栏: 主舞台 + AI 解说 (核心显示区)
+ *   - 右栏: 房间聊天 + 裁判评审 + Agent 统计 (可折叠)
+ *   - 移除底部横向聊天栏,聊天移入右栏
  *
  * §20260831-07 — R6 测试报告 §3.4 修复:
  *   DebateSpeechPanel(中列,WS 实时推送,按 phase 分组折叠)与
@@ -21,6 +21,7 @@ import { useDebate } from '@/hooks/useDebate';
 import { useDebateStore } from '@/store/debate.store';
 import { debateService } from '@/api/debate';
 import { reportGlobalError } from '@/services/globalError';
+import { useSidebarCollapse } from '@/hooks/useSidebarCollapse';
 import DebateStage from '@/components/debate/DebateStage';
 import DebateTeamPanel from '@/components/debate/DebateTeamPanel';
 import DebateJudgePanel from '@/components/debate/DebateJudgePanel';
@@ -41,6 +42,7 @@ export function DebateGamePage() {
   const spectatorCount = useDebateStore((s) => s.spectatorCount);
   const phase = useDebateStore((s) => s.phase);
   const currentRoom = useDebateStore((s) => s.currentRoom);
+  const { leftCollapsed, rightCollapsed, toggleLeft, toggleRight } = useSidebarCollapse();
 
   useEffect(() => {
     if (!roomId) return;
@@ -79,41 +81,69 @@ export function DebateGamePage() {
       </header>
 
       <main className="game-main">
-        <aside className="team-panel-col">
-          <DebateTeamPanel />
+        {/* 左栏: 发言历史 + 队伍信息 (可折叠) */}
+        <aside className={`sidebar-left${leftCollapsed ? ' sidebar-collapsed' : ''}`}>
+          {!leftCollapsed && (
+            <div className="sidebar-content sidebar-left-content">
+              <DebateTeamPanel />
+              <DebateSpeechPanel />
+            </div>
+          )}
+          <button
+            type="button"
+            className="sidebar-toggle sidebar-toggle-left"
+            onClick={toggleLeft}
+            aria-label={leftCollapsed ? '展开发言历史' : '折叠发言历史'}
+            title={leftCollapsed ? '展开发言历史' : '折叠发言历史'}
+          >
+            {leftCollapsed ? '📜 ▶' : '◀ 📜'}
+          </button>
         </aside>
 
-        <section className="stage-col">
-          {/* §20260831-09 — Agent 统计面板(运行时长 + 总 Token + 每小时速率 + 调用次数) */}
-          <DebateAgentStatsPanel />
+        {/* 中栏: 主舞台 (核心显示区) */}
+        <section className="main-col">
           <DebateStage />
           <DebateCommentaryPanel />
-          <DebateSpeechPanel />
           <DebateSpectatorQuestionPanel roomId={roomId} />
         </section>
 
-        <aside className="judge-col">
-          <DebateJudgePanel />
-          {/* §20260831-09 — 裁判实时打分看板(阶段式累计 5 维度 + 总分) */}
-          <DebateJudgeScoreboardPanel />
-          <DebateScorePanel />
-          {isGameOver && (
-            <div className="post-game-actions">
-              <button
-                type="button"
-                className="btn-secondary btn-block"
-                onClick={() => navigate('/debate')}
-              >
-                ↩ 返回大厅
-              </button>
+        {/* 右栏: 房间聊天 + 裁判评审 + Agent 统计 (可折叠) */}
+        <aside className={`sidebar-right${rightCollapsed ? ' sidebar-collapsed' : ''}`}>
+          <button
+            type="button"
+            className="sidebar-toggle sidebar-toggle-right"
+            onClick={toggleRight}
+            aria-label={rightCollapsed ? '展开聊天与裁判' : '折叠聊天与裁判'}
+            title={rightCollapsed ? '展开聊天与裁判' : '折叠聊天与裁判'}
+          >
+            {rightCollapsed ? '💬 ◀' : '▶ 💬'}
+          </button>
+          {!rightCollapsed && (
+            <div className="sidebar-content sidebar-right-content">
+              <div className="sidebar-chat">
+                <GameChatPanel roomId={roomId} />
+              </div>
+              <div className="sidebar-aux">
+                <DebateAgentStatsPanel />
+                <DebateJudgePanel />
+                <DebateJudgeScoreboardPanel />
+                <DebateScorePanel />
+                {isGameOver && (
+                  <div className="post-game-actions">
+                    <button
+                      type="button"
+                      className="btn-secondary btn-block"
+                      onClick={() => navigate('/debate')}
+                    >
+                      ↩ 返回大厅
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </aside>
       </main>
-
-      <footer className="chat-col">
-        <GameChatPanel roomId={roomId} />
-      </footer>
     </div>
   );
 }
