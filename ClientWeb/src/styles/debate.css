@@ -1241,3 +1241,152 @@
   padding: 4px 8px;
   border-radius: 4px;
 }
+
+/* ========= 创建辩论房间弹窗 (§20260831-02) ========= */
+/* 全部挂 .debate-create-modal 作用域, 不改动 .modal-card 等共享基类(§2.1 约束4) */
+
+.debate-create-modal {
+  max-width: 960px; /* 640px +50% */
+  width: 95%;
+}
+
+.debate-create-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.debate-create-body fieldset.debate-create-section {
+  margin-bottom: 12px;
+  padding: 12px 16px 14px;
+}
+
+.debate-create-body .debate-create-section legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debate-create-body .section-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.35);
+  color: #bfdbfe; /* 对比度 ≥4.5:1 (§26) */
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* 双栏布局: ≥900px 双栏, <900px 回退单栏 */
+.debate-create-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+
+@media (max-width: 899px) {
+  .debate-create-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 单选一行控件: 按钮 + 文字不换行, 右侧扩展控件自适应拉伸 */
+.debate-create-modal .radio-option-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+
+.debate-create-modal .radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.debate-create-modal .radio-option input {
+  margin: 0;
+  accent-color: #3b82f6;
+}
+
+.debate-create-modal .debate-create-flex-input {
+  flex: 1;
+  min-width: 220px;
+}
+
+.debate-create-modal .debate-create-flex-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ② 辩论模式 2×2 网格 */
+.debate-create-modal .mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  margin-top: 4px;
+}
+
+@media (max-width: 480px) {
+  .debate-create-modal .mode-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ③ 阶段参数 */
+.debate-create-modal .preset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.debate-create-modal .preset-label {
+  white-space: nowrap;
+}
+
+.debate-create-modal .phase-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: #d1d5db;
+  font-variant-numeric: tabular-nums;
+}
+
+.debate-create-modal .phase-total {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #4b5563;
+  font-size: 13px;
+  font-weight: 600;
+  color: #93c5fd; /* 对比度 ≥4.5:1 (§26) */
+}
+
+/* ⑤ 观众设置 */
+.debate-create-modal .spectator-checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  margin-top: 4px;
+}
+
+.debate-create-modal .check-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.debate-create-modal .check-option input {
+  margin: 0;
+  accent-color: #3b82f6;
+}
