@@ -7,6 +7,8 @@ import { http } from '@/services/http';
 import type {
   DebateClientState,
   DebateCreateRoomRequest,
+  DebateHistoryDetail,
+  DebateHistoryListData,
   DebateModelStats,
   DebateRoomSummary,
   DebateTopic,
@@ -87,6 +89,17 @@ export const debateService = {
   // GET /api/games/debate/stats (§20260831-06 模型胜率统计)
   stats() {
     return http<DebateModelStats[]>('/api/games/debate/stats');
+  },
+
+  // GET /api/games/debate/history (§20260831-08 大厅历史战绩分页列表)
+  listHistory(page = 1, pageSize = 20) {
+    const qs = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    return http<DebateHistoryListData>(`/api/games/debate/history?${qs.toString()}`);
+  },
+
+  // GET /api/games/debate/history/:id (§20260831-08 复盘详情)
+  historyDetail(roomId: string) {
+    return http<DebateHistoryDetail>(`/api/games/debate/history/${encodeURIComponent(roomId)}`);
   },
 
   // DELETE /api/games/debate/rooms/:id

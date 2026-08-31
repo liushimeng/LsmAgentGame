@@ -20,7 +20,8 @@ interface PhaseGroup {
 }
 
 // 与后端 PhaseCN 对齐
-const PHASE_CN: Record<string, string> = {
+// §20260831-08 — 导出供 DebateReplayModal(复盘详情)复用,阶段中文标签单一事实来源。
+export const PHASE_CN: Record<string, string> = {
   preparation: '赛前准备',
   opening_argument: '① 开篇立论',
   rebuttal: '② 驳论',
@@ -241,7 +242,8 @@ function PhaseGroupView({
   );
 }
 
-function stanceLabel(s: string): string {
+/** §20260831-08 — 导出供 DebateReplayModal(复盘详情)复用。 */
+export function stanceLabel(s: string): string {
   switch (s) {
     case 'pro': return '正方';
     case 'con': return '反方';

@@ -45,6 +45,9 @@ const (
 	ErrNotYourTurn     = 30008
 	ErrGameNotStarted  = 30009
 	ErrGameAlreadyOver = 30010
+	// ErrTopicNotFound: 辩论辩题详情查询未命中(内置池 + DB 自定义池均无此 ID)。
+	// §20260831-08 GET /api/games/debate/topics/:id。
+	ErrTopicNotFound = 30017
 
 	// 3xxxx — spectator-related
 	// ErrSpectatorInputForbidden: a spectator tried to send a game input frame
@@ -133,6 +136,7 @@ var DefaultMessages = map[int]string{
 	ErrRoomAlreadyIn:   "already in this room",
 	ErrRoomNotIn:       "not in this room",
 	ErrGameNotFound:    "game not found",
+	ErrTopicNotFound:   "debate topic not found",
 	ErrMaxRoomsReached: "maximum rooms reached for this game",
 	ErrInvalidMove:     "invalid move",
 	ErrNotYourTurn:     "not your turn",

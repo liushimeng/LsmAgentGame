@@ -74,3 +74,7 @@
    只追加在末尾,不调整既有 @import 链顺序(CLAUDE.md §2.1 约束 4)。 */
 @import './werewolf-suicide-take.css';
 @import './debate.css';
+/* 2026-08-31 §20260831-08 — 辩论比赛「历史战绩」面板 + 复盘详情弹窗样式。
+   只追加在末尾(debate.css 之后),不调整既有 @import 链顺序;
+   独立成文件的原因:debate.css 已 1673 行,逼近 CLAUDE.md §4 的 1800 行上限。 */
+@import './debate-history.css';

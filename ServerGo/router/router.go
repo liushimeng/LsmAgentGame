@@ -171,7 +171,7 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 	// Werewolf prop REST (2026-07-21 §道具系统):
 	//   GET  /api/games/werewolf/props       — 列出已启用道具(前端抽屉)
 	//   POST /api/games/werewolf/props/use   — HTTP 形式使用道具(WS 断线兜底)
-//   GET  /api/games/werewolf/rooms/:roomId/prop_history  — 房间内最近 N 条道具使用记录(v3 §G5)
+	//   GET  /api/games/werewolf/rooms/:roomId/prop_history  — 房间内最近 N 条道具使用记录(v3 §G5)
 	werewolfGames := r.Group("/api/games/werewolf")
 	werewolfGames.Use(middleware.AuthRequired(cfg))
 	{
@@ -212,6 +212,9 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 	{
 		// 辩题池
 		debateGames.GET("/topics", debateAPI.Topics)
+		// §20260831-08 — 辩题详情 + 管理员添加自定义辩题(docs/辩论比赛/03 §2.4)。
+		debateGames.GET("/topics/:id", debateAPI.TopicDetail)
+		debateGames.POST("/topics", debateAPI.CreateTopic)
 		debateGames.GET("/stats", debateAPI.Stats) // §20260831-06 模型胜率统计
 
 		// 房间管理
@@ -223,6 +226,11 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		debateGames.POST("/rooms/:id/start", debateAPI.Start)
 		debateGames.GET("/rooms/:id/history", debateAPI.History)
 		debateGames.DELETE("/rooms/:id", debateAPI.Disband)
+
+		// §20260831-08 — 历史对局(已结束比赛分页列表 + 复盘详情,
+		// 数据来自 t_lsm_game_debate_* 表)。
+		debateGames.GET("/history", debateAPI.HistoryList)
+		debateGames.GET("/history/:id", debateAPI.HistoryDetail)
 	}
 
 	// LLM model metadata — protected, returns the safe (key-free) list of

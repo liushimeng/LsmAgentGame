@@ -930,6 +930,48 @@ export interface Dict {
   'debate.noRooms': string;
   'debate.createFirst': string;
 
+  // §20260831-08 — 大厅「历史战绩」面板 + 复盘详情弹窗
+  'debate.history.title': string;
+  'debate.history.empty': string;
+  'debate.history.loading': string;
+  'debate.history.error': string;
+  'debate.history.topic': string;
+  'debate.history.mode': string;
+  'debate.history.winner': string;
+  'debate.history.bestDebater': string;
+  'debate.history.finishedAt': string;
+  'debate.history.abnormal': string;
+  'debate.history.view': string;
+  'debate.history.seat': string;
+  'debate.history.pageInfo': string;
+  'debate.history.prev': string;
+  'debate.history.next': string;
+  'debate.mode.two_team': string;
+  'debate.mode.three_team': string;
+  'debate.mode.four_team': string;
+  'debate.mode.five_team': string;
+  'debate.replay.title': string;
+  'debate.replay.loading': string;
+  'debate.replay.error': string;
+  'debate.replay.teams': string;
+  'debate.replay.speeches': string;
+  'debate.replay.scores': string;
+  'debate.replay.noSpeeches': string;
+  'debate.replay.noScores': string;
+  'debate.replay.winnerIs': string;
+  'debate.replay.bestIs': string;
+  'debate.replay.avgOf': string;
+  'debate.replay.fallback': string;
+  'debate.replay.words': string;
+  'debate.replay.close': string;
+  'debate.replay.judge': string;
+  'debate.replay.judgeComments': string;
+  'debate.replay.noWinner': string;
+  'debate.role.first': string;
+  'debate.role.second': string;
+  'debate.role.third': string;
+  'debate.role.fourth': string;
+
   // 狼人杀 7 人局 — werewolf (第 6 款游戏)
   'nav.werewolf': string;
   'texasholdem.title': string;

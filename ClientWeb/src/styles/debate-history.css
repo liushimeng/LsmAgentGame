@@ -1,0 +1,245 @@
+/* ============================================================================
+   2026-08-31 §20260831-08 — 辩论比赛「历史战绩」面板 + 复盘详情弹窗样式
+
+   独立成文件的原因:styles/debate.css 已 1673 行,逼近 CLAUDE.md §4 的
+   1800 行硬上限,故遵循 werewolf-20260812-03 等先例在 globals.css 末尾
+   (debate.css 之后)追加本文件,只新增不覆盖,不调整既有 @import 链序。
+
+   复用 debate.css 现有类,不在本文件重复声明:
+     .debate-model-stats / .model-stats-toggle / .model-stats-empty /
+     .model-stats-table / .mode-tag / .modal-overlay / .modal-card /
+     .modal-header / .modal-close / .modal-body / .modal-footer /
+     .btn-primary / .btn-secondary / .btn-sm / .form-error /
+     .team-card(--{stance}) / .team-card__header / .team-card__agents /
+     .agent-row / .stance-tag(--{stance}) / .team-score(--winner) /
+     .team-score__header / .team-score__body / .team-score__bars /
+     .score-bar(__label/__track/__fill/__value) / .winner-banner /
+     .best-debater / .judge-comments / .speech-item(.pro/.con/.neutral) /
+     .speech-item__content / .debate-radar
+   ============================================================================ */
+
+/* ---------- 大厅:历史战绩列表 ---------- */
+
+.debate-history-list {
+  margin-top: 8px;
+}
+
+/* §7.1 就地错误条(样式对齐 .form-error,此处不依赖 .modal-body 作用域) */
+.history-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+.history-row {
+  cursor: pointer;
+}
+
+.history-row:hover td {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.history-topic-cell {
+  max-width: 320px;
+}
+
+/* §26.1 状态徽章对比度 ≥ 5:1:亮金文字 #fcd34d 于 #1f2937 面板底 ≈ 9.6:1 */
+.history-winner-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  white-space: nowrap;
+}
+
+/* §26.1 异常徽章:#fca5a5 于 #1f2937 ≈ 7.5:1(禁止红底红字反模式) */
+.history-abnormal-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.history-muted {
+  color: #9ca3af;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.history-pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.history-pager-info {
+  color: #d1d5db;
+  font-size: 12px;
+}
+
+/* ---------- 复盘详情弹窗 ---------- */
+
+.debate-replay-modal {
+  max-width: 960px;
+}
+
+.debate-replay-body {
+  padding-bottom: 8px;
+}
+
+.replay-topic-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  color: #e5e7eb;
+  font-size: 14px;
+}
+
+.replay-topic-text {
+  font-weight: 600;
+}
+
+.replay-section-title {
+  margin: 18px 0 8px;
+  font-size: 14px;
+  color: #fbbf24;
+  border-bottom: 1px solid #374151;
+  padding-bottom: 4px;
+}
+
+/* 队伍与辩位:自适应网格(≥260px 每列) */
+.replay-teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.replay-teams-grid .team-card {
+  margin-bottom: 0;
+}
+
+.replay-agent-model {
+  margin-left: auto;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* 每队均分提示(N 位裁判均分) */
+.replay-avg-hint {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #9ca3af;
+}
+
+/* §26.1 兜底评分徽章:金系,同 .history-winner-badge 对比度口径 */
+.replay-fallback-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* 裁判点评:单裁判 × 各队评分行 */
+.replay-judge-team {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.replay-judge-score {
+  color: #fbbf24;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.replay-judge-comment {
+  color: #d1d5db;
+  line-height: 1.5;
+}
+
+/* 发言记录:阶段折叠组(与 .debate-speech-panel .phase-group 同款视觉) */
+.replay-phase-group summary {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  color: #e5e7eb;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.replay-phase-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.replay-phase-group summary:hover {
+  color: #fbbf24;
+}
+
+.replay-phase-group .phase-group-icon {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.replay-phase-group .phase-group-count {
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.replay-speech-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.replay-speech-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.replay-speech-meta .speaker {
+  color: #93c5fd;
+  font-weight: 600;
+}
+
+.replay-speech-model {
+  color: #9ca3af;
+  font-size: 11px;
+}

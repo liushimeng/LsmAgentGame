@@ -3,6 +3,8 @@
  *
  * 对齐 docs/辩论比赛/04 §2 大厅页设计 + 复用 5 款游戏大厅页风格。
  * §20260831-06 — 增补模型胜率统计面板(§06 §9 历史统计)。
+ * §20260831-08 — 增补「历史战绩」折叠面板(DebateHistoryListPanel)+
+ *   复盘详情弹窗(DebateReplayModal),消费 /api/games/debate/history 端点。
  * 与 TexasHoldemLobbyPage / WerewolfLobbyPage 同构:
  *   - 5s HTTP 轮询 + room.state WS 推送(useLobbyLiveUpdate)
  *   - myRoles 状态(供房间卡片渲染「进入房间」/「👁 观战」按钮)
@@ -20,6 +22,8 @@ import { useLobbyLiveUpdate } from '@/hooks/useLobbyLiveUpdate';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import DebateRoomCreateModal from '@/components/debate/DebateRoomCreateModal';
+import DebateHistoryListPanel from '@/components/debate/DebateHistoryListPanel';
+import DebateReplayModal from '@/components/debate/DebateReplayModal';
 import type { DebateModelStats, DebateRoomSummary } from '@/types/debate';
 
 export function DebateLobbyPage() {
@@ -32,6 +36,9 @@ export function DebateLobbyPage() {
   // §20260831-06 — 模型胜率统计(§06 §9 历史统计)
   const [modelStats, setModelStats] = useState<DebateModelStats[]>([]);
   const [statsOpen, setStatsOpen] = useState(false);
+  // §20260831-08 — 历史战绩面板 + 复盘详情弹窗
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [replayRoomId, setReplayRoomId] = useState('');
   const t = useT();
 
   // 大厅挂载时拉取模型胜率统计(失败静默:统计缺失不影响主流程)
@@ -232,10 +239,31 @@ export function DebateLobbyPage() {
         )}
       </section>
 
+      {/* §20260831-08 — 历史战绩折叠面板(与「模型胜率统计」同款交互) */}
+      <section className="debate-model-stats debate-history-section">
+        <button
+          type="button"
+          className="model-stats-toggle"
+          onClick={() => setHistoryOpen((v) => !v)}
+        >
+          📜 {t('debate.history.title' as TKey)}{historyOpen ? ' ▲' : ' ▼'}
+        </button>
+        {historyOpen && (
+          <DebateHistoryListPanel onOpenDetail={(id) => setReplayRoomId(id)} />
+        )}
+      </section>
+
       {createOpen && (
         <DebateRoomCreateModal
           onClose={() => setCreateOpen(false)}
           onCreated={handleCreated}
+        />
+      )}
+
+      {replayRoomId && (
+        <DebateReplayModal
+          roomId={replayRoomId}
+          onClose={() => setReplayRoomId('')}
         />
       )}
     </div>

@@ -260,6 +260,100 @@ export interface DebateModelStats {
   win_rate: number;
 }
 
+/* ==========================================================================
+ * §20260831-08 — 历史战绩 (大厅「历史战绩」面板 + 复盘详情弹窗)
+ * 后端契约:GET /api/games/debate/history?page=&page_size= 与
+ *          GET /api/games/debate/history/:id(以 ServerGo 落库 JSON tag 为准)。
+ * ========================================================================== */
+
+/**
+ * 历史队伍中的辩手(落库精简版,对齐 ServerGo AgentConfig 的 wire 字段:
+ * seat_id / role / role_name / model_key —— §20260831-08 契约对齐)。
+ */
+export interface DebateHistoryAgent {
+  seat_id: number;
+  role: DebateRole;
+  role_name?: string;
+  model_key?: string;
+}
+
+/** 历史房间 team_config[] 单项(后端持久化 []TeamConfig 原样透传)。 */
+export interface DebateHistoryTeam {
+  team_id: number;
+  stance: DebateStance;
+  stance_label?: string;
+  agents: DebateHistoryAgent[];
+}
+
+/** 已结束比赛列表项(HistoryRoom)。 */
+export interface DebateHistoryRoom {
+  room_id: string;
+  topic_text: string;
+  topic_type?: string;
+  mode: DebateMode;
+  /** 后端落库为原始 phase 字符串(如 "game_over"),前端不消费,不做字面量收窄。 */
+  status: string;
+  winner_team_id: number;
+  best_debater_seat: number;
+  best_debater_team_id: number;
+  finished_at: number;
+  created_by: string;
+  is_abnormal: boolean;
+  /** 后端形状:顶层数组 []TeamConfig 原样透传(非 {teams:[]})。 */
+  team_config?: DebateHistoryTeam[];
+}
+
+/** GET /api/games/debate/history 响应 data。 */
+export interface DebateHistoryListData {
+  rooms: DebateHistoryRoom[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+/** 落库发言记录(HistorySpeech)。 */
+export interface DebateHistorySpeech {
+  id: string;
+  room_id: string;
+  phase: DebatePhase;
+  team_id: number;
+  seat: number;
+  stance: DebateStance;
+  speaker_name: string;
+  role: DebateRole;
+  content: string;
+  word_count: number;
+  model_key?: string;
+  created_at: number;
+}
+
+/** 落库裁判评分(HistoryScore,一行 = 一位裁判对一支队伍的打分)。 */
+export interface DebateHistoryScore {
+  id: string;
+  room_id: string;
+  judge_id: number;
+  judge_model_key?: string;
+  team_id: number;
+  argument_quality: number;
+  logic_rigor: number;
+  language_expression: number;
+  team_coordination: number;
+  rebuttal_effectiveness: number;
+  total_score: number;
+  comment: string;
+  best_debater_seat: number;
+  winner_team_id: number;
+  overall_comment: string;
+  is_fallback: boolean;
+}
+
+/** GET /api/games/debate/history/:id 响应 data。 */
+export interface DebateHistoryDetail {
+  room: DebateHistoryRoom;
+  speeches: DebateHistorySpeech[];
+  scores: DebateHistoryScore[];
+}
+
 export interface DebateCreateRoomRequest {
   name?: string;
   topic_id?: string;

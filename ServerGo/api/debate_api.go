@@ -1,17 +1,22 @@
 // Package api — 辩论比赛 REST API(2026-08-31 §20260831-01)。
 //
 // 端点清单(对齐 docs/辩论比赛/00 §4.1):
-//   POST   /api/games/debate/rooms                  创建辩论房间
-//   GET    /api/games/debate/rooms                  列出辩论房间
-//   GET    /api/games/debate/rooms/:id              房间详情
-//   POST   /api/games/debate/rooms/:id/join         加入观战
-//   POST   /api/games/debate/rooms/:id/spectate     观战
-//   POST   /api/games/debate/rooms/:id/leave_spectate 离开观战
-//   GET    /api/games/debate/topics                 获取辩题池
-//   POST   /api/games/debate/rooms/:id/start        开始比赛(仅房主)
-//   GET    /api/games/debate/rooms/:id/history      发言历史
-//   DELETE /api/games/debate/rooms/:id              房主解散房间
-//   GET    /api/games/debate/stats                  模型胜率统计(§20260831-06)
+//
+//	POST   /api/games/debate/rooms                  创建辩论房间
+//	GET    /api/games/debate/rooms                  列出辩论房间
+//	GET    /api/games/debate/rooms/:id              房间详情
+//	POST   /api/games/debate/rooms/:id/join         加入观战
+//	POST   /api/games/debate/rooms/:id/spectate     观战
+//	POST   /api/games/debate/rooms/:id/leave_spectate 离开观战
+//	GET    /api/games/debate/topics                 获取辩题池(§20260831-08:内置+DB 合并)
+//	GET    /api/games/debate/topics/:id             辩题详情(§20260831-08)
+//	POST   /api/games/debate/topics                 添加自定义辩题(§20260831-08,管理员)
+//	POST   /api/games/debate/rooms/:id/start        开始比赛(仅房主)
+//	GET    /api/games/debate/rooms/:id/history      发言历史
+//	DELETE /api/games/debate/rooms/:id              房主解散房间
+//	GET    /api/games/debate/stats                  模型胜率统计(§20260831-06)
+//	GET    /api/games/debate/history                已结束比赛分页列表(§20260831-08)
+//	GET    /api/games/debate/history/:id            复盘详情(§20260831-08)
 //
 // 路由在 router.go 注册。
 package api
@@ -26,17 +31,30 @@ import (
 	"LsmAgentGame/llm"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // DebateAPI 辩论 REST API。
 type DebateAPI struct {
 	mgr      *debate.DebateManager
 	registry *llm.Registry
+
+	// §20260831-08 — gormDB 用于历史对局查询(t_lsm_game_debate_*)与
+	// 自定义辩题读写(t_lsm_game_debate_topic);nil = in-memory 降级,
+	// history / 自定义辩题端点返回 ErrDB,其余端点不受影响。
+	gormDB *gorm.DB
+
+	// users 用于 POST /topics 的管理员校验(UserRoleChecker,
+	// 与 model_admin_api 同一注入模式,*service.UserService 满足该接口)。
+	users UserRoleChecker
 }
 
 // NewDebateAPI 构造 DebateAPI。
-func NewDebateAPI(mgr *debate.DebateManager, registry *llm.Registry) *DebateAPI {
-	return &DebateAPI{mgr: mgr, registry: registry}
+//
+// gormDB / users 允许 nil:历史与自定义辩题端点返回 ErrDB / 权限错误,
+// 房间 / 对局 / 统计端点不依赖 DB。
+func NewDebateAPI(mgr *debate.DebateManager, registry *llm.Registry, gormDB *gorm.DB, users UserRoleChecker) *DebateAPI {
+	return &DebateAPI{mgr: mgr, registry: registry, gormDB: gormDB, users: users}
 }
 
 // DebaterManager 返回 manager(供 ws 层注入钩子)。
@@ -48,22 +66,22 @@ func (a *DebateAPI) DebaterManager() *debate.DebateManager { return a.mgr }
 
 type createDebateRoomRequest struct {
 	Name            string                  `json:"name,omitempty"`
-	TopicID         string                  `json:"topic_id,omitempty"`     // 从辩题池选
-	TopicText       string                  `json:"topic_text,omitempty"`   // 自定义辩题
-	TopicType       string                  `json:"topic_type,omitempty"`   // 自定义时填类型
-	Mode            string                  `json:"mode"`                  // two_team/three_team/...
+	TopicID         string                  `json:"topic_id,omitempty"`   // 从辩题池选
+	TopicText       string                  `json:"topic_text,omitempty"` // 自定义辩题
+	TopicType       string                  `json:"topic_type,omitempty"` // 自定义时填类型
+	Mode            string                  `json:"mode"`                 // two_team/three_team/...
 	PhaseConfig     *debate.PhaseConfig     `json:"phase_config,omitempty"`
 	SpectatorConfig *debate.SpectatorConfig `json:"spectator_config,omitempty"`
 	AgentAssignment string                  `json:"agent_assignment,omitempty"` // auto / manual
-	Teams        []manualTeamReq          `json:"teams,omitempty"`         // 手动分配时填
-	Judges       []manualJudgeReq         `json:"judges,omitempty"`        // 手动分配时填
+	Teams           []manualTeamReq         `json:"teams,omitempty"`            // 手动分配时填
+	Judges          []manualJudgeReq        `json:"judges,omitempty"`           // 手动分配时填
 }
 
 type manualTeamReq struct {
-	TeamID      int                 `json:"team_id"`
-	Stance      string              `json:"stance"`
-	StanceLabel string              `json:"stance_label,omitempty"`
-	Agents      []manualAgentReq    `json:"agents"`
+	TeamID      int              `json:"team_id"`
+	Stance      string           `json:"stance"`
+	StanceLabel string           `json:"stance_label,omitempty"`
+	Agents      []manualAgentReq `json:"agents"`
 }
 
 type manualAgentReq struct {
@@ -173,8 +191,8 @@ func (a *DebateAPI) Create(c *gin.Context) {
 		"code":    errcode.OK,
 		"message": "ok",
 		"data": gin.H{
-			"room_id": room.RoomID,
-			"summary": room.PublicSummary(),
+			"room_id":      room.RoomID,
+			"summary":      room.PublicSummary(),
 			"client_state": room.BuildClientState(userID, true, false),
 		},
 	})
@@ -182,11 +200,16 @@ func (a *DebateAPI) Create(c *gin.Context) {
 
 // resolveTopic 解析辩题。
 //
-// 优先级:topic_id 命中内置池 > topic_text 自定义。
+// 优先级:topic_id 命中内置池 > topic_id 命中 DB 自定义池(§20260831-08)
+// > topic_text 自定义。
 func (a *DebateAPI) resolveTopic(req *createDebateRoomRequest) (debate.DebateTopic, bool) {
 	if req.TopicID != "" {
 		if t, ok := debate.FindTopicByID(req.TopicID); ok {
 			return *t, true
+		}
+		// §20260831-08 — 管理员添加的自定义辩题也能通过 topic_id 选题开房。
+		if t, ok := a.findCustomTopic(req.TopicID); ok {
+			return t, true
 		}
 	}
 	if req.TopicText != "" {
@@ -520,9 +543,9 @@ func (a *DebateAPI) History(c *gin.Context) {
 		"code":    errcode.OK,
 		"message": "ok",
 		"data": gin.H{
-			"speeches":  r.Speeches(),
+			"speeches":   r.Speeches(),
 			"cross_exam": r.CrossExamEntries(),
-			"results":   r.Result(),
+			"results":    r.Result(),
 		},
 	})
 }
@@ -562,10 +585,14 @@ func (a *DebateAPI) Disband(c *gin.Context) {
 
 // Topics GET /api/games/debate/topics — 获取辩题池。
 //
+// §20260831-08 起返回「内置题(cards.go) + DB 自定义题」合并结果,
+// 过滤参数同时作用于两个来源。
+//
 // 查询参数:
-//   q        关键词搜索(text/keywords)
-//   type     按类型筛选
-//   category 按分类筛选
+//
+//	q        关键词搜索(text/keywords)
+//	type     按类型筛选
+//	category 按分类筛选
 func (a *DebateAPI) Topics(c *gin.Context) {
 	q := c.Query("q")
 	topicType := c.Query("type")
@@ -581,6 +608,13 @@ func (a *DebateAPI) Topics(c *gin.Context) {
 		topics = debate.TopicsByCategory(category)
 	default:
 		topics = debate.BuiltInTopics()
+	}
+
+	// 合并 DB 自定义题(自定义题排在前,便于发现新题)。
+	for _, t := range a.loadCustomTopics() {
+		if customTopicMatches(t, q, topicType, category) {
+			topics = append(topics, t)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -620,7 +654,7 @@ func mustAtoi(s string) int {
 		if c < '0' || c > '9' {
 			return 0
 		}
-		v = v*10 + int(c - '0')
+		v = v*10 + int(c-'0')
 	}
 	return v
 }

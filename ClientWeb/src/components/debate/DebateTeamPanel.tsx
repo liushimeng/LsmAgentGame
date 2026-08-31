@@ -8,8 +8,9 @@
 import { useDebateStore } from '@/store/debate.store';
 import type { DebateClientTeam } from '@/types/debate';
 
-/** 立场 → 图标(多角度立场各自专属,§20260831-04) */
-const STANCE_ICONS: Record<string, string> = {
+/** 立场 → 图标(多角度立场各自专属,§20260831-04)
+ *  §20260831-08 — 导出供 DebateReplayModal(复盘详情)复用。 */
+export const STANCE_ICONS: Record<string, string> = {
   pro: '🔵',
   con: '🔴',
   neutral: '🟣',

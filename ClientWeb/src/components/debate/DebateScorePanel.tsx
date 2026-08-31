@@ -8,8 +8,9 @@
 import { useDebateStore } from '@/store/debate.store';
 import DebateRadarChart, { TEAM_RADAR_COLORS } from './DebateRadarChart';
 
-/** 维度 key → 中文标签(与后端 ScoreDimensions json tag 对应) */
-const DIM_LABELS: Record<string, string> = {
+/** 维度 key → 中文标签(与后端 ScoreDimensions json tag 对应)
+ *  §20260831-08 — 导出供 DebateReplayModal(复盘详情)复用。 */
+export const DIM_LABELS: Record<string, string> = {
   argument_quality: '论证质量',
   logic_rigor: '逻辑严谨',
   language_expression: '语言表达',

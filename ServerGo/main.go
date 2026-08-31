@@ -627,7 +627,16 @@ func main() {
 		// 前端 useDebate 订阅 debate.commentary 帧,不与狼人杀的 chat.commentary 混淆。
 		debateWsSvc.BroadcastCommentary(roomID, text, style)
 	})
-	debateAPI := api.NewDebateAPI(debateMgr, llmRegistry)
+	// §20260831-08 — 辩论比赛数据库持久化接线(发言/评审/房间记录/模型统计落库 +
+	// 启动回读模型胜率)。必须在上述 WS 广播钩子全部注入之后调用:persistence
+	// 采用链式包装(先广播、后异步落库),顺序颠倒会丢失实时推送。
+	// gormDB == nil 时 no-op(单测 / 无 DB 部署走 in-memory 降级)。
+	if err := debate.AttachPersistence(debateMgr, gormDB); err != nil {
+		logger.L().Warn("debate: persistence attach failed", zap.Error(err))
+	}
+	// gormDB / userSvc 注入历史对局查询(t_lsm_game_debate_*)与
+	// 自定义辩题读写 + 管理员校验;nil 时对应端点返回 ErrDB 降级。
+	debateAPI := api.NewDebateAPI(debateMgr, llmRegistry, gormDB, userSvc)
 
 	// 2026-07-10 §125 增强 — 注入法官总结所需回调。
 	// 1) Manager 单例(让 judge goroutine 内部能拿到 registry 调 LLM)。

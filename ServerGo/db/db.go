@@ -89,6 +89,13 @@ func Init(cfg *config.Config) (*gorm.DB, error) {
 		&models.TLsmGamePropUsageLog{},
 		// §20260812-02 U3 — 观众押注竞猜表。
 		&models.TLsmGameSpectatorBet{},
+		// 2026-08-31 §20260831-08 — 辩论比赛持久化:房间记录 / 发言 /
+		// 评审 / 模型胜率统计 / 自定义辩题(写入方 game/debate/persistence.go)。
+		&models.TLsmGameDebateRoom{},
+		&models.TLsmGameDebateSpeech{},
+		&models.TLsmGameDebateScore{},
+		&models.TLsmGameDebateModelStats{},
+		&models.TLsmGameDebateTopic{},
 	); err != nil {
 		return nil, err
 	}
@@ -220,9 +227,9 @@ func backfillPlayerRole(gormDB *gorm.DB) error {
 // columns populated with their safe defaults before AutoMigrate tightens them
 // to NOT NULL / indexed. Idempotent. The model defines:
 //
-//   is_bot                  bool   default false
-//   bot_provider_id         char(36) default '' (indexed)
-//   linked_provider_account varchar(64) default ''
+//	is_bot                  bool   default false
+//	bot_provider_id         char(36) default '' (indexed)
+//	linked_provider_account varchar(64) default ''
 //
 // Existing rows must end up at the safe defaults; the empty-string default
 // for bot_provider_id matches the model so the new index sees no NULLs.
@@ -317,7 +324,7 @@ func ensurePlayerUniqueIndex(gormDB *gorm.DB) error {
 // Idempotent: skips when the table is absent (AutoMigrate creates it fresh
 // with the correct width) and when the column is already varchar(>=128).
 // The nullability semantics of the existing column are preserved (legacy
-// databases have NULL DEFAULT ''). Indexes on the column are kept by MySQL
+// databases have NULL DEFAULT ”). Indexes on the column are kept by MySQL
 // across MODIFY COLUMN.
 func ensureWalletTxRefIDWidth(gormDB *gorm.DB) error {
 	mig := gormDB.Migrator()
