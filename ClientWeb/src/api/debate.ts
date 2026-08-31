@@ -82,4 +82,12 @@ export const debateService = {
       results: import('@/types/debate').DebateResult | null;
     }>(`/api/games/debate/rooms/${encodeURIComponent(roomId)}/history`);
   },
+
+  // DELETE /api/games/debate/rooms/:id
+  disband(roomId: string) {
+    return http<{ ok: true }>(
+      `/api/games/debate/rooms/${encodeURIComponent(roomId)}`,
+      { method: "DELETE" },
+    );
+  },
 };

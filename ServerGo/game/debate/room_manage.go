@@ -505,6 +505,36 @@ func (m *DebateManager) StopGame(roomID string) bool {
 	return true
 }
 
+// Disband 房主解散房间(彻底删除,不同于 StopGame 仅结束比赛)。
+// 仅房主可操作,房间存在且未在删除中时返回 true。
+func (m *DebateManager) Disband(roomID, callerUserID string) (*errcode.Error, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, ok := m.rooms[roomID]
+	if !ok {
+		return errcode.CodeMsg(errcode.ErrRoomNotFound, "debate: room not found"), false
+	}
+	if !r.IsOwner(callerUserID) {
+		return errcode.CodeMsg(errcode.ErrPermissionDenied, "debate: only owner can disband"), false
+	}
+	// 停止 Agent + 引擎
+	if r.agentRegistry != nil {
+		r.agentRegistry.Stop()
+		r.agentRegistry = nil
+	}
+	if eng, ok2 := m.engines[roomID]; ok2 {
+		eng.Stop()
+		delete(m.engines, roomID)
+	}
+	r.SetPhase(PhaseGameOver)
+	r.SetClosed()
+	delete(m.rooms, roomID)
+	if m.onRoomRemove != nil {
+		go m.onRoomRemove(roomID)
+	}
+	return nil, true
+}
+
 // Registry 返回 LLM Registry(供 Agent / 裁判使用)。
 func (m *DebateManager) Registry() *llm.Registry {
 	m.mu.RLock()

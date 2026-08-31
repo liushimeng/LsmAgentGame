@@ -1,14 +1,14 @@
 /**
- * 辩论比赛房主操作面板 (2026-08-31 §20260831-04)
+ * 辩论比赛房主操作面板 (2026-08-31 §20260831-04 + §20260831-05)
  *
  * 对齐 docs/辩论比赛/04 §4.2 房主交互:
  *   - 开始比赛(仅 Filling 阶段)
+ *   - 解散房间(任何阶段,二次确认)
  *
  * 失败错误以 formError 形式在面板内展示,同时上报全局(§7.1)。
- *
- * 解散房间(disband)暂未提供 REST 端点,留待下一阶段补全。
  */
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { debateService } from '@/api/debate';
 import { useDebateStore } from '@/store/debate.store';
 import { reportGlobalError } from '@/services/globalError';
@@ -18,10 +18,12 @@ interface Props {
 }
 
 export default function DebateHostControls({ roomId }: Props) {
+  const nav = useNavigate();
   const phase = useDebateStore((s) => s.phase);
   const isOwner = useDebateStore((s) => s.currentRoom?.is_owner ?? false);
 
   const [loading, setLoading] = useState(false);
+  const [disbanding, setDisbanding] = useState(false);
   const [err, setErr] = useState('');
 
   if (!isOwner) {
@@ -50,6 +52,23 @@ export default function DebateHostControls({ roomId }: Props) {
       });
   };
 
+  const handleDisband = () => {
+    if (!window.confirm('确定要解散房间吗?此操作不可撤销。')) return;
+    setErr('');
+    setDisbanding(true);
+    debateService
+      .disband(roomId)
+      .then(() => {
+        setDisbanding(false);
+        nav('/debate');
+      })
+      .catch((e: Error) => {
+        setDisbanding(false);
+        setErr(e.message);
+        reportGlobalError({ message: e.message, severity: 'error' });
+      });
+  };
+
   return (
     <div className="debate-host-controls">
       <span className="host-badge">👑 房主</span>
@@ -59,13 +78,22 @@ export default function DebateHostControls({ roomId }: Props) {
             type="button"
             className="btn-primary btn-sm"
             onClick={handleStart}
-            disabled={loading}
+            disabled={loading || disbanding}
           >
             {loading ? '启动中...' : '开始比赛'}
           </button>
         ) : (
           <span className="host-running">比赛进行中</span>
         )}
+        <button
+          type="button"
+          className="btn-danger btn-sm"
+          onClick={handleDisband}
+          disabled={loading || disbanding}
+          title="解散房间"
+        >
+          {disbanding ? '解散中...' : '解散房间'}
+        </button>
       </div>
       {err && <div className="host-error">{err}</div>}
     </div>

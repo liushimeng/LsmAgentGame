@@ -65,6 +65,7 @@ export default function App() {
           <Route path="/werewolf/spectate/:roomId" element={<WerewolfGamePage />} />
           <Route path="/debate" element={<DebateLobbyPage />} />
           <Route path="/debate/:roomId" element={<DebateGamePage />} />
+          <Route path="/debate/spectate/:roomId" element={<DebateGamePage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />

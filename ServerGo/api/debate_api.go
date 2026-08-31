@@ -526,6 +526,35 @@ func (a *DebateAPI) History(c *gin.Context) {
 }
 
 // ============================================================================
+// Disband DELETE /api/games/debate/rooms/:id
+// ============================================================================
+
+// Disband DELETE /api/games/debate/rooms/:id — 房主解散房间。
+func (a *DebateAPI) Disband(c *gin.Context) {
+	roomID := c.Param("id")
+	userID := c.GetString("user_id")
+	if userID == "" {
+		c.JSON(http.StatusOK, gin.H{"code": errcode.ErrAuthMissingToken, "message": "login required"})
+		return
+	}
+	err, ok := a.mgr.Disband(roomID, userID)
+	if !ok {
+		code := errcode.ErrInternal
+		msg := "disband failed"
+		if err != nil {
+			code = err.Code
+			msg = err.Message
+		}
+		c.JSON(http.StatusOK, gin.H{"code": code, "message": msg})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    errcode.OK,
+		"message": "ok",
+	})
+}
+
+// ============================================================================
 // Topics GET /api/games/debate/topics
 // ============================================================================
 

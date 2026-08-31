@@ -1390,3 +1390,263 @@
   margin: 0;
   accent-color: #3b82f6;
 }
+
+/* ============================================================================
+   §20260831-05 — 观众提问面板
+   ============================================================================ */
+
+.debate-spectator-questions {
+  margin-top: 16px;
+  padding: 12px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+}
+
+.spectator-questions-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.spectator-questions-header h3 {
+  margin: 0;
+  font-size: 14px;
+  color: #f1f5f9;
+}
+
+.spectator-questions-hint {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.spectator-questions-list {
+  max-height: 160px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.spectator-questions-empty {
+  font-size: 12px;
+  color: #64748b;
+  margin: 8px 0;
+}
+
+.spectator-questions-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.spectator-question-item {
+  padding: 6px 8px;
+  border-bottom: 1px solid #1e293b;
+  font-size: 12px;
+}
+
+.question-user {
+  color: #fbbf24;
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.question-text {
+  color: #e2e8f0;
+}
+
+.question-time {
+  color: #64748b;
+  font-size: 10px;
+  margin-left: 8px;
+}
+
+.spectator-questions-input {
+  display: flex;
+  gap: 6px;
+}
+
+.spectator-question-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
+.spectator-question-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.spectator-questions-error {
+  color: #ef4444;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* ============================================================================
+   §20260831-05 — 发言历史面板
+   ============================================================================ */
+
+.history-col {
+  margin: 0 16px 16px;
+  padding: 12px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+}
+
+.debate-history-panel h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: #f1f5f9;
+}
+
+.history-error {
+  color: #ef4444;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.history-empty {
+  font-size: 12px;
+  color: #64748b;
+  padding: 8px 0;
+}
+
+.history-phase {
+  margin-bottom: 8px;
+}
+
+.history-phase-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.history-phase-header:hover {
+  background: #1e293b;
+}
+
+.history-phase-toggle {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.history-phase-label {
+  flex: 1;
+  font-weight: 600;
+}
+
+.history-phase-count {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.history-phase-content {
+  padding: 8px 0 8px 16px;
+}
+
+.history-speech {
+  padding: 8px;
+  margin-bottom: 6px;
+  background: #0f172a;
+  border-left: 3px solid #475569;
+  border-radius: 4px;
+}
+
+.history-speech-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.history-speech-speaker {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.history-speech-content {
+  font-size: 12px;
+  color: #cbd5e1;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.history-cross-exam {
+  padding: 4px 0;
+}
+
+.history-cross-item {
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  background: #0f172a;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.history-cross-item--answer {
+  border-left: 3px solid #22c55e;
+}
+
+.history-cross-item:not(.history-cross-item--answer) {
+  border-left: 3px solid #f59e0b;
+}
+
+.history-cross-role {
+  font-weight: 600;
+  color: #94a3b8;
+  margin-right: 6px;
+}
+
+.history-cross-text {
+  color: #cbd5e1;
+}
+
+/* ============================================================================
+   §20260831-05 — 房主操作(危险按钮)
+   ============================================================================ */
+
+.btn-danger {
+  background-color: #dc2626;
+  color: #ffffff;
+  border: 1px solid #b91c1c;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.host-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.host-error {
+  color: #ef4444;
+  font-size: 11px;
+  margin-top: 4px;
+}

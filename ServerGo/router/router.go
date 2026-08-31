@@ -221,6 +221,7 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		debateGames.POST("/rooms/:id/leave_spectate", debateAPI.LeaveSpectate)
 		debateGames.POST("/rooms/:id/start", debateAPI.Start)
 		debateGames.GET("/rooms/:id/history", debateAPI.History)
+		debateGames.DELETE("/rooms/:id", debateAPI.Disband)
 	}
 
 	// LLM model metadata — protected, returns the safe (key-free) list of
