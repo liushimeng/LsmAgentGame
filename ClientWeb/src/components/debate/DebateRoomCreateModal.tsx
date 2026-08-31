@@ -15,7 +15,7 @@
  *   - 阶段参数预设(快速/标准/深度)
  *   - 自动分配模型(默认)
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { debateService } from '@/api/debate';
 import type {
@@ -155,6 +155,14 @@ export default function DebateRoomCreateModal({ onClose, onCreated }: Props) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
+  // §20260831-10(P2-1):选中"自定义辩题"radio 后自动聚焦输入框,无需二次点击。
+  const customTopicRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (topicSource === 'custom' && customTopicRef.current) {
+      customTopicRef.current.focus();
+    }
+  }, [topicSource]);
+
   useEffect(() => {
     debateService
       .listTopics()
@@ -271,6 +279,7 @@ export default function DebateRoomCreateModal({ onClose, onCreated }: Props) {
               label="自定义辩题"
             >
               <input
+                ref={customTopicRef}
                 className="debate-create-flex-input"
                 type="text"
                 placeholder="输入自定义辩题文本..."
@@ -320,6 +329,7 @@ export default function DebateRoomCreateModal({ onClose, onCreated }: Props) {
                 <span>立论 {phaseConfig.opening_argument_sec}s</span>
                 <span>驳论 {phaseConfig.rebuttal_sec}s</span>
                 <span>质询 {phaseConfig.cross_exam_sec}s</span>
+                <span>质询小结 {phaseConfig.cross_exam_summary_sec}s</span>
                 <span>自由辩 {phaseConfig.free_debate_sec}s</span>
                 <span>总结 {phaseConfig.closing_argument_sec}s</span>
               </div>

@@ -21,7 +21,81 @@ export const DIM_LABELS: Record<string, string> = {
 export default function DebateScorePanel() {
   const { result, phase } = useDebateStore();
 
-  // 仅在 result 阶段或之后显示
+  // §20260831-10(P1-1 修复):BroadcastResult 在 advanceTo(PhaseResult) 之前触发,
+  // debate.game_over 帧到达时 phase 可能仍为 judging。因此只要 result 数据到达即渲染,
+  // 不必等待 phase 变更为 result/game_over。
+  if (result) {
+    return (
+      <div className="debate-score-panel">
+        <h3>🏆 评审结果</h3>
+
+        {/* 胜方高亮 */}
+        <div className="winner-banner">
+          🥇 胜方:{result.winner_team_name}
+        </div>
+
+        {/* 各队伍分数(含雷达图;多队模式按数组渲染) */}
+        {result.team_scores.map((ts, idx) => {
+          const isWinner = ts.team_id === result.winner_team_id;
+          const radarColor = TEAM_RADAR_COLORS[idx % TEAM_RADAR_COLORS.length];
+          return (
+            <div
+              key={ts.team_id}
+              className={`team-score${isWinner ? ' team-score--winner' : ''}`}
+            >
+              <header className="team-score__header">
+                {isWinner ? '🥇' : '🥈'} {ts.team_name} #{ts.rank}
+                <span className="total">{ts.total_score.toFixed(1)}</span>
+              </header>
+              <div className="team-score__body">
+                <DebateRadarChart
+                  dimensionScores={ts.dimension_scores}
+                  color={radarColor}
+                  size={128}
+                />
+                <div className="team-score__bars">
+                  {Object.entries(ts.dimension_scores).map(([dim, score]) => (
+                    <div key={dim} className="score-bar">
+                      <span className="score-bar__label">{DIM_LABELS[dim] ?? dim}</span>
+                      <div className="score-bar__track">
+                        <div
+                          className="score-bar__fill"
+                          style={{ width: `${(score / 10) * 100}%` }}
+                        />
+                      </div>
+                      <span className="score-bar__value">{score.toFixed(1)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* 最佳辩手 */}
+        <div className="best-debater">
+          🌟 最佳辩手:{result.best_debater.name} (座位 {result.best_debater.seat})
+        </div>
+
+        {/* 整体评语 */}
+        {result.judge_details && result.judge_details.length > 0 && (
+          <details className="judge-comments">
+            <summary>📝 裁判点评</summary>
+            <ul>
+              {result.judge_details.map((js) => (
+                <li key={js.judge_id}>
+                  <strong>裁判 {js.judge_id + 1}({js.model_key}):</strong>
+                  <p>{js.overall_comment}</p>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    );
+  }
+
+  // result 数据尚未到达:根据阶段显示不同提示
   if (phase !== 'result' && phase !== 'game_over') {
     return (
       <div className="debate-score-panel debate-score-panel--pending">
@@ -31,81 +105,11 @@ export default function DebateScorePanel() {
     );
   }
 
-  if (!result) {
-    return (
-      <div className="debate-score-panel">
-        <h3>🏆 评审结果</h3>
-        <p>评审中...</p>
-      </div>
-    );
-  }
-
+  // phase 已是 result/game_over 但 result 数据仍未到达(异常路径)
   return (
     <div className="debate-score-panel">
       <h3>🏆 评审结果</h3>
-
-      {/* 胜方高亮 */}
-      <div className="winner-banner">
-        🥇 胜方:{result.winner_team_name}
-      </div>
-
-      {/* 各队伍分数(含雷达图;多队模式按数组渲染) */}
-      {result.team_scores.map((ts, idx) => {
-        const isWinner = ts.team_id === result.winner_team_id;
-        const radarColor = TEAM_RADAR_COLORS[idx % TEAM_RADAR_COLORS.length];
-        return (
-          <div
-            key={ts.team_id}
-            className={`team-score${isWinner ? ' team-score--winner' : ''}`}
-          >
-            <header className="team-score__header">
-              {isWinner ? '🥇' : '🥈'} {ts.team_name} #{ts.rank}
-              <span className="total">{ts.total_score.toFixed(1)}</span>
-            </header>
-            <div className="team-score__body">
-              <DebateRadarChart
-                dimensionScores={ts.dimension_scores}
-                color={radarColor}
-                size={128}
-              />
-              <div className="team-score__bars">
-                {Object.entries(ts.dimension_scores).map(([dim, score]) => (
-                  <div key={dim} className="score-bar">
-                    <span className="score-bar__label">{DIM_LABELS[dim] ?? dim}</span>
-                    <div className="score-bar__track">
-                      <div
-                        className="score-bar__fill"
-                        style={{ width: `${(score / 10) * 100}%` }}
-                      />
-                    </div>
-                    <span className="score-bar__value">{score.toFixed(1)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-      })}
-
-      {/* 最佳辩手 */}
-      <div className="best-debater">
-        🌟 最佳辩手:{result.best_debater.name} (座位 {result.best_debater.seat})
-      </div>
-
-      {/* 整体评语 */}
-      {result.judge_details && result.judge_details.length > 0 && (
-        <details className="judge-comments">
-          <summary>📝 裁判点评</summary>
-          <ul>
-            {result.judge_details.map((js) => (
-              <li key={js.judge_id}>
-                <strong>裁判 {js.judge_id + 1}({js.model_key}):</strong>
-                <p>{js.overall_comment}</p>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+      <p>评审中...</p>
     </div>
   );
 }

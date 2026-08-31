@@ -130,27 +130,6 @@ export default function DebateSpeechPanel() {
           }}
         />
       ))}
-      {crossExam.length > 0 && (
-        <PhaseGroupView
-          group={{
-            phase: 'cross_examination' as DebatePhase,
-            phaseCn: PHASE_CN['cross_examination'],
-            speeches: [],
-          }}
-          defaultOpen={defaultOpen.has('cross_examination')}
-          revealThought={revealThought}
-          agentThoughts={agentThoughts}
-          likedSpeeches={likedSpeeches}
-          onLike={(sid) => {
-            const added = toggleLike(sid);
-            if (!added || !currentRoom) return;
-            wsClient.send('debate.like', {
-              room_id: currentRoom.room_id,
-              speech_id: sid,
-            });
-          }}
-        />
-      )}
     </div>
   );
 }

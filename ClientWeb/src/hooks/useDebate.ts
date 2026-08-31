@@ -69,19 +69,30 @@ export function useDebate(roomId: string) {
     // 2) WS subscribe
     wsClient.send('debate.subscribe', { room_id: roomId });
 
-    // §20260831-07 — history fallback:若 1.5s 内 WS 未推 debate.state,
-    // 主动拉一次 history 注入 store,避免阶段/计时卡在「等待开始」。
+    // §20260831-07 + §20260831-10(P1-3 修复) — history fallback:
+    // 1. 若 1.5s 内 WS 未推 debate.state,主动拉一次 history 注入 store。
+    // 2. 即使收到了 debate.state 帧,若 phase 仍为 filling/watching(占位帧),
+    //    也强制拉 history 获取真实阶段数据。
     const historyFallbackTimer = window.setTimeout(() => {
-      if (cancelled || stateReceived) return;
+      if (cancelled) return;
+      // 如果已收到真实 phase(非 filling),则无需兜底
+      if (stateReceived && useDebateStore.getState().phase !== 'filling') return;
       debateService
         .history(roomId)
         .then((h) => {
-          if (cancelled || stateReceived) return;
-          // 把历史发言追加到 store(空时不报错)。
-          const speeches = (h as { speeches?: DebateSpeech[] }).speeches ?? [];
-          speeches.forEach((s) => addSpeech(s));
-          const crossExams = (h as { cross_exams?: DebateCrossExamEntry[] }).cross_exams ?? [];
-          crossExams.forEach((x) => addCrossExam(x));
+          if (cancelled) return;
+          // 拉到真实 state 后,重新拉一次 detail 覆盖 store
+          return debateService.detail(roomId).then((state) => {
+            if (cancelled) return;
+            setGameState(state);
+          }).catch(() => {
+            // detail 失败时降级:仅注入历史发言(去重由 addSpeech 保证)
+            if (cancelled) return;
+            const speeches = (h as { speeches?: DebateSpeech[] }).speeches ?? [];
+            speeches.forEach((s) => addSpeech(s));
+            const crossExams = (h as { cross_exams?: DebateCrossExamEntry[] }).cross_exams ?? [];
+            crossExams.forEach((x) => addCrossExam(x));
+          });
         })
         .catch(() => {
           // 兜底失败静默,后续 phase 帧还会来

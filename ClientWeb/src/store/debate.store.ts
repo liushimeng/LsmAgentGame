@@ -160,10 +160,14 @@ export const useDebateStore = create<DebateStore>((set) => ({
   }),
   updatePhase: (phase, timeRemaining) => set({ phase, timeRemaining }),
   setCurrentSpeaker: (speaker) => set({ currentSpeaker: speaker }),
-  addSpeech: (speech) => set((s) => ({
-    speeches: [...s.speeches, speech],
-    currentSpeech: speech,
-  })),
+  // §20260831-10(P1-2 修复):addSpeech 幂等去重,防止 history fallback + WS 帧重复追加。
+  addSpeech: (speech) => set((s) => {
+    if (speech.id && s.speeches.some((x) => x.id === speech.id)) {
+      // 重复发言:仅更新 currentSpeech,不追加到列表
+      return { currentSpeech: speech };
+    }
+    return { speeches: [...s.speeches, speech], currentSpeech: speech };
+  }),
   addCrossExam: (entry) => set((s) => ({ crossExam: [...s.crossExam, entry] })),
   setCurrentSpeech: (speech) => set({ currentSpeech: speech }),
   addJudgeScore: (score) => set((s) => {
