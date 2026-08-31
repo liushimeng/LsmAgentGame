@@ -12,6 +12,10 @@
  * §20260831-06 — 增补:
  *   - spectatorAnswers 裁判回答观众提问(debate.spectator_answer 帧)
  *   - judgeAnnouncements 裁判公开宣告(debate.judge_announce 帧)
+ *
+ * §20260831-11 — 增补:
+ *   - updatePhase 扩签名接收 phase_cn,并同步更新 currentRoom 副本
+ *     (R8 P1-A:会话内开始比赛时阶段标签不推进)
  */
 import { create } from 'zustand';
 import type {
@@ -78,7 +82,10 @@ interface DebateStore {
   // Actions
   setRooms: (rooms: DebateRoomSummary[]) => void;
   setGameState: (state: DebateClientState) => void;
-  updatePhase: (phase: string, timeRemaining: number) => void;
+  /** §20260831-11(P1-A 修复):扩签名接收 phase_cn —— 除顶层 phase/timeRemaining 外
+   *  必须同步更新 currentRoom 副本,否则读 currentRoom.phase_cn 的组件
+   *  (DebateStage 阶段标签/计时器)永远停留在 HTTP detail 初值,不随 WS 帧推进。 */
+  updatePhase: (phase: string, timeRemaining: number, phaseCn?: string) => void;
   setCurrentSpeaker: (speaker: string) => void;
   addSpeech: (speech: DebateSpeech) => void;
   addCrossExam: (entry: DebateCrossExamEntry) => void;
@@ -158,7 +165,20 @@ export const useDebateStore = create<DebateStore>((set) => ({
     spectatorCount: state.spectator_count,
     currentSpeaker: state.current_speaker ?? '',
   }),
-  updatePhase: (phase, timeRemaining) => set({ phase, timeRemaining }),
+  // §20260831-11(P1-A 修复):同步写 currentRoom 的 current_phase / phase_cn /
+  // time_remaining_sec,currentRoom 为 null 时仅更新顶层(不崩溃)。
+  updatePhase: (phase, timeRemaining, phaseCn) => set((s) => ({
+    phase,
+    timeRemaining,
+    currentRoom: s.currentRoom
+      ? {
+          ...s.currentRoom,
+          current_phase: phase as DebateClientState['current_phase'],
+          phase_cn: phaseCn || s.currentRoom.phase_cn,
+          time_remaining_sec: timeRemaining,
+        }
+      : null,
+  })),
   setCurrentSpeaker: (speaker) => set({ currentSpeaker: speaker }),
   // §20260831-10(P1-2 修复):addSpeech 幂等去重,防止 history fallback + WS 帧重复追加。
   addSpeech: (speech) => set((s) => {

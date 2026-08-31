@@ -215,11 +215,54 @@ func (e *DebateEngine) Run() {
 		phase := e.room.Phase()
 		e.handlePhase(phase)
 
-		// 阶段超时后由 handlePhase 内部推进;若已 GameOver,退出
-		if e.room.IsGameOver() {
+		// §20260831-11 R8 P1-B — result 卡死兜底(防御性 watchdog,R8 报告 §6.2 建议):
+		// handlePhase 返回后 phase 仍停在 PhaseResult 且已超过 deadline + 5s
+		// (5s 调度余量)时,强制推进终局并触发 onGameOver —— 避免任何未预期
+		// 路径导致 phase 永远停留 result(R8 实测 result 倒计时归零后卡死 90s+)。
+		// 幂等:runResultPhase 正常推进后 phase 已是 PhaseGameOver,不会进该分支。
+		// 引擎已被取消(ctx done)时交由 manager 拆除路径收尾,此处不再补触发。
+		e.forceGameOverIfResultStuck()
+
+		// §20260831-11 R8 P1-B — 退出条件由 IsGameOver() 收紧为 Phase() == PhaseGameOver。
+		// 根因:IsGameOver() 对 PhaseResult 也返回 true(room.go),runJudgingPhase
+		// → advanceTo(PhaseResult) 后主循环立即退出,runResultPhase 永远不会被
+		// 调用 —— phase 从此停留 result,这是 R8「result 阶段不推进 game_over」
+		// 的第一根因(第二根因是 runResultPhase 固定计数 + 裸 SetPhase,见其注释)。
+		// IsGameOver() 对外语义保持不变(API/WS 层仍把 result 视作"比赛已定")。
+		if e.room.Phase() == PhaseGameOver {
 			return
 		}
 	}
+}
+
+// resultStuckGraceSec result 卡死 watchdog 的调度余量(秒)。
+//
+// deadline 归零后仍留 5s:容忍 runResultPhase 每秒轮询粒度 + goroutine 调度
+// 抖动,避免与正常推进路径竞争重复触发 onGameOver。
+const resultStuckGraceSec = 5
+
+// forceGameOverIfResultStuck result 阶段卡死强制终局(§20260831-11 R8 P1-B)。
+//
+// 判定:引擎存活 且 phase == PhaseResult 且 WallNow() > PhaseDeadline()+resultStuckGraceSec。
+// 命中时强制 advanceTo(PhaseGameOver)(触发 debate.phase 广播 + stats 推送)
+// 并补触发 onGameOver(与 runResultPhase 相同的回调)。
+// 返回是否执行了强制推进(用于测试断言;调用方 Run() 不依赖返回值)。
+func (e *DebateEngine) forceGameOverIfResultStuck() bool {
+	if isCtxDone(e.ctx) {
+		return false
+	}
+	if e.room.Phase() != PhaseResult {
+		return false
+	}
+	dl := e.room.PhaseDeadline()
+	if dl <= 0 || WallNow() <= dl+resultStuckGraceSec {
+		return false
+	}
+	e.advanceTo(PhaseGameOver)
+	if mgr := e.manager; mgr != nil && mgr.onGameOver != nil {
+		go mgr.onGameOver(e.room.RoomID)
+	}
+	return true
 }
 
 // handlePhase 当前阶段实现入口(由 engine_phase.go 中的具体方法分发)。

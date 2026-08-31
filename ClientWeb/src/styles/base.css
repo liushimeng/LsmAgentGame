@@ -139,6 +139,11 @@ a:hover { text-decoration: underline; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* §20260831-11(P2-A):品牌链接触控目标补齐 —— 高度 ≥44(报告实测 27px),
+   * inline-flex 垂直居中,不影响水平截断行为。 */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 
 /* 版本号 + 编译时间 */
@@ -216,6 +221,25 @@ a:hover { text-decoration: underline; }
   padding: 6px 8px;
   font-size: 11px;
   align-self: flex-end;
+  /* §20260831-11(P2-A):触控目标补齐到 44×44(CLAUDE.md §23)。 */
+  min-height: 44px;
+  min-width: 44px;
+  position: relative;
+}
+/* §20260831-11(P2-A):折叠态侧栏宽 48px、水平 padding 4px → 可视宽仅 40px,
+ * min-width:44 会溢出 —— 改为撑满轨宽(40px),::after 左右各外扩 2px
+ * 把点击热区补足到 44px 宽。 */
+.app-sidebar--collapsed .app-sidebar__toggle {
+  min-width: 0;
+  width: 100%;
+}
+.app-sidebar--collapsed .app-sidebar__toggle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -2px;
+  right: -2px;
 }
 
 .app-sidebar__backdrop {
@@ -516,7 +540,27 @@ a:hover { text-decoration: underline; }
   padding: 2px 8px;
   font-size: 11px;
   line-height: 1.2;
-  min-height: 28px;
+  /* §20260831-11(P2-A):触控目标补齐 —— 展开态 44×44。
+   * 折叠态见下方 --collapsed 覆盖(侧栏仅 36px 宽,44px min-width 会撑破)。 */
+  min-height: 44px;
+  min-width: 44px;
+  position: relative;
+}
+/* §20260831-11(P2-A):折叠态侧栏宽 --chat-w-collapsed: 36px,放不下 44px 宽按钮 ——
+ * 视觉宽度收窄回紧凑尺寸,用 ::after 伪元素把点击热区外扩到 ≥44×44(不影响布局)。 */
+.chat-panel--collapsed .chat-panel__toggle {
+  min-width: 0;
+  padding: 2px 6px;
+}
+.chat-panel--collapsed .chat-panel__toggle::after {
+  content: '';
+  position: absolute;
+  /* 相对按钮自身 padding box 取百分比:上下各外扩 50%、左右各 60%,
+   * 视觉 ~24×44 → 热区 ≥44×44 */
+  top: -50%;
+  bottom: -50%;
+  left: -60%;
+  right: -60%;
 }
 .chat-panel__header-actions {
   display: flex;

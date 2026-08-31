@@ -358,22 +358,42 @@ func (e *DebateEngine) runJudgingPhase() {
 }
 
 // runResultPhase 公布结果。
+//
+// §20260831-11 R8 P1-B:deadline 驱动 + advanceTo 广播。旧实现两处缺陷:
+//   - 固定计数循环(for i < showSec)与 room.PhaseDeadline()(SetPhase 时按
+//     PhaseDurationSec 写入)脱钩 —— 进入 result 前若存在延迟(评审聚合 /
+//     goroutine 调度),会出现「deadline 已过(remaining=0)但函数仍在数秒」
+//     的窗口,任何未预期路径都会让 phase 永远停留 result;
+//   - 裸 room.SetPhase(PhaseGameOver) 不触发 onPhaseChange WS 广播
+//     (debate.phase 帧)与 emitAgentStatsIfPossible,前端会话内收不到
+//     终局 phase 帧(R8 报告 P1-A phase 标签卡死的同源因素)。
+//
+// 现改为对齐 runPreparationPhase 的 deadline 驱动写法 + advanceTo 推进;
+// onGameOver 回调与 ctx.Done 提前返回语义保留。
 func (e *DebateEngine) runResultPhase() {
 	cfg := e.room.Config.PhaseConfig
 	showSec := cfg.ResultShowSec
 	if showSec <= 0 {
 		showSec = 30
 	}
-	for i := 0; i < showSec; i++ {
+	deadline := e.room.PhaseDeadline()
+	if deadline <= 0 {
+		// 异常兜底:deadline 未初始化(未经 SetPhase 进入 result)时按 showSec 重算
+		deadline = WallNow() + int64(showSec)
+	}
+	for {
 		select {
 		case <-e.ctx.Done():
 			return
 		case <-time.After(time.Second):
+			if WallNow() >= deadline {
+				e.advanceTo(PhaseGameOver)
+				if mgr := e.manager; mgr != nil && mgr.onGameOver != nil {
+					go mgr.onGameOver(e.room.RoomID)
+				}
+				return
+			}
 		}
-	}
-	e.room.SetPhase(PhaseGameOver)
-	if mgr := e.manager; mgr != nil && mgr.onGameOver != nil {
-		go mgr.onGameOver(e.room.RoomID)
 	}
 }
 

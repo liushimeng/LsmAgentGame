@@ -4,8 +4,14 @@
  * 对齐 docs/辩论比赛/04 §3.5 评分面板设计。
  * §20260831-04 — 每队新增 5 维 SVG 雷达图(DebateRadarChart)+ 维度中文标签;
  * 多队模式按 team_scores 数量渲染(不硬编码两队)。
+ *
+ * §20260831-11 — R8 P2-B 修复:裁判点评块加固 ——
+ * overall_comment 为空回退 comment → rankings 队伍评语,显示 model_key
+ * 与 is_fallback「默认评分」徽章,整条全空才跳过(配合 useDebate 的
+ * game_over 帧 merge,保证服务端有数据时前端必渲染)。
  */
 import { useDebateStore } from '@/store/debate.store';
+import type { DebateJudgeScore } from '@/types/debate';
 import DebateRadarChart, { TEAM_RADAR_COLORS } from './DebateRadarChart';
 
 /** 维度 key → 中文标签(与后端 ScoreDimensions json tag 对应)
@@ -24,6 +30,21 @@ export default function DebateScorePanel() {
   // §20260831-10(P1-1 修复):BroadcastResult 在 advanceTo(PhaseResult) 之前触发,
   // debate.game_over 帧到达时 phase 可能仍为 judging。因此只要 result 数据到达即渲染,
   // 不必等待 phase 变更为 result/game_over。
+  //
+  // §20260831-11(P2-B 修复):预计算可展示的裁判点评条目 —— 每条取
+  // overall_comment → comment(扁平兼容字段)→ rankings 内队伍评语,
+  // 整条全空的过滤掉;全部为空时整块不渲染(避免空 details)。
+  const judgeComments = (result?.judge_details ?? [])
+    .map((js) => {
+      const teamComments = (js.rankings ?? [])
+        .map((r) => r.comment)
+        .filter(Boolean)
+        .join('\n');
+      const text = js.overall_comment || js.comment || teamComments;
+      return text ? { js, text } : null;
+    })
+    .filter((x): x is { js: DebateJudgeScore; text: string } => x !== null);
+
   if (result) {
     return (
       <div className="debate-score-panel">
@@ -77,15 +98,21 @@ export default function DebateScorePanel() {
           🌟 最佳辩手:{result.best_debater.name} (座位 {result.best_debater.seat})
         </div>
 
-        {/* 整体评语 */}
-        {result.judge_details && result.judge_details.length > 0 && (
+        {/* 整体评语 — §20260831-11(P2-B 修复):
+            见上方 judgeComments 预计算;显示 model_key 与「默认评分」徽章。 */}
+        {judgeComments.length > 0 && (
           <details className="judge-comments">
             <summary>📝 裁判点评</summary>
             <ul>
-              {result.judge_details.map((js) => (
-                <li key={js.judge_id}>
-                  <strong>裁判 {js.judge_id + 1}({js.model_key}):</strong>
-                  <p>{js.overall_comment}</p>
+              {judgeComments.map(({ js, text }) => (
+                <li key={js.judge_id} className="judge-comment">
+                  <strong className="judge-comment__title">
+                    裁判 {js.judge_id + 1}({js.model_key})
+                    {js.is_fallback && (
+                      <span className="judge-comment__fallback">默认评分</span>
+                    )}
+                  </strong>
+                  <p className="judge-comment__text">{text}</p>
                 </li>
               ))}
             </ul>

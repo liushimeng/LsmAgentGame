@@ -146,6 +146,10 @@ export interface DebateJudgeScore {
   model_key: string;
   rankings: DebateTeamRanking[];
   overall_comment: string;
+  /** §20260831-11(P2-B 修复):result.judge_details[] 条目的扁平评语字段。
+   *  后端 JudgeScore 的 comment 位于 rankings[] 内;此可选字段是
+   *  对部分路径(如 fallback / 历史落库展开)直接下发 comment 的兼容。 */
+  comment?: string;
   winner_team_id: number;
   is_fallback: boolean;
 }

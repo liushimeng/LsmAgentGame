@@ -1,0 +1,71 @@
+/* ═══════════════════════════════════════════════════════════════════════
+ * debate-20260831-11.css — 辩论比赛 R8 测试报告修复样式
+ * (TestReport/辩论比赛自动化测试报告_20260831_223500.md)
+ *
+ * 内容:
+ *   1. P2-A 触控目标补齐(CLAUDE.md §23,44px 硬约束):
+ *      - .like-btn 点赞按钮(36 高 + 44 宽,报告 §6.3 建议值)
+ *      - .debate-host-controls 房主按钮(高 ≥44;不动全局 .btn-sm)
+ *      - .debate-game-page .sidebar-toggle 对局页左右栏折叠按钮(高 ≥44)
+ *   2. P2-B 裁判点评渲染加固:
+ *      - .judge-comment / .judge-comment__title / .judge-comment__fallback
+ *
+ * 独立成文件的原因见 CLAUDE.md §4:debate.css 已 1915 行 > 1800 上限,
+ * 按「只追加在末尾,不调整既有 @import 链顺序」的既定模式
+ * (先例:werewolf-20260817-01.css / debate-history.css / debate-stats.css)。
+ *
+ * 级联说明:本文件排在 debate.css / debate-stats.css 之后,同特异性靠
+ * 级联顺序取胜;所有规则只改尺寸/间距,不改配色(§26 对比度规范)。
+ * ═══════════════════════════════════════════════════════════════════ */
+
+/* ── 1. P2-A:点赞按钮(debate.css §「点赞按钮」原规则 padding: 4px 10px,
+ *      实测 43×24)—— 报告 §6.3 建议高 ≥36 + 点击热区尽量 ≥44 ───────── */
+.like-btn {
+  min-height: 36px;
+  min-width: 44px;
+  justify-content: center;
+}
+
+/* ── 2. P2-A:房主操作按钮(实测 74×28)。
+ *      只作用域到 DebateHostControls 的按钮容器,**不**全局改 .btn-sm
+ *      (btn-sm 被 xiangqi 等其他界面共用,影响面大)。 ───────────────── */
+.debate-host-controls .host-actions button {
+  min-height: 44px;
+}
+
+/* ── 3. P2-A:对局页左右栏折叠按钮(.sidebar-toggle 原仅 min-width:36,
+ *      实测高 ~28)—— 与报告点名的 4 类折叠按钮同一 §23 缺陷族,
+ *      窄屏下该按钮已被 debate.css 的 media query 隐藏,仅桌面生效。 ── */
+.debate-game-page .sidebar-toggle {
+  min-height: 44px;
+}
+
+/* ── 4. P2-B:裁判点评条目(DebateScorePanel .judge-comments 内)─────── */
+
+.judge-comment__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* 「默认评分」徽章(is_fallback 标记)。
+ * §26 对比度:#fbbf24 on #1f2937 系 ≈ 9.4:1 ≥ badge 5.0:1 阈值;
+ * 背景透明度 0.18 + 1px 同色相边框,文字显式声明 color。 */
+.judge-comment__fallback {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.18);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 4px;
+}
+
+/* 评语正文:overall_comment 为空回退 rankings 内多条队伍评语时以
+ * 换行拼接,pre-line 保留分段可读性。 */
+.judge-comment__text {
+  margin: 4px 0 0;
+  white-space: pre-line;
+}

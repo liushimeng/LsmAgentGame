@@ -16,6 +16,10 @@
  *     REST 返回慢导致 React state 默认值,而 WS subscribe 时若服务端
  *     不缓存 last_state,首次 state 推送可能在数秒后才到)。
  *   - 1.5s 后若仍未收到 debate.state 帧,再次拉 history 兜底。
+ *
+ * §20260831-11 — R8 报告修复:
+ *   - debate.phase 帧把 phase_cn 传入 store(P1-A:同步 currentRoom 副本)
+ *   - debate.game_over 帧与 store 现值字段级 merge(P2-B:保住 judge_details)
  */
 import { useEffect } from 'react';
 import { wsClient, type WsEnvelope } from '@/services/ws';
@@ -118,8 +122,11 @@ export function useDebate(roomId: string) {
         case 'debate.phase': {
           const phase = (p.phase ?? '') as string;
           const timeRemaining = (p.time_remaining_sec ?? 0) as number;
+          // §20260831-11(P1-A 修复):把帧内 phase_cn 一并传入 store,
+          // 同步更新 currentRoom 副本(否则 DebateStage 阶段标签停在初值)。
+          const phaseCn = (p.phase_cn ?? '') as string;
           if (p.room_id !== roomId) return;
-          updatePhase(phase, timeRemaining);
+          updatePhase(phase, timeRemaining, phaseCn);
           break;
         }
         case 'debate.speech': {
@@ -142,9 +149,14 @@ export function useDebate(roomId: string) {
           break;
         }
         case 'debate.game_over': {
+          if (p.room_id !== roomId) return;
           const result = (p.result ?? p) as DebateResult;
           if (result && typeof result.winner_team_id === 'number') {
-            setResult(result);
+            // §20260831-11(P2-B 修复):帧内 result 与 store 现值做字段级 merge ——
+            // 帧内 judge_details / team_scores 等为空或缺失而 store 已有
+            // (HTTP detail 已拉到完整数据)时保留旧值,避免直接覆盖导致
+            // 裁判点评等渲染块凭空消失。
+            setResult(mergeDebateResult(useDebateStore.getState().result, result));
           }
           break;
         }
@@ -235,4 +247,29 @@ export function useDebate(roomId: string) {
       unsub();
     };
   }, [roomId, setGameState, updatePhase, addSpeech, addCrossExam, addJudgeScore, setResult, addAgentThought, pushCommentary, addSpectatorAnswer, pushJudgeAnnounce, setAgentStatsDetail, setJudgeScoreboard]);
+}
+
+/**
+ * §20260831-11(P2-B 修复)— WS debate.game_over 帧 result 与 store 现值的字段级 merge。
+ *
+ * 规则:数组/文案字段在帧内为空或缺失而 store 已有非空值时,保留旧值;
+ * 帧内非空则用帧内新值。标量字段(winner_team_id 等)始终以帧内为准
+ * (服务端广播是权威源)。
+ */
+function mergeDebateResult(
+  oldResult: DebateResult | null,
+  incoming: DebateResult,
+): DebateResult {
+  if (!oldResult) return incoming;
+  return {
+    ...incoming,
+    winner_team_name: incoming.winner_team_name || oldResult.winner_team_name,
+    team_scores: incoming.team_scores?.length
+      ? incoming.team_scores
+      : oldResult.team_scores,
+    judge_details: incoming.judge_details?.length
+      ? incoming.judge_details
+      : oldResult.judge_details,
+    best_debater: incoming.best_debater ?? oldResult.best_debater,
+  };
 }

@@ -8,16 +8,41 @@
  *   - 当前发言下方折叠显示 internal_thought(§04 §3.1「Agent 思考」面板)
  *     仅在 SpectatorConfig.RevealAgentThought=true 时展示
  *   - 准备阶段 / 自由辩论空挡 / 评审阶段空挡继续保留
+ *
+ * §20260831-11 — R8 P1-A 修复:
+ *   - 阶段标签 / 计时器改为优先读顶层 phase / timeRemaining(WS 帧实时更新),
+ *     currentRoom.phase_cn 仅作 fallback,新增 PHASE_CN 本地映射兜底
  */
 import { useMemo } from 'react';
 import { wsClient } from '@/services/ws';
 import { useDebateStore } from '@/store/debate.store';
+
+/**
+ * §20260831-11(P1-A 修复)— phase → 中文兜底映射。
+ * 与后端 ServerGo/game/debate/types.go 的 PhaseCN() 逐项一致;
+ * 优先用「顶层 phase 本地映射」,store 同步写入值 / currentRoom.phase_cn 作 fallback,
+ * 保证 WS debate.phase 帧到达后标签立即推进(不再依赖 HTTP detail 初值)。
+ */
+const PHASE_CN: Record<string, string> = {
+  filling: '等待开始',
+  preparation: '赛前准备',
+  opening_argument: '开篇立论',
+  rebuttal: '驳论',
+  cross_examination: '质询',
+  cross_exam_summary: '质询小结',
+  free_debate: '自由辩论',
+  closing_argument: '总结陈词',
+  judging: '裁判评审',
+  result: '公布结果',
+  game_over: '对局结束',
+};
 
 export default function DebateStage() {
   const {
     currentRoom,
     currentSpeech,
     phase,
+    timeRemaining,
     currentSpeaker,
     agentThoughts,
     likedSpeeches,
@@ -42,7 +67,12 @@ export default function DebateStage() {
     );
   }
 
-  const phaseCn = currentRoom.phase_cn;
+  // §20260831-11(P1-A 修复):优先取顶层 phase 的本地映射(store 由 WS 帧实时更新),
+  // currentRoom.phase_cn 仅作 fallback(未知 phase 时沿用服务端文案)。
+  const phaseCn = PHASE_CN[phase] ?? currentRoom.phase_cn ?? phase;
+  // 计时器同理:优先用顶层 timeRemaining(与 phase 同一帧更新),
+  // 顶层为 0 时回退 currentRoom.time_remaining_sec。
+  const timeRemainingSec = timeRemaining > 0 ? timeRemaining : currentRoom.time_remaining_sec;
   const isSpeechPhases =
     phase === 'opening_argument' ||
     phase === 'rebuttal' ||
@@ -69,8 +99,8 @@ export default function DebateStage() {
         <h2 className="topic">「{currentRoom.topic.text}」</h2>
         <div className="phase-info">
           <span className="phase-tag">{phaseCn}</span>
-          {currentRoom.time_remaining_sec > 0 && (
-            <span className="timer">⏱ {formatTime(currentRoom.time_remaining_sec)}</span>
+          {timeRemainingSec > 0 && (
+            <span className="timer">⏱ {formatTime(timeRemainingSec)}</span>
           )}
         </div>
       </div>
