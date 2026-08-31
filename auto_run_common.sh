@@ -86,6 +86,14 @@ declare -A GAME_GLOBS=(
     [junqi_screenshot_progress]="军棋截图进度_*.md"
     [junqi_usage]="军棋测试工具使用报告_*.md"
     [junqi_protocol]="军棋协议抓包分析报告_*.md"
+
+    # 辩论比赛(2026-08-31 起即带前缀,无 legacy)
+    [debate_main]="辩论比赛自动化测试报告_*.md"
+    [debate_progress]="辩论比赛自动化测试进度_*.md"
+    [debate_screenshot]="辩论比赛截图报告_*.md"
+    [debate_screenshot_progress]="辩论比赛截图进度_*.md"
+    [debate_usage]="辩论比赛测试工具使用报告_*.md"
+    [debate_protocol]="辩论比赛协议抓包分析报告_*.md"
 )
 
 # 游戏显示名(commit message / 日志头用)
@@ -95,6 +103,7 @@ declare -A GAME_DISPLAY_NAME=(
     [xiangqi]="象棋"
     [doudizhu]="斗地主"
     [junqi]="军棋"
+    [debate]="辩论比赛"
 )
 
 # ---------- enqueue_game_glob <game> <kind> [<kind> ...] ----------
