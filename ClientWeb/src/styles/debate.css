@@ -465,6 +465,13 @@
   color: #9ca3af;
 }
 
+/* §20260831-07 — R6 报告 §3.5 修复:
+   顶部 stage-header(辩题 + phase-tag + timer)1920×1080 视口下常被
+   DebateSpeechPanel 内容挤出首屏。改为 sticky 定位 + 暗背景 + z-index,
+   保证滚动时阶段/计时始终可见。
+   注意:仅作用于 stage-header 本身(不是整个 .debate-stage),因为下方
+   发言气泡 + 思考面板仍需自然滚动;sticky 元素离开容器即失效,
+   所以这里 sticky 容器 = .debate-stage,父容器可滚动时元素相对视口贴顶。 */
 .stage-header {
   display: flex;
   justify-content: space-between;
@@ -472,6 +479,13 @@
   padding-bottom: 16px;
   border-bottom: 1px solid #374151;
   margin-bottom: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #1f2937;
+  /* padding-top:8 抵消父容器 24px padding,使 sticky 边缘贴齐容器内壁 */
+  margin-top: -8px;
+  padding-top: 8px;
 }
 
 .stage-header .topic {
@@ -1488,133 +1502,12 @@
 }
 
 /* ============================================================================
-   §20260831-05 — 发言历史面板
+   §20260831-07 — R6 报告 §3.4 修复:
+   .history-col + .debate-history-panel + .history-* 一组发言历史面板 CSS
+   已全部移除。原因:DebateSpeechPanel(中列 WS 实时推送)与
+   DebateHistoryPanel(REST 拉取)展示同一份数据,造成双历史面板。
+   页面层 §20260831-07 只保留 SpeechPanel;.history-col 等 CSS 不再被引用。
    ============================================================================ */
-
-.history-col {
-  margin: 0 16px 16px;
-  padding: 12px;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 8px;
-}
-
-.debate-history-panel h3 {
-  margin: 0 0 10px;
-  font-size: 14px;
-  color: #f1f5f9;
-}
-
-.history-error {
-  color: #ef4444;
-  font-size: 12px;
-  margin-bottom: 8px;
-}
-
-.history-empty {
-  font-size: 12px;
-  color: #64748b;
-  padding: 8px 0;
-}
-
-.history-phase {
-  margin-bottom: 8px;
-}
-
-.history-phase-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 4px;
-  cursor: pointer;
-  text-align: left;
-  color: #e2e8f0;
-  font-size: 13px;
-}
-
-.history-phase-header:hover {
-  background: #1e293b;
-}
-
-.history-phase-toggle {
-  font-size: 10px;
-  color: #94a3b8;
-}
-
-.history-phase-label {
-  flex: 1;
-  font-weight: 600;
-}
-
-.history-phase-count {
-  font-size: 11px;
-  color: #94a3b8;
-}
-
-.history-phase-content {
-  padding: 8px 0 8px 16px;
-}
-
-.history-speech {
-  padding: 8px;
-  margin-bottom: 6px;
-  background: #0f172a;
-  border-left: 3px solid #475569;
-  border-radius: 4px;
-}
-
-.history-speech-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.history-speech-speaker {
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.history-speech-content {
-  font-size: 12px;
-  color: #cbd5e1;
-  margin: 0;
-  white-space: pre-wrap;
-}
-
-.history-cross-exam {
-  padding: 4px 0;
-}
-
-.history-cross-item {
-  padding: 6px 8px;
-  margin-bottom: 4px;
-  background: #0f172a;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.history-cross-item--answer {
-  border-left: 3px solid #22c55e;
-}
-
-.history-cross-item:not(.history-cross-item--answer) {
-  border-left: 3px solid #f59e0b;
-}
-
-.history-cross-role {
-  font-weight: 600;
-  color: #94a3b8;
-  margin-right: 6px;
-}
-
-.history-cross-text {
-  color: #cbd5e1;
-}
 
 /* ============================================================================
    §20260831-05 — 房主操作(危险按钮)

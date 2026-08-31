@@ -1,11 +1,17 @@
 /**
- * 辩论比赛 — 对局页 (2026-08-31 §20260831-01 + §20260831-04 + §20260831-05)
+ * 辩论比赛 — 对局页 (2026-08-31 §20260831-01 + §20260831-04 + §20260831-05 + §20260831-07)
  *
  * 对齐 docs/辩论比赛/04 §3 对局页设计 + 复用 §6.2 zustand store / §6.3 useDebate hook。
  *
  * §20260831-05 增补:
  *   - 评委列加入 DebateSpectatorQuestionPanel(观众向裁判提问)
  *   - 聊天行上方加入 DebateHistoryPanel(完整发言历史 + 质询记录)
+ *
+ * §20260831-07 — R6 测试报告 §3.4 修复:
+ *   DebateSpeechPanel(中列,WS 实时推送,按 phase 分组折叠)与
+ *   DebateHistoryPanel(下方 .history-col,REST 拉取)展示的是同一份
+ *   发言数据,出现两份相同信息。改为只保留 SpeechPanel,删除 history-col
+ *   整列布局,组件本身保留(供未来「完整历史回放」页面复用)。
  *
  * §13 SubAgent = frontend-dev:仅修改 ClientWeb/。
  */
@@ -23,7 +29,6 @@ import DebateScorePanel from '@/components/debate/DebateScorePanel';
 import DebateCommentaryPanel from '@/components/debate/DebateCommentaryPanel';
 import DebateHostControls from '@/components/debate/DebateHostControls';
 import DebateSpectatorQuestionPanel from '@/components/debate/DebateSpectatorQuestionPanel';
-import DebateHistoryPanel from '@/components/debate/DebateHistoryPanel';
 import { GameChatPanel } from '@/components/chat/GameChatPanel';
 
 export function DebateGamePage() {
@@ -99,10 +104,6 @@ export function DebateGamePage() {
           )}
         </aside>
       </main>
-
-      <section className="history-col">
-        <DebateHistoryPanel roomId={roomId} />
-      </section>
 
       <footer className="chat-col">
         <GameChatPanel roomId={roomId} />

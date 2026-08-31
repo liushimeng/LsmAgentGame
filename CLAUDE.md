@@ -243,6 +243,7 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 - **预留 OpenAI 协议** —— `provider_type` 字段已留 `"openai"`。
 - **API** —— `GET /api/llm/models`（需登录），返回 `[{agent_name, model, provider_type}]`，**不含 api_key**。
 - **8 个默认模型**（运行时 `LsmAgentGame.conf`，seed 源迁到代码常量 `defaultProvidersForSeed()` 见 §20260812-LLM）：美团 LongCat-2.0 / 豆包 2.0 / DeepSeek V4-Pro / 智谱 GLM-5.2 / Kimi 2.7 / MiniMax M3 / Qwen 3.7-Plus-and-Max / Xiaomi mimo-v2.5-pro，对应模型 key `MeiTuan/DouBao/DeepSeek/GLM/Kimi/MinMax/Qwen/Xiaomi-model`，均为 `anthropic` provider_type。
+- **运行时 provider 数量可超过 8 个**（§20260831-07 增补）：上述 8 个仅是 `t_lsm_game_llm_provider` 表为空时自动 seed 的默认值。运维可在后台通过 `/api/admin/llm/providers` 接入更多 provider（如 `Claude-model` / `Gemini-model` / `Tencent-model` / `ChatGPT-model` / `Kwai-model`），registry 按需加载；测试报告 R6 实测运行时 13 个 provider 全部 usable 即此场景。LLM 调用方（狼人杀 Agent / 辩论 Agent / 裁判）从不感知具体 provider 数量——`registry.Get(model_key)` 按需查找。
 
 ### 14.1 Anthropic 协议对齐（参考 ClaudeCode）
 

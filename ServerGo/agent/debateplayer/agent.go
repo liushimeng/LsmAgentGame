@@ -375,9 +375,63 @@ func cloneBlocks(blocks []llm.ContentBlock) []llm.ContentBlock {
 
 // submitPlainTextAsSpeech 把 LLM 的纯文本回复(未走工具)按 speech 提交。
 //
-// 适配阶段:仅正式发言阶段有效;质询/自由辩阶段文本无法映射时由
-// SubmitSpeech 的阶段校验拒绝,此时退回 useFallbackResponse。
+// 适配阶段:
+//   - 正式发言阶段(立论/驳论/小结/总结)→ 按 speech 提交
+//   - cross_examination 阶段(三辩纯文本兜底):
+//     §20260831-07 — R6 报告 §3.2 实测部分跨厂商模型在 cross_examination
+//     阶段不会调 tool_use,只回纯文本;旧实现会把文本按 speech 提交,
+//     阶段校验拒收 → 该轮彻底 0 内容,cross_exam count 永远 0。
+//     新行为:若我是被点名的三辩且有 pending question → 按 cross_exam_answer
+//     提交;否则按 cross_exam_question 兜底(以对方任一三辩为 target)。
+//   - 其它阶段(free_debate 等)→ SubmitSpeech 阶段校验拒收,退回 fallback。
 func (a *Agent) submitPlainTextAsSpeech(text string) {
+	room := a.engine.Room()
+	if room == nil {
+		a.useFallbackResponse()
+		return
+	}
+	phase := room.Phase()
+
+	if phase == debate.PhaseCrossExamination && a.Role == debate.RoleThird {
+		// §20260831-07 — 质询阶段三辩纯文本兜底:拆分为 question 或 answer。
+		if gc := a.collectContext(); gc.PendingQuestionText != "" && gc.PendingQuestionID != "" {
+			// 被质询方:按 answer 提交
+			res := a.dispatchTool(llm.ContentBlock{
+				Type: "tool_use",
+				ID:   "plain_ans_" + fmt.Sprint(debate.WallNowMS()),
+				Name: string(debate.ToolCrossExamAnswer),
+				Input: map[string]any{
+					"question_id": gc.PendingQuestionID,
+					"answer":      truncateRunes(text, 100),
+				},
+			})
+			if !res.OK {
+				a.useFallbackResponse()
+			}
+			return
+		}
+		// 提问方:把纯文本当作问题,对方任一三辩为 target。
+		targetTeam, targetSeat := a.pickCrossExamTarget(room)
+		if targetTeam < 0 {
+			a.useFallbackResponse()
+			return
+		}
+		res := a.dispatchTool(llm.ContentBlock{
+			Type: "tool_use",
+			ID:   "plain_q_" + fmt.Sprint(debate.WallNowMS()),
+			Name: string(debate.ToolCrossExamQuestion),
+			Input: map[string]any{
+				"target_team": targetTeam,
+				"target_seat": targetSeat,
+				"question":    truncateRunes(text, 50),
+			},
+		})
+		if !res.OK {
+			a.useFallbackResponse()
+		}
+		return
+	}
+
 	res := a.dispatchTool(llm.ContentBlock{
 		Type:  "tool_use",
 		ID:    "plain_" + fmt.Sprint(debate.WallNowMS()),
@@ -387,6 +441,26 @@ func (a *Agent) submitPlainTextAsSpeech(text string) {
 	if !res.OK {
 		a.useFallbackResponse()
 	}
+}
+
+// pickCrossExamTarget 选择质询目标:对方任一三辩 seat;无三辩则取对方任一辩手。
+//
+// §20260831-07 — R6 cross_examination 阶段兜底用。
+func (a *Agent) pickCrossExamTarget(room *debate.DebateRoom) (int, int) {
+	for _, t := range room.Config.Teams {
+		if t.TeamID == a.TeamID {
+			continue
+		}
+		for _, ag := range t.Agents {
+			if ag.Role == debate.RoleThird {
+				return t.TeamID, ag.SeatID
+			}
+		}
+		if len(t.Agents) > 0 {
+			return t.TeamID, t.Agents[0].SeatID
+		}
+	}
+	return -1, -1
 }
 
 // useFallbackResponse LLM 失败 / 返回纯文本时使用 fallback 发言。
@@ -533,7 +607,7 @@ func (a *Agent) buildUserPrompt(gc DebateContext) string {
 	}
 
 	// 当前轮次任务
-	b.WriteString(fmt.Sprintf("【本轮任务】\n%s\n", phaseTaskGuide(gc.Phase, gc.MyRole, gc.PendingQuestionText != "")))
+	b.WriteString(fmt.Sprintf("【本轮任务】\n%s\n", phaseTaskGuide(gc.Phase, gc.MyRole, gc.PendingQuestionText != "", gc.PendingQuestionID)))
 	return b.String()
 }
 
@@ -565,7 +639,14 @@ func truncateRunes(s string, max int) string {
 }
 
 // phaseTaskGuide 阶段任务指引(基于阶段+辩位;hasPendingQuestion 区分质询提问/回答)。
-func phaseTaskGuide(phase debate.Phase, role string, hasPendingQuestion bool) string {
+//
+// §20260831-07 — cross_examination 阶段三辩补强:
+// R6 报告 §3.2 实测 DeepSeek-model(正方三辩)+ Qwen-model(反方三辩)
+// 在 cross_examination 阶段连续 5 轮 all tool_use failed,cross_exam count = 0。
+// 根因是旧 prompt 只写「调用 cross_exam_question」,没给完整 input 形状,
+// 部分跨厂商模型把 tool 名字错认 / 缺字段直接放弃。
+// 修复:补 tool_use input 完整示例 + 字段含义 + 「仅且必须 X 工具」强约束。
+func phaseTaskGuide(phase debate.Phase, role string, hasPendingQuestion bool, questionID string) string {
 	switch phase {
 	case debate.PhaseOpeningArgument:
 		return "请以一辩身份发表立论:清晰定义辩题概念,明确判定标准,抛出 2-3 个核心论点并提供论据。"
@@ -573,10 +654,25 @@ func phaseTaskGuide(phase debate.Phase, role string, hasPendingQuestion bool) st
 		return "请以二辩身份发表驳论:针对对方一辩发言中的具体观点,指出逻辑漏洞或论据不足。"
 	case debate.PhaseCrossExamination:
 		if hasPendingQuestion {
-			return "对方三辩已向你发起质询,请立即调用 cross_exam_answer 正面回答(≤100 字)。"
+			// question_id 已在上方「待答质询」段给出;这里再次复述防止跨模型截断 user prompt 头/尾。
+			qid := questionID
+			if qid == "" {
+				qid = "<上方待答质询的 id>"
+			}
+			return "对方三辩已向你发起质询,请**仅且必须**调用 cross_exam_answer 工具(不要用 cross_exam_question、不要用 idle_silent、不要用 speech)。\n" +
+				"调用示例(字段值必须填实际值,question_id 直接复制上方的 id):\n" +
+				"  cross_exam_answer(question_id=\"" + qid + "\", answer=\"<≤100 字的正面回应>\")\n" +
+				"answer ≤ 100 字,正面回应问题,不得回避或反问。若模型无法调用工具,请回一段纯文本回答(系统会自动转写为答案)。"
 		}
 		if role == string(debate.RoleThird) {
-			return "请以三辩身份发起质询:调用 cross_exam_question 向对方辩手提出精准问题(target_team 填对方队号),挖掘其逻辑漏洞。"
+			return "请以三辩身份发起质询:**仅且必须**调用 cross_exam_question 工具(不要用其他任何工具,不要用 idle_silent 跳过)。\n" +
+				"调用示例(字段值根据对方队伍号实际替换):\n" +
+				"  cross_exam_question(target_team=1, target_seat=0, question=\"<≤50 字的精准问题>\")\n" +
+				"字段含义:\n" +
+				"  - target_team:对方队伍号(0 表示队0/正方,1 表示队1/反方)\n" +
+				"  - target_seat:被质询辩位 seat(0-3,-1 表任意对手)\n" +
+				"  - question:问题正文,≤ 50 字\n" +
+				"问题要精准、有针对性,挖掘对方逻辑漏洞。若模型无法调用工具,回一段纯文本(系统会按质询提交)。"
 		}
 		return "当前无质询任务,若无待答问题可选择 idle_silent。"
 	case debate.PhaseCrossExamSummary:
