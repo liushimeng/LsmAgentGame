@@ -19,6 +19,8 @@
 
 ## 1. FIRE 运动深度研究
 
+> FIRE 四流派定义、4% 法则数学推导（Trinity Study/Bengen 1994）、储蓄率-FI 年限表的权威定义见《财商流游戏真实世界经济与财商理论底座》板块 7；本文聚焦中国本土化数据与实践。
+
 ### 1.1 起源与发展
 
 **FIRE**（Financial Independence, Retire Early）即"财务独立、提前退休"，
