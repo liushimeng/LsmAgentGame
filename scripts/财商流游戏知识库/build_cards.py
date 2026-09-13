@@ -218,9 +218,12 @@ def build_occ_substrings(recs):
 
 
 def is_plausible_name(n, occ_sub):
-    if not n or not re.fullmatch(r'[一-鿿]{2,4}', n):
+    if not n:
         return False
-    given = n[1:]
+    core = n.replace('·', '').replace('・', '')
+    if not re.fullmatch(r'[一-鿿]{2,4}', core):
+        return False
+    given = core[1:]
     if given in occ_sub:
         return False
     if len(given) >= 3 and (given[:2] in occ_sub or given[1:] in occ_sub):
@@ -492,7 +495,8 @@ def build(rec, cls, l3idx):
     card['_completeness'] = round(
         (len(D.COUNTED_FIELDS) - len(missing)) / len(D.COUNTED_FIELDS), 3)
     card['_grounded'] = round(len(explicit) / len(D.COUNTED_FIELDS), 3)
-    card['_legacy_ids'] = [rec['id']] + ([rec['_legacy_dup']] if rec.get('_legacy_dup') else [])
+    card['_legacy_ids'] = list(dict.fromkeys(
+        [rec['id']] + ([rec['_legacy_dup']] if rec.get('_legacy_dup') else [])))
     card['_raw'] = {'src_line': rec['src_line'][:400]}
     if rec.get('_legacy_name'):
         card['_raw']['legacy_name'] = rec['_legacy_name']

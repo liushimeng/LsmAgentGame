@@ -87,12 +87,22 @@ def parse_name_age_body(cell):
     """`厨店长 · 38/腰椎B+应酬肝B` / `谷砚秋 · 男42/咽喉B+腰B` /
     `苏曼凝 · 29/腰椎B+肩颈B+膝关节B` / `厨店长 · 38/腰椎B+应酬肝B`"""
     cell = cell.strip()
-    m = re.match(r'^([^·/]+?)\s*[·]\s*(.*)$', cell)
+    # 姓名可含中间点（如 `柯蘅·芳`），故以「最后一个后接年龄的 ·」为界
+    m = re.match(r'^(.*?)\s*[·・]\s*((?:[男女]\s*[·・]?\s*)?\d{1,3}\s*[/／].*)$', cell)
     if not m:
-        return {'name': cell, 'age': None, 'gender': None, 'health_raw': '',
-                'health_grade': None, 'conditions': []}
-    name = m.group(1).strip()
-    rest = m.group(2).strip()
+        m2 = re.match(r'^(.*?)\s*[·・]\s*((?:[男女]\s*[·・]?\s*)?\d{1,3}\s*岁?.*)$', cell)
+        m = m2
+    if not m:
+        # 无年龄的形态：`黎亦辰 · 腕管B/过敏B/胃病B` —— 以首个点为界
+        parts = re.split(r'\s*[·・]\s*', cell, maxsplit=1)
+        if len(parts) == 2:
+            name, rest = parts[0].strip(), parts[1].strip()
+        else:
+            return {'name': cell, 'age': None, 'gender': None, 'health_raw': '',
+                    'health_grade': None, 'conditions': []}
+    else:
+        name = m.group(1).strip()
+        rest = m.group(2).strip()
     gender = None
     # 支持 `38/...`、`男 38/...`、`男 · 38/...`、`男·38岁` 等写法
     gm = re.match(r'^(男|女)\s*[·・]?\s*(\d{1,3})', rest)
@@ -120,7 +130,8 @@ def parse_name_age_body(cell):
             grade = 'A'
     conditions = [c for c in re.split(r'[+＋/／]', health_raw) if c] if health_raw else []
     conditions = [re.sub(r'[ABC]$', '', c).strip('，,;； ') for c in conditions]
-    conditions = [c for c in conditions if len(c) >= 2]
+    ABBR = {'颈', '腰', '胃', '肝', '咽', '眼', '耳', '肾', '肺', '肩', '腕'}
+    conditions = [c for c in conditions if len(c) >= 2 or c in ABBR]
     return {'name': name, 'age': age, 'gender': gender, 'health_raw': health_raw,
             'health_grade': grade, 'conditions': conditions}
 
@@ -239,24 +250,8 @@ def parse_family(cell):
     if out['marital'] is None and '新婚' in cell:
         out['marital'] = '已婚'
         out['newlywed'] = True
-    # 子女
-    cm = re.search(r'(双胞胎|龙凤胎)\s*(\d{1,2})\s*岁', cell)
-    if cm:
-        out['children'].append({'count': 2, 'ages': [int(cm.group(2))] * 2, 'note': cm.group(1)})
-    else:
-        for m in re.finditer(r'(女儿|儿子|女孩|男孩)\s*(\d{1,2})?\s*岁?', cell):
-            rel = m.group(1)
-            age = int(m.group(2)) if m.group(2) else None
-            out['children'].append({'count': 1, 'ages': [age] if age is not None else [],
-                                    'note': rel})
-    if '两娃' in cell or '俩娃' in cell:
-        out['children'].append({'count': 2, 'ages': [], 'note': '两娃'})
-    if re.search(r'一娃|一个娃', cell):
-        out['children'].append({'count': 1, 'ages': [], 'note': '一娃'})
-    if not out['children']:
-        if re.search(r'独自抚养(孩子|子女|娃)|抚养孩子|带娃|孩子(上|读)|'
-                     r'有(一|两个|个)?孩子|育有|生育', cell):
-            out['children'].append({'count': 1, 'ages': [], 'note': '未标明数量'})
+    # 子女（统一抽取）
+    out['children'] = extract_children(cell)
     if '儿子大学毕业' in cell or '女儿大学毕业' in cell:
         out['children'].append({'count': 1, 'ages': [], 'note': '成年子女'})
     # 老人
@@ -311,30 +306,51 @@ def parse_finance(cell):
     out = {'raw': cell, 'expense': None, 'savings': None, 'debt': None, 'note': ''}
     if not cell:
         return out
-    nums = re.findall(r'([0-9][0-9,]*(?:\.[0-9]+)?)\s*(万)?', cell)
-    vals = []
-    for v, wan in nums:
-        try:
-            x = float(v.replace(',', ''))
-        except ValueError:
-            continue
-        if wan:
-            x *= 10000
-        vals.append(int(x))
-    if len(vals) >= 3:
-        out['expense'], out['savings'], out['debt'] = vals[0], vals[1], vals[2]
-    elif len(vals) == 2:
-        out['expense'], out['savings'] = vals[0], vals[1]
-    elif len(vals) == 1:
-        out['expense'] = vals[0]
-    # 带文字的形态：`储蓄78,000；房贷48万`
-    sm = re.search(r'储蓄\s*([\d,]+)', cell)
-    if sm:
-        out['savings'] = int(sm.group(1).replace(',', ''))
-    dm = re.search(r'房贷\s*([\d.]+)\s*万', cell)
-    if dm:
-        out['debt'] = int(float(dm.group(1)) * 10000)
-    out['note'] = cell if not vals else ''
+    # 带文字标签的形态优先（`月支出3800,储蓄8万,负债0` / `储蓄78,000；房贷48万`）
+    labelled = re.search(r'(月?支出|储蓄|存款|负债|房贷|月供)', cell)
+    if not labelled:
+        nums = re.findall(r'([0-9][0-9,]*(?:\.[0-9]+)?)\s*(万)?', cell)
+        vals = []
+        for v, wan in nums:
+            try:
+                x = float(v.replace(',', ''))
+            except ValueError:
+                continue
+            if wan:
+                x *= 10000
+            vals.append(int(x))
+        if len(vals) >= 3:
+            out['expense'], out['savings'], out['debt'] = vals[0], vals[1], vals[2]
+        elif len(vals) == 2:
+            out['expense'], out['savings'] = vals[0], vals[1]
+        elif len(vals) == 1:
+            out['expense'] = vals[0]
+
+    def _amt(pat):
+        m = re.search(pat, cell)
+        if not m:
+            return None
+        v = float(m.group(1).replace(',', '').replace('千', '') or 0)
+        unit = m.group(2) if m.lastindex and m.lastindex >= 2 else None
+        if unit == '万':
+            v *= 10000
+        elif unit == '千':
+            v *= 1000
+        return int(v)
+
+    ex = _amt(r'(?:月?支出|月供|月还款)\s*([\d,.]+)\s*(万|千)?')
+    if ex:
+        out['expense'] = ex
+    sv = _amt(r'(?:储蓄|存款)\s*([\d,.]+)\s*(万|千)?')
+    if sv:
+        out['savings'] = sv
+    db = _amt(r'(?:负债|房贷余?额?|欠款)\s*([\d,.]+)\s*(万|千)?')
+    if db:
+        out['debt'] = db
+    dm = re.search(r'房贷\s*([\d.,]+)\s*万', cell)
+    if dm and out['debt'] is None:
+        out['debt'] = int(float(dm.group(1).replace(',', '')) * 10000)
+    out['note'] = ''
     return out
 
 
@@ -430,6 +446,59 @@ def parse_person(cell):
 # ── 打包列解析（变体表头「家庭/身体/资产要点」） ─────────────────
 HEALTH_TOKEN = re.compile(r'([一-鿿]{2,8})\s*([ABC])(?=[、,，;；]|$)')
 CHILD_GRADE = re.compile(r'(儿子|女儿|孩子|子女)([一-鿿]{0,6})')
+
+CN_NUM = {'一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6}
+
+
+def extract_children(cell):
+    """统一抽取子女：支持 `1子5岁` / `1女2岁` / `双胞胎12岁` / `儿子初中` / `两娃` 等写法。
+
+    返回 children 列表（`count` 恒为 1，重复条目表示多个孩子）。
+    """
+    out = []
+    cell = cell or ''
+    if not cell:
+        return out
+    m = re.search(r'(双胞胎|龙凤胎)\s*(\d{1,2})?\s*岁?', cell)
+    if m:
+        age = int(m.group(2)) if m.group(2) else None
+        for _ in range(2):
+            out.append({'count': 1, 'ages': [age] if age is not None else [],
+                        'note': m.group(1)})
+        return out
+    # `1子5岁` / `2女` / `1子随己`
+    for m in re.finditer(r'([0-9一二三四五六两])\s*([子女])\s*(\d{1,2})?\s*岁?', cell):
+        g = m.group(1)
+        n = int(g) if g.isdigit() else CN_NUM.get(g, 1)
+        age = int(m.group(3)) if m.group(3) else None
+        for _ in range(min(n, 4)):
+            out.append({'count': 1, 'ages': [age] if age is not None else [],
+                        'note': '儿子' if m.group(2) == '子' else '女儿'})
+    if out:
+        return out
+    # `儿子初中` / `女儿大二`
+    for m in CHILD_GRADE.finditer(cell):
+        note = (m.group(2) or '').strip()
+        if note and any(w in note for w in GRADE_WORDS):
+            out.append({'count': 1, 'ages': [], 'note': m.group(1) + note})
+    if out:
+        return out
+    # `女儿10岁`
+    for m in re.finditer(r'(女儿|儿子|女孩|男孩)\s*(\d{1,2})?\s*岁', cell):
+        age = int(m.group(2)) if m.group(2) else None
+        out.append({'count': 1, 'ages': [age] if age is not None else [],
+                    'note': m.group(1)})
+    if out:
+        return out
+    if '两娃' in cell or '俩娃' in cell:
+        for _ in range(2):
+            out.append({'count': 1, 'ages': [], 'note': '两娃'})
+    elif re.search(r'一娃|一个娃', cell):
+        out.append({'count': 1, 'ages': [], 'note': '一娃'})
+    elif re.search(r'独自抚养(孩子|子女|娃)|抚养孩子|带娃|孩子(上|读)|'
+                   r'有(一|两个|个)?孩子|育有|生育|儿女', cell):
+        out.append({'count': 1, 'ages': [], 'note': '未标明数量'})
+    return out
 GRADE_WORDS = ('小学', '初中', '高中', '大二', '大三', '大四', '大学', '幼儿园',
                '读研', '研究生', '中专', '大专', '本科', '中考', '高考', '毕业')
 
@@ -456,12 +525,7 @@ def parse_mixed(cell):
                 out['health_grade'] = 'C' if g == 'C' else 'B'
             elif g == 'A' and out['health_grade'] is None:
                 out['health_grade'] = 'A'
-    for m in CHILD_GRADE.finditer(cell):
-        note = (m.group(2) or '').strip()
-        if note and any(w in note for w in GRADE_WORDS):
-            out['children'].append({'count': 1, 'ages': [], 'note': m.group(1) + note})
-    if not out['children'] and re.search(r'儿子|女儿|两娃|一娃', cell):
-        out['children'].append({'count': 1, 'ages': [], 'note': '未标明数量'})
+    out['children'] = extract_children(cell)
     m = re.search(r'存款\s*([\d.]+)\s*万', cell)
     if m:
         out['savings'] = int(float(m.group(1)) * 10000)
