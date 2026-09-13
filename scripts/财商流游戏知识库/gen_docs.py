@@ -95,7 +95,12 @@ def main():
               '```',
               '<L1码>-<L1名>/<L2码>-<L2名>/<L3码>-<L3名>/<L4地区档>/<L5年龄段>/<编号>-<姓名>.md',
               'O-住宿与餐饮/O01-餐饮门店经营/O0101-餐厅店长/CN-S-华南/35-44/N1034000-陈砚青.md',
-              '```', '']
+              '```', '',
+              '## 5.1 v2.0 数字编号（2026-09-13 落地，兼容期与字母并存）', '',
+              '人物卡 frontmatter 新增 `occ_id / occ_industry_num / occ_l2_num / occ_l3_num`，',
+              '旧 `N<流水>` 进 `_legacy_ids`；目录树 L1/L2/L3 重命名为数字（详见 tmpPlan/...-20260913-01.md）。',
+              '字母版与数字版**字段共存**，文件名仍 `N<流水>-<姓名>.md` 不变。',
+              '', '']
     with open(os.path.join(args.out, '03-行业分类体系-ICG.md'), 'w', encoding='utf-8') as fh:
         fh.write('\n'.join(lines))
 

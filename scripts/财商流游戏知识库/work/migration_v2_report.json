@@ -1,0 +1,31 @@
+{
+  "migration_ts": "2026-09-14T00:45:27",
+  "dry_run": false,
+  "only_l1": null,
+  "include_submodule": false,
+  "total_cards_scanned": 69438,
+  "total_buckets": 4535,
+  "total_cards_migrated": 69437,
+  "write_count": 69437,
+  "skip_count": 1,
+  "error_count": 0,
+  "l1_distribution": {
+    "02": 5548,
+    "19": 11245,
+    "16": 3509,
+    "12": 1752,
+    "14": 2590,
+    "05": 2769,
+    "11": 9394,
+    "17": 5970,
+    "15": 1370,
+    "04": 2190,
+    "07": 3265,
+    "01": 2297,
+    "06": 2966,
+    "03": 1430,
+    "13": 2680,
+    "10": 7432,
+    "09": 3030
+  }
+}

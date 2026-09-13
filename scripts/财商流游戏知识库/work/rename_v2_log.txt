@@ -1,0 +1,14 @@
+L3 batch 1: commit 500 ok=True
+L3 batch 2: commit 500 ok=True
+L3 batch 3: commit 500 ok=True
+L3 batch 4: commit 500 ok=True
+L3 batch 5: commit 500 ok=True
+L3 batch 6: commit 500 ok=True
+L3 batch 7: commit 500 ok=True
+L3 batch 8: commit 500 ok=True
+L3 batch 9: commit 500 ok=True
+L3 batch 10: commit 500 ok=True
+L3 batch 11: commit 500 ok=True
+L3 tail: commit 372 ok=True
+L2 tail: commit 250 ok=True
+L1 tail: commit 26 ok=True

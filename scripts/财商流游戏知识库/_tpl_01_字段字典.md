@@ -74,9 +74,13 @@ _raw: {src_line: '<原档行原文>'}
 
 | 字段 | 类型 | 含义 |
 |---|---|---|
-| `industry_l1` | str | ICG 一级码 `A`–`Z` |
-| `industry_l2` | str | ICG 二级码，如 `R01` |
-| `industry_l3` | str | ICG 三级码，如 `R0102` |
+| `industry_l1` | str | ICG 一级码 `A`–`Z`（v4.0 字母，**保留作过渡期索引**） |
+| `industry_l2` | str | ICG 二级码，如 `R01`（v4.0 字母，保留） |
+| `industry_l3` | str | ICG 三级码，如 `R0102`（v4.0 字母，保留） |
+| `occ_industry_num` | str | **v2.0 数字版 L1 码**，2 位数字，如 `02`（2026-09-13 新增） |
+| `occ_l2_num` | str | **v2.0 数字版 L2 码**，4 位数字，如 `0207`（2026-09-13 新增） |
+| `occ_l3_num` | str | **v2.0 数字版 L3 码**，6 位数字，如 `020706`（2026-09-13 新增） |
+| `occ_id` | str | **v2.0 业务 ID** `OCC-XX-NNNNN`，按 L3 分桶 5 位流水（2026-09-13 新增） |
 | `occupation` | str | **原档职业串**（去除薪资括号后），逐字保留 |
 | `employment` | enum | 全职/个体经营/自由职业/平台就业/灵活就业/退休返聘 |
 | `employer` | str | 用人单位（模板生成） |

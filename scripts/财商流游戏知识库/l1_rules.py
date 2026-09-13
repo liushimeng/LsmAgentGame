@@ -6,6 +6,9 @@
   · 高特异性的行业词排在前面（如「宠物」「殡葬」「新能源」）；
   · `Z` 兜底规则放在最后。
 每条规则 = (L1 码, 正则)。正则在「职业串 + 原文件名」拼接文本上匹配。
+
+v2.0 (2026-09-13)：新增 NUM_L1_NAMES 数字版行业名 + classify_l1_num()
+返回 v2.0 数字编号，详见 v2_mapping.L1_TO_NUM。
 """
 
 L1_NAMES = {
@@ -36,6 +39,16 @@ L1_NAMES = {
     'Y': '居民生活服务',
     'Z': '新兴交叉职业与其他',
 }
+
+# === v2.0 数字版行业名（按 L1 数字码排序）===
+# 来源：tmpPlan/财商流游戏-玩家职业设计-v2.0-数字编号规范-20260913-01.md §1.1
+# 仅有 L1 一对一直接对应的行业保留原名；强行合并行业的数字名按 v2.0 行业名
+import os as _os
+import sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+from v2_mapping import L1_TO_NUM, NUM_TO_L1_NAME  # noqa: E402
+
+NUM_L1_NAMES = dict(NUM_TO_L1_NAME)  # 复用 v2_mapping 的映射表
 
 # ── 顺序敏感：先匹配先返回 ──────────────────────────────────────
 RULES = [
@@ -209,3 +222,28 @@ def classify_l1(text):
         if rx.search(text):
             return code, i
     return 'Z', -1
+
+
+def classify_l1_num(text: str) -> tuple:
+    """v2.0 数字编号版 classify_l1。
+
+    返回 (数字码, 命中规则序号)。未命中返回 ('19', -1) — 对应 v2.0 的 19-新兴职业
+    （v4.0 的 Z 默认归 19，详见 v2_mapping.resolve_l1）。
+
+    Args:
+        text: 待匹配的文本（职业串 + 文件名 + 行业描述）
+
+    Returns:
+        (l1_num, rule_index) e.g. ('01', 1) 或 ('19', -1)
+
+    Examples:
+        >>> classify_l1_num('水稻种植户')
+        ('01', 1)
+        >>> classify_l1_num('光伏运维工程师')
+        ('19', 0)  # 高特异性规则优先
+        >>> classify_l1_num('未知职业')
+        ('19', -1)  # Z 兜底 → 19
+    """
+    letter, idx = classify_l1(text)
+    num = L1_TO_NUM.get(letter, '19')
+    return num, idx

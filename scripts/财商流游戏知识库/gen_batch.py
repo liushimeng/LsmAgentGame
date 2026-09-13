@@ -614,6 +614,16 @@ class Generator:
         # L3 = L2 + 01..99
         l3_num = self.rng.randint(1, 99)
         card['industry_l3'] = '%s%02d' % (l2, l3_num)
+        # === v2.0 数字编号（2026-09-13）：同步产出 ===
+        # 由 l1 字母 + occ_name 推 v2.0 L1 数字（拆分到 19 时按判定词）
+        from v2_mapping import resolve_l1, l2_num_for, l3_num_for
+        l1_num = resolve_l1(l1, occ_name, '')
+        l2_num = l2_num_for(l1, l1_num, l2)
+        l3_num_full = l3_num_for(l2_num, card['industry_l3'])
+        card['occ_industry_num'] = l1_num
+        card['occ_l2_num'] = l2_num
+        card['occ_l3_num'] = l3_num_full
+        # occ_id 由后续批量步骤分配（见 build_cards.py → resolve_ids）
         card['occupation'] = occ_name
         card['employment'] = employment
         card['employer'] = ('%s自营主体' % city if employment == '个体经营' else

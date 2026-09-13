@@ -366,6 +366,13 @@ def build(rec, cls, l3idx):
     card['industry_l1'] = l1
     card['industry_l2'] = l2
     card['industry_l3'] = l3
+    # === v2.0 数字编号（2026-09-13）：同步产出 ===
+    from v2_mapping import resolve_l1, l2_num_for, l3_num_for
+    l1_num = resolve_l1(l1, occ, l3name)
+    card['occ_industry_num'] = l1_num
+    card['occ_l2_num'] = l2_num_for(l1, l1_num, l2)
+    card['occ_l3_num'] = l3_num_for(card['occ_l2_num'], l3)
+    # occ_id 由 build_cards.py 后续批量步骤分配（按 L3 分桶）
     card['occupation'] = occ
     emp, empsrc = D.derive_employment(occ, rec.get('detail_subs'))
     card['employment'] = emp
