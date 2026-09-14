@@ -160,7 +160,10 @@ export function WealthCityMap({
   const mySeat = gameState?.my_seat ?? -1;
   const marketById = useMemo(() => {
     const m = new Map<string, number>();
-    gameState?.market.districts.forEach((d) => m.set(d.id, d.price_index));
+    // 2026-09-14 §财商流P0-bugfix: 半截可选链 `?.market.districts` 在
+    // gameState 已到达但 market/districts 尚未填充(占位帧/竞态)时整页崩溃
+    // (TypeError: null.forEach → ErrorBoundary)。双层防御。
+    (gameState?.market?.districts ?? []).forEach((d) => m.set(d.id, d.price_index));
     return m;
   }, [gameState]);
 

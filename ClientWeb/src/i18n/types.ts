@@ -1463,6 +1463,7 @@ export interface Dict {
   'wealth.pool.docs': string;
   'wealth.pool.cards': string;
   'wealth.pool.stats': string;
+  'wealth.pool.indexing': string;
   'wealth.pool.unavailable': string;
   'wealth.seed': string;
   'wealth.join': string;

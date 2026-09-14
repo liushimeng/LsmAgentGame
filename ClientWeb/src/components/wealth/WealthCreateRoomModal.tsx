@@ -294,13 +294,18 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
         {pool === 'docs' && poolInfo && !poolInfo.available && (
           <p className="wealth-create-form__hint">⚠️ {t('wealth.pool.unavailable' as TKey)}</p>
         )}
-        {poolInfo && (
+        {poolInfo && poolInfo.total >= 0 && (
           <p className="wealth-create-form__hint">
             {t('wealth.pool.stats' as TKey, {
               total: poolInfo.total,
               indexed: poolInfo.indexed,
             })}
           </p>
+        )}
+        {/* 2026-09-14 §财商流P0-bugfix: total=-1 表示文档池索引尚未懒构建,
+            原样渲染会显示"文档池共 -1 卡";此时显示统计中提示。 */}
+        {poolInfo && poolInfo.total < 0 && (
+          <p className="wealth-create-form__hint">{t('wealth.pool.indexing' as TKey)}</p>
         )}
 
         {/* 随机种子 */}

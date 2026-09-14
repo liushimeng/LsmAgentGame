@@ -1381,6 +1381,7 @@ const ja: Dict = {
   'wealth.pool.docs': '文書プール',
   'wealth.pool.cards': '職業カード一覧',
   'wealth.pool.stats': '文書プール全{total}枚・索引済み{indexed}枚',
+  'wealth.pool.indexing': '文書プール索引を構築中（初回 docs プール建房後に生成）…',
   'wealth.pool.unavailable': '文書プールは現在利用不可。精選10枚へ自動フォールバック',
   'wealth.seed': 'シード',
   'wealth.join': '入室',

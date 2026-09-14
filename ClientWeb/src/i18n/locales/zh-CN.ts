@@ -1382,6 +1382,7 @@ const zhCN: Dict = {
   'wealth.pool.docs': '文档池（75 万卡）',
   'wealth.pool.cards': '职业卡一览',
   'wealth.pool.stats': '文档池共 {total} 卡，已索引 {indexed} 张',
+  'wealth.pool.indexing': '文档池索引统计中（首次使用文档池建房后生成）…',
   'wealth.pool.unavailable': '文档池当前不可用，开局将自动回退精选 10 卡',
   'wealth.seed': '随机种子',
   'wealth.join': '进入房间',

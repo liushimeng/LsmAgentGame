@@ -1382,6 +1382,7 @@ const en: Dict = {
   'wealth.pool.docs': 'Docs pool',
   'wealth.pool.cards': 'Profession cards',
   'wealth.pool.stats': 'Docs pool: {total} cards, {indexed} indexed',
+  'wealth.pool.indexing': 'Docs pool index pending (built on first docs-pool room)…',
   'wealth.pool.unavailable': 'Docs pool unavailable — falls back to curated 10',
   'wealth.seed': 'Random seed',
   'wealth.join': 'Join',

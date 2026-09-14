@@ -169,7 +169,7 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
           return;
         case 'sell_asset': {
           if (!assetKind) throw new Error(t('wealth.action.pickAsset' as TKey));
-          const held = my?.assets.find((a) => a.kind === assetKind);
+          const held = (my?.assets ?? []).find((a) => a.kind === assetKind);
           const maxUnits = held?.units ?? 0;
           if (u < 1 || u > maxUnits) throw new Error(t('wealth.action.unitsRange' as TKey, { n: maxUnits }));
           fire({ type: 'sell_asset', asset: assetKind, units: u });
@@ -190,7 +190,7 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
           return;
         }
         case 'repay_loan': {
-          const loan = my?.loans.find((l) => l.id === loanId);
+          const loan = (my?.loans ?? []).find((l) => l.id === loanId);
           if (!loan) throw new Error(t('wealth.action.noLoan' as TKey));
           const value = repayFull ? Math.ceil(loan.balance) : amt;
           if (!repayFull && value < 10000) {
@@ -224,7 +224,7 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
 
   // 买房估算：房价 = 基准万 × 10000 × beta × price_index（《后端架构》§4）。
   const houseDef = wealthDistrict(district);
-  const housePriceIdx = gameState?.market.districts.find((d) => d.id === district)?.price_index ?? 1;
+  const housePriceIdx = (gameState?.market?.districts ?? []).find((d) => d.id === district)?.price_index ?? 1;
   const housePrice = houseDef ? houseDef.basePriceWan * 10000 * houseDef.houseBeta * housePriceIdx : 0;
   const downpay = housePrice * ratio;
 
