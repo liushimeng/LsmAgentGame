@@ -81,3 +81,4 @@ AutoScreenshotProgress/
 # ============ 安全：整改方案工作目录（20260825-02） ============
 # 安全加固方案文档仅本机使用，不入库
 tmpPlan/
+go-web-debug-tool/debug-tool
