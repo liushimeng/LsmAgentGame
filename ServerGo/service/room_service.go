@@ -26,9 +26,12 @@ const BotUserRoleAgent = models.PlayerRoleAgent
 // knight/demon_hunter/villager),空或 "random" = 随机(默认)。服务端在发牌后
 // 做"牌组内座位置换"(多重集守恒),牌组中无此角色时降级为随机。
 type AgentSeatConfig struct {
-	Seat     int    `json:"seat"`
-	ModelKey string `json:"model_key"`
-	Role     string `json:"role,omitempty"`
+	Seat       int    `json:"seat"`
+	ModelKey   string `json:"model_key"`
+	Role       string `json:"role,omitempty"`
+	// Profession 2026-09-14 §财商流P0 — 仅 wealth 生效;其他游戏忽略。
+	// 形如 "P01".."P16"(精选手卡);文档池使用 frontmatter 的 id。
+	Profession string `json:"profession,omitempty"`
 }
 
 // JudgeConfig 房间级法官(主持人)设置(创建者可选)。nil = 默认(有 Agent 时启用 Agent 法官)。
@@ -51,6 +54,14 @@ type JudgeConfig struct {
 type TexasTableConfig struct {
 	BigBlind   int `json:"big_blind,omitempty"`
 	StartStack int `json:"start_stack,omitempty"`
+}
+
+// WealthRoomOptions 2026-09-14 §财商流P0 — 房间级配置(仅 wealth 生效;
+// month_ms clamp [3000,30000] 由 service 层校验)。
+type WealthRoomOptions struct {
+	MonthMs int    `json:"month_ms,omitempty"`
+	Pool    string `json:"pool,omitempty"` // "curated"|"docs"
+	Seed    int64  `json:"seed,omitempty"`
 }
 
 // GameJoiner is the callback RoomService invokes after a successful CreateRoom
@@ -239,6 +250,9 @@ type RoomService struct {
 	// 由 main.go 通过 SetTexasHoldemRoomConfigurer 注入(thpMgr.SetRoomConfig),
 	// 避免 service → ws 反向依赖;nil 时静默跳过(单元测试 / 老装配)。
 	texasHoldemConfigurer func(roomID string, bigBlind, startStack int)
+	// wealthRoomConfigurer 2026-09-14 §财商流P0 — 房间级配置透传(月份节奏 + 卡池 + seed)。
+	// 由 main.go 通过 SetWealthRoomConfigurer 注入。
+	wealthRoomConfigurer func(roomID string, opts *WealthRoomOptions)
 	// roomActivityChecker 2026-08-22 §BUG-TEXAS-JANITOR-SPLITBRAIN — 强删前
 	// 探测 in-memory 游戏管理器(狼人杀 + 德州扑克)的权威状态。若管理器认为
 	// 该房间仍有玩家(活跃对局或未开局但已入座),janitor 必须跳过,避免
@@ -286,6 +300,11 @@ func (s *RoomService) SetModelAvailabilityHook(h ModelAvailabilityHook) {
 // service → ws 反向依赖)。nil-safe:未注入时 CreateRoomWithAgents 跳过下发。
 func (s *RoomService) SetTexasHoldemRoomConfigurer(fn func(roomID string, bigBlind, startStack int)) {
 	s.texasHoldemConfigurer = fn
+}
+
+// SetWealthRoomConfigurer 2026-09-14 §财商流P0 — 注册房间级配置回调。
+func (s *RoomService) SetWealthRoomConfigurer(fn func(roomID string, opts *WealthRoomOptions)) {
+	s.wealthRoomConfigurer = fn
 }
 
 // SetRoomActivityChecker 2026-08-22 §BUG-TEXAS-JANITOR-SPLITBRAIN — 注册
@@ -637,6 +656,8 @@ func gameKindCN(kind string) string {
 		return "斗地主"
 	case "texasholdem":
 		return "德州扑克"
+	case "wealth":
+		return "财商流游戏"
 	case "werewolf":
 		return "狼人杀"
 	default:

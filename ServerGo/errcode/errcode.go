@@ -103,6 +103,21 @@ const (
 	// ErrRestartVoteWrongPhase: a vote was submitted outside PhaseRestartVote.
 	// 2026-07-10.
 	ErrRestartVoteWrongPhase = 30200
+
+	// 35001–35012 — 财商流游戏(wealth)专用段(2026-09-14 §财商流P0)。
+	// 契约: docs/财商流游戏/已实现/02-架构设计/财商流游戏-WS与HTTP协议契约-v1.md §5。
+	ErrWealthRoomNotFound           = 35001
+	ErrWealthNotPlaying             = 35002
+	ErrWealthNotEnoughPlayers       = 35003
+	ErrWealthWrongPhase             = 35004
+	ErrWealthPlayerInactive         = 35005
+	ErrWealthActionBudgetExhausted  = 35006
+	ErrWealthInsufficientCash       = 35007
+	ErrWealthAssetInvalid           = 35008
+	ErrWealthLoanInvalid            = 35009
+	ErrWealthGateFailed             = 35010
+	ErrWealthNotOwner               = 35011
+	ErrWealthProfessionPoolEmpty    = 35012
 	// ErrAlreadyWolfVoted: 狼人在 night_wolves 阶段已投过票(含弃权),
 	// 再次调用 wolf_kill 一律拒绝。R196 报告 P1:Bot 8 (GLM-5.2) 反复投票
 	// 15+ 次服务端仅覆盖不报错,LLM 看不到反馈陷入循环。
@@ -164,6 +179,20 @@ var DefaultMessages = map[int]string{
 	ErrPropEngineUnavailable: "prop engine unavailable (server not configured)",
 	ErrPropPlayerDead:        "死亡玩家不能使用道具（仅存活玩家可用）",
 	ErrDeadPlayerAction:      "死亡玩家不能执行该动作（仅存活玩家可用）",
+
+	// 财商流游戏(wealth)专用段 — 协议契约文档 §5 默认英文消息照抄。
+	ErrWealthRoomNotFound:          "wealth room not found",
+	ErrWealthNotPlaying:            "wealth game not in playing state",
+	ErrWealthNotEnoughPlayers:      "wealth game needs at least 3 seated players",
+	ErrWealthWrongPhase:            "wealth action only allowed in acting phase",
+	ErrWealthPlayerInactive:        "wealth player is stopped/bankrupt/eliminated",
+	ErrWealthActionBudgetExhausted: "wealth monthly action budget exhausted",
+	ErrWealthInsufficientCash:      "wealth insufficient cash",
+	ErrWealthAssetInvalid:          "wealth asset/units invalid",
+	ErrWealthLoanInvalid:           "wealth loan kind/amount/credit gate invalid",
+	ErrWealthGateFailed:            "wealth cognition/energy/network gate failed",
+	ErrWealthNotOwner:              "wealth operation requires room owner",
+	ErrWealthProfessionPoolEmpty:   "wealth profession pool unavailable",
 }
 
 // Code constructs a Coded error.

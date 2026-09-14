@@ -1,0 +1,147 @@
+/**
+ * WealthMinimap — 左上角 Canvas2D 小地图（**不开第二个 r3f Canvas**，性能考虑）。
+ *
+ * 绘制：40×40 世界 → 132px（scale 3.3）；
+ *   - 8 城区色块（透明度 0.35）+ 区名首字；
+ *   - agent 点（职业色 4px 圆，与主地图 districtSeatOffset 同一落位公式）；
+ *   - 相机视野框（主 Canvas viewRef 回传 target/distance 推算白框）；
+ *   - rAF 与主 Canvas 同频重绘。
+ * 交互：点击城区 → onSelectDistrict（主地图平滑聚焦 + 面板联动）。
+ */
+
+import { useEffect, useRef } from 'react';
+import { districtSeatOffset } from './AgentToken';
+import type { WealthCameraView } from './WealthCityMap';
+import {
+  WEALTH_DISTRICTS,
+  districtCenter,
+  professionColor,
+  type WealthDistrictId,
+  type WealthGameState,
+} from '@/types/wealth';
+
+const SIZE = 132;           // CSS 像素（触控目标 ≥44px 满足）
+const WORLD = 40;           // 世界 40×40
+const SCALE = SIZE / WORLD; // 3.3 px / 世界单位
+
+function worldToPx(x: number, z: number): { px: number; py: number } {
+  return { px: (x + WORLD / 2) * SCALE, py: (z + WORLD / 2) * SCALE };
+}
+
+interface Props {
+  gameState: WealthGameState | null;
+  viewRef: React.MutableRefObject<WealthCameraView>;
+  selectedDistrict: WealthDistrictId | null;
+  onSelectDistrict: (id: WealthDistrictId) => void;
+}
+
+export function WealthMinimap({ gameState, viewRef, selectedDistrict, onSelectDistrict }: Props) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stateRef = useRef(gameState);
+  stateRef.current = gameState;
+  const selectedRef = useRef(selectedDistrict);
+  selectedRef.current = selectedDistrict;
+
+  // rAF 重绘循环（读 ref，避免 React 渲染节流）。
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = SIZE * dpr;
+    canvas.height = SIZE * dpr;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    let raf = 0;
+
+    const draw = () => {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      ctx.fillStyle = '#0b0f16';
+      ctx.fillRect(0, 0, SIZE, SIZE);
+
+      // 城区色块（8×8 世界 → 26.4px）+ 区名首字。
+      for (const d of WEALTH_DISTRICTS) {
+        const { px, py } = worldToPx(d.x - 4, d.z - 4);
+        const size = 8 * SCALE;
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = d.color;
+        ctx.fillRect(px, py, size, size);
+        ctx.globalAlpha = d.id === selectedRef.current ? 1 : 0.55;
+        ctx.strokeStyle = d.id === selectedRef.current ? '#d4a017' : '#4b5563';
+        ctx.lineWidth = d.id === selectedRef.current ? 2 : 1;
+        ctx.strokeRect(px, py, size, size);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#e5e7eb';
+        ctx.font = 'bold 11px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(d.nameZh.charAt(0), px + size / 2, py + size / 2);
+      }
+
+      // agent 点（职业色 4px 圆；同区多 token 环形落位与主地图一致）。
+      const gs = stateRef.current;
+      if (gs) {
+        const byDistrict = new Map<string, number[]>();
+        gs.players.forEach((p, i) => {
+          if (!p.alive) return;
+          const list = byDistrict.get(p.district) ?? [];
+          list.push(i);
+          byDistrict.set(p.district, list);
+        });
+        for (const [distId, idxs] of byDistrict) {
+          const c = districtCenter(distId);
+          idxs.forEach((playerIdx, i) => {
+            const p = gs.players[playerIdx];
+            const { dx, dz } = districtSeatOffset(i, idxs.length);
+            const { px, py } = worldToPx(c.x + dx, c.z + dz);
+            ctx.beginPath();
+            ctx.arc(px, py, p.seat === gs.my_seat ? 4 : 3, 0, Math.PI * 2);
+            ctx.fillStyle = professionColor(p.profession.id);
+            ctx.fill();
+            if (p.seat === gs.my_seat) {
+              ctx.strokeStyle = '#d4a017';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            }
+          });
+        }
+      }
+
+      // 相机视野框（target + distance；~0.6 投影系数近似透视范围）。
+      const v = viewRef.current;
+      const center = worldToPx(v.x, v.z);
+      const half = Math.max(6, (v.dist * 0.6 * SCALE) / 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(center.px - half, center.py - half, half * 2, half * 2);
+
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [viewRef]);
+
+  // 点击 → 命中城区 → 联动主地图聚焦 + 选中态。
+  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const wx = px / SCALE - WORLD / 2;
+    const wz = py / SCALE - WORLD / 2;
+    const hit = WEALTH_DISTRICTS.find(
+      (d) => Math.abs(wx - d.x) <= 4 && Math.abs(wz - d.z) <= 4,
+    );
+    if (hit) onSelectDistrict(hit.id);
+  };
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="wealth-minimap"
+      width={SIZE}
+      height={SIZE}
+      onClick={handleClick}
+      aria-label="财商流城市小地图"
+    />
+  );
+}

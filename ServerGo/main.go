@@ -41,6 +41,7 @@ import (
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/game/debate"
 	"LsmAgentGame/game/texasholdem"
+	"LsmAgentGame/game/wealth"
 	"LsmAgentGame/game/werewolf"
 	"LsmAgentGame/llm"
 	"LsmAgentGame/logger"
@@ -879,7 +880,24 @@ func main() {
 	})
 	hub.SetGameManagerCleanupFunc(gameSvcWs.RemoveRoomState)
 
-	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI)
+	// 2026-09-14 §财商流P0 — 构造 wealth 管理器 + 文档池加载器 + 职业卡路由。
+	wealthLoader := wealth.NewLoader(cfg.Wealth.ProfessionDocsPath)
+	wealthMgr := wealth.NewManager(wealth.Config{
+		MonthMs:                 cfg.Wealth.MonthMs,
+		AgentEnabled:            cfg.Wealth.AgentEnabled,
+		AgentDecisionTimeoutSec: cfg.Wealth.AgentDecisionTimeoutSec,
+		BotMaxActionsPerMonth:   cfg.Wealth.BotMaxActionsPerMonth,
+		PoolDefault:             cfg.Wealth.ProfessionPoolDefault,
+		Seed:                    cfg.Wealth.RandomSeed,
+	}, llmRegistry)
+	wealthMgr.SetLoader(wealthLoader)
+	gameSvcWs.SetWealthManager(wealthMgr)
+	gameSvcWs.SetWealthLoader(wealthLoader)
+	gameSvcWs.SetWealthChatSender(&wsChatSenderAdapter{chat: chatSvc})
+	roomSvc.SetWealthRoomConfigurer(wealthMgr.ApplyRoomOptions)
+	professionAPI := api.NewProfessionAPI(wealthLoader)
+
+	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, professionAPI)
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.
@@ -1059,4 +1077,17 @@ type botUserProvisionerAdapter struct {
 
 func (a botUserProvisionerAdapter) EnsureBotUserForProvider(ctx context.Context, p *models.TLsmGameLlmProvider) (interface{}, error) {
 	return a.svc.EnsureBotUserForProvider(ctx, p)
+}
+
+// wsChatSenderAdapter 把 ws.ChatService 适配到 wealth.ChatSender(2026-09-14 §财商流P0)。
+type wsChatSenderAdapter struct {
+	chat *ws.ChatService
+}
+
+func (a *wsChatSenderAdapter) SendFromBot(roomID, botUserID, botAccount, modelKey, text string) error {
+	if a.chat == nil {
+		return nil
+	}
+	_, err := a.chat.SendFromBot(roomID, botUserID, botAccount, modelKey, text)
+	return err
 }

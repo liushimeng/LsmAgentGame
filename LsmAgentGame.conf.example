@@ -148,11 +148,12 @@
     // false:新建房默认保留 §135 竞技规则(死者身份牌不翻开)。建房请求携带
     // reveal_role_on_death 时以请求为准,本默认仅兜底未传字段的旧客户端。
     "reveal_role_on_death_default": true
-  }
-}
+  },
 
   // ============================================================================
   // 2026-08-19 §德州扑克Agent — Texas Hold'em Bot 配置
+  // (2026-09-14 §财商流P0 修复:此前本块被误放在根对象闭括号之后,
+  //  fresh-clone bootstrap 按 .example 复制出的 conf 解析即 panic)
   // ============================================================================
   "texasholdem": {
     // 总开关(默认 true)。false 时即使创建房间携带 agent_seats 也被忽略,
@@ -168,5 +169,26 @@
     "rake_rate_pct": 5,
     // 单手牌最大底池上限(防恶意刷金币)。
     "max_pot_per_hand": 100000
+  },
+
+  // ============================================================================
+  // 2026-09-14 §财商流P0 — 财商流游戏(game_kind=wealth)配置。全部占位默认值,
+  // 无任何密钥。真实值只进 LsmAgentGame.conf(§5 安全)。
+  // ============================================================================
+  "wealth": {
+    // 1 游戏月窗口毫秒数,clamp [3000, 30000]。
+    "month_ms": 8000,
+    // 文档池(75k 人物卡,Schema v1.1)磁盘根。
+    "profession_docs_path": "./docs/财商流游戏/玩家职业设计",
+    // 建房缺省卡池: "curated"(内嵌精选 10 卡) | "docs"(文档池懒加载)。
+    "profession_pool_default": "curated",
+    // Agent 总开关(默认 true)。
+    "agent_enabled": true,
+    // 单 bot 单月决策超时(秒),watchdog 兜底强制 submit_month。
+    "agent_decision_timeout_sec": 20,
+    // bot 每月动作工具上限(与人类 ActionBudget 同规则)。
+    "bot_max_actions_per_month": 3,
+    // 0 = 运行时随机;非 0 = 固定种子(确定性测试/复现)。
+    "random_seed": 0
   }
 }

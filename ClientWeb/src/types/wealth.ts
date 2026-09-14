@@ -1,0 +1,553 @@
+// ─── 财商流游戏 (Wealth) types ───
+//
+// 与 docs/财商流游戏/已实现/02-架构设计/财商流游戏-WS与HTTP协议契约-v1.md §3
+// 「game.state 载荷逐字段契约」**逐字段对齐**（字段名 / 可空性一字不改；
+// 后端 game/wealth/view.go::BuildClientState 是协议唯一实现）。
+// 静态表（城区 / 职业色 / 动作元数据）出处：协议 §4 + 后端架构文档 §4 DistrictDefs
+// + 前端架构文档 §3 职业色（P0 新定）。
+
+/** 8 城区 id（顺序 = DistrictDefs 静态表 / market.districts 数组顺序）。 */
+export type WealthDistrictId =
+  | 'finance' | 'tech' | 'industry' | 'oldtown'
+  | 'commerce' | 'residential' | 'suburb' | 'riverside';
+
+/** 市场周期四阶段（《规则》§7.1）。 */
+export type WealthCyclePhase = 'recovery' | 'boom' | 'recession' | 'depression';
+
+/** 月内相位：acting=动作窗口 / settling=月结中。 */
+export type WealthPhase = 'acting' | 'settling';
+
+export type WealthStatus = 'open' | 'playing' | 'over';
+
+/** 月总收入档（《规则》§5.3）。 */
+export type WealthIncomeBand = 'low' | 'mid' | 'high' | 'top';
+
+/** 本月最近动作类别（players[].status_icon）。 */
+export type WealthStatusIcon = 'working' | 'idle' | 'trading' | 'resting' | 'moved';
+
+/** 资产种类（asset.kind；house/shop 带城区后缀）。 */
+export type WealthAssetKind =
+  | 'stock_index' | 'bond' | 'gold'
+  | `house:${WealthDistrictId}` | `shop:${WealthDistrictId}`
+  | 'side_business' | 'pension';
+
+/** 贷款种类（loan.kind）。 */
+export type WealthLoanKind =
+  | 'mortgage' | 'consumer' | 'credit_tier1' | 'credit_tier2' | 'credit_tier3' | 'business';
+
+// ── game.state 载荷（协议 §3）──────────────────────────────────────────
+
+export interface WealthCycle {
+  phase: WealthCyclePhase;
+  /** 1Y LPR，小数（如 0.035），非百分数。 */
+  lpr: number;
+  /** CPI，小数（如 0.02）。 */
+  cpi: number;
+  /** 阶段剩余月（含钟声重掷不确定性，仅展示）。 */
+  months_left: number;
+}
+
+export interface WealthDistrictMarket {
+  id: WealthDistrictId;
+  /** 房价指数（初始 1.0）。 */
+  price_index: number;
+  /** 租金指数（price_index × 0.0016 归一）。 */
+  rent_index: number;
+}
+
+export interface WealthMarket {
+  /** 股票指数，元/份（初始 3.50）。 */
+  stock_index: number;
+  /** 黄金，元/克（初始 750）。 */
+  gold_price: number;
+  /** 当期新购债券年化，小数（如 0.032）。 */
+  bond_yield: number;
+  /** 8 项，顺序 = DistrictDefs 静态表。 */
+  districts: WealthDistrictMarket[];
+}
+
+export interface WealthProfession {
+  /** 职业卡 id（"P01"…；文档池 "N9012345"）。 */
+  id: string;
+  /** 中文名，如 "外卖骑手"。 */
+  title: string;
+  /** 头像文件名主干（"p01" → assets/images/wealth/agents/p01.png）。 */
+  avatar: string;
+}
+
+export interface WealthResources {
+  energy: number;
+  network: number;
+  cognition: number;
+}
+
+export interface WealthPlayer {
+  seat: number;              // 0..7
+  account: string;           // bot 为 bot_<modelkey>
+  nickname: string;
+  is_bot: boolean;
+  /** bot 的 agent_name；人类为 ""。 */
+  model_display: string;
+  profession: WealthProfession;
+  /** 当前所在区 id。 */
+  district: WealthDistrictId;
+  /** 住房所在区 id。 */
+  home_district: WealthDistrictId;
+  alive: boolean;
+  /** P0 恒 false（P1 提前退休预留）。 */
+  retired: boolean;
+  /** 个人年龄（文档池差异卡展示用）。 */
+  age: number;
+  resources: WealthResources;
+  /** 元（公开）。 */
+  net_worth: number;
+  /** 0–2 封顶（公开）。 */
+  fi_index: number;
+  income_band: WealthIncomeBand;
+  status_icon: WealthStatusIcon;
+  /** 人读，如 "买入黄金 50g"；空 = 本月未动作。 */
+  last_action: string;
+  /** 终局结局 id；进行中为 ""。 */
+  ending: string;
+}
+
+export interface WealthMonthlyDetail {
+  /** "salary" | "tax" | "living" | …（引擎扩展开放）。 */
+  key: string;
+  amount_cny: number;
+  text: string;
+}
+
+export interface WealthMonthly {
+  income: number;
+  expense: number;
+  net: number;
+  tax: number;
+  social: number;
+  detail: WealthMonthlyDetail[];
+}
+
+export interface WealthAsset {
+  kind: WealthAssetKind | string;
+  /** 人读名，如 "指数基金" "老城区住宅"。 */
+  name: string;
+  /** 份/克/套/间。 */
+  units: number;
+  /** 当前单价。 */
+  price: number;
+  value_cny: number;
+  /** 月现金流（租金+/月供−；正为流入）。 */
+  monthly_flow_cny: number;
+}
+
+export interface WealthLoan {
+  id: string;                // "L3"
+  kind: WealthLoanKind | string;
+  principal: number;
+  balance: number;
+  annual_rate: number;
+  monthly_payment: number;
+  months_left: number;
+}
+
+export interface WealthFamily {
+  marital: 'single' | 'married';
+  children: number;
+}
+
+/** 仅本人座位填充；观战者 null。 */
+export interface WealthMyState {
+  cash: number;
+  /** 当前基准月薪（税前）。 */
+  salary: number;
+  /** 配偶月收入（税后净额）。 */
+  spouse_income: number;
+  /** 上月副业净收入。 */
+  side_income: number;
+  /** 上月被动收入合计。 */
+  passive_income: number;
+  /** 最近一次月结（或当月预估）。 */
+  monthly: WealthMonthly;
+  resources: WealthResources;
+  assets: WealthAsset[];
+  loans: WealthLoan[];
+  /** 养老金账户余额。 */
+  pension_cny: number;
+  /** 400–850。 */
+  credit_score: number;
+  family: WealthFamily;
+  fi_index: number;
+  net_worth: number;
+  /** 职业卡 goals（含 5 年目标），终局对照展示。 */
+  goals: string[];
+}
+
+/** Agent 思维可见性：本人座位 + 观战者可见；其他玩家不可见。 */
+export interface WealthBotContext {
+  seat: number;
+  /** Agent 自述本月决策（≤120 字）。 */
+  last_decision_summary: string;
+  /** JSON 字符串。 */
+  last_tool_input: string;
+  /** 人读结果。 */
+  last_tool_result: string;
+  /** 内心独白（speak 的 internal_thought）。 */
+  heart_thought: string;
+}
+
+export interface WealthLedgerEntry {
+  month: number;
+  from: string;
+  to: string;
+  amount_cny: number;
+  category: string;
+  note: string;
+}
+
+export interface WealthRecentEvent {
+  month: number;
+  type: string;
+  text: string;
+}
+
+/** game.state 全量快照（按座位脱敏，BroadcastTo 单发）。 */
+export interface WealthGameState {
+  room_id: string;
+  game_kind: 'wealth';
+  status: WealthStatus;
+  /** 1..420。 */
+  month: number;
+  /** 主时钟年龄。 */
+  age: number;
+  phase: WealthPhase;
+  cycle: WealthCycle;
+  market: WealthMarket;
+  max_seat: number;
+  /** unix_ms；前端倒计时 = next_month_at − now。 */
+  next_month_at: number;
+  /** unix_s；RoomRunningClock 同源语义。 */
+  game_started_at: number;
+  players: WealthPlayer[];
+  /** -1 = 观战。 */
+  my_seat: number;
+  my: WealthMyState | null;
+  bot_contexts: WealthBotContext[];
+  /** 最近 50 条：本人相关 + 公共。 */
+  ledger_recent: WealthLedgerEntry[];
+  /** 最近 100 条。 */
+  events_recent: WealthRecentEvent[];
+}
+
+// ── 其余 S→C 帧载荷（协议 §2）────────────────────────────────────────
+
+/** game.joined。 */
+export interface WealthJoinedFrame {
+  my_seat: number;
+  month: number;
+  phase: WealthPhase;
+}
+
+/** game.started。 */
+export interface WealthStartedFrame {
+  month: number;
+  age: number;
+  start_age: number;
+  professions: { seat: number; profession_id: string }[];
+}
+
+export type WealthEventType =
+  | 'action' | 'move' | 'settle' | 'market' | 'life' | 'chat' | 'error';
+
+/** game.event。 */
+export interface WealthEventFrame {
+  room_id?: string;
+  month: number;
+  seat?: number;
+  type: WealthEventType | string;
+  text: string;
+  data?: unknown;
+}
+
+export interface WealthMonthSummary {
+  seat: number;
+  cash_delta: number;
+  net_worth: number;
+  fi_index: number;
+  note: string;
+}
+
+/** game.month（BroadcastRoom 全房同帧）。 */
+export interface WealthMonthFrame {
+  room_id?: string;
+  month: number;
+  age: number;
+  summaries: WealthMonthSummary[];
+  market_changes: {
+    stock_index?: number;
+    gold_price?: number;
+    bond_rate?: number;
+    house_idx?: Record<string, number>;
+  };
+  events: WealthRecentEvent[];
+}
+
+export type WealthEndingId =
+  | 'winner' | 'affluent' | 'ordinary' | 'indebted' | 'bankrupt' | 'lonely_rich';
+
+export interface WealthScore {
+  seat: number;
+  fi_score: number;
+  life_score: number;
+  social_score: number;
+  total: number;
+  ending: string;
+}
+
+/** game.over。 */
+export interface WealthOverFrame {
+  room_id?: string;
+  scores: WealthScore[];
+  /** 人生报告（按座位索引；P0 简化为每个座位一份独立报告）。 */
+  reports: Record<number, string>;
+}
+
+/** game.error。 */
+export interface WealthErrorFrame {
+  code: number;
+  message: string;
+}
+
+// ── C→S 动作（协议 §4 动作语义表；人类按钮 = 14 种，check_state/speak 仅 Agent）──
+
+export type WealthActionType =
+  | 'buy_asset' | 'sell_asset' | 'buy_house' | 'take_loan' | 'repay_loan'
+  | 'start_side_business' | 'stop_side_business' | 'study' | 'socialize'
+  | 'rest' | 'work_overtime' | 'move_district' | 'consume' | 'donate'
+  | 'submit_month';
+
+export type WealthAction =
+  | { type: 'buy_asset'; asset: 'stock_index' | 'bond' | 'gold'; amount_cny: number }
+  | { type: 'sell_asset'; asset: string; units: number }
+  | { type: 'buy_house'; district: WealthDistrictId; downpay_ratio: number }
+  | { type: 'take_loan'; kind: 'consumer' | 'credit' | 'business'; amount_cny: number }
+  | { type: 'repay_loan'; loan_id: string; amount_cny: number }
+  | { type: 'start_side_business'; kind: 'delivery' | 'content' | 'tutoring' | 'freelance' }
+  | { type: 'stop_side_business' }
+  | { type: 'study' }
+  | { type: 'socialize' }
+  | { type: 'rest' }
+  | { type: 'work_overtime' }
+  | { type: 'move_district'; district: WealthDistrictId }
+  | { type: 'consume'; amount_cny: number; reason?: string }
+  | { type: 'donate'; amount_cny: number }
+  | { type: 'submit_month' };
+
+/** POST /api/games/wealth/rooms 的 wealth 段（协议 §6）。 */
+export interface WealthRoomOptions {
+  /** 1 游戏月时长 ms，3000–30000，缺省 8000。 */
+  month_ms?: number;
+  /** "curated" | "docs"，缺省 curated。 */
+  pool?: 'curated' | 'docs';
+  /** 可选随机种子（测试确定性复现）。 */
+  seed?: number;
+}
+
+// ── 静态表 ────────────────────────────────────────────────────────────
+
+export interface WealthDistrictDef {
+  id: WealthDistrictId;
+  /** 中文名（DistrictDefs 权威值；i18n 展示走 wealth.district.<id>）。 */
+  nameZh: string;
+  /** 主色（后端 DistrictDefs）。 */
+  color: string;
+  /** 40×40 地图平面坐标（前端 DistrictBlock / 小地图共用）。 */
+  x: number;
+  z: number;
+  /** 房价 beta。 */
+  houseBeta: number;
+  /** 基准房价（万元/套）。 */
+  basePriceWan: number;
+}
+
+/** 8 城区静态表（后端架构文档 §4 DistrictDefs，顺序即数组下标）。 */
+export const WEALTH_DISTRICTS: WealthDistrictDef[] = [
+  { id: 'finance',     nameZh: '金融CBD', color: '#1d4ed8', x: 0,   z: 0,   houseBeta: 1.3,  basePriceWan: 800 },
+  { id: 'tech',        nameZh: '科技园',  color: '#0e7490', x: -10, z: 4,   houseBeta: 1.15, basePriceWan: 500 },
+  { id: 'industry',    nameZh: '工业区',  color: '#57534e', x: -12, z: -8,  houseBeta: 0.85, basePriceWan: 200 },
+  { id: 'oldtown',     nameZh: '老城区',  color: '#92400e', x: 2,   z: -12, houseBeta: 0.8,  basePriceWan: 180 },
+  { id: 'commerce',    nameZh: '商业中心', color: '#b91c1c', x: 10,  z: -2,  houseBeta: 1.1,  basePriceWan: 400 },
+  { id: 'residential', nameZh: '居住区',  color: '#15803d', x: 0,   z: 12,  houseBeta: 1.0,  basePriceWan: 300 },
+  { id: 'suburb',      nameZh: '郊区',    color: '#65a30d', x: -14, z: 14,  houseBeta: 0.7,  basePriceWan: 120 },
+  { id: 'riverside',   nameZh: '滨河新区', color: '#7c3aed', x: 14,  z: 10,  houseBeta: 1.25, basePriceWan: 450 },
+];
+
+export const WEALTH_DISTRICT_IDS: WealthDistrictId[] =
+  WEALTH_DISTRICTS.map((d) => d.id);
+
+/** 按 id 查城区定义。 */
+export function wealthDistrict(id: string): WealthDistrictDef | undefined {
+  return WEALTH_DISTRICTS.find((d) => d.id === id);
+}
+
+/** 城区中心（40×40 世界坐标）；未知 id 回落原点。 */
+export function districtCenter(id: string): { x: number; z: number } {
+  const d = wealthDistrict(id);
+  return d ? { x: d.x, z: d.z } : { x: 0, z: 0 };
+}
+
+/** 职业显示元数据（前端架构文档 §3，P0 新定；对比度 ≥4.5:1 于深色地图）。 */
+export const PROFESSION_COLORS: Record<string, string> = {
+  P01: '#f59e0b', P03: '#94a3b8', P05: '#34d399', P07: '#60a5fa',
+  P08: '#fb7185', P09: '#a78bfa', P10: '#f87171', P11: '#fbbf24',
+  P15: '#fdba74', P16: '#e879f9',
+};
+
+/** 头像 PNG 缺失时的职业 emoji 兜底（降级策略 §9）。 */
+export const PROFESSION_EMOJI: Record<string, string> = {
+  P01: '🛵', P03: '🚔', P05: '📚', P07: '🏛️', P08: '💼',
+  P09: '💻', P10: '🩺', P11: '⚖️', P15: '🥐', P16: '📱',
+};
+
+export const WEALTH_DEFAULT_PROFESSION_COLOR = '#9ca3af';
+export const WEALTH_DEFAULT_PROFESSION_EMOJI = '🧑‍💼';
+
+/** 精选 10 卡静态镜像（职业卡与加载器设计 §1；仅用于 UI 兜底展示，
+ *  权威数据走 GET /api/games/wealth/professions）。 */
+export interface CuratedProfession {
+  id: string;
+  title: string;
+  avatar: string;
+  color: string;
+  emoji: string;
+  salary: number;
+  expense: number;
+  savings: number;
+  homeDistrict: WealthDistrictId;
+  openingHook: string;
+  goal: string;
+}
+
+export const CURATED_PROFESSIONS: CuratedProfession[] = [
+  { id: 'P01', title: '外卖骑手',  avatar: 'p01', color: PROFESSION_COLORS.P01, emoji: PROFESSION_EMOJI.P01,
+    salary: 5000,  expense: 3200, savings: 8000,   homeDistrict: 'commerce',
+    openingHook: '风里雨里跑了三年，卡里就八千块。我不想送一辈子外卖，先攒出第一桶金。',
+    goal: '5 年内攒下 15 万启动资金，学会让钱替我干活。' },
+  { id: 'P03', title: '保安/司机', avatar: 'p03', color: PROFESSION_COLORS.P03, emoji: PROFESSION_EMOJI.P03,
+    salary: 5500,  expense: 3500, savings: 10000,  homeDistrict: 'oldtown',
+    openingHook: '站岗十小时，月薪五千五。安稳是安稳，可我不想五十岁还在替别人看大门。',
+    goal: '5 年内建立每月 2000 元被动收入，给自己多一条路。' },
+  { id: 'P05', title: '小学教师',  avatar: 'p05', color: PROFESSION_COLORS.P05, emoji: PROFESSION_EMOJI.P05,
+    salary: 9000,  expense: 6000, savings: 30000,  homeDistrict: 'residential',
+    openingHook: '粉笔灰吃了七年，存款三万。教书育人不慌，我怕的是一眼望到头的工资条。',
+    goal: '5 年内攒够一套郊区房的首付，让家安下来。' },
+  { id: 'P07', title: '公务员',    avatar: 'p07', color: PROFESSION_COLORS.P07, emoji: PROFESSION_EMOJI.P07,
+    salary: 12000, expense: 8000, savings: 50000,  homeDistrict: 'oldtown',
+    openingHook: '体制内第八年，钱不多但稳。同学都下海了，我打算稳中求进慢慢布局。',
+    goal: '5 年内完成两套住宅配置，家庭被动收入覆盖基本开销。' },
+  { id: 'P08', title: '销售代表',  avatar: 'p08', color: PROFESSION_COLORS.P08, emoji: PROFESSION_EMOJI.P08,
+    salary: 12000, expense: 8500, savings: 20000,  homeDistrict: 'commerce',
+    openingHook: '靠嘴皮子吃饭，行情好月月超额。趁年轻胆子大，我要把提成变成资产。',
+    goal: '5 年内净资产突破 100 万，摆脱纯靠提成吃饭。' },
+  { id: 'P09', title: '初级程序员', avatar: 'p09', color: PROFESSION_COLORS.P09, emoji: PROFESSION_EMOJI.P09,
+    salary: 15000, expense: 10000, savings: 40000, homeDistrict: 'tech',
+    openingHook: '写代码第五年，年包二十来万。我信数据不信运气，定投+记账慢慢滚。',
+    goal: '5 年内指数基金持仓 50 万，FI 指数达到 0.5。' },
+  { id: 'P10', title: '医生',      avatar: 'p10', color: PROFESSION_COLORS.P10, emoji: PROFESSION_EMOJI.P10,
+    salary: 25000, expense: 18000, savings: 100000, homeDistrict: 'residential',
+    openingHook: '白大褂下是还不完的房贷。收入高开销也高，我得学会像管理病人一样管理钱。',
+    goal: '5 年内还清一半房贷，建立孩子的教育金。' },
+  { id: 'P11', title: '律师',      avatar: 'p11', color: PROFESSION_COLORS.P11, emoji: PROFESSION_EMOJI.P11,
+    salary: 30000, expense: 20000, savings: 150000, homeDistrict: 'finance',
+    openingHook: '时薪三千，照样月光。见惯了财富易主，这次我要做自己案子的当事人。',
+    goal: '5 年内构建 1.5 万月被动收入，把时间从时薪里赎回来。' },
+  { id: 'P15', title: '早餐店主',  avatar: 'p15', color: PROFESSION_COLORS.P15, emoji: PROFESSION_EMOJI.P15,
+    salary: 12000, expense: 7500, savings: 60000,  homeDistrict: 'oldtown',
+    openingHook: '凌晨三点的豆浆香，是我全部的家当。生意稳但太单一，得想想退路。',
+    goal: '5 年内攒出第二家店的启动金，同时配置一份金融资产。' },
+  { id: 'P16', title: '自媒体博主', avatar: 'p16', color: PROFESSION_COLORS.P16, emoji: PROFESSION_EMOJI.P16,
+    salary: 9000,  expense: 7000, savings: 20000,  homeDistrict: 'tech',
+    openingHook: '三万粉的博主，上个月爆了，这个月凉透。流量是过山车，我要把波动变成台阶。',
+    goal: '5 年内用流量收入攒下 40 万稳健资产，告别收入焦虑。' },
+];
+
+export function professionColor(id: string): string {
+  return PROFESSION_COLORS[id] ?? WEALTH_DEFAULT_PROFESSION_COLOR;
+}
+
+export function professionEmoji(id: string): string {
+  return PROFESSION_EMOJI[id] ?? WEALTH_DEFAULT_PROFESSION_EMOJI;
+}
+
+// ── 动作元数据（ActionPanel 按钮渲染依据；语义唯一事实来源 = 协议 §4）──
+
+/** 参数化动作的表单形态。 */
+export type WealthActionFormKind =
+  | 'none'                       // 无参确认（study / socialize / rest / work_overtime / stop_side_business / submit_month）
+  | 'buy_asset' | 'sell_asset' | 'buy_house' | 'take_loan' | 'repay_loan'
+  | 'side_business' | 'move_district' | 'amount' | 'amount_reason';
+
+export interface WealthActionMeta {
+  type: WealthActionType;
+  icon: string;
+  /** i18n key：`wealth.action.<key>`。 */
+  i18nKey: string;
+  form: WealthActionFormKind;
+  /** 简述（tooltip / 规则页），人读。 */
+  hint: string;
+}
+
+/** 14 个人类按钮动作（顺序 = 产品设计 §7.1 动作条）。 */
+export const WEALTH_ACTIONS: WealthActionMeta[] = [
+  { type: 'buy_asset',  icon: '💵', i18nKey: 'buyAsset',  form: 'buy_asset',    hint: '按市价买入指数基金 / 债券 / 黄金（≥1000 元）' },
+  { type: 'sell_asset', icon: '📈', i18nKey: 'sellAsset', form: 'sell_asset',   hint: '卖出持仓资产（房产整售 1 套）' },
+  { type: 'buy_house',  icon: '🏠', i18nKey: 'buyHouse',  form: 'buy_house',    hint: '首付 ≥30%，余额 30 年等额本息房贷' },
+  { type: 'take_loan',  icon: '🏦', i18nKey: 'takeLoan',  form: 'take_loan',    hint: '消费贷 / 信用贷（5/10/20 万三档）/ 经营贷' },
+  { type: 'repay_loan', icon: '💳', i18nKey: 'repayLoan', form: 'repay_loan',   hint: '提前还本 ≥1 万元或结清' },
+  { type: 'start_side_business', icon: '🛵', i18nKey: 'sideBusiness', form: 'side_business', hint: '副业月入约 2000–6000 元，月耗精力 2' },
+  { type: 'stop_side_business',  icon: '🛑', i18nKey: 'stopBusiness', form: 'none',          hint: '停止副业，精力释放' },
+  { type: 'study',      icon: '📚', i18nKey: 'study',      form: 'none',         hint: '2000 元 / 精力-1 / 认知+1' },
+  { type: 'socialize',  icon: '🤝', i18nKey: 'socialize',  form: 'none',         hint: '1000 元 / 人脉+1' },
+  { type: 'rest',       icon: '😴', i18nKey: 'rest',       form: 'none',         hint: '精力 +2' },
+  { type: 'work_overtime', icon: '⚡', i18nKey: 'workOvertime', form: 'none',    hint: '精力-2 / 当月工资 ×0.3 奖金' },
+  { type: 'move_district', icon: '🚚', i18nKey: 'moveDistrict', form: 'move_district', hint: '搬家费 3000 元 / 精力-1' },
+  { type: 'consume',    icon: '🛍', i18nKey: 'consume',    form: 'amount_reason', hint: '自由消费（记事，无机制效果）' },
+  { type: 'donate',     icon: '❤',  i18nKey: 'donate',     form: 'amount',       hint: '每万元 1 社会贡献分；人脉+1（累计前 3 次）' },
+];
+
+export const WEALTH_SUBMIT_MONTH: WealthActionMeta = {
+  type: 'submit_month', icon: '✅', i18nKey: 'submitMonth', form: 'none',
+  hint: '标记本月完成；全员提交提前进入月结（不耗动作预算）',
+};
+
+// ── 展示辅助 ──────────────────────────────────────────────────────────
+
+/** 人民币金额人读化：≥1 亿 → "x.xx亿"；≥1 万 → "x.x万"；否则整数千分位。 */
+export function formatCny(n: number | undefined | null): string {
+  if (n === undefined || n === null || Number.isNaN(n)) return '—';
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (abs >= 1e8) return `${sign}${(abs / 1e8).toFixed(2)}亿`;
+  if (abs >= 1e4) return `${sign}${(abs / 1e4).toFixed(1)}万`;
+  return `${sign}${Math.round(abs).toLocaleString('zh-CN')}`;
+}
+
+/** 带符号差额（+/-）用于涨跌箭头。 */
+export function formatDelta(n: number | undefined | null): string {
+  if (n === undefined || n === null || Number.isNaN(n)) return '—';
+  if (n > 0) return `+${formatCny(n)}`;
+  return formatCny(n);
+}
+
+/** 百分比展示（0.035 → "3.5%"）。 */
+export function formatPct(v: number | undefined | null, digits = 1): string {
+  if (v === undefined || v === null || Number.isNaN(v)) return '—';
+  return `${(v * 100).toFixed(digits)}%`;
+}
+
+/** FI Index 档位色（前端架构文档 §5：<0.5 灰 / 0.5–1 蓝 / ≥1 绿 / ≥1.5 金）。 */
+export function fiIndexColor(fi: number): string {
+  if (fi >= 1.5) return '#d4a017';
+  if (fi >= 1) return '#34d399';
+  if (fi >= 0.5) return '#60a5fa';
+  return '#9ca3af';
+}

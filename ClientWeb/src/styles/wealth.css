@@ -1,0 +1,764 @@
+/* ─── 财商流游戏 (wealth) 样式 — 2026-09-14 §财商流 P0 ───
+ *
+ * 命名空间：全部选择器前缀 .wealth-（杜绝与既有样式互染）；
+ * CSS 变量挂 .wealth-root 作用域。globals.css 的 @import 链**末尾**追加
+ * （CLAUDE.md §2.1 约束 4：只追加不改序）。
+ *
+ * 对比度硬阈值（CLAUDE.md §26）：正文 ≥4.5:1 / 徽章 ≥5:1 / 选中态 ≥6:1；
+ * 五大反模式一票否决（红底红字 / 浅字+低透明底 / color:inherit+半透明 /
+ * 选中态明度差<1.5 / opacity:0.4 表 disabled）。
+ * 触控目标：--wealth-touch-target: 44px；prefers-reduced-motion 关闭动画。
+ */
+
+.wealth-root {
+  --wealth-accent: #c9a227;
+  --wealth-accent-strong: #d4a017;
+  --wealth-bg: #10151d;
+  --wealth-panel: #161d28;
+  --wealth-panel-2: #1c2431;
+  --wealth-border: #2c3644;
+  --wealth-text: #e5e7eb;
+  --wealth-text-dim: #b7bfcc;
+  --wealth-pos: #4ade80;
+  --wealth-neg: #f87171;
+  --wealth-touch-target: 44px;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  color: var(--wealth-text);
+  background: var(--wealth-bg);
+}
+
+/* 屏幕阅读器专用（视觉隐藏） */
+.wealth-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ── 数字红绿（≥4.5:1 于面板底）── */
+.wealth-num--pos { color: #4ade80; font-weight: 600; }
+.wealth-num--neg { color: #f87171; font-weight: 600; }
+
+/* ── 徽章（≥5:1，白字 + 实底）── */
+.wealth-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #ffffff;
+  background: #374151; /* 灰底白字 ≈ 8.6:1 */
+  white-space: nowrap;
+}
+.wealth-badge--credit { background: #1d4ed8; }   /* 蓝底白字 ≈ 6.6:1 */
+.wealth-badge--band   { background: #b45309; }   /* 琥珀底白字 ≈ 5.3:1 */
+.wealth-badge--budget { background: #065f46; }   /* 绿底白字 ≈ 6.4:1 */
+.wealth-badge--spectator { background: #4c1d95; } /* 紫底白字 ≈ 8:1 */
+
+/* 周期徽章四色（§26.3 三件套：JSX 拼接与 CSS 规则同提交） */
+.wealth-cycle--recovery  { background: #15803d; } /* 白字 ≈ 5.0:1 */
+.wealth-cycle--boom      { background: #b45309; } /* 白字 ≈ 5.3:1 */
+.wealth-cycle--recession { background: #b91c1c; } /* 白字 ≈ 5.9:1 */
+.wealth-cycle--depression{ background: #374151; } /* 白字 ≈ 8.6:1 */
+
+/* 相位徽章 */
+.wealth-phase-badge--settling { background: #92400e; } /* 白字 ≈ 5.6:1 */
+
+/* 结局徽章六色（白字全 ≥5:1） */
+.wealth-ending--winner     { background: #b45309; }
+.wealth-ending--affluent   { background: #1d4ed8; }
+.wealth-ending--ordinary   { background: #374151; }
+.wealth-ending--indebted   { background: #b91c1c; }
+.wealth-ending--bankrupt   { background: #7f1d1d; }
+.wealth-ending--lonely_rich{ background: #6d28d9; }
+.wealth-ending-badge {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 700;
+  background: #374151;
+}
+
+/* ── 大厅 ─────────────────────────────────────────── */
+.wealth-lobby__banner {
+  position: relative;
+  min-height: 150px;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 14px;
+  border: 1px solid var(--wealth-border);
+}
+.wealth-lobby__banner-img,
+.wealth-lobby__banner-fallback {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* banner PNG 缺失降级：accent 金 → 深蓝渐变（§9 降级策略） */
+.wealth-lobby__banner-fallback {
+  background: linear-gradient(120deg, #2a2410 0%, #101a30 55%, #0d1220 100%);
+}
+.wealth-lobby__banner-text {
+  position: relative;
+  z-index: 1;
+  padding: 20px 22px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+.wealth-lobby__banner-text h1 { margin: 0 0 6px; font-size: 24px; color: #fff; }
+.wealth-lobby__banner-text p { margin: 0; color: #dbe2ee; font-size: 14px; }
+.wealth-lobby__create {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  min-height: var(--wealth-touch-target);
+}
+
+/* ── 对局页骨架 ───────────────────────────────────── */
+.wealth-game { gap: 0; }
+.wealth-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  background: var(--wealth-panel);
+  border-bottom: 1px solid var(--wealth-border);
+  font-size: 14px;
+}
+.wealth-topbar__title { font-weight: 700; font-size: 16px; color: #fff; }
+.wealth-topbar__room { color: var(--wealth-text-dim); font-weight: 400; margin-left: 6px; }
+.wealth-topbar__item { color: var(--wealth-text); }
+.wealth-topbar__actions { margin-left: auto; display: flex; gap: 8px; }
+.wealth-topbar__actions .btn { min-height: var(--wealth-touch-target); }
+
+.wealth-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 14px;
+  background: #7f1d1d; /* 红底白字 ≈ 9:1 */
+  color: #fff;
+  font-size: 13px;
+}
+.wealth-error-banner button {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 32px;
+}
+
+.wealth-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.wealth-map-area {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 320px;
+  background: #0b0f16;
+}
+.wealth-map-host {
+  position: absolute;
+  inset: 0;
+}
+.wealth-map-host canvas { display: block; touch-action: none; }
+
+.wealth-minimap {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  border: 1px solid var(--wealth-border);
+  border-radius: 8px;
+  background: #0b0f16;
+  cursor: pointer;
+  min-width: var(--wealth-touch-target);
+  min-height: var(--wealth-touch-target);
+}
+
+/* ── 右侧栏 ───────────────────────────────────────── */
+.wealth-sidebar {
+  width: 380px;
+  flex: 0 0 380px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--wealth-panel);
+  border-left: 1px solid var(--wealth-border);
+}
+.wealth-sidebar__panels {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+.wealth-sidebar > .wealth-botpanel { flex: 0 0 auto; max-height: 220px; overflow-y: auto; }
+.wealth-sidebar > :global(.chat-panel) { flex: 0 0 240px; }
+.wealth-join-hint {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #fde68a;          /* 深底黄字 ≈ 9:1 */
+  background: rgba(180, 83, 9, 0.35);
+  border-top: 1px solid var(--wealth-border);
+}
+
+/* Tab 条（选中态 ≥6:1：金底深字 + 光晕双通道） */
+.wealth-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px 0;
+}
+.wealth-tabs__btn {
+  flex: 1;
+  min-height: var(--wealth-touch-target);
+  border: 1px solid var(--wealth-border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: var(--wealth-panel-2);
+  color: var(--wealth-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.wealth-tabs__btn:hover { color: #fff; }
+.wealth-tabs__btn--active {
+  background: var(--wealth-accent-strong);
+  color: #1a1305;                    /* 金底深字 ≈ 9:1 */
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.55);
+}
+.wealth-tabs--fin { padding: 6px 0 0; }
+
+/* ── 通用小面板 ───────────────────────────────────── */
+.wealth-panel__empty {
+  padding: 22px 12px;
+  text-align: center;
+  color: var(--wealth-text-dim);
+  font-size: 13px;
+}
+
+/* ── 财务面板 ─────────────────────────────────────── */
+.wealth-finpanel__summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--wealth-border);
+}
+.wealth-finpanel__kv {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--wealth-text-dim);
+}
+.wealth-finpanel__kv b { font-size: 15px; color: #fff; }
+.wealth-finpanel__kv--head,
+.wealth-finpanel__kv--foot {
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  background: var(--wealth-panel-2);
+  border-radius: 6px;
+  color: var(--wealth-text);
+}
+.wealth-fi-gauge { text-align: center; margin-left: auto; }
+.wealth-fi-gauge__value { font-size: 18px; font-weight: 700; }
+.wealth-fi-gauge__label { display: block; font-size: 11px; color: var(--wealth-text-dim); }
+
+.wealth-res-bar {
+  display: grid;
+  grid-template-columns: 42px 1fr 46px;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--wealth-text);
+}
+.wealth-res-bar__track {
+  height: 10px;
+  border-radius: 5px;
+  background: #2a3240;
+  overflow: hidden;
+}
+.wealth-res-bar__fill { height: 100%; background: #60a5fa; }
+.wealth-res-bar__fill--neg { background: #f87171; }
+.wealth-res-bar__value { text-align: right; color: var(--wealth-text-dim); }
+.wealth-finpanel__meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.wealth-finpanel__table { padding-top: 8px; }
+
+.wealth-detail-list {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  font-size: 12.5px;
+}
+.wealth-detail-list__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 8px;
+  border-bottom: 1px dashed #2c3644;
+  color: var(--wealth-text);
+}
+.wealth-detail-list__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wealth-detail-list__row--empty { color: var(--wealth-text-dim); justify-content: center; }
+
+.wealth-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  margin: 6px 0;
+}
+.wealth-table th {
+  text-align: left;
+  color: var(--wealth-text-dim);
+  font-weight: 600;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--wealth-border);
+}
+.wealth-table td {
+  padding: 4px 6px;
+  border-bottom: 1px dashed #26303e;
+  color: var(--wealth-text);
+}
+.wealth-table__empty { text-align: center; color: var(--wealth-text-dim); padding: 12px 0; }
+
+.wealth-goals summary { cursor: pointer; font-size: 13px; color: var(--wealth-accent-strong); }
+.wealth-goals ul { margin: 6px 0 2px; padding-left: 20px; font-size: 12.5px; color: var(--wealth-text-dim); }
+
+/* ── 行情面板 ─────────────────────────────────────── */
+.wealth-marketpanel { font-size: 13px; }
+.wealth-marketpanel__head { display: flex; align-items: center; gap: 10px; padding-bottom: 6px; }
+.wealth-marketpanel__months { color: var(--wealth-text-dim); font-size: 12px; }
+.wealth-marketpanel__rates { display: flex; gap: 8px; flex-wrap: wrap; padding: 6px 0; }
+.wealth-quote {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px dashed #26303e;
+}
+.wealth-quote__label { width: 108px; color: var(--wealth-text-dim); }
+.wealth-quote__value { font-weight: 700; color: #fff; }
+.wealth-quote__delta { font-size: 12px; }
+.wealth-spark { opacity: 0.95; }
+
+.wealth-marketpanel__districts { padding-top: 8px; }
+.wealth-marketpanel__districts-title { color: var(--wealth-text-dim); font-size: 12px; margin-bottom: 4px; }
+.wealth-hp-bar {
+  display: grid;
+  grid-template-columns: 64px 1fr 92px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 2px 0;
+  background: transparent;
+  border: none;
+  color: var(--wealth-text);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.wealth-hp-bar:hover { background: rgba(255, 255, 255, 0.04); }
+.wealth-hp-bar__track {
+  height: 9px;
+  border-radius: 4px;
+  background: #2a3240;
+  overflow: hidden;
+}
+.wealth-hp-bar__fill { display: block; height: 100%; border-radius: 4px; }
+.wealth-hp-bar__value { text-align: right; color: var(--wealth-text-dim); }
+
+/* ── 流水面板 ─────────────────────────────────────── */
+.wealth-ledgerpanel { font-size: 12.5px; }
+.wealth-ledger-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.wealth-ledger-list__row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  padding: 5px 4px;
+  border-bottom: 1px dashed #26303e;
+  color: var(--wealth-text);
+}
+.wealth-ledger-list__entities { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wealth-ledger-list__arrow { color: var(--wealth-accent-strong); margin: 0 2px; }
+.wealth-ledger-list__cat { color: var(--wealth-text-dim); }
+.wealth-ledger-list__amount { font-weight: 600; }
+.wealth-ledger-list__row--empty { grid-template-columns: 1fr; color: var(--wealth-text-dim); text-align: center; }
+
+/* ── 动作条 ───────────────────────────────────────── */
+.wealth-actionbar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--wealth-panel);
+  border-top: 1px solid var(--wealth-border);
+}
+.wealth-actionbar__budget { display: flex; gap: 8px; }
+.wealth-actionbar__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wealth-action-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 76px;
+  min-height: var(--wealth-touch-target);
+  padding: 6px 10px;
+  border: 1px solid var(--wealth-border);
+  border-radius: 10px;
+  background: var(--wealth-panel-2);
+  color: var(--wealth-text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.wealth-action-btn:hover:not(:disabled) {
+  border-color: var(--wealth-accent-strong);
+  color: #fff;
+}
+.wealth-action-btn__icon { font-size: 18px; line-height: 1; }
+.wealth-action-btn--submit {
+  background: #065f46;         /* 深绿底白字 ≈ 6.4:1 */
+  border-color: #34d399;
+  color: #fff;
+  font-weight: 700;
+}
+/* 反模式 5 禁用：灰底 + cursor:not-allowed（不用 opacity 污染） */
+.wealth-action-btn:disabled {
+  background: #232a35;
+  border-color: #2c3644;
+  color: #8b94a3;
+  cursor: not-allowed;
+}
+
+/* 动作弹窗表单 */
+.wealth-action-form { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.wealth-action-form__row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  align-items: center;
+  gap: 10px;
+  color: var(--wealth-text);
+}
+.wealth-action-form__row span { color: var(--wealth-text-dim); }
+.wealth-action-form__row select,
+.wealth-action-form__row input {
+  min-height: var(--wealth-touch-target);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--wealth-border);
+  background: #0f141c;
+  color: var(--wealth-text);
+}
+.wealth-action-form__check { display: flex; align-items: center; gap: 8px; color: var(--wealth-text); }
+.wealth-action-form__check input { width: 20px; height: 20px; }
+.wealth-action-form__hint { color: var(--wealth-text-dim); font-size: 12.5px; }
+.wealth-action-form__error {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #7f1d1d;   /* 红底白字 ≈ 9:1（§7.1 内联红条） */
+  color: #ffffff;
+  font-size: 13px;
+}
+.wealth-action-form__tiers { display: flex; gap: 8px; }
+
+/* 档位选择按钮（建房 / 信用贷三档；选中 ≥6:1 金底深字 + 光晕） */
+.wealth-tier-btn {
+  min-height: var(--wealth-touch-target);
+  min-width: 64px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--wealth-border);
+  background: var(--wealth-panel-2);
+  color: var(--wealth-text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.wealth-tier-btn--active {
+  background: var(--wealth-accent-strong);
+  border-color: #f0d387;
+  color: #1a1305;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.55);
+}
+
+/* ── 事件流 / 月度节拍 ─────────────────────────────── */
+.wealth-ticker {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 6px 14px;
+  background: #0d1219;
+  border-top: 1px solid var(--wealth-border);
+  font-size: 13px;
+}
+.wealth-ticker__month { font-weight: 700; color: #fff; display: flex; gap: 8px; align-items: center; }
+.wealth-ticker__countdown { display: flex; align-items: center; gap: 8px; }
+.wealth-ticker__bar {
+  width: 120px;
+  height: 8px;
+  border-radius: 4px;
+  background: #2a3240;
+  overflow: hidden;
+}
+.wealth-ticker__bar-fill { height: 100%; background: var(--wealth-accent-strong); }
+.wealth-ticker__remain { color: var(--wealth-text-dim); font-variant-numeric: tabular-nums; }
+.wealth-ticker__events {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  white-space: nowrap;
+  color: var(--wealth-text);
+  scrollbar-width: thin;
+}
+.wealth-ticker__event { flex: 0 0 auto; }
+.wealth-ticker__event--error { color: #f87171; font-weight: 600; }
+.wealth-ticker__event--life { color: #fde68a; }
+.wealth-ticker__event--muted { color: var(--wealth-text-dim); }
+.wealth-ticker__summary { flex-basis: 100%; }
+.wealth-ticker__summary summary { cursor: pointer; color: var(--wealth-accent-strong); }
+.wealth-ticker__note { color: var(--wealth-text-dim); }
+
+/* ── Agent 思维面板 ───────────────────────────────── */
+.wealth-botpanel {
+  border-top: 1px solid var(--wealth-border);
+  padding: 8px 12px;
+  font-size: 12.5px;
+}
+.wealth-botpanel--empty { color: var(--wealth-text-dim); }
+.wealth-botpanel__title { font-weight: 700; color: #fff; margin-bottom: 4px; }
+.wealth-botpanel__card { border-bottom: 1px dashed #26303e; padding: 4px 0; }
+.wealth-botpanel__card summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--wealth-text);
+  min-height: 32px;
+}
+.wealth-botpanel__dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.wealth-botpanel__model {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--wealth-text-dim);
+  border: 1px solid var(--wealth-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.wealth-botpanel__row { margin: 6px 0; color: var(--wealth-text); }
+.wealth-botpanel__row b { display: block; color: var(--wealth-text-dim); font-weight: 600; margin-bottom: 2px; }
+.wealth-botpanel__pre {
+  background: #0f141c;
+  border: 1px solid var(--wealth-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  color: var(--wealth-text);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 140px;
+}
+.wealth-botpanel__result { color: var(--wealth-text-dim); margin: 4px 0 0; }
+
+/* ── 建房弹窗 ─────────────────────────────────────── */
+.wealth-create-form { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.wealth-create-form__row {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.wealth-create-form__row span { color: var(--wealth-text-dim); }
+.wealth-create-form__row input,
+.wealth-create-form__row select {
+  min-height: var(--wealth-touch-target);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--wealth-border);
+  background: #0f141c;
+  color: var(--wealth-text);
+}
+.wealth-create-form__seatcount { display: flex; gap: 6px; flex-wrap: wrap; }
+.wealth-create-form__seats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px dashed var(--wealth-border);
+  border-radius: 8px;
+  padding: 8px;
+}
+.wealth-create-form__seatrow { display: flex; align-items: center; gap: 8px; }
+.wealth-create-form__seatno { width: 44px; color: var(--wealth-text-dim); font-size: 13px; }
+.wealth-create-form__seatrow select { flex: 1; min-height: 38px; }
+.wealth-create-form__hint { color: #fde68a; font-size: 12.5px; }
+.wealth-create-form__cards summary { cursor: pointer; color: var(--wealth-accent-strong); }
+.wealth-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.wealth-card {
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 8px;
+  background: var(--wealth-panel-2);
+  font-size: 12px;
+  color: var(--wealth-text);
+}
+.wealth-card__head { display: flex; align-items: center; gap: 6px; }
+.wealth-card__head b { color: #fff; }
+.wealth-card__head small { margin-left: auto; color: var(--wealth-text-dim); }
+.wealth-card__meta { display: flex; justify-content: space-between; color: var(--wealth-text-dim); margin-top: 4px; }
+.wealth-card__goal { margin-top: 4px; color: var(--wealth-text-dim); font-size: 11.5px; }
+
+/* ── 终局结算 ─────────────────────────────────────── */
+.wealth-gameover { font-size: 13.5px; }
+.wealth-gameover__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 10px;
+}
+.wealth-gameover__total-label { display: block; color: var(--wealth-text-dim); font-size: 12px; }
+.wealth-gameover__total b { font-size: 30px; color: #fff; }
+.wealth-gameover__seat { color: var(--wealth-text-dim); }
+.wealth-score-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 44px;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+}
+.wealth-score-row__label { color: var(--wealth-text); }
+.wealth-score-row__label small { color: var(--wealth-text-dim); }
+.wealth-score-row__track {
+  height: 12px;
+  border-radius: 6px;
+  background: #2a3240;
+  overflow: hidden;
+}
+.wealth-score-row__fill { display: block; height: 100%; background: var(--wealth-accent-strong); }
+.wealth-score-row__value { text-align: right; font-weight: 700; color: #fff; }
+.wealth-gameover__curve-block { margin: 10px 0; }
+.wealth-gameover__curve-title { color: var(--wealth-text-dim); margin-bottom: 4px; }
+.wealth-gameover__curve-empty { color: var(--wealth-text-dim); }
+.wealth-gameover__report summary { cursor: pointer; color: var(--wealth-accent-strong); }
+.wealth-gameover__report-text {
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  background: #0f141c;
+  border: 1px solid var(--wealth-border);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12.5px;
+  color: var(--wealth-text);
+}
+.wealth-gameover__board summary { cursor: pointer; color: var(--wealth-text-dim); }
+
+/* ── 3D 场景叠加元素 ──────────────────────────────── */
+.wealth-token-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(15, 20, 28, 0.88);   /* 深底白字 ≈ 12:1 */
+  border: 1px solid #3a465a;
+  color: #f3f5f9;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+.wealth-token-tag--me {
+  border-color: var(--wealth-accent-strong);
+  box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.5);
+  font-weight: 700;
+}
+.wealth-token-tag__seat { color: var(--wealth-accent-strong); font-weight: 700; }
+.wealth-token-tag__nw { color: #c3cbd8; }
+.wealth-token-emoji {
+  font-size: 22px;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.9));
+}
+.wealth-district-card {
+  min-width: 150px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(15, 20, 28, 0.94);
+  border: 1px solid #3a465a;
+  color: #f3f5f9;
+  font-size: 12.5px;
+  pointer-events: none;
+  user-select: none;
+}
+.wealth-district-card__name { font-weight: 700; margin-bottom: 4px; color: #fff; }
+.wealth-district-card__row { display: flex; justify-content: space-between; gap: 14px; }
+.wealth-district-card__row span { color: #b7bfcc; }
+
+/* ── 响应式 ───────────────────────────────────────── */
+@media (max-width: 1279px) {
+  .wealth-sidebar { width: 320px; flex-basis: 320px; }
+}
+@media (max-width: 767px) {
+  .wealth-main { flex-direction: column; }
+  .wealth-map-area { min-height: 40vh; flex: 0 0 40vh; }
+  .wealth-sidebar { width: 100%; flex-basis: auto; border-left: none; border-top: 1px solid var(--wealth-border); }
+  .wealth-actionbar__buttons { gap: 6px; }
+  .wealth-action-btn { min-width: 64px; flex: 1 1 30%; }
+}
+
+/* ── 动效收敛（prefers-reduced-motion）───────────── */
+@media (prefers-reduced-motion: reduce) {
+  .wealth-ticker__bar-fill,
+  .wealth-score-row__fill,
+  .wealth-res-bar__fill,
+  .wealth-hp-bar__fill {
+    transition: none !important;
+    animation: none !important;
+  }
+}

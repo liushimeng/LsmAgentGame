@@ -164,7 +164,7 @@ func (s *RoomService) getOrCreateBotUserID(ctx context.Context, suffix string) (
 }
 
 func (s *RoomService) CreateRoom(gameKind, userID, name string) (*RoomDetail, *errcode.Error) {
-	return s.CreateRoomWithAgents(context.Background(), gameKind, userID, name, nil, nil, "", nil, "", nil, nil)
+	return s.CreateRoomWithAgents(context.Background(), gameKind, userID, name, nil, nil, "", nil, "", nil, nil, nil)
 }
 
 // resolveRevealRoleOnDeath §20260830-01 — 三态解析建房请求的「死亡亮身份」开关。
@@ -182,7 +182,7 @@ func resolveRevealRoleOnDeath(revealRoleOnDeath *bool, cfg *config.Config) bool 
 	return *cfg.Werewolf.RevealRoleOnDeathDefault
 }
 
-func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID, name string, agentSeats []AgentSeatConfig, judge *JudgeConfig, agentDifficulty string, commentary *CommentaryConfig, creatorRole string, texasCfg *TexasTableConfig, revealRoleOnDeath *bool) (*RoomDetail, *errcode.Error) {
+func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID, name string, agentSeats []AgentSeatConfig, judge *JudgeConfig, agentDifficulty string, commentary *CommentaryConfig, creatorRole string, texasCfg *TexasTableConfig, revealRoleOnDeath *bool, wealthCfg *WealthRoomOptions) (*RoomDetail, *errcode.Error) {
 	// creatorRole (2026-08-06 §20260806-03 自选角色):空/"random" = 随机。
 	// (原为可变参;2026-08-19 §德州扑克盲注透传 追加 texasCfg 参数时归一化为
 	// 普通参数 — Go 仅允许一个可变参且必须在末位。)
@@ -224,13 +224,16 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	}
 
 	// 2026-08-19 §德州扑克Agent: agent_seats 从狼人杀扩展到德州扑克。
-	// werewolf: 13 座位; texasholdem: 6 座位; 其他游戏暂不支持。
+	// werewolf: 13 座位; texasholdem: 6 座位; wealth: 8 座位; 其他游戏暂不支持。
 	maxAgentSeats := 13
 	if gameKind == "texasholdem" {
 		maxAgentSeats = 6
 	}
-	if len(agentSeats) > 0 && gameKind != "werewolf" && gameKind != "texasholdem" {
-		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "agent_seats only supported for werewolf and texasholdem")
+	if gameKind == "wealth" {
+		maxAgentSeats = 8
+	}
+	if len(agentSeats) > 0 && gameKind != "werewolf" && gameKind != "texasholdem" && gameKind != "wealth" {
+		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "agent_seats only supported for werewolf, texasholdem and wealth")
 	}
 	// agent 最多 N 座(werewolf 13 人局上限=13; texasholdem 6 人局上限=6)。
 	// 不设 import werewolf/texasholdem 包(避免反向依赖),直接写死常量。
@@ -430,6 +433,8 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		cap = 3
 	case "texasholdem":
 		cap = 6
+	case "wealth":
+		cap = 8
 	case "werewolf_12":
 		cap = 12
 	case "werewolf_7":
@@ -475,7 +480,8 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	creatorAsSpectator := false
 	if len(freeSeats) == 0 {
 		// 2026-08-19 §德州扑克Agent: texasholdem 同样允许全 AI 房间(创建者降级为观战者)。
-		if gameKind != "werewolf" && gameKind != "texasholdem" {
+		// 2026-09-14 §财商流P0: wealth 同款支持(创建者降级为观战者,房满 8 即开局)。
+		if gameKind != "werewolf" && gameKind != "texasholdem" && gameKind != "wealth" {
 			// Other games don't allow spectator-creator semantics.
 			return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "no free seat for creator")
 		}
@@ -678,6 +684,15 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 				zap.String("room_id", room.ID),
 				zap.Int("big_blind", texasCfg.BigBlind),
 				zap.Int("start_stack", texasCfg.StartStack))
+		}
+		// 2026-09-14 §财商流P0 — wealth 房间配置透传(月份节奏 + 卡池 + seed)。
+		// 由 ws 层在 RegisterAgentSeats 之前注入(同 texasholdem 时序约束)。
+		if gameKind == "wealth" && wealthCfg != nil && s.wealthRoomConfigurer != nil {
+			s.wealthRoomConfigurer(room.ID, wealthCfg)
+			logger.L().Info("wealth room config set before RegisterAgentSeats",
+				zap.String("room_id", room.ID),
+				zap.Int("month_ms", wealthCfg.MonthMs),
+				zap.String("pool", wealthCfg.Pool))
 		}
 		// RegisterAgentSeats persists (botUserID, seat, modelKey) pairings in
 		// the in-memory manager *before* the human creator joins. werewolf 走

@@ -4,14 +4,14 @@ import { wsClient } from '@/services/ws';
 import { useUiStore } from '@/store/ui.store';
 
 // 从对局路由解析出 roomId + gameKind + 额外 join 参数 + 是否 spectator 模式。
-// 支持：/xiangqi/:roomId、/chess/:roomId、/junqi/:roomId、/doudizhu/:roomId、/texasholdem/:roomId
+// 支持：/xiangqi/:roomId、/chess/:roomId、/junqi/:roomId、/doudizhu/:roomId、/texasholdem/:roomId、/wealth/:roomId
 // 以及 spectator 兄弟路由：/<game>/spectate/:roomId。
 function parseGameRoute(pathname: string):
-  | { gameKind: 'xiangqi' | 'chess' | 'junqi' | 'doudizhu' | 'texasholdem' | 'werewolf'; roomId: string; joinExtra: Record<string, unknown>; spectator: boolean }
+  | { gameKind: 'xiangqi' | 'chess' | 'junqi' | 'doudizhu' | 'texasholdem' | 'werewolf' | 'wealth'; roomId: string; joinExtra: Record<string, unknown>; spectator: boolean }
   | null {
-  const m = pathname.match(/^\/(xiangqi|chess|junqi|doudizhu|texasholdem|werewolf)(?:\/spectate)?\/([^/]+)$/);
+  const m = pathname.match(/^\/(xiangqi|chess|junqi|doudizhu|texasholdem|werewolf|wealth)(?:\/spectate)?\/([^/]+)$/);
   if (!m) return null;
-  const gameKind = m[1] as 'xiangqi' | 'chess' | 'junqi' | 'doudizhu' | 'texasholdem' | 'werewolf';
+  const gameKind = m[1] as 'xiangqi' | 'chess' | 'junqi' | 'doudizhu' | 'texasholdem' | 'werewolf' | 'wealth';
   const roomId = decodeURIComponent(m[2]);
   const spectator = pathname.includes('/spectate/');
   // 各游戏 join 帧所需的额外字段，与各 GamePage 首次 join 保持一致。
@@ -26,7 +26,9 @@ function parseGameRoute(pathname: string):
             ? { game_kind: 'texasholdem' }
             : gameKind === 'werewolf'
               ? { game_kind: 'werewolf' }
-              : {}; // 象棋首次 join 仅需 room_id
+              : gameKind === 'wealth'
+                ? { game_kind: 'wealth' }
+                : {}; // 象棋首次 join 仅需 room_id
   return { gameKind, roomId, joinExtra, spectator };
 }
 

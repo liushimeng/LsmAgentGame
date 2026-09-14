@@ -1,5 +1,7 @@
 // Shared API types for the frontend.
 
+import type { WealthRoomOptions } from '@/types/wealth';
+
 export interface ApiEnvelope<T> {
   code: number;
   message: string;
@@ -438,6 +440,11 @@ export interface CreateRoomOptions {
   // big_blind ∈ {10,50,200,1000,5000};start_stack ∈ [20bb,100bb]。
   big_blind?: number;
   start_stack?: number;
+  // 2026-09-14 §财商流 P0 — wealth only。建房可选段（协议契约 §6:
+  // createRoomRequest 新增字段 wealth *WealthRoomOptions,DisallowUnknownFields
+  // 严格校验)。month_ms clamp 3000–30000;agent_seats 复用 CreateRoomWithAgents
+  // 流程(§14.2 model_key 去重自动生效)。
+  wealth?: WealthRoomOptions;
 }
 
 /** One bot seat requested at room-creation time (werewolf only). */

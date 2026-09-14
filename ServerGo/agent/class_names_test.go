@@ -28,6 +28,31 @@ func TestAgentClassWerewolfMemoryCompact_Wired(t *testing.T) {
 	}
 }
 
+// TestAgentClassWealthPlayer_Wired 校验财商流玩家 Bot 的 AgentClassName 已按
+// §24 登记(常量 + AllAgentClassNames + IsValidAgentClassName)——防 §130
+// 「声明了却从不接线」复发(2026-09-14 §财商流P0,G3 门禁)。
+func TestAgentClassWealthPlayer_Wired(t *testing.T) {
+	if AgentClassWealthPlayer == "" {
+		t.Fatal("AgentClassWealthPlayer must be non-empty (§24)")
+	}
+	if string(AgentClassWealthPlayer) != "LsmAgentGame-Wealth-Player" {
+		t.Errorf("unexpected AgentClassName: %q", AgentClassWealthPlayer)
+	}
+	found := false
+	for _, c := range AllAgentClassNames() {
+		if c == AgentClassWealthPlayer {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("AgentClassWealthPlayer must be registered in AllAgentClassNames()")
+	}
+	if !IsValidAgentClassName(string(AgentClassWealthPlayer)) {
+		t.Error("AgentClassWealthPlayer must pass IsValidAgentClassName")
+	}
+}
+
 // TestAllAgentClassNames_NonEmptyAndUnique 是 §24 的通用不变量:所有登记进
 // AllAgentClassNames 的常量必须非空且互不重复(防将来复制粘贴出同名/空常量)。
 func TestAllAgentClassNames_NonEmptyAndUnique(t *testing.T) {

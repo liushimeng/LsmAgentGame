@@ -56,6 +56,8 @@ const MENU_GROUPS: MenuGroup[] = [
      { to: '/texasholdem', labelKey: 'nav.texasholdem', icon: '🎰' },
      { to: '/werewolf',    labelKey: 'nav.werewolf',    icon: '🐺' },
      { to: '/debate',      labelKey: 'nav.debate',      icon: '🎓' },
+     // 2026-09-14 §财商流 P0 — Agent 组第 4 款。
+     { to: '/wealth',      labelKey: 'nav.wealth',      icon: '💰' },
    ],
  },
 

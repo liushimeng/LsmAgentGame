@@ -29,6 +29,7 @@ type Config struct {
 	LLM         LLMConfig         `json:"llm"`
 	Werewolf    WerewolfConfig    `json:"werewolf"`
 	TexasHoldem TexasHoldemConfig `json:"texasholdem"`
+	Wealth      WealthConfig      `json:"wealth"`
 }
 
 // §128 对话即思考重构:AgentParallelConfig 已删除(原 §122)。
@@ -338,6 +339,26 @@ type TexasHoldemConfig struct {
 	BotChatMinIntervalSec int `json:"bot_chat_min_interval_sec"` // 默认 30s
 	RakeRatePct          int `json:"rake_rate_pct"`             // 默认 5(Health 档);Caution 7、Danger 10 由代码常量定
 	MaxPotPerHand        int `json:"max_pot_per_hand"`          // 默认 100000
+}
+
+// WealthConfig 控制财商流游戏(game_kind=wealth)的月度节奏与 Agent(P0 v1)。
+// 契约: docs/财商流游戏/已实现/02-架构设计/财商流游戏-后端架构与经济引擎-v1.md §3。
+type WealthConfig struct {
+	// MonthMs 1 游戏月的窗口毫秒数(默认 8000,clamp [3000,30000])。
+	MonthMs int `json:"month_ms"`
+	// ProfessionDocsPath 文档池(75k 人物卡)磁盘根,默认
+	// "./docs/财商流游戏/玩家职业设计"。
+	ProfessionDocsPath string `json:"profession_docs_path"`
+	// ProfessionPoolDefault 建房缺省卡池: "curated"(内嵌 10 卡) | "docs"。
+	ProfessionPoolDefault string `json:"profession_pool_default"`
+	// AgentEnabled 默认 true;false 时 agent_seats 被忽略(座位回退人类占位)。
+	AgentEnabled bool `json:"agent_enabled"`
+	// AgentDecisionTimeoutSec 单 bot 单月决策超时(默认 20s),watchdog 兜底 auto-submit。
+	AgentDecisionTimeoutSec int `json:"agent_decision_timeout_sec"`
+	// BotMaxActionsPerMonth bot 每月动作工具上限(默认 3,与人类 ActionBudget 同规则)。
+	BotMaxActionsPerMonth int `json:"bot_max_actions_per_month"`
+	// RandomSeed 0 = 运行时随机;非 0 时引擎/市场/事件用固定种子(确定性测试/复现)。
+	RandomSeed int64 `json:"random_seed"`
 }
 
 // RootDisabledSentinel 是 conf 中 root_account / root_password 的「禁用」哨兵值。
@@ -991,6 +1012,34 @@ func applyDefaults(c *Config) {
 	}
 	if c.TexasHoldem.MaxPotPerHand == 0 {
 		c.TexasHoldem.MaxPotPerHand = 100000
+	}
+
+	// 2026-09-14 §财商流P0 — Wealth 配置默认值(协议契约 §6 与后端架构 §3)。
+	if c.Wealth.MonthMs == 0 {
+		c.Wealth.MonthMs = 8000
+	}
+	if c.Wealth.MonthMs < 3000 {
+		c.Wealth.MonthMs = 3000
+	}
+	if c.Wealth.MonthMs > 30000 {
+		c.Wealth.MonthMs = 30000
+	}
+	if c.Wealth.ProfessionDocsPath == "" {
+		c.Wealth.ProfessionDocsPath = "./docs/财商流游戏/玩家职业设计"
+	}
+	if c.Wealth.ProfessionPoolDefault == "" {
+		c.Wealth.ProfessionPoolDefault = "curated"
+	}
+	if !c.Wealth.AgentEnabled {
+		// 默认 true;operator 显式设 false 仍为 false(零值无法区分,与
+		// TexasHoldem.AgentEnabled 同款取舍 — conf 未写该键时零值被强制 true)。
+		c.Wealth.AgentEnabled = true
+	}
+	if c.Wealth.AgentDecisionTimeoutSec == 0 {
+		c.Wealth.AgentDecisionTimeoutSec = 20
+	}
+	if c.Wealth.BotMaxActionsPerMonth == 0 {
+		c.Wealth.BotMaxActionsPerMonth = 3
 	}
 	// §128 对话即思考重构:AgentParallel 默认值已删除(原 §122)。
 

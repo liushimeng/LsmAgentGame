@@ -5,6 +5,7 @@ import (
 
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/game/chess"
+	"LsmAgentGame/game/wealth"
 	"LsmAgentGame/game/xiangqi"
 	"LsmAgentGame/logger"
 
@@ -34,6 +35,8 @@ func (s *GameService) handleJoin(c *Client, env Envelope) {
 		s.handleDoudizhuJoin(c, env, req.RoomID)
 	case "texasholdem":
 		s.handleTexasHoldemJoin(c, env, req.RoomID)
+	case "wealth":
+		s.handleWealthJoin(c, env, req.RoomID)
 	case "werewolf":
 		s.handleWerewolfJoin(c, env, req.RoomID)
 	default:
@@ -434,6 +437,17 @@ func (s *GameService) handleResign(c *Client, env Envelope) {
 		s.broadcastTexasHoldemState(req.RoomID)
 		s.broadcastTexasHoldemSpectatorState(req.RoomID)
 		s.leaveRoomQuiet(req.RoomID, c.UserID)
+	case "wealth":
+		if s.wealthMgr == nil {
+			return
+		}
+		if r := s.wealthMgr.Get(req.RoomID); r != nil {
+			// 标记座位挂机(P0;bot 接管为 P1)。
+			r.MarkIdle(c.UserID)
+			// 终局前:触发快照推送(允许其他玩家看到人走)。
+			s.broadcastWealthState(req.RoomID)
+		}
+		s.leaveRoomQuiet(req.RoomID, c.UserID)
 	}
 }
 
@@ -614,6 +628,22 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 			}
 			s.sendOK(c, env.Seq, "game.state", state)
 			return
+		case "wealth":
+			if s.wealthMgr == nil {
+				s.sendError(c, env.Seq, errcode.ErrWealthRoomNotFound, "")
+				return
+			}
+			r := s.wealthMgr.Get(req.RoomID)
+			if r == nil || r.Engine() == nil {
+				s.sendError(c, env.Seq, errcode.ErrRoomNotFound, "")
+				return
+			}
+			cs := wealth.BuildClientState(req.RoomID, -1, r.Engine(),
+				r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
+				r.SnapshotModelKeys(), r.SnapshotTranscripts(),
+				r.GameStartedAtUnix(), r.NextMonthAtUnix())
+			s.sendOK(c, env.Seq, "game.state", cs)
+			return
 		}
 	}
 
@@ -711,6 +741,22 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 			return
 		}
 		s.sendOK(c, env.Seq, "game.state", state)
+	case "wealth":
+		if s.wealthMgr == nil {
+			s.sendError(c, env.Seq, errcode.ErrWealthRoomNotFound, "")
+			return
+		}
+		r := s.wealthMgr.Get(req.RoomID)
+		if r == nil || r.Engine() == nil {
+			s.sendError(c, env.Seq, errcode.ErrRoomNotFound, "")
+			return
+		}
+		seat, _ := r.SeatOf(c.UserID)
+		cs := wealth.BuildClientState(req.RoomID, seat, r.Engine(),
+			r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
+			r.SnapshotModelKeys(), r.SnapshotTranscripts(),
+			r.GameStartedAtUnix(), r.NextMonthAtUnix())
+		s.sendOK(c, env.Seq, "game.state", cs)
 	}
 }
 
