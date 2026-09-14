@@ -35,85 +35,85 @@ func (a *AgentRunner) CheckState(seat int) string {
 
 func (a *AgentRunner) BuyAsset(seat int, asset string, amountCNY int64) error {
 	return a.apply(seat, wealthplayer.ToolBuyAsset, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActBuyAsset, Asset: asset, AmountCNY: amountCNY})
+		return a.room.World.ApplyAction(seat, Action{Type: ActBuyAsset, Asset: asset, AmountCNY: amountCNY})
 	})
 }
 
 func (a *AgentRunner) SellAsset(seat int, asset string, units float64) error {
 	return a.apply(seat, wealthplayer.ToolSellAsset, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActSellAsset, Asset: asset, Units: units})
+		return a.room.World.ApplyAction(seat, Action{Type: ActSellAsset, Asset: asset, Units: units})
 	})
 }
 
 func (a *AgentRunner) BuyHouse(seat int, district string, downpayRatio float64, asset string) error {
 	return a.apply(seat, wealthplayer.ToolBuyHouse, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActBuyHouse, District: district, DownpayRatio: downpayRatio, Asset: asset})
+		return a.room.World.ApplyAction(seat, Action{Type: ActBuyHouse, District: district, DownpayRatio: downpayRatio, Asset: asset})
 	})
 }
 
 func (a *AgentRunner) TakeLoan(seat int, kind string, amountCNY int64) error {
 	return a.apply(seat, wealthplayer.ToolTakeLoan, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActTakeLoan, Kind: kind, AmountCNY: amountCNY})
+		return a.room.World.ApplyAction(seat, Action{Type: ActTakeLoan, Kind: kind, AmountCNY: amountCNY})
 	})
 }
 
 func (a *AgentRunner) RepayLoan(seat int, loanID string, amountCNY int64) error {
 	return a.apply(seat, wealthplayer.ToolRepayLoan, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActRepayLoan, LoanID: loanID, AmountCNY: amountCNY})
+		return a.room.World.ApplyAction(seat, Action{Type: ActRepayLoan, LoanID: loanID, AmountCNY: amountCNY})
 	})
 }
 
 func (a *AgentRunner) StartSideBusiness(seat int, kind string) error {
 	return a.apply(seat, wealthplayer.ToolStartSide, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActStartSide, Kind: kind})
+		return a.room.World.ApplyAction(seat, Action{Type: ActStartSide, Kind: kind})
 	})
 }
 
 func (a *AgentRunner) StopSideBusiness(seat int) error {
 	return a.apply(seat, wealthplayer.ToolStopSide, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActStopSide})
+		return a.room.World.ApplyAction(seat, Action{Type: ActStopSide})
 	})
 }
 
 func (a *AgentRunner) Study(seat int) error {
 	return a.apply(seat, wealthplayer.ToolStudy, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActStudy})
+		return a.room.World.ApplyAction(seat, Action{Type: ActStudy})
 	})
 }
 
 func (a *AgentRunner) Socialize(seat int) error {
 	return a.apply(seat, wealthplayer.ToolSocialize, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActSocialize})
+		return a.room.World.ApplyAction(seat, Action{Type: ActSocialize})
 	})
 }
 
 func (a *AgentRunner) Rest(seat int) error {
 	return a.apply(seat, wealthplayer.ToolRest, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActRest})
+		return a.room.World.ApplyAction(seat, Action{Type: ActRest})
 	})
 }
 
 func (a *AgentRunner) WorkOvertime(seat int) error {
 	return a.apply(seat, wealthplayer.ToolWorkOvertime, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActWorkOvertime})
+		return a.room.World.ApplyAction(seat, Action{Type: ActWorkOvertime})
 	})
 }
 
 func (a *AgentRunner) MoveDistrict(seat int, district string) error {
 	return a.apply(seat, wealthplayer.ToolMoveDistrict, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActMoveDistrict, District: district})
+		return a.room.World.ApplyAction(seat, Action{Type: ActMoveDistrict, District: district})
 	})
 }
 
 func (a *AgentRunner) Consume(seat int, amountCNY int64, reason string) error {
 	return a.apply(seat, wealthplayer.ToolConsume, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActConsume, AmountCNY: amountCNY, Reason: reason})
+		return a.room.World.ApplyAction(seat, Action{Type: ActConsume, AmountCNY: amountCNY, Reason: reason})
 	})
 }
 
 func (a *AgentRunner) Donate(seat int, amountCNY int64) error {
 	return a.apply(seat, wealthplayer.ToolDonate, "", func() (string, error) {
-		return a.room.Engine().ApplyAction(seat, Action{Type: ActDonate, AmountCNY: amountCNY})
+		return a.room.World.ApplyAction(seat, Action{Type: ActDonate, AmountCNY: amountCNY})
 	})
 }
 
@@ -156,6 +156,10 @@ func (a *AgentRunner) SubmitMonth(seat int) error {
 
 // apply 通用动作派发:锁内校验 + 执行;成功返回 nil,失败返回 errcode.Error
 // (工具层 IsErr)。
+// 2026-09-14 §财商流P0-bugfix: 本函数持 r.mu 期间,闭包内必须使用
+// a.room.World 直接字段访问,严禁调 a.room.Engine()(内部再次 r.mu.Lock,
+// sync.Mutex 不可重入 → 自死锁,曾导致整个房间卡死:bot 首个 buy_asset
+// 即锁死房间锁,JoinGame/trySettle/game.state 全部阻塞)。
 func (a *AgentRunner) apply(seat int, toolName, toolID string, fn func() (string, error)) error {
 	a.room.mu.Lock()
 	if a.room.closed {

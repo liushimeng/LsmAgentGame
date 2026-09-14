@@ -114,16 +114,19 @@ func (s *GameService) handleWealthAction(c *Client, env Envelope) {
 // applyWealthAction 应用动作并发送 bot_contexts 更新(锁定释放,§92a)。
 func (s *GameService) applyWealthAction(r *wealth.WealthRoom, seat int, a wealth.Action) (string, *errcode.Error) {
 	// 房间持锁校验/执行;返回文本 + 错误。
+	// 2026-09-14 §财商流P0-bugfix: 持锁期间严禁调 GetStatus()/GetPhase()/Engine()
+	// (三者内部各自再锁 r.mu,sync.Mutex 不可重入 → 自死锁,曾致整房卡死)。
+	// Status/Phase 是导出字段,持锁下直接读;引擎用 EngineLocked()。
 	r.MuLock()
 	defer r.MuUnlock()
 	// 通用校验(房间层做;错误码统一)。
-	if r.GetStatus() != wealth.StatusPlaying {
+	if r.Status != wealth.StatusPlaying {
 		return "", errcode.Code(errcode.ErrWealthNotPlaying)
 	}
-	if r.GetPhase() != wealth.PhaseActing {
+	if r.Phase != wealth.PhaseActing {
 		return "", errcode.Code(errcode.ErrWealthWrongPhase)
 	}
-	text, e := r.Engine().ApplyAction(seat, a)
+	text, e := r.EngineLocked().ApplyAction(seat, a)
 	if e != nil {
 		return "", e
 	}

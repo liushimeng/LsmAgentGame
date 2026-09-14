@@ -639,6 +639,13 @@ func (r *WealthRoom) Engine() *World {
 	return r.World
 }
 
+// EngineLocked 返回引擎指针(不加锁;调用方必须已持 MuLock —— §92a ws 层
+// apply 路径专用)。2026-09-14 §财商流P0-bugfix: 修复「持锁后调 Engine()
+// 二次加锁自死锁」;wealth 包内部持锁路径同理应直接读 r.World 字段。
+func (r *WealthRoom) EngineLocked() *World {
+	return r.World
+}
+
 // MuLock/MuUnlock 是 ws 层 SyncSeat/apply 路径专用(§92a,锁外不允许)。
 // 其他路径优先用短方法。
 func (r *WealthRoom) MuLock()    { r.mu.Lock() }
