@@ -241,10 +241,30 @@ func (r *WealthRoom) JoinGame(userID, nickname string) (int, bool, *errcode.Erro
 	return seat, full, nil
 }
 
-// RegisterBotSeats 标记 bot 座位(建房时调用,先于人类 JoinGame)。
-func (r *WealthRoom) RegisterBotSeats(seatModels map[int]string, professions map[int]string) {
+// RegisterBotSeats 标记并入住 bot 座位(建房时调用,先于人类 JoinGame)。
+// 2026-09-14 §财商流P0-bugfix: 旧版只写 BotSeats/SeatModelKeys,不写
+// Seats[seat] 的 bot userID,导致 Start 发卡跳过 bot 座位、EnsureAgents 因
+// Seats[seat]=="" 跳过 → bot 永不上场。现扩展为同时入住 bot userID
+// (seatUsers,仅写空位,不覆盖已有人类座位)。
+func (r *WealthRoom) RegisterBotSeats(seatUsers map[int]string, seatModels map[int]string, professions map[int]string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	for seat, userID := range seatUsers {
+		if seat < 0 || seat >= MaxSeats || userID == "" {
+			continue
+		}
+		if r.Seats[seat] == "" {
+			r.Seats[seat] = userID
+		}
+		r.BotSeats[seat] = true
+		if r.Nicknames[seat] == "" {
+			if mk := seatModels[seat]; mk != "" {
+				r.Nicknames[seat] = "AI·" + mk
+			} else {
+				r.Nicknames[seat] = "AI 玩家"
+			}
+		}
+	}
 	for seat, modelKey := range seatModels {
 		if seat < 0 || seat >= MaxSeats || modelKey == "" {
 			continue
@@ -623,6 +643,13 @@ func (r *WealthRoom) Engine() *World {
 // 其他路径优先用短方法。
 func (r *WealthRoom) MuLock()    { r.mu.Lock() }
 func (r *WealthRoom) MuUnlock()  { r.mu.Unlock() }
+
+// SeedView 返回房间种子(锁内读)。ws 层用于 PlaceholderWorld。
+func (r *WealthRoom) SeedView() int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.seed
+}
 
 // SubmitMonthLocked 提交单座位(锁内,§92a)。
 // 别名保持:SubmitMonthLocked = SubmitMonthLocked(同上)。

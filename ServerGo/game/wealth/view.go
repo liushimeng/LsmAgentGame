@@ -197,9 +197,24 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		MySeat: viewer, NextMonthAt: nextMonthAtUnixMs,
 		GameStartedAt: gameStartedAt,
 		Players: make([]PlayerJSON, MaxSeats),
+		// 2026-09-14 §财商流P0-bugfix: 数组字段必须序列化为 [] 而非 null ——
+		// Go nil slice → JSON null,前端 xxx.map 直接 TypeError 整页崩溃
+		// (ErrorBoundary 兜底)。空集合统一初始化。
+		BotContexts:  make([]BotCtxJSON, 0),
+		LedgerRecent: make([]LedgerJSON, 0),
+		EventsRecent: make([]EventJSON, 0),
 	}
 	if world == nil {
-		cs.Phase = "acting"
+		cs.Phase = PhaseActing
+		// status/age/month 由 caller（game_service_xiangqi.go handleWealthJoin /
+		// game.state 分支）从 room 快照覆盖 —— 这里给一个安全的兜底值让
+		// 前端 gameState?.status === 'open' 检查能匹配大厅态。
+		if cs.Status == "" {
+			cs.Status = StatusOpen
+		}
+		if cs.Month == 0 {
+			cs.Month = 1
+		}
 		return cs
 	}
 	cs.Status = world.Status
@@ -311,7 +326,11 @@ func myJSONFor(p *Player) *MyJSON {
 		Family:    MyFamilyJSON{Marital: p.Family.Marital, Children: p.Family.Children},
 		FIIndex:   p.FIIndex(globalMarketSnap(p), globalAgeSnap(p)),
 		NetWorth:  p.NetWorth(globalMarketSnap(p)),
-		Goals:     append([]string(nil), p.Card.Goals...),
+		// 2026-09-14 §财商流P0-bugfix: 数组一律非 nil(空集合序列化为 [],
+		// 防止前端 null.map 崩溃)。
+		Goals:  append([]string{}, p.Card.Goals...),
+		Assets: make([]MyAssetJSON, 0, len(p.Assets)),
+		Loans:  make([]MyLoanJSON, 0, len(p.Loans)),
 	}
 	for i := range p.Assets {
 		my.Assets = append(my.Assets, MyAssetJSON{

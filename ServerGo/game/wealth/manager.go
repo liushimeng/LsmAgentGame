@@ -127,12 +127,11 @@ func (m *Manager) Get(roomID string) *WealthRoom {
 // CreateRoom 新建房间(默认不开局;Start 触发)。
 func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	r, ok := m.rooms[roomID]
 	if ok {
 		m.mu.Unlock()
+		// 已存在：释放锁后再 apply pending opts（applyOpts 自身不持 m.mu）。
 		m.pendingOptsApply(roomID)
-		m.mu.Lock()
 		return r
 	}
 	r = NewWealthRoom(roomID, m.cfg.MonthMs, m.cfg.PoolDefault, m.cfg.Seed, 4)
@@ -146,7 +145,14 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 		zap.String("room_id", roomID),
 		zap.Int("month_ms", m.cfg.MonthMs),
 		zap.String("pool", m.cfg.PoolDefault))
-	m.pendingOptsApply(roomID)
+	// 把 pending opts 应用到新建房间；必须先把 m.rooms[roomID] 已登记再释放锁，
+	// 避免与并发的 Get/CreateRoom 出现「先读 m.rooms、后补 opts」的可见性窗口。
+	opts := m.pendingOpts[roomID]
+	delete(m.pendingOpts, roomID)
+	m.mu.Unlock()
+	if opts != nil {
+		r.applyOpts(opts)
+	}
 	return r
 }
 

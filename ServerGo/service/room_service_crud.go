@@ -619,7 +619,20 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	// 内层把狼人杀专属配置 (Judge/Difficulty/Commentary/RolePrefs) 收敛到
 	// `gameKind == "werewolf"` 分支;texasholdem 路径只走 RegisterAgentSeats。
 	// 未来新增游戏只需在 isAgentSupportedGameKind(gameKind) 加枚举即可。
-	if (gameKind == "werewolf" || gameKind == "texasholdem") && len(agentSeats) > 0 && s.agentSeater != nil {
+	//
+	// 2026-09-14 §财商流P0-bugfix: wealth 房间配置透传从下方 agent 分支移出 ——
+	// 原实现嵌在 (werewolf|texasholdem) 条件内,wealth 永远短路,导致建房时
+	// month_ms/pool/seed 全部静默丢失(线上日志 "wealth room config set" 0 次)。
+	// 配置必须对纯人类 wealth 房同样生效,且早于 RegisterAgentSeats / SyncSeat
+	// (Start 发卡与月结 tick 读房间配置)。
+	if gameKind == "wealth" && wealthCfg != nil && s.wealthRoomConfigurer != nil {
+		s.wealthRoomConfigurer(room.ID, wealthCfg)
+		logger.L().Info("wealth room config set before RegisterAgentSeats",
+			zap.String("room_id", room.ID),
+			zap.Int("month_ms", wealthCfg.MonthMs),
+			zap.String("pool", wealthCfg.Pool))
+	}
+	if (gameKind == "werewolf" || gameKind == "texasholdem" || gameKind == "wealth") && len(agentSeats) > 0 && s.agentSeater != nil {
 		// BUG-R136-RACE-001: 复述段落已压缩 — git blame 与 docs/ 索引可还原
 
 		if gameKind == "werewolf" {
@@ -685,21 +698,15 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 				zap.Int("big_blind", texasCfg.BigBlind),
 				zap.Int("start_stack", texasCfg.StartStack))
 		}
-		// 2026-09-14 §财商流P0 — wealth 房间配置透传(月份节奏 + 卡池 + seed)。
-		// 由 ws 层在 RegisterAgentSeats 之前注入(同 texasholdem 时序约束)。
-		if gameKind == "wealth" && wealthCfg != nil && s.wealthRoomConfigurer != nil {
-			s.wealthRoomConfigurer(room.ID, wealthCfg)
-			logger.L().Info("wealth room config set before RegisterAgentSeats",
-				zap.String("room_id", room.ID),
-				zap.Int("month_ms", wealthCfg.MonthMs),
-				zap.String("pool", wealthCfg.Pool))
-		}
 		// RegisterAgentSeats persists (botUserID, seat, modelKey) pairings in
 		// the in-memory manager *before* the human creator joins. werewolf 走
 		// ws.GameService.RegisterAgentSeats 的 werewolf 分支 → ManagerAddPlayerAt
 		// + SetSeatModelKey + ForceStartIfReady;texasholdem 走同函数的
 		// registerTexasHoldemAgentSeats → TexasHoldemManager.AddBotSeat + 启动
-		// BotDriver。两类游戏共用同一入口,分支由 gameKind 决定(见 ws/game_service.go:230)。
+		// BotDriver;wealth 走 registerWealthAgentSeats → WealthRoom.RegisterBotSeats。
+		// 三类游戏共用同一入口,分支由 gameKind 决定(见 ws/game_service.go)。
+		// 2026-09-14 §财商流P0-bugfix: wealth 的 month_ms/pool/seed 配置块已上移
+		// 到本 agent 分支之外(纯人类房也要生效),此处不再重复。
 		if e := s.agentSeater.RegisterAgentSeats(gameKind, room.ID, agentSeats); e != nil {
 			// Non-fatal: the room is already created in DB; the agent seater
 			// failure only means bots won't auto-play. Surface + continue.

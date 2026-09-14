@@ -747,12 +747,20 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 			return
 		}
 		r := s.wealthMgr.Get(req.RoomID)
-		if r == nil || r.Engine() == nil {
+		if r == nil {
 			s.sendError(c, env.Seq, errcode.ErrRoomNotFound, "")
 			return
 		}
 		seat, _ := r.SeatOf(c.UserID)
-		cs := wealth.BuildClientState(req.RoomID, seat, r.Engine(),
+		eng := r.Engine()
+		// World 在房间尚未 Start 时为 nil —— 用一个最小的占位 world 让客户端
+		// 拿到座位列表/状态快照以渲染大厅态，而不是返回 30001 让前端永远 loading。
+		// PlaceholderWorld 内部 NewMarket(rng) 保证 Market 非 nil，避免 view.go
+		// 第 214 行 nil 解引用。
+		if eng == nil {
+			eng = wealth.PlaceholderWorld(r.SeedView())
+		}
+		cs := wealth.BuildClientState(req.RoomID, seat, eng,
 			r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
 			r.SnapshotModelKeys(), r.SnapshotTranscripts(),
 			r.GameStartedAtUnix(), r.NextMonthAtUnix())

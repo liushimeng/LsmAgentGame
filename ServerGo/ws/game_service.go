@@ -296,6 +296,11 @@ func (s *GameService) RegisterAgentSeats(gameKind, roomID string, seats []servic
 	if gameKind == "texasholdem" {
 		return s.registerTexasHoldemAgentSeats(roomID, seats)
 	}
+	// 2026-09-14 §财商流P0-bugfix: wealth 分支(此前直接 return nil,
+	// bot 座位从未注册到 in-memory 房间,bot 永不上场)。
+	if gameKind == "wealth" {
+		return s.registerWealthAgentSeats(roomID, seats)
+	}
 	if gameKind != "werewolf" {
 		return nil
 	}

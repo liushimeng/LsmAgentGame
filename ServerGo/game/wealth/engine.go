@@ -97,6 +97,13 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 	return w
 }
 
+// PlaceholderWorld 返回一个最小可用的 World 视图（房间尚未 Start 时用于
+// game.state 轮询返回：保证 Market 非 nil、Players/ledger 为零值，build
+// 客户端快照时不触发 nil 解引用；不参与任何真实结算）。
+func PlaceholderWorld(seed int64) *World {
+	return NewWorld(seed, [MaxSeats]profession.Card{})
+}
+
 // newPlayerFromCard 按职业卡初始化单座位(初始注入 world→seat = Savings,I2)。
 func newPlayerFromCard(seat int, card profession.Card) *Player {
 	p := &Player{
