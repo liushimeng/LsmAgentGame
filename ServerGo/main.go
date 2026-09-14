@@ -890,6 +890,24 @@ func main() {
 		PoolDefault:             cfg.Wealth.ProfessionPoolDefault,
 		Seed:                    cfg.Wealth.RandomSeed,
 	}, llmRegistry)
+	// 2026-09-14 §财商流P0-bugfix: 服务重启后内存房间 Seats/BotSeats 全空,必须从
+	// t_lsm_game_player 恢复人类 + bot 座位,否则 Start() 永远 ErrWealthNotEnoughPlayers。
+	wealthMgr.SetSeatHydrator(func(roomID string) ([]wealth.SeatRestoreInfo, error) {
+		seats, err := roomSvc.SeatsForRoom(roomID)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]wealth.SeatRestoreInfo, 0, len(seats))
+		for _, s := range seats {
+			out = append(out, wealth.SeatRestoreInfo{
+				Seat:     s.Seat,
+				UserID:   s.UserID,
+				IsBot:    s.Role == models.PlayerRoleAgent,
+				ModelKey: s.ModelKey,
+			})
+		}
+		return out, nil
+	})
 	wealthMgr.SetLoader(wealthLoader)
 	gameSvcWs.SetWealthManager(wealthMgr)
 	gameSvcWs.SetWealthLoader(wealthLoader)

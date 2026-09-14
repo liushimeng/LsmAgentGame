@@ -48,6 +48,14 @@ type LLMRegistry interface {
 	GetThinkingEnabled(modelKey string) (bool, int)
 }
 
+// SeatRestoreInfo 是 Manager 从外部源(DB)恢复 in-memory 房间时的单座位数据。
+type SeatRestoreInfo struct {
+	Seat     int
+	UserID   string
+	IsBot    bool
+	ModelKey string
+}
+
 // NewManager 构造空 Manager(loader 由 SetLoader 注入;不在构造期读取磁盘)。
 func NewManager(cfg Config, reg LLMRegistry) *Manager {
 	if cfg.BotMaxActionsPerMonth <= 0 {
@@ -64,6 +72,13 @@ func NewManager(cfg Config, reg LLMRegistry) *Manager {
 		registry: reg,
 		rooms:    make(map[string]*WealthRoom),
 	}
+}
+
+// SetSeatHydrator 注入 DB 座位恢复回调(对齐德扑 BUG-WEREWOLF-P0-7)。
+// 服务重启后内存房间 Seats/BotSeats 全空,必须靠 hydrator 从 t_lsm_game_player
+// 拉人类 + agent_seats 拉 bot 才能让 Start() 的 occupiedLocked ≥ MinSeats。
+func (m *Manager) SetSeatHydrator(h func(roomID string) ([]SeatRestoreInfo, error)) {
+	m.seatHydrator = h
 }
 
 // SetLoader 注入文档池加载器(由 ws 层装配时传入)。
@@ -85,6 +100,9 @@ type Manager struct {
 	loader      *Loader // profession.Loader(包内别名)
 	rooms       map[string]*WealthRoom
 	pendingOpts map[string]*WealthRoomOptions // roomSvc → Start 时取用
+	// seatHydrator 服务重启后从 DB 恢复 in-memory 房间的座位信息(对齐德扑
+	// BUG-WEREWOLF-P0-7 修复方案)。nil-safe,未设置时 Get/CreateRoom 跳过恢复。
+	seatHydrator func(roomID string) ([]SeatRestoreInfo, error)
 }
 
 // ApplyRoomOptions 是 roomSvc.SetWealthRoomConfigurer 的回调:
@@ -139,6 +157,32 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 		r.mu.Lock()
 		r.docLoader = m.loader
 		r.mu.Unlock()
+	}
+	// 重启后第一次访问:从 DB 把座位恢复回来,否则 Start() 的 occupiedLocked
+	// 永远 < MinSeats → ErrWealthNotEnoughPlayers(35003),游戏永远无法开局。
+	if m.seatHydrator != nil {
+		seats, err := m.seatHydrator(roomID)
+		if err == nil && len(seats) > 0 {
+			r.mu.Lock()
+			for _, s := range seats {
+				if s.Seat < 0 || s.Seat >= MaxSeats || s.UserID == "" {
+					continue
+				}
+				if r.Seats[s.Seat] == "" {
+					r.Seats[s.Seat] = s.UserID
+				}
+				if s.IsBot {
+					r.BotSeats[s.Seat] = true
+				}
+				if s.ModelKey != "" {
+					r.SeatModelKeys[s.Seat] = s.ModelKey
+				}
+			}
+			r.mu.Unlock()
+			logger.L().Info("wealth room seats hydrated from DB",
+				zap.String("room_id", roomID),
+				zap.Int("restored", len(seats)))
+		}
 	}
 	m.rooms[roomID] = r
 	logger.L().Info("wealth room created",

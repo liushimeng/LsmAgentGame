@@ -13,7 +13,6 @@
 package wealth
 
 import (
-	"encoding/json"
 	"math/rand"
 )
 
@@ -414,7 +413,9 @@ func assetMonthlyFlowSnap(a *Asset) int64 { return 0 }
 
 func convertMyDetail(in []FlowItem) []MyMonthlyItemJSON {
 	if len(in) == 0 {
-		return nil
+		// 2026-09-14 §财商流P0-bugfix: 返回空数组而非 nil(JSON null 会让前端
+		// my.monthly.detail.map 崩溃)。
+		return []MyMonthlyItemJSON{}
 	}
 	out := make([]MyMonthlyItemJSON, len(in))
 	for i, f := range in {
@@ -423,8 +424,6 @@ func convertMyDetail(in []FlowItem) []MyMonthlyItemJSON {
 	return out
 }
 
-// MarshalJSON 兜底:ClientGameState 顶层结构序列化(供调试)。
-func (cs *ClientGameState) MarshalJSON() ([]byte, []byte) {
-	data, err := json.Marshal(cs)
-	return data, []byte(err.Error())
-}
+// 2026-09-14 §财商流P0-bugfix: 删除了签名错误的 MarshalJSON() ([]byte, []byte)
+// —— 不满足 json.Marshaler 接口(encoding/json 静默忽略,属死代码),且内部
+// json.Marshal(cs) 一旦修正签名即无限递归。默认结构体序列化已满足需求。

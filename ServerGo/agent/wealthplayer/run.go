@@ -184,7 +184,7 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *wealthtypes.GameContex
 				// 不计预算;结束循环。
 				results = append(results, toolResultContentBlock(tu.ID, res.Text, res.IsErr))
 				lastToolInput, lastToolResult = res.Input, res.Text
-				a.appendMessages(&messages, results)
+				a.appendMessages(&messages, resp.Content, results)
 				a.finalizeTranscript(lastSummary, lastToolInput, lastToolResult)
 				return
 			}
@@ -194,7 +194,7 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *wealthtypes.GameContex
 			if actionsUsed >= actionsLimit && isBudgetAction(tu.Name) {
 				// 超预算:本工具被拒;直接给 submit 提示,下一轮结束。
 				a.finalizeTranscript(lastSummary, lastToolInput, lastToolResult)
-				a.appendMessages(&messages, results)
+				a.appendMessages(&messages, resp.Content, results)
 				// 主动结束:不再加 tool_use,强制提交。
 				break
 			}
@@ -202,7 +202,7 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *wealthtypes.GameContex
 				// speak 已用过;记下结果,继续。
 			}
 		}
-		a.appendMessages(&messages, results)
+		a.appendMessages(&messages, resp.Content, results)
 		// 若本轮全为非动作(纯 speak/check_state)且已用完,仍然 break;
 		// 我们用 actionsUsed 兜底,actionsUsed 不再增长则安全。
 		if actionsUsed > actionsLimit {
@@ -228,10 +228,17 @@ func isBudgetAction(name string) bool {
 }
 
 // appendMessages 把 assistant + tool_result 回合追加到消息流。
-func (a *Agent) appendMessages(messages *[]llmtypes.Message, results []llmtypes.ContentBlock) {
-	// 构造 assistant 消息:同轮产生的 tool_use 块 + text。
-	// 但 run.go 里我们未保存 tool_use 块,所以 assistant 段只放 text;tool_result
-	// 直接放在 user 消息中(§14.1 user/assistant 严格交替需求)。
+// 2026-09-14 §财商流P0-bugfix: 必须携带原始 assistant content(含 tool_use
+// 块)——旧实现只追加 user 态 tool_result,assistant 段的 tool_use 从未入流,
+// 下一轮请求中 tool_result.tool_use_id 在上游找不到对应 tool_use →
+// Anthropic 协议 400 "tool result's tool id not found"(CLAUDE.md §14.1:
+// messages 严格 user/assistant 交替 + tool_use/tool_result 成对)。
+func (a *Agent) appendMessages(messages *[]llmtypes.Message, assistantContent []llmtypes.ContentBlock, results []llmtypes.ContentBlock) {
+	if len(assistantContent) > 0 {
+		*messages = append(*messages, llmtypes.Message{
+			Role: "assistant", Content: assistantContent,
+		})
+	}
 	if len(results) == 0 {
 		return
 	}

@@ -333,6 +333,9 @@ type AgentSeatInfo struct {
 	Seat     int    `json:"seat"`
 	UserID   string `json:"user_id"`
 	ModelKey string `json:"model_key"`
+	// Role 标识该座位是 agent 还是 player(空 = player)。用于 wealth
+	// 重启恢复时区分 BotSeats[] 标记。2026-09-14 §财商流P0-bugfix。
+	Role     string `json:"role,omitempty"`
 }
 
 // BotSeatsForRoom returns every agent seat configured for `roomID`, ordered by
@@ -384,6 +387,7 @@ func (s *RoomService) SeatsForRoom(roomID string) ([]AgentSeatInfo, error) {
 			Seat:     p.Seat,
 			UserID:   p.UserID,
 			ModelKey: p.ModelKey, // empty for human players; agent seats carry the LLM model key
+			Role:     p.Role,
 		})
 	}
 	return out, nil
