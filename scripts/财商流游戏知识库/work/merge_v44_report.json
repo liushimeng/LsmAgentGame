@@ -1,0 +1,399 @@
+{
+  "ts": "2026-09-14T05:30:28+00:00",
+  "dry": false,
+  "limit": null,
+  "stats": {
+    "scanned_files": 69455,
+    "planned_cards": 69455,
+    "planned_n_cards": 69437,
+    "planned_p_cards": 18,
+    "elapsed_sec": 467.88,
+    "existing_letter_tree_ids": 5660,
+    "existing_letter_tree_names": 5290,
+    "unique_target_filenames": 69455
+  },
+  "gates": [
+    "PASS id_conflicts=0",
+    "PASS filename_conflicts=0",
+    "PASS l4_l5_invalid=0",
+    "PASS missing_industry=0",
+    "PASS name_unique=69437",
+    "WARN multi_name_anomalies=660"
+  ],
+  "gate_passed": true,
+  "conflicts_summary": {
+    "id_conflicts": 0,
+    "filename_conflicts": 0,
+    "l4_l5_invalid": 0,
+    "missing_industry": 0,
+    "multi_name_anomalies": 660
+  },
+  "conflicts_detail": {
+    "id_conflicts": [],
+    "filename_conflicts": [],
+    "l4_l5_invalid": [],
+    "missing_industry": [],
+    "multi_name_anomalies": [
+      {
+        "industry_l3": "G0105",
+        "names": [
+          "炼油工程师",
+          "煤化工"
+        ]
+      },
+      {
+        "industry_l3": "G0190",
+        "names": [
+          "化工操作工",
+          "炼油工程师"
+        ]
+      },
+      {
+        "industry_l3": "G0194",
+        "names": [
+          "炼油工程师",
+          "石化技术员"
+        ]
+      },
+      {
+        "industry_l3": "G0202",
+        "names": [
+          "农药与农化",
+          "精细化工技术员"
+        ]
+      },
+      {
+        "industry_l3": "G0204",
+        "names": [
+          "有机合成",
+          "精细化工技术员"
+        ]
+      },
+      {
+        "industry_l3": "G0285",
+        "names": [
+          "化妆品配方师",
+          "精细化工技术员"
+        ]
+      },
+      {
+        "industry_l3": "G0303",
+        "names": [
+          "橡胶助剂",
+          "橡胶硫化工"
+        ]
+      },
+      {
+        "industry_l3": "G0360",
+        "names": [
+          "塑料制品设计师",
+          "注塑成型操作工"
+        ]
+      },
+      {
+        "industry_l3": "G0403",
+        "names": [
+          "油墨工程师",
+          "涂料配方研发"
+        ]
+      },
+      {
+        "industry_l3": "G0520",
+        "names": [
+          "日化销售代表",
+          "香精香料调配师"
+        ]
+      },
+      {
+        "industry_l3": "G0524",
+        "names": [
+          "日化销售代表",
+          "香精香料调配师"
+        ]
+      },
+      {
+        "industry_l3": "G0574",
+        "names": [
+          "化妆品生产员",
+          "日化销售代表"
+        ]
+      },
+      {
+        "industry_l3": "G0617",
+        "names": [
+          "光伏材料技术员",
+          "锂电材料工程师"
+        ]
+      },
+      {
+        "industry_l3": "G0673",
+        "names": [
+          "光伏材料技术员",
+          "锂电材料工程师"
+        ]
+      },
+      {
+        "industry_l3": "G0703",
+        "names": [
+          "光刻胶研发工程师",
+          "电子化学品"
+        ]
+      },
+      {
+        "industry_l3": "G0802",
+        "names": [
+          "水泥生产",
+          "混凝土技术员"
+        ]
+      },
+      {
+        "industry_l3": "G0804",
+        "names": [
+          "水泥工艺工程师",
+          "绿色建材"
+        ]
+      },
+      {
+        "industry_l3": "G0904",
+        "names": [
+          "新材料研发",
+          "碳纤维生产技术员"
+        ]
+      },
+      {
+        "industry_l3": "G0905",
+        "names": [
+          "复合材料工程师",
+          "生物医用材料"
+        ]
+      },
+      {
+        "industry_l3": "G0960",
+        "names": [
+          "复合材料工程师",
+          "碳纤维生产技术员"
+        ]
+      },
+      {
+        "industry_l3": "G0970",
+        "names": [
+          "复合材料工程师",
+          "碳纤维生产技术员"
+        ]
+      },
+      {
+        "industry_l3": "G0990",
+        "names": [
+          "复合材料工程师",
+          "碳纤维生产技术员"
+        ]
+      },
+      {
+        "industry_l3": "G1003",
+        "names": [
+          "化工环保工程师",
+          "环保与水处理工程"
+        ]
+      },
+      {
+        "industry_l3": "G1071",
+        "names": [
+          "化工安全工程师",
+          "化工环保工程师"
+        ]
+      },
+      {
+        "industry_l3": "B0102",
+        "names": [
+          "煤炭洗选",
+          "煤矿井下采煤工"
+        ]
+      },
+      {
+        "industry_l3": "B0147",
+        "names": [
+          "煤矿井下采煤工",
+          "选煤厂操作工"
+        ]
+      },
+      {
+        "industry_l3": "B0148",
+        "names": [
+          "矿山安全员",
+          "选煤厂操作工"
+        ]
+      },
+      {
+        "industry_l3": "B0149",
+        "names": [
+          "煤矿井下采煤工",
+          "选煤厂操作工"
+        ]
+      },
+      {
+        "industry_l3": "B0172",
+        "names": [
+          "煤矿井下采煤工",
+          "矿山安全员"
+        ]
+      },
+      {
+        "industry_l3": "B0173",
+        "names": [
+          "矿山安全员",
+          "选煤厂操作工"
+        ]
+      },
+      {
+        "industry_l3": "B0227",
+        "names": [
+          "采油工",
+          "钻井技术员"
+        ]
+      },
+      {
+        "industry_l3": "B0234",
+        "names": [
+          "压裂工程师",
+          "采油工"
+        ]
+      },
+      {
+        "industry_l3": "B0236",
+        "names": [
+          "采油工",
+          "钻井技术员"
+        ]
+      },
+      {
+        "industry_l3": "B0247",
+        "names": [
+          "采油工",
+          "钻井技术员"
+        ]
+      },
+      {
+        "industry_l3": "B0254",
+        "names": [
+          "压裂工程师",
+          "钻井技术员"
+        ]
+      },
+      {
+        "industry_l3": "B0291",
+        "names": [
+          "压裂工程师",
+          "钻井技术员"
+        ]
+      },
+      {
+        "industry_l3": "B0303",
+        "names": [
+          "矿山爆破工",
+          "选矿工艺"
+        ]
+      },
+      {
+        "industry_l3": "B0304",
+        "names": [
+          "矿山爆破工",
+          "采矿技术"
+        ]
+      },
+      {
+        "industry_l3": "B0306",
+        "names": [
+          "矿山爆破工",
+          "铁矿选矿"
+        ]
+      },
+      {
+        "industry_l3": "B0361",
+        "names": [
+          "矿山提升机操作工",
+          "矿山爆破工",
+          "矿用卡车司机"
+        ]
+      },
+      {
+        "industry_l3": "B0375",
+        "names": [
+          "矿山爆破工",
+          "矿用卡车司机"
+        ]
+      },
+      {
+        "industry_l3": "B0379",
+        "names": [
+          "矿山提升机操作工",
+          "矿用卡车司机"
+        ]
+      },
+      {
+        "industry_l3": "B0480",
+        "names": [
+          "石墨矿采选工",
+          "石英砂矿加工员"
+        ]
+      },
+      {
+        "industry_l3": "B0494",
+        "names": [
+          "石墨矿采选工",
+          "石英砂矿加工员"
+        ]
+      },
+      {
+        "industry_l3": "B0506",
+        "names": [
+          "炼钢工",
+          "电炉炼钢"
+        ]
+      },
+      {
+        "industry_l3": "B0507",
+        "names": [
+          "炼钢工",
+          "轧钢工艺",
+          "轧钢操作工"
+        ]
+      },
+      {
+        "industry_l3": "B0508",
+        "names": [
+          "炼钢工",
+          "转炉炼钢"
+        ]
+      },
+      {
+        "industry_l3": "B0509",
+        "names": [
+          "连铸工艺",
+          "钢铁销售员"
+        ]
+      },
+      {
+        "industry_l3": "B0516",
+        "names": [
+          "钢铁质检员",
+          "钢铁销售员"
+        ]
+      },
+      {
+        "industry_l3": "B0520",
+        "names": [
+          "轧钢操作工",
+          "钢铁销售员"
+        ]
+      }
+    ]
+  },
+  "sample_log": [],
+  "anomalies_during_apply": [],
+  "applied_stats": {
+    "applied": 69455,
+    "skipped": 0,
+    "sample_log": []
+  },
+  "elapsed_sec": 489.97
+}
