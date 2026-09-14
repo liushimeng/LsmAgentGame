@@ -466,6 +466,16 @@ def _normalize_pool(raw):
 
 OCC_POOL = _normalize_pool(_build_occ_pool())
 
+# ── 接入 v4.2 扩展职业池（17 个缺失 L1 域，172 个 L2 码） ──
+try:
+    import importlib
+    _ext_mod = importlib.import_module('occ_pools_ext')
+    for _k, _items in _ext_mod.EXT.items():
+        OCC_POOL[_k] = [tuple(it) if isinstance(it, list) else it for it in _items]
+    print('[gen_batch] 已加载 occ_pools_ext：+%d 个 L2 职业池' % len(_ext_mod.EXT))
+except Exception as _e:
+    print('[gen_batch] occ_pools_ext 加载失败（不影响既有池）:', _e)
+
 
 def _seg(s):
     return re.sub(r'[^\w一-鿿\-]+', '-', str(s)).strip('-')[:40]
