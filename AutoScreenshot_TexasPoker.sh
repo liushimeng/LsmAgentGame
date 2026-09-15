@@ -3,14 +3,14 @@
 # ---------------------------------------------------------------
 # 用途：
 #   德州扑克 2-6 人 Agent 专用自动化截图入口。随机选择一个可用的编程
-#   Agent CLI（Claude Code / OpenCode / Hermes / OpenClaw），读取当前目录
+#   Agent CLI（Claude Code / OpenCode / Codex），读取当前目录
 #   或仓库根的 AutoScreenshot_TexasPoker.md 作为提示词执行德扑精彩画面
 #   截图采集；Agent 退出后自动将截图与报告文件以中文 git 提交，全程
 #   bypass 权限。
 #
 # 特性（与 AutoScreenshot_Werewolf.sh 同根，文件名特化）：
 #   - 工作目录与 Agent 启动目录均为 /usr/local/LsmAgentGame/LsmAgentGame
-#   - 支持全部编程 Agent CLI（Claude Code / OpenCode / Hermes / OpenClaw）
+#   - 支持全部编程 Agent CLI（Claude Code / OpenCode / Codex）
 #     随机选择执行(§20260821-02)；选择逻辑在公共库 agent_cli_common.sh 中
 #     （可 source 复用）；AGENT_CLI 环境变量可强制指定某个 Agent
 #   - 通过 nohup + setsid + & + disown 脱离调用者，**不阻塞**调用者进程
@@ -65,7 +65,7 @@ PROMPT_FILE="$(locate_prompt_file "${PROMPT_FILE_NAME}")" || {
 cd "${PROJECT_DIR}" || { echo "[ERROR] 无法进入 ${PROJECT_DIR}"; exit 1; }
 
 # ---------- 随机选择 Agent（§20260821-02：全部可用 Agent 均支持执行） ----------
-# claude|opencode|hermes|openclaw 随机选取；AGENT_CLI 环境变量可强制指定
+# claude|opencode|codex 随机选取；AGENT_CLI 环境变量可强制指定
 pick_agent "${SCRIPT_TAG}"
 
 # ---------- 日志文件名含 Agent 程序名（§20260821-01） ----------

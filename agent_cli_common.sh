@@ -4,17 +4,13 @@
 # 多 Agent CLI 随机选择公共库（被 AutoDebugTestReport.sh /
 # AutoScreenshotWerewolf.sh / AutoTestAndSaveReport.sh source 引用）。
 #
-# 支持的编程 Agent CLI（2026-08-21 §20260821-02 复核 --help，命令以本机为准）：
+# 支持的编程 Agent CLI（2026-09-15 缩减为 3 个，命令以本机为准）：
 #   claude    v2.1.238   claude --dangerously-skip-permissions -p "<prompt>"
 #   opencode  v1.18.19   opencode run --auto -m <provider/model> "<prompt>"
 #                        （--auto = 自动批准未显式拒绝的权限，危险模式）
-#   hermes    v0.20.4    hermes chat -q "<prompt>" --yolo -Q --accept-hooks
-#                        --max-turns <N>
-#                        （--yolo = 跳过全部危险命令审批；-Q = 脚本静默模式）
-#   openclaw  2026.7.1-2 openclaw agent --agent lsm --message-file <file>
-#                        --timeout <sec>
-#                        （专属 agent `lsm` 的 workspace 指向本项目目录；
-#                          全局 exec 策略 security=full ask=off 已免审批）
+#   codex     0.154.0    codex exec --dangerously-bypass-approvals-and-sandbox -
+#                        （exec=非交互；`-` 从 stdin 读提示词文件，规避 argv 转义风险；
+#                          --dangerously-bypass-approvals-and-sandbox = 免审批危险模式）
 #
 # 用法（在调用脚本中）：
 #   source "${PROJECT_DIR}/agent_cli_common.sh"
@@ -28,32 +24,19 @@
 #   AGENT_CLI 环境变量强制指定 > pick_agent 第二参数首选 Agent > 随机选择
 #
 # 环境变量：
-#   AGENT_CLI           强制指定 Agent（claude|opencode|hermes|openclaw），为空走首选/随机
-#   CLAUDE_BIN / OPENCODE_BIN / HERMES_BIN / OPENCLAW_BIN   各二进制路径覆盖
+#   AGENT_CLI           强制指定 Agent（claude|opencode|codex），为空走首选/随机
+#   CLAUDE_BIN / OPENCODE_BIN / CODEX_BIN   各二进制路径覆盖
 #   OPENCODE_MODEL      opencode 模型（provider/model 格式），缺省自动从
 #                       ~/.config/opencode/config.json 推导
-#   OPENCLAW_AGENT_ID   openclaw 专属 agent id（缺省 lsm）
-#   OPENCLAW_MODEL      openclaw agent 模型 id（缺省 liusm191-server-model）
-#   OPENCLAW_TIMEOUT_SEC  openclaw 单轮超时秒数（缺省 7200，覆盖 75min 截图流程）
-#   HERMES_MAX_TURNS    hermes 工具调用迭代上限（缺省 500，hermes 自身默认值）
 # ---------------------------------------------------------------
 
 # ---------- 二进制路径（可被环境变量覆盖） ----------
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 OPENCODE_BIN="${OPENCODE_BIN:-opencode}"
-HERMES_BIN="${HERMES_BIN:-hermes}"
-OPENCLAW_BIN="${OPENCLAW_BIN:-openclaw}"
-
-# ---------- openclaw 专属 agent（workspace 必须指向项目目录） ----------
-OPENCLAW_AGENT_ID="${OPENCLAW_AGENT_ID:-lsm}"
-OPENCLAW_MODEL="${OPENCLAW_MODEL:-liusm191-server-model}"
-OPENCLAW_TIMEOUT_SEC="${OPENCLAW_TIMEOUT_SEC:-7200}"
-
-# ---------- hermes ----------
-HERMES_MAX_TURNS="${HERMES_MAX_TURNS:-500}"
+CODEX_BIN="${CODEX_BIN:-codex}"
 
 # 候选 Agent 全集（顺序无关，随机选取）
-AGENT_CANDIDATES=(claude opencode hermes openclaw)
+AGENT_CANDIDATES=(claude opencode codex)
 
 # SELECTED_AGENT 由 pick_agent 填充
 SELECTED_AGENT=""
@@ -63,8 +46,7 @@ agent_binary_of() {
     case "$1" in
         claude)   echo "${CLAUDE_BIN}" ;;
         opencode) echo "${OPENCODE_BIN}" ;;
-        hermes)   echo "${HERMES_BIN}" ;;
-        openclaw) echo "${OPENCLAW_BIN}" ;;
+        codex)    echo "${CODEX_BIN}" ;;
         *)        echo "" ;;
     esac
 }
@@ -135,7 +117,7 @@ pick_agent() {
 
 # pick_agent_from_list <caller_tag> <agent1> [agent2] ... —— 从指定列表中随机选择可用 Agent。
 # 用于「专业任务用专业 Agent」场景：AutoDebugTestReport 只需 claude/opencode，
-# 不把 hermes/openclaw 纳入随机池。
+# 不把 codex 纳入随机池。
 # 选择优先级：AGENT_CLI 环境变量强制指定 > 从指定列表中随机选择 >
 #   指定列表全部不可用时降级为全部可用 Agent 随机选择（日志有 WARN）。
 pick_agent_from_list() {
@@ -214,22 +196,6 @@ opencode_model_arg() {
     echo "${m}"
 }
 
-# ensure_openclaw_agent —— 幂等保证 openclaw 专属 agent 存在（workspace 指向项目目录）。
-# openclaw 默认 agent 的 workspace 是 ~/.openclaw/workspace，不在项目目录，
-# 必须为自动化流程单独建一个 workspace=项目目录 的 agent。
-ensure_openclaw_agent() {
-    local project_dir="${1:-${PROJECT_DIR:-$(pwd)}}"
-    if "${OPENCLAW_BIN}" agents list 2>/dev/null | grep -qE "^- ${OPENCLAW_AGENT_ID}(\$|[[:space:]])"; then
-        return 0
-    fi
-    echo "[agent_cli_common] openclaw agent '${OPENCLAW_AGENT_ID}' 不存在，自动创建（workspace=${project_dir}）..."
-    "${OPENCLAW_BIN}" agents add "${OPENCLAW_AGENT_ID}" \
-        --workspace "${project_dir}" \
-        --model "${OPENCLAW_MODEL}" \
-        --non-interactive >/dev/null 2>&1 \
-        || echo "[agent_cli_common] [WARN] openclaw agent 创建失败，尝试直接运行（可能失败）。"
-}
-
 # run_agent_with_prompt <agent> <prompt_file> [project_dir]
 # 以「放开权限、全程自动化」方式运行指定 Agent，提示词取自 prompt 文件。
 # 返回 Agent 进程的退出码。
@@ -247,7 +213,7 @@ run_agent_with_prompt() {
 
     case "${agent}" in
         claude)
-            # §20260821-02：与 opencode/hermes 对齐，显式 cd 到项目目录，
+            # §20260821-02：与 opencode/codex 对齐，显式 cd 到项目目录，
             # 不再隐式依赖调用方 cwd（Claude Code 以 cwd 为工作区）
             (cd "${project_dir}" && "${CLAUDE_BIN}" --dangerously-skip-permissions -p "${prompt_text}")
             ;;
@@ -257,19 +223,12 @@ run_agent_with_prompt() {
             echo "[agent_cli_common] opencode 模型参数: ${model_arg}"
             (cd "${project_dir}" && "${OPENCODE_BIN}" run --auto -m "${model_arg}" "${prompt_text}")
             ;;
-        hermes)
-            (cd "${project_dir}" && "${HERMES_BIN}" chat \
-                -q "${prompt_text}" \
-                --yolo -Q --accept-hooks \
-                --max-turns "${HERMES_MAX_TURNS}")
-            ;;
-        openclaw)
-            ensure_openclaw_agent "${project_dir}"
-            # --message-file 直读 UTF-8 文件，避免 19KB+ 复杂提示词的 shell 转义风险
-            "${OPENCLAW_BIN}" agent \
-                --agent "${OPENCLAW_AGENT_ID}" \
-                --message-file "${prompt_file}" \
-                --timeout "${OPENCLAW_TIMEOUT_SEC}"
+        codex)
+            # stdin 直读 UTF-8 提示词文件，安全传递超长中文文本（规避 argv 转义风险）；
+            # --dangerously-bypass-approvals-and-sandbox = 免审批危险模式
+            (cd "${project_dir}" && "${CODEX_BIN}" exec \
+                --dangerously-bypass-approvals-and-sandbox \
+                - < "${prompt_file}")
             ;;
         *)
             echo "[agent_cli_common] [ERROR] 未知 Agent: ${agent}" >&2

@@ -10,7 +10,7 @@
 # 特性：
 #   - 工作目录与 Agent 启动目录均为 /usr/local/LsmAgentGame/LsmAgentGame
 #   - Agent 选择：自动修复对编码能力要求最高，仅从 claude / opencode 中随机选择
-#     （hermes / openclaw 不纳入随机池）；选择逻辑在公共库 agent_cli_common.sh
+#     （codex 不纳入随机池）；选择逻辑在公共库 agent_cli_common.sh
 #     中（可 source 复用）；AGENT_CLI 环境变量可强制指定某个 Agent
 #   - 通过 nohup + setsid + & + disown 脱离调用者，**不阻塞**调用者进程
 #   - 日志体系（§20260821-01 增强）：
@@ -97,7 +97,7 @@ cd "${PROJECT_DIR}" || { echo "[ERROR] 无法进入 ${PROJECT_DIR}"; exit 1; }
 
 # ---------- 选择 Agent（专业任务用专业 Agent） ----------
 # 自动修复对编码能力要求最高，仅从 claude / opencode 两个专业编程 Agent 中随机选择；
-# hermes / openclaw 不纳入随机池。AGENT_CLI 环境变量仍可强制指定某个 Agent。
+# codex 不纳入随机池。AGENT_CLI 环境变量仍可强制指定某个 Agent。
 # 全部不可用时降级为全部可用 Agent 随机选择（日志有 WARN）。
 pick_agent_from_list "${SCRIPT_TAG}" "claude" "opencode"
 
