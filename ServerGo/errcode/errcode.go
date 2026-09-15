@@ -217,6 +217,9 @@ type Error struct {
 
 // Error implements the error interface.
 func (e *Error) Error() string {
+	if e == nil {
+		return "nil error"
+	}
 	return fmt.Sprintf("[%d] %s", e.Code, e.Message)
 }
 
