@@ -8,7 +8,7 @@
  * 全局 toast（useWealth 已上报）；面板级失败兜底 reportGlobalError。
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppModal } from '@/components/ui/AppModal';
 import { wsClient, type WsEnvelope } from '@/services/ws';
 import { useT } from '@/hooks/useT';
@@ -75,18 +75,41 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
   const stopped = !!me && !me.alive;
 
   // ── 动作结果回执（弹窗内联成功 / 失败；短窗口内仅接受最近一帧）──
+  // 用 refs 保存最新值，避免 setAwaiting(true) → React 异步重渲染 → effect 注册
+  // 监听器的窗口内服务器已广播 game.event 而丢失（竞态条件）：监听器在 mount
+  // 时只注册一次，通过 ref 读取当前 awaiting / roomId / mySeat / active。
+  const awaitingRef = useRef(awaiting);
+  awaitingRef.current = awaiting;
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const roomIdRef = useRef(roomId);
+  roomIdRef.current = roomId;
+  const mySeatRef = useRef(mySeat);
+  mySeatRef.current = mySeat;
+
+  // mapError 必须声明于 wsClient.on 监听器之前（监听器闭包引用它）。
+  const mapError = useCallback(
+    (code: number, message: string): string => {
+      if (code === 35006) return t('wealth.error.budget' as TKey);
+      if (code === 35007) return t('wealth.error.cash' as TKey);
+      return message || t('wealth.error.generic' as TKey);
+    },
+    [t],
+  );
+
   useEffect(() => {
-    if (!awaiting) return;
     const off = wsClient.on((env: WsEnvelope) => {
+      // 仅处理当前房间的动作结果；非 awaiting 时跳过。
+      if (!awaitingRef.current) return;
       if (env.type === 'game.event') {
         const p = env.payload as { room_id?: string; seat?: number; type?: string; text?: string };
-        if (p.room_id && p.room_id !== roomId) return;
+        if (p.room_id && p.room_id !== roomIdRef.current) return;
         if (p.type === 'error') {
           setFormError(p.text || t('wealth.error.generic' as TKey));
           setAwaiting(false);
           return;
         }
-        if (p.seat === mySeat && (p.type === 'action' || p.type === 'move')) {
+        if (p.seat === mySeatRef.current && (p.type === 'action' || p.type === 'move')) {
           setAwaiting(false);
           setActive(null);
           setFormError(null);
@@ -97,25 +120,20 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
         setAwaiting(false);
       }
     });
+    return () => off();
+    // 监听器只注册一次；通过 ref 读取最新值，无需把 awaiting/roomId/mySeat 放入依赖。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t, mapError]);
+
+  // 超时定时器独立 effect：awaiting → true 时启动，触发即显示超时提示。
+  useEffect(() => {
+    if (!awaiting) return;
     const timer = window.setTimeout(() => {
       setFormError(t('wealth.error.timeout' as TKey));
       setAwaiting(false);
     }, AWAIT_TIMEOUT_MS);
-    return () => {
-      off();
-      window.clearTimeout(timer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [awaiting, roomId, mySeat]);
-
-  const mapError = useCallback(
-    (code: number, message: string): string => {
-      if (code === 35006) return t('wealth.error.budget' as TKey);
-      if (code === 35007) return t('wealth.error.cash' as TKey);
-      return message || t('wealth.error.generic' as TKey);
-    },
-    [t],
-  );
+    return () => window.clearTimeout(timer);
+  }, [awaiting, t]);
 
   const openModal = (meta: WealthActionMeta) => {
     setFormError(null);
@@ -144,6 +162,9 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
 
   const fire = (action: WealthAction) => {
     setFormError(null);
+    // 同步置 ref 为 true，再发 WS 消息——避免本地往返极快时事件在
+    // React 重渲染（awaitingRef.current = awaiting）之前到达而丢失。
+    awaitingRef.current = true;
     setAwaiting(true);
     sendAction(action);
   };
