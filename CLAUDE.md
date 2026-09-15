@@ -411,15 +411,19 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,可使用
 - 仅限本地/开发环境使用,**严禁**在生产环境复用。
 - `cfg.Server.DevMode=true` 仅有开发模式日志告警,**不再解锁任何认证旁路**。
 
-## 22. 自动化测试报告处理流程
+## 22. 自动化测试与修复处理流程
 
 > R46–R51 等多轮「报告→修复→验证」历史快照已迁出本文件，按需查阅 `docs/` 下归档或 git log。
 > 本节仅保留**流程规约**，不再记录每轮具体报告内容。
+> **§20260915-01 重构**：原独立 Debug 流程 (`AutoDebugTestReport.md`) 已合并入各游戏测试提示词，
+> 文件命名统一为 `AutoTestAndDebug_<Game>`；Agent 测试完成后在同一会话内直接执行修复 + 提交推送，
+> 无需外部脚本接力。方案详见 [`docs/通用功能/自动化测试与调试流程合并方案-20260915.md`](docs/通用功能/自动化测试与调试流程合并方案-20260915.md)。
 
-- **检索入口**：主工程 `TestReport/自动化测试报告_*.md`；子工程 `go-web-debug-tool/UseReport/测试工具使用报告_*.md`。
-- **处理入口**：根目录 `AutoDebugTestReport.sh` —— **首选 Claude Code CLI 执行**（claude 不可用降级随机选；§20260821-02；公共库 `agent_cli_common.sh`，`AGENT_CLI=<name>` 可强制指定），加载 `AutoDebugTestReport.md` 作为 prompt；`AutoTestAndSaveReport_{Werewolf,TexasPoker}.sh` / `AutoScreenshot_{Werewolf,TexasPoker}.sh` 同机制（全部可用 Agent 随机选择）。
-- **流程规范与硬约束**详见 `AutoDebugTestReport.md`；其中**绝对禁止**自动修复流程写入 `CLAUDE.md` / `AGENTS.md` 这两个规则文件。
-- **报告清理**：修复完成后必须删除已处理的 `TestReport/*.md`（子工程 `UseReport/*.md`），报告不应在仓库中长期堆积。
+- **检索入口**：主工程 `TestReport/<游戏>自动化测试报告_*.md`（glob 来源: `auto_run_common.sh::GAME_GLOBS`）；子工程 `go-web-debug-tool/UseReport/<游戏>测试工具使用报告_*.md`。
+- **处理入口**：各游戏独立入口脚本 `AutoTestAndDebug_{Werewolf,TexasPoker,Debate,Wealth}.sh` —— **首选 Claude Code CLI 执行**（claude 不可用降级随机选；公共库 `agent_cli_common.sh`，`AGENT_CLI=<name>` 可强制指定），加载同名的 `AutoTestAndDebug_*.md` 作为 prompt；`AutoScreenshot_{Werewolf,TexasPoker}.sh` 等同机制（全部可用 Agent 随机选择）。
+- **流程规范与硬约束**详见各 `AutoTestAndDebug_*.md` 的「自动修复流程」章节(§12)；其中**绝对禁止**自动修复流程写入 `CLAUDE.md` / `AGENTS.md` 这两个规则文件。
+- **报告清理**：修复完成后必须删除已处理的 `TestReport/*.md`（子工程 `UseReport/*.md`），报告不应在仓库中长期堆积；无问题的报告追加 `_无问题` 后缀归档。
+- **提示词内嵌修复**：各游戏提示词已包含完整「测试 → 自动修复 → 提交推送」流程，Agent 无需依赖外部 debug 脚本接力。
 
 ## 23. 狼人杀 Web 运行时 UI（房间总运行时间 + 历史抽屉）
 

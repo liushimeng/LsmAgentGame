@@ -82,7 +82,7 @@ For PRs that touch both `ClientWeb/` and `ServerGo/`, please describe:
 
 ## 4. Automated Testing
 
-Maintainers use `AutoTestAndSaveReport.sh` and the `go-web-debug-tool/` submodule to run regression.
+Maintainers use `AutoTestAndDebug_{Werewolf,TexasPoker,Debate,Wealth}.sh` and the `go-web-debug-tool/` submodule to run regression.
 Contributors are encouraged to attach local regression output in the PR description (path to `TestReport/` is enough).
 
 ## 5. Contact

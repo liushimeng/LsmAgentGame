@@ -84,7 +84,7 @@
 
 ## 4. 自動テスト
 
-メンテナは `AutoTestAndSaveReport.sh` と `go-web-debug-tool/` サブモジュールで回帰テストを実施します。
+メンテナは `AutoTestAndDebug_{Werewolf,TexasPoker,Debate,Wealth}.sh` と `go-web-debug-tool/` サブモジュールで回帰テストを実施します。
 PR 説明欄にローカル回帰出力（`TestReport/` パスで十分）を添付してください。
 
 ## 5. 連絡先

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # auto_run_common.sh
 # ---------------------------------------------------------------
-# 自动化脚本公共库（被 AutoDebugTestReport.sh /
-# AutoTestAndSaveReport_{Werewolf,TexasPoker}.sh /
+# 自动化脚本公共库（被 AutoTestAndDebug_*.sh /
+# AutoTestAndDebug_{Werewolf,TexasPoker}.sh /
 # AutoScreenshot_{Werewolf,TexasPoker}.sh source 引用）。
 #
 # 职责（与 agent_cli_common.sh 严格分工）：
@@ -152,7 +152,7 @@ enqueue_game_glob() {
 }
 
 # list_game_globs_for_kind <kind>
-# 跨所有游戏枚举某 kind 的 glob（用于 AutoDebugTestReport 的 union 扫描）。
+# 跨所有游戏枚举某 kind 的 glob（用于 AutoTestAndDebug 的 union 扫描）。
 list_game_globs_for_kind() {
     local kind="$1"
     local key glob
@@ -178,7 +178,7 @@ game_display_name() {
 # bg_log <tag> <message...>
 # 后台段日志助手：start_agent_in_background 已把后台 shell 的 stdout/stderr
 # 重定向到本次运行日志文件，此处仅负责补上统一时间戳前缀：
-#   [2026-08-21 12:00:00] [AutoDebugTestReport] claude 退出码 : 0
+#   [2026-08-21 12:00:00] [AutoTestAndDebug] claude 退出码 : 0
 bg_log() {
     local tag="$1"
     shift
@@ -280,7 +280,7 @@ git_add_safe() {
 #   type_zh: "测试" / "截图" / "修复" / "处理"
 #   game_key: werewolf / texasholdem / ...
 #   commit_ts: 时间戳(YYYYMMDD_HHMMSS)
-#   source_tag: 来源脚本名(如 AutoTestAndSaveReport_Werewolf.sh)
+#   source_tag: 来源脚本名(如 AutoTestAndDebug_Werewolf.sh)
 #   extra_msg: 可选追加 commit message 行
 # 修复(§20260821-01)：旧实现用 $(basename "$0") 标注来源，但本函数实际在
 # start_agent_in_background 的 bash -c 子 shell 中执行，$0 恒为 "bash"，

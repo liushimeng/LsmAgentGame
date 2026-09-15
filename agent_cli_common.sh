@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # agent_cli_common.sh
 # ---------------------------------------------------------------
-# 多 Agent CLI 随机选择公共库（被 AutoDebugTestReport.sh /
-# AutoScreenshotWerewolf.sh / AutoTestAndSaveReport.sh source 引用）。
+# 多 Agent CLI 随机选择公共库（被 AutoTestAndDebug_*.sh /
+# AutoScreenshotWerewolf.sh / AutoTestAndDebug_*.sh source 引用）。
 #
 # 支持的编程 Agent CLI（2026-09-15 缩减为 3 个，命令以本机为准）：
 #   claude    v2.1.238   claude --dangerously-skip-permissions -p "<prompt>"
@@ -65,7 +65,7 @@ list_available_agents() {
 # pick_agent <caller_tag> [preferred_agent] —— 选择一个可用 Agent，结果写入 SELECTED_AGENT。
 # 选择优先级（§20260821-02）：
 #   1. AGENT_CLI 环境变量强制指定（用于定向测试某个 Agent），不可用则报错退出；
-#   2. preferred_agent 首选（如 AutoDebugTestReport 首选 claude/Claude Code CLI）：
+#   2. preferred_agent 首选（如 AutoTestAndDebug 首选 claude/Claude Code CLI）：
 #      可用则必选；不可用打 WARN 并自动降级随机选择（不阻塞自动化流水线）；
 #   3. 无首选时从全部可用 Agent 中随机选择。
 # 无可用 Agent 时直接退出（exit 3）。
@@ -116,7 +116,7 @@ pick_agent() {
 }
 
 # pick_agent_from_list <caller_tag> <agent1> [agent2] ... —— 从指定列表中随机选择可用 Agent。
-# 用于「专业任务用专业 Agent」场景：AutoDebugTestReport 只需 claude/opencode，
+# 用于「专业任务用专业 Agent」场景：AutoTestAndDebug 只需 claude/opencode，
 # 不把 codex 纳入随机池。
 # 选择优先级：AGENT_CLI 环境变量强制指定 > 从指定列表中随机选择 >
 #   指定列表全部不可用时降级为全部可用 Agent 随机选择（日志有 WARN）。

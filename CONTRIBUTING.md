@@ -82,7 +82,7 @@
 
 ## 4. 自动化测试
 
-仓库维护者使用 `AutoTestAndSaveReport.sh` 与 `go-web-debug-tool/` 子模块跑回归。
+仓库维护者使用 `AutoTestAndDebug_{Werewolf,TexasPoker,Debate,Wealth}.sh` 与 `go-web-debug-tool/` 子模块跑回归。
 贡献者请在 PR 描述里附上本地回归脚本输出（不必粘贴全部日志，附 `TestReport/` 路径即可）。
 
 ## 5. 联系方式
