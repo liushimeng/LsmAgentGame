@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"LsmAgentGame/errcode"
 	llmtypes "LsmAgentGame/llm/types"
 )
 
@@ -277,6 +278,17 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 		return res
 	}
 	fail := func(err error) dispatchToolResult {
+		// typed-nil 防御(2026-09-15 §财商流P0-bugfix):与 failOr 同源保护。
+		if err == nil {
+			res.IsErr = true
+			res.Text = "失败:未知错误(nil)"
+			return res
+		}
+		if e, ok := err.(*errcode.Error); ok && e == nil {
+			res.IsErr = true
+			res.Text = "失败:未知错误(nil *Error)"
+			return res
+		}
 		res.IsErr = true
 		res.Text = "失败:" + err.Error()
 		return res
@@ -329,11 +341,18 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 }
 
 func failOr(err error, successText string, res dispatchToolResult) dispatchToolResult {
-	if err != nil {
-		res.IsErr = true
-		res.Text = "失败:" + err.Error()
+	// typed-nil 防御(2026-09-15 §财商流P0-bugfix):实现侧若返回 *errcode.Error
+	// nil 指针,装入 error 接口后 != nil 但 .Error() 会 panic。本函数对入参
+	// 做 interface-nil + typed-nil 双保险,杜绝上游 panic 蔓延到服务主进程。
+	if err == nil {
+		res.Text = successText
 		return res
 	}
-	res.Text = successText
+	if e, ok := err.(*errcode.Error); ok && e == nil {
+		res.Text = successText
+		return res
+	}
+	res.IsErr = true
+	res.Text = "失败:" + err.Error()
 	return res
 }

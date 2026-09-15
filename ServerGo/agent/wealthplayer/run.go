@@ -8,6 +8,7 @@ package wealthplayer
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -85,6 +86,26 @@ func maxRunes(s string, n int) string {
 // OnMonthStart 月度决策循环入口(caller 负责房间信号量)。
 // 调用方在每 acting 窗口开始后异步调用;ctx 携带 decisionTimeout。
 func (a *Agent) OnMonthStart(parent context.Context, ctx *wealthtypes.GameContext) {
+	// 2026-09-15 §财商流P0-bugfix: 单 bot 任何 panic 都兜底 submit + 摘要,
+	// 避免 LLM provider 异常或 typed-nil 接口穿透导致整个房间锁住 / 服务崩溃。
+	defer func() {
+		if r := recover(); r != nil {
+			logger.L().Error("wealthplayer OnMonthStart panic recovered",
+				zap.Int("seat", a.MySeat),
+				zap.Any("panic", r),
+				zap.String("stack", string(debug.Stack())),
+			)
+			if a.runner != nil {
+				if err := a.runner.SubmitMonth(a.MySeat); err != nil {
+					logger.L().Warn("wealthplayer recover: submit_month fallback failed",
+						zap.Int("seat", a.MySeat),
+						zap.Error(err),
+					)
+				}
+			}
+			a.finalizeTranscript("", "", "panic recovered; 强制提交")
+		}
+	}()
 	if a.IsCancelled() || a.runner == nil {
 		return
 	}

@@ -1,8 +1,11 @@
 package wealthplayer
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"LsmAgentGame/errcode"
 )
 
 // TestBuildTools_All17ToolsPresent 17 工具齐备(§7)。
@@ -70,5 +73,45 @@ func TestToolNames_Returns17Names(t *testing.T) {
 			!strings.HasPrefix(n, "submit_") {
 			t.Errorf("unexpectedname: %s", n)
 		}
+	}
+}
+
+// TestFailOr_NilError 验证 failOr 对 nil error 返回成功文案(不 panic)。
+// 2026-09-15 §财商流P0-bugfix:typed-nil *errcode.Error 装入 error 接口后
+// != nil 但 .Error() panic,这里是核心防御。
+func TestFailOr_NilError(t *testing.T) {
+	res := failOr(nil, "买入成功", dispatchToolResult{})
+	if res.IsErr {
+		t.Errorf("nil error must not be error: %+v", res)
+	}
+	if res.Text != "买入成功" {
+		t.Errorf("nil error must keep success text: got %q", res.Text)
+	}
+}
+
+// TestFailOr_TypedNilError 验证 failOr 对 typed-nil *errcode.Error 返回成功文案。
+func TestFailOr_TypedNilError(t *testing.T) {
+	var typedNil *errcode.Error // == nil but type is *errcode.Error
+	var err error = typedNil    // interface wrapping typed-nil → err != nil
+	if err == nil {
+		t.Fatal("typed-nil assignment must produce non-nil interface")
+	}
+	res := failOr(err, "买入成功", dispatchToolResult{})
+	if res.IsErr {
+		t.Errorf("typed-nil must not be error: %+v", res)
+	}
+	if res.Text != "买入成功" {
+		t.Errorf("typed-nil must keep success text: got %q", res.Text)
+	}
+}
+
+// TestFailOr_RealError 验证 failOr 对真实 error 返回失败文案。
+func TestFailOr_RealError(t *testing.T) {
+	res := failOr(errors.New("boom"), "买入成功", dispatchToolResult{})
+	if !res.IsErr {
+		t.Errorf("real error must set IsErr: %+v", res)
+	}
+	if !strings.Contains(res.Text, "boom") {
+		t.Errorf("real error text must contain message: got %q", res.Text)
 	}
 }

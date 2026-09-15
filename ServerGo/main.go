@@ -29,6 +29,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -144,6 +145,11 @@ func main() {
 	if cfg.JWT.Secret == "" {
 		logger.L().Fatal("cfg.jwt.secret 为空 — 拒绝启动，请在 LsmAgentGame.conf 配置强随机 secret")
 	}
+
+	// 2026-09-15 §财商流P0-bugfix: TLS 证书路径自动 fallback。
+	// 运维若从 ServerGo/ 子目录启动,相对路径 ./server.crt 不存在 → FATAL。
+	// 这里在启动早期探测一次:相对路径不存在时回退到 ../server.crt 并 Warn。
+	resolveTLSCertPath(cfg)
 	// 2026-08-25 安全加固：DevMode 仅限本地开发，生产误开需醒目告警。
 	if cfg.Server.DevMode {
 		logger.L().Warn("cfg.server.dev_mode=true — 开发模式，仅限本地开发环境使用，生产部署必须显式设置为 false")
@@ -1108,4 +1114,32 @@ func (a *wsChatSenderAdapter) SendFromBot(roomID, botUserID, botAccount, modelKe
 	}
 	_, err := a.chat.SendFromBot(roomID, botUserID, botAccount, modelKey, text)
 	return err
+}
+
+// resolveTLSCertPath 自动 fallback(2026-09-15 §财商流P0-bugfix)。
+// 相对路径不存在时回退到 ../server.crt(项目根目录相对 ServerGo/)与
+// ../server.key,避免从 ServerGo/ 子目录启动时 FATAL 退出的硬错。
+func resolveTLSCertPath(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	resolveOne := func(field *string, label string) {
+		p := strings.TrimSpace(*field)
+		if p == "" || filepath.IsAbs(p) {
+			return
+		}
+		if _, err := os.Stat(p); err == nil {
+			return
+		}
+		parent := filepath.Join("..", p)
+		if _, err := os.Stat(parent); err == nil {
+			logger.L().Warn("tls path auto-fallback",
+				zap.String("field", label),
+				zap.String("from", p),
+				zap.String("to", parent))
+			*field = parent
+		}
+	}
+	resolveOne(&cfg.Server.TLSCert, "tls_cert")
+	resolveOne(&cfg.Server.TLSKey, "tls_key")
 }
