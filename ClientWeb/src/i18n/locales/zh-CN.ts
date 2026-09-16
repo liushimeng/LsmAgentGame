@@ -1,4 +1,5 @@
 import type { Dict } from '../types';
+import wealthP2 from './wealthP2-zh';
 
 // 中文 (默认) — zh-CN
 const zhCN: Dict = {
@@ -1665,6 +1666,10 @@ const zhCN: Dict = {
   'wealth.consumption.forcedDown': '已强制降档',
   'wealth.consumption.forcedHint': '现金低于 2×月生活支出时，月结将强制降为节俭档（生活支出×0.6）',
   'wealth.consumption.invalid': '消费档位非法（须 0-3）',
+
+
+  // ── P2 交易系统拆到 wealthP2-zh.ts（≤1800 行约束）──
+  ...wealthP2,
 
   // ── P1 明斯基引擎 + LPR 重定价 + 提前还款 ──
   'minsky.title': '明斯基融资状态',

@@ -1,4 +1,5 @@
 import type { Dict } from '../types';
+import wealthP2 from './wealthP2-en';
 
 // English — en
 const en: Dict = {
@@ -1665,6 +1666,9 @@ const en: Dict = {
   'wealth.consumption.forcedDown': 'Force-Downgraded',
   'wealth.consumption.forcedHint': 'When cash falls below 2× monthly living expense, settlement force-downgrades you to Frugal (living ×0.6)',
   'wealth.consumption.invalid': 'Invalid consumption level (must be 0-3)',
+
+  // ── P2 trading system split to wealthP2-en.ts (≤1800 line cap) ──
+  ...wealthP2,
 
   // ── P1 Minsky Engine + LPR Reprice + Early Repayment ──
   'minsky.title': 'Minsky Financing Status',

@@ -1,4 +1,5 @@
 import type { Dict } from '../types';
+import wealthP2 from './wealthP2-ja';
 
 // 日本語 — ja
 const ja: Dict = {
@@ -1664,6 +1665,9 @@ const ja: Dict = {
   'wealth.consumption.forcedDown': '強制ダウングレード',
   'wealth.consumption.forcedHint': '現金が月生活費の2倍を下回ると、決済時に倹約档へ強制ダウン（生活費×0.6）',
   'wealth.consumption.invalid': '消費水準が不正です（0-3）',
+
+  // ── P2 取引システムを wealthP2-ja.ts に分割 ──
+  ...wealthP2,
 
   // ── P1 ミンスキーエンジン + LPR リプライシング + 早期返済 ──
   'minsky.title': 'ミンスキー融資状態',

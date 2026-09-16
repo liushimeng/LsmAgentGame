@@ -1,3 +1,5 @@
+import type { TKey } from '@/i18n';
+
 // ─── 财商流游戏 (Wealth) types ───
 //
 // 与 docs/财商流游戏/已实现/02-架构设计/财商流游戏-WS与HTTP协议契约-v1.md §3
@@ -295,6 +297,8 @@ export interface WealthGameState {
   society?: WealthSociety;
   /** 社会调研（open ≤1 + 最近 4 个 closed；P1 社会调研系统）。 */
   surveys?: WealthSurvey[];
+  /** 挂单簿（P2 交易系统；房间级）。 */
+  listing_book?: WealthListingBook;
 }
 
 /** 明斯基全局概览（game.state.minsky_overview，P1 明斯基引擎）。 */
@@ -407,6 +411,160 @@ export interface WealthSurvey {
   answers_count: number;
   /** closed 时非空。 */
   result?: WealthSurveyResult;
+}
+
+// ── P2 玩家间交易与财富流动系统（docs/财商流游戏/已实现/06-P2交易系统/）────
+//
+// 与 §3 数据结构逐字段对齐（JSON 名不可改；后端 view.go 是唯一实现）。
+
+/** 挂单类型（Listing.Type）。 */
+export type WealthListingType = 'asset' | 'buy' | 'info' | 'loan_ofr' | 'loan_req';
+
+/** 挂单状态（Listing.Status）。 */
+export type WealthListingStatus = 'open' | 'negotiating' | 'deal' | 'expired' | 'cancelled';
+
+/** 议价动作（NegotiateTurn.Action）。 */
+export type WealthNegotiateAction = 'offer' | 'accept' | 'reject' | 'counter';
+
+/** 议价会话状态（NegotiateSession.Status）。 */
+export type WealthNegotiateStatus = 'active' | 'deal' | 'reject' | 'expired';
+
+/** 借贷方向（LoanPayload.Direction）。 */
+export type WealthLoanDirection = 'lend' | 'borrow';
+
+/** 信息类别（InfoOfferPayload.Category）。 */
+export type WealthInfoCategory = 'market' | 'intel' | 'personal';
+
+/** 拍卖类型。 */
+export type WealthAuctionKind = 'english' | 'sealed' | 'take_it' | 'single_round';
+
+/** 拍卖状态。 */
+export type WealthAuctionStatus = 'pending' | 'active' | 'ended';
+
+/** 资产挂单详情（ListingPayload.Asset）。 */
+export interface WealthTradeAssetPayload {
+  kind: string;
+  name: string;
+  units: number;
+  price: number;
+  value_cny: number;
+  /** 底价（卖家保密；仅本人座位下发时可填，不下发他人）。 */
+  min_cny: number;
+}
+
+/** 借贷挂单详情（ListingPayload.Loan）。 */
+export interface WealthTradeLoanPayload {
+  direction: WealthLoanDirection;
+  principal_cny: number;
+  max_rate: number;
+  term_n: number;
+  need_guarantee: boolean;
+}
+
+/** 信息出售详情（ListingPayload.Info）。 */
+export interface WealthTradeInfoPayload {
+  category: WealthInfoCategory;
+  title: string;
+  detail_hash: string;
+  min_bid_cny: number;
+}
+
+/** 挂单内容联合（ListingPayload）。 */
+export interface WealthListingPayload {
+  asset?: WealthTradeAssetPayload;
+  loan?: WealthTradeLoanPayload;
+  info?: WealthTradeInfoPayload;
+}
+
+/** 单笔挂单（挂单簿条目）。 */
+export interface WealthListing {
+  id: string;
+  type: WealthListingType;
+  seat: number;
+  payload: WealthListingPayload;
+  ask_cny: number;
+  status: WealthListingStatus;
+  create_month: number;
+  expire_month: number;
+}
+
+/** 单轮议价（NegotiateSession.Turns[]）。 */
+export interface WealthNegotiateTurn {
+  from: number;
+  offer_cny: number;
+  rate: number;
+  comment: string;
+  action: WealthNegotiateAction;
+}
+
+/** 单笔议价会话。 */
+export interface WealthNegotiateSession {
+  id: string;
+  listing_id: string;
+  proposer_seat: number;
+  respond_seat: number;
+  turns: WealthNegotiateTurn[];
+  status: WealthNegotiateStatus;
+  create_month: number;
+  expire_month: number;
+  last_offer_cny: number;
+  last_offer_by: number;
+}
+
+/** 玩家间借贷合约（deal 后生成）。 */
+export interface WealthP2PLoan {
+  id: string;
+  lender_seat: number;
+  borrower_seat: number;
+  principal_cny: number;
+  balance_cny: number;
+  annual_rate: number;
+  monthly_payment: number;
+  term_n: number;
+  months_left: number;
+  /** -1 无担保。 */
+  guarantor_seat: number;
+  overdue: boolean;
+  create_month: number;
+  listing_id: string;
+}
+
+/** 拍卖出价记录。 */
+export interface WealthAuctionBid {
+  seat: number;
+  amount_cny: number;
+  month: number;
+  /** 密封暗标揭示后有效。 */
+  revealed?: boolean;
+}
+
+/** 拍卖场次。 */
+export interface WealthAuction {
+  id: string;
+  listing_id: string;
+  kind: WealthAuctionKind;
+  status: WealthAuctionStatus;
+  /** 卖家座位。 */
+  seat: number;
+  /** 起拍价 / 基准价。 */
+  start_cny: number;
+  /** 当前最高出价。 */
+  current_cny: number;
+  /** 当前最高出价者座位（-1 无人）。 */
+  current_seat: number;
+  /** 结束月份（月结时判定）。 */
+  end_month: number;
+  bids: WealthAuctionBid[];
+  /** 英式拍卖：卖家保留价（< 此价可拒绝）。 */
+  reserve_cny?: number;
+}
+
+/** 房间级挂单簿（game.state.listing_book）。 */
+export interface WealthListingBook {
+  listings: WealthListing[];
+  negotiates: WealthNegotiateSession[];
+  p2p_loans: WealthP2PLoan[];
+  auctions: WealthAuction[];
 }
 
 /**
@@ -570,6 +728,54 @@ export type WealthAction =
   | { type: 'submit_month' }
   | { type: 'early_repay'; loan_id: string; amount_cny: number }
   | { type: 'set_consumption'; level: number };
+
+// ── P2 交易系统：交易类动作（走 game.wealth_xxx 帧）──────────────────────
+
+/** 挂牌出售 / 收购 / 信息 / 借贷。 */
+export type WealthTradeAction =
+  | { type: 'listing_create'; listing_type: WealthListingType; payload: WealthListingPayload; ask_cny: number }
+  | { type: 'listing_cancel'; listing_id: string }
+  | { type: 'listing_view'; listing_type?: WealthListingType }
+  | { type: 'negotiate_start'; listing_id: string; offer_cny: number }
+  | { type: 'negotiate_respond'; neg_id: string; action: WealthNegotiateAction; offer_cny: number; comment?: string }
+  | { type: 'loan_accept'; listing_id: string }
+  | { type: 'loan_repay'; loan_id: string; amount_cny?: number }
+  | { type: 'add_guarantor'; loan_id: string }
+  | { type: 'auction_bid'; auction_id: string; amount_cny: number }
+  | { type: 'sell_info'; category: WealthInfoCategory; title: string; detail: string; min_bid_cny: number }
+  | { type: 'bid_info'; listing_id: string; bid_cny: number };
+
+/** P2 交易错误码（errcode/errcode.go §8.2，35013–35024）。 */
+export const WEALTH_TRADE_ERR = {
+  ListingInvalid: 35013,
+  ListingExpired: 35014,
+  NegotiateNotFound: 35015,
+  NotYourTurn: 35016,
+  LoanRateInvalid: 35017,
+  LoanNoCredit: 35018,
+  GuarantorConflict: 35019,
+  AuctionEnded: 35020,
+  BidTooLow: 35021,
+  NoPrivilege: 35022,
+  ListingFull: 35023,
+  SelfTrade: 35024,
+} as const;
+
+/** P2 交易错误码 → i18n key 映射。 */
+export const TRADE_ERR_I18N: Record<number, TKey> = {
+  [WEALTH_TRADE_ERR.ListingInvalid]: 'wealth.error.listingInvalid' as TKey,
+  [WEALTH_TRADE_ERR.ListingExpired]: 'wealth.error.listingExpired' as TKey,
+  [WEALTH_TRADE_ERR.NegotiateNotFound]: 'wealth.error.negotiateNotFound' as TKey,
+  [WEALTH_TRADE_ERR.NotYourTurn]: 'wealth.error.notYourTurn' as TKey,
+  [WEALTH_TRADE_ERR.LoanRateInvalid]: 'wealth.error.loanRate' as TKey,
+  [WEALTH_TRADE_ERR.LoanNoCredit]: 'wealth.error.loanCredit' as TKey,
+  [WEALTH_TRADE_ERR.GuarantorConflict]: 'wealth.error.guarantorConflict' as TKey,
+  [WEALTH_TRADE_ERR.AuctionEnded]: 'wealth.error.auctionEnded' as TKey,
+  [WEALTH_TRADE_ERR.BidTooLow]: 'wealth.error.bidTooLow' as TKey,
+  [WEALTH_TRADE_ERR.NoPrivilege]: 'wealth.error.noPrivilege' as TKey,
+  [WEALTH_TRADE_ERR.ListingFull]: 'wealth.error.listingFull' as TKey,
+  [WEALTH_TRADE_ERR.SelfTrade]: 'wealth.error.selfTrade' as TKey,
+};
 
 /** POST /api/games/wealth/rooms 的 wealth 段（协议 §6）。 */
 export interface WealthRoomOptions {

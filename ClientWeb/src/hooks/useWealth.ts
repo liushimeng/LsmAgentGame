@@ -23,10 +23,12 @@ import type {
   WealthEventFrame,
   WealthGameState,
   WealthJoinedFrame,
+  WealthListingBook,
   WealthMonthFrame,
   WealthOverFrame,
   WealthStartedFrame,
   WealthSurvey,
+  WealthTradeAction,
 } from '@/types/wealth';
 
 export function useWealth(roomId: string) {
@@ -39,6 +41,8 @@ export function useWealth(roomId: string) {
     setGameOver,
     setLastError,
     mergeSurvey,
+    setListingBook,
+    mergeListingBook,
   } = useWealthStore();
 
   const roomIdRef = useRef(roomId);
@@ -100,6 +104,36 @@ export function useWealth(roomId: string) {
           if (sv && sv.id) mergeSurvey(sv);
           break;
         }
+        // ── P2 交易系统帧（§8.1）──
+        case 'game.listings': {
+          // 挂单簿全量快照（game.wealth_listing_view 响应）。
+          setListingBook(p as unknown as WealthListingBook);
+          break;
+        }
+        case 'game.listing_created':
+        case 'game.listing_cancelled': {
+          const listing = (p as { listing?: WealthListingBook['listings'][number] }).listing;
+          if (listing) mergeListingBook({ listings: [listing] });
+          break;
+        }
+        case 'game.negotiate_started':
+        case 'game.negotiate_responded': {
+          const neg = (p as { negotiate?: WealthListingBook['negotiates'][number] }).negotiate;
+          if (neg) mergeListingBook({ negotiates: [neg] });
+          break;
+        }
+        case 'game.loan_contract':
+        case 'game.loan_repaid': {
+          const loan = (p as { loan?: WealthListingBook['p2p_loans'][number] }).loan;
+          if (loan) mergeListingBook({ p2p_loans: [loan] });
+          break;
+        }
+        case 'game.auction_bid':
+        case 'game.auction_ended': {
+          const auction = (p as { auction?: WealthListingBook['auctions'][number] }).auction;
+          if (auction) mergeListingBook({ auctions: [auction] });
+          break;
+        }
         case 'game.over': {
           setGameOver(p as unknown as WealthOverFrame);
           break;
@@ -130,7 +164,8 @@ export function useWealth(roomId: string) {
     return () => unsub();
   }, [
     setGameState, setMySeat, setStartedInfo, pushEvent,
-    applyMonthFrame, setGameOver, setLastError, mergeSurvey, navigate,
+    applyMonthFrame, setGameOver, setLastError, mergeSurvey,
+    setListingBook, mergeListingBook, navigate,
   ]);
 
   // ── 操作函数 ──
@@ -181,8 +216,19 @@ export function useWealth(roomId: string) {
     [roomId],
   );
 
+  /**
+   * P2 交易动作（§8.1）：走 game.wealth_xxx 帧（不走 game.wealth_action）。
+   * 帧名 = `game.wealth_${action.type}`，载荷 = { room_id, ...action }。
+   */
+  const sendTrade = useCallback(
+    (action: WealthTradeAction) => {
+      wsClient.send(`game.wealth_${action.type}`, { room_id: roomId, ...action });
+    },
+    [roomId],
+  );
+
   return {
     joinGame, spectate, unspectate, leaveGame, requestState,
-    sendAction, startEarly, sendPause,
+    sendAction, sendTrade, startEarly, sendPause,
   };
 }

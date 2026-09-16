@@ -11,6 +11,7 @@ import type {
   WealthDistrictId,
   WealthEventFrame,
   WealthGameState,
+  WealthListingBook,
   WealthMonthFrame,
   WealthOverFrame,
   WealthStartedFrame,
@@ -21,8 +22,11 @@ import { WEALTH_MIN_SEATS, wealthOccupiedSeats, wealthSeatCapacity } from '@/typ
 /**
  * 右侧面板 Tab（聊天 / Agent 思维独立于 Tab 栈之外）。
  * P1 第二期扩展：economy（经济循环引擎）/ survey（社会调研系统）。
+ * P2 第三期扩展：listing（挂单簿）/ loan（借贷）/ infomarket（信息市场）。
  */
-export type WealthPanelTab = 'finance' | 'market' | 'ledger' | 'economy' | 'survey';
+export type WealthPanelTab =
+  | 'finance' | 'market' | 'ledger' | 'economy' | 'survey'
+  | 'listing' | 'loan' | 'infomarket';
 
 /** 市场快照（走势迷你图 + 相对上月箭头用）。 */
 export interface WealthMarketPoint {
@@ -62,6 +66,9 @@ interface WealthStore {
    */
   surveys: WealthSurvey[];
 
+  // ── P2 交易（挂单簿 / 议价 / 借贷 / 拍卖；game.state.listing_book 快照驱动）──
+  listingBook: WealthListingBook | null;
+
   // ── UI ──
   panelTab: WealthPanelTab;
   selectedDistrict: WealthDistrictId | null;
@@ -84,6 +91,9 @@ interface WealthStore {
   mergeSurvey: (survey: WealthSurvey) => void;
   setPanelTab: (tab: WealthPanelTab) => void;
   setSelectedDistrict: (id: WealthDistrictId | null) => void;
+  setListingBook: (book: WealthListingBook | null) => void;
+  /** 单帧内局部挂单/议价/借贷更新（game.listing_created 等增量帧）。 */
+  mergeListingBook: (patch: Partial<WealthListingBook>) => void;
   reset: () => void;
 }
 
@@ -99,6 +109,7 @@ export const useWealthStore = create<WealthStore>((set) => ({
   gameOver: null,
   lastError: null,
   surveys: [],
+  listingBook: null,
   panelTab: 'finance',
   selectedDistrict: null,
 
@@ -131,7 +142,9 @@ export const useWealthStore = create<WealthStore>((set) => ({
           ].slice(-MAX_MARKET_HISTORY);
         }
       }
-      return { gameState: state, marketHistory };
+      // 挂单簿快照种子（后端 game.state.listing_book 全量下发；无则保留）。
+      const listingBook = state?.listing_book ?? s.listingBook;
+      return { gameState: state, marketHistory, listingBook };
     }),
 
   setMySeat: (seat) => set({ mySeat: seat }),
@@ -163,6 +176,26 @@ export const useWealthStore = create<WealthStore>((set) => ({
   setPanelTab: (tab) => set({ panelTab: tab }),
   setSelectedDistrict: (id) => set({ selectedDistrict: id }),
 
+  setListingBook: (book) => set({ listingBook: book }),
+
+  mergeListingBook: (patch) =>
+    set((s) => {
+      const prev = s.listingBook ?? { listings: [], negotiates: [], p2p_loans: [], auctions: [] };
+      const mergeById = <T extends { id: string }>(arr: T[] = [], incoming: T[] = []) => {
+        const map = new Map(arr.map((x) => [x.id, x]));
+        for (const x of incoming) map.set(x.id, x);
+        return [...map.values()];
+      };
+      return {
+        listingBook: {
+          listings: mergeById(prev.listings, patch.listings),
+          negotiates: mergeById(prev.negotiates, patch.negotiates),
+          p2p_loans: mergeById(prev.p2p_loans, patch.p2p_loans),
+          auctions: mergeById(prev.auctions, patch.auctions),
+        },
+      };
+    }),
+
   reset: () =>
     set({
       gameState: null,
@@ -174,6 +207,7 @@ export const useWealthStore = create<WealthStore>((set) => ({
       gameOver: null,
       lastError: null,
       surveys: [],
+      listingBook: null,
       panelTab: 'finance',
       selectedDistrict: null,
     }),
