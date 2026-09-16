@@ -199,6 +199,10 @@ type Player struct {
 	MinskyByLoan          map[string]*MinskyStatus // loanID -> 分级
 	MinskyMomentTriggered bool                     // 本回合明斯基时刻是否已触发(用于 UI 高亮)
 
+	// P1: 真实经济循环(2026-09-16 §财商流P1-2 契约 §3.1)。
+	ConsumptionLevel   int                // 0 节俭/1 标准/2 精致/3 奢侈;默认 1(newPlayerFromCard 显式置 1)
+	ConsumptionByGoods map[string]float64 // 上月消费结构(元,id→金额;nil=未初始化,视为档位 1)
+
 	Monthly         MonthlyResult
 	NetWorthHistory []int64
 	LastActionText  string // 本月最近动作(公开字段 last_action)
@@ -208,6 +212,19 @@ type Player struct {
 
 // monthlyActionBudget 每月动作预算(人类/Agent 同规则 3)。
 const monthlyActionBudget = 3
+
+// ConsumptionLevelSafe 档位兜底:map 未初始化(nil)或档位越界 → 1(标准)。
+// ⚠️ 零值陷阱:0 是合法档位(节俭),不能以零值判默认;存量对局玩家以
+// ConsumptionByGoods == nil 判「未初始化」,首次月结按档位 1 处理(§3.1)。
+func (p *Player) ConsumptionLevelSafe() int {
+	if p.ConsumptionByGoods == nil {
+		return 1
+	}
+	if p.ConsumptionLevel < 0 || p.ConsumptionLevel > 3 {
+		return 1
+	}
+	return p.ConsumptionLevel
+}
 
 // houseCount / shopCount 持仓计数。
 func (p *Player) houseCount() int {

@@ -15,6 +15,7 @@ import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import {
   WEALTH_ACTIONS,
+  WEALTH_CONSUMPTION_LEVELS,
   WEALTH_DISTRICTS,
   WEALTH_SUBMIT_MONTH,
   wealthDistrict,
@@ -83,6 +84,15 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
   // 理财收益率 ≈ 债券年化（简化机会成本）。
   const investYield = gameState?.market?.bond_yield ?? 0;
 
+  // ── P1 消费档位（真实经济循环引擎 §3）──
+  // 后端下发的 consumption_level 即当前真实档位（含结算时的强制降档）。
+  const consumptionLevel = me?.consumption_level ?? 1;
+  // 强制降档提示：现金 < 2×月生活支出（后端月结同款流动性约束；前端用上月
+  // living 明细近似基准，仅作提示，服务端权威）。
+  const livingBase =
+    my?.monthly?.detail.find((d) => d.key === 'living')?.amount_cny ?? 0;
+  const forcedDown = livingBase > 0 && (my?.cash ?? 0) < 2 * livingBase;
+
   // ── 动作结果回执（弹窗内联成功 / 失败；短窗口内仅接受最近一帧）──
   // 用 refs 保存最新值，避免 setAwaiting(true) → React 异步重渲染 → effect 注册
   // 监听器的窗口内服务器已广播 game.event 而丢失（竞态条件）：监听器在 mount
@@ -101,6 +111,8 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
     (code: number, message: string): string => {
       if (code === 35006) return t('wealth.error.budget' as TKey);
       if (code === 35007) return t('wealth.error.cash' as TKey);
+      // P1 真实经济循环 §6.4：消费档位非法（须 0-3）。
+      if (code === 35020) return t('wealth.consumption.invalid' as TKey);
       return message || t('wealth.error.generic' as TKey);
     },
     [t],
@@ -544,8 +556,57 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
           </button>
         )}
       </div>
+
+      {/* P1 消费档位 4 按钮组（0 节俭 / 1 标准 / 2 精致 / 3 奢侈；选中态 ≥6:1
+          金底深字 + 光晕，照 §26.1 AAA；耗 1 次动作预算，复用 sendAction） */}
+      <div className="wealth-consumption">
+        <span className="wealth-consumption__label">
+          {t('wealth.consumption.title' as TKey)}
+          {forcedDown && (
+            <span
+              className="wealth-badge wealth-consumption__forced"
+              title={t('wealth.consumption.forcedHint' as TKey)}
+            >
+              {t('wealth.consumption.forcedDown' as TKey)}
+            </span>
+          )}
+        </span>
+        <div
+          className="wealth-consumption__levels"
+          role="group"
+          aria-label={t('wealth.consumption.title' as TKey)}
+        >
+          {WEALTH_CONSUMPTION_LEVELS.map((lv) => {
+            const activeLv = consumptionLevel === lv.level;
+            return (
+              <button
+                key={lv.level}
+                type="button"
+                className={'wealth-consumption__btn' + (activeLv ? ' wealth-consumption__btn--active' : '')}
+                disabled={actionsDisabled || stopped || awaiting}
+                aria-pressed={activeLv}
+                title={`${lv.multiplier.toFixed(1)}× · ${t('wealth.energy' as TKey)} ${lv.energy > 0 ? `+${lv.energy}` : lv.energy}`}
+                onClick={() => fire({ type: 'set_consumption', level: lv.level })}
+                data-testid={`wealth-consumption-${lv.level}`}
+              >
+                <span className="wealth-consumption__btn-name">
+                  {t(`wealth.consumption.level.${lv.i18nKey}` as TKey)}
+                </span>
+                <span className="wealth-consumption__btn-meta">
+                  ×{lv.multiplier.toFixed(1)} · {lv.energy > 0 ? `+${lv.energy}` : lv.energy}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {/* 无弹窗打开时的就地错误条（§7.1：不吞进 console） */}
+        {formError && !active && (
+          <div className="wealth-consumption__error" role="alert">{formError}</div>
+        )}
+      </div>
+
       <div className="wealth-actionbar__buttons">
-        {WEALTH_ACTIONS.map((meta) => {
+        {WEALTH_ACTIONS.filter((meta) => meta.form !== 'consumption_level').map((meta) => {
           const disabled = actionsDisabled || stopped ||
             (meta.type === 'stop_side_business' && !(my?.assets ?? []).some((a) => a.kind === 'side_business'));
           return (

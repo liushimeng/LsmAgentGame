@@ -14,11 +14,15 @@ import type {
   WealthMonthFrame,
   WealthOverFrame,
   WealthStartedFrame,
+  WealthSurvey,
 } from '@/types/wealth';
 import { WEALTH_MIN_SEATS, wealthOccupiedSeats, wealthSeatCapacity } from '@/types/wealth';
 
-/** 右侧面板 Tab（聊天 / Agent 思维独立于 Tab 栈之外）。 */
-export type WealthPanelTab = 'finance' | 'market' | 'ledger';
+/**
+ * 右侧面板 Tab（聊天 / Agent 思维独立于 Tab 栈之外）。
+ * P1 第二期扩展：economy（经济循环引擎）/ survey（社会调研系统）。
+ */
+export type WealthPanelTab = 'finance' | 'market' | 'ledger' | 'economy' | 'survey';
 
 /** 市场快照（走势迷你图 + 相对上月箭头用）。 */
 export interface WealthMarketPoint {
@@ -51,6 +55,12 @@ interface WealthStore {
   gameOver: WealthOverFrame | null;
   /** 最近一次 game.error（页面顶部 banner 就地显示 + 全局 toast 双通道）。 */
   lastError: { code: number; message: string } | null;
+  /**
+   * 社会调研列表（P1 社会调研系统）。来源三路合一：
+   * SurveyPanel 挂载时 HTTP GET 全量 setSurveys / game.state 快照种子 /
+   * game.survey_result 增量 mergeSurvey（按 id 去重覆盖）。
+   */
+  surveys: WealthSurvey[];
 
   // ── UI ──
   panelTab: WealthPanelTab;
@@ -68,6 +78,10 @@ interface WealthStore {
   applyMonthFrame: (frame: WealthMonthFrame) => void;
   setGameOver: (over: WealthOverFrame | null) => void;
   setLastError: (err: { code: number; message: string } | null) => void;
+  /** 整表替换（HTTP GET / game.state 快照种子）。 */
+  setSurveys: (surveys: WealthSurvey[]) => void;
+  /** 单条按 id 去重覆盖（game.survey_result 帧；新增置顶）。 */
+  mergeSurvey: (survey: WealthSurvey) => void;
   setPanelTab: (tab: WealthPanelTab) => void;
   setSelectedDistrict: (id: WealthDistrictId | null) => void;
   reset: () => void;
@@ -84,6 +98,7 @@ export const useWealthStore = create<WealthStore>((set) => ({
   marketHistory: [],
   gameOver: null,
   lastError: null,
+  surveys: [],
   panelTab: 'finance',
   selectedDistrict: null,
 
@@ -132,6 +147,19 @@ export const useWealthStore = create<WealthStore>((set) => ({
 
   setGameOver: (over) => set({ gameOver: over }),
   setLastError: (err) => set({ lastError: err }),
+
+  setSurveys: (surveys) => set({ surveys }),
+
+  mergeSurvey: (survey) =>
+    set((s) => {
+      const exists = s.surveys.some((x) => x.id === survey.id);
+      return {
+        surveys: exists
+          ? s.surveys.map((x) => (x.id === survey.id ? survey : x))
+          : [survey, ...s.surveys],
+      };
+    }),
+
   setPanelTab: (tab) => set({ panelTab: tab }),
   setSelectedDistrict: (id) => set({ selectedDistrict: id }),
 
@@ -145,6 +173,7 @@ export const useWealthStore = create<WealthStore>((set) => ({
       marketHistory: [],
       gameOver: null,
       lastError: null,
+      surveys: [],
       panelTab: 'finance',
       selectedDistrict: null,
     }),

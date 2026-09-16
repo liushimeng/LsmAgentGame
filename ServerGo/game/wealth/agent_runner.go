@@ -9,6 +9,7 @@ package wealth
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"LsmAgentGame/agent/wealthplayer"
@@ -278,6 +279,110 @@ func (a *AgentRunner) EarlyRepay(seat int, loanID string, amountCNY int64) error
 	})
 }
 
+// ── P1(§财商流P1-2 §7.1):set_consumption / answer_survey / query_economy ──
+
+// SetConsumption 调整消费档位(耗 1 次动作预算;走 ApplyAction 与人类同路径)。
+func (a *AgentRunner) SetConsumption(seat int, level int) error {
+	return a.apply(seat, wealthplayer.ToolSetConsumption, "", func() (string, error) {
+		return a.room.World.ApplyAction(seat, Action{Type: ActSetConsumption, Level: level})
+	})
+}
+
+// AnswerSurvey 回答进行中调研(不耗动作预算;调研契约 §4.2)。
+// 锁纪律照 QueryMinsky:持锁校验/写入;若全部存活 bot 已答 → 锁内提前关闭,
+// 锁外调 hooks.OnSurvey(§92a)。
+func (a *AgentRunner) AnswerSurvey(seat int, surveyID string, optionIdx int, reason string) error {
+	a.room.mu.Lock()
+	if a.room.closed || a.room.Status != StatusPlaying || a.room.World == nil {
+		a.room.mu.Unlock()
+		return errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	w := a.room.World
+	sv := w.findSurveyByID(surveyID)
+	if sv == nil || sv.Status != SurveyOpen {
+		a.room.mu.Unlock()
+		return errcode.Code(errcode.ErrWealthSurveyNotFound) // 35019
+	}
+	p := w.Players[seat]
+	if p == nil || !p.Alive || !a.room.BotSeats[seat] {
+		// 仅 alive 且 bot 座位可答(人类在座玩家作答入口为 P2 扩展)。
+		a.room.mu.Unlock()
+		return errcode.Code(errcode.ErrWealthPlayerInactive)
+	}
+	if _, dup := sv.Answers[seat]; dup {
+		a.room.mu.Unlock()
+		return errcode.CodeMsg(errcode.ErrWealthSurveyNotFound, "已回答过该调研")
+	}
+	if optionIdx < 0 || optionIdx >= len(sv.Options) {
+		a.room.mu.Unlock()
+		return errcode.Code(errcode.ErrWealthSurveyOptionsInvalid) // 35016
+	}
+	sv.Answers[seat] = &SurveyAnswer{
+		Seat:      seat,
+		OptionIdx: optionIdx,
+		Reason:    clip(reason, surveyReasonMaxRunes),
+		ModelKey:  a.room.SeatModelKeys[seat],
+	}
+	// 全部存活 bot 已答 → 立即关闭聚合(不等 deadline)。
+	allAnswered, anyBot := true, false
+	for s, pp := range w.Players {
+		if pp == nil || !pp.Alive || !a.room.BotSeats[s] {
+			continue
+		}
+		anyBot = true
+		if _, ok := sv.Answers[s]; !ok {
+			allAnswered = false
+			break
+		}
+	}
+	var closed *Survey
+	if anyBot && allAnswered {
+		w.CloseAndAggregate(sv)
+		closed = sv
+	}
+	hooks := a.room.hooks
+	roomID := a.room.RoomID
+	a.room.mu.Unlock()
+
+	if closed != nil && hooks.OnSurvey != nil {
+		hooks.OnSurvey(roomID, closed) // 锁外广播 game.survey_result
+	}
+	return nil
+}
+
+// QueryEconomy 查询经济全景(不耗动作预算):CPI 同比/环比、八大类价格环比、
+// 失业率、工资增长、企业营收、基尼、圈层分布。返回单行中文摘要。
+func (a *AgentRunner) QueryEconomy(seat int) (string, error) {
+	a.room.mu.Lock()
+	defer a.room.mu.Unlock()
+	if a.room.closed || a.room.Status != StatusPlaying || a.room.World == nil {
+		return "", errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	w := a.room.World
+	if !w.EconomyEnabled {
+		return "经济循环引擎未启用(P0 模式:物价/就业由市场周期阶段外生决定)", nil
+	}
+	var b strings.Builder
+	b.WriteString("经济:")
+	if w.Goods != nil {
+		fmt.Fprintf(&b, "CPI同比%.1f%% 环比%.1f%%|", w.Goods.CPIYoY*100, w.Goods.CPIMom*100)
+		for _, id := range goodsOrder {
+			if it := w.Goods.Items[id]; it != nil {
+				fmt.Fprintf(&b, "%s%+.1f%% ", goodsCN[id], it.MomChange*100)
+			}
+		}
+	}
+	if w.Labor != nil {
+		fmt.Fprintf(&b, "|失业率%.1f%% 工资增长%.1f%% 企业营收¥%d 裁员潮%d",
+			w.Labor.Unemployment*100, w.Labor.WageGrowthYoY*100, w.Labor.RevenueCNY, w.Labor.LayoffWave)
+	}
+	if w.Society != nil {
+		fmt.Fprintf(&b, "|基尼%.2f 圈层:生存%d/积累%d/自由%d",
+			w.Society.Gini, w.Society.Circles[0], w.Society.Circles[1], w.Society.Circles[2])
+	}
+	return b.String(), nil
+}
+
 func (a *AgentRunner) Speak(seat int, text, internalThought string) error {
 	// speak 走 chat sender,不耗动作预算。
 	a.room.mu.Lock()
@@ -533,6 +638,23 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 		Goals:          append([]string(nil), p.Card.Goals...),
 	}
 
+	// P1(§财商流P1-2 §7.2):真实经济循环 + 社会调研上下文。
+	ecoCPIYoY, ecoUnemployment, ecoBrief := 0.0, 0.0, ""
+	if r.World.EconomyEnabled && r.World.Goods != nil {
+		if r.World.Labor != nil {
+			ecoUnemployment = r.World.Labor.Unemployment
+		}
+		ecoCPIYoY = r.World.Goods.CPIYoY
+		ecoBrief = economyBrief(r.World.Goods, ecoUnemployment)
+	}
+	var openSurveyID, openSurveyQ string
+	var openSurveyOpts []string
+	if sv := r.World.OpenSurvey(); sv != nil { // 限流保证至多 1 个 open
+		openSurveyID = sv.ID
+		openSurveyQ = sv.Question
+		openSurveyOpts = append([]string(nil), sv.Options...)
+	}
+
 	return &wealthtypes.GameContext{
 		RoomID: r.RoomID, GameKind: "wealth",
 		MySeat: seat, MyUserID: r.Seats[seat], ModelKey: r.SeatModelKeys[seat],
@@ -543,6 +665,14 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 		RecentEvents: evRecent, RecentLedger: ledgerRecent,
 		BotIdentity: botIdent, MyCard: cardBrief,
 		CentralBank: cbSnapshot, CreditTightness: creditTightness, LoanQuotaFactor: loanQuotaFactor,
+		// P1: 经济环境 + 待答调研。
+		CPIYoY:            ecoCPIYoY,
+		UnemploymentRate:  ecoUnemployment,
+		ConsumptionLevel:  p.ConsumptionLevelSafe(),
+		OpenSurveyID:      openSurveyID,
+		OpenSurveyQuestion: openSurveyQ,
+		OpenSurveyOptions: openSurveyOpts,
+		EconomyBrief:      ecoBrief,
 	}, true
 }
 

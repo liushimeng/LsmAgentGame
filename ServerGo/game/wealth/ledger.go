@@ -11,11 +11,14 @@ import (
 
 // Ledger 实体常量(§13 实体语义硬约束)。
 const (
-	EntityBank     = "bank"     // 银行:贷款放出/还本付息;工资代发(雇主并入 bank)
-	EntityMarket   = "market"   // 市场:资产买卖/租金/佣金/中介费/资本利得
-	EntityGov      = "gov"      // 政府:个税/社保(pension 类白名单 gov→seat)
-	EntityInsurer  = "insurer"  // 保险(P0 预留,无交易)
-	EntityWorld    = "world"    // 系统外:from=world 仅限初始注入;to=world=消费类
+	EntityBank    = "bank"    // 银行:贷款放出/还本付息;工资代发(雇主并入 bank)
+	EntityMarket  = "market"  // 市场:资产买卖/租金/佣金/中介费/资本利得
+	EntityGov     = "gov"     // 政府:个税/社保(pension 类白名单 gov→seat)
+	EntityInsurer = "insurer" // 保险(P0 预留,无交易)
+	EntityWorld   = "world"   // 系统外:from=world 仅限初始注入;to=world=公益转移/消费类
+	// EntityFirms 企业部门(P1 §财商流P1-2):家庭消费的接收方;只收不付
+	// (工资仍由 bank 代发;企业营收回流玩家为 P2 分红)。
+	EntityFirms = "firms"
 )
 
 // SeatEntity 拼装座位实体 id。
@@ -82,7 +85,7 @@ type Ledger struct {
 // validEntity 实体白名单(I3)。
 func validEntity(e string) bool {
 	switch e {
-	case EntityBank, EntityMarket, EntityGov, EntityInsurer, EntityWorld:
+	case EntityBank, EntityMarket, EntityGov, EntityInsurer, EntityWorld, EntityFirms:
 		return true
 	default:
 		if _, ok := IsSeatEntity(e); ok {
@@ -92,8 +95,16 @@ func validEntity(e string) bool {
 	}
 }
 
-// validFromTo 实体方向白名单(I3):
-//   - world 只能作为 from(初始注入)或 to(消费类);
+// firmsInCategories to=firms 允许的消费类 category(§3.6 方向白名单表)。
+var firmsInCategories = map[string]bool{
+	CatLiving: true, CatConsume: true, CatRentPay: true, CatProperty: true,
+	CatStudy: true, CatSocialEv: true, CatMoving: true, CatMedical: true, CatWedding: true,
+}
+
+// validFromTo 实体方向白名单(I3 + P1 §3.6):
+//   - firms 只收不付:from=firms 恒非法;to=firms 仅消费类白名单;
+//   - world 只能作为 from(初始注入)或 to(donate 公益转移 + 消费类 —— 后者
+//     为 economy_enabled=false 的 P0 回退路径保留,§6.5 回退是一等公民);
 //   - gov 只收不付(pension 类白名单除外);
 //   - insurer P0 无交易。
 func validFromTo(from, to, category string) error {
@@ -103,11 +114,22 @@ func validFromTo(from, to, category string) error {
 	if from == EntityInsurer || to == EntityInsurer {
 		return fmt.Errorf("insurer has no trades in P0: %s → %s", from, to)
 	}
+	if from == EntityFirms {
+		return fmt.Errorf("firms never pays out (wages are paid by bank): %s → %s", from, to)
+	}
+	if to == EntityFirms && !firmsInCategories[category] {
+		return fmt.Errorf("firms only receives consumption categories (category=%s)", category)
+	}
 	if from == EntityWorld && category != CatInject {
 		return fmt.Errorf("world can only be the source of initial inject (category=%s)", category)
 	}
-	if to == EntityWorld && category == CatInject {
-		return fmt.Errorf("inject must come from world")
+	if to == EntityWorld {
+		if category == CatInject {
+			return fmt.Errorf("inject must come from world")
+		}
+		if category != CatDonate && !firmsInCategories[category] {
+			return fmt.Errorf("world only receives donate/consumption categories (category=%s)", category)
+		}
 	}
 	if from == EntityGov && category != CatPension {
 		return fmt.Errorf("gov never pays out except pension (category=%s)", category)

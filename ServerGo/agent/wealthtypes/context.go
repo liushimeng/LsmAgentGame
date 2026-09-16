@@ -50,6 +50,15 @@ type GameContext struct {
 	CentralBank     *CentralBankSnapshot // 央行快照(CB 为 nil 时回退 PhaseTable 基础值)
 	CreditTightness float64               // 信贷约束系数
 	LoanQuotaFactor float64               // 贷款额度乘数
+
+	// P1(2026-09-16 §财商流P1-2 §7.2): 真实经济循环(引擎侧 BuildContextForAgent 填充)。
+	CPIYoY            float64  // 篮子 CPI 同比(小数)
+	UnemploymentRate  float64  // 内生失业率(小数)
+	ConsumptionLevel  int      // 本人当前档位(0-3,兜底后)
+	OpenSurveyID      string   // 进行中调研 id(无则 "")
+	OpenSurveyQuestion string  // 问题文本
+	OpenSurveyOptions []string // 选项列表
+	EconomyBrief      string   // 一行价格涨跌摘要,如 "CPI同比2.3% 失业5.1% 涨幅前二:食品+1.2% 交通+0.8%"
 }
 
 // CentralBankSnapshot 央行只读快照(AltAgent 可见)。

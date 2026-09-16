@@ -122,6 +122,12 @@ const (
 	ErrLoanNotFound          = 35013
 	ErrEarlyRepayOnlyMortgage = 35014
 	ErrCashNotEnoughRepay    = 35015
+	// 35016–35020 — 财商流 P1 真实经济循环 + 社会调研(2026-09-16 §财商流P1-2)。
+	ErrWealthSurveyOptionsInvalid    = 35016 // 调研选项数非法(须 2-6)或选项索引越界
+	ErrWealthSurveyOpenExists        = 35017 // 已有进行中的调研(每房同时 1 个 open)
+	ErrWealthSurveyMonthlyLimit      = 35018 // 本月已达调研发起上限(每月 1 个/累计 20 个)
+	ErrWealthSurveyNotFound          = 35019 // 调研不存在/已关闭/已回答
+	ErrWealthConsumptionLevelInvalid = 35020 // 消费档位非法(须 0-3)
 	// ErrAlreadyWolfVoted: 狼人在 night_wolves 阶段已投过票(含弃权),
 	// 再次调用 wolf_kill 一律拒绝。R196 报告 P1:Bot 8 (GLM-5.2) 反复投票
 	// 15+ 次服务端仅覆盖不报错,LLM 看不到反馈陷入循环。
@@ -201,6 +207,12 @@ var DefaultMessages = map[int]string{
 	ErrLoanNotFound:          "loan not found",
 	ErrEarlyRepayOnlyMortgage: "early repay only allowed for mortgage loans",
 	ErrCashNotEnoughRepay:    "cash not enough for early repayment (including penalty)",
+	// 35016–35020 — 财商流 P1 真实经济循环 + 社会调研(2026-09-16 §财商流P1-2)。
+	ErrWealthSurveyOptionsInvalid:    "survey options invalid (need 2-6 non-empty) or option index out of range",
+	ErrWealthSurveyOpenExists:        "an open survey already exists (one open per room)",
+	ErrWealthSurveyMonthlyLimit:      "survey launch limit reached (1 per month / 20 per room)",
+	ErrWealthSurveyNotFound:          "survey not found / closed / already answered",
+	ErrWealthConsumptionLevelInvalid: "consumption level invalid (must be 0-3)",
 }
 
 // Code constructs a Coded error.

@@ -1665,6 +1665,94 @@ export interface Dict {
   'wealth.pool.cardSalary': string;
   'wealth.pool.cardSavings': string;
 
+  // ── P1 第二期：真实经济循环引擎 + 社会调研系统（2026-09-16）──
+  // economy = EconomyPanel；survey = SurveyPanel；consumption = ActionPanel 档位组。
+  'wealth.tab.economy': string;
+  'wealth.tab.survey': string;
+  'wealth.action.setConsumption': string;
+  // CPI 八大类（id 与 goods.go 权重表一致）
+  'wealth.goods.food': string;
+  'wealth.goods.clothing': string;
+  'wealth.goods.housing': string;
+  'wealth.goods.household': string;
+  'wealth.goods.transport': string;
+  'wealth.goods.education': string;
+  'wealth.goods.healthcare': string;
+  'wealth.goods.misc': string;
+  // 经济循环仪表盘
+  'wealth.economy.title': string;
+  'wealth.economy.unavailable': string;
+  'wealth.economy.cpiYoy': string;
+  'wealth.economy.cpiMom': string;
+  'wealth.economy.goodsTitle': string;
+  'wealth.economy.weight': string;
+  'wealth.economy.priceIdx': string;
+  'wealth.economy.up': string;
+  'wealth.economy.down': string;
+  'wealth.economy.legendNote': string;
+  'wealth.economy.laborTitle': string;
+  'wealth.economy.layoff': string;
+  'wealth.economy.layoff.0': string;
+  'wealth.economy.layoff.1': string;
+  'wealth.economy.layoff.2': string;
+  'wealth.economy.layoff.3': string;
+  'wealth.economy.unemployment': string;
+  'wealth.economy.employment': string;
+  'wealth.economy.wageGrowth': string;
+  'wealth.economy.firmRevenue': string;
+  'wealth.economy.naturalRate': string;
+  'wealth.economy.societyTitle': string;
+  'wealth.economy.gini': string;
+  'wealth.economy.giniWarn': string;
+  'wealth.economy.quintiles': string;
+  'wealth.economy.circles': string;
+  'wealth.economy.circle.survival': string;
+  'wealth.economy.circle.accumulate': string;
+  'wealth.economy.circle.freedom': string;
+  'wealth.economy.eduToggle': string;
+  'wealth.economy.eduP1': string;
+  'wealth.economy.eduP2': string;
+  'wealth.economy.eduEnergy': string; // {up} {down}
+  'wealth.economy.eduNote': string;
+  // 社会调研
+  'wealth.survey.title': string;
+  'wealth.survey.launchTitle': string;
+  'wealth.survey.question': string;
+  'wealth.survey.questionPlaceholder': string;
+  'wealth.survey.questionRequired': string;
+  'wealth.survey.optionPlaceholder': string; // {n}
+  'wealth.survey.addOption': string;
+  'wealth.survey.removeOption': string;
+  'wealth.survey.invalidOptions': string;
+  'wealth.survey.submit': string;
+  'wealth.survey.notPlaying': string;
+  'wealth.survey.limitOpen': string;
+  'wealth.survey.limitMonth': string;
+  'wealth.survey.disabled': string;
+  'wealth.survey.spectatorHint': string;
+  'wealth.survey.openTag': string;
+  'wealth.survey.closedTag': string;
+  'wealth.survey.deadline': string; // {m}
+  'wealth.survey.launchedAt': string; // {m}
+  'wealth.survey.answersCount': string; // {n}
+  'wealth.survey.progress': string;
+  'wealth.survey.waitingBots': string;
+  'wealth.survey.total': string; // {n}
+  'wealth.survey.topReasons': string;
+  'wealth.survey.noAnswers': string;
+  'wealth.survey.history': string;
+  'wealth.survey.empty': string;
+  'wealth.survey.loadFailed': string;
+  // 消费档位（ActionPanel）
+  'wealth.consumption.title': string;
+  'wealth.consumption.level.frugal': string;
+  'wealth.consumption.level.normal': string;
+  'wealth.consumption.level.refined': string;
+  'wealth.consumption.level.luxury': string;
+  'wealth.consumption.forcedDown': string;
+  'wealth.consumption.forcedHint': string;
+  'wealth.consumption.invalid': string;
+
   // ── P1 明斯基引擎 + LPR 重定价 + 提前还款 ──
   'minsky.title': string;
   'minsky.hedge': string;

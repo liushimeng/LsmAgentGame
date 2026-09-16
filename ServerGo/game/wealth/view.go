@@ -38,6 +38,105 @@ type ClientGameState struct {
 	LedgerRecent   []LedgerJSON    `json:"ledger_recent"`
 	EventsRecent   []EventJSON     `json:"events_recent"`
 	Minsky         MinskyOverview  `json:"minsky_overview"`
+	// P1(§财商流P1-2 §6.1):economy_enabled=false 时为零值/空数组下发。
+	ConsumerMarket ConsumerMarketJSON `json:"consumer_market"`
+	LaborMarket    LaborMarketJSON   `json:"labor_market"`
+	Society        SocietyJSON       `json:"society"`
+	Surveys        []SurveyJSON      `json:"surveys"` // 调研契约 §5.1
+}
+
+// ConsumerMarketJSON 是 consumer_market 子结构(P1 §6.1)。
+type ConsumerMarketJSON struct {
+	CPIYoY float64         `json:"cpi_yoy"`
+	CPIMom float64         `json:"cpi_mom"`
+	Goods  []GoodsItemJSON `json:"goods"` // 8 类,按 §2.1 表序
+}
+
+// GoodsItemJSON 是 consumer_market.goods 单项。
+type GoodsItemJSON struct {
+	ID        string  `json:"id"`
+	Weight    float64 `json:"weight"`
+	PriceIdx  float64 `json:"price_idx"`
+	MomChange float64 `json:"mom_change"`
+}
+
+// LaborMarketJSON 是 labor_market 子结构(P1 §6.1)。
+type LaborMarketJSON struct {
+	UnemploymentRate float64 `json:"unemployment_rate"`
+	EmploymentRatio  float64 `json:"employment_ratio"`
+	AvgWageGrowthYoY float64 `json:"avg_wage_growth_yoy"`
+	FirmRevenueCNY   int64   `json:"firm_revenue_cny"`
+	LayoffWave       int     `json:"layoff_wave"`
+}
+
+// SocietyJSON 是 society 子结构(P1 §6.1)。
+type SocietyJSON struct {
+	Gini      float64    `json:"gini"`
+	Quintiles [5]float64 `json:"quintiles"`
+	Circles   struct {
+		Survival   int `json:"survival"`
+		Accumulate int `json:"accumulate"`
+		Freedom    int `json:"freedom"`
+	} `json:"circles"`
+}
+
+// SurveyJSON 是 game.state.surveys 单项(调研契约 §5.1;view 层映射)。
+// 下发范围:所有 open(≤1)+ 最近 4 个 closed(含 Result),按时间倒序。
+type SurveyJSON struct {
+	ID            string            `json:"id"`
+	Question      string            `json:"question"`
+	Options       []string          `json:"options"`
+	LaunchMonth   int               `json:"launch_month"`
+	DeadlineMonth int               `json:"deadline_month"`
+	Status        string            `json:"status"` // open|closed
+	AnswersCount  int               `json:"answers_count"`
+	Result        *SurveyResultJSON `json:"result,omitempty"` // closed 时非空
+}
+
+// SurveyResultJSON 是聚合结果(选项文本一并下发,前端免查表)。
+type SurveyResultJSON struct {
+	Options     []string  `json:"options"`
+	Counts      []int     `json:"counts"`
+	Percents    []float64 `json:"percents"`
+	Total       int       `json:"total"`
+	TopReasons  []string  `json:"top_reasons"`
+}
+
+// SurveyJSONFrom 把引擎 Survey 映射为 SurveyJSON(ws 层 game.survey_result 与
+// game.state.surveys 共用)。Answers 明细不进公开快照(匿名投票,§11.5)。
+func SurveyJSONFrom(sv *Survey) SurveyJSON {
+	if sv == nil {
+		return SurveyJSON{Options: []string{}}
+	}
+	out := SurveyJSON{
+		ID:            sv.ID,
+		Question:      sv.Question,
+		Options:       append([]string{}, sv.Options...),
+		LaunchMonth:   sv.LaunchMonth,
+		DeadlineMonth: sv.DeadlineMonth,
+		Status:        sv.Status,
+		AnswersCount:  len(sv.Answers),
+	}
+	if out.Options == nil {
+		out.Options = []string{}
+	}
+	if sv.Result != nil {
+		out.Result = &SurveyResultJSON{
+			// 选项文本一并下发(来自 Survey.Options,前端免查表;§5.1)。
+			Options:    append([]string{}, sv.Options...),
+			Counts:     append([]int{}, sv.Result.Counts...),
+			Percents:   append([]float64{}, sv.Result.Percents...),
+			Total:      sv.Result.Total,
+			TopReasons: append([]string{}, sv.Result.TopReasons...),
+		}
+		if out.Result.Options == nil {
+			out.Result.Options = []string{}
+		}
+		if out.Result.TopReasons == nil {
+			out.Result.TopReasons = []string{}
+		}
+	}
+	return out
 }
 
 // CentralBankJSON 是 central_bank 子结构(P1,设计文档 §6.5)。
@@ -112,6 +211,8 @@ type PlayerJSON struct {
 	// P1: 明斯基状态(v2.60 N11-4)。
 	MinskyTier   string  `json:"minsky_tier"`   // hedge/speculative/ponzi(主导等级)
 	DebtToIncome float64 `json:"debt_to_income"` // 主导贷款月供/月收入(0-1+)
+	// P1(§财商流P1-2 §6.2):消费档位(0-3,档位是公开生活方式)。
+	ConsumptionLevel int `json:"consumption_level"`
 }
 
 // ProfJSON 是职业卡公开字段。
@@ -146,6 +247,8 @@ type MyJSON struct {
 	FIIndex       float64         `json:"fi_index"`
 	NetWorth      int64           `json:"net_worth"`
 	Goals         []string        `json:"goals"`
+	// P1(§财商流P1-2 §6.2):上月消费结构(仅本人;nil→{})。
+	ConsumptionByGoods map[string]float64 `json:"consumption_by_goods"`
 }
 
 // MyMonthlyJSON 是 my.monthly 子结构。
@@ -338,6 +441,7 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 			Ending:     pp.Ending,
 			MinskyTier: minskyTier,
 			DebtToIncome: dti,
+			ConsumptionLevel: pp.ConsumptionLevelSafe(),
 		}
 		cs.Players[s] = pj
 	}
@@ -387,6 +491,48 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 
 	// P1: 明斯基全局概览(v2.60 N11-5)。
 	cs.Minsky = buildMinskyOverview(world)
+
+	// P1(§财商流P1-2 §6.1):消费品市场 / 劳动力市场 / 社会结构 / 调研。
+	// economy_enabled=false 时零值/空数组下发(P0-bugfix 纪律:数组非 null)。
+	cs.ConsumerMarket = ConsumerMarketJSON{Goods: make([]GoodsItemJSON, 0, len(goodsOrder))}
+	if world.EconomyEnabled && world.Goods != nil {
+		cs.ConsumerMarket.CPIYoY = world.Goods.CPIYoY
+		cs.ConsumerMarket.CPIMom = world.Goods.CPIMom
+		for _, id := range goodsOrder {
+			if it := world.Goods.Items[id]; it != nil {
+				cs.ConsumerMarket.Goods = append(cs.ConsumerMarket.Goods, GoodsItemJSON{
+					ID: it.ID, Weight: it.Weight, PriceIdx: it.PriceIdx, MomChange: it.MomChange,
+				})
+			}
+		}
+	}
+	if world.EconomyEnabled && world.Labor != nil {
+		cs.LaborMarket = LaborMarketJSON{
+			UnemploymentRate: world.Labor.Unemployment,
+			EmploymentRatio:  world.Labor.Employment,
+			AvgWageGrowthYoY: world.Labor.WageGrowthYoY,
+			FirmRevenueCNY:   world.Labor.RevenueCNY,
+			LayoffWave:       world.Labor.LayoffWave,
+		}
+	}
+	if world.EconomyEnabled && world.Society != nil {
+		cs.Society = SocietyJSON{Gini: world.Society.Gini, Quintiles: world.Society.Quintiles}
+		cs.Society.Circles.Survival = world.Society.Circles[0]
+		cs.Society.Circles.Accumulate = world.Society.Circles[1]
+		cs.Society.Circles.Freedom = world.Society.Circles[2]
+	}
+	// Surveys:open(≤1)+ 最近 4 个 closed(含 Result),倒序(调研契约 §5.1)。
+	cs.Surveys = make([]SurveyJSON, 0)
+	if len(world.Surveys) > 0 {
+		if sv := world.OpenSurvey(); sv != nil {
+			cs.Surveys = append(cs.Surveys, SurveyJSONFrom(sv))
+		}
+		for i := len(world.Surveys) - 1; i >= 0 && len(cs.Surveys) < 5; i-- {
+			if world.Surveys[i].Status == SurveyClosed {
+				cs.Surveys = append(cs.Surveys, SurveyJSONFrom(world.Surveys[i]))
+			}
+		}
+	}
 
 	return cs
 }
@@ -444,6 +590,8 @@ func myJSONFor(p *Player) *MyJSON {
 		Family:    MyFamilyJSON{Marital: p.Family.Marital, Children: p.Family.Children},
 		FIIndex:   p.FIIndex(globalMarketSnap(p), globalAgeSnap(p)),
 		NetWorth:  p.NetWorth(globalMarketSnap(p)),
+		// P1: 上月消费结构(nil→{};§6.2)。
+		ConsumptionByGoods: consumptionByGoodsView(p),
 		// 2026-09-14 §财商流P0-bugfix: 数组一律非 nil(空集合序列化为 [],
 		// 防止前端 null.map 崩溃)。
 		Goals:  append([]string{}, p.Card.Goals...),
@@ -493,6 +641,8 @@ type MyMy struct {
 	FIIndex       float64
 	NetWorth     int64
 	Goals         []string
+	// P1: 上月消费结构(nil→{})。
+	ConsumptionByGoods map[string]float64
 }
 
 // jsonMy 把 MyMy 转成 *MyJSON(避免在 MyMy 上重复 JSON 标签)。
@@ -508,7 +658,17 @@ func jsonMy(m *MyMy) *MyJSON {
 		PensionCNY: m.PensionCNY, CreditScore: m.CreditScore,
 		Family:    m.Family,
 		FIIndex:   m.FIIndex, NetWorth: m.NetWorth, Goals: m.Goals,
+		ConsumptionByGoods: m.ConsumptionByGoods,
 	}
+}
+
+// consumptionByGoodsView 消费结构视图(nil → 空 map,§6.2)。
+func consumptionByGoodsView(p *Player) map[string]float64 {
+	out := make(map[string]float64, len(p.ConsumptionByGoods))
+	for k, v := range p.ConsumptionByGoods {
+		out[k] = v
+	}
+	return out
 }
 
 // globalMarketSnap / globalAgeSnap 提供视图层的 stub 市场快照(viewer 不带

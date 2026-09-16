@@ -45,6 +45,10 @@ type Config struct {
 	// 4 批串行,月窗口(默认 8s)内后几批来不及跑。8 是 Provider 配额与房间
 	// 并发间的平衡(详见 engine.go DefaultAgentConcurrency 注释)。
 	AgentConcurrency int
+	// P1(2026-09-16 §财商流P1-2 §6.5):真实经济循环 / 社会调研总开关。
+	// NewManager 归一:零值 → true(false 回退 P0 行为;与 cfg.Wealth 同名键)。
+	EconomyEnabled bool
+	SurveyEnabled  bool
 }
 
 // LLMRegistry 窄接口(llm.Registry 满足;避免 manager 包 import llm)。
@@ -74,6 +78,13 @@ func NewManager(cfg Config, reg LLMRegistry) *Manager {
 	}
 	if cfg.AgentConcurrency <= 0 {
 		cfg.AgentConcurrency = DefaultAgentConcurrency
+	}
+	// P1(§6.5):零值 → true(默认开启;false 回退 P0)。
+	if !cfg.EconomyEnabled {
+		cfg.EconomyEnabled = true
+	}
+	if !cfg.SurveyEnabled {
+		cfg.SurveyEnabled = true
 	}
 	return &Manager{
 		cfg:      cfg,
@@ -161,6 +172,8 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 		return r
 	}
 	r = NewWealthRoom(roomID, m.cfg.MonthMs, m.cfg.PoolDefault, m.cfg.Seed, m.cfg.AgentConcurrency)
+	// P1(§6.5):economy/survey 房间级开关接线(Start 前回写)。
+	r.SetEconomyFlags(m.cfg.EconomyEnabled, m.cfg.SurveyEnabled)
 	if m.loader != nil {
 		r.mu.Lock()
 		r.docLoader = m.loader

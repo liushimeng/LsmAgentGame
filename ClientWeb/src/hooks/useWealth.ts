@@ -26,6 +26,7 @@ import type {
   WealthMonthFrame,
   WealthOverFrame,
   WealthStartedFrame,
+  WealthSurvey,
 } from '@/types/wealth';
 
 export function useWealth(roomId: string) {
@@ -37,6 +38,7 @@ export function useWealth(roomId: string) {
     applyMonthFrame,
     setGameOver,
     setLastError,
+    mergeSurvey,
   } = useWealthStore();
 
   const roomIdRef = useRef(roomId);
@@ -71,6 +73,11 @@ export function useWealth(roomId: string) {
           }
           // 新对局开始（月回卷）时清掉上一局的终局态。
           if (gs.status !== 'over') setGameOver(null);
+          // P1 社会调研：快照携带 surveys（open + 最近 4 closed）作种子/刷新。
+          // 逐条 merge 而非整表替换——保住 SurveyPanel 已拉取的更长历史（≤20）。
+          if (Array.isArray(gs.surveys)) {
+            gs.surveys.forEach((sv: WealthSurvey) => mergeSurvey(sv));
+          }
           break;
         }
         case 'game.event': {
@@ -84,6 +91,13 @@ export function useWealth(roomId: string) {
         }
         case 'game.month': {
           applyMonthFrame(p as unknown as WealthMonthFrame);
+          break;
+        }
+        case 'game.survey_result': {
+          // P1 社会调研系统 §5.2：调研关闭（deadline / 全员已答）时广播。
+          // 载荷 {room_id, survey: SurveyJSON} → 按 id 去重覆盖进 store.surveys。
+          const sv = (p as { survey?: WealthSurvey }).survey;
+          if (sv && sv.id) mergeSurvey(sv);
           break;
         }
         case 'game.over': {
@@ -116,7 +130,7 @@ export function useWealth(roomId: string) {
     return () => unsub();
   }, [
     setGameState, setMySeat, setStartedInfo, pushEvent,
-    applyMonthFrame, setGameOver, setLastError, navigate,
+    applyMonthFrame, setGameOver, setLastError, mergeSurvey, navigate,
   ]);
 
   // ── 操作函数 ──

@@ -80,6 +80,17 @@ type World struct {
 	Ledger *Ledger
 	CB     *CentralBankState // 央行-商业银行体系(P1,nil 时回退 P0 硬编码)
 
+	// P1: 真实经济循环(2026-09-16 §财商流P1-2)。NewWorld 恒置
+	// EconomyEnabled=true;房间层 Start 时按配置回写(§6.5 回退开关)。
+	EconomyEnabled bool
+	Goods          *GoodsMarket  // 八大类消费篮子 + 内生 CPI(nil 惰性初始化)
+	Labor          *FirmSector   // 企业部门/劳动力市场(nil 惰性初始化)
+	Society        *SocietyStats // 社会结构统计(月度缓存,view 直读)
+
+	// P1: 社会调研系统(§财商流P1-2 调研契约 §2)。
+	Surveys   []*Survey // 全房调研(≤20,按发起序)
+	SurveySeq int       // id 自增序列
+
 	Players [MaxSeats]*Player // 空座 nil
 
 	Rand *rand.Rand
@@ -109,6 +120,11 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		CB:       NewCentralBank(),
 		Rand:     rng,
 		startAge: MasterStartAge,
+		// P1: 真实经济循环恒开启(§6.5);economy_enabled=false 由房间层
+		// Start 时回写(NewManager 归一后传入)。
+		EconomyEnabled: true,
+		Goods:          NewGoodsMarket(),
+		Labor:          NewFirmSector(),
 	}
 	for seat := 0; seat < MaxSeats; seat++ {
 		if cards[seat].ID == "" {
@@ -144,6 +160,9 @@ func newPlayerFromCard(seat int, card profession.Card) *Player {
 		Alive:        true,
 		StatusIcon:   "idle",
 		MinskyByLoan: map[string]*MinskyStatus{},
+		// P1: 消费档位默认 1(标准)。⚠️ 零值陷阱:0 是合法档位(节俭),
+		// 必须显式置 1;存量玩家以 ConsumptionByGoods==nil 判未初始化(§3.1)。
+		ConsumptionLevel: 1,
 	}
 	if card.Marital == "" {
 		p.Family.Marital = "single"

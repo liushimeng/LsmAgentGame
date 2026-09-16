@@ -193,6 +193,12 @@
     // 10+ bot 同月决策时建议 ≥8,避免 4 并发把 12 人压成串行。
     "agent_concurrency": 0,
     // 0 = 运行时随机;非 0 = 固定种子(确定性测试/复现)。
-    "random_seed": 0
+    "random_seed": 0,
+    // 真实经济循环引擎(P1-2,2026-09-16):消费品市场/内生 CPI/劳动力市场/
+    // 社会结构。默认 true;false 回退 P0 行为(消费 to=world、失业/工资外生)。
+    "economy_enabled": true,
+    // 社会调研系统(P1-2):默认 true;false 时发起入口返回 35010,
+    // 既有 open 调研照常走完关闭流程。
+    "survey_enabled": true
   }
 }

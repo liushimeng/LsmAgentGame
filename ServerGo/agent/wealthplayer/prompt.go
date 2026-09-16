@@ -86,7 +86,12 @@ func SystemPromptBlocks(card wealthtypes.CardBrief) []llmtypes.SystemBlock {
 - 月结顺序:工资→被动收入→固定支出→税+社保→生活支出→债务。个税 7 级累进(起征 5000),
   社保 10.5%(其中 8% 进你的养老金账户,60 岁才能领)。
 - 危险信号:现金连续 3 个月为负 = 破产清算(资产七折变现、信用清零);精力透支到 -3 = 健康危机。
-- 人生事件不可控:结婚/生育/疾病/失业都会发生,留足应急现金(建议 3–6 个月支出)。`
+- 人生事件不可控:结婚/生育/疾病/失业都会发生,留足应急现金(建议 3–6 个月支出)。
+- 消费档位:0 节俭(支出×0.6/精力−1)/1 标准/2 精致(×1.5/+1)/3 奢侈(×2.2/+2)。
+  档位决定生活支出与精力,也决定全城物价与就业(恩格尔定律:收入越低食品占比越高)。
+- 经济循环:你的消费 → 企业营收 → 劳动需求 → 失业率 → 裁员概率与再就业薪资;
+  失业率高时保守消费、留现金;菲利普斯定律:失业率高→年度涨薪低。
+- 有进行中的社会调研时,用 answer_survey 表达真实偏好(不耗动作次数)。`
 
 	seg5 := `【第 5 段 · 明斯基风险与 LPR(v2.60)】
 - 明斯基三阶段融资:对冲(月供≤收入 40%)、投机(40%-70%)、庞氏(>70%)。投机 +0.5% 利率,庞氏 -0.5%(诱人陷阱)。
@@ -101,7 +106,8 @@ func SystemPromptBlocks(card wealthtypes.CardBrief) []llmtypes.SystemBlock {
 2. 每月最多 3 个动作工具 + 1 次 speak,然后必须调用 submit_month 结束本月;不调用也会被系统强制结束。
 3. speak 的内容 ≤100 字,像真人在群里聊天:可以聊行情、吐槽生活、分享买卖心得;不要复述工具参数。
 4. 不要每 3 个动作都全用满——没有好机会时,攒钱、休息、学习也是决策。
-5. 一切金额单位是人民币元。你的决策会被记录在财富流水账中,终局会生成你的人生报告。`
+5. 一切金额单位是人民币元。你的决策会被记录在财富流水账中,终局会生成你的人生报告。
+6. 回答调研时按你的人设与真实财务处境作答,理由说人话(≤50 字),不要中立和稀泥。`
 
 	return []llmtypes.SystemBlock{
 		{Type: "text", Text: seg1},
@@ -133,6 +139,23 @@ func UserPrompt(ctx *wealthtypes.GameContext, memText string) string {
 		fmt.Fprintf(&b, " %s %.2f", d, ctx.Market.HouseIdx[d])
 	}
 	b.WriteString("\n\n")
+
+	// P1(§财商流P1-2 §7.3): 经济环境段(EconomyBrief 已含 CPI 同比/环比、
+	// 失业率、涨幅前二商品)+ 本人消费档位 + 待答调研(无 open 调研时省略)。
+	if ctx.EconomyBrief != "" {
+		b.WriteString("■ 经济环境\n")
+		b.WriteString(ctx.EconomyBrief)
+		fmt.Fprintf(&b, "\n本人消费档位:%s(0 节俭/1 标准/2 精致/3 奢侈,可用 set_consumption 调整)。",
+			consumptionLevelCN(ctx.ConsumptionLevel))
+		if ctx.OpenSurveyID != "" {
+			fmt.Fprintf(&b, "\n待答调研[%s](截止前用 answer_survey 表态,不耗动作次数):%s\n",
+				ctx.OpenSurveyID, ctx.OpenSurveyQuestion)
+			for i, opt := range ctx.OpenSurveyOptions {
+				fmt.Fprintf(&b, "  选项 %d:%s\n", i, opt)
+			}
+		}
+		b.WriteString("\n")
+	}
 
 	me := ctx.Me
 	fmt.Fprintf(&b, "■ 我的财务(三表摘要)\n现金 %d 元 ｜ 净资产 %d 元 ｜ FI 指数 %.2f\n",
@@ -195,6 +218,21 @@ func UserPrompt(ctx *wealthtypes.GameContext, memText string) string {
 	}
 	b.WriteString("请决定本月怎么做(≤3 个动作 + 可选 1 次 speak),然后调用 submit_month。")
 	return b.String()
+}
+
+// consumptionLevelCN 消费档位中文名(P1 §财商流P1-2 §3.2;本包不 import
+// game/wealth,故与引擎侧 goods.go 各持一份文案)。
+func consumptionLevelCN(level int) string {
+	switch level {
+	case 0:
+		return "节俭"
+	case 2:
+		return "精致"
+	case 3:
+		return "奢侈"
+	default:
+		return "标准"
+	}
 }
 
 func joinWords(words []string) string {

@@ -247,8 +247,15 @@ func (cb *CentralBankState) MonthlyDecision(w *World, rng *rand.Rand) {
 	}
 	// prevM2=0 时保留已有 M2GrowthYoY(首月同比增速未知)。
 
-	// e. 内生 CPI。
+	// e. 内生 CPI:P1(§财商流P1-2 §2.4)在 MV-PY 理论值之上做 50/50 混合 ——
+	// 货币供给决定中长期趋势,八大类篮子捕捉短期结构性涨价(猪周期/油价)。
+	// ComputeCPI 本体不动;篮子未积累 12 月环比(CPIYoYReady=false)时不混合。
 	cb.ComputeCPI()
+	if w.Goods != nil && w.EconomyEnabled && w.Goods.CPIYoYReady() {
+		blended := 0.5*cb.CPI + 0.5*w.Goods.CPIYoY
+		cb.CPI = clampF(blended, CPIMin, CPIMax)
+		cb.LastCPI = cb.CPI
+	}
 
 	// f. 央行逆周期调节:调整 PolicyRate(通胀↑→加息,产出缺口↓→降息)。
 	oldRate := cb.PolicyRate

@@ -8,7 +8,9 @@ package wealth
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +44,10 @@ type BroadcastHooks struct {
 	OnOver    func(roomID string, scores []FinalScore)    // game.over
 	OnStarted func(roomID string, payload map[string]any) // game.started
 	OnRemoved func(roomID string)                         // game.removed(终局 60s 后)
+	// OnSurvey 调研关闭广播(P1 §财商流P1-2 调研契约 §4.4):deadline 到期
+	// (SettleResult.ClosedSurveys)或全员已答提前关闭两条路径均在锁外触发
+	// → ws 层发 game.survey_result。
+	OnSurvey func(roomID string, sv *Survey)
 }
 
 // SeatProfession 开局职业公开对(game.started.professions)。
@@ -92,6 +98,11 @@ type WealthRoom struct {
 
 	gameStartedAt int64 // 开局 unix s(view 下发 game_started_at 字段)
 
+	// P1(§财商流P1-2 §6.5):economy/survey 房间级开关(默认 true;
+	// Manager.CreateRoom 按 Manager.Config 调 SetEconomyFlags 回写)。
+	economyEnabled bool
+	surveyEnabled  bool
+
 	done     chan struct{}
 	settleCh chan struct{}
 	closed   bool
@@ -131,6 +142,22 @@ func NewWealthRoom(roomID string, monthMs int, pool string, seed int64, llmConcu
 		agentSem:   make(chan struct{}, llmConcurrency),
 		done:       make(chan struct{}),
 		settleCh:   make(chan struct{}, 1),
+		// P1: 真实经济循环 / 社会调研默认开启(§6.5;SetEconomyFlags 可覆盖)。
+		economyEnabled: true,
+		surveyEnabled:  true,
+	}
+}
+
+// SetEconomyFlags 回写房间级 economy/survey 开关(P1 §6.5;由
+// Manager.CreateRoom 调用,须在 Start 之前)。economy=false 时 World 保持
+// P0 行为(消费 to=world、无 Goods/Labor/Society、失业概率/ratio/工资增长回退)。
+func (r *WealthRoom) SetEconomyFlags(economy, survey bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.economyEnabled = economy
+	r.surveyEnabled = survey
+	if r.World != nil {
+		r.World.EconomyEnabled = economy
 	}
 }
 
@@ -340,6 +367,8 @@ func (r *WealthRoom) Start(loader *profession.Loader) *errcode.Error {
 
 	seed := r.seed
 	r.World = NewWorld(seed, cards)
+	// P1(§6.5):NewWorld 恒置 EconomyEnabled=true,此处按房间级开关回写。
+	r.World.EconomyEnabled = r.economyEnabled
 	r.World.StartGame()
 	r.Status = StatusPlaying
 	r.Phase = PhaseActing
@@ -476,6 +505,12 @@ func (r *WealthRoom) trySettle(onFinish func(roomID string)) bool {
 	if hooks.OnEvent != nil {
 		for _, ev := range newEvents {
 			hooks.OnEvent(roomID, ev)
+		}
+	}
+	// P1: 本月关闭的调研逐个广播 game.survey_result(调研契约 §4.4)。
+	if hooks.OnSurvey != nil {
+		for _, sv := range res.ClosedSurveys {
+			hooks.OnSurvey(roomID, sv)
 		}
 	}
 	if hooks.OnMonth != nil {
@@ -724,6 +759,95 @@ func (r *WealthRoom) EnqueueEventForUI(ev EventRecord) {
 		return
 	}
 	r.World.Events = append(r.World.Events, ev)
+}
+
+// ── P1: 社会调研(§财商流P1-2 调研契约 §3.3)──
+
+// LaunchSurvey 发起调研(持 r.mu;§3.2 全部校验在此)。
+// 成功后 emitEvent("survey", -1, "新调研:<question>(截止月 <DeadlineMonth>)")。
+// 权限:任意登录用户(HTTP 层鉴权;调研是「向 AI 提问」,与座位无关)。
+func (r *WealthRoom) LaunchSurvey(question string, options []string) (*Survey, *errcode.Error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.World == nil || r.Status != StatusPlaying {
+		return nil, errcode.Code(errcode.ErrWealthNotPlaying) // 35002
+	}
+	if !r.surveyEnabled {
+		return nil, errcode.CodeMsg(errcode.ErrWealthGateFailed, "调研系统未启用") // 35010
+	}
+	q := strings.TrimSpace(question)
+	if q == "" {
+		return nil, errcode.Code(errcode.ErrWealthSurveyOptionsInvalid) // 35016
+	}
+	if len([]rune(q)) > surveyQuestionMaxRunes {
+		q = string([]rune(q)[:surveyQuestionMaxRunes])
+	}
+	if len(options) < 2 || len(options) > 6 {
+		return nil, errcode.Code(errcode.ErrWealthSurveyOptionsInvalid) // 35016
+	}
+	opts := make([]string, 0, len(options))
+	for _, o := range options {
+		o = strings.TrimSpace(o)
+		if o == "" {
+			return nil, errcode.Code(errcode.ErrWealthSurveyOptionsInvalid)
+		}
+		if len([]rune(o)) > surveyOptionMaxRunes {
+			o = string([]rune(o)[:surveyOptionMaxRunes])
+		}
+		opts = append(opts, o)
+	}
+	// 限流 ①:每房同时仅 1 个 open。
+	if r.World.OpenSurvey() != nil {
+		return nil, errcode.Code(errcode.ErrWealthSurveyOpenExists) // 35017
+	}
+	// 限流 ②:每月(w.Month)仅可发起 1 个新调研(扫描 LaunchMonth,零新增状态)。
+	for _, sv := range r.World.Surveys {
+		if sv.LaunchMonth == r.World.Month {
+			return nil, errcode.Code(errcode.ErrWealthSurveyMonthlyLimit) // 35018
+		}
+	}
+	// 限流 ③:每房累计 ≤ 20 个。
+	if len(r.World.Surveys) >= surveyMaxPerRoom {
+		return nil, errcode.CodeMsg(errcode.ErrWealthSurveyMonthlyLimit, "调研累计上限 20 个")
+	}
+	r.World.SurveySeq++
+	sv := &Survey{
+		ID:            fmt.Sprintf("SV%d", r.World.SurveySeq),
+		Question:      q,
+		Options:       opts,
+		LaunchMonth:   r.World.Month,
+		DeadlineMonth: r.World.Month + 2,
+		Status:        SurveyOpen,
+		Answers:       map[int]*SurveyAnswer{},
+	}
+	r.World.Surveys = append(r.World.Surveys, sv)
+	r.World.emitEvent("survey", -1, fmt.Sprintf("新调研:%s(截止月 %d)", sv.Question, sv.DeadlineMonth))
+	return sv, nil
+}
+
+// ListSurveys 返回全部调研快照(持 r.mu 拷贝;≤20,按发起序)。
+func (r *WealthRoom) ListSurveys() []Survey {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.World == nil || len(r.World.Surveys) == 0 {
+		return nil
+	}
+	out := make([]Survey, 0, len(r.World.Surveys))
+	for _, sv := range r.World.Surveys {
+		cp := *sv
+		cp.Options = append([]string(nil), sv.Options...)
+		if sv.Result != nil {
+			res := *sv.Result
+			res.Counts = append([]int(nil), sv.Result.Counts...)
+			res.Percents = append([]float64(nil), sv.Result.Percents...)
+			res.TopReasons = append([]string(nil), sv.Result.TopReasons...)
+			cp.Result = &res
+		}
+		// Answers 明细不下发(view 层只取聚合;§11.5 匿名投票原理)。
+		cp.Answers = nil
+		out = append(out, cp)
+	}
+	return out
 }
 
 // SnapshotSeats/Nicknames/BotSeats/ModelKeys/Transcripts 锁内取快照。

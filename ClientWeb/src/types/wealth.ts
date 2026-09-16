@@ -148,6 +148,8 @@ export interface WealthPlayer {
   minsky_tier?: WealthMinskyTier;
   /** 月供/月收入比（0-1+；P1 明斯基引擎，仅本人座位下发）。 */
   debt_to_income?: number;
+  /** 消费档位 0-3（P1 真实经济循环引擎；档位是公开生活方式，全座位下发）。 */
+  consumption_level?: number;
 }
 
 export interface WealthMonthlyDetail {
@@ -221,6 +223,8 @@ export interface WealthMyState {
   net_worth: number;
   /** 职业卡 goals（含 5 年目标），终局对照展示。 */
   goals: string[];
+  /** 上月消费结构（CPI 八大类 id → 金额元；P1 真实经济循环引擎，仅本人座位下发）。 */
+  consumption_by_goods?: Record<string, number>;
 }
 
 /** Agent 思维可见性：本人座位 + 观战者可见；其他玩家不可见。 */
@@ -283,6 +287,14 @@ export interface WealthGameState {
   minsky_overview?: WealthMinskyOverview;
   /** 提前还款资格（仅本人座位下发；P1 LPR 重定价）。 */
   early_repay_eligible?: boolean;
+  /** 消费品市场快照（P1 真实经济循环引擎；economy_enabled=false 时零值/缺失）。 */
+  consumer_market?: WealthGoodsMarket;
+  /** 劳动力市场快照（P1 真实经济循环引擎）。 */
+  labor_market?: WealthLaborMarket;
+  /** 社会结构统计（P1 真实经济循环引擎）。 */
+  society?: WealthSociety;
+  /** 社会调研（open ≤1 + 最近 4 个 closed；P1 社会调研系统）。 */
+  surveys?: WealthSurvey[];
 }
 
 /** 明斯基全局概览（game.state.minsky_overview，P1 明斯基引擎）。 */
@@ -297,6 +309,118 @@ export interface WealthMinskyOverview {
   ponzi_ratio: number;
   /** 距离下次明斯基时刻判定的剩余月（冷却期；0=可触发）。 */
   cooldown_left: number;
+}
+
+// ── P1 真实经济循环引擎（消费品市场 / 劳动力市场 / 社会结构）────────────
+//
+// 与 docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-真实经济循环引擎-v1.md
+// §6「视图与协议」逐字段对齐（JSON 名不可改；后端 view.go 是唯一实现）。
+
+/** CPI 八大类消费单品（game.state.consumer_market.goods[]，按 §2.1 权重表序）。 */
+export interface WealthGoodsItem {
+  /** food|clothing|housing|household|transport|education|healthcare|misc。 */
+  id: string;
+  /** 篮子权重（0-1，八类和恒为 1）。 */
+  weight: number;
+  /** 价格指数（基期 = 100）。 */
+  price_idx: number;
+  /** 上月环比（小数，0.01 = +1%）。 */
+  mom_change: number;
+}
+
+/** 消费品市场快照（game.state.consumer_market）。 */
+export interface WealthGoodsMarket {
+  /** CPI 同比（12 月滚动年化，小数；不足 12 月时值保留但口径未就绪）。 */
+  cpi_yoy: number;
+  /** CPI 上月环比（小数）。 */
+  cpi_mom: number;
+  /** 8 类，按权重表顺序。 */
+  goods: WealthGoodsItem[];
+}
+
+/** 劳动力市场快照（game.state.labor_market）。 */
+export interface WealthLaborMarket {
+  /** 内生失业率（0-1，clamp [0.02,0.35]）。 */
+  unemployment_rate: number;
+  /** 就业率 = 1 − 失业率。 */
+  employment_ratio: number;
+  /** 平均工资年增长（Phillips 曲线，小数）。 */
+  avg_wage_growth_yoy: number;
+  /** 上月企业营收（元，居民消费 × FirmScale 2.5）。 */
+  firm_revenue_cny: number;
+  /** 裁员潮强度 0-3（0 平静 / 1 观察 / 2 裁员潮 / 3 已触发个体放大）。 */
+  layoff_wave: number;
+}
+
+/** 三圈层人数（game.state.society.circles；《总体设计》§6）。 */
+export interface WealthSocietyCircles {
+  /** 生存圈（月被动收入 < 月支出）。 */
+  survival: number;
+  /** 积累圈（1 ≤ 比值 < 2）。 */
+  accumulate: number;
+  /** 自由圈（比值 ≥ 2）。 */
+  freedom: number;
+}
+
+/** 社会结构统计（game.state.society，月度计算）。 */
+export interface WealthSociety {
+  /** 存活玩家净资产基尼系数 [0,1]。 */
+  gini: number;
+  /** 可支配收入五等份各组占比（低→高，和 = 1）。 */
+  quintiles: number[];
+  /** 圈层人数分布。 */
+  circles: WealthSocietyCircles;
+}
+
+// ── P1 社会调研系统（对全体 Agent 的预测模拟）───────────────────────────
+//
+// 与 docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-社会调研系统-v1.md
+// §5「视图与协议」逐字段对齐。
+
+/** 调研聚合结果（WealthSurvey.result；选项文本一并下发，前端免查表）。 */
+export interface WealthSurveyResult {
+  options: string[];
+  /** 按选项下标计数（len == options.length）。 */
+  counts: number[];
+  /** Counts / Total（和 ≈ 1）。 */
+  percents: number[];
+  /** 回答总数。 */
+  total: number;
+  /** 去重后前 3 条理由摘录（每条 ≤30 字）。 */
+  top_reasons: string[];
+}
+
+/** 单次社会调研（game.state.surveys[] / game.survey_result.survey）。 */
+export interface WealthSurvey {
+  /** "SV1"…（World.SurveySeq 自增）。 */
+  id: string;
+  /** 问题文本（≤100 字）。 */
+  question: string;
+  /** 2-6 个选项（每个 ≤40 字）。 */
+  options: string[];
+  launch_month: number;
+  /** launch_month + 2。 */
+  deadline_month: number;
+  /** "open" | "closed"。 */
+  status: string;
+  /** 已作答人数。 */
+  answers_count: number;
+  /** closed 时非空。 */
+  result?: WealthSurveyResult;
+}
+
+/**
+ * 单座位回答明细（引擎 SurveyAnswer 镜像）。公开快照**不下发** Answers
+ * （匿名投票原理）；本类型为 P2「按模型切片」分析预留，勿用于 UI 渲染。
+ */
+export interface WealthSurveyAnswer {
+  seat: number;
+  /** 选项下标 0-based。 */
+  option_idx: number;
+  /** ≤50 字理由。 */
+  reason: string;
+  /** 回答者模型 key。 */
+  model_key: string;
 }
 
 // ── 座位容量常量（2026-09-16 §财商流10–12座位改造）──────────────────────
@@ -384,6 +508,10 @@ export interface WealthMonthFrame {
     gold_price?: number;
     bond_rate?: number;
     house_idx?: Record<string, number>;
+    /** 本月篮子 CPIYoY（P1 真实经济循环引擎 §6.3；economy_enabled=false 时 = CB.CPI）。 */
+    cpi?: number;
+    /** 本月内生失业率（P1 真实经济循环引擎 §6.3）。 */
+    unemployment_rate?: number;
   };
   events: WealthRecentEvent[];
 }
@@ -421,7 +549,8 @@ export type WealthActionType =
   | 'start_side_business' | 'stop_side_business' | 'study' | 'socialize'
   | 'rest' | 'work_overtime' | 'move_district' | 'consume' | 'donate'
   | 'submit_month'
-  | 'early_repay';
+  | 'early_repay'
+  | 'set_consumption';
 
 export type WealthAction =
   | { type: 'buy_asset'; asset: 'stock_index' | 'bond' | 'gold'; amount_cny: number }
@@ -439,7 +568,8 @@ export type WealthAction =
   | { type: 'consume'; amount_cny: number; reason?: string }
   | { type: 'donate'; amount_cny: number }
   | { type: 'submit_month' }
-  | { type: 'early_repay'; loan_id: string; amount_cny: number };
+  | { type: 'early_repay'; loan_id: string; amount_cny: number }
+  | { type: 'set_consumption'; level: number };
 
 /** POST /api/games/wealth/rooms 的 wealth 段（协议 §6）。 */
 export interface WealthRoomOptions {
@@ -583,7 +713,8 @@ export function professionEmoji(id: string): string {
 export type WealthActionFormKind =
   | 'none'                       // 无参确认（study / socialize / rest / work_overtime / stop_side_business / submit_month）
   | 'buy_asset' | 'sell_asset' | 'buy_house' | 'take_loan' | 'repay_loan'
-  | 'side_business' | 'move_district' | 'amount' | 'amount_reason';
+  | 'side_business' | 'move_district' | 'amount' | 'amount_reason'
+  | 'consumption_level';         // 消费档位 4 按钮组（ActionPanel 专属渲染，不走通用弹窗）
 
 export interface WealthActionMeta {
   type: WealthActionType;
@@ -595,7 +726,8 @@ export interface WealthActionMeta {
   hint: string;
 }
 
-/** 14 个人类按钮动作（顺序 = 产品设计 §7.1 动作条）。 */
+/** 14 个人类按钮动作 + P1 消费档位（顺序 = 产品设计 §7.1 动作条；set_consumption
+ *  由 ActionPanel 的档位 4 按钮组专属渲染，通用按钮循环须跳过 form==='consumption_level'）。 */
 export const WEALTH_ACTIONS: WealthActionMeta[] = [
   { type: 'buy_asset',  icon: '💵', i18nKey: 'buyAsset',  form: 'buy_asset',    hint: '按市价买入指数基金 / 债券 / 黄金（≥1000 元）' },
   { type: 'sell_asset', icon: '📈', i18nKey: 'sellAsset', form: 'sell_asset',   hint: '卖出持仓资产（房产整售 1 套）' },
@@ -611,7 +743,58 @@ export const WEALTH_ACTIONS: WealthActionMeta[] = [
   { type: 'move_district', icon: '🚚', i18nKey: 'moveDistrict', form: 'move_district', hint: '搬家费 3000 元 / 精力-1' },
   { type: 'consume',    icon: '🛍', i18nKey: 'consume',    form: 'amount_reason', hint: '自由消费（记事，无机制效果）' },
   { type: 'donate',     icon: '❤',  i18nKey: 'donate',     form: 'amount',       hint: '每万元 1 社会贡献分；人脉+1（累计前 3 次）' },
+  { type: 'set_consumption', icon: '🧾', i18nKey: 'setConsumption', form: 'consumption_level', hint: '消费档位：0 节俭(×0.6/精力-1) / 1 标准 / 2 精致(×1.5/+1) / 3 奢侈(×2.2/+2)' },
 ];
+
+// ── 消费档位静态表（P1 真实经济循环引擎 §3.2）────────────────────────────
+
+export interface WealthConsumptionLevelMeta {
+  /** 0-3。 */
+  level: number;
+  /** i18n key：`wealth.consumption.level.<i18nKey>`。 */
+  i18nKey: 'frugal' | 'normal' | 'refined' | 'luxury';
+  /** 生活支出乘数（与后端 consumptionLevelMult 同值）。 */
+  multiplier: number;
+  /** 精力效果（与后端 consumptionLevelEnergy 同值）。 */
+  energy: number;
+}
+
+/** 消费档位 4 档（0 节俭 / 1 标准 / 2 精致 / 3 奢侈）。 */
+export const WEALTH_CONSUMPTION_LEVELS: WealthConsumptionLevelMeta[] = [
+  { level: 0, i18nKey: 'frugal',  multiplier: 0.6, energy: -1 },
+  { level: 1, i18nKey: 'normal',  multiplier: 1.0, energy: 0 },
+  { level: 2, i18nKey: 'refined', multiplier: 1.5, energy: 1 },
+  { level: 3, i18nKey: 'luxury',  multiplier: 2.2, energy: 2 },
+];
+
+// ── CPI 八大类静态表（P1 真实经济循环引擎 §2.1）─────────────────────────
+
+export interface WealthGoodsMeta {
+  id: string;
+  /** 中文名（统计口径；i18n 展示走 wealth.goods.<id>）。 */
+  nameZh: string;
+  /** PNG 缺失时的 emoji 兜底（goodsIcon(id) 返回 '' 时用）。 */
+  emoji: string;
+  /** 篮子权重（服务端权威下发，此表仅兜底展示）。 */
+  weight: number;
+}
+
+/** 八大类顺序 = 权重表序（goodsIcon 图标 / emoji 兜底 / tooltip 中文名）。 */
+export const WEALTH_GOODS_META: WealthGoodsMeta[] = [
+  { id: 'food',        nameZh: '食品烟酒',     emoji: '🍚', weight: 0.30 },
+  { id: 'clothing',    nameZh: '衣着',         emoji: '👕', weight: 0.06 },
+  { id: 'housing',     nameZh: '居住',         emoji: '🏠', weight: 0.20 },
+  { id: 'household',   nameZh: '生活用品及服务', emoji: '🧻', weight: 0.06 },
+  { id: 'transport',   nameZh: '交通通信',     emoji: '🚌', weight: 0.13 },
+  { id: 'education',   nameZh: '教育文化娱乐', emoji: '📚', weight: 0.11 },
+  { id: 'healthcare',  nameZh: '医疗保健',     emoji: '💊', weight: 0.09 },
+  { id: 'misc',        nameZh: '其他用品及服务', emoji: '🛍', weight: 0.05 },
+];
+
+/** 八大类 id → 静态元数据。 */
+export function wealthGoodsMeta(id: string): WealthGoodsMeta | undefined {
+  return WEALTH_GOODS_META.find((g) => g.id === id);
+}
 
 export const WEALTH_SUBMIT_MONTH: WealthActionMeta = {
   type: 'submit_month', icon: '✅', i18nKey: 'submitMonth', form: 'none',

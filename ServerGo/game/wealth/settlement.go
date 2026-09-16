@@ -45,6 +45,12 @@ type SettleResult struct {
 	// MarketChanges 本月漂移后的市场快照(game.month.market_changes)。
 	StockIndex, GoldPrice, BondRate float64
 	HouseIdx                        map[string]float64
+	// P1(§财商流P1-2 §6.3):market_changes 追加 cpi / unemployment_rate。
+	CPI              float64 // 本月篮子 CPIYoY(economy_enabled=false 时 = CB.CPI)
+	UnemploymentRate float64 // 本月内生失业率(回退时 0)
+	// ClosedSurveys 本月结算关闭的调研(调研契约 §4.4;房间层锁外逐个触发
+	// hooks.OnSurvey → game.survey_result)。
+	ClosedSurveys []*Survey
 }
 
 // SettleMonth 执行一次完整月结。调用方持房间锁。
@@ -55,6 +61,10 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 	if w.CB != nil {
 		w.CB.MonthlyDecision(w, w.Rand)
 	}
+
+	// ②.0 劳动力市场月度更新(P1 §财商流P1-2 §4.2):在 MonthlyEvents 之前,
+	// 个体失业概率消费最新 Unemployment。economy_enabled=false 跳过。
+	w.LaborMonthStep()
 
 	// ② 月度事件(失业判定)。
 	w.MonthlyEvents()
@@ -114,6 +124,25 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		res.HouseIdx[d.ID] = w.Market.DistrictIdx[d.ID]
 	}
 
+	// ④.5 消费品市场价格更新(P1 §财商流P1-2 §2.3):在市场漂移之后 ——
+	// housing 联动需要本月最新 DistrictIdx。economy_enabled=false 跳过。
+	w.GoodsMonthStep()
+
+	// ④.6 社会结构统计(P1 §5.1,月度计算后缓存,view 层直读 World.Society)。
+	if w.EconomyEnabled {
+		w.Society = ComputeSociety(w)
+	}
+
+	// market_changes 追加(P1 §6.3):cpi = 篮子 CPIYoY(回退时 CB 理论值)。
+	if w.EconomyEnabled && w.Goods != nil {
+		res.CPI = w.Goods.CPIYoY
+	} else if w.CB != nil {
+		res.CPI = w.CB.CPI
+	}
+	if w.EconomyEnabled && w.Labor != nil {
+		res.UnemploymentRate = w.Labor.Unemployment
+	}
+
 	// ⑤ 月份 +1;年调整 / 钟声。
 	isYearEnd := w.Month%12 == 0
 	isBell := w.Month%60 == 0
@@ -134,6 +163,10 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		w.BellEvents()
 		w.emitEvent("market", -1, "人生钟声:市场周期重掷")
 	}
+
+	// P1: 调研到期检查(调研契约 §4.3 入口①):w.Month++ 后逐个检查,
+	// w.Month > DeadlineMonth 的 open → 关闭聚合;房间层锁外广播 game.survey_result。
+	res.ClosedSurveys = w.CloseSurveyIfDue()
 
 	// 终局判定:主时钟到 60 岁。
 	finished = w.Age() >= TerminalAge || len(w.alivePlayers()) == 0
@@ -273,12 +306,12 @@ func (w *World) settlePlayer(p *Player, age int) {
 	if p.selfOccupiedHouse() == nil {
 		rentPay := w.Market.HouseRent(p.HomeDistrict)
 		if rentPay > 0 {
-			w.Pay(seat, SeatEntity(seat), EntityWorld, rentPay, CatRentPay, "房租")
+			w.Pay(seat, SeatEntity(seat), w.consumerPayTo(), rentPay, CatRentPay, "房租")
 			addExpense(rentPay, "rent_pay", "房租")
 		}
 	}
 	if p.ownsProperty() {
-		w.Pay(seat, SeatEntity(seat), EntityWorld, propertyFeeCNY, CatProperty, "物业费")
+		w.Pay(seat, SeatEntity(seat), w.consumerPayTo(), propertyFeeCNY, CatProperty, "物业费")
 		addExpense(propertyFeeCNY, "property", "物业费")
 	}
 
@@ -299,11 +332,24 @@ func (w *World) settlePlayer(p *Player, age int) {
 		}
 	}
 
-	// ── 步骤5 生活支出:职业基数 × 通胀因子 + 配偶 2000 + 每孩 5000 + 赡养。
+	// ── 步骤5 生活支出:职业基数 × 通胀因子 × 档位乘数(P1 §3.3)+ 配偶 2000 +
+	// 每孩 5000 + 赡养;economy_enabled 时归入 firms 钱流并按恩格尔曲线拆 8 类。
 	infl := InflationFactorCB(w)
-	living := int64(float64(p.Card.Expense)*infl + 0.5)
+	level := p.ConsumptionLevelSafe()
+	if p.ConsumptionByGoods == nil {
+		level = 1 // 存量兜底:map 未初始化视为标准档(与 ConsumptionLevelSafe 双保险)
+	}
+	// 强制降档(流动性约束,P1 新定):现金 < 2×月生活支出基准(不含档位乘数)
+	// → 强制降为 0 档(节俭)。
+	baseline := int64(float64(p.Card.Expense)*infl + 0.5)
+	if p.Cash < 2*baseline && level != 0 {
+		p.ConsumptionLevel = 0
+		level = 0
+		w.emitEvent("life", seat, fmt.Sprintf("%d 号位现金不足,本月强制节俭档(生活支出×0.6)", seat))
+	}
+	living := int64(float64(p.Card.Expense)*infl*consumptionLevelMult[level] + 0.5)
 	if living > 0 {
-		w.Pay(seat, SeatEntity(seat), EntityWorld, living, CatLiving, "生活支出")
+		w.Pay(seat, SeatEntity(seat), w.consumerPayTo(), living, CatLiving, "生活支出")
 		addExpense(living, "living", "生活支出")
 	}
 	familyLiving := int64(0)
@@ -313,9 +359,16 @@ func (w *World) settlePlayer(p *Player, age int) {
 	familyLiving += int64(p.Family.Children) * livingChildCNY
 	familyLiving += int64(p.Card.EldersDependent) * livingElderCNY
 	if familyLiving > 0 {
-		w.Pay(seat, SeatEntity(seat), EntityWorld, familyLiving, CatLiving, "家庭支出")
+		// 家庭支出金额不变,但归入篮子计数(§3.4)且 to=firms。
+		w.Pay(seat, SeatEntity(seat), w.consumerPayTo(), familyLiving, CatLiving, "家庭支出")
 		addExpense(familyLiving, "family", "家庭支出(配偶/子女/赡养)")
 	}
+
+	// 档位精力效果(clamp [-3,10],与 events.go 精力边界同款)。
+	p.Energy = clamp(p.Energy+consumptionLevelEnergy[level], -3, 10)
+
+	// 恩格尔分配:living+familyLiving 拆 8 类写入 p.ConsumptionByGoods(覆盖上月)。
+	p.ConsumptionByGoods = splitEngel(living+familyLiving, p, age)
 
 	// ── 步骤6 债务:月供足够 → 正常扣款;不足 → 逾期(罚息 5%、信用分 −50)。
 	type dueItem struct {
@@ -528,10 +581,20 @@ func (w *World) eliminate(p *Player, reason string) {
 }
 
 // AnnualAdjust 年度调整(§9.3):工资增长(Brass 改写)+ 信用分按时还款 +20。
+// P1 §4.4(§财商流P1-2):economy_enabled 时增长率改走 Phillips 曲线 ——
+// g = phillipsBase + (BrassSalaryGrowth − 3%),自然失业率下与 P0 数值完全一致
+// (回归零差异),Brass「信用贷压低增长」语义叠加在 Phillips 基线之上。
+// 名义工资粘性:工资只在年度调整,CPI 每月变 —— 高通胀期实际工资自动缩水。
 func (w *World) AnnualAdjust() {
+	if w.EconomyEnabled && w.Labor != nil {
+		w.Labor.WageGrowthYoY = w.phillipsBase()
+	}
 	for _, seat := range w.alivePlayers() {
 		p := w.Players[seat]
 		g := p.BrassSalaryGrowth()
+		if w.EconomyEnabled && w.Labor != nil {
+			g = w.phillipsBase() + p.BrassSalaryGrowth() - 0.03
+		}
 		p.SalaryBase = int64(float64(p.SalaryBase)*(1+g) + 0.5)
 		if p.SalaryVolatile {
 			// 年增长作用于带边界。

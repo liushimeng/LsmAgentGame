@@ -21,6 +21,10 @@
 | 5 | [`03-Agent设计/财商流游戏-WealthPlayer-Agent设计-v1.md`](03-Agent设计/财商流游戏-WealthPlayer-Agent设计-v1.md) | AgentClassName / GameContext / 17 工具 / prompt 模板 / 月度决策循环 | backend-dev（Agent 线） |
 | 6 | [`03-Agent设计/财商流游戏-职业卡与加载器设计-v1.md`](03-Agent设计/财商流游戏-职业卡与加载器设计-v1.md) | 精选 10 职业卡全量数据 / 文档池加载器 / 十万级卡池路径 | backend-dev |
 | 7 | [`04-验收/财商流游戏-P0验收清单-v1.md`](04-验收/财商流游戏-P0验收清单-v1.md) | 编译门禁 / 功能勾选 / 经济不变量 / 已知边界 | integration-tester |
+| 8 | [`02-架构设计/财商流游戏-央行信用创造引擎-v1.md`](02-架构设计/财商流游戏-央行信用创造引擎-v1.md) | P1 央行引擎：M0/M1/M2 货币三层 / Taylor 调息 / LPR 与信贷约束 | backend-dev |
+| 9 | [`05-P1扩展/财商流游戏-P1-Minsky与LPR引擎-v1.md`](05-P1扩展/财商流游戏-P1-Minsky与LPR引擎-v1.md) | P1 扩展：明斯基三阶段/时刻 + LPR 年度重定价 + 提前还款 | backend-dev、frontend-dev |
+| 10 | [`05-P1扩展/财商流游戏-P1-真实经济循环引擎-v1.md`](05-P1扩展/财商流游戏-P1-真实经济循环引擎-v1.md) | 消费品市场与内生 CPI / 消费档位与恩格尔分配 / firms 钱流 / 劳动力市场（内生失业 + Phillips 工资）/ 社会结构统计 / Agent 经济感知工具 | backend-dev、frontend-dev |
+| 11 | [`05-P1扩展/财商流游戏-P1-社会调研系统-v1.md`](05-P1扩展/财商流游戏-P1-社会调研系统-v1.md) | 调研发起与限流 / Agent 作答（零额外 LLM 成本）/ 聚合广播 `game.survey_result` / 预测模拟用途 | backend-dev、frontend-dev |
 
 **配套事实来源**（本目录不重复、只引用）：
 

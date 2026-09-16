@@ -1,5 +1,6 @@
-// Package wealthplayer — tools.go: 17 工具(Anthropic wire)+ DispatchTool +
-// ToolRunner 接口定义(2026-09-14 §财商流P0)。
+// Package wealthplayer — tools.go: 工具定义(Anthropic wire)+ DispatchTool +
+// ToolRunner 接口定义(2026-09-14 §财商流P0;P1-2 追加 set_consumption /
+// answer_survey / query_economy 三工具)。
 //
 // 契约: Agent 设计文档 §7 工具表;动作语义唯一事实来源 = 协议契约文档 §4
 // (与人类 game.wealth_action 同一 actions.go 代码路径,无分叉)。
@@ -42,6 +43,10 @@ type ToolRunner interface {
 	// P1 扩展: 明斯基 / 提前还款。
 	QueryMinsky(seat int) (string, error)
 	EarlyRepay(seat int, loanID string, amountCNY int64) error
+	// P1(2026-09-16 §财商流P1-2 §7.1): 消费档位 / 社会调研 / 经济查询。
+	SetConsumption(seat int, level int) error
+	AnswerSurvey(seat int, surveyID string, optionIdx int, reason string) error
+	QueryEconomy(seat int) (string, error)
 }
 
 // 工具名常量。
@@ -72,6 +77,10 @@ const (
 	// P1 扩展: 明斯基 / 提前还款。
 	ToolQueryMinsky       = "query_minsky"
 	ToolEarlyRepay        = "early_repay"
+	// P1(§财商流P1-2 §7.1): 消费档位 / 社会调研 / 经济查询。
+	ToolSetConsumption = "set_consumption"
+	ToolAnswerSurvey   = "answer_survey"
+	ToolQueryEconomy   = "query_economy"
 )
 
 // schema helpers。
@@ -83,7 +92,7 @@ func intSchema(min int64, desc string) map[string]any {
 	return map[string]any{"type": "integer", "minimum": min, "description": desc}
 }
 
-// BuildTools 返回 17 个工具定义(全部座位相同——财商流信息不对称在 my.* 快照,
+// BuildTools 返回全部工具定义(全部座位相同——财商流信息不对称在 my.* 快照,
 // 不在工具裁剪)。
 func BuildTools() []llmtypes.ToolDef {
 	return []llmtypes.ToolDef{
@@ -302,6 +311,35 @@ func BuildTools() []llmtypes.ToolDef {
 				"required": []string{"loan_id"},
 			},
 		},
+		{
+			Name:        ToolSetConsumption,
+			Description: "设置消费档位(耗 1 次动作预算,立即生效):0 节俭(生活支出×0.6/精力−1)/1 标准(×1.0)/2 精致(×1.5/精力+1)/3 奢侈(×2.2/精力+2)。你的消费决定全城物价与就业;现金 < 2×月生活支出时会被强制降为节俭档。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"level": intSchema(0, "0 节俭/1 标准/2 精致/3 奢侈"),
+				},
+				"required": []string{"level"},
+			},
+		},
+		{
+			Name:        ToolAnswerSurvey,
+			Description: "回答进行中的社会调研(不耗动作次数):按你的人设与真实财务处境表态,理由说人话(≤50 字),不要中立和稀泥。每月只能答一次,提交后不可修改。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"survey_id":    strSchema("调研 id,如 SV1(见经济环境段)"),
+					"option_index": intSchema(0, "选项下标(0 起,对应经济环境段列表)"),
+					"reason":       map[string]any{"type": "string", "maxLength": 50, "description": "≤50 字理由"},
+				},
+				"required": []string{"survey_id", "option_index"},
+			},
+		},
+		{
+			Name:        ToolQueryEconomy,
+			Description: "查询经济全景(不消耗动作预算):CPI 同比/环比、八大类价格环比、失业率、工资增长、企业营收、基尼系数、圈层分布。",
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		},
 	}
 }
 
@@ -315,6 +353,7 @@ func ToolNames() []string {
 		ToolQueryCentralBank, ToolQueryBankingSystem, ToolApplyLoanWithCredit,
 		ToolDepositSavings, ToolWithdrawSavings,
 		ToolQueryMinsky, ToolEarlyRepay,
+		ToolSetConsumption, ToolAnswerSurvey, ToolQueryEconomy,
 	}
 }
 
@@ -445,6 +484,16 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 		return ok(s)
 	case ToolEarlyRepay:
 		return failOr(a.runner.EarlyRepay(seat, getStr("loan_id"), getInt("amount_cny")), "提前还款完成", res)
+	case ToolSetConsumption:
+		return failOr(a.runner.SetConsumption(seat, int(getInt("level"))), "已调整消费档位", res)
+	case ToolAnswerSurvey:
+		return failOr(a.runner.AnswerSurvey(seat, getStr("survey_id"), int(getInt("option_index")), getStr("reason")), "已回答调研", res)
+	case ToolQueryEconomy:
+		s, err := a.runner.QueryEconomy(seat)
+		if err != nil {
+			return fail(err)
+		}
+		return ok(s)
 	default:
 		res.IsErr = true
 		res.Text = "未知工具: " + name

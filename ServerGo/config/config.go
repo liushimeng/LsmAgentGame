@@ -364,6 +364,13 @@ type WealthConfig struct {
 	// 8);10+ bot 同月决策时建议 ≥8,避免 4 并发把 12 人压成串行(详见
 	// game/wealth/engine.go DefaultAgentConcurrency 注释)。
 	AgentConcurrency int `json:"agent_concurrency"`
+	// EconomyEnabled 真实经济循环引擎(消费品市场/内生 CPI/劳动力市场/社会结构,
+	// 2026-09-16 §财商流P1-2)。默认 true;false 回退 P0 行为(消费 to=world、
+	// 失业概率/工资增长外生)。零值强制 true(与 agent_enabled 同款取舍)。
+	EconomyEnabled bool `json:"economy_enabled"`
+	// SurveyEnabled 社会调研系统(§财商流P1-2 调研契约 §6)。默认 true;false 时
+	// 发起入口返回 35010,既有 open 调研照常走完关闭流程。
+	SurveyEnabled bool `json:"survey_enabled"`
 }
 
 // RootDisabledSentinel 是 conf 中 root_account / root_password 的「禁用」哨兵值。
@@ -1048,6 +1055,15 @@ func applyDefaults(c *Config) {
 	}
 	if c.Wealth.BotMaxActionsPerMonth == 0 {
 		c.Wealth.BotMaxActionsPerMonth = 3
+	}
+	// P1(2026-09-16 §财商流P1-2 §6.5):真实经济循环 / 社会调研默认开启;
+	// 零值强制 true(operator 显式设 false 会被覆盖 — 与 AgentEnabled 同款
+	// 取舍,关闭请用房间级 SetEconomyFlags / Manager.Config)。
+	if !c.Wealth.EconomyEnabled {
+		c.Wealth.EconomyEnabled = true
+	}
+	if !c.Wealth.SurveyEnabled {
+		c.Wealth.SurveyEnabled = true
 	}
 	// §128 对话即思考重构:AgentParallel 默认值已删除(原 §122)。
 

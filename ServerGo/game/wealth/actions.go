@@ -33,6 +33,8 @@ type Action struct {
 	LoanID string `json:"loan_id,omitempty"`
 	// consume / donate
 	Reason string `json:"reason,omitempty"`
+	// set_consumption(P1 §3.5):0 节俭/1 标准/2 精致/3 奢侈
+	Level int `json:"level,omitempty"`
 }
 
 // 动作类型常量(协议 §4)。
@@ -57,6 +59,8 @@ const (
 	ActWithdraw         = "withdraw"
 	// P1 新增: 提前还款(v2.60 N12-5)。
 	ActEarlyRepay       = "early_repay"
+	// P1 新增(§财商流P1-2 §3.5): 设置消费档位(0-3)。
+	ActSetConsumption   = "set_consumption"
 )
 
 // 信用贷档位面额(协议 §4:credit 档位必须是 50000/100000/200000 之一)。
@@ -125,6 +129,8 @@ func (w *World) ApplyAction(seat int, a Action) (string, *errcode.Error) {
 		return w.actWithdraw(p, a)
 	case ActEarlyRepay:
 		return w.actEarlyRepay(p, a)
+	case ActSetConsumption:
+		return w.actSetConsumption(p, a)
 	default:
 		return "", errcode.CodeMsg(errcode.ErrValidationFailed, "unknown wealth action: "+a.Type)
 	}
@@ -852,7 +858,7 @@ func (w *World) actStudy(p *Player) (string, *errcode.Error) {
 	if p.Cash < 2000 {
 		return "", errcode.Code(errcode.ErrWealthInsufficientCash)
 	}
-	w.Pay(p.Seat, SeatEntity(p.Seat), EntityWorld, 2000, CatStudy, "学习进修")
+	w.Pay(p.Seat, SeatEntity(p.Seat), w.consumerPayTo(), 2000, CatStudy, "学习进修")
 	p.Energy--
 	p.Cognition++
 	text := "学习进修(¥2000,认知 +1)"
@@ -870,7 +876,7 @@ func (w *World) actSocialize(p *Player) (string, *errcode.Error) {
 	if p.Cash < 1000 {
 		return "", errcode.Code(errcode.ErrWealthInsufficientCash)
 	}
-	w.Pay(p.Seat, SeatEntity(p.Seat), EntityWorld, 1000, CatSocialEv, "社交应酬")
+	w.Pay(p.Seat, SeatEntity(p.Seat), w.consumerPayTo(), 1000, CatSocialEv, "社交应酬")
 	p.Network++
 	text := "社交应酬(¥1000,人脉 +1)"
 	w.spendBudget(p, "resting", text)
@@ -926,7 +932,7 @@ func (w *World) actMoveDistrict(p *Player, a Action) (string, *errcode.Error) {
 	if p.Cash < 3000 {
 		return "", errcode.Code(errcode.ErrWealthInsufficientCash)
 	}
-	w.Pay(p.Seat, SeatEntity(p.Seat), EntityWorld, 3000, CatMoving, "迁区搬家")
+	w.Pay(p.Seat, SeatEntity(p.Seat), w.consumerPayTo(), 3000, CatMoving, "迁区搬家")
 	p.Energy--
 	p.District = a.District
 	// 目标区有自住房 → 自动改自住(P0 新定);否则租房跟随当前区。
@@ -977,7 +983,12 @@ func (w *World) actConsume(p *Player, a Action) (string, *errcode.Error) {
 	if note == "" {
 		note = "自由消费"
 	}
-	w.Pay(p.Seat, SeatEntity(p.Seat), EntityWorld, a.AmountCNY, CatConsume, note)
+	w.Pay(p.Seat, SeatEntity(p.Seat), w.consumerPayTo(), a.AmountCNY, CatConsume, note)
+	// P1: 自由消费同时计入消费篮子 misc(与步骤5 恩格尔分配同口径,§3.6)。
+	if p.ConsumptionByGoods == nil {
+		p.ConsumptionByGoods = map[string]float64{}
+	}
+	p.ConsumptionByGoods["misc"] += float64(a.AmountCNY)
 	text := fmt.Sprintf("消费 ¥%d(%s)", a.AmountCNY, note)
 	w.spendBudget(p, "idle", text)
 	return text, nil
@@ -1040,5 +1051,24 @@ func (w *World) actWithdraw(p *Player, a Action) (string, *errcode.Error) {
 	p.Cash += a.AmountCNY
 	text := fmt.Sprintf("定期转活期 ¥%d(提前支取,利息损失)", a.AmountCNY)
 	w.spendBudget(p, "trading", text)
+	return text, nil
+}
+
+// ── set_consumption: 消费档位(P1 §财商流P1-2 §3.5) ──
+
+// actSetConsumption 设置消费档位(耗 1 次动作预算;立即生效,本月月结按新档位
+// 结算)。人类走 WS game.wealth_action {type:"set_consumption", level},与 Agent
+// 同一 ApplyAction 路径。
+func (w *World) actSetConsumption(p *Player, a Action) (string, *errcode.Error) {
+	if p.ActionBudget <= 0 {
+		return "", errcode.Code(errcode.ErrWealthActionBudgetExhausted)
+	}
+	if a.Level < 0 || a.Level > 3 {
+		return "", errcode.Code(errcode.ErrWealthConsumptionLevelInvalid) // 35020
+	}
+	p.ConsumptionLevel = a.Level
+	text := fmt.Sprintf("调整消费档位:%s(支出×%.1f,精力%+d)",
+		consumptionLevelCN(a.Level), consumptionLevelMult[a.Level], consumptionLevelEnergy[a.Level])
+	w.spendBudget(p, "idle", text)
 	return text, nil
 }

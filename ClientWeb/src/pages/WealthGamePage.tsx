@@ -32,6 +32,8 @@ import { WealthMinimap } from '@/components/wealth/WealthMinimap';
 import { FinancialPanel } from '@/components/wealth/FinancialPanel';
 import { MarketPanel } from '@/components/wealth/MarketPanel';
 import { LedgerPanel } from '@/components/wealth/LedgerPanel';
+import { EconomyPanel } from '@/components/wealth/EconomyPanel';
+import { SurveyPanel } from '@/components/wealth/SurveyPanel';
 import { ActionPanel } from '@/components/wealth/ActionPanel';
 import { MonthTicker } from '@/components/wealth/MonthTicker';
 import { GameOverModal } from '@/components/wealth/GameOverModal';
@@ -165,6 +167,9 @@ export function WealthGamePage() {
     { key: 'finance', label: t('wealth.tab.finance' as TKey) },
     { key: 'market', label: t('wealth.tab.market' as TKey) },
     { key: 'ledger', label: t('wealth.tab.ledger' as TKey) },
+    // P1 第二期：真实经济循环引擎（economy）+ 社会调研（survey）。
+    { key: 'economy', label: `📊 ${t('wealth.tab.economy' as TKey)}` },
+    { key: 'survey', label: `📋 ${t('wealth.tab.survey' as TKey)}` },
   ];
 
   return (
@@ -296,6 +301,12 @@ export function WealthGamePage() {
               />
             )}
             {panelTab === 'ledger' && <LedgerPanel gameState={gameState} />}
+            {/* P1 第二期：经济循环仪表盘 + 社会调研（观战视图同样可用；SurveyPanel
+                发起按钮对观战者开放——调研与座位无关） */}
+            {panelTab === 'economy' && <EconomyPanel gameState={gameState} />}
+            {panelTab === 'survey' && (
+              <SurveyPanel roomId={roomId} gameState={gameState} />
+            )}
           </div>
           {gameState && !spectator && gameState.my_seat < 0 && (
             <div className="wealth-join-hint">{t('wealth.joinHint' as TKey)}</div>

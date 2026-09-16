@@ -175,6 +175,7 @@ func (s *GameService) startWealthRoom(roomID string) *errcode.Error {
 		OnMonth:  s.broadcastWealthMonthly,
 		OnState:  s.broadcastWealthState,
 		OnOver:   s.broadcastWealthOver,
+		OnSurvey: s.broadcastWealthSurvey,
 		OnStarted: func(rid string, payload map[string]any) {
 			s.hub.BroadcastRoomIncludingSpectators(rid, wsEnvelope("game.started", 0, payload))
 		},
@@ -307,6 +308,8 @@ func (s *GameService) broadcastWealthMonth(roomID string, res *wealth.SettleResu
 		"market_changes": map[string]any{
 			"stock_index": res.StockIndex, "gold_price": res.GoldPrice,
 			"bond_rate": res.BondRate, "house_idx": res.HouseIdx,
+			// P1(§财商流P1-2 §6.3):cpi = 篮子 CPIYoY(回退时 CB 理论值)。
+			"cpi": res.CPI, "unemployment_rate": res.UnemploymentRate,
 		},
 		"events": res.Events,
 	}
@@ -338,6 +341,18 @@ func (s *GameService) broadcastWealthEvent(roomID string, ev wealth.EventRecord)
 	s.hub.BroadcastRoomIncludingSpectators(roomID, wsEnvelope("game.event", 0, map[string]any{
 		"room_id": roomID, "game_kind": "wealth",
 		"month": ev.Month, "seat": ev.Seat, "type": ev.Type, "text": ev.Text,
+	}))
+}
+
+// broadcastWealthSurvey 广播 game.survey_result(P1 §财商流P1-2 调研契约 §4.4;
+// 由 BroadcastHooks.OnSurvey 在锁外触发:deadline 到期 / 全员已答提前关闭)。
+func (s *GameService) broadcastWealthSurvey(roomID string, sv *wealth.Survey) {
+	if sv == nil {
+		return
+	}
+	s.hub.BroadcastRoomIncludingSpectators(roomID, wsEnvelope("game.survey_result", 0, map[string]any{
+		"room_id": roomID,
+		"survey":  wealth.SurveyJSONFrom(sv),
 	}))
 }
 

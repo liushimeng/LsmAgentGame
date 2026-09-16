@@ -896,6 +896,9 @@ func main() {
 		PoolDefault:             cfg.Wealth.ProfessionPoolDefault,
 		Seed:                    cfg.Wealth.RandomSeed,
 		AgentConcurrency:        cfg.Wealth.AgentConcurrency,
+		// P1(2026-09-16 §财商流P1-2 §6.5):真实经济循环 / 社会调研开关。
+		EconomyEnabled: cfg.Wealth.EconomyEnabled,
+		SurveyEnabled:  cfg.Wealth.SurveyEnabled,
 	}, llmRegistry)
 	// 2026-09-14 §财商流P0-bugfix: 服务重启后内存房间 Seats/BotSeats 全空,必须从
 	// t_lsm_game_player 恢复人类 + bot 座位,否则 Start() 永远 ErrWealthNotEnoughPlayers。
@@ -921,8 +924,10 @@ func main() {
 	gameSvcWs.SetWealthChatSender(&wsChatSenderAdapter{chat: chatSvc})
 	roomSvc.SetWealthRoomConfigurer(wealthMgr.ApplyRoomOptions)
 	professionAPI := api.NewProfessionAPI(wealthLoader)
+	// 2026-09-16 §财商流P1-2 — 社会调研 HTTP 入口(房间源 = wealthMgr)。
+	wealthSurveyAPI := api.NewWealthSurveyAPI(wealthMgr)
 
-	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, professionAPI)
+	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, professionAPI, wealthSurveyAPI)
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.

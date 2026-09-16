@@ -9,10 +9,13 @@
  *   banner.png                                2560×1440
  *   agents/{p01,p03,p05,p07,p08,p09,p10,p11,p15,p16}.png   512×512 透明
  *   districts/{finance,tech,industry,oldtown,commerce,residential,suburb,riverside}.png
+ *   goods/{food,clothing,housing,household,transport,education,healthcare,misc}.png
+ *     128×128 透明（统计局 CPI 八大类消费品图标，P1 真实经济循环引擎）
  */
 
 const agentImgs = import.meta.glob<string>('./agents/*.png', { eager: true, import: 'default' });
 const districtImgs = import.meta.glob<string>('./districts/*.png', { eager: true, import: 'default' });
+const goodsImgs = import.meta.glob<string>('./goods/*.png', { eager: true, import: 'default' });
 const bannerImgs = import.meta.glob<string>('./banner.png', { eager: true, import: 'default' });
 
 /** 大厅 banner（缺失 = ''，WealthLobbyPage 回落 CSS 渐变）。 */
@@ -29,4 +32,9 @@ export function professionAvatar(id: string): string {
 /** 城区底板纹理 URL（缺失 = ''，DistrictBlock 回落 DistrictDefs 主色）。 */
 export function districtTexture(id: string): string {
   return districtImgs[`./districts/${id}.png`] ?? '';
+}
+
+/** CPI 八大类消费品图标 URL（缺失 = ''，组件回落类别主色/emoji）。 */
+export function goodsIcon(id: string): string {
+  return goodsImgs[`./goods/${id}.png`] ?? '';
 }

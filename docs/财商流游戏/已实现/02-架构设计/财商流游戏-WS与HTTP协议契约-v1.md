@@ -44,8 +44,9 @@ switch 中路由到 `ws/game_service_wealth.go`。
 | `game.joined` | 入座成功 | `{my_seat, month, phase}` |
 | `game.started` | 开局 | `{month:1, age, start_age, professions:[{seat,profession_id}]}`（职业对全房公开——设定层职业非隐藏信息） |
 | `game.state` | 每月 / 每次请求 | 全量快照，见 §3；**按座位脱敏**，经 `hub.BroadcastTo(uid,…)` 单发 |
-| `game.event` | 单个事件 | `{room_id, month, seat?, type:"action"\|"move"\|"settle"\|"market"\|"life"\|"chat"\|"error", text, data?}` |
-| `game.month` | 每月结算后（BroadcastRoom 全房同帧） | `{room_id, month, age, summaries:[{seat, cash_delta, net_worth, fi_index, note}], market_changes:{stock_index, gold_price, bond_rate, house_idx:{district:Δ}}, events:[…]}` |
+| `game.event` | 单个事件 | `{room_id, month, seat?, type:"action"\|"move"\|"settle"\|"market"\|"life"\|"survey"\|"chat"\|"error", text, data?}` |
+| `game.month` | 每月结算后（BroadcastRoom 全房同帧） | `{room_id, month, age, summaries:[{seat, cash_delta, net_worth, fi_index, note}], market_changes:{stock_index, gold_price, bond_rate, house_idx:{district:Δ}, cpi?:number, unemployment_rate?:number}, events:[…]}` |
+| `game.survey_result` | 调研关闭（deadline / 全员已答） | `{room_id, survey:{id, question, options, launch_month, deadline_month, status, answers_count, result?:{options, counts, percents, total, top_reasons}}}`（BroadcastRoomIncludingSpectators，含观战者） |
 | `game.over` | 60 岁终局 | `{room_id, scores:[{seat, fi_score, life_score, social_score, total, ending}], report}` |
 | `game.error` | 操作错误 | `{code, message}`（seq 回带） |
 | `game.removed` | 终局 60s 后房间清理 | `{room_id}` |
@@ -102,7 +103,8 @@ switch 中路由到 `ws/game_service_wealth.go`。
     income_band: "low" | "mid" | "high" | "top",  // 月总收入 <8000/8000–20000/20000–50000/>50000（《规则》§5.3）
     status_icon: "working" | "idle" | "trading" | "resting" | "moved",  // 本月最近动作类别
     last_action: string,    // 人读，如 "买入黄金 50g"；空 = 本月未动作
-    ending: string          // 终局结局 id；进行中为 ""
+    ending: string,         // 终局结局 id；进行中为 ""
+    consumption_level: number  // P1: 消费档位 0 节俭/1 标准/2 精致/3 奢侈（公开生活方式）
   }],
   my_seat: number,          // -1 = 观战
   my: null | {              // 仅本人座位填充；观战者为 null
@@ -133,7 +135,8 @@ switch 中路由到 `ws/game_service_wealth.go`。
     family: { marital: "single" | "married", children: number },
     fi_index: number,
     net_worth: number,
-    goals: [string]         // 职业卡 goals（含 5 年目标），终局对照展示
+    goals: [string],        // 职业卡 goals（含 5 年目标），终局对照展示
+    consumption_by_goods: { [id: string]: number }  // P1: 本人上月八大类消费拆分（元）
   },
   bot_contexts: [{          // Agent 思维可见性：本人座位 + 观战者可见；其他玩家不可见
     seat: number,
@@ -144,7 +147,18 @@ switch 中路由到 `ws/game_service_wealth.go`。
   }],
   ledger_recent: [{ month: number, from: string, to: string,
                     amount_cny: number, category: string, note: string }],  // 最近 50 条：本人相关 + 公共
-  events_recent: [{ month: number, type: string, text: string }]           // 最近 100 条
+  events_recent: [{ month: number, type: string, text: string }],          // 最近 100 条
+  // ── P1 真实经济循环（economy_enabled=false 时为零值/空数组）──
+  consumer_market: { cpi_yoy: number, cpi_mom: number,                    // 内生 CPI 同比/环比
+    goods: [{ id: string, weight: number, price_idx: number, mom_change: number }] },  // 八大类
+  labor_market: { unemployment_rate: number, employment_ratio: number,     // 内生失业率/就业率
+    avg_wage_growth_yoy: number, firm_revenue_cny: number, layoff_wave: number },  // Phillips 工资/企业营收/裁员潮
+  society: { gini: number, quintiles: [number ×5],                        // 基尼/五等份
+    circles: { survival: number, accumulate: number, freedom: number } }, // 三圈层分布
+  surveys: [{ id: string, question: string, options: [string],            // 调研（open ≤1 + 最近 4 closed）
+    launch_month: number, deadline_month: number, status: "open"|"closed",
+    answers_count: number,
+    result?: { options: [string], counts: [number], percents: [number], total: number, top_reasons: [string] } }]
 }
 ```
 
@@ -174,8 +188,9 @@ switch 中路由到 `ws/game_service_wealth.go`。
 | `rest` | 无 | 精力 <10 | 精力 +2（P0 新定） | — |
 | `work_overtime` | 无 | 精力 ≥2；在职 | 精力-2；当月工资 ×0.3 奖金（随月结发放）（P0 新定） | 月结 `bank→seat`（`overtime`） |
 | `move_district` | `{district}` | district ≠ 当前；现金 ≥3000；精力 ≥1 | 现金-3000；精力-1；token 迁移；若目标区有自住房自动改自住（P0 新定） | `seat→world`（`moving`） |
-| `consume` | `{amount_cny, reason?}` | 金额 ≥1；现金足额 | 纯消费（记事）；无机制效果 | `seat→world`（`consume`） |
+| `consume` | `{amount_cny, reason?}` | 金额 ≥1；现金足额 | 纯消费（记事）；无机制效果；P1 计入 ConsumptionByGoods["misc"] | `seat→firms`（`consume`，economy_enabled=true 时；false 回退 to=world） |
 | `donate` | `{amount_cny}` | 金额 ≥1000；现金足额 | 累计入社会贡献分（每万 1 分）；人脉+1（累计前 3 次，《规则》§2.5） | `seat→world`（`donate`） |
+| `set_consumption` | `{level:0\|1\|2\|3}` | level ∈[0,3] | 调整消费档位（节俭/标准/精致/奢侈），本月月结按新档位结算（支出乘数 0.6/1.0/1.5/2.2，精力效果 −1/0/+1/+2）| — |
 | `speak` | `{text}` | 仅 Agent（`chatSvc.SendFromBot`/`WhisperFromBot`）；≤100 字截断；SpeakLimiter 节流 | 公屏发言（`game.event type:"chat"`） | — |
 | `submit_month` | 无 | 本月未提交 | 标记 Submitted；不耗动作预算；全员提交 → 提前进入月结 | — |
 
@@ -203,6 +218,11 @@ switch 中路由到 `ws/game_service_wealth.go`。
 | 35010 | `ErrWealthGateFailed` | `wealth cognition/energy/network gate failed` | 副业/学习等门槛不满足 |
 | 35011 | `ErrWealthNotOwner` | `wealth operation requires room owner` | 非房主 start/pause |
 | 35012 | `ErrWealthProfessionPoolEmpty` | `wealth profession pool unavailable` | docs 池路径不可读且回退也失败 |
+| 35016 | `ErrWealthSurveyOptionsInvalid` | `wealth survey options must be 2-6 non-empty, or answer option_index out of range` | 选项数非 2–6 / 选项文本空 / 作答 option_index 越界 |
+| 35017 | `ErrWealthSurveyOpenExists` | `wealth a survey is already open in this room` | 已有进行中调研（每房同时 1 个 open）|
+| 35018 | `ErrWealthSurveyMonthlyLimit` | `wealth survey launch limit reached (1/month, 20 max per room)` | 本月已达发起上限 / 累计 20 个上限 |
+| 35019 | `ErrWealthSurveyNotFound` | `wealth survey not found, closed, or already answered` | 调研不存在 / 已关闭 / 本人已回答 |
+| 35020 | `ErrWealthConsumptionLevelInvalid` | `wealth consumption level must be 0-3` | 消费档位非法（须 0–3）|
 
 通用码复用：`30011` 观战者输入禁止 ｜ `30002` 房满 ｜ `30001` 房间不存在 ｜ `20001` 参数非法（payload 解析失败 / DisallowUnknownFields 命中）。
 
@@ -222,6 +242,8 @@ switch 中路由到 `ws/game_service_wealth.go`。
 | `/api/rooms/:id/spectate` | POST | 观战（复用，§19.5） |
 | `/api/rooms/:id/leave_spectate` | POST | 退出观战（复用） |
 | `/api/games/wealth/professions` | GET（需登录） | **新增**。返回 `{curated:[…精选手卡], pool:{available: bool, total: number, indexed: number}}`；`curated` 每项 = 职业卡公开字段（id/title/salary/expense/初始值/opening_hook/goals）；`pool.total` = 文档池卡总数（懒加载前可为估算），`indexed` = 已建索引数；池不可用时 `available=false`。职业卡数据结构见职业卡加载器文档 |
+| `/api/games/wealth/rooms/:id/survey` | POST（需登录） | P1 新增。发起调研。body `{question: string(≤100 rune), options: []string(2-6, 各≤40 rune)}`；返回 `{survey: SurveyJSON}`；限流（同时 1 个 open / 每月 1 个 / 累计 20）；`survey_enabled=false` → 35010 |
+| `/api/games/wealth/rooms/:id/surveys` | GET（需登录） | P1 新增。返回 `{surveys: [SurveyJSON]}`（全部历史 ≤20）|
 
 **与 config 的关系**：`pool:"docs"` 的磁盘根 = `cfg.Wealth.ProfessionDocsPath`
 （json 键 `profession_docs_path`，默认 `./docs/财商流游戏/玩家职业设计`）；请求级 `pool` 覆盖

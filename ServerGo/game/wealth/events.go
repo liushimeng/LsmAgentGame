@@ -37,11 +37,18 @@ func (w *World) MonthlyEvents() {
 		default:
 			base = 0.05
 		}
-		if w.Rand.Float64() >= base*negativeGuard(p.Cognition) {
+		// P1: 个体失业概率 × 内生失业率倍率(§4.3)。U=自然率 5% 时 p=base
+		// (与 P0 等价);危机 U=12.5% → ×2.5;过热 U=2% → ×0.4→clamp 0.5。
+		// economy_enabled=false → 完整回退 P0(factor 恒 1,rand 消费序列不变)。
+		unemployFactor := 1.0
+		if w.EconomyEnabled && w.Labor != nil {
+			unemployFactor = clampF(w.Labor.Unemployment/UnemployNatural, 0.5, 2.5)
+		}
+		if w.Rand.Float64() >= base*unemployFactor*negativeGuard(p.Cognition) {
 			continue
 		}
-		months := 2 + w.Rand.Intn(5) // U(2,6) 月
-		ratio := 0.8 + w.Rand.Float64()*0.4 // 80–120%
+		months := 2 + w.Rand.Intn(5) // U(2,6) 月,不变
+		ratio := w.sampleRehireRatio()
 		p.UnemployedMonths = months
 		p.RehireSalaryRatio = ratio
 		w.emitEvent("life", seat, fmt.Sprintf("%d 号位(%s)被裁员,失业 %d 个月", seat, p.Card.Title, months))
@@ -87,7 +94,7 @@ func (w *World) BellEvents() {
 				wedding = p.Cash // 有多少花多少(现金不为负)
 			}
 			if wedding > 0 {
-				w.Pay(seat, SeatEntity(seat), EntityWorld, wedding, CatWedding, "婚礼开销")
+				w.Pay(seat, SeatEntity(seat), w.consumerPayTo(), wedding, CatWedding, "婚礼开销")
 			}
 			w.emitEvent("life", seat, fmt.Sprintf("%d 号位结婚了!婚礼支出 ¥%d,配偶月入 ¥6000", seat, wedding))
 		}
@@ -119,7 +126,7 @@ func (w *World) BellEvents() {
 				cost = p.Cash
 			}
 			if cost > 0 {
-				w.Pay(seat, SeatEntity(seat), EntityWorld, cost, CatMedical, "医疗支出")
+				w.Pay(seat, SeatEntity(seat), w.consumerPayTo(), cost, CatMedical, "医疗支出")
 			}
 			p.HadIllnessYear = true
 			p.Energy -= 5
