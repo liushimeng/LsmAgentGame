@@ -94,6 +94,9 @@ type Loan struct {
 	InterestOnly   bool    // true = 先息后本/到期还本(月付息,期末还本)
 	LumpAtMaturity bool    // true = 信用贷(到期一次性还本)
 	FreeInterest   bool    // true = 破产重组 36 期免息分期(Balance 按期递减)
+	// P1: LPR 重定价用(v2.60 N12-3)。
+	OrigSpread float64 // 发放时锁定加点(= 总利率 − 发放时 LPR),P0 遗留贷款默认 0
+	RateFixed  bool    // true = 固定利率(P0 遗留兼容,false = 浮动 LPR 参与重定价)
 }
 
 // SideBusiness 副业状态。
@@ -192,6 +195,10 @@ type Player struct {
 	NegativeCashMonths int // 连续现金 < 0 月数(破产触发)
 	InReorganization   bool
 
+	// P1: 明斯基金融不稳定引擎(v2.60 N11-4 / N11-5)。
+	MinskyByLoan          map[string]*MinskyStatus // loanID -> 分级
+	MinskyMomentTriggered bool                     // 本回合明斯基时刻是否已触发(用于 UI 高亮)
+
 	Monthly         MonthlyResult
 	NetWorthHistory []int64
 	LastActionText  string // 本月最近动作(公开字段 last_action)
@@ -279,6 +286,16 @@ func (p *Player) loanByID(id string) *Loan {
 // nextLoanID 生成下一个贷款 id("L1","L2",…)。
 func (p *Player) nextLoanID() string {
 	return fmt.Sprintf("L%d", len(p.Loans)+1)
+}
+
+// removeLoan 原地移除指定 id 的贷款(避免内存泄漏)。
+func (p *Player) removeLoan(id string) {
+	for i := range p.Loans {
+		if p.Loans[i].ID == id {
+			p.Loans = append(p.Loans[:i], p.Loans[i+1:]...)
+			return
+		}
+	}
 }
 
 // brassTier 返回最高未清偿信用贷档位(0=无;1/2/3)。

@@ -37,6 +37,7 @@ type ClientGameState struct {
 	BotContexts    []BotCtxJSON   `json:"bot_contexts"`
 	LedgerRecent   []LedgerJSON    `json:"ledger_recent"`
 	EventsRecent   []EventJSON     `json:"events_recent"`
+	Minsky         MinskyOverview  `json:"minsky_overview"`
 }
 
 // CentralBankJSON 是 central_bank 子结构(P1,设计文档 §6.5)。
@@ -55,10 +56,22 @@ type CentralBankJSON struct {
 
 // CycleJSON 是 cycle 字段(契约 §3)。
 type CycleJSON struct {
-	Phase       string  `json:"phase"`
-	LPR         float64 `json:"lpr"`
-	CPI         float64 `json:"cpi"`
-	MonthsLeft  int     `json:"months_left"`
+	Phase      string  `json:"phase"`
+	LPR        float64 `json:"lpr"`
+	CPI        float64 `json:"cpi"`
+	MonthsLeft int     `json:"months_left"`
+	// P1: 5Y LPR(房贷重定价用,v2.60 N12-3)。
+	LPR5Y float64 `json:"lpr_5y"`
+}
+
+// MinskyOverview 是明斯基全局概览(v2.60 N11-5,game.state.minsky_overview)。
+type MinskyOverview struct {
+	PonziCount   int     `json:"ponzi_count"`
+	SpecCount    int     `json:"spec_count"`
+	HedgeCount   int     `json:"hedge_count"`
+	PonziRatio   float64 `json:"ponzy_ratio"`
+	CooldownLeft int     `json:"cooldown_left"`
+	MomentCount  int     `json:"moment_count"`
 }
 
 // MarketJSON 是 market 字段(契约 §3,districts 顺序 = DistrictDefs)。
@@ -96,6 +109,9 @@ type PlayerJSON struct {
 	StatusIcon    string  `json:"status_icon"`
 	LastAction    string  `json:"last_action"`
 	Ending        string  `json:"ending"`
+	// P1: 明斯基状态(v2.60 N11-4)。
+	MinskyTier   string  `json:"minsky_tier"`   // hedge/speculative/ponzi(主导等级)
+	DebtToIncome float64 `json:"debt_to_income"` // 主导贷款月供/月收入(0-1+)
 }
 
 // ProfJSON 是职业卡公开字段。
@@ -243,6 +259,9 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 	// Cycle + Market。
 	p := world.Market.Params()
 	cs.Cycle = CycleJSON{Phase: string(world.Market.CyclePhase), LPR: p.LPR, CPI: p.CPI, MonthsLeft: world.Market.CycleMonthsLeft}
+	if world.CB != nil {
+		cs.Cycle.LPR5Y = world.CB.ComputeL5Y()
+	}
 	mj := MarketJSON{
 		StockIndex: world.Market.StockIndex,
 		GoldPrice:  world.Market.GoldPrice,
@@ -283,6 +302,27 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 			cs.Players[s] = pj
 			continue
 		}
+		// P1: 明斯基主导等级 + DTI(死亡玩家也可见,取零值兜底)。
+		minskyTier := ""
+		dti := 0.0
+		if pp != nil && len(pp.MinskyByLoan) > 0 {
+			worst := MinskyHedge
+			for _, ms := range pp.MinskyByLoan {
+				if ms == nil {
+					continue
+				}
+				if ms.Tier == MinskyPonzi {
+					worst = MinskyPonzi
+					dti = ms.DebtToIncome
+					break
+				}
+				if ms.Tier == MinskySpeculative {
+					worst = MinskySpeculative
+					dti = ms.DebtToIncome
+				}
+			}
+			minskyTier = string(worst)
+		}
 		pj := PlayerJSON{
 			Seat: s, Account: pp.Card.ID, Nickname: nicknames[s],
 			IsBot: botSeats[s], ModelDisplay: ModelDisplayName(modelKeys[s]),
@@ -296,6 +336,8 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 			StatusIcon: pp.StatusIcon,
 			LastAction: pp.LastActionText,
 			Ending:     pp.Ending,
+			MinskyTier: minskyTier,
+			DebtToIncome: dti,
 		}
 		cs.Players[s] = pj
 	}
@@ -343,7 +385,48 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		cs.EventsRecent = append(cs.EventsRecent, EventJSON{Month: e.Month, Type: e.Type, Text: e.Text})
 	}
 
+	// P1: 明斯基全局概览(v2.60 N11-5)。
+	cs.Minsky = buildMinskyOverview(world)
+
 	return cs
+}
+
+// buildMinskyOverview 统计全局明斯基概览(view 下发)。
+func buildMinskyOverview(world *World) MinskyOverview {
+	overview := MinskyOverview{CooldownLeft: world.MinskyMomentCooldown, MomentCount: world.MinskyMomentCount}
+	alive := 0
+	for _, p := range world.Players {
+		if p == nil || !p.Alive {
+			continue
+		}
+		alive++
+		// 主导等级(取玩家所有贷款的最差者)。
+		worst := MinskyHedge
+		for _, ms := range p.MinskyByLoan {
+			if ms == nil {
+				continue
+			}
+			if ms.Tier == MinskyPonzi {
+				worst = MinskyPonzi
+				break
+			}
+			if ms.Tier == MinskySpeculative {
+				worst = MinskySpeculative
+			}
+		}
+		switch worst {
+		case MinskyPonzi:
+			overview.PonziCount++
+		case MinskySpeculative:
+			overview.SpecCount++
+		default:
+			overview.HedgeCount++
+		}
+	}
+	if alive > 0 {
+		overview.PonziRatio = float64(overview.PonziCount) / float64(alive)
+	}
+	return overview
 }
 
 // avatarID 职业卡头像文件名主干(前端 avatar)。

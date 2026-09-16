@@ -1664,6 +1664,42 @@ export interface Dict {
   'wealth.pool.cardsTitle': string;
   'wealth.pool.cardSalary': string;
   'wealth.pool.cardSavings': string;
+
+  // ── P1 明斯基引擎 + LPR 重定价 + 提前还款 ──
+  'minsky.title': string;
+  'minsky.hedge': string;
+  'minsky.speculative': string;
+  'minsky.ponzi': string;
+  'minsky.cooldown': string; // {n}
+  'minsky.moment': string;
+  'minsky.ponziRatio': string;
+  'minsky.threshold': string;
+  'minsky.triggeredCount': string; // {n}
+  'minsky.globalWarning': string; // {pct}
+  'minsky.totalAlive': string; // {n}
+  'minsky.unavailable': string;
+  'minsky.eduToggle': string;
+  'minsky.eduP1': string;
+  'minsky.eduP2': string;
+  'minsky.eduWarn': string;
+  'lpr.5y': string;
+  'lpr.5yNote': string;
+  'lpr.5yHint': string;
+  'lpr.reprice_notice': string; // {old} {new}
+  'earlyrepay.title': string;
+  'earlyrepay.trigger': string; // {rate} {yield}
+  'earlyrepay.full': string;
+  'earlyrepay.partial': string;
+  'earlyrepay.hold': string;
+  'earlyrepay.confirmFullTitle': string;
+  'earlyrepay.confirmPartialTitle': string;
+  'earlyrepay.loanLabel': string;
+  'earlyrepay.principal': string;
+  'earlyrepay.penalty': string;
+  'earlyrepay.savedInterest': string;
+  'earlyrepay.partialAmount': string;
+  'earlyrepay.dangerTitle': string;
+  'earlyrepay.dangerBody': string; // {amount}
 }
 
 export type TKey = keyof Dict;

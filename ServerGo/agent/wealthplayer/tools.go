@@ -39,6 +39,9 @@ type ToolRunner interface {
 	ApplyLoanWithCredit(seat int, kind string, amountCNY int64) (string, error)
 	DepositSavings(seat int, amountCNY int64) error
 	WithdrawSavings(seat int, amountCNY int64) error
+	// P1 扩展: 明斯基 / 提前还款。
+	QueryMinsky(seat int) (string, error)
+	EarlyRepay(seat int, loanID string, amountCNY int64) error
 }
 
 // 工具名常量。
@@ -66,6 +69,9 @@ const (
 	ToolApplyLoanWithCredit = "apply_loan_with_credit"
 	ToolDepositSavings    = "deposit_savings"
 	ToolWithdrawSavings   = "withdraw_savings"
+	// P1 扩展: 明斯基 / 提前还款。
+	ToolQueryMinsky       = "query_minsky"
+	ToolEarlyRepay        = "early_repay"
 )
 
 // schema helpers。
@@ -279,6 +285,23 @@ func BuildTools() []llmtypes.ToolDef {
 				"required": []string{"amount_cny"},
 			},
 		},
+		{
+			Name:        ToolQueryMinsky,
+			Description: "查询明斯基全局状态(不消耗动作预算):庞氏/投机/对冲玩家数与占比、明斯基时刻冷却剩余月、累计触发次数。",
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		},
+		{
+			Name:        ToolEarlyRepay,
+			Description: "提前还款(仅房贷):amount_cny=全额还清(≤0)或部分还款;1 年内罚息 1-3%(线性化)。可节省未来利息、降低杠杆、规避明斯基清算。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"loan_id":     strSchema("房贷 id,如 L3"),
+					"amount_cny":  intSchema(0, "还款金额(元);0 或 ≥余额=全额还清"),
+				},
+				"required": []string{"loan_id"},
+			},
+		},
 	}
 }
 
@@ -291,6 +314,7 @@ func ToolNames() []string {
 		ToolSpeak, ToolSubmitMonth,
 		ToolQueryCentralBank, ToolQueryBankingSystem, ToolApplyLoanWithCredit,
 		ToolDepositSavings, ToolWithdrawSavings,
+		ToolQueryMinsky, ToolEarlyRepay,
 	}
 }
 
@@ -413,6 +437,14 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 		return failOr(a.runner.DepositSavings(seat, getInt("amount_cny")), "存款完成", res)
 	case ToolWithdrawSavings:
 		return failOr(a.runner.WithdrawSavings(seat, getInt("amount_cny")), "支取完成", res)
+	case ToolQueryMinsky:
+		s, err := a.runner.QueryMinsky(seat)
+		if err != nil {
+			return fail(err)
+		}
+		return ok(s)
+	case ToolEarlyRepay:
+		return failOr(a.runner.EarlyRepay(seat, getStr("loan_id"), getInt("amount_cny")), "提前还款完成", res)
 	default:
 		res.IsErr = true
 		res.Text = "未知工具: " + name

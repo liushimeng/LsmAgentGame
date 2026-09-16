@@ -118,6 +118,10 @@ const (
 	ErrWealthGateFailed             = 35010
 	ErrWealthNotOwner               = 35011
 	ErrWealthProfessionPoolEmpty    = 35012
+	// P1: 财商流提前还款 / 明斯基(v2.60 N11-4/N11-5/N12-3/N12-5)专用错误码。
+	ErrLoanNotFound          = 35013
+	ErrEarlyRepayOnlyMortgage = 35014
+	ErrCashNotEnoughRepay    = 35015
 	// ErrAlreadyWolfVoted: 狼人在 night_wolves 阶段已投过票(含弃权),
 	// 再次调用 wolf_kill 一律拒绝。R196 报告 P1:Bot 8 (GLM-5.2) 反复投票
 	// 15+ 次服务端仅覆盖不报错,LLM 看不到反馈陷入循环。
@@ -193,6 +197,10 @@ var DefaultMessages = map[int]string{
 	ErrWealthGateFailed:            "wealth cognition/energy/network gate failed",
 	ErrWealthNotOwner:              "wealth operation requires room owner",
 	ErrWealthProfessionPoolEmpty:   "wealth profession pool unavailable",
+	// P1: 财商流提前还款 / 明斯基错误码默认英文消息。
+	ErrLoanNotFound:          "loan not found",
+	ErrEarlyRepayOnlyMortgage: "early repay only allowed for mortgage loans",
+	ErrCashNotEnoughRepay:    "cash not enough for early repayment (including penalty)",
 }
 
 // Code constructs a Coded error.

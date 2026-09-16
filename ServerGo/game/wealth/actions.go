@@ -19,7 +19,7 @@ type Action struct {
 	// buy_asset/sell_asset: "stock_index"|"bond"|"gold"|"house:<d>"|"shop:<d>";
 	// buy_house: "house"(默认)|"shop"。
 	Asset string `json:"asset,omitempty"`
-	// buy_asset / take_loan
+	// buy_asset / take_loan / early_repay
 	AmountCNY int64 `json:"amount_cny,omitempty"`
 	// sell_asset
 	Units float64 `json:"units,omitempty"`
@@ -29,7 +29,7 @@ type Action struct {
 	DownpayRatio float64 `json:"downpay_ratio,omitempty"`
 	// take_loan / repay_loan
 	Kind string `json:"kind,omitempty"`
-	// repay_loan
+	// repay_loan / early_repay
 	LoanID string `json:"loan_id,omitempty"`
 	// consume / donate
 	Reason string `json:"reason,omitempty"`
@@ -55,6 +55,8 @@ const (
 	// P1 新增: 活期→定期 / 定期→活期。
 	ActDeposit          = "deposit"
 	ActWithdraw         = "withdraw"
+	// P1 新增: 提前还款(v2.60 N12-5)。
+	ActEarlyRepay       = "early_repay"
 )
 
 // 信用贷档位面额(协议 §4:credit 档位必须是 50000/100000/200000 之一)。
@@ -121,6 +123,8 @@ func (w *World) ApplyAction(seat int, a Action) (string, *errcode.Error) {
 		return w.actDeposit(p, a)
 	case ActWithdraw:
 		return w.actWithdraw(p, a)
+	case ActEarlyRepay:
+		return w.actEarlyRepay(p, a)
 	default:
 		return "", errcode.CodeMsg(errcode.ErrValidationFailed, "unknown wealth action: "+a.Type)
 	}
@@ -461,10 +465,20 @@ func (w *World) actBuyHouse(p *Player, a Action) (string, *errcode.Error) {
 			}
 			w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, downpay, CatBuy, "购房首付")
 			w.Pay(p.Seat, EntityBank, SeatEntity(p.Seat), loanAmount, CatLoan, "房贷放款")
+			// P1: 锁定加点 = 银行侧加点(MortgageSpread + CreditSpread)(不含玩家信用加点,
+			// 玩家在重定价时按最新信用等级重新计算),用于 LPR 重定价(v2.60 N12-3)。
+			lprRef := w.Market.Params().LPR
+			if w.CB != nil {
+				lprRef = w.CB.ComputeLPR()
+			}
 			p.Loans = append(p.Loans, Loan{
 				ID: p.nextLoanID(), Kind: LoanMortgage, Principal: loanAmount, Balance: loanAmount,
 				AnnualRate: rate, MonthlyPayment: payment, TermN: 360, MonthsLeft: 360,
+				OrigSpread: rate - lprRef - p.CreditMarkup(), RateFixed: false,
 			})
+			// P1: 明斯基分级 + 利率调整(v2.60 N11-4)。
+			w.recordMinskyForLoan(p, &p.Loans[len(p.Loans)-1])
+			w.applyMinskyRateAdjustment(p, &p.Loans[len(p.Loans)-1])
 			p.Assets = append(p.Assets, w.newPropertyAsset(AssetKindHouse(a.District), price))
 			w.autoSelfOccupy(p)
 			text := fmt.Sprintf("购入%s住宅 ¥%d(首付 ¥%d,月供 ¥%d)",
@@ -569,6 +583,9 @@ func (w *World) actTakeLoan(p *Player, a Action) (string, *errcode.Error) {
 			ID: p.nextLoanID(), Kind: LoanConsumer, Principal: a.AmountCNY, Balance: a.AmountCNY,
 			AnnualRate: rate, MonthlyPayment: payment, TermN: 36, MonthsLeft: 36,
 		})
+		// P1: 明斯基分级 + 利率调整(v2.60 N11-4)。
+		w.recordMinskyForLoan(p, &p.Loans[len(p.Loans)-1])
+		w.applyMinskyRateAdjustment(p, &p.Loans[len(p.Loans)-1])
 		text := fmt.Sprintf("借入消费贷 ¥%d(月供 ¥%d)", a.AmountCNY, payment)
 		w.spendBudget(p, "trading", text)
 		return text, nil
@@ -600,6 +617,9 @@ func (w *World) actTakeLoan(p *Player, a Action) (string, *errcode.Error) {
 			AnnualRate: monthly * 12, MonthlyPayment: int64(float64(amount)*monthly + 0.5),
 			TermN: 36, MonthsLeft: 36, InterestOnly: true, LumpAtMaturity: true,
 		})
+		// P1: 明斯基分级 + 利率调整(v2.60 N11-4)。
+		w.recordMinskyForLoan(p, &p.Loans[len(p.Loans)-1])
+		w.applyMinskyRateAdjustment(p, &p.Loans[len(p.Loans)-1])
 		text := fmt.Sprintf("借入信用贷 ¥%d(月息 %.1f%%)", amount, monthly*100)
 		w.spendBudget(p, "trading", text)
 		return text, nil
@@ -627,6 +647,9 @@ func (w *World) actTakeLoan(p *Player, a Action) (string, *errcode.Error) {
 			AnnualRate: rate, MonthlyPayment: int64(float64(a.AmountCNY)*rate/12 + 0.5),
 			TermN: 60, MonthsLeft: 60, InterestOnly: true,
 		})
+		// P1: 明斯基分级 + 利率调整(v2.60 N11-4)。
+		w.recordMinskyForLoan(p, &p.Loans[len(p.Loans)-1])
+		w.applyMinskyRateAdjustment(p, &p.Loans[len(p.Loans)-1])
 		text := fmt.Sprintf("借入经营贷 ¥%d(月息 ¥%d)", a.AmountCNY, int64(float64(a.AmountCNY)*rate/12+0.5))
 		w.spendBudget(p, "trading", text)
 		return text, nil
@@ -669,6 +692,99 @@ func (w *World) actRepayLoan(p *Player, a Action) (string, *errcode.Error) {
 	text := fmt.Sprintf("提前还款 %s ¥%d(余额 ¥%d)", a.LoanID, pay, loan.Balance)
 	w.spendBudget(p, "trading", text)
 	return text, nil
+}
+
+// applyMinskyRateAdjustment 庞氏等级:月供实际减免 0.5%(诱人陷阱);投机 +0.5%。
+// 等额本息贷款重算月供(调用方已持锁)。
+func (w *World) applyMinskyRateAdjustment(p *Player, loan *Loan) {
+	if loan == nil || p == nil {
+		return
+	}
+	ms := p.MinskyByLoan[loan.ID]
+	if ms == nil {
+		return
+	}
+	adj := MinskyRateAdjustment(ms.Tier)
+	if adj == 0 {
+		return
+	}
+	newRate := loan.AnnualRate + adj
+	if newRate < 0.001 {
+		newRate = 0.001
+	}
+	loan.AnnualRate = newRate
+	if !loan.InterestOnly {
+		loan.MonthlyPayment = AnnuityPayment(loan.Balance, newRate, loan.MonthsLeft)
+	}
+}
+
+// ── early_repay:提前还款(仅房贷,全额或部分 + 违约金 1-3%)(v2.60 N12-5) ──
+
+// actEarlyRepay 提前还款(v2.60 N12-5)。
+// 参数: loan_id, amount_cny(0/"all"=全部,正数=部分)。
+// 1 年内提前还款罚息 1-3%(线性化);仅房贷允许。
+func (w *World) actEarlyRepay(p *Player, a Action) (string, *errcode.Error) {
+	if p.ActionBudget <= 0 {
+		return "", errcode.Code(errcode.ErrWealthActionBudgetExhausted)
+	}
+	loan := p.loanByID(a.LoanID)
+	if loan == nil || loan.Balance <= 0 {
+		return "", errcode.Code(errcode.ErrLoanNotFound)
+	}
+	if loan.Kind != LoanMortgage {
+		return "", errcode.Code(errcode.ErrEarlyRepayOnlyMortgage)
+	}
+	// 1 年内提前还款罚息 1-3%(线性化:开放时点距今 <12 月才收)。
+	monthsSinceOpen := loan.TermN - loan.MonthsLeft
+	var penaltyRate float64
+	if monthsSinceOpen < 12 {
+		// 1% → 3% 线性(距今 0 月 ≈ 3%, 12 月 ≈ 0)。
+		penaltyRate = 0.01 + float64(12-monthsSinceOpen)*0.00167
+		if penaltyRate > 0.03 {
+			penaltyRate = 0.03
+		}
+	}
+	// 还款金额(≤0 或 ≥余额 = 全部还清)。
+	var payAmount int64
+	if a.AmountCNY <= 0 || a.AmountCNY >= loan.Balance {
+		payAmount = loan.Balance
+	} else {
+		payAmount = a.AmountCNY
+	}
+	penalty := int64(float64(payAmount) * penaltyRate)
+	totalPay := payAmount + penalty
+	if p.Cash < totalPay {
+		return "", errcode.CodeMsg(errcode.ErrCashNotEnoughRepay,
+			fmt.Sprintf("现金不足(需 %d 元,含违约金 %d 元)", totalPay, penalty))
+	}
+	w.Pay(p.Seat, SeatEntity(p.Seat), EntityBank, totalPay, CatRepay, "early_repay")
+	loan.Balance -= payAmount
+	if loan.Balance <= 0 {
+		p.removeLoan(a.LoanID)
+		savedInterest := w.estimateSavedInterest(loan)
+		text := fmt.Sprintf("🎉 房贷 %s 已结清！节省利息约 ¥%d", a.LoanID, savedInterest)
+		w.spendBudget(p, "trading", text)
+		return text, nil
+	}
+	// 部分还款后重算月供(期限不变)。
+	loan.MonthlyPayment = AnnuityPayment(loan.Balance, loan.AnnualRate, loan.MonthsLeft)
+	text := fmt.Sprintf("提前还款 %s ¥%d(违约金 %d 元,剩余余额 ¥%d,新月供 ¥%d)",
+		a.LoanID, payAmount, penalty, loan.Balance, loan.MonthlyPayment)
+	w.spendBudget(p, "trading", text)
+	return text, nil
+}
+
+// estimateSavedInterest 估算结清贷款节省的利息(剩余月供总和 − 剩余余额,最低 0)。
+func (w *World) estimateSavedInterest(loan *Loan) int64 {
+	if loan == nil {
+		return 0
+	}
+	total := loan.MonthlyPayment * int64(loan.MonthsLeft)
+	saved := total - loan.Balance
+	if saved < 0 {
+		return 0
+	}
+	return saved
 }
 
 // ── 副业 ──

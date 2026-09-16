@@ -8,11 +8,11 @@ import (
 	"LsmAgentGame/errcode"
 )
 
-// TestBuildTools_All22ToolsPresent 22 工具齐备(§7 + P1 新增 5 个央行/银行工具)。
-func TestBuildTools_All22ToolsPresent(t *testing.T) {
+// TestBuildTools_AllToolsPresent 24 工具齐备(§7 + P1 新增 5 个央行/银行工具 + 2 个明斯基/提前还款工具)。
+func TestBuildTools_AllToolsPresent(t *testing.T) {
 	tools := BuildTools()
-	if len(tools) != 22 {
-		t.Errorf("tools count: got %d, want 22", len(tools))
+	if len(tools) != 24 {
+		t.Errorf("tools count: got %d, want 24", len(tools))
 	}
 	want := map[string]bool{
 		ToolCheckState: false, ToolBuyAsset: false, ToolSellAsset: false,
@@ -21,9 +21,11 @@ func TestBuildTools_All22ToolsPresent(t *testing.T) {
 		ToolSocialize: false, ToolRest: false, ToolWorkOvertime: false,
 		ToolMoveDistrict: false, ToolConsume: false, ToolDonate: false,
 		ToolSpeak: false, ToolSubmitMonth: false,
-		// P1 新增。
+		// P1 新增: 央行/银行工具。
 		ToolQueryCentralBank: false, ToolQueryBankingSystem: false,
 		ToolApplyLoanWithCredit: false, ToolDepositSavings: false, ToolWithdrawSavings: false,
+		// P1 扩展: 明斯基 / 提前还款。
+		ToolQueryMinsky: false, ToolEarlyRepay: false,
 	}
 	for _, t1 := range tools {
 		if _, ok := want[t1.Name]; !ok {
@@ -51,11 +53,11 @@ func TestBuildTools_RequiredFields(t *testing.T) {
 	}
 }
 
-// TestToolNames_Returns22Names 工具名列表 = 22(P1 新增 5 个)。
-func TestToolNames_Returns22Names(t *testing.T) {
+// TestToolNames_Returns24Names 工具名列表 = 24(P1 新增 5 个央行/银行工具 + 2 个明斯基/提前还款工具)。
+func TestToolNames_Returns24Names(t *testing.T) {
 	names := ToolNames()
-	if len(names) != 22 {
-		t.Errorf("names count: got %d, want 22", len(names))
+	if len(names) != 24 {
+		t.Errorf("names count: got %d, want 24", len(names))
 	}
 	for _, n := range names {
 		if !strings.HasPrefix(n, "check_state") &&
@@ -77,7 +79,8 @@ func TestToolNames_Returns22Names(t *testing.T) {
 			!strings.HasPrefix(n, "query_") &&
 			!strings.HasPrefix(n, "apply_loan_with_credit") &&
 			!strings.HasPrefix(n, "deposit_") &&
-			!strings.HasPrefix(n, "withdraw_") {
+			!strings.HasPrefix(n, "withdraw_") &&
+			!strings.HasPrefix(n, "early_") {
 			t.Errorf("unexpected name: %s", n)
 		}
 	}

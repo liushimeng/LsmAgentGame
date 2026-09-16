@@ -87,6 +87,10 @@ type World struct {
 	Events []EventRecord // 全量事件(增长缓慢:每月 ≈ 1–3 条)
 
 	startAge int
+
+	// P1: 明斯基金融不稳定引擎(v2.60 N11-5)。
+	MinskyMomentCooldown int // 明斯基时刻冷却剩余月(触发后置 12)
+	MinskyMomentCount    int // 累计触发次数(展示/评分用)
 }
 
 // NewWorld 构造世界(seed=0 时用时间随机;cards[seat] 可为零值 Card 表示空座)。
@@ -139,6 +143,7 @@ func newPlayerFromCard(seat int, card profession.Card) *Player {
 		SalaryBase:   card.Salary,
 		Alive:        true,
 		StatusIcon:   "idle",
+		MinskyByLoan: map[string]*MinskyStatus{},
 	}
 	if card.Marital == "" {
 		p.Family.Marital = "single"

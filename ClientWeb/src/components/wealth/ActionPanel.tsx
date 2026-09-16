@@ -24,6 +24,8 @@ import {
   type WealthGameState,
 } from '@/types/wealth';
 import { selectActionsUsedThisMonth, WEALTH_ACTION_BUDGET, useWealthStore } from '@/store/wealth.store';
+import { EarlyRepayModal } from './EarlyRepayModal';
+import { MinskyStatusBar } from './MinskyStatusBar';
 
 const AWAIT_TIMEOUT_MS = 8000;
 
@@ -73,6 +75,13 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
   const actionsDisabled = !playing || !acting || budgetLeft <= 0;
   const me = gameState?.players.find((p) => p.seat === mySeat);
   const stopped = !!me && !me.alive;
+
+  // P1 提前还款弹窗状态。
+  const [earlyRepayOpen, setEarlyRepayOpen] = useState(false);
+  const earlyRepayEligible = !!gameState?.early_repay_eligible;
+  const mortgageLoans = (my?.loans ?? []).filter((l) => l.kind === 'mortgage');
+  // 理财收益率 ≈ 债券年化（简化机会成本）。
+  const investYield = gameState?.market?.bond_yield ?? 0;
 
   // ── 动作结果回执（弹窗内联成功 / 失败；短窗口内仅接受最近一帧）──
   // 用 refs 保存最新值，避免 setAwaiting(true) → React 异步重渲染 → effect 注册
@@ -511,12 +520,29 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
     </div>
   );
 
+  const handleEarlyRepaySubmit = (action: WealthAction) => {
+    sendAction(action);
+    setEarlyRepayOpen(false);
+  };
+
   return (
     <div className="wealth-actionbar">
+      {/* P1 明斯基风险提示条（颜色编码；庞氏等级红色警告） */}
+      <MinskyStatusBar gameState={gameState} mySeat={mySeat} />
+
       <div className="wealth-actionbar__budget">
         <span className="wealth-badge wealth-badge--budget">
           {t('wealth.actionBudget' as TKey, { n: budgetLeft })}
         </span>
+        {earlyRepayEligible && mortgageLoans.length > 0 && playing && acting && !stopped && (
+          <button
+            type="button"
+            className="wealth-badge wealth-action-btn--earlyrepay"
+            onClick={() => setEarlyRepayOpen(true)}
+          >
+            💰 {t('earlyrepay.title' as TKey)}
+          </button>
+        )}
       </div>
       <div className="wealth-actionbar__buttons">
         {WEALTH_ACTIONS.map((meta) => {
@@ -576,6 +602,15 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
           {modalBody}
         </AppModal>
       )}
+
+      {/* P1 提前还款弹窗 */}
+      <EarlyRepayModal
+        open={earlyRepayEligible && earlyRepayOpen}
+        mortgageLoans={mortgageLoans}
+        investYield={investYield}
+        onSubmit={handleEarlyRepaySubmit}
+        onDismiss={() => setEarlyRepayOpen(false)}
+      />
     </div>
   );
 }

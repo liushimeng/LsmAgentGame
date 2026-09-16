@@ -14,6 +14,9 @@ export type WealthDistrictId =
 /** 市场周期四阶段（《规则》§7.1）。 */
 export type WealthCyclePhase = 'recovery' | 'boom' | 'recession' | 'depression';
 
+/** 明斯基融资等级（v2.60 N11-4）。 */
+export type WealthMinskyTier = 'hedge' | 'speculative' | 'ponzi';
+
 /** 月内相位：acting=动作窗口 / settling=月结中。 */
 export type WealthPhase = 'acting' | 'settling';
 
@@ -41,10 +44,18 @@ export interface WealthCycle {
   phase: WealthCyclePhase;
   /** 1Y LPR，小数（如 0.035），非百分数。 */
   lpr: number;
+  /** 5Y LPR，小数（如 0.04），非百分数（P1 LPR 重定价）。 */
+  lpr5y?: number;
   /** CPI，小数（如 0.02）。 */
   cpi: number;
   /** 阶段剩余月（含钟声重掷不确定性，仅展示）。 */
   months_left: number;
+  /** 明斯基时刻累计触发次数（P1 明斯基引擎）。 */
+  minsky_moment_count?: number;
+  /** 当前庞氏玩家数（P1 明斯基引擎）。 */
+  ponzi_count?: number;
+  /** 庞氏玩家占比（0-1；P1 明斯基引擎）。 */
+  ponzi_ratio?: number;
 }
 
 export interface WealthDistrictMarket {
@@ -133,6 +144,10 @@ export interface WealthPlayer {
   last_action: string;
   /** 终局结局 id；进行中为 ""。 */
   ending: string;
+  /** 明斯基融资等级（P1 明斯基引擎，仅本人座位下发）。 */
+  minsky_tier?: WealthMinskyTier;
+  /** 月供/月收入比（0-1+；P1 明斯基引擎，仅本人座位下发）。 */
+  debt_to_income?: number;
 }
 
 export interface WealthMonthlyDetail {
@@ -264,6 +279,24 @@ export interface WealthGameState {
   ledger_recent: WealthLedgerEntry[];
   /** 最近 100 条。 */
   events_recent: WealthRecentEvent[];
+  /** 明斯基全局概览（P1 明斯基引擎）。 */
+  minsky_overview?: WealthMinskyOverview;
+  /** 提前还款资格（仅本人座位下发；P1 LPR 重定价）。 */
+  early_repay_eligible?: boolean;
+}
+
+/** 明斯基全局概览（game.state.minsky_overview，P1 明斯基引擎）。 */
+export interface WealthMinskyOverview {
+  /** 庞氏玩家数。 */
+  ponzi_count: number;
+  /** 投机玩家数。 */
+  spec_count: number;
+  /** 对冲玩家数。 */
+  hedge_count: number;
+  /** 庞氏玩家占比（0-1）。 */
+  ponzi_ratio: number;
+  /** 距离下次明斯基时刻判定的剩余月（冷却期；0=可触发）。 */
+  cooldown_left: number;
 }
 
 // ── 座位容量常量（2026-09-16 §财商流10–12座位改造）──────────────────────
@@ -387,7 +420,8 @@ export type WealthActionType =
   | 'buy_asset' | 'sell_asset' | 'buy_house' | 'take_loan' | 'repay_loan'
   | 'start_side_business' | 'stop_side_business' | 'study' | 'socialize'
   | 'rest' | 'work_overtime' | 'move_district' | 'consume' | 'donate'
-  | 'submit_month';
+  | 'submit_month'
+  | 'early_repay';
 
 export type WealthAction =
   | { type: 'buy_asset'; asset: 'stock_index' | 'bond' | 'gold'; amount_cny: number }
@@ -404,7 +438,8 @@ export type WealthAction =
   | { type: 'move_district'; district: WealthDistrictId }
   | { type: 'consume'; amount_cny: number; reason?: string }
   | { type: 'donate'; amount_cny: number }
-  | { type: 'submit_month' };
+  | { type: 'submit_month' }
+  | { type: 'early_repay'; loan_id: string; amount_cny: number };
 
 /** POST /api/games/wealth/rooms 的 wealth 段（协议 §6）。 */
 export interface WealthRoomOptions {
@@ -614,4 +649,14 @@ export function fiIndexColor(fi: number): string {
   if (fi >= 1) return '#34d399';
   if (fi >= 0.5) return '#60a5fa';
   return '#9ca3af';
+}
+
+/** 明斯基融资等级色（暗色主题 ≥5:1）。 */
+export function minskyTierColor(tier: WealthMinskyTier | undefined | null): string {
+  switch (tier) {
+    case 'hedge': return '#4caf50';       // 对冲 — 绿（白字 ≈ 5.4:1）
+    case 'speculative': return '#ff9800'; // 投机 — 橙（白字 ≈ 4.6:1 on #10151d）
+    case 'ponzi': return '#f44336';       // 庞氏 — 红（白字 ≈ 5.7:1）
+    default: return '#9ca3af';
+  }
 }

@@ -205,6 +205,79 @@ func (a *AgentRunner) WithdrawSavings(seat int, amountCNY int64) error {
 	})
 }
 
+// QueryMinsky 查询明斯基全局概览(不耗动作预算,v2.60 N11-4/N11-5)。
+func (a *AgentRunner) QueryMinsky(seat int) (string, error) {
+	a.room.mu.Lock()
+	defer a.room.mu.Unlock()
+	if a.room.closed || a.room.Status != StatusPlaying {
+		return "", errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	w := a.room.World
+	if w == nil {
+		return "", errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	// 统计各等级玩家数。
+	var ponzi, spec, hedge, alive int
+	for _, p := range w.Players {
+		if p == nil || !p.Alive {
+			continue
+		}
+		alive++
+		worst := MinskyHedge
+		for _, ms := range p.MinskyByLoan {
+			if ms == nil {
+				continue
+			}
+			if ms.Tier == MinskyPonzi {
+				worst = MinskyPonzi
+				break
+			}
+			if ms.Tier == MinskySpeculative {
+				worst = MinskySpeculative
+			}
+		}
+		switch worst {
+		case MinskyPonzi:
+			ponzi++
+		case MinskySpeculative:
+			spec++
+		default:
+			hedge++
+		}
+	}
+	// 当前座位的主导等级。
+	myTier := ""
+	if p := w.Players[seat]; p != nil {
+		worst := MinskyHedge
+		for _, ms := range p.MinskyByLoan {
+			if ms == nil {
+				continue
+			}
+			if ms.Tier == MinskyPonzi {
+				worst = MinskyPonzi
+				break
+			}
+			if ms.Tier == MinskySpeculative {
+				worst = MinskySpeculative
+			}
+		}
+		myTier = string(worst)
+	}
+	ponziRatio := 0.0
+	if alive > 0 {
+		ponziRatio = float64(ponzi) / float64(alive) * 100
+	}
+	return fmt.Sprintf("明斯基概览:庞氏 %d 人(%.0f%%)/投机 %d/对冲 %d;您=%s;冷却 %d 月;累计触发 %d 次;庞氏 >30%% 触发明斯基时刻(杠杆资产腰斩)",
+		ponzi, ponziRatio, spec, hedge, myTier, w.MinskyMomentCooldown, w.MinskyMomentCount), nil
+}
+
+// EarlyRepay 提前还款(仅房贷,v2.60 N12-5)。
+func (a *AgentRunner) EarlyRepay(seat int, loanID string, amountCNY int64) error {
+	return a.apply(seat, wealthplayer.ToolEarlyRepay, "", func() (string, error) {
+		return a.room.World.ApplyAction(seat, Action{Type: ActEarlyRepay, LoanID: loanID, AmountCNY: amountCNY})
+	})
+}
+
 func (a *AgentRunner) Speak(seat int, text, internalThought string) error {
 	// speak 走 chat sender,不耗动作预算。
 	a.room.mu.Lock()

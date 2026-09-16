@@ -61,7 +61,7 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 
 	age := w.Age()
 
-	// ③ 逐座位月结 7 步 + 破产检查。
+	// ③ 逐座位月结 7 步 + 破产检查 + P1 月度明斯基重分级。
 	for seat, p := range w.Players {
 		if p == nil {
 			continue
@@ -69,6 +69,10 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		cashBefore := p.Cash
 		if p.Alive {
 			w.settlePlayer(p, age)
+			// P1: 月结后按最新收入重算明斯基分级(工资/收入可能变化)(v2.60 N11-4)。
+			w.reclassifyPlayerMinsky(p)
+			// P1: 重置明斯基时刻触发标记。
+			p.MinskyMomentTriggered = false
 		}
 		net := p.NetWorth(w.Market)
 		p.NetWorthHistory = append(p.NetWorthHistory, net)
@@ -80,6 +84,20 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 			sum.Note = "停赛恢复中"
 		}
 		res.Summaries = append(res.Summaries, sum)
+	}
+
+	// ③.5 明斯基时刻判定(v2.60 N11-5):庞氏玩家占比 > 30% 时触发(有冷却)。
+	if w.MinskyMomentCooldown > 0 {
+		w.MinskyMomentCooldown--
+	}
+	if ponziCount := w.minskyPonziCount(); ponziCount > 0 {
+		alive := len(w.alivePlayers())
+		if alive > 0 {
+			ponziRatio := float64(ponziCount) / float64(alive)
+			if ponziRatio > 0.30 && w.MinskyMomentCooldown == 0 {
+				w.triggerMinskyMoment(res)
+			}
+		}
 	}
 
 	// ④ 市场漂移 + 阶段到期重掷。
@@ -100,6 +118,13 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 	isYearEnd := w.Month%12 == 0
 	isBell := w.Month%60 == 0
 	w.Month++
+
+	// P1: 年初(每年 1 月)LPR 重定价(v2.60 N12-3)。
+	if w.Month > 0 && w.Month%12 == 1 {
+		if records := w.RepriceMortgageLPR(); len(records) > 0 {
+			w.emitEvent("lpr_reprice", -1, fmt.Sprintf("LPR 重定价:共 %d 笔房贷月供调整", len(records)))
+		}
+	}
 
 	if isYearEnd {
 		w.AnnualAdjust()

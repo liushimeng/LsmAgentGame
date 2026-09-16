@@ -86,6 +86,7 @@ type CentralBankState struct {
 
 	// ── 通胀与产出 ──
 	CPI           float64 // 内生 CPI(替代 PhaseTable 硬编码)
+	LastCPI       float64 // 上月 CPI(用于 ComputeL5Y 的 P1 5Y LPR 计算,与 CPI 同步更新)
 	RealGDPGrowth float64 // 实际 GDP 增速(内生于市场阶段)
 	M2GrowthYoY   float64 // M2 同比增速
 
@@ -175,6 +176,20 @@ func (cb *CentralBankState) ComputeCPI() {
 		cpi = CPIMax
 	}
 	cb.CPI = cpi
+	cb.LastCPI = cpi
+}
+
+// ComputeL5Y 计算 5Y LPR = PolicyRate + 期限溢价 + CPI 加点(v2.60 N12-3)。
+// CPI 高于目标时 5Y 加点更高(银行对长期通胀风险的补偿)。
+func (cb *CentralBankState) ComputeL5Y() float64 {
+	base := cb.PolicyRate + TermPremium
+	if cb.LastCPI > TargetCPI {
+		base += (cb.LastCPI - TargetCPI) * 0.5
+	}
+	if base < 0 {
+		base = 0
+	}
+	return base
 }
 
 // ComputeLPR 内生 LPR = PolicyRate + TermPremium + CreditSpread。

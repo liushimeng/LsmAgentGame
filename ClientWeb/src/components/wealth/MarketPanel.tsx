@@ -13,6 +13,7 @@ import {
   WEALTH_DISTRICTS,
   formatPct,
   type WealthCentralBank,
+  type WealthCycle,
   type WealthCyclePhase,
   type WealthDistrictId,
   type WealthGameState,
@@ -96,7 +97,7 @@ function creditTightnessColor(v: number): string {
 }
 
 /** 央行货币政策快照区块（M0/M1/M2 + 政策利率 + 信贷约束）。 */
-function CentralBankSection({ cb }: { cb: WealthCentralBank }) {
+function CentralBankSection({ cb, cycle }: { cb: WealthCentralBank; cycle?: WealthCycle }) {
   const t = useT();
   const tightnessColor = creditTightnessColor(cb.credit_tightness);
   return (
@@ -129,7 +130,7 @@ function CentralBankSection({ cb }: { cb: WealthCentralBank }) {
         <span className="wealth-cb__value">{cb.money_multiplier.toFixed(3)}</span>
       </div>
 
-      {/* 政策利率 / LPR / CPI（百分数 2 位） */}
+      {/* 政策利率 / LPR / 5Y LPR / CPI（百分数 2 位） */}
       <div className="wealth-cb__row">
         <span className="wealth-cb__label">{t('wealth.cb.policyRate' as TKey)}</span>
         <span className="wealth-cb__value">{formatPct(cb.policy_rate, 2)}</span>
@@ -138,6 +139,16 @@ function CentralBankSection({ cb }: { cb: WealthCentralBank }) {
         <span className="wealth-cb__label">{t('wealth.cpi' as TKey)}</span>
         <span className="wealth-cb__value">{formatPct(cb.cpi, 2)}</span>
       </div>
+
+      {/* P1 5Y LPR 展示（如有） */}
+      {cycle?.lpr5y !== undefined && (
+        <div className="wealth-cb__row">
+          <span className="wealth-cb__label">{t('lpr.5y' as TKey)}</span>
+          <span className="wealth-cb__value wealth-cb__value--lpr5y">{formatPct(cycle.lpr5y, 2)}</span>
+          <span className="wealth-cb__label">{t('lpr.5yNote' as TKey)}</span>
+          <span className="wealth-cb__value">{t('lpr.5yHint' as TKey)}</span>
+        </div>
+      )}
 
       {/* 信贷约束 + 贷款额度乘数 */}
       <div className="wealth-cb__row">
@@ -189,10 +200,15 @@ export function MarketPanel({ gameState, marketHistory, onSelectDistrict }: Prop
       </div>
       <div className="wealth-marketpanel__rates">
         <span className="wealth-badge">{t('wealth.lpr' as TKey)} {formatPct(cycle.lpr)}</span>
+        {cycle.lpr5y !== undefined && (
+          <span className="wealth-badge wealth-badge--lpr5y">
+            {t('lpr.5y' as TKey)} {formatPct(cycle.lpr5y)}
+          </span>
+        )}
         <span className="wealth-badge">{t('wealth.cpi' as TKey)} {formatPct(cycle.cpi)}</span>
       </div>
 
-      <CentralBankSection cb={gameState.central_bank} />
+      <CentralBankSection cb={gameState.central_bank} cycle={cycle} />
 
       <QuoteRow
         label={t('wealth.stockIndex' as TKey)}
