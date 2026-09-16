@@ -11,7 +11,6 @@ import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import {
   WEALTH_DISTRICTS,
-  formatCny,
   formatPct,
   type WealthCentralBank,
   type WealthCyclePhase,
@@ -80,6 +79,79 @@ const CYCLE_CLASS: Record<WealthCyclePhase, string> = {
   depression: 'wealth-cycle--depression',
 };
 
+/** 信贷约束状态：宽松 / 中性 / 收紧 / 惜贷（阈值来自设计文档 §6.5）。 */
+function creditTightnessLabel(t: TKey, v: number): string {
+  if (v >= 1) return t('wealth.cb.tightness.cautious' as TKey);
+  if (v > 0.7) return t('wealth.cb.tightness.tight' as TKey);
+  if (v >= 0.3) return t('wealth.cb.tightness.neutral' as TKey);
+  return t('wealth.cb.tightness.loose' as TKey);
+}
+
+/** 信贷约束状态色（暗色主题 ≥4.5:1）。 */
+function creditTightnessColor(v: number): string {
+  if (v >= 1) return '#f87171';   // 惜贷 — 红
+  if (v > 0.7) return '#fb923c';  // 收紧 — 橙
+  if (v >= 0.3) return '#fbbf24'; // 中性 — 琥珀
+  return '#4ade80';               // 宽松 — 绿
+}
+
+/** 央行货币政策快照区块（M0/M1/M2 + 政策利率 + 信贷约束）。 */
+function CentralBankSection({ cb }: { cb: WealthCentralBank }) {
+  const t = useT();
+  const tightnessColor = creditTightnessColor(cb.credit_tightness);
+  return (
+    <div className="wealth-cb">
+      <div className="wealth-cb__head">
+        <span className="wealth-cb__title">{t('wealth.cb.title' as TKey)}</span>
+        <span
+          className="wealth-badge"
+          style={{ background: tightnessColor, color: '#0f172a' }}
+        >
+          {creditTightnessLabel(t, cb.credit_tightness)}
+        </span>
+      </div>
+
+      {/* 货币三层次：M0 / M1 / M2（万元） */}
+      <div className="wealth-cb__row">
+        <span className="wealth-cb__label">{t('wealth.cb.m0' as TKey)}</span>
+        <span className="wealth-cb__value">¥{(cb.m0_cny / 1e4).toFixed(1)}万</span>
+        <span className="wealth-cb__label">{t('wealth.cb.m1' as TKey)}</span>
+        <span className="wealth-cb__value">¥{(cb.m1_cny / 1e4).toFixed(1)}万</span>
+        <span className="wealth-cb__label">{t('wealth.cb.m2' as TKey)}</span>
+        <span className="wealth-cb__value">¥{(cb.m2_cny / 1e4).toFixed(1)}万</span>
+      </div>
+
+      {/* 基础货币 + 货币乘数 */}
+      <div className="wealth-cb__row">
+        <span className="wealth-cb__label">{t('wealth.cb.mb' as TKey)}</span>
+        <span className="wealth-cb__value">¥{(cb.mb_cny / 1e4).toFixed(1)}万</span>
+        <span className="wealth-cb__label">{t('wealth.cb.multiplier' as TKey)}</span>
+        <span className="wealth-cb__value">{cb.money_multiplier.toFixed(3)}</span>
+      </div>
+
+      {/* 政策利率 / LPR / CPI（百分数 2 位） */}
+      <div className="wealth-cb__row">
+        <span className="wealth-cb__label">{t('wealth.cb.policyRate' as TKey)}</span>
+        <span className="wealth-cb__value">{formatPct(cb.policy_rate, 2)}</span>
+        <span className="wealth-cb__label">{t('wealth.lpr' as TKey)}</span>
+        <span className="wealth-cb__value">{formatPct(cb.lpr, 2)}</span>
+        <span className="wealth-cb__label">{t('wealth.cpi' as TKey)}</span>
+        <span className="wealth-cb__value">{formatPct(cb.cpi, 2)}</span>
+      </div>
+
+      {/* 信贷约束 + 贷款额度乘数 */}
+      <div className="wealth-cb__row">
+        <span className="wealth-cb__label">{t('wealth.cb.creditTightness' as TKey)}</span>
+        <span className="wealth-cb__value" style={{ color: tightnessColor }}>
+          {formatPct(cb.credit_tightness, 0)}
+        </span>
+        <span className="wealth-cb__label">{t('wealth.cb.loanQuota' as TKey)}</span>
+        <span className="wealth-cb__value">{formatPct(cb.loan_quota_factor, 0)}</span>
+      </div>
+    </div>
+  );
+}
+
 export function MarketPanel({ gameState, marketHistory, onSelectDistrict }: Props) {
   const t = useT();
   if (!gameState) {
@@ -119,6 +191,8 @@ export function MarketPanel({ gameState, marketHistory, onSelectDistrict }: Prop
         <span className="wealth-badge">{t('wealth.lpr' as TKey)} {formatPct(cycle.lpr)}</span>
         <span className="wealth-badge">{t('wealth.cpi' as TKey)} {formatPct(cycle.cpi)}</span>
       </div>
+
+      <CentralBankSection cb={gameState.central_bank} />
 
       <QuoteRow
         label={t('wealth.stockIndex' as TKey)}

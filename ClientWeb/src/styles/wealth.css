@@ -374,6 +374,42 @@
 .wealth-quote__delta { font-size: 12px; }
 .wealth-spark { opacity: 0.95; }
 
+/* ── 央行货币政策区块（P1 央行引擎）─────────────────── */
+.wealth-cb {
+  padding: 8px 0;
+  border-top: 1px solid var(--wealth-border);
+  border-bottom: 1px solid var(--wealth-border);
+  margin: 6px 0;
+}
+.wealth-cb__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.wealth-cb__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wealth-text);
+}
+.wealth-cb__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+.wealth-cb__label {
+  color: var(--wealth-text-dim);
+  min-width: 56px;
+}
+.wealth-cb__value {
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
 .wealth-marketpanel__districts { padding-top: 8px; }
 .wealth-marketpanel__districts-title { color: var(--wealth-text-dim); font-size: 12px; margin-bottom: 4px; }
 .wealth-hp-bar {
