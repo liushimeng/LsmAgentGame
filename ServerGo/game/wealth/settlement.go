@@ -133,6 +133,16 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		w.Society = ComputeSociety(w)
 	}
 
+	// P2: 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
+	// ④.7 借贷月结:逐笔 P2PLoan 月供扣款/逾期判定/担保代偿。
+	w.SettleP2PLoans(res)
+	// ④.8 挂单过期清理:ExpireMonth < w.Month 的 open/negotiating 挂单 → expired。
+	w.ExpiredListingsCleanup()
+	// ④.9 议价过期清理:ExpireMonth < w.Month 的 active 议价 → expired。
+	w.ExpiredNegotiatesCleanup()
+	// ④.10 拍卖到期处理:到期未成交 → 流拍/荷兰式降价处理。
+	w.EndDueAuctions()
+
 	// market_changes 追加(P1 §6.3):cpi = 篮子 CPIYoY(回退时 CB 理论值)。
 	if w.EconomyEnabled && w.Goods != nil {
 		res.CPI = w.Goods.CPIYoY

@@ -102,6 +102,10 @@ type World struct {
 	// P1: 明斯基金融不稳定引擎(v2.60 N11-5)。
 	MinskyMomentCooldown int // 明斯基时刻冷却剩余月(触发后置 12)
 	MinskyMomentCount    int // 累计触发次数(展示/评分用)
+
+	// P2: 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
+	ListingBook  *ListingBook  // 挂单簿 + 议价 + P2P 借贷合约
+	AuctionHouse *AuctionHouse // 拍卖行(四种拍卖)
 }
 
 // NewWorld 构造世界(seed=0 时用时间随机;cards[seat] 可为零值 Card 表示空座)。
@@ -125,6 +129,9 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		EconomyEnabled: true,
 		Goods:          NewGoodsMarket(),
 		Labor:          NewFirmSector(),
+		// P2: 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
+		ListingBook:  NewListingBook(),
+		AuctionHouse: NewAuctionHouse(),
 	}
 	for seat := 0; seat < MaxSeats; seat++ {
 		if cards[seat].ID == "" {

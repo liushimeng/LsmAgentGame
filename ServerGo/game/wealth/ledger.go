@@ -65,6 +65,14 @@ const (
 	CatMoving   = "moving"
 	CatOvertime = "overtime"
 	CatProperty = "property"
+	// P2: 玩家间交易 / 拍卖 / 信息 / 借贷(2026-09-16 §财商流P2)。
+	CatTrade        = "trade"         // 玩家间资产成交(买卖双方)
+	CatTradeFee     = "trade_fee"     // 交易税费(增值税/中介费)
+	CatP2PInterest  = "p2p_interest"  // P2P 借贷利息
+	CatP2PRepay     = "p2p_repay"     // P2P 借贷还本
+	CatAuctionFee   = "auction_fee"   // 拍卖佣金
+	CatInfoTrade    = "info_trade"    // 信息交易
+	CatNegotiateFee = "negotiate_fee" // 议价服务费
 )
 
 // Entry 单条双式流水。
