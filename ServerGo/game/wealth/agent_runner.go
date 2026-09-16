@@ -420,6 +420,213 @@ func (a *AgentRunner) SubmitMonth(seat int) error {
 	return a.room.SubmitMonth(seat)
 }
 
+// ── P2(2026-09-16 §财商流P2): 玩家间交易与财富流动系统 12 工具 ──
+//
+// 以下方法为 Agent 工具桥的 P2 扩展。引擎侧实现(listing.go / auction.go /
+// trade_actions.go)为独立交付;当前为占位实现,返回友好中文错误提示,
+// 避免 Agent 调用时 panic。引擎接入后替换为真实逻辑。
+
+func (a *AgentRunner) checkActing(seat int) error {
+	if a.room.closed || a.room.Status != StatusPlaying {
+		return errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	if a.room.Phase != PhaseActing {
+		return errcode.Code(errcode.ErrWealthWrongPhase)
+	}
+	p := a.room.World.Players[seat]
+	if p == nil || !p.Alive {
+		return errcode.Code(errcode.ErrWealthPlayerInactive)
+	}
+	if p.Submitted {
+		return errcode.Code(errcode.ErrWealthWrongPhase)
+	}
+	return nil
+}
+
+// ListAsset 挂牌出售资产:从玩家持仓中按 asset_index 取出快照,创建挂单。
+func (a *AgentRunner) ListAsset(seat int, assetIndex int, askCNY, minCNY int64) error {
+	return a.apply(seat, wealthplayer.ToolListAsset, "", func() (string, error) {
+		w := a.room.World
+		p := w.Players[seat]
+		if p == nil || !p.Alive {
+			return "", errcode.Code(errcode.ErrWealthPlayerInactive)
+		}
+		if assetIndex < 0 || assetIndex >= len(p.Assets) {
+			return "", errcode.CodeMsg(errcode.ErrWealthAssetInvalid, "asset_index 越界")
+		}
+		snap := p.Assets[assetIndex]
+		payload := ListingPayload{
+			Asset: &AssetPayload{Asset: snap, MinCNY: minCNY},
+		}
+		l, err := w.CreateListing(seat, ListingAsset, payload, askCNY)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("挂牌成功 %s(要价 ¥%d)", l.ID, askCNY), nil
+	})
+}
+
+// CancelListing 取消自己的 open 挂单。
+func (a *AgentRunner) CancelListing(seat int, listingID string) error {
+	return a.apply(seat, wealthplayer.ToolCancelListing, "", func() (string, error) {
+		if err := a.room.World.CancelListing(seat, listingID); err != nil {
+			return "", err
+		}
+		return "已取消挂单 " + listingID, nil
+	})
+}
+
+// ViewListings 查看挂单簿(不耗动作预算)。
+func (a *AgentRunner) ViewListings(seat int, typeFilter string) (string, error) {
+	a.room.mu.Lock()
+	defer a.room.mu.Unlock()
+	if err := a.checkActingUnlocked(seat); err != nil {
+		return "", err
+	}
+	w := a.room.World
+	lType := ListingType(typeFilter)
+	snapshots := w.SnapshotListings(lType)
+	if len(snapshots) == 0 {
+		return "挂单簿为空(暂无活跃挂单)", nil
+	}
+	out := fmt.Sprintf("活跃挂单 %d 笔:\n", len(snapshots))
+	for _, s := range snapshots {
+		out += fmt.Sprintf("- %s [%s] %d 号位 要价 ¥%d", s.ID, s.Type, s.Seat, s.AskCNY)
+		if s.AssetKind != "" {
+			out += fmt.Sprintf(" 资产:%s(%s)", s.AssetKind, s.AssetUnits)
+		}
+		if s.InfoTitle != "" {
+			out += fmt.Sprintf(" 信息:%s", s.InfoTitle)
+		}
+		if s.Direction != "" {
+			out += fmt.Sprintf(" 借贷:%s ¥%d 月利率 %.2f%%", s.Direction, s.PrincipalCNY, s.MaxRate*100)
+		}
+		out += "\n"
+	}
+	return out, nil
+}
+
+// StartNegotiate 对 open 挂单发起议价。
+func (a *AgentRunner) StartNegotiate(seat int, listingID string, offerCNY int64) error {
+	return a.apply(seat, wealthplayer.ToolNegotiateStart, "", func() (string, error) {
+		neg, err := a.room.World.NegotiateStart(seat, listingID, offerCNY)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("议价 %s 已发起(首轮报价 ¥%d)", neg.ID, offerCNY), nil
+	})
+}
+
+// RespondNegotiate 响应议价(还价/接受/拒绝)。
+func (a *AgentRunner) RespondNegotiate(seat int, negID string, action string, offerCNY int64, comment string) error {
+	return a.apply(seat, wealthplayer.ToolRespondNegotiate, "", func() (string, error) {
+		text, err := a.room.World.NegotiateRespond(seat, negID, action, offerCNY, comment)
+		if err != nil {
+			return "", err
+		}
+		return text, nil
+	})
+}
+
+// CreateLoanListing 创建借贷挂单。
+func (a *AgentRunner) CreateLoanListing(seat int, direction string, principal int64, rate float64, term int, needGuarantee bool) error {
+	return a.apply(seat, wealthplayer.ToolCreateLoanListing, "", func() (string, error) {
+		l, err := a.room.World.CreateLoanListing(seat, direction, principal, rate, term, needGuarantee)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("借贷挂单 %s 已创建(%s ¥%d)", l.ID, direction, principal), nil
+	})
+}
+
+// AcceptLoan 接受借贷要约(匹配成交)。
+func (a *AgentRunner) AcceptLoan(seat int, listingID string) error {
+	return a.apply(seat, wealthplayer.ToolAcceptLoan, "", func() (string, error) {
+		loan, err := a.room.World.AcceptLoan(seat, listingID)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("已接受借贷要约,合约 %s 成立(月供 ¥%d)", loan.ID, loan.MonthlyPayment), nil
+	})
+}
+
+// RepayP2PLoan 偿还 P2P 借贷(部分或全额)。
+func (a *AgentRunner) RepayP2PLoan(seat int, loanID string, amountCNY int64) error {
+	return a.apply(seat, wealthplayer.ToolRepayLoanP2P, "", func() (string, error) {
+		text, err := a.room.World.RepayLoan(seat, loanID, amountCNY)
+		if err != nil {
+			return "", err
+		}
+		return text, nil
+	})
+}
+
+// AddGuarantor 为 P2P 借贷提供担保。
+func (a *AgentRunner) AddGuarantor(seat int, loanID string) error {
+	return a.apply(seat, wealthplayer.ToolAddGuarantor, "", func() (string, error) {
+		if err := a.room.World.AddGuarantor(loanID, seat); err != nil {
+			return "", err
+		}
+		return "担保已生效(" + loanID + ")", nil
+	})
+}
+
+// BidAuction 参与拍卖出价(区分公开/密封)。
+func (a *AgentRunner) BidAuction(seat int, auctionID string, amountCNY int64) error {
+	return a.apply(seat, wealthplayer.ToolBidAuction, "", func() (string, error) {
+		w := a.room.World
+		ta := TradeAction{
+			Type:      ActionBidAuction,
+			AuctionID: auctionID,
+			OfferCNY:  amountCNY,
+		}
+		text, err := w.ApplyTradeAction(seat, ta)
+		if err != nil {
+			return "", err
+		}
+		return text, nil
+	})
+}
+
+// SellInfo 出售信息(密封暗标)。
+func (a *AgentRunner) SellInfo(seat int, category string, title string, detail string, minBid int64) error {
+	return a.apply(seat, wealthplayer.ToolSellInfo, "", func() (string, error) {
+		l, err := a.room.World.SellInfo(seat, category, title, detail, minBid)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("信息挂单 %s 已创建(暗标最低 ¥%d)", l.ID, minBid), nil
+	})
+}
+
+// BidInfo 暗标信息。
+func (a *AgentRunner) BidInfo(seat int, listingID string, bidCNY int64) error {
+	return a.apply(seat, wealthplayer.ToolBidInfo, "", func() (string, error) {
+		if err := a.room.World.BidInfo(seat, listingID, bidCNY); err != nil {
+			return "", err
+		}
+		return "暗标已提交(" + listingID + ",出价 ¥" + fmt.Sprintf("%d", bidCNY) + ")", nil
+	})
+}
+
+// checkActingUnlocked 是 checkActing 的无锁变体(调用方已持 r.mu)。
+func (a *AgentRunner) checkActingUnlocked(seat int) error {
+	if a.room.closed || a.room.Status != StatusPlaying {
+		return errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	if a.room.Phase != PhaseActing {
+		return errcode.Code(errcode.ErrWealthWrongPhase)
+	}
+	p := a.room.World.Players[seat]
+	if p == nil || !p.Alive {
+		return errcode.Code(errcode.ErrWealthPlayerInactive)
+	}
+	if p.Submitted {
+		return errcode.Code(errcode.ErrWealthWrongPhase)
+	}
+	return nil
+}
+
 // apply 通用动作派发:锁内校验 + 执行;成功返回 nil,失败返回 errcode.Error
 // (工具层 IsErr)。
 // 2026-09-14 §财商流P0-bugfix: 本函数持 r.mu 期间,闭包内必须使用

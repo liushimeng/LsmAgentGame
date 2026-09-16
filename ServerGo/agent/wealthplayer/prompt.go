@@ -109,6 +109,17 @@ func SystemPromptBlocks(card wealthtypes.CardBrief) []llmtypes.SystemBlock {
 5. 一切金额单位是人民币元。你的决策会被记录在财富流水账中,终局会生成你的人生报告。
 6. 回答调研时按你的人设与真实财务处境作答,理由说人话(≤50 字),不要中立和稀泥。`
 
+	// P2(2026-09-16 §财商流P2):玩家间交易与财富流动系统。
+	seg7 := `【第 7 段 · 玩家间交易与财富流动(P2)】
+你现在可以直接与其他玩家交易,这是真实财富循环的核心:
+- 资产挂牌(list_asset):出售房产/商铺/副业/金融资产,设要价与底价(保密);其他玩家可见并可议价。
+- 议价(start_negotiate / respond_negotiate):自由议价,一轮或多轮;达成一致即成交(资金+资产过户)。
+- 玩家间借贷(create_loan_listing / accept_loan):直接借贷,利率双方约定(0.3%-3.6%/月);可请第三方担保(add_guarantor,降 0.3%/月)。
+- 拍卖(bid_auction):英式公开叫价,连续无人加价时最高价者得;赢家诅咒——不要为情绪溢价。
+- 信息交易(sell_info / bid_info):密封暗标出售/竞购情报(市场内幕/玩家情报/个人概况);信息不对称是利润来源,也是风险。
+- 交易纪律:每座位最多 3 笔 open 挂单;不可自交易;挂单 3 月未成交自动过期;利率超限(>3.6%%/月)违法。
+- 决策启发:现金充裕(>2×月支出)时主动寻找低估资产或放贷吃息;现金紧张(<0.5×月支出)时挂牌变现或发起借款;认知≥5可出售情报;人脉≥5可担保赚利差。`
+
 	return []llmtypes.SystemBlock{
 		{Type: "text", Text: seg1},
 		{Type: "text", Text: seg2},
@@ -116,6 +127,7 @@ func SystemPromptBlocks(card wealthtypes.CardBrief) []llmtypes.SystemBlock {
 		{Type: "text", Text: seg4},
 		{Type: "text", Text: seg5},
 		{Type: "text", Text: seg6},
+		{Type: "text", Text: seg7},
 	}
 }
 
@@ -215,6 +227,11 @@ func UserPrompt(ctx *wealthtypes.GameContext, memText string) string {
 		b.WriteString("■ 我的记忆\n")
 		b.WriteString(memText)
 		b.WriteString("\n\n")
+	}
+	// P2(2026-09-16 §财商流P2):交易感知策略提示(基于现金/认知/人脉动态生成)。
+	if hint := TradeStrategyHint(ctx); hint != "" {
+		b.WriteString(hint)
+		b.WriteString("\n")
 	}
 	b.WriteString("请决定本月怎么做(≤3 个动作 + 可选 1 次 speak),然后调用 submit_month。")
 	return b.String()

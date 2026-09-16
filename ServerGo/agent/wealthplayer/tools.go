@@ -47,36 +47,49 @@ type ToolRunner interface {
 	SetConsumption(seat int, level int) error
 	AnswerSurvey(seat int, surveyID string, optionIdx int, reason string) error
 	QueryEconomy(seat int) (string, error)
+	// P2(2026-09-16 §财商流P2): 玩家间交易与财富流动系统 12 工具。
+	ListAsset(seat int, assetIndex int, askCNY, minCNY int64) error
+	CancelListing(seat int, listingID string) error
+	ViewListings(seat int, typeFilter string) (string, error)
+	StartNegotiate(seat int, listingID string, offerCNY int64) error
+	RespondNegotiate(seat int, negID string, action string, offerCNY int64, comment string) error
+	CreateLoanListing(seat int, direction string, principal int64, rate float64, term int, needGuarantee bool) error
+	AcceptLoan(seat int, listingID string) error
+	RepayP2PLoan(seat int, loanID string, amountCNY int64) error
+	AddGuarantor(seat int, loanID string) error
+	BidAuction(seat int, auctionID string, amountCNY int64) error
+	SellInfo(seat int, category string, title string, detail string, minBid int64) error
+	BidInfo(seat int, listingID string, bidCNY int64) error
 }
 
 // 工具名常量。
 const (
-	ToolCheckState       = "check_state"
-	ToolBuyAsset         = "buy_asset"
-	ToolSellAsset        = "sell_asset"
-	ToolBuyHouse         = "buy_house"
-	ToolTakeLoan         = "take_loan"
-	ToolRepayLoan        = "repay_loan"
-	ToolStartSide        = "start_side_business"
-	ToolStopSide         = "stop_side_business"
-	ToolStudy            = "study"
-	ToolSocialize        = "socialize"
-	ToolRest             = "rest"
-	ToolWorkOvertime     = "work_overtime"
-	ToolMoveDistrict     = "move_district"
-	ToolConsume          = "consume"
-	ToolDonate           = "donate"
-	ToolSpeak            = "speak"
-	ToolSubmitMonth      = "submit_month"
+	ToolCheckState   = "check_state"
+	ToolBuyAsset     = "buy_asset"
+	ToolSellAsset    = "sell_asset"
+	ToolBuyHouse     = "buy_house"
+	ToolTakeLoan     = "take_loan"
+	ToolRepayLoan    = "repay_loan"
+	ToolStartSide    = "start_side_business"
+	ToolStopSide     = "stop_side_business"
+	ToolStudy        = "study"
+	ToolSocialize    = "socialize"
+	ToolRest         = "rest"
+	ToolWorkOvertime = "work_overtime"
+	ToolMoveDistrict = "move_district"
+	ToolConsume      = "consume"
+	ToolDonate       = "donate"
+	ToolSpeak        = "speak"
+	ToolSubmitMonth  = "submit_month"
 	// P1 新增。
-	ToolQueryCentralBank  = "query_central_bank"
-	ToolQueryBankingSystem = "query_banking_system"
+	ToolQueryCentralBank    = "query_central_bank"
+	ToolQueryBankingSystem  = "query_banking_system"
 	ToolApplyLoanWithCredit = "apply_loan_with_credit"
-	ToolDepositSavings    = "deposit_savings"
-	ToolWithdrawSavings   = "withdraw_savings"
+	ToolDepositSavings      = "deposit_savings"
+	ToolWithdrawSavings     = "withdraw_savings"
 	// P1 扩展: 明斯基 / 提前还款。
-	ToolQueryMinsky       = "query_minsky"
-	ToolEarlyRepay        = "early_repay"
+	ToolQueryMinsky = "query_minsky"
+	ToolEarlyRepay  = "early_repay"
 	// P1(§财商流P1-2 §7.1): 消费档位 / 社会调研 / 经济查询。
 	ToolSetConsumption = "set_consumption"
 	ToolAnswerSurvey   = "answer_survey"
@@ -94,8 +107,9 @@ func intSchema(min int64, desc string) map[string]any {
 
 // BuildTools 返回全部工具定义(全部座位相同——财商流信息不对称在 my.* 快照,
 // 不在工具裁剪)。
+// P0/P1/P1-2 基础工具 + P2 交易工具(§财商流P2),返回前追加 TradeToolDefinitions()。
 func BuildTools() []llmtypes.ToolDef {
-	return []llmtypes.ToolDef{
+	base := []llmtypes.ToolDef{
 		{
 			Name:        ToolCheckState,
 			Description: "查看本人三表/资产/贷款/资源/信用摘要文本(不消耗动作预算)。",
@@ -145,8 +159,8 @@ func BuildTools() []llmtypes.ToolDef {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"kind":        strSchema("consumer|credit|business"),
-					"amount_cny":  intSchema(1, "金额(credit 必须是 50000/100000/200000 之一)"),
+					"kind":       strSchema("consumer|credit|business"),
+					"amount_cny": intSchema(1, "金额(credit 必须是 50000/100000/200000 之一)"),
 				},
 				"required": []string{"kind", "amount_cny"},
 			},
@@ -157,8 +171,8 @@ func BuildTools() []llmtypes.ToolDef {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"loan_id":     strSchema("贷款 id,如 L3"),
-					"amount_cny":  intSchema(1, "还款金额(元)"),
+					"loan_id":    strSchema("贷款 id,如 L3"),
+					"amount_cny": intSchema(1, "还款金额(元)"),
 				},
 				"required": []string{"loan_id", "amount_cny"},
 			},
@@ -266,8 +280,8 @@ func BuildTools() []llmtypes.ToolDef {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"kind":        strSchema("consumer|credit|business"),
-					"amount_cny":  intSchema(1, "申请金额(元)"),
+					"kind":       strSchema("consumer|credit|business"),
+					"amount_cny": intSchema(1, "申请金额(元)"),
 				},
 				"required": []string{"kind", "amount_cny"},
 			},
@@ -305,8 +319,8 @@ func BuildTools() []llmtypes.ToolDef {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"loan_id":     strSchema("房贷 id,如 L3"),
-					"amount_cny":  intSchema(0, "还款金额(元);0 或 ≥余额=全额还清"),
+					"loan_id":    strSchema("房贷 id,如 L3"),
+					"amount_cny": intSchema(0, "还款金额(元);0 或 ≥余额=全额还清"),
 				},
 				"required": []string{"loan_id"},
 			},
@@ -341,11 +355,15 @@ func BuildTools() []llmtypes.ToolDef {
 			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
 		},
 	}
+	// 追加 P2 交易工具(挂牌/议价/借贷/拍卖/信息)。
+	base = append(base, TradeToolDefinitions()...)
+	return base
 }
 
 // ToolNames 返回全部工具名(测试/lint 用)。
+// 包括 P0 基础 17 + P1 央行/银行 5 + 明斯基/提前还款 2 + P1-2 经济循环 3 + P2 交易 12 = 39。
 func ToolNames() []string {
-	return []string{
+	out := []string{
 		ToolCheckState, ToolBuyAsset, ToolSellAsset, ToolBuyHouse, ToolTakeLoan,
 		ToolRepayLoan, ToolStartSide, ToolStopSide, ToolStudy, ToolSocialize,
 		ToolRest, ToolWorkOvertime, ToolMoveDistrict, ToolConsume, ToolDonate,
@@ -355,14 +373,16 @@ func ToolNames() []string {
 		ToolQueryMinsky, ToolEarlyRepay,
 		ToolSetConsumption, ToolAnswerSurvey, ToolQueryEconomy,
 	}
+	out = append(out, TradeToolNames()...)
+	return out
 }
 
 // dispatchToolResult 是一次工具派发的结果。
 type dispatchToolResult struct {
-	Name   string
-	Input  string // 原始 input JSON
-	Text   string // 人读结果
-	IsErr  bool
+	Name  string
+	Input string // 原始 input JSON
+	Text  string // 人读结果
+	IsErr bool
 }
 
 // DispatchTool 派发单个 tool_use 到 ToolRunner。
@@ -495,6 +515,12 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 		}
 		return ok(s)
 	default:
+		// P2 交易工具路由到 DispatchTradeTool(独立文件,避免本文件过长)。
+		for _, tn := range tradeToolNames {
+			if tn == name {
+				return DispatchTradeTool(a.runner, seat, name, inputJSON)
+			}
+		}
 		res.IsErr = true
 		res.Text = "未知工具: " + name
 		return res

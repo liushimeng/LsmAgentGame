@@ -8,12 +8,12 @@ import (
 	"LsmAgentGame/errcode"
 )
 
-// TestBuildTools_AllToolsPresent 27 工具齐备(§7 + P1 央行/银行 5 + 明斯基/提前还款 2 +
-// P1-2 经济循环 3:set_consumption/answer_survey/query_economy)。
+// TestBuildTools_AllToolsPresent 39 工具齐备(P0 17 + P1 央行/银行 5 + 明斯基/提前还款 2 +
+// P1-2 经济循环 3 + P2 交易系统 12)。
 func TestBuildTools_AllToolsPresent(t *testing.T) {
 	tools := BuildTools()
-	if len(tools) != 27 {
-		t.Errorf("tools count: got %d, want 27", len(tools))
+	if len(tools) != 39 {
+		t.Errorf("tools count: got %d, want 39", len(tools))
 	}
 	want := map[string]bool{
 		ToolCheckState: false, ToolBuyAsset: false, ToolSellAsset: false,
@@ -29,6 +29,12 @@ func TestBuildTools_AllToolsPresent(t *testing.T) {
 		ToolQueryMinsky: false, ToolEarlyRepay: false,
 		// P1-2(§财商流P1-2 §7.1): 消费档位 / 社会调研 / 经济查询。
 		ToolSetConsumption: false, ToolAnswerSurvey: false, ToolQueryEconomy: false,
+		// P2 交易系统: 玩家间交易工具。
+		ToolListAsset: false, ToolCancelListing: false, ToolViewListings: false,
+		ToolNegotiateStart: false, ToolRespondNegotiate: false,
+		ToolCreateLoanListing: false, ToolAcceptLoan: false,
+		ToolRepayLoanP2P: false, ToolAddGuarantor: false,
+		ToolBidAuction: false, ToolSellInfo: false, ToolBidInfo: false,
 	}
 	for _, t1 := range tools {
 		if _, ok := want[t1.Name]; !ok {
@@ -56,12 +62,11 @@ func TestBuildTools_RequiredFields(t *testing.T) {
 	}
 }
 
-// TestToolNames_Returns27Names 工具名列表 = 27(P1 央行/银行 5 + 明斯基/提前还款 2 +
-// P1-2 经济循环 3)。
-func TestToolNames_Returns27Names(t *testing.T) {
+// TestToolNames_Returns39Names 工具名列表 = 39(P0 17 + P1 10 + P1-2 3 + P2 交易 12 - 3重复)。
+func TestToolNames_Returns39Names(t *testing.T) {
 	names := ToolNames()
-	if len(names) != 27 {
-		t.Errorf("names count: got %d, want 27", len(names))
+	if len(names) != 39 {
+		t.Errorf("names count: got %d, want 39", len(names))
 	}
 	for _, n := range names {
 		if !strings.HasPrefix(n, "check_state") &&
@@ -86,7 +91,21 @@ func TestToolNames_Returns27Names(t *testing.T) {
 			!strings.HasPrefix(n, "withdraw_") &&
 			!strings.HasPrefix(n, "early_") &&
 			!strings.HasPrefix(n, "set_consumption") &&
-			!strings.HasPrefix(n, "answer_survey") {
+			!strings.HasPrefix(n, "answer_survey") &&
+			// P2 交易系统工具。
+			!strings.HasPrefix(n, "list_asset") &&
+			!strings.HasPrefix(n, "cancel_listing") &&
+			!strings.HasPrefix(n, "view_listings") &&
+			!strings.HasPrefix(n, "negotiate_") &&
+			!strings.HasPrefix(n, "respond_negotiate") &&
+			!strings.HasPrefix(n, "start_negotiate") &&
+			!strings.HasPrefix(n, "create_loan_listing") &&
+			!strings.HasPrefix(n, "accept_loan") &&
+			!strings.HasPrefix(n, "repay_loan") &&
+			!strings.HasPrefix(n, "add_guarantor") &&
+			!strings.HasPrefix(n, "bid_auction") &&
+			!strings.HasPrefix(n, "sell_info") &&
+			!strings.HasPrefix(n, "bid_info") {
 			t.Errorf("unexpected name: %s", n)
 		}
 	}

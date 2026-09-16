@@ -239,10 +239,10 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *wealthtypes.GameContex
 	a.finalizeTranscript(lastSummary, lastToolInput, lastToolResult)
 }
 
-// isBudgetAction 是否耗动作预算(check_state / submit_month 不耗)。
+// isBudgetAction 是否耗动作预算(check_state / submit_month / view_listings 不耗)。
 func isBudgetAction(name string) bool {
 	switch name {
-	case ToolCheckState, ToolSubmitMonth:
+	case ToolCheckState, ToolSubmitMonth, ToolViewListings:
 		return false
 	}
 	return true
