@@ -485,7 +485,10 @@ func (s *GameService) handleLeave(c *Client, env Envelope) {
 		s.xiangqiMgr.RemoveGame(req.RoomID)
 		s.leaveRoomQuiet(req.RoomID, c.UserID)
 		s.sendOK(c, env.Seq, "game.left", map[string]any{"room_id": req.RoomID, "game_kind": "xiangqi"})
-		logger.L().Info("player left xiangqi game", zap.String("room_id", req.RoomID), zap.String("user_id", c.UserID))
+		// P3-09 修复:gameKindFromPayload 在 payload 缺 game_kind 时默认 "xiangqi",
+		// 导致 wealth 玩家退房也命中此处并打 "left xiangqi game" 误导日志。
+		// 仅改文案,逻辑不动。
+		logger.L().Info("player left game room", zap.String("game_kind", gk), zap.String("room_id", req.RoomID), zap.String("user_id", c.UserID))
 	case "chess":
 		result, _ := s.chessMgr.Resign(req.RoomID, c.UserID)
 		if result != nil {

@@ -186,6 +186,15 @@ func (s *GameService) startWealthRoom(roomID string) *errcode.Error {
 	}
 	// 装配 bot agents。
 	s.wealthMgr.EnsureAgents(r)
+	// 标记 DB 房间状态为 playing(开局成功回调路径,锁外执行 §92a)。
+	// 此前仅 werewolf/debate 接线;P1-Ghost-03: wealth 永远 open,大厅
+	// 在终局内存房被清理后仍显示可加入,触发「幽灵房」重建。
+	if s.roomSvc != nil {
+		if e := s.roomSvc.UpdateRoomStatus(roomID, "playing"); e != nil {
+			logger.L().Warn("wealth room status -> playing failed",
+				zap.String("room_id", roomID), zap.Error(e))
+		}
+	}
 	// 启动 runLoop goroutine(单房间)。
 	go r.RunLoop(func(rid string) {
 		// 60s 后清理(终局 cleanup,§14 game.removed)。
@@ -193,6 +202,14 @@ func (s *GameService) startWealthRoom(roomID string) *errcode.Error {
 			s.wealthMgr.RemoveRoom(rid)
 			s.hub.UnsubscribeRoomAll(rid)
 			s.BroadcastRoomRemoved(rid, "game-over")
+			// 同步 DB 状态为 over(§P1-Ghost-03:终局后 DB 残留 'open',
+			// 大厅列表误显可加入)。锁外执行,失败仅记日志不中断 cleanup。
+			if s.roomSvc != nil {
+				if e := s.roomSvc.UpdateRoomStatus(rid, "over"); e != nil {
+					logger.L().Warn("wealth room status -> over failed",
+						zap.String("room_id", rid), zap.Error(e))
+				}
+			}
 		})
 	})
 	// 启动 watchdog。

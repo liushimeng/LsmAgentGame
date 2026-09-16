@@ -164,6 +164,7 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 		seats, err := m.seatHydrator(roomID)
 		if err == nil && len(seats) > 0 {
 			r.mu.Lock()
+			hydratedBots := 0
 			for _, s := range seats {
 				if s.Seat < 0 || s.Seat >= MaxSeats || s.UserID == "" {
 					continue
@@ -173,8 +174,12 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 				}
 				if s.IsBot {
 					r.BotSeats[s.Seat] = true
-				}
-				if s.ModelKey != "" {
+					if s.ModelKey != "" {
+						r.SeatModelKeys[s.Seat] = s.ModelKey
+						hydratedBots++
+					}
+				} else if s.ModelKey != "" {
+					// 允许人类玩家保留 ModelKey 字段(暂不影响 EnsureAgents)。
 					r.SeatModelKeys[s.Seat] = s.ModelKey
 				}
 			}
@@ -182,6 +187,13 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 			logger.L().Info("wealth room seats hydrated from DB",
 				zap.String("room_id", roomID),
 				zap.Int("restored", len(seats)))
+			// P1-Ghost-03 修复:重建路径(服务重启后首次访问)在 EnsureAgents 之前
+			// 先把座位与 SeatModelKeys/BotSeats 还原回内存房;此处立刻装配 bot
+			// agent,即便后续 startWealthRoom 路径再次 EnsureAgents,也是幂等的
+			// (agents map 在 EnsureAgents 内整体覆盖)。
+			if hydratedBots > 0 {
+				m.EnsureAgents(r)
+			}
 		}
 	}
 	m.rooms[roomID] = r

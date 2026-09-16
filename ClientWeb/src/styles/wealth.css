@@ -162,6 +162,17 @@
   min-height: 32px;
 }
 
+/* 2026-09-16 §财商流10–12座位 — 已占座 < MinSeats(10) 的就地等待提示条。
+   与 .wealth-error-banner 同级，但语义是「等待态」而非「错误态」：
+   琥珀底 + 浅黄字（#fde68a on rgba(180,83,9,.45) ≈ 7.5:1，满足对比度规范）。 */
+.wealth-seats-hint {
+  padding: 6px 14px;
+  background: rgba(180, 83, 9, 0.45);
+  border-bottom: 1px solid var(--wealth-border);
+  color: #fde68a;
+  font-size: 13px;
+}
+
 .wealth-main {
   display: flex;
   flex: 1;
@@ -512,6 +523,16 @@
   box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.55);
 }
 
+/* 2026-09-16 §财商流10–12座位 — Agent 数档位从 6 个（2..7）扩到最多 13 个
+   （0..12），64px 最小宽在 370px 表单列里会折成 3 行。紧凑变体 40px 最小宽
+   → 每行 8 个 / 两行放满 13 个，触控高度仍 >= var(--wealth-touch-target)。 */
+.wealth-tier-btn--sm {
+  min-width: 40px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── 事件流 / 月度节拍 ─────────────────────────────── */
 .wealth-ticker {
   display: flex;
@@ -522,21 +543,29 @@
   background: #0d1219;
   border-top: 1px solid var(--wealth-border);
   font-size: 13px;
+  /* 2026-09-16 §P2-Ticker-06：跑马灯事件条目在 1920px 视口下
+     getBoundingClientRect().right 达 2774px，撑大 document 宽度。
+     此处作为「事件滚动区(__events)的外层裁剪容器」加 overflow:hidden + min-width:0，
+     把 __events 的可用宽度锁在 .wealth-ticker 的内容盒内；事件条目内部的
+     overflow-x:auto / translate 仍提供横向滚动，视觉无回归。 */
+  min-width: 0;
+  overflow-x: hidden;
 }
 .wealth-ticker__month { font-weight: 700; color: #fff; display: flex; gap: 8px; align-items: center; }
-.wealth-ticker__countdown { display: flex; align-items: center; gap: 8px; }
+.wealth-ticker__countdown { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .wealth-ticker__bar {
   width: 120px;
   height: 8px;
   border-radius: 4px;
   background: #2a3240;
   overflow: hidden;
+  flex: 0 0 auto;
 }
 .wealth-ticker__bar-fill { height: 100%; background: var(--wealth-accent-strong); }
-.wealth-ticker__remain { color: var(--wealth-text-dim); font-variant-numeric: tabular-nums; }
+.wealth-ticker__remain { color: var(--wealth-text-dim); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 .wealth-ticker__events {
-  flex: 1;
-  min-width: 200px;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   gap: 14px;
   overflow-x: auto;
@@ -551,6 +580,12 @@
 .wealth-ticker__summary { flex-basis: 100%; }
 .wealth-ticker__summary summary { cursor: pointer; color: var(--wealth-accent-strong); }
 .wealth-ticker__note { color: var(--wealth-text-dim); }
+/* 2026-09-16 §财商流10–12座位 — 月度汇总每座位一行，12 座展开约 340px 会把
+   底部节拍条撑出视口。限高滚动 → 节拍条本体高度不随座位数增长。 */
+.wealth-ticker__summary-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+}
 
 /* ── Agent 思维面板 ───────────────────────────────── */
 .wealth-botpanel {
@@ -624,9 +659,21 @@
   padding: 8px;
 }
 .wealth-create-form__seatrow { display: flex; align-items: center; gap: 8px; }
-.wealth-create-form__seatno { width: 44px; color: var(--wealth-text-dim); font-size: 13px; }
+/* 2026-09-16 §财商流10–12座位 — 座位号列宽 44 → 76px：座位数扩到 12 后
+   en「Seat #12」/ ja「12番席」在 44px 下会折行错位。 */
+.wealth-create-form__seatno {
+  width: 76px;
+  flex: 0 0 76px;
+  color: var(--wealth-text-dim);
+  font-size: 13px;
+  white-space: nowrap;
+}
 .wealth-create-form__seatrow select { flex: 1; min-height: 38px; }
 .wealth-create-form__hint { color: #fde68a; font-size: 12.5px; }
+/* 座位数达标（不小于 MinSeats）时的绿色确认提示（与黄条警示同位置，避免布局跳动）。 */
+.wealth-create-form__hint--ok { color: #86efac; }
+/* 创建者身份行（由 Agent 数推导：入座玩家 / 观战者全 Agent 房），非交互展示。 */
+.wealth-create-form__creatorrole { color: var(--wealth-text); font-size: 13px; }
 .wealth-create-form__cards summary { cursor: pointer; color: var(--wealth-accent-strong); }
 .wealth-cards-grid {
   display: grid;
@@ -718,6 +765,15 @@
 }
 .wealth-token-tag__seat { color: var(--wealth-accent-strong); font-weight: 700; }
 .wealth-token-tag__nw { color: #c3cbd8; }
+/* 2026-09-16 §财商流10–12座位 — 同城区 token > 6 时的紧凑名牌：
+   AgentToken 隐藏昵称（保留 title 悬浮）+ 收窄内边距与字号，
+   避免 12 座同房时名牌互相压盖成一片不可读色块。 */
+.wealth-token-tag--compact {
+  gap: 3px;
+  padding: 1px 6px;
+  font-size: 11px;
+}
+.wealth-token-tag--compact .wealth-token-tag__nw { font-size: 10.5px; }
 .wealth-token-emoji {
   font-size: 22px;
   line-height: 1;
