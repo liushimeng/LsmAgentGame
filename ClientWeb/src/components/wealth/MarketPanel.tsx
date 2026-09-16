@@ -80,11 +80,11 @@ const CYCLE_CLASS: Record<WealthCyclePhase, string> = {
 };
 
 /** 信贷约束状态：宽松 / 中性 / 收紧 / 惜贷（阈值来自设计文档 §6.5）。 */
-function creditTightnessLabel(t: TKey, v: number): string {
-  if (v >= 1) return t('wealth.cb.tightness.cautious' as TKey);
-  if (v > 0.7) return t('wealth.cb.tightness.tight' as TKey);
-  if (v >= 0.3) return t('wealth.cb.tightness.neutral' as TKey);
-  return t('wealth.cb.tightness.loose' as TKey);
+function creditTightnessKey(v: number): TKey {
+  if (v >= 1) return 'wealth.cb.tightness.cautious' as TKey;
+  if (v > 0.7) return 'wealth.cb.tightness.tight' as TKey;
+  if (v >= 0.3) return 'wealth.cb.tightness.neutral' as TKey;
+  return 'wealth.cb.tightness.loose' as TKey;
 }
 
 /** 信贷约束状态色（暗色主题 ≥4.5:1）。 */
@@ -107,7 +107,7 @@ function CentralBankSection({ cb }: { cb: WealthCentralBank }) {
           className="wealth-badge"
           style={{ background: tightnessColor, color: '#0f172a' }}
         >
-          {creditTightnessLabel(t, cb.credit_tightness)}
+          {t(creditTightnessKey(cb.credit_tightness))}
         </span>
       </div>
 

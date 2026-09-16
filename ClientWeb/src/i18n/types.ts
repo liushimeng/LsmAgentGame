@@ -1495,6 +1495,20 @@ export interface Dict {
   'wealth.goldPrice': string;
   'wealth.bondYield': string;
   'wealth.housePrice': string;
+  // 央行货币政策 — P1 央行引擎
+  'wealth.cb.title': string;
+  'wealth.cb.m0': string;
+  'wealth.cb.m1': string;
+  'wealth.cb.m2': string;
+  'wealth.cb.mb': string;
+  'wealth.cb.multiplier': string;
+  'wealth.cb.policyRate': string;
+  'wealth.cb.creditTightness': string;
+  'wealth.cb.loanQuota': string;
+  'wealth.cb.tightness.loose': string;
+  'wealth.cb.tightness.neutral': string;
+  'wealth.cb.tightness.tight': string;
+  'wealth.cb.tightness.cautious': string;
   'wealth.district.finance': string;
   'wealth.district.tech': string;
   'wealth.district.industry': string;
