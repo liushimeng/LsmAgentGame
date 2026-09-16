@@ -45,6 +45,23 @@ type GameContext struct {
 
 	// BotIdentity 自己的 Bot 身份。
 	BotIdentity BotIdentityBrief
+
+	// P1: 央行只读快照 + 信贷约束参数(AltAgent 可见)。
+	CentralBank     *CentralBankSnapshot // 央行快照(CB 为 nil 时回退 PhaseTable 基础值)
+	CreditTightness float64               // 信贷约束系数
+	LoanQuotaFactor float64               // 贷款额度乘数
+}
+
+// CentralBankSnapshot 央行只读快照(AltAgent 可见)。
+type CentralBankSnapshot struct {
+	M0, M1, M2      float64
+	MB              float64
+	MoneyMultiplier float64
+	PolicyRate      float64
+	LPR             float64
+	CPI             float64
+	CreditTightness float64
+	LoanQuotaFactor float64
 }
 
 // CycleBrief 是市场周期快照。

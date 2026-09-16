@@ -117,6 +117,94 @@ func (a *AgentRunner) Donate(seat int, amountCNY int64) error {
 	})
 }
 
+// ── P1 新增工具: 央行/银行体系查询 + 存款 ──
+
+// QueryCentralBank 查询央行状态(不耗动作预算)。
+func (a *AgentRunner) QueryCentralBank(seat int) (string, error) {
+	a.room.mu.Lock()
+	defer a.room.mu.Unlock()
+	if a.room.closed || a.room.Status != StatusPlaying {
+		return "", errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	cb := a.room.World.CB
+	if cb == nil {
+		return "", errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	snap := cb.Snapshot()
+	return fmt.Sprintf("央行:M0=%.0f M1=%.0f M2=%.0f MB=%.0f 乘数=%.3f 政策利率=%.2f%% LPR=%.2f%% CPI=%.2f%% 信贷约束=%.2f 额度系数=%.2f",
+		snap.M0, snap.M1, snap.M2, snap.MB, snap.MoneyMultiplier,
+		snap.PolicyRate*100, snap.LPR*100, snap.CPI*100, snap.CreditTightness, snap.LoanQuotaFactor), nil
+}
+
+// QueryBankingSystem 查询银行体系(不耗动作预算)。
+func (a *AgentRunner) QueryBankingSystem(seat int) (string, error) {
+	a.room.mu.Lock()
+	defer a.room.mu.Unlock()
+	if a.room.closed || a.room.Status != StatusPlaying {
+		return "", errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	cb := a.room.World.CB
+	if cb == nil {
+		return "", errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	bs := cb.BankingSystem()
+	return fmt.Sprintf("银行体系:活期=%.0f 定期=%.0f 总存款=%.0f 准备金=%.0f 超额准备金=%.0f 贷款余额=%.0f",
+		bs.DemandDeposits, bs.TimeDeposits, bs.TotalDeposits, bs.Reserves, bs.ExcessReserves, bs.LoansOutstanding), nil
+}
+
+// ApplyLoanWithCredit 带信贷约束的贷款申请(不耗动作预算,仅查询额度/利率)。
+func (a *AgentRunner) ApplyLoanWithCredit(seat int, kind string, amountCNY int64) (string, error) {
+	a.room.mu.Lock()
+	defer a.room.mu.Unlock()
+	if a.room.closed || a.room.Status != StatusPlaying {
+		return "", errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	cb := a.room.World.CB
+	if cb == nil {
+		return "", errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	quotaFactor := cb.LoanQuotaFactor
+	creditSpread := cb.CreditSpread
+	creditThreshold := 500
+	if cb.CreditTightness > 0 {
+		creditThreshold += CreditScoreBonus
+	}
+	p := a.room.World.Players[seat]
+	if p == nil {
+		return "", errcode.Code(errcode.ErrWealthPlayerInactive)
+	}
+	cap := int64(200000 * quotaFactor)
+	if kind == "consumer" {
+		cap = int64(float64(p.monthlyIncomeEstimate()*12) * quotaFactor)
+		if cap > 200000 {
+			cap = 200000
+		}
+	}
+	rate := cb.PolicyRate + creditSpread
+	if kind == "business" {
+		rate = cb.BusinessRate()
+	} else if kind == "consumer" {
+		rate = ConsumerRate + creditSpread
+	}
+	approved := amountCNY <= cap && p.CreditScore >= creditThreshold
+	return fmt.Sprintf("贷款申请:kind=%s 申请=%.0f 额度上限=%.0f 利率=%.2f%% 信用门槛=%d 信用分=%d 批准=%v",
+		kind, float64(amountCNY), float64(cap), rate*100, creditThreshold, p.CreditScore, approved), nil
+}
+
+// DepositSavings 活期→定期(不耗动作预算)。
+func (a *AgentRunner) DepositSavings(seat int, amountCNY int64) error {
+	return a.apply(seat, wealthplayer.ToolDepositSavings, "", func() (string, error) {
+		return a.room.World.ApplyAction(seat, Action{Type: ActDeposit, AmountCNY: amountCNY})
+	})
+}
+
+// WithdrawSavings 定期→活期(不耗动作预算)。
+func (a *AgentRunner) WithdrawSavings(seat int, amountCNY int64) error {
+	return a.apply(seat, wealthplayer.ToolWithdrawSavings, "", func() (string, error) {
+		return a.room.World.ApplyAction(seat, Action{Type: ActWithdraw, AmountCNY: amountCNY})
+	})
+}
+
 func (a *AgentRunner) Speak(seat int, text, internalThought string) error {
 	// speak 走 chat sender,不耗动作预算。
 	a.room.mu.Lock()
@@ -331,6 +419,31 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 		UserID: p.Card.ID, ModelKey: r.SeatModelKeys[seat], ModelName: ModelDisplayName(r.SeatModelKeys[seat]),
 		AgentClass: "LsmAgentGame-Wealth-Player",
 	}
+
+	// P1: 央行快照 + 信贷约束参数。
+	var cbSnapshot *wealthtypes.CentralBankSnapshot
+	creditTightness, loanQuotaFactor := 0.0, 1.0
+	if r.World.CB != nil {
+		snap := r.World.CB.Snapshot()
+		if snap != nil {
+			cbSnapshot = &wealthtypes.CentralBankSnapshot{
+				M0: snap.M0, M1: snap.M1, M2: snap.M2,
+				MB: snap.MB, MoneyMultiplier: snap.MoneyMultiplier,
+				PolicyRate: snap.PolicyRate, LPR: snap.LPR, CPI: snap.CPI,
+				CreditTightness: snap.CreditTightness, LoanQuotaFactor: snap.LoanQuotaFactor,
+			}
+		}
+		creditTightness = r.World.CB.CreditTightness
+		loanQuotaFactor = r.World.CB.LoanQuotaFactor
+	} else {
+		// CB nil 回退:PhaseTable 基础值。
+		pp := r.World.Market.Params()
+		cbSnapshot = &wealthtypes.CentralBankSnapshot{
+			PolicyRate: pp.LPR, LPR: pp.LPR, CPI: pp.CPI,
+			CreditTightness: 0, LoanQuotaFactor: 1,
+		}
+	}
+
 	// Card 投影。
   cardBrief := wealthtypes.CardBrief{
 		ID: p.Card.ID, Title: p.Card.Title, Name: p.Card.Name,
@@ -356,6 +469,7 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 		Me: me, Peers: peers,
 		RecentEvents: evRecent, RecentLedger: ledgerRecent,
 		BotIdentity: botIdent, MyCard: cardBrief,
+		CentralBank: cbSnapshot, CreditTightness: creditTightness, LoanQuotaFactor: loanQuotaFactor,
 	}, true
 }
 

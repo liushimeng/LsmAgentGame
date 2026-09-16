@@ -8,11 +8,11 @@ import (
 	"LsmAgentGame/errcode"
 )
 
-// TestBuildTools_All17ToolsPresent 17 工具齐备(§7)。
-func TestBuildTools_All17ToolsPresent(t *testing.T) {
+// TestBuildTools_All22ToolsPresent 22 工具齐备(§7 + P1 新增 5 个央行/银行工具)。
+func TestBuildTools_All22ToolsPresent(t *testing.T) {
 	tools := BuildTools()
-	if len(tools) != 17 {
-		t.Errorf("tools count: got %d, want 17", len(tools))
+	if len(tools) != 22 {
+		t.Errorf("tools count: got %d, want 22", len(tools))
 	}
 	want := map[string]bool{
 		ToolCheckState: false, ToolBuyAsset: false, ToolSellAsset: false,
@@ -21,6 +21,9 @@ func TestBuildTools_All17ToolsPresent(t *testing.T) {
 		ToolSocialize: false, ToolRest: false, ToolWorkOvertime: false,
 		ToolMoveDistrict: false, ToolConsume: false, ToolDonate: false,
 		ToolSpeak: false, ToolSubmitMonth: false,
+		// P1 新增。
+		ToolQueryCentralBank: false, ToolQueryBankingSystem: false,
+		ToolApplyLoanWithCredit: false, ToolDepositSavings: false, ToolWithdrawSavings: false,
 	}
 	for _, t1 := range tools {
 		if _, ok := want[t1.Name]; !ok {
@@ -48,11 +51,11 @@ func TestBuildTools_RequiredFields(t *testing.T) {
 	}
 }
 
-// TestToolNames_Returns17Names 工具名列表 = 17。
-func TestToolNames_Returns17Names(t *testing.T) {
+// TestToolNames_Returns22Names 工具名列表 = 22(P1 新增 5 个)。
+func TestToolNames_Returns22Names(t *testing.T) {
 	names := ToolNames()
-	if len(names) != 17 {
-		t.Errorf("names count: got %d, want 17", len(names))
+	if len(names) != 22 {
+		t.Errorf("names count: got %d, want 22", len(names))
 	}
 	for _, n := range names {
 		if !strings.HasPrefix(n, "check_state") &&
@@ -70,8 +73,12 @@ func TestToolNames_Returns17Names(t *testing.T) {
 			!strings.HasPrefix(n, "take_") &&
 			!strings.HasPrefix(n, "repay_") &&
 			!strings.HasPrefix(n, "speak") &&
-			!strings.HasPrefix(n, "submit_") {
-			t.Errorf("unexpectedname: %s", n)
+			!strings.HasPrefix(n, "submit_") &&
+			!strings.HasPrefix(n, "query_") &&
+			!strings.HasPrefix(n, "apply_loan_with_credit") &&
+			!strings.HasPrefix(n, "deposit_") &&
+			!strings.HasPrefix(n, "withdraw_") {
+			t.Errorf("unexpected name: %s", n)
 		}
 	}
 }

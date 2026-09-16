@@ -73,11 +73,12 @@ type EventRecord struct {
 
 // World 财商流纯引擎世界状态。
 type World struct {
-	Month  int // 1..420(主时钟)
+	Month  int // 1..420(主钟)
 	Status string
 
 	Market *MarketState
 	Ledger *Ledger
+	CB     *CentralBankState // 央行-商业银行体系(P1,nil 时回退 P0 硬编码)
 
 	Players [MaxSeats]*Player // 空座 nil
 
@@ -101,6 +102,7 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		Status:   StatusOpen,
 		Market:   NewMarket(rng),
 		Ledger:   &Ledger{},
+		CB:       NewCentralBank(),
 		Rand:     rng,
 		startAge: MasterStartAge,
 	}
@@ -303,10 +305,28 @@ func AnnuityPayment(principal int64, annualRate float64, n int) int64 {
 }
 
 // InflationFactor 通胀因子 = 1.05^(游戏年数)(§9.2,恒定 5% 取舍)。
+// P0 回退:World.CB 为 nil 时使用(向前兼容)。
 func InflationFactor(month int) float64 {
 	years := (month - 1) / 12
 	if years < 0 {
 		years = 0
 	}
 	return math.Pow(1.05, float64(years))
+}
+
+// InflationFactorCB 内生通胀因子 = (1 + max(CPI, 0.02))^年数(P1)。
+// CPI 来自 World.CB;CB 为 nil 时回退 P0 硬编码 1.05^年数。
+func InflationFactorCB(w *World) float64 {
+	if w == nil || w.CB == nil {
+		return InflationFactor(w.Month)
+	}
+	cpi := w.CB.CPI
+	if cpi < 0.02 {
+		cpi = 0.02 // 保底 2%,避免通缩时生活支出为 0
+	}
+	years := (w.Month - 1) / 12
+	if years < 0 {
+		years = 0
+	}
+	return math.Pow(1+cpi, float64(years))
 }

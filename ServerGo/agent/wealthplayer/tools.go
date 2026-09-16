@@ -33,6 +33,12 @@ type ToolRunner interface {
 	Donate(seat int, amountCNY int64) error
 	Speak(seat int, text, internalThought string) error
 	SubmitMonth(seat int) error
+	// P1 新增: 央行/银行体系查询 + 存款。
+	QueryCentralBank(seat int) (string, error)
+	QueryBankingSystem(seat int) (string, error)
+	ApplyLoanWithCredit(seat int, kind string, amountCNY int64) (string, error)
+	DepositSavings(seat int, amountCNY int64) error
+	WithdrawSavings(seat int, amountCNY int64) error
 }
 
 // 工具名常量。
@@ -54,6 +60,12 @@ const (
 	ToolDonate           = "donate"
 	ToolSpeak            = "speak"
 	ToolSubmitMonth      = "submit_month"
+	// P1 新增。
+	ToolQueryCentralBank  = "query_central_bank"
+	ToolQueryBankingSystem = "query_banking_system"
+	ToolApplyLoanWithCredit = "apply_loan_with_credit"
+	ToolDepositSavings    = "deposit_savings"
+	ToolWithdrawSavings   = "withdraw_savings"
 )
 
 // schema helpers。
@@ -223,6 +235,50 @@ func BuildTools() []llmtypes.ToolDef {
 			Description: "结束本月(必须调用;不调用也会被系统强制结束)。不消耗动作预算。",
 			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
 		},
+		{
+			Name:        ToolQueryCentralBank,
+			Description: "查询央行货币政策状态(不消耗动作预算):M0/M1/M2、基础货币、货币乘数、政策利率、LPR、CPI、信贷约束、额度系数。",
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		},
+		{
+			Name:        ToolQueryBankingSystem,
+			Description: "查询商业银行体系汇总(不消耗动作预算):活期/定期存款、准备金、超额准备金、贷款余额。",
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		},
+		{
+			Name:        ToolApplyLoanWithCredit,
+			Description: "带信贷约束的贷款申请(不消耗动作预算,仅查询额度/利率/批准结果):消费贷/经营贷在信贷紧缩时额度收紧、利率上浮、信用门槛提高。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"kind":        strSchema("consumer|credit|business"),
+					"amount_cny":  intSchema(1, "申请金额(元)"),
+				},
+				"required": []string{"kind", "amount_cny"},
+			},
+		},
+		{
+			Name:        ToolDepositSavings,
+			Description: "活期→定期存款(不消耗动作预算):年利率 1.5%;提前支取损失全部利息。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"amount_cny": intSchema(1, "金额(元)"),
+				},
+				"required": []string{"amount_cny"},
+			},
+		},
+		{
+			Name:        ToolWithdrawSavings,
+			Description: "定期→活期(不消耗动作预算):提前支取损失全部利息。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"amount_cny": intSchema(1, "金额(元)"),
+				},
+				"required": []string{"amount_cny"},
+			},
+		},
 	}
 }
 
@@ -233,6 +289,8 @@ func ToolNames() []string {
 		ToolRepayLoan, ToolStartSide, ToolStopSide, ToolStudy, ToolSocialize,
 		ToolRest, ToolWorkOvertime, ToolMoveDistrict, ToolConsume, ToolDonate,
 		ToolSpeak, ToolSubmitMonth,
+		ToolQueryCentralBank, ToolQueryBankingSystem, ToolApplyLoanWithCredit,
+		ToolDepositSavings, ToolWithdrawSavings,
 	}
 }
 
@@ -333,6 +391,28 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 		return failOr(a.runner.Speak(seat, getStr("text"), getStr("internal_thought")), "已发言", res)
 	case ToolSubmitMonth:
 		return failOr(a.runner.SubmitMonth(seat), "本月已提交", res)
+	case ToolQueryCentralBank:
+		s, err := a.runner.QueryCentralBank(seat)
+		if err != nil {
+			return fail(err)
+		}
+		return ok(s)
+	case ToolQueryBankingSystem:
+		s, err := a.runner.QueryBankingSystem(seat)
+		if err != nil {
+			return fail(err)
+		}
+		return ok(s)
+	case ToolApplyLoanWithCredit:
+		s, err := a.runner.ApplyLoanWithCredit(seat, getStr("kind"), getInt("amount_cny"))
+		if err != nil {
+			return fail(err)
+		}
+		return ok(s)
+	case ToolDepositSavings:
+		return failOr(a.runner.DepositSavings(seat, getInt("amount_cny")), "存款完成", res)
+	case ToolWithdrawSavings:
+		return failOr(a.runner.WithdrawSavings(seat, getInt("amount_cny")), "支取完成", res)
 	default:
 		res.IsErr = true
 		res.Text = "未知工具: " + name

@@ -144,6 +144,8 @@ type Player struct {
 
 	Cash int64
 
+	SavingsDeposit int64 // 定期存款(M2 但非 M1),利率 1.5%/年,提前支取损失全部利息(P1)
+
 	Energy    int // E -3..10
 	Network   int // N 0..10
 	Cognition int // K 0..10

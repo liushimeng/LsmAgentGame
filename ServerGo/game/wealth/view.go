@@ -27,6 +27,7 @@ type ClientGameState struct {
 	Phase          string         `json:"phase"`
 	Cycle          CycleJSON      `json:"cycle"`
 	Market         MarketJSON     `json:"market"`
+	CentralBank    CentralBankJSON `json:"central_bank"` // P1: 央行快照
 	MaxSeat        int            `json:"max_seat"`
 	NextMonthAt    int64          `json:"next_month_at"`
 	GameStartedAt  int64          `json:"game_started_at"`
@@ -36,6 +37,20 @@ type ClientGameState struct {
 	BotContexts    []BotCtxJSON   `json:"bot_contexts"`
 	LedgerRecent   []LedgerJSON    `json:"ledger_recent"`
 	EventsRecent   []EventJSON     `json:"events_recent"`
+}
+
+// CentralBankJSON 是 central_bank 子结构(P1,设计文档 §6.5)。
+type CentralBankJSON struct {
+	M0CNY           float64 `json:"m0_cny"`
+	M1CNY           float64 `json:"m1_cny"`
+	M2CNY           float64 `json:"m2_cny"`
+	MBCNY           float64 `json:"mb_cny"`
+	MoneyMultiplier float64 `json:"money_multiplier"`
+	PolicyRate      float64 `json:"policy_rate"`
+	LPR             float64 `json:"lpr"`
+	CPI             float64 `json:"cpi"`
+	CreditTightness float64 `json:"credit_tightness"`
+	LoanQuotaFactor float64 `json:"loan_quota_factor"`
 }
 
 // CycleJSON 是 cycle 字段(契约 §3)。
@@ -99,21 +114,22 @@ type ResourceJSON struct {
 
 // MyJSON 是 my.* 全量快照(仅本人/已登录玩家可见,观战者 = nil)。
 type MyJSON struct {
-	Cash         int64           `json:"cash"`
-	Salary       int64           `json:"salary"`
-	SpouseIncome int64           `json:"spouse_income"`
-	SideIncome   int64           `json:"side_income"`
-	PassiveIncome int64          `json:"passive_income"`
-	Monthly      MyMonthlyJSON   `json:"monthly"`
-	Resources    ResourceJSON    `json:"resources"`
-	Assets       []MyAssetJSON   `json:"assets"`
-	Loans        []MyLoanJSON    `json:"loans"`
-	PensionCNY   int64           `json:"pension_cny"`
-	CreditScore  int             `json:"credit_score"`
-	Family       MyFamilyJSON    `json:"family"`
-	FIIndex      float64         `json:"fi_index"`
-	NetWorth     int64           `json:"net_worth"`
-	Goals        []string        `json:"goals"`
+	Cash          int64           `json:"cash"`
+	SavingsDeposit int64          `json:"savings_deposit"` // P1: 定期存款(M2)
+	Salary        int64           `json:"salary"`
+	SpouseIncome  int64           `json:"spouse_income"`
+	SideIncome    int64           `json:"side_income"`
+	PassiveIncome int64           `json:"passive_income"`
+	Monthly       MyMonthlyJSON   `json:"monthly"`
+	Resources     ResourceJSON    `json:"resources"`
+	Assets        []MyAssetJSON   `json:"assets"`
+	Loans         []MyLoanJSON    `json:"loans"`
+	PensionCNY    int64           `json:"pension_cny"`
+	CreditScore   int             `json:"credit_score"`
+	Family        MyFamilyJSON    `json:"family"`
+	FIIndex       float64         `json:"fi_index"`
+	NetWorth      int64           `json:"net_worth"`
+	Goals         []string        `json:"goals"`
 }
 
 // MyMonthlyJSON 是 my.monthly 子结构。
@@ -239,6 +255,26 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		})
 	}
 	cs.Market = mj
+
+	// CentralBank 子结构(P1;CB 为 nil 时回退 PhaseTable 基础值)。
+	cj := CentralBankJSON{
+		PolicyRate: p.LPR, // 回退:PhaseTable LPR 作为政策利率近似
+		LPR:        p.LPR,
+		CPI:        p.CPI,
+	}
+	if world.CB != nil {
+		cj.M0CNY = world.CB.M0
+		cj.M1CNY = world.CB.M1
+		cj.M2CNY = world.CB.M2
+		cj.MBCNY = world.CB.BaseMoney
+		cj.MoneyMultiplier = world.CB.MoneyMultiplier
+		cj.PolicyRate = world.CB.PolicyRate
+		cj.LPR = world.CB.ComputeLPR()
+		cj.CPI = world.CB.CPI
+		cj.CreditTightness = world.CB.CreditTightness
+		cj.LoanQuotaFactor = world.CB.LoanQuotaFactor
+	}
+	cs.CentralBank = cj
 
 	// Players(全公开)。
 	for s, pp := range world.Players {

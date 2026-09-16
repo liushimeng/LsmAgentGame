@@ -11,7 +11,9 @@ import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import {
   WEALTH_DISTRICTS,
+  formatCny,
   formatPct,
+  type WealthCentralBank,
   type WealthCyclePhase,
   type WealthDistrictId,
   type WealthGameState,

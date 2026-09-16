@@ -52,6 +52,9 @@ const (
 	ActConsume          = "consume"
 	ActDonate           = "donate"
 	ActSubmitMonth      = "submit_month"
+	// P1 新增: 活期→定期 / 定期→活期。
+	ActDeposit          = "deposit"
+	ActWithdraw         = "withdraw"
 )
 
 // 信用贷档位面额(协议 §4:credit 档位必须是 50000/100000/200000 之一)。
@@ -114,6 +117,10 @@ func (w *World) ApplyAction(seat int, a Action) (string, *errcode.Error) {
 		return w.actConsume(p, a)
 	case ActDonate:
 		return w.actDonate(p, a)
+	case ActDeposit:
+		return w.actDeposit(p, a)
+	case ActWithdraw:
+		return w.actWithdraw(p, a)
 	default:
 		return "", errcode.CodeMsg(errcode.ErrValidationFailed, "unknown wealth action: "+a.Type)
 	}
@@ -443,7 +450,11 @@ func (w *World) actBuyHouse(p *Player, a Action) (string, *errcode.Error) {
 			if p.CreditGrade() == "E" {
 				return "", errcode.Code(errcode.ErrWealthLoanInvalid)
 			}
-			rate := w.Market.Params().LPR + 0.005 + p.CreditMarkup()
+			// P1: 房贷利率 = CB 内生(LPR5Y + 0.5% + CreditSpread);CB nil 回退 PhaseTable。
+			rate := w.Market.Params().LPR + MortgageSpread + p.CreditMarkup()
+			if w.CB != nil {
+				rate = w.CB.MortgageRate() + p.CreditMarkup()
+			}
 			payment := AnnuityPayment(loanAmount, rate, 360)
 			if p.Cash < downpay {
 				return "", errcode.Code(errcode.ErrWealthInsufficientCash)
@@ -521,6 +532,17 @@ func (w *World) actTakeLoan(p *Player, a Action) (string, *errcode.Error) {
 	if p.CreditGrade() == "E" {
 		return "", errcode.Code(errcode.ErrWealthLoanInvalid)
 	}
+	// P1: 信贷约束参数(CB 为 nil 时回退宽松)。
+	quotaFactor := 1.0
+	creditSpread := 0.0
+	creditThreshold := 500
+	if w.CB != nil {
+		quotaFactor = w.CB.LoanQuotaFactor
+		creditSpread = w.CB.CreditSpread
+		if w.CB.CreditTightness > 0 {
+			creditThreshold += CreditScoreBonus
+		}
+	}
 	switch a.Kind {
 	case "consumer":
 		if a.AmountCNY <= 0 {
@@ -529,14 +551,18 @@ func (w *World) actTakeLoan(p *Player, a Action) (string, *errcode.Error) {
 		if p.OverdueCount > 0 {
 			return "", errcode.CodeMsg(errcode.ErrWealthLoanInvalid, "overdue record blocks consumer loan")
 		}
+		if p.CreditScore < creditThreshold {
+			return "", errcode.CodeMsg(errcode.ErrWealthLoanInvalid, "credit score below threshold")
+		}
 		cap := p.monthlyIncomeEstimate() * 12
 		if cap > 200000 {
 			cap = 200000
 		}
+		cap = int64(float64(cap) * quotaFactor)
 		if a.AmountCNY > cap {
 			return "", errcode.CodeMsg(errcode.ErrWealthLoanInvalid, "consumer loan cap exceeded")
 		}
-		rate := 0.10 + p.CreditMarkup()
+		rate := ConsumerRate + p.CreditMarkup() + creditSpread
 		payment := AnnuityPayment(a.AmountCNY, rate, 36)
 		w.Pay(p.Seat, EntityBank, SeatEntity(p.Seat), a.AmountCNY, CatLoan, "消费贷放款")
 		p.Loans = append(p.Loans, Loan{
@@ -551,8 +577,13 @@ func (w *World) actTakeLoan(p *Player, a Action) (string, *errcode.Error) {
 		if !ok {
 			return "", errcode.CodeMsg(errcode.ErrWealthLoanInvalid, "credit amount must be 50000|100000|200000")
 		}
-		if p.CreditScore < 500 {
+		if p.CreditScore < creditThreshold {
 			return "", errcode.Code(errcode.ErrWealthLoanInvalid)
+		}
+		// P1: 额度收紧(实际放款 = 档位 × quotaFactor,最低 50000)。
+		amount := int64(float64(a.AmountCNY) * quotaFactor)
+		if amount < 50000 {
+			amount = 50000
 		}
 		var monthly float64
 		switch kind {
@@ -563,13 +594,13 @@ func (w *World) actTakeLoan(p *Player, a Action) (string, *errcode.Error) {
 		default:
 			monthly = 0.018
 		}
-		w.Pay(p.Seat, EntityBank, SeatEntity(p.Seat), a.AmountCNY, CatLoan, "信用贷放款")
+		w.Pay(p.Seat, EntityBank, SeatEntity(p.Seat), amount, CatLoan, "信用贷放款")
 		p.Loans = append(p.Loans, Loan{
-			ID: p.nextLoanID(), Kind: kind, Principal: a.AmountCNY, Balance: a.AmountCNY,
-			AnnualRate: monthly * 12, MonthlyPayment: int64(float64(a.AmountCNY)*monthly + 0.5),
+			ID: p.nextLoanID(), Kind: kind, Principal: amount, Balance: amount,
+			AnnualRate: monthly * 12, MonthlyPayment: int64(float64(amount)*monthly + 0.5),
 			TermN: 36, MonthsLeft: 36, InterestOnly: true, LumpAtMaturity: true,
 		})
-		text := fmt.Sprintf("借入信用贷 ¥%d(月息 %.1f%%)", a.AmountCNY, monthly*100)
+		text := fmt.Sprintf("借入信用贷 ¥%d(月息 %.1f%%)", amount, monthly*100)
 		w.spendBudget(p, "trading", text)
 		return text, nil
 	case "business":
@@ -579,7 +610,14 @@ func (w *World) actTakeLoan(p *Player, a Action) (string, *errcode.Error) {
 		if a.AmountCNY <= 0 || a.AmountCNY > 200000 {
 			return "", errcode.CodeMsg(errcode.ErrWealthLoanInvalid, "business loan cap is 200000")
 		}
-		rate := w.Market.Params().LPR + 0.02 + p.CreditMarkup()
+		if p.CreditScore < creditThreshold {
+			return "", errcode.CodeMsg(errcode.ErrWealthLoanInvalid, "credit score below threshold")
+		}
+		cap := int64(200000 * quotaFactor)
+		if a.AmountCNY > cap {
+			return "", errcode.CodeMsg(errcode.ErrWealthLoanInvalid, "business loan cap exceeded")
+		}
+		rate := w.Market.Params().LPR + BusinessSpread + p.CreditMarkup() + creditSpread
 		if rate < 0.01 {
 			rate = 0.01
 		}
@@ -847,5 +885,44 @@ func (w *World) actDonate(p *Player, a Action) (string, *errcode.Error) {
 	}
 	text := fmt.Sprintf("捐赠 ¥%d(累计 ¥%d)", a.AmountCNY, p.DonationTotalCNY)
 	w.spendBudget(p, "idle", text)
+	return text, nil
+}
+
+// ── deposit / withdraw:活期 ↔ 定期(P1) ──
+// 定期存款利率 1.5%/年;提前支取损失全部利息(简化:支取时无利息)。
+
+// actDeposit 活期 → 定期转账。
+func (w *World) actDeposit(p *Player, a Action) (string, *errcode.Error) {
+	if p.ActionBudget <= 0 {
+		return "", errcode.Code(errcode.ErrWealthActionBudgetExhausted)
+	}
+	if a.AmountCNY <= 0 {
+		return "", errcode.CodeMsg(errcode.ErrWealthAssetInvalid, "deposit amount_cny must be > 0")
+	}
+	if p.Cash < a.AmountCNY {
+		return "", errcode.Code(errcode.ErrWealthInsufficientCash)
+	}
+	p.Cash -= a.AmountCNY
+	p.SavingsDeposit += a.AmountCNY
+	text := fmt.Sprintf("活期转定期 ¥%d(年利率 1.5%%)", a.AmountCNY)
+	w.spendBudget(p, "trading", text)
+	return text, nil
+}
+
+// actWithdraw 定期 → 活期(提前支取损失全部利息,简化:无利息)。
+func (w *World) actWithdraw(p *Player, a Action) (string, *errcode.Error) {
+	if p.ActionBudget <= 0 {
+		return "", errcode.Code(errcode.ErrWealthActionBudgetExhausted)
+	}
+	if a.AmountCNY <= 0 {
+		return "", errcode.CodeMsg(errcode.ErrWealthAssetInvalid, "withdraw amount_cny must be > 0")
+	}
+	if p.SavingsDeposit < a.AmountCNY {
+		return "", errcode.CodeMsg(errcode.ErrWealthInsufficientCash, "savings deposit insufficient")
+	}
+	p.SavingsDeposit -= a.AmountCNY
+	p.Cash += a.AmountCNY
+	text := fmt.Sprintf("定期转活期 ¥%d(提前支取,利息损失)", a.AmountCNY)
+	w.spendBudget(p, "trading", text)
 	return text, nil
 }

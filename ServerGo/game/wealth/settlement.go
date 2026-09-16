@@ -51,12 +51,17 @@ type SettleResult struct {
 func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 	res = &SettleResult{Month: w.Month, Age: w.Age(), HouseIdx: map[string]float64{}}
 
-	// ① 月度事件(失业判定)。
+	// ① 央行月度决策(P1:在月度事件之前,内生 CPI/LPR/信贷约束)。
+	if w.CB != nil {
+		w.CB.MonthlyDecision(w, w.Rand)
+	}
+
+	// ② 月度事件(失业判定)。
 	w.MonthlyEvents()
 
 	age := w.Age()
 
-	// ② 逐座位月结 7 步 + 破产检查。
+	// ③ 逐座位月结 7 步 + 破产检查。
 	for seat, p := range w.Players {
 		if p == nil {
 			continue
@@ -77,7 +82,7 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		res.Summaries = append(res.Summaries, sum)
 	}
 
-	// ③ 市场漂移 + 阶段到期重掷。
+	// ④ 市场漂移 + 阶段到期重掷。
 	p0 := w.Market.Params()
 	res.StockIndex, res.GoldPrice, res.BondRate = w.Market.StockIndex, w.Market.GoldPrice, p0.BondRate
 	if w.Market.CycleStep(w.Rand) {
@@ -91,7 +96,7 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		res.HouseIdx[d.ID] = w.Market.DistrictIdx[d.ID]
 	}
 
-	// ④ 月份 +1;年调整 / 钟声。
+	// ⑤ 月份 +1;年调整 / 钟声。
 	isYearEnd := w.Month%12 == 0
 	isBell := w.Month%60 == 0
 	w.Month++
@@ -135,6 +140,11 @@ func (w *World) settlePlayer(p *Player, age int) {
 	seat := p.Seat
 	var income, expense, passive int64
 	detail := []FlowItem{}
+
+	// P1: 汇总 M0/M1/M2(央行货币统计)。
+	if w.CB != nil {
+		w.CB.UpdateMoneyStats(w)
+	}
 
 	addIncome := func(amount int64, key, text string, isPassive bool) {
 		if amount == 0 {
@@ -265,7 +275,7 @@ func (w *World) settlePlayer(p *Player, age int) {
 	}
 
 	// ── 步骤5 生活支出:职业基数 × 通胀因子 + 配偶 2000 + 每孩 5000 + 赡养。
-	infl := InflationFactor(w.Month)
+	infl := InflationFactorCB(w)
 	living := int64(float64(p.Card.Expense)*infl + 0.5)
 	if living > 0 {
 		w.Pay(seat, SeatEntity(seat), EntityWorld, living, CatLiving, "生活支出")
@@ -301,14 +311,29 @@ func (w *World) settlePlayer(p *Player, age int) {
 				principal = loan.Balance
 			}
 		} else {
-			interest = int64(float64(loan.Balance)*loan.AnnualRate/12 + 0.5)
+			rate := loan.AnnualRate
+			if w.CB != nil {
+				// P1: 浮动利率贷款(mortgage/business)按当月 LPR 重算利率。
+				switch loan.Kind {
+				case LoanMortgage:
+					rate = w.CB.MortgageRate()
+				case LoanBusiness:
+					rate = w.CB.BusinessRate()
+				}
+			}
+			interest = int64(float64(loan.Balance)*rate/12 + 0.5)
 			if loan.InterestOnly {
 				// 先息后本:月付息;末期(business)还本;信用贷到期一次性还本。
 				if loan.MonthsLeft <= 1 && !loan.LumpAtMaturity {
 					principal = loan.Balance
 				}
 			} else {
-				principal = loan.MonthlyPayment - interest
+				// 等额本息:按当月 LPR 重算月供(不写回 loan.AnnualRate,避免累积漂移)。
+				payment := loan.MonthlyPayment
+				if rate != loan.AnnualRate {
+					payment = AnnuityPayment(loan.Balance, rate, loan.MonthsLeft)
+				}
+				principal = payment - interest
 				if principal < 0 {
 					principal = 0
 				}

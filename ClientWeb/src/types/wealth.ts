@@ -66,6 +66,30 @@ export interface WealthMarket {
   districts: WealthDistrictMarket[];
 }
 
+/** 央行货币政策快照（game.state.central_bank，P1 央行引擎下发）。 */
+export interface WealthCentralBank {
+  /** 流通中现金（元）。 */
+  m0_cny: number;
+  /** M1 = M0（游戏简化，元）。 */
+  m1_cny: number;
+  /** M2 = M1 + 定期存款（元）。 */
+  m2_cny: number;
+  /** 基础货币（元）。 */
+  mb_cny: number;
+  /** 货币乘数（M2 / MB，保留 3 位小数）。 */
+  money_multiplier: number;
+  /** 政策利率（小数，如 0.03）。 */
+  policy_rate: number;
+  /** LPR（小数）。 */
+  lpr: number;
+  /** CPI（小数）。 */
+  cpi: number;
+  /** 信贷约束系数 [0,1]（0=宽松，1=惜贷）。 */
+  credit_tightness: number;
+  /** 贷款额度乘数 [0.5,1]。 */
+  loan_quota_factor: number;
+}
+
 export interface WealthProfession {
   /** 职业卡 id（"P01"…；文档池 "N9012345"）。 */
   id: string;
@@ -173,6 +197,8 @@ export interface WealthMyState {
   loans: WealthLoan[];
   /** 养老金账户余额。 */
   pension_cny: number;
+  /** 定期存款（M2 组成部分，元）。 */
+  savings_deposit: number;
   /** 400–850。 */
   credit_score: number;
   family: WealthFamily;
@@ -222,6 +248,8 @@ export interface WealthGameState {
   phase: WealthPhase;
   cycle: WealthCycle;
   market: WealthMarket;
+  /** 央行货币政策快照（P1 央行引擎下发）。 */
+  central_bank: WealthCentralBank;
   max_seat: number;
   /** unix_ms；前端倒计时 = next_month_at − now。 */
   next_month_at: number;
