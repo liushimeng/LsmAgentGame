@@ -128,6 +128,22 @@ const (
 	ErrWealthSurveyMonthlyLimit      = 35018 // 本月已达调研发起上限(每月 1 个/累计 20 个)
 	ErrWealthSurveyNotFound          = 35019 // 调研不存在/已关闭/已回答
 	ErrWealthConsumptionLevelInvalid = 35020 // 消费档位非法(须 0-3)
+	// 35021–35035 — 财商流 P2 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
+	ErrWealthListingInvalid      = 35021 // 挂单无效(资产不存在/参数非法)
+	ErrWealthListingExpired      = 35022 // 挂单已过期
+	ErrWealthListingNotFound     = 35023 // 挂单不存在
+	ErrWealthNegotiateNotFound   = 35024 // 议价会话不存在
+	ErrWealthNotYourTurn         = 35025 // 非议价轮次(非本方出价)
+	ErrWealthLoanRateInvalid     = 35026 // 借贷利率超限(0.3%-3.6%/月)
+	ErrWealthLoanNoCredit        = 35027 // 信用不足(无法借贷)
+	ErrWealthGuarantorConflict   = 35028 // 担保人冲突(不可自担保/已担保过)
+	ErrWealthAuctionEnded        = 35029 // 拍卖已结束
+	ErrWealthBidTooLow           = 35030 // 出价低于当前最高价/起拍价
+	ErrWealthNoPrivilege         = 35031 // 权限不足(非自由圈)
+	ErrWealthListingFull         = 35032 // 挂单已满(每座位最多 3 笔)
+	ErrWealthSelfTrade           = 35033 // 不可自交易(买卖双方相同)
+	ErrWealthAuctionNotFound     = 35034 // 拍卖不存在
+	ErrWealthInfoNotFound        = 35035 // 信息不存在/未成交
 	// ErrAlreadyWolfVoted: 狼人在 night_wolves 阶段已投过票(含弃权),
 	// 再次调用 wolf_kill 一律拒绝。R196 报告 P1:Bot 8 (GLM-5.2) 反复投票
 	// 15+ 次服务端仅覆盖不报错,LLM 看不到反馈陷入循环。
@@ -213,6 +229,22 @@ var DefaultMessages = map[int]string{
 	ErrWealthSurveyMonthlyLimit:      "survey launch limit reached (1 per month / 20 per room)",
 	ErrWealthSurveyNotFound:          "survey not found / closed / already answered",
 	ErrWealthConsumptionLevelInvalid: "consumption level invalid (must be 0-3)",
+	// 35021–35035 — 财商流 P2 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
+	ErrWealthListingInvalid:      "wealth listing invalid (asset not found or params invalid)",
+	ErrWealthListingExpired:      "wealth listing expired",
+	ErrWealthListingNotFound:     "wealth listing not found",
+	ErrWealthNegotiateNotFound:   "wealth negotiate session not found",
+	ErrWealthNotYourTurn:         "wealth negotiate not your turn to respond",
+	ErrWealthLoanRateInvalid:     "wealth loan rate out of range (0.3%-3.6% per month)",
+	ErrWealthLoanNoCredit:        "wealth loan credit score too low",
+	ErrWealthGuarantorConflict:   "wealth guarantor conflict (self-guarantee or already guaranteed)",
+	ErrWealthAuctionEnded:        "wealth auction already ended",
+	ErrWealthBidTooLow:           "wealth bid too low (below current highest/reserve)",
+	ErrWealthNoPrivilege:         "wealth operation requires free-circle privilege",
+	ErrWealthListingFull:         "wealth listing full (max 3 per seat)",
+	ErrWealthSelfTrade:           "wealth self-trade not allowed (buyer=seller)",
+	ErrWealthAuctionNotFound:     "wealth auction not found",
+	ErrWealthInfoNotFound:        "wealth info not found or not won",
 }
 
 // Code constructs a Coded error.
