@@ -239,7 +239,11 @@ func (r *WealthRoom) JoinGame(userID, nickname string) (int, bool, *errcode.Erro
 		p.ActionBudget = 0
 		r.World.Players[seat] = p
 	}
-	full := r.occupiedLocked() >= MaxSeats && r.Status == StatusOpen
+	// 2026-09-16 §12 座扩容:「满员自动开局」阈值从 MaxSeats(12) 下调到
+	// MinSeats(10)——10-11 bot 的全 Agent 房(创建者降级为观战者)在注册完
+	// bot 后即可自动开局,不必凑满 12 人。房间仍可容纳到 MaxSeats(12),超出的
+	// 2 头寸留给中途加入的人类玩家。
+	full := r.occupiedLocked() >= MinSeats && r.Status == StatusOpen
 	return seat, full, nil
 }
 

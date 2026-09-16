@@ -56,5 +56,17 @@ func (s *GameService) registerWealthAgentSeats(roomID string, seats []service.Ag
 	logger.L().Info("wealth bot seats registered",
 		zap.String("room_id", roomID),
 		zap.Int("bot_seats", len(seatUsers)))
+
+	// 2026-09-16 §12 座扩容:全 Agent 房(创建者降级为观战者)在
+	// CreateRoomWithAgents 里跳过 SyncSeat,此处必须兜底自动开局 —— 否则
+	// 10-11 bot 房注册完 bot 后永远停在 open。满 MinSeats(10) 即开,与
+	// JoinGame 的 full 语义一致;若人类创建者随后 SyncSeat 会再触发一次
+	// startWealthRoom,但 r.Start 在 Status!=Open 时幂等返回错误(仅日志),不重复开局。
+	if r.GetStatus() == wealth.StatusOpen && r.Occupied() >= wealth.MinSeats {
+		if e := s.startWealthRoom(roomID); e != nil {
+			logger.L().Warn("registerWealthAgentSeats: auto-start failed",
+				zap.String("room_id", roomID), zap.Error(e))
+		}
+	}
 	return nil
 }

@@ -360,6 +360,10 @@ type WealthConfig struct {
 	BotMaxActionsPerMonth int `json:"bot_max_actions_per_month"`
 	// RandomSeed 0 = 运行时随机;非 0 时引擎/市场/事件用固定种子(确定性测试/复现)。
 	RandomSeed int64 `json:"random_seed"`
+	// AgentConcurrency 房间级 LLM 并发信号量容量(默认 0 = wealth.DefaultAgentConcurrency
+	// 8);10+ bot 同月决策时建议 ≥8,避免 4 并发把 12 人压成串行(详见
+	// game/wealth/engine.go DefaultAgentConcurrency 注释)。
+	AgentConcurrency int `json:"agent_concurrency"`
 }
 
 // RootDisabledSentinel 是 conf 中 root_account / root_password 的「禁用」哨兵值。

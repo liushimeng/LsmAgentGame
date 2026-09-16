@@ -50,10 +50,15 @@ func TestBotBuyAsset_NoDeadlock(t *testing.T) {
 	m := NewManager(Config{MonthMs: 3000, PoolDefault: "curated", AgentEnabled: true, AgentDecisionTimeoutSec: 5},
 		fakeBuyRegistry{p: fakeBuyProvider{calls: &calls}})
 	r := m.CreateRoom("room-buy")
-	r.RegisterBotSeats(map[int]string{1: "b1", 2: "b2"}, map[int]string{1: "MA", 2: "MB"}, nil)
-	if _, _, e := r.JoinGame("h0", "human"); e != nil {
-		t.Fatal(e)
+	// 2026-09-16 §12 座扩容:MinSeats=10,需注册 ≥10 个 bot 座位才能开局
+	// (测试只关心 buy_asset 不杀房间锁,不关心具体人数)。
+	botUsers := make(map[int]string, 10)
+	botModels := make(map[int]string, 10)
+	for seat := 0; seat < 10; seat++ {
+		botUsers[seat] = "b" + string(rune('0'+seat))
+		botModels[seat] = "M" + string(rune('A'+seat))
 	}
+	r.RegisterBotSeats(botUsers, botModels, nil)
 	if e := r.Start(nil); e != nil {
 		t.Fatalf("start: %v", e)
 	}

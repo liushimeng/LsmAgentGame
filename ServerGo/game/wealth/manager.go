@@ -34,12 +34,17 @@ type WealthRoomOptions = service.WealthRoomOptions
 
 // Config 是 Manager 装配参数(避免直接 import config 包;ws 层转换传入)。
 type Config struct {
-	MonthMs                int
-	AgentEnabled           bool
+	MonthMs                 int
+	AgentEnabled            bool
 	AgentDecisionTimeoutSec int
-	BotMaxActionsPerMonth  int
-	PoolDefault            string // "curated" | "docs"
-	Seed                   int64
+	BotMaxActionsPerMonth   int
+	PoolDefault             string // "curated" | "docs"
+	Seed                    int64
+	// AgentConcurrency 房间级 LLM 并发信号量容量;0 = DefaultAgentConcurrency(8)。
+	// 2026-09-16 §12 座扩容 新增:10+ bot 同月决策时,4 并发会把 12 人压成
+	// 4 批串行,月窗口(默认 8s)内后几批来不及跑。8 是 Provider 配额与房间
+	// 并发间的平衡(详见 engine.go DefaultAgentConcurrency 注释)。
+	AgentConcurrency int
 }
 
 // LLMRegistry 窄接口(llm.Registry 满足;避免 manager 包 import llm)。
@@ -66,6 +71,9 @@ func NewManager(cfg Config, reg LLMRegistry) *Manager {
 	}
 	if cfg.MonthMs <= 0 {
 		cfg.MonthMs = 8000
+	}
+	if cfg.AgentConcurrency <= 0 {
+		cfg.AgentConcurrency = DefaultAgentConcurrency
 	}
 	return &Manager{
 		cfg:      cfg,
@@ -152,7 +160,7 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 		m.pendingOptsApply(roomID)
 		return r
 	}
-	r = NewWealthRoom(roomID, m.cfg.MonthMs, m.cfg.PoolDefault, m.cfg.Seed, 4)
+	r = NewWealthRoom(roomID, m.cfg.MonthMs, m.cfg.PoolDefault, m.cfg.Seed, m.cfg.AgentConcurrency)
 	if m.loader != nil {
 		r.mu.Lock()
 		r.docLoader = m.loader

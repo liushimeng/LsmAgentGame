@@ -11,10 +11,15 @@ import (
 // 为 [] 而非 null。
 func TestClientState_NoNullArrays(t *testing.T) {
 	r := NewWealthRoom("room-null", 3000, "curated", 7, 4)
-	r.RegisterBotSeats(map[int]string{1: "b1", 2: "b2"}, map[int]string{1: "MA", 2: "MB"}, nil)
-	if _, _, e := r.JoinGame("h0", "human"); e != nil {
-		t.Fatal(e)
+	// 2026-09-16 §12 座扩容:MinSeats=10,注册 10 个 bot 座位开局(测试只关心
+	// BuildClientState 不输出 null 数组,不关心具体人数)。
+	botUsers := make(map[int]string, 10)
+	botModels := make(map[int]string, 10)
+	for seat := 0; seat < 10; seat++ {
+		botUsers[seat] = "b" + string(rune('0'+seat))
+		botModels[seat] = "M" + string(rune('A'+seat))
 	}
+	r.RegisterBotSeats(botUsers, botModels, nil)
 	if e := r.Start(nil); e != nil {
 		t.Fatalf("start: %v", e)
 	}

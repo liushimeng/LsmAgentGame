@@ -189,6 +189,9 @@
     "agent_decision_timeout_sec": 20,
     // bot 每月动作工具上限(与人类 ActionBudget 同规则)。
     "bot_max_actions_per_month": 3,
+    // 房间级 LLM 并发信号量容量(默认 0 = wealth.DefaultAgentConcurrency 8);
+    // 10+ bot 同月决策时建议 ≥8,避免 4 并发把 12 人压成串行。
+    "agent_concurrency": 0,
     // 0 = 运行时随机;非 0 = 固定种子(确定性测试/复现)。
     "random_seed": 0
   }

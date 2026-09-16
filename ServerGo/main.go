@@ -895,6 +895,7 @@ func main() {
 		BotMaxActionsPerMonth:   cfg.Wealth.BotMaxActionsPerMonth,
 		PoolDefault:             cfg.Wealth.ProfessionPoolDefault,
 		Seed:                    cfg.Wealth.RandomSeed,
+		AgentConcurrency:        cfg.Wealth.AgentConcurrency,
 	}, llmRegistry)
 	// 2026-09-14 §财商流P0-bugfix: 服务重启后内存房间 Seats/BotSeats 全空,必须从
 	// t_lsm_game_player 恢复人类 + bot 座位,否则 Start() 永远 ErrWealthNotEnoughPlayers。
