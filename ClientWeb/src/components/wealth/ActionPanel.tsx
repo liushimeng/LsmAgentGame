@@ -24,7 +24,12 @@ import {
   type WealthDistrictId,
   type WealthGameState,
 } from '@/types/wealth';
-import { selectActionsUsedThisMonth, WEALTH_ACTION_BUDGET, useWealthStore } from '@/store/wealth.store';
+import {
+  selectActionsUsedThisMonth,
+  WEALTH_ACTION_BUDGET,
+  useWealthStore,
+  type WealthPanelTab,
+} from '@/store/wealth.store';
 import { EarlyRepayModal } from './EarlyRepayModal';
 import { MinskyStatusBar } from './MinskyStatusBar';
 
@@ -39,9 +44,11 @@ interface Props {
   mySeat: number;
   /** 发送函数由 useWealth 提供（页面注入）。 */
   sendAction: (action: WealthAction) => void;
+  /** 切换到交易侧栏 Tab（挂单 / 借贷 / 信息）。 */
+  onTradeTab: (tab: WealthPanelTab) => void;
 }
 
-export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
+export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab }: Props) {
   const t = useT();
   const eventFeed = useWealthStore((s) => s.eventFeed);
   const [active, setActive] = useState<WealthActionMeta | null>(null);
@@ -603,6 +610,56 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction }: Props) {
         {formError && !active && (
           <div className="wealth-consumption__error" role="alert">{formError}</div>
         )}
+      </div>
+
+      {/* P2 交易入口：挂单簿 / 借贷市场 / 信息市场（不耗动作预算，交易类动作） */}
+      <div className="wealth-actionbar__trade">
+        <span className="wealth-actionbar__trade-label">🤝 交易</span>
+        <div className="wealth-actionbar__trade-btns">
+          <button
+            type="button"
+            className="wealth-action-btn wealth-action-btn--trade"
+            disabled={!playing || !acting || stopped}
+            title="挂单簿 · 自由议价 · 英式拍卖 · 密封暗标"
+            onClick={() => onTradeTab('listing')}
+          >
+            <span className="wealth-action-btn__icon">📋</span>
+            <span className="wealth-action-btn__label">挂单簿</span>
+          </button>
+          <button
+            type="button"
+            className="wealth-action-btn wealth-action-btn--trade"
+            disabled={!playing || !acting || stopped}
+            title="玩家间借贷 · 利率协商 · 担保机制"
+            onClick={() => onTradeTab('loan')}
+          >
+            <span className="wealth-action-btn__icon">🏦</span>
+            <span className="wealth-action-btn__label">借贷</span>
+          </button>
+          <button
+            type="button"
+            className="wealth-action-btn wealth-action-btn--trade"
+            disabled={!playing || !acting || stopped}
+            title="信息出售 · 密封暗标 · 情报交易"
+            onClick={() => onTradeTab('infomarket')}
+          >
+            <span className="wealth-action-btn__icon">🔍</span>
+            <span className="wealth-action-btn__label">信息</span>
+          </button>
+          <button
+            type="button"
+            className="wealth-action-btn wealth-action-btn--trade"
+            disabled={!playing || !acting || stopped}
+            title="发布资产出售 / 收购 / 信息 / 借贷挂单"
+            onClick={() => {
+              // 快捷发布：弹出信息出售（最常见交易入口）。
+              onTradeTab('listing');
+            }}
+          >
+            <span className="wealth-action-btn__icon">➕</span>
+            <span className="wealth-action-btn__label">发布</span>
+          </button>
+        </div>
       </div>
 
       <div className="wealth-actionbar__buttons">

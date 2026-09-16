@@ -36,6 +36,9 @@ import { EconomyPanel } from '@/components/wealth/EconomyPanel';
 import { SurveyPanel } from '@/components/wealth/SurveyPanel';
 import { ActionPanel } from '@/components/wealth/ActionPanel';
 import { MonthTicker } from '@/components/wealth/MonthTicker';
+import { ListingPanel } from '@/components/wealth/ListingPanel';
+import { LoanPanel } from '@/components/wealth/LoanPanel';
+import { InfoMarketPanel } from '@/components/wealth/InfoMarketPanel';
 import { GameOverModal } from '@/components/wealth/GameOverModal';
 import { WealthBotPanel } from '@/components/wealth/WealthBotPanel';
 import { WealthGameChatPanel } from '@/components/wealth/WealthGameChatPanel';
@@ -85,7 +88,7 @@ export function WealthGamePage() {
   const seatsReady = useWealthStore(selectSeatsReady);
 
   const {
-    spectate, unspectate, leaveGame, requestState, sendAction, startEarly,
+    spectate, unspectate, leaveGame, requestState, sendAction, sendTrade, startEarly,
   } = useWealth(roomId ?? '');
 
   const [leavePromptOpen, setLeavePromptOpen] = useState(false);
@@ -170,6 +173,10 @@ export function WealthGamePage() {
     // P1 第二期：真实经济循环引擎（economy）+ 社会调研（survey）。
     { key: 'economy', label: `📊 ${t('wealth.tab.economy' as TKey)}` },
     { key: 'survey', label: `📋 ${t('wealth.tab.survey' as TKey)}` },
+    // P2 第三期：玩家间交易（挂单簿 / 借贷 / 信息市场）。
+    { key: 'listing', label: `📋 ${t('wealth.tab.listing' as TKey)}` },
+    { key: 'loan', label: `🏦 ${t('wealth.tab.loan' as TKey)}` },
+    { key: 'infomarket', label: `🔍 ${t('wealth.tab.infomarket' as TKey)}` },
   ];
 
   return (
@@ -307,6 +314,34 @@ export function WealthGamePage() {
             {panelTab === 'survey' && (
               <SurveyPanel roomId={roomId} gameState={gameState} />
             )}
+            {/* P2 第三期：挂单簿 + 借贷市场 + 信息市场（观战视图可用，刷新只读） */}
+            {panelTab === 'listing' && (
+              <ListingPanel
+                roomId={roomId}
+                gameState={gameState}
+                mySeat={effectiveSeat}
+                my={gameState?.my ?? null}
+                sendTrade={sendTrade}
+                onRefresh={() => sendTrade({ type: 'listing_view' })}
+              />
+            )}
+            {panelTab === 'loan' && (
+              <LoanPanel
+                gameState={gameState}
+                mySeat={effectiveSeat}
+                my={gameState?.my ?? null}
+                sendTrade={sendTrade}
+                onRefresh={() => sendTrade({ type: 'listing_view' })}
+              />
+            )}
+            {panelTab === 'infomarket' && (
+              <InfoMarketPanel
+                gameState={gameState}
+                mySeat={effectiveSeat}
+                sendTrade={sendTrade}
+                onRefresh={() => sendTrade({ type: 'listing_view' })}
+              />
+            )}
           </div>
           {gameState && !spectator && gameState.my_seat < 0 && (
             <div className="wealth-join-hint">{t('wealth.joinHint' as TKey)}</div>
@@ -326,6 +361,7 @@ export function WealthGamePage() {
           gameState={gameState}
           mySeat={effectiveSeat}
           sendAction={sendAction}
+          onTradeTab={(tab) => setPanelTab(tab)}
         />
       )}
       <MonthTicker
