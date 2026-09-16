@@ -1633,6 +1633,23 @@ export interface Dict {
   'wealth.create.meSeat': string;
   'wealth.create.noModels': string;
   'wealth.create.failed': string;
+  // 2026-09-16 §财商流10–12座位改造 — 建房弹窗座位档位 / 创建者身份（观战者建
+  // 全 Agent 房）/ MinSeats(10) 校验提示 / 对局页座位计数 / 12 座下的紧凑文案。
+  'wealth.create.seatNo': string;
+  'wealth.create.creatorRole': string;
+  'wealth.create.watchOnly': string;
+  'wealth.create.creatorPlayer': string;
+  'wealth.create.needMinSeats': string;
+  'wealth.create.seatsOk': string;
+  'wealth.seatsCount': string;
+  'wealth.seatsWaiting': string;
+  'wealth.botPanel.seat': string;
+  'wealth.botPanel.titleCount': string;
+  'wealth.chat.playerFallback': string;
+  'wealth.minimap.aria': string;
+  'wealth.pool.cardsTitle': string;
+  'wealth.pool.cardSalary': string;
+  'wealth.pool.cardSavings': string;
 }
 
 export type TKey = keyof Dict;

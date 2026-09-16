@@ -21,7 +21,7 @@ type Config struct {
 	Server      ServerConfig      `json:"server"`
 	DB          DBConfig          `json:"db"`
 	JWT         JWTConfig         `json:"jwt"`
-	Cookie      CookieConfig   `json:"cookie"`
+	Cookie      CookieConfig      `json:"cookie"`
 	Captcha     CaptchaConfig     `json:"captcha"`
 	Log         LogConfig         `json:"log"`
 	CORS        CORSConfig        `json:"cors"`
@@ -333,12 +333,12 @@ const DefaultSpeakFloorWakeIntervalSec = 20
 //   - RakeRatePct:标准档抽水率(Health 档默认 5%)。
 //   - MaxPotPerHand:单手牌最大底池上限(防恶意刷金币)。
 type TexasHoldemConfig struct {
-	AgentEnabled         bool `json:"agent_enabled"`           // 默认 true
-	AgentActionTimeoutSec int `json:"agent_action_timeout_sec"` // 默认 15s(R7 P0-2:原 30s 导致 LLM 失败时 bot 卡住 30s+)
-	BotChatPerHand       int `json:"bot_chat_per_hand"`        // 默认 2
-	BotChatMinIntervalSec int `json:"bot_chat_min_interval_sec"` // 默认 30s
-	RakeRatePct          int `json:"rake_rate_pct"`             // 默认 5(Health 档);Caution 7、Danger 10 由代码常量定
-	MaxPotPerHand        int `json:"max_pot_per_hand"`          // 默认 100000
+	AgentEnabled          bool `json:"agent_enabled"`             // 默认 true
+	AgentActionTimeoutSec int  `json:"agent_action_timeout_sec"`  // 默认 15s(R7 P0-2:原 30s 导致 LLM 失败时 bot 卡住 30s+)
+	BotChatPerHand        int  `json:"bot_chat_per_hand"`         // 默认 2
+	BotChatMinIntervalSec int  `json:"bot_chat_min_interval_sec"` // 默认 30s
+	RakeRatePct           int  `json:"rake_rate_pct"`             // 默认 5(Health 档);Caution 7、Danger 10 由代码常量定
+	MaxPotPerHand         int  `json:"max_pot_per_hand"`          // 默认 100000
 }
 
 // WealthConfig 控制财商流游戏(game_kind=wealth)的月度节奏与 Agent(P0 v1)。
@@ -349,7 +349,8 @@ type WealthConfig struct {
 	// ProfessionDocsPath 文档池(75k 人物卡)磁盘根,默认
 	// "./docs/财商流游戏/玩家职业设计"。
 	ProfessionDocsPath string `json:"profession_docs_path"`
-	// ProfessionPoolDefault 建房缺省卡池: "curated"(内嵌 10 卡) | "docs"。
+	// ProfessionPoolDefault 建房缺省卡池: "docs"(75k 文档池,2026-09-16 起默认) |
+	// "curated"(内嵌 14 精选卡,文档池不可用时的兜底)。
 	ProfessionPoolDefault string `json:"profession_pool_default"`
 	// AgentEnabled 默认 true;false 时 agent_seats 被忽略(座位回退人类占位)。
 	AgentEnabled bool `json:"agent_enabled"`
@@ -1028,7 +1029,10 @@ func applyDefaults(c *Config) {
 		c.Wealth.ProfessionDocsPath = "./docs/财商流游戏/玩家职业设计"
 	}
 	if c.Wealth.ProfessionPoolDefault == "" {
-		c.Wealth.ProfessionPoolDefault = "curated"
+		// 2026-09-16 §文档池解析修复:默认切到 "docs"。文档池 75k 卡经形状容错
+		// 后解析成功率 ≥99%(旧实现 0%),不再回退 curated;仅当磁盘池不可用时
+		// loader 自动回退内嵌 14 张精选卡,不影响建房。
+		c.Wealth.ProfessionPoolDefault = "docs"
 	}
 	if !c.Wealth.AgentEnabled {
 		// 默认 true;operator 显式设 false 仍为 false(零值无法区分,与

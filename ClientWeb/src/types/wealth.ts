@@ -82,7 +82,7 @@ export interface WealthResources {
 }
 
 export interface WealthPlayer {
-  seat: number;              // 0..7
+  seat: number;              // 0..WEALTH_MAX_SEATS-1（2026-09-16 起 10–12 座位）
   account: string;           // bot 为 bot_<modelkey>
   nickname: string;
   is_bot: boolean;
@@ -236,6 +236,42 @@ export interface WealthGameState {
   ledger_recent: WealthLedgerEntry[];
   /** 最近 100 条。 */
   events_recent: WealthRecentEvent[];
+}
+
+// ── 座位容量常量（2026-09-16 §财商流10–12座位改造）──────────────────────
+//
+// 与后端 ServerGo/game/wealth/engine.go 的 MaxSeats / MinSeats 同值同义：
+//   MaxSeats = 12 → 房间容量 12（「1 人类 + 11 Agent」或「全 12 Agent」）
+//   MinSeats = 10 → 已占座 < 10 时 Start 返回 35003 ErrWealthNotEnoughPlayers
+// 前端一切座位相关长度（建房档位 / 座位模型下拉 / 渲染环 / 提前开始门控）
+// **必须**引用这些常量，禁止再出现 7 / 8 之类的魔数（§130「声明了却从不接线」）。
+
+/** 房间座位上限（后端 wealth.MaxSeats）。game.state.max_seat 缺失时的兜底值。 */
+export const WEALTH_MAX_SEATS = 12;
+
+/** 最少开局座位（后端 wealth.MinSeats）：不足则无法开局。 */
+export const WEALTH_MIN_SEATS = 10;
+
+/** 建房弹窗 Agent 数默认值（10 Agent + 创建者 = 11 座 ≥ MinSeats → 自动开局）。 */
+export const WEALTH_DEFAULT_AGENT_COUNT = 10;
+
+/** 座位容量解析：服务端权威 max_seat 优先，非法/未到达时回落常量。 */
+export function wealthSeatCapacity(
+  gs: Pick<WealthGameState, 'max_seat'> | null | undefined,
+): number {
+  const n = gs?.max_seat;
+  return typeof n === 'number' && n > 0 ? n : WEALTH_MAX_SEATS;
+}
+
+/**
+ * 已占座人数。后端 players[] **恒为 max_seat 长度**（空座位是 account/nickname
+ * 全空的占位对象），因此 `players.length` 永远等于容量 —— 判断「够不够开局」
+ * 必须数真实占座，不能用数组长度（曾导致「提前开始」按钮恒可点）。
+ */
+export function wealthOccupiedSeats(
+  players: WealthPlayer[] | null | undefined,
+): number {
+  return (players ?? []).filter((p) => !!p && (!!p.account || !!p.nickname)).length;
 }
 
 // ── 其余 S→C 帧载荷（协议 §2）────────────────────────────────────────

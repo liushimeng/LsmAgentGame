@@ -12,6 +12,8 @@
 import { useEffect, useRef } from 'react';
 import { districtSeatOffset } from './AgentToken';
 import type { WealthCameraView } from './WealthCityMap';
+import { useT } from '@/hooks/useT';
+import type { TKey } from '@/i18n';
 import {
   WEALTH_DISTRICTS,
   districtCenter,
@@ -36,6 +38,7 @@ interface Props {
 }
 
 export function WealthMinimap({ gameState, viewRef, selectedDistrict, onSelectDistrict }: Props) {
+  const t = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef(gameState);
   stateRef.current = gameState;
@@ -141,7 +144,7 @@ export function WealthMinimap({ gameState, viewRef, selectedDistrict, onSelectDi
       width={SIZE}
       height={SIZE}
       onClick={handleClick}
-      aria-label="财商流城市小地图"
+      aria-label={t('wealth.minimap.aria' as TKey)}
     />
   );
 }

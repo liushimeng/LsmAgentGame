@@ -9,6 +9,8 @@
 import React, { useMemo } from 'react';
 import { GameChatPanel as SharedGameChatPanel } from '@/components/chat/GameChatPanel';
 import { useSpectatorMode } from '@/hooks/useSpectatorMode';
+import { useT } from '@/hooks/useT';
+import type { TKey } from '@/i18n';
 import type { WealthGameState } from '@/types/wealth';
 
 interface Props {
@@ -18,21 +20,36 @@ interface Props {
   currentMonth?: number | null;
 }
 
-/** players[] → roomPlayers[]（bot 用 model_display 拼昵称；人类用 N 号）。 */
-function toRoomPlayers(gs: WealthGameState | null): { user_id: string; nickname: string }[] {
+/**
+ * players[] → roomPlayers[]（bot 用 model_display 拼昵称；人类用 N 号）。
+ *
+ * 2026-09-16 §财商流10–12座位：players[] 恒为 max_seat(12) 长度，未入座的是
+ * account/nickname 全空的占位对象 —— 不过滤会让 @mention 列表出现一堆「玩家N号」
+ * 幽灵条目。座位号一律用权威的 p.seat（不再用数组下标 i）。
+ */
+function toRoomPlayers(
+  gs: WealthGameState | null,
+  fallbackName: (seatNo: number) => string,
+): { user_id: string; nickname: string }[] {
   if (!gs) return [];
-  return gs.players.map((p, i) => {
-    const role = p.profession.title ? `(${p.profession.title})` : '';
-    const nickname = p.is_bot
-      ? `${p.model_display || 'Bot'} #${i + 1}${role}`
-      : `${p.nickname || `玩家${i + 1}号`}${role}`;
-    return { user_id: p.account, nickname };
-  });
+  return gs.players
+    .filter((p) => !!p && (!!p.account || !!p.nickname))
+    .map((p) => {
+      const role = p.profession?.title ? `(${p.profession.title})` : '';
+      const nickname = p.is_bot
+        ? `${p.model_display || 'Bot'} #${p.seat + 1}${role}`
+        : `${p.nickname || fallbackName(p.seat + 1)}${role}`;
+      return { user_id: p.account, nickname };
+    });
 }
 
 export const WealthGameChatPanel: React.FC<Props> = ({ roomId, gameState, currentMonth }) => {
+  const t = useT();
   const spectator = useSpectatorMode();
-  const roomPlayers = useMemo(() => toRoomPlayers(gameState), [gameState]);
+  const roomPlayers = useMemo(
+    () => toRoomPlayers(gameState, (n) => t('wealth.chat.playerFallback' as TKey, { n })),
+    [gameState, t],
+  );
   return (
     <SharedGameChatPanel
       roomId={roomId}

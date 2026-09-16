@@ -15,13 +15,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useWealthStore } from '@/store/wealth.store';
+import { selectSeatedCount, selectSeatCapacity, selectSeatsReady } from '@/store/wealth.store';
 import { useWealth } from '@/hooks/useWealth';
 import { useSpectatorMode } from '@/hooks/useSpectatorMode';
 import { wsClient } from '@/services/ws';
 import { roomService } from '@/services/auth.service';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
-import { districtCenter, formatPct, type WealthDistrictId } from '@/types/wealth';
+import { WEALTH_MIN_SEATS, districtCenter, formatPct, type WealthDistrictId } from '@/types/wealth';
 import {
   WealthCityMap,
   type WealthCameraView,
@@ -74,6 +75,12 @@ export function WealthGamePage() {
   const selectedDistrict = useWealthStore((s) => s.selectedDistrict);
   const setSelectedDistrict = useWealthStore((s) => s.setSelectedDistrict);
   const reset = useWealthStore((s) => s.reset);
+  // 2026-09-16 §财商流10–12座位 — 座位占用三件套（返回原语 → 不引发多余重渲染；
+  // 实现见 store/wealth.store.ts 对应的 selectSeatedCount / selectSeatCapacity /
+  // selectSeatsReady）。必须在任何 early-return 之前调用以满足 React Rules of Hooks。
+  const seatedCount = useWealthStore(selectSeatedCount);
+  const seatCapacity = useWealthStore(selectSeatCapacity);
+  const seatsReady = useWealthStore(selectSeatsReady);
 
   const {
     spectate, unspectate, leaveGame, requestState, sendAction, startEarly,
@@ -146,9 +153,13 @@ export function WealthGamePage() {
   }
 
   const effectiveSeat = spectator ? -1 : mySeat;
-  const seatedCount = gameState?.players.length ?? 0;
   const canStartEarly =
-    !spectator && gameState?.status === 'open' && effectiveSeat >= 0 && seatedCount >= 3;
+    !spectator &&
+    gameState?.status === 'open' &&
+    effectiveSeat >= 0 &&
+    seatsReady;
+  const waitingForSeats =
+    gameState?.status === 'open' && !seatsReady;
 
   const tabs: { key: typeof panelTab; label: string }[] = [
     { key: 'finance', label: t('wealth.tab.finance' as TKey) },
@@ -184,6 +195,13 @@ export function WealthGamePage() {
             <span className="wealth-topbar__item" title={t('wealth.runningTime' as TKey)}>
               ⏱ {fmtElapsed(gameState.game_started_at, now)}
             </span>
+            <span
+              className="wealth-topbar__item"
+              title={t('wealth.seatsCount' as TKey, { n: seatedCount, max: seatCapacity })}
+              data-testid="wealth-seats-count"
+            >
+              👥 {t('wealth.seatsCount' as TKey, { n: seatedCount, max: seatCapacity })}
+            </span>
             {effectiveSeat >= 0 && (
               <span className="wealth-topbar__item">
                 {t('wealth.mySeat' as TKey, { n: effectiveSeat + 1 })}
@@ -218,6 +236,13 @@ export function WealthGamePage() {
         <div className="wealth-error-banner" role="alert">
           <span>⚠️ [{lastError.code}] {lastError.message}</span>
           <button type="button" onClick={() => setLastError(null)} aria-label="dismiss">×</button>
+        </div>
+      )}
+
+      {/* 座位不足提示（MinSeats=10）：等待人类加入 / 建房时少配了 Agent */}
+      {waitingForSeats && (
+        <div className="wealth-seats-hint" role="status" data-testid="wealth-seats-hint">
+          {t('wealth.seatsWaiting' as TKey, { n: seatedCount, min: WEALTH_MIN_SEATS })}
         </div>
       )}
 

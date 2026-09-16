@@ -24,11 +24,27 @@ const (
 	PhaseSettling = "settling"
 )
 
-// MaxSeats 房间容量(8 座,3–8 可玩)。
-const MaxSeats = 8
+// MaxSeats 房间容量(2026-09-16 §12 座扩容:8 → 12,给「1 人类 + 11 bot」
+// 留头寸;同时也是精选卡池 / 文档池抽卡张数的硬下限)。
+const MaxSeats = 12
 
-// MinSeats 最少开局座位。
-const MinSeats = 3
+// MinSeats 最少开局座位(2026-09-16 §12 座扩容:3 → 10,即最少 10 个 Agent
+// 可跑全场;与 MaxSeats 之间保留 2 个头寸给人类玩家)。
+const MinSeats = 10
+
+// DefaultAgentConcurrency 是房间级 LLM 并发信号量(agentSem)的默认容量
+// (2026-09-16 §12 座扩容 新定)。
+//
+// 设计取舍:
+//   - 狼人杀 / 德扑的 bot 是「轮到才动」,4 并发够用;财商流 12 个 bot 每
+//     个月**同时**决策 → 4 并发会把 12 人压成 4 批串行,月窗口(默认 8s)内
+//     后几批根本来不及跑 → 「10+ Agent 跑全场」等于 4 个在跑、其余被强制
+//     submit。放宽到 8(≈ MaxSeats 的 2/3)后,12 人分 2 批,配合月窗口上限
+//     30s 与 decisionTimeout 20s,足够全部 bot 完成一轮决策。
+//   - 不设成 MaxSeats(12):LLM Provider 自身有全局并发/配额上限,12 路并发
+//     容易触发 429 被 quarantine;8 是 Provider 配额与房间并发间的平衡。
+//   - NewWealthRoom 的 llmConcurrency 参数=0 时回落此默认;管理器可按需覆盖。
+const DefaultAgentConcurrency = 8
 
 // MasterStartAge 主时钟开局基准年龄(精选手卡恒 25;文档池混龄卡仅展示个人
 // age,主时钟统一 25 起 — 验收清单 B1 设计取舍)。
@@ -39,11 +55,11 @@ const TerminalAge = 60
 
 // 终局结局 id(后端架构 §12)。
 const (
-	EndingWinner    = "winner"     // 财务自由·人生赢家(≥85)
-	EndingAffluent  = "affluent"   // 富足安稳(70–84)
-	EndingOrdinary  = "ordinary"   // 平淡度日(50–69)
-	EndingIndebted  = "indebted"   // 债务缠身(30–49)
-	EndingBankrupt  = "bankrupt"   // 破产出局(<30)
+	EndingWinner    = "winner"      // 财务自由·人生赢家(≥85)
+	EndingAffluent  = "affluent"    // 富足安稳(70–84)
+	EndingOrdinary  = "ordinary"    // 平淡度日(50–69)
+	EndingIndebted  = "indebted"    // 债务缠身(30–49)
+	EndingBankrupt  = "bankrupt"    // 破产出局(<30)
 	EndingLonelyRic = "lonely_rich" // 孤独富翁(FI≥1.5 且人生满意度<40)
 )
 
@@ -107,20 +123,20 @@ func PlaceholderWorld(seed int64) *World {
 // newPlayerFromCard 按职业卡初始化单座位(初始注入 world→seat = Savings,I2)。
 func newPlayerFromCard(seat int, card profession.Card) *Player {
 	p := &Player{
-		Seat:        seat,
-		Card:        card,
-		Age:         card.StartAge,
-		Cash:        card.Savings,
-		Energy:      card.Energy,
-		Network:     card.Network,
-		Cognition:   card.Cognition,
-		CreditScore: card.CreditScore,
-		District:    card.HomeDistrict,
+		Seat:         seat,
+		Card:         card,
+		Age:          card.StartAge,
+		Cash:         card.Savings,
+		Energy:       card.Energy,
+		Network:      card.Network,
+		Cognition:    card.Cognition,
+		CreditScore:  card.CreditScore,
+		District:     card.HomeDistrict,
 		HomeDistrict: card.HomeDistrict,
-		Family:      Family{Marital: card.Marital, Children: card.ChildrenCount},
-		SalaryBase:  card.Salary,
-		Alive:       true,
-		StatusIcon:  "idle",
+		Family:       Family{Marital: card.Marital, Children: card.ChildrenCount},
+		SalaryBase:   card.Salary,
+		Alive:        true,
+		StatusIcon:   "idle",
 	}
 	if card.Marital == "" {
 		p.Family.Marital = "single"

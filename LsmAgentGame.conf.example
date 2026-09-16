@@ -180,8 +180,9 @@
     "month_ms": 8000,
     // 文档池(75k 人物卡,Schema v1.1)磁盘根。
     "profession_docs_path": "./docs/财商流游戏/玩家职业设计",
-    // 建房缺省卡池: "curated"(内嵌精选 10 卡) | "docs"(文档池懒加载)。
-    "profession_pool_default": "curated",
+    // 建房缺省卡池(2026-09-16 起默认 "docs"):文档池 75k 人物卡,形状容错后
+    // 解析成功率 ≥99%;仅当磁盘池不可用时自动回退 "curated"(内嵌 14 精选卡)。
+    "profession_pool_default": "docs",
     // Agent 总开关(默认 true)。
     "agent_enabled": true,
     // 单 bot 单月决策超时(秒),watchdog 兜底强制 submit_month。

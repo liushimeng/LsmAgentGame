@@ -6,10 +6,19 @@
 //   - 阶段 1(buildIndex):首次抽卡 / HTTP professions 触发;walk 收集 *.md 相对
 //     路径清单,**不解析 frontmatter**;结果缓存进程内。
 //   - 阶段 2(Draw):均匀抽 n 张不重复 → 逐张读文件 → 解析 frontmatter
-//     (gopkg.in/yaml.v3)→ 映射 Card → LRU 缓存(上限 256)。
+//     (gopkg.in/yaml.v3,形状容错见 frontmatter.go)→ 映射 Card → LRU 缓存(256)。
 //
-// 失败语义:任一卡解析失败 → 跳过并 logger.Warn + 计数;可用卡 < n → 回退精选
-// 补足;根目录不可用 → 全量回退 curated。seed 注入的 *rand.Rand 保证确定性。
+// 失败语义(2026-09-16 §文档池解析修复 修订):
+//   - 单卡解析失败 → 跳过 + logger.Warn + parseFail 计数,并**从池中补抽**
+//     (最多 drawRetryFactor×n 张候选),保证「文档池可用时不回退 curated」;
+//   - 文档池整体不可用(根目录缺失 / 索引为空 / 候选耗尽)→ 回退精选补足;
+//   - ForceIndex 后**同步**做一次 200 张采样自检,成功率 < 95% 打
+//     logger.Error(线上可观测:形状漂移导致的批量解析失败第一时间暴露);
+//   - seed 注入的 *rand.Rand 保证同 seed 同索引 → 同卡集(确定性)。
+//
+// 目录约定(硬约束): buildIndex 跳过所有 `_` / `.` 前缀目录(_框架、_交付说明
+// 等为知识库框架文档,不是卡池)。**新增维度目录不得使用 `_` 前缀**,否则整棵
+// 子树不入卡池。
 package profession
 
 import (
@@ -25,11 +34,22 @@ import (
 	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 )
 
 // lruCapacity 解析缓存上限(加载器文档 §3.1)。
 const lruCapacity = 256
+
+// drawRetryFactor 补抽倍率(2026-09-16 §文档池解析修复):单卡解析失败时最多
+// 再试 (drawRetryFactor-1)×n 张候选。真实池失败率 ≈0.33%(income_monthly 与
+// income_range 双缺的档案 stub),n=12 时 20×12=240 张候选足够把「回退 curated」
+// 的概率压到 0.33%^240 ≈ 0;池本身不足 12 张时才会真正走到 curated 兜底。
+const drawRetryFactor = 20
+
+// selfCheckSample 是 ForceIndex 后采样自检的张数(可观测性,不影响抽卡路径)。
+const selfCheckSample = 200
+
+// selfCheckMinSuccessRate 采样解析成功率红线:低于此值打 logger.Error。
+const selfCheckMinSuccessRate = 0.95
 
 // Loader 是文档池懒加载器(并发安全)。
 type Loader struct {
@@ -43,6 +63,23 @@ type Loader struct {
 	lru        map[string]*lruEntry
 	lruOrder   []string // 最近使用在尾
 	parseFail  int      // 解析失败累计(跳过的卡数)
+
+	// 采样自检(2026-09-16 §文档池解析修复):与 Draw 的 parseFail 分开计数,
+	// 避免自检把「运行时抽卡跳过数」指标污染。
+	selfCheckOnce sync.Once
+	selfCheck     PoolSelfCheck
+}
+
+// PoolSelfCheck 是一次采样自检的结果(可观测性:形状漂移导致的批量解析失败
+// 必须在日志/HTTP 里看得见,不能像旧实现那样静默回退 curated)。
+type PoolSelfCheck struct {
+	Sampled     int      // 采样张数
+	Parsed      int      // 解析成功张数
+	Valid       int      // 同时通过 Card.Validate() 的张数
+	SuccessRate float64  // Parsed / Sampled
+	ValidRate   float64  // Valid / Sampled
+	Done        bool     // 是否已执行
+	FirstErrors []string // 前 5 条失败原因(定位用)
 }
 
 type lruEntry struct {
@@ -142,15 +179,105 @@ func (l *Loader) PoolInfo() (available bool, total, indexed, parseFail int) {
 }
 
 // ForceIndex 显式触发阶段 1(HTTP professions / 首次抽卡共用)。
+// 索引完成后**同步**跑一次 200 张采样自检(200 张 + parseFile ≈30–60ms,远
+// 小于 buildIndex walk 75k 卡的 ≈1s;同步避免 t.TempDir() 测试清理与 goroutine
+// 争用导致「目录已删」误报,失败判定走 selfCheckMinSuccessRate,日志留前 5
+// 条原因于 PoolSelfCheck.FirstErrors —— 2026-09-16 §文档池解析修复)。
 func (l *Loader) ForceIndex() {
 	l.buildIndex()
 	l.mu.Lock()
 	l.indexBuilt = true
 	l.mu.Unlock()
+	l.runSelfCheckOnce()
 }
 
-// Draw 从文档池均匀抽 n 张不重复卡;不足/失败部分回退精选补足
-//(加载器文档 §3.1 失败语义)。rng 为注入的随机源(同 seed 同索引 → 同卡集)。
+// runSelfCheckOnce 采样自检(sync.Once:整个进程每 Loader 只跑一次)。
+func (l *Loader) runSelfCheckOnce() {
+	l.selfCheckOnce.Do(func() {
+		res := l.SelfCheckPool(selfCheckSample)
+		if res.SuccessRate < selfCheckMinSuccessRate {
+			logger.L().Error("wealth profession docs pool parse rate below threshold — 文档池卡形状可能已漂移,Draw 将大量回退 curated",
+				zap.String("root", l.root),
+				zap.Int("sampled", res.Sampled),
+				zap.Int("parsed", res.Parsed),
+				zap.Float64("success_rate", res.SuccessRate),
+				zap.Float64("valid_rate", res.ValidRate),
+				zap.Strings("first_errors", res.FirstErrors))
+			return
+		}
+		logger.L().Info("wealth profession docs pool self-check ok",
+			zap.String("root", l.root),
+			zap.Int("sampled", res.Sampled),
+			zap.Float64("success_rate", res.SuccessRate),
+			zap.Float64("valid_rate", res.ValidRate))
+	})
+}
+
+// SelfCheckPool 同步采样自检(供 main.go 启动期与集成测试调用)。
+//
+// 前置约定(死锁防护):调用方**必须**已 ForceIndex()。本方法内部**不再**
+// 调 ForceIndex —— 否则会经 runSelfCheckOnce 递归进入 sync.Once.Do 的内部
+// 互斥锁 → 自死锁(曾导致所有调用 ForceIndex 的测试/启动永久挂起)。
+//
+// 从索引里均匀取 sampleN 张(确定性:按索引序等距取样,不吃 rng),
+// 逐张 parse + Card.Validate();结果写入 l.selfCheck 并返回。
+// 自检直接走 parseFile(不经 LRU),避免把 256 条缓存被采样卡挤满。
+func (l *Loader) SelfCheckPool(sampleN int) PoolSelfCheck {
+	l.mu.RLock()
+	total := len(l.indexPath)
+	sample := make([]string, 0, sampleN)
+	if total > 0 && sampleN > 0 {
+		step := total / sampleN
+		if step < 1 {
+			step = 1
+		}
+		for i := 0; i < total && len(sample) < sampleN; i += step {
+			sample = append(sample, l.indexPath[i])
+		}
+	}
+	l.mu.RUnlock()
+
+	res := PoolSelfCheck{Sampled: len(sample)}
+	for _, rel := range sample {
+		card, err := l.parseFile(rel)
+		if err != nil {
+			if len(res.FirstErrors) < 5 {
+				res.FirstErrors = append(res.FirstErrors, rel+": "+err.Error())
+			}
+			continue
+		}
+		res.Parsed++
+		if card.Validate() == nil {
+			res.Valid++
+		} else if len(res.FirstErrors) < 5 {
+			res.FirstErrors = append(res.FirstErrors, rel+": validate failed")
+		}
+	}
+	if res.Sampled > 0 {
+		res.SuccessRate = float64(res.Parsed) / float64(res.Sampled)
+		res.ValidRate = float64(res.Valid) / float64(res.Sampled)
+	}
+	res.Done = true
+	l.mu.Lock()
+	l.selfCheck = res
+	l.mu.Unlock()
+	return res
+}
+
+// SelfCheckResult 返回最近一次采样自检结果(未跑过则 Done=false)。
+func (l *Loader) SelfCheckResult() PoolSelfCheck {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.selfCheck
+}
+
+// Draw 从文档池均匀抽 n 张不重复卡。
+//
+// 2026-09-16 §文档池解析修复:旧实现只试前 n 张候选,任一卡解析失败即掉进
+// curated 回退 → 文档池卡与精选卡混发(且 curated 只有 10 张,n=12 时必然重复)。
+// 现改为「失败即补抽」:候选上限 drawRetryFactor×n(不超过池大小),只有池真的
+// 供不出 n 张时才回退精选补足(加载器文档 §3.1 失败语义)。
+// rng 为注入的随机源(同 seed 同索引 → 同卡集,确定性单测)。
 func (l *Loader) Draw(n int, rng *rand.Rand) []Card {
 	if n <= 0 {
 		return nil
@@ -161,20 +288,37 @@ func (l *Loader) Draw(n int, rng *rand.Rand) []Card {
 	pool := append([]string(nil), l.indexPath...)
 	l.mu.RUnlock()
 
-	var out []Card
+	out := make([]Card, 0, n)
 	if len(pool) > 0 {
-		// Fisher-Yates 部分洗牌:前 n 位即抽中集合。
-		for i := 0; i < n && i < len(pool); i++ {
+		// 候选上限:min(池大小, drawRetryFactor×n) —— 前缀 Fisher-Yates 部分洗牌,
+		// 逐个解析,失败(数据缺陷卡/形状漂移)就继续吃下一个候选。
+		candidates := n * drawRetryFactor
+		if candidates > len(pool) {
+			candidates = len(pool)
+		}
+		for i := 0; i < candidates; i++ {
 			j := i + rng.Intn(len(pool)-i)
 			pool[i], pool[j] = pool[j], pool[i]
 		}
-		for _, rel := range pool[:min(n, len(pool))] { // builtin min(Go 1.21+)
-			if card, err := l.loadCard(rel); err == nil {
-				out = append(out, card)
+		for _, rel := range pool[:candidates] {
+			if len(out) >= n {
+				break
 			}
+			card, err := l.loadCard(rel)
+			if err != nil {
+				continue
+			}
+			out = append(out, card)
+		}
+		if len(out) < n {
+			logger.L().Warn("wealth profession docs pool cannot supply requested card count, falling back to curated",
+				zap.String("root", l.root),
+				zap.Int("requested", n),
+				zap.Int("from_docs", len(out)),
+				zap.Int("pool_size", len(pool)))
 		}
 	}
-	// 回退精选补足。
+	// 回退精选补足(仅当文档池供不出 n 张:根目录缺失 / 池太小 / 候选全失败)。
 	if len(out) < n {
 		curated := CuratedCards()
 		perm := rng.Perm(len(curated))
@@ -183,11 +327,21 @@ func (l *Loader) Draw(n int, rng *rand.Rand) []Card {
 			out = append(out, curated[perm[k]])
 			k++
 		}
+		if len(out) < n {
+			// 精选池也不足 n 张(理论上 curated ≥ MaxSeats=12,不该发生):
+			// 允许重复取用,保证返回张数 = n,座位不会因零值卡变成空洞。
+			for i := 0; len(out) < n && len(curated) > 0; i++ {
+				out = append(out, curated[i%len(curated)])
+			}
+			logger.L().Error("wealth profession curated pool smaller than requested draw",
+				zap.Int("requested", n), zap.Int("curated", len(curated)))
+		}
 	}
 	return out
 }
 
 // loadCard 读单卡:LRU 命中免读盘;否则读文件 + 解析 frontmatter。
+// 失败计数(parseFail)与 Warn 日志在此统一处理,Draw 的补抽循环不再重复计数。
 func (l *Loader) loadCard(rel string) (Card, error) {
 	l.mu.RLock()
 	if e, ok := l.lru[rel]; ok {
@@ -240,8 +394,8 @@ func (l *Loader) parseFile(rel string) (Card, error) {
 	if fm == nil {
 		return Card{}, fmt.Errorf("no frontmatter in %s", rel)
 	}
-	var raw docCard
-	if err := yaml.Unmarshal(fm, &raw); err != nil {
+	raw, err := parseDocCard(fm)
+	if err != nil {
 		return Card{}, fmt.Errorf("yaml %s: %w", rel, err)
 	}
 	card, err := l.mapCard(raw, rel)
@@ -249,203 +403,4 @@ func (l *Loader) parseFile(rel string) (Card, error) {
 		return Card{}, fmt.Errorf("map %s: %w", rel, err)
 	}
 	return card, nil
-}
-
-// extractFrontmatter 取首个 "---" 围起的 YAML 块。
-func extractFrontmatter(s string) []byte {
-	lines := strings.SplitN(s, "\n", 4096)
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
-		return nil
-	}
-	var b strings.Builder
-	for _, ln := range lines[1:] {
-		if strings.TrimSpace(ln) == "---" {
-			return []byte(b.String())
-		}
-		b.WriteString(ln)
-		b.WriteString("\n")
-	}
-	return nil
-}
-
-// docCard 是文档池 frontmatter 的可空子集(Schema v1.1;缺失字段走默认)。
-type docCard struct {
-	ID               string   `yaml:"id"`
-	LegacyName       string   `yaml:"legacy_name"`
-	Occupation       string   `yaml:"occupation"`
-	IndustryL3       string   `yaml:"industry_l3"`
-	IncomeMonthly    *int64   `yaml:"income_monthly"`
-	IncomeStability  string   `yaml:"income_stability"`
-	MonthlyExpense   *int64   `yaml:"monthly_expense"`
-	SavingsStock     *int64   `yaml:"savings_stock"`
-	Age              *int     `yaml:"age"`
-	WorkIntensity    string   `yaml:"work_intensity"`
-	HealthGrade      string   `yaml:"health_grade"`
-	Personality      []string `yaml:"personality"`
-	BehaviorTraits   []string `yaml:"behavior_traits"`
-	RiskPreference   string   `yaml:"risk_preference"`
-	Marital          string   `yaml:"marital"`
-	ChildrenCount    *int     `yaml:"children_count"`
-	EldersDependent  *int     `yaml:"elders_dependent"`
-	OpeningHook      string   `yaml:"opening_hook"`
-	GoalsShort       []string `yaml:"goals_short"`
-	HousingCity      string   `yaml:"housing_city"`
-	EmploymentType   string   `yaml:"employment_type"`
-}
-
-// cityToDistrict 城市名 → 8 区启发映射(加载器文档 §4;无命中 → residential)。
-var cityToDistrict = []struct {
-	Keyword  string
-	District string
-}{
-	{"一线", "finance"},
-	{"核心", "finance"},
-	{"金融", "finance"},
-	{"高新", "tech"},
-	{"科技", "tech"},
-	{"开发", "tech"},
-	{"工业", "industry"},
-	{"县城", "oldtown"},
-	{"老城", "oldtown"},
-	{"商业", "commerce"},
-	{"居住", "residential"},
-	{"郊区", "suburb"},
-	{"新区", "riverside"},
-	{"滨海", "riverside"},
-}
-
-// mapCard 按 §4 映射表把 frontmatter 转成 Card。
-func (l *Loader) mapCard(raw docCard, rel string) (Card, error) {
-	c := Card{Source: "docs"}
-
-	c.ID = strings.TrimSpace(raw.ID)
-	if c.ID == "" {
-		// 文件名编号段兜底:…/<编号>-<姓名>.md。
-		base := strings.TrimSuffix(filepath.Base(rel), ".md")
-		if i := strings.IndexByte(base, '-'); i > 0 {
-			c.ID = base[:i]
-		} else {
-			c.ID = base
-		}
-	}
-	c.Name = strings.TrimSpace(raw.LegacyName)
-	if c.Name == "" {
-		if i := strings.LastIndexByte(strings.TrimSuffix(filepath.Base(rel), ".md"), '-'); i >= 0 {
-			c.Name = strings.TrimSuffix(filepath.Base(rel), ".md")[i+1:]
-		}
-	}
-	c.Title = strings.TrimSpace(raw.Occupation)
-	if c.Title == "" {
-		c.Title = strings.TrimSpace(raw.IndustryL3)
-	}
-	if c.Title == "" {
-		return Card{}, fmt.Errorf("missing occupation/industry_l3")
-	}
-	if raw.IncomeMonthly == nil || *raw.IncomeMonthly <= 0 {
-		return Card{}, fmt.Errorf("missing income_monthly")
-	}
-	c.Salary = *raw.IncomeMonthly
-	c.SalaryVolatile = strings.Contains(raw.IncomeStability, "波动") || strings.Contains(raw.IncomeStability, "不稳定")
-	if raw.MonthlyExpense != nil && *raw.MonthlyExpense > 0 {
-		c.Expense = *raw.MonthlyExpense
-	} else {
-		c.Expense = c.Salary * 60 / 100 // 兜底 60% 消费率
-	}
-	// savings_stock 可空 → 兜底 = income_monthly × 6(P0 新定)。
-	if raw.SavingsStock != nil {
-		c.Savings = *raw.SavingsStock
-	} else {
-		c.Savings = c.Salary * 6
-	}
-	c.StartAge = 25
-	if raw.Age != nil {
-		c.StartAge = *raw.Age
-	}
-	if c.StartAge < 20 {
-		c.StartAge = 20
-	}
-	if c.StartAge > 55 {
-		c.StartAge = 55
-	}
-	// Energy 由 work_intensity 映射:高→4、中→6、低→8(P0 新定)。
-	switch {
-	case strings.Contains(raw.WorkIntensity, "高"):
-		c.Energy = 4
-	case strings.Contains(raw.WorkIntensity, "低"):
-		c.Energy = 8
-	default:
-		c.Energy = 6
-	}
-	c.Network = 5
-	c.Cognition = 5
-	c.HealthGrade = strings.TrimSpace(raw.HealthGrade)
-	switch c.HealthGrade {
-	case "A", "B", "C":
-	default:
-		c.HealthGrade = "B"
-	}
-	c.Personality = FilterByVocab(raw.Personality, personalityVocab, 4)
-	c.BehaviorTraits = FilterByVocab(raw.BehaviorTraits, behaviorVocab, 4)
-	switch strings.TrimSpace(raw.RiskPreference) {
-	case "conservative", "balanced", "aggressive":
-		c.RiskPreference = strings.TrimSpace(raw.RiskPreference)
-	default:
-		c.RiskPreference = "balanced"
-	}
-	if strings.Contains(raw.Marital, "已婚") || strings.TrimSpace(raw.Marital) == "married" {
-		c.Marital = "married"
-	} else {
-		c.Marital = "single"
-	}
-	if raw.ChildrenCount != nil && *raw.ChildrenCount > 0 {
-		c.ChildrenCount = *raw.ChildrenCount
-	}
-	if raw.EldersDependent != nil && *raw.EldersDependent > 0 {
-		c.EldersDependent = *raw.EldersDependent
-	}
-	// opening_hook:骨架 30–50 字直接使用;>60 rune 截断 + 「…」。
-	c.OpeningHook = strings.TrimSpace(raw.OpeningHook)
-	if runes := []rune(c.OpeningHook); len(runes) > 60 {
-		c.OpeningHook = string(runes[:59]) + "…"
-	}
-	if len([]rune(c.OpeningHook)) < 20 {
-		c.OpeningHook = fmt.Sprintf("我是%s，今年 %d 岁，正在为想要的生活努力攒第一桶金。", c.Title, c.StartAge)
-	}
-	// goals_short 取前 3 条。
-	for i, g := range raw.GoalsShort {
-		if i >= 3 {
-			break
-		}
-		if g = strings.TrimSpace(g); g != "" {
-			c.Goals = append(c.Goals, g)
-		}
-	}
-	if len(c.Goals) == 0 {
-		c.Goals = []string{"5 年内把储蓄翻一番。"}
-	}
-	// 城市名 → 8 区启发(无命中 → residential)。
-	c.HomeDistrict = "residential"
-	for _, m := range cityToDistrict {
-		if strings.Contains(raw.HousingCity, m.Keyword) {
-			c.HomeDistrict = m.District
-			break
-		}
-	}
-	// CreditScore 按收入档:≥20000→700、8000–20000→650、<8000→550;
-	// 个体/自由就业 -50 下限 500(P0 新定)。
-	switch {
-	case c.Salary >= 20000:
-		c.CreditScore = 700
-	case c.Salary >= 8000:
-		c.CreditScore = 650
-	default:
-		c.CreditScore = 550
-	}
-	if strings.Contains(raw.EmploymentType, "个体") || strings.Contains(raw.EmploymentType, "自由") {
-		c.CreditScore -= 50
-		if c.CreditScore < 500 {
-			c.CreditScore = 500
-		}
-	}
-	return c, nil
 }

@@ -149,7 +149,12 @@ export function useWealth(roomId: string) {
     [roomId],
   );
 
-  /** 房主提前开始（已占座 ≥3；满 8 自动开局无需此帧）。 */
+  /**
+   * 房主提前开始（`game.wealth_start`）。
+   * 2026-09-16 §财商流10–12座位：后端要求已占座 ≥ WEALTH_MIN_SEATS(10)，
+   * 不足返回 35003 ErrWealthNotEnoughPlayers；占座达 10 或满 12 座时后端在
+   * game.join / RegisterAgentSeats 阶段已自动开局，通常无需再发此帧。
+   */
   const startEarly = useCallback(() => {
     wsClient.send('game.wealth_start', { room_id: roomId });
   }, [roomId]);

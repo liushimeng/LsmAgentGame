@@ -34,7 +34,10 @@ export function WealthBotPanel({ botContexts, players }: Props) {
 
   return (
     <div className="wealth-botpanel">
-      <div className="wealth-botpanel__title">🤖 {t('wealth.botPanel.title' as TKey)}</div>
+      {/* 10–12 座位房：观战者最多同时看到 12 张卡 → 标题带计数，卡片列表可滚动 */}
+      <div className="wealth-botpanel__title">
+        🤖 {t('wealth.botPanel.titleCount' as TKey, { n: botContexts.length })}
+      </div>
       {botContexts.map((ctx) => {
         const p = players.find((x) => x.seat === ctx.seat);
         const color = p ? professionColor(p.profession.id) : '#9ca3af';
@@ -46,7 +49,7 @@ export function WealthBotPanel({ botContexts, players }: Props) {
                 style={{ background: color }}
                 aria-hidden="true"
               />
-              {ctx.seat + 1}号 {p?.nickname ?? ''}{' '}
+              {t('wealth.botPanel.seat' as TKey, { n: ctx.seat + 1 })} {p?.nickname ?? ''}{' '}
               <span className="wealth-botpanel__emoji">
                 {p ? professionEmoji(p.profession.id) : ''}
               </span>

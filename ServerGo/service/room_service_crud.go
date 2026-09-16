@@ -34,10 +34,10 @@ func (s *RoomService) ListRooms(gameKind string) []RoomInfo {
 // each room where the given userID has a player or spectator row.
 //
 // Algorithm:
-//   1. SELECT rooms where status IN ('open','playing') — same filter as before.
-//   2. SELECT role FROM t_lsm_game_player WHERE user_id = ? AND room_id IN (...)
-//      — single query keyed by userID + room set, no N+1.
-//   3. Build a roomID → role map and stamp MyRole on each RoomInfo.
+//  1. SELECT rooms where status IN ('open','playing') — same filter as before.
+//  2. SELECT role FROM t_lsm_game_player WHERE user_id = ? AND room_id IN (...)
+//     — single query keyed by userID + room set, no N+1.
+//  3. Build a roomID → role map and stamp MyRole on each RoomInfo.
 //
 // userID == "" → MyRole is left empty for every row (legacy behavior).
 //
@@ -171,6 +171,7 @@ func (s *RoomService) CreateRoom(gameKind, userID, name string) (*RoomDetail, *e
 //   - 显式 true / false → 以请求为准;
 //   - nil(未传 / 旧客户端)→ cfg.Werewolf.RevealRoleOnDeathDefault(默认 true;
 //     cfg 为 nil 或字段未配置时同样 true)。
+//
 // 单独成函数以便单测覆盖三态(service 层全链路测试需 DB)。
 func resolveRevealRoleOnDeath(revealRoleOnDeath *bool, cfg *config.Config) bool {
 	if revealRoleOnDeath != nil {
@@ -224,13 +225,13 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	}
 
 	// 2026-08-19 §德州扑克Agent: agent_seats 从狼人杀扩展到德州扑克。
-	// werewolf: 13 座位; texasholdem: 6 座位; wealth: 8 座位; 其他游戏暂不支持。
+	// werewolf: 13 座位; texasholdem: 6 座位; wealth: 12 座位; 其他游戏暂不支持。
 	maxAgentSeats := 13
 	if gameKind == "texasholdem" {
 		maxAgentSeats = 6
 	}
 	if gameKind == "wealth" {
-		maxAgentSeats = 8
+		maxAgentSeats = 12
 	}
 	if len(agentSeats) > 0 && gameKind != "werewolf" && gameKind != "texasholdem" && gameKind != "wealth" {
 		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "agent_seats only supported for werewolf, texasholdem and wealth")
@@ -434,7 +435,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	case "texasholdem":
 		cap = 6
 	case "wealth":
-		cap = 8
+		cap = 12
 	case "werewolf_12":
 		cap = 12
 	case "werewolf_7":
@@ -480,7 +481,8 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	creatorAsSpectator := false
 	if len(freeSeats) == 0 {
 		// 2026-08-19 §德州扑克Agent: texasholdem 同样允许全 AI 房间(创建者降级为观战者)。
-		// 2026-09-14 §财商流P0: wealth 同款支持(创建者降级为观战者,房满 8 即开局)。
+		// 2026-09-14 §财商流P0 / 2026-09-16 §12座扩容:wealth 同款支持(创建者降级为观战者,
+		// 满 MinSeats(10) 即自动开局;MaxSeats=12 留 2 头寸给人类玩家)。
 		if gameKind != "werewolf" && gameKind != "texasholdem" && gameKind != "wealth" {
 			// Other games don't allow spectator-creator semantics.
 			return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "no free seat for creator")
@@ -1296,5 +1298,3 @@ func (s *RoomService) DeleteRoomIfEmpty(roomID string) (bool, *errcode.Error) {
 		zap.String("game_kind", room.GameKind))
 	return true, nil
 }
-
-

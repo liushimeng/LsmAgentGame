@@ -15,6 +15,7 @@ import type {
   WealthOverFrame,
   WealthStartedFrame,
 } from '@/types/wealth';
+import { WEALTH_MIN_SEATS, wealthOccupiedSeats, wealthSeatCapacity } from '@/types/wealth';
 
 /** 右侧面板 Tab（聊天 / Agent 思维独立于 Tab 栈之外）。 */
 export type WealthPanelTab = 'finance' | 'market' | 'ledger';
@@ -166,3 +167,21 @@ export function selectActionsUsedThisMonth(
 
 /** 本月动作预算（P0 = 3，与引擎 BotMaxActionsPerMonth 同值）。 */
 export const WEALTH_ACTION_BUDGET = 3;
+
+// ── 座位占用选择器（2026-09-16 §财商流10–12座位改造）─────────────────────
+//
+// 房间容量 8 → 12、最少开局座位 3 → 10（后端 wealth.MaxSeats / MinSeats）。
+// 三者都返回原语（number / boolean），可安全用于 useWealthStore(selector) —— 返回
+// 对象字面量的选择器会让 zustand 每次快照都判定「变了」从而死循环重渲染。
+
+/** 已占座人数（players[] 恒为 max_seat 长度，空座位是占位对象，不能取 length）。 */
+export const selectSeatedCount = (s: Pick<WealthStore, 'gameState'>): number =>
+  wealthOccupiedSeats(s.gameState?.players);
+
+/** 房间容量：服务端权威 game.state.max_seat 优先，未到达时回落 WEALTH_MAX_SEATS(12)。 */
+export const selectSeatCapacity = (s: Pick<WealthStore, 'gameState'>): number =>
+  wealthSeatCapacity(s.gameState);
+
+/** 是否已达到开局最少座位（不小于 WEALTH_MIN_SEATS）。 */
+export const selectSeatsReady = (s: Pick<WealthStore, 'gameState'>): boolean =>
+  selectSeatedCount(s) >= WEALTH_MIN_SEATS;

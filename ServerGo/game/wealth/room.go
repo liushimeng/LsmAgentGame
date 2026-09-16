@@ -36,18 +36,18 @@ type ChatSender interface {
 
 // BroadcastHooks ws 层广播钩子(全部在锁外调用)。
 type BroadcastHooks struct {
-	OnEvent   func(roomID string, ev EventRecord)               // game.event
-	OnMonth   func(roomID string, res *SettleResult)            // game.month(BroadcastRoom)
-	OnState   func(roomID string)                               // game.state 逐座位单发
-	OnOver    func(roomID string, scores []FinalScore)          // game.over
-	OnStarted func(roomID string, payload map[string]any)       // game.started
-	OnRemoved func(roomID string)                               // game.removed(终局 60s 后)
+	OnEvent   func(roomID string, ev EventRecord)         // game.event
+	OnMonth   func(roomID string, res *SettleResult)      // game.month(BroadcastRoom)
+	OnState   func(roomID string)                         // game.state 逐座位单发
+	OnOver    func(roomID string, scores []FinalScore)    // game.over
+	OnStarted func(roomID string, payload map[string]any) // game.started
+	OnRemoved func(roomID string)                         // game.removed(终局 60s 后)
 }
 
 // SeatProfession 开局职业公开对(game.started.professions)。
 type SeatProfession struct {
-	Seat          int    `json:"seat"`
-	ProfessionID  string `json:"profession_id"`
+	Seat         int    `json:"seat"`
+	ProfessionID string `json:"profession_id"`
 }
 
 // WealthRoom 单房间运行时。
@@ -70,23 +70,23 @@ type WealthRoom struct {
 	Status string // open | playing | over
 	Phase  string // acting | settling
 
-	MonthMs    int
+	MonthMs     int
 	NextMonthAt time.Time
-	Paused     bool
+	Paused      bool
 
 	Transcripts [MaxSeats]BotTranscript
 
 	// 卡池与随机源(房间级;开局抽卡用)。
-	pool     string // curated | docs
-	seed     int64
-	rng      *rand.Rand
+	pool      string // curated | docs
+	seed      int64
+	rng       *rand.Rand
 	docLoader *profession.Loader // pool="docs" 时由 Manager 注入
 
 	hooks       BroadcastHooks
 	chatSender  ChatSender
 	agents      map[int]*wealthplayer.Agent
-	agentSem    chan struct{} // 房间级 LLM 并发信号量(默认 4)
-	eventsSent  int          // World.Events 已下发条数
+	agentSem    chan struct{} // 房间级 LLM 并发信号量(默认 DefaultAgentConcurrency=8)
+	eventsSent  int           // World.Events 已下发条数
 	cardPool    []profession.Card
 	cardPoolIdx int
 
@@ -109,7 +109,9 @@ func NewWealthRoom(roomID string, monthMs int, pool string, seed int64, llmConcu
 		pool = "curated"
 	}
 	if llmConcurrency <= 0 {
-		llmConcurrency = 4
+		// 2026-09-16 §12 座扩容:默认 4 → DefaultAgentConcurrency(8),让 10+ bot
+		// 同月的并发决策不再被 4 路信号量压成串行(详见 engine.go 常量注释)。
+		llmConcurrency = DefaultAgentConcurrency
 	}
 	seedVal := seed
 	if seedVal == 0 {
@@ -128,7 +130,7 @@ func NewWealthRoom(roomID string, monthMs int, pool string, seed int64, llmConcu
 		agents:     map[int]*wealthplayer.Agent{},
 		agentSem:   make(chan struct{}, llmConcurrency),
 		done:       make(chan struct{}),
-		settleCh:  make(chan struct{}, 1),
+		settleCh:   make(chan struct{}, 1),
 	}
 }
 
@@ -648,8 +650,8 @@ func (r *WealthRoom) EngineLocked() *World {
 
 // MuLock/MuUnlock 是 ws 层 SyncSeat/apply 路径专用(§92a,锁外不允许)。
 // 其他路径优先用短方法。
-func (r *WealthRoom) MuLock()    { r.mu.Lock() }
-func (r *WealthRoom) MuUnlock()  { r.mu.Unlock() }
+func (r *WealthRoom) MuLock()   { r.mu.Lock() }
+func (r *WealthRoom) MuUnlock() { r.mu.Unlock() }
 
 // SeedView 返回房间种子(锁内读)。ws 层用于 PlaceholderWorld。
 func (r *WealthRoom) SeedView() int64 {

@@ -24,13 +24,27 @@ const REDUCED_MOTION =
   typeof window.matchMedia === 'function' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** 同城区多 token 的环形落位（地图 / 小地图共用，保证点位一致）。 */
+/**
+ * 同城区多 token 的环形落位（地图 / 小地图共用，保证点位一致）。
+ *
+ * 2026-09-16 §财商流10–12座位：房间容量 8 → 12，单城区最坏情况可挤进 12 个
+ * token。原「>3 一律 2.4」下 12 个 token 的圆周间距仅 ≈1.26 单位（≈ token 直径
+ * 0.7 的 1.8 倍，名牌必然互相压盖）→ 按人数分档扩环，最大 3.3 仍落在 8×8
+ * 城区底板内（3.3 + token 半径 0.35 = 3.65 < 4）。
+ */
 export function districtSeatOffset(index: number, total: number): { dx: number; dz: number } {
   if (total <= 1) return { dx: 0, dz: 0.9 };
-  const radius = total <= 3 ? 1.9 : 2.4;
+  let radius: number;
+  if (total <= 3) radius = 1.9;
+  else if (total <= 6) radius = 2.4;
+  else if (total <= 9) radius = 2.9;
+  else radius = 3.3;
   const angle = (index / total) * Math.PI * 2 - Math.PI / 2;
   return { dx: Math.cos(angle) * radius, dz: Math.sin(angle) * radius };
 }
+
+/** 同城区 token 数超过此阈值 → 名牌走紧凑态（隐藏昵称，只留座位号 + emoji + 净资产）。 */
+export const TOKEN_TAG_CROWD_THRESHOLD = 6;
 
 const STATUS_ICON_EMOJI: Record<string, string> = {
   working: '💼', idle: '💤', trading: '📊', resting: '😴', moved: '🚚',
@@ -83,6 +97,7 @@ export function AgentToken({ player, cx, cz, index, total, isMe }: Props) {
   const { dx, dz } = districtSeatOffset(index, total);
   const targetX = cx + dx;
   const targetZ = cz + dz;
+  const crowded = total > TOKEN_TAG_CROWD_THRESHOLD;
 
   useFrame(() => {
     const g = groupRef.current;
@@ -145,11 +160,18 @@ export function AgentToken({ player, cx, cz, index, total, isMe }: Props) {
       <Html position={[0, 1.85, 0]} center distanceFactor={12} zIndexRange={[9, 0]}>
         <div
           className={
-            'wealth-token-tag' + (isMe ? ' wealth-token-tag--me' : '') + (player.is_bot ? ' wealth-token-tag--bot' : '')
+            'wealth-token-tag' +
+            (isMe ? ' wealth-token-tag--me' : '') +
+            (player.is_bot ? ' wealth-token-tag--bot' : '') +
+            (crowded ? ' wealth-token-tag--compact' : '')
           }
         >
           <span className="wealth-token-tag__seat">{player.seat + 1}</span>
-          <span className="wealth-token-tag__name">{player.nickname || player.account}</span>
+          {(!crowded || isMe) && (
+            <span className="wealth-token-tag__name" title={player.nickname || player.account}>
+              {player.nickname || player.account}
+            </span>
+          )}
           <span className="wealth-token-tag__emoji">{emoji}</span>
           <span className="wealth-token-tag__status">
             {STATUS_ICON_EMOJI[player.status_icon] ?? ''}

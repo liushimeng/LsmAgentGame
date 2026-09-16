@@ -85,30 +85,34 @@ export function MonthTicker({ gameState, eventFeed, lastMonth }: Props) {
           <summary>
             🧾 {t('wealth.ticker.summary' as TKey)} · M{lastMonth.month}
           </summary>
-          <table className="wealth-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>{t('wealth.ticker.cashDelta' as TKey)}</th>
-                <th>{t('wealth.netWorth' as TKey)}</th>
-                <th>FI</th>
-                <th>{t('wealth.ticker.note' as TKey)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lastMonth.summaries.map((s) => (
-                <tr key={s.seat}>
-                  <td>{s.seat + 1}</td>
-                  <td className={s.cash_delta >= 0 ? 'wealth-num--pos' : 'wealth-num--neg'}>
-                    {formatDelta(s.cash_delta)}
-                  </td>
-                  <td>{formatCny(s.net_worth)}</td>
-                  <td>{s.fi_index.toFixed(2)}</td>
-                  <td className="wealth-ticker__note">{s.note}</td>
+          {/* 10–12 座位：每座位一行，限高滚动（.wealth-ticker__summary-scroll），
+              避免展开后把底部节拍条撑出视口。 */}
+          <div className="wealth-ticker__summary-scroll">
+            <table className="wealth-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>{t('wealth.ticker.cashDelta' as TKey)}</th>
+                  <th>{t('wealth.netWorth' as TKey)}</th>
+                  <th>FI</th>
+                  <th>{t('wealth.ticker.note' as TKey)}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {lastMonth.summaries.map((s) => (
+                  <tr key={s.seat}>
+                    <td>{s.seat + 1}</td>
+                    <td className={s.cash_delta >= 0 ? 'wealth-num--pos' : 'wealth-num--neg'}>
+                      {formatDelta(s.cash_delta)}
+                    </td>
+                    <td>{formatCny(s.net_worth)}</td>
+                    <td>{s.fi_index.toFixed(2)}</td>
+                    <td className="wealth-ticker__note">{s.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </details>
       )}
     </div>
