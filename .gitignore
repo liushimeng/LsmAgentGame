@@ -82,3 +82,9 @@ AutoScreenshotProgress/
 # 安全加固方案文档仅本机使用，不入库
 tmpPlan/
 go-web-debug-tool/debug-tool
+
+# macOS 垃圾文件
+.DS_Store
+
+# go-web-debug-tool 编译产物(本地构建,不入库)
+go-web-debug-tool/GoWebDebugTool
