@@ -33,7 +33,7 @@
 //   - 隐私合规:只存 LLM 摘要后的打法画像,不存聊天原文;画像只对
 //     bot 自己(prompt 注入)与 admin 可见,无前端公开接口。
 //
-// 详见 docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-05.md §U1。
+// 详见 lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-05.md §U1。
 package werewolf
 
 import (

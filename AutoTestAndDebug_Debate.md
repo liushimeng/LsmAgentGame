@@ -131,16 +131,16 @@
 2. 读 `AutoTestProgress/辩论比赛自动化测试进度_*.md` 最新一份,沿用其「已测 / 待测」清单与「未覆盖项跟踪表」。
 3. **敲定本阶段**:`当前阶段=A / B / C`,决定测试模式与焦点,写入进度草稿。
 4. 读 `go-web-debug-tool/MCP_Proc_Def.md` 确认 MCP 操作/抓包接口可用;读 `MCP_ControlChromePage_Def.md` / `MCP_LookChromePageInfo_Def.md` 复核具体参数(避免凭记忆调用错误字段)。
-5. 准备 `test_account.json` 中的白名单账号(见 `docs/通用功能/测试账号凭证.md`)。
+5. 准备 `test_account.json` 中的白名单账号(见 `lag_docs/通用功能/测试账号凭证.md`)。
 6. **服务探活**(`curl -sk https://127.0.0.1:39001/api/health` → `code: 0`)。
 7. **MCP 探活**:`POST /ListChromePages` 看是否已有 page,清理残留;若无,`POST /NewChromePage {"url": "about:blank"}` 试启,确保 CDP 链路通畅。
 8. **参考文档清单**(测试前 5 分钟必读清单,作为 UI 合理性审计的事实来源):
-   - `docs/辩论比赛/00-辩论比赛总体架构设计.md`(顶层架构)
-   - `docs/辩论比赛/01-辩论比赛游戏流程设计.md`(阶段流程与阶段转换)
-   - `docs/辩论比赛/02-辩论比赛Agent设计.md`(Agent 行为预期)
-   - `docs/辩论比赛/03-辩论比赛房间创建与配置设计.md`(创建弹窗 UI 事实来源)
-   - `docs/辩论比赛/04-辩论比赛界面与交互设计.md`(**布局/交互/可达性事实来源**)
-   - `docs/辩论比赛/06-辩论比赛公平性与评审系统设计.md`(评审规则事实来源)
+   - `lag_docs/辩论比赛/00-辩论比赛总体架构设计.md`(顶层架构)
+   - `lag_docs/辩论比赛/01-辩论比赛游戏流程设计.md`(阶段流程与阶段转换)
+   - `lag_docs/辩论比赛/02-辩论比赛Agent设计.md`(Agent 行为预期)
+   - `lag_docs/辩论比赛/03-辩论比赛房间创建与配置设计.md`(创建弹窗 UI 事实来源)
+   - `lag_docs/辩论比赛/04-辩论比赛界面与交互设计.md`(**布局/交互/可达性事实来源**)
+   - `lag_docs/辩论比赛/06-辩论比赛公平性与评审系统设计.md`(评审规则事实来源)
    - `CLAUDE.md §26` 前端 UI 颜色对比度与可读性规范(暗色主题对比度硬阈值)
 
 ### 5. 大模型 API 异常与协议层诊断
@@ -470,7 +470,7 @@ SELECT COUNT(*) FROM t_lsm_game_debate_score WHERE room_id=:room_id;
 ### 12.1 硬约束（不可违反）
 
 1. **绝对禁止修改 `CLAUDE.md`、`AGENTS.md` 这两个规则文件。**
-   - 修复摘要 / 版本基线 / commit hash / 教训只写到旁路文档(如 `TestReport/<BugID>_validation.md` 或对应 `docs/` 归档),**绝不写入规则文件**。
+   - 修复摘要 / 版本基线 / commit hash / 教训只写到旁路文档(如 `TestReport/<BugID>_validation.md` 或对应 `lag_docs/` 归档),**绝不写入规则文件**。
 2. **每一份被处理的报告文件都必须有明确归宿**:
    - **A. 有问题已修复并推送成功** → **删除**该报告文件。
    - **B. 经核查无问题** → **就地重命名**,追加 `_无问题` 后缀。
@@ -503,7 +503,7 @@ SELECT COUNT(*) FROM t_lsm_game_debate_score WHERE room_id=:room_id;
 
 ### 12.5 文档同步(仅旁路,≤ 2 min)
 
-- 修复涉及架构调整 / API 变更 / 新增常量 → **只**更新业务/技术文档(`docs/*.md`)与代码内注释。
+- 修复涉及架构调整 / API 变更 / 新增常量 → **只**更新业务/技术文档(`lag_docs/*.md`)与代码内注释。
 - **禁止**追加、删除、修改 `CLAUDE.md` / `AGENTS.md`。
 - 修复摘要 / commit hash / 回归结果可写 `TestReport/<BugID>_validation.md` 作为本轮验证记录。
 - **本步骤仅在「实际改了代码」时执行**;分支 B 跳过。

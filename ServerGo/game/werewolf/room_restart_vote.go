@@ -1,5 +1,5 @@
 // Package werewolf — room_restart_vote.go: Room manager 侧的重开局投票派发路径。
-// 详见 docs/狼人杀-Agent与系统/狼人杀重开局投票设计.md。
+// 详见 lag_docs/狼人杀-Agent与系统/狼人杀重开局投票设计.md。
 //
 // 关键约束:
 //   - 所有 *Locked 函数假定 caller 已持 r.mu(见 §92a sync.Mutex 不可重入)。

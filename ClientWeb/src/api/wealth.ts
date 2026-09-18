@@ -1,7 +1,7 @@
 /**
  * 财商流游戏 REST API 封装。
  *
- * 对齐 docs/财商流游戏/已实现/02-架构设计/财商流游戏-WS与HTTP协议契约-v1.md §6。
+ * 对齐 lag_docs/财商流游戏/已实现/02-架构设计/财商流游戏-WS与HTTP协议契约-v1.md §6。
  * 房间 CRUD（list / create / join / leave / spectate）复用 services/auth.service.ts
  * 的 roomService（参数化路由），本文件只承载 wealth 专属端点。
  */
@@ -45,7 +45,7 @@ export function fetchProfessions(): Promise<WealthProfessionsResponse> {
   return http<WealthProfessionsResponse>('/api/games/wealth/professions');
 }
 
-// ── P1 社会调研系统（docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-社会调研系统-v1.md §3.1）──
+// ── P1 社会调研系统（lag_docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-社会调研系统-v1.md §3.1）──
 
 /**
  * POST /api/games/wealth/rooms/:id/survey（需登录）。

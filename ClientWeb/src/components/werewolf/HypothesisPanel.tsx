@@ -2,7 +2,7 @@
  * HypothesisPanel — 多假说并行推演观战视图(spectator only)
  *
  * 2026-08-11 §20260811-02 U2 — 接线修复。
- * 设计文档:`docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-02.md` §U2。
+ * 设计文档:`lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-02.md` §U2。
  *
  * 背景:后端 §20260810-07 起就在 `view.go:1066` 向观战者下发 `bot_hypotheses`,
  * 且注释声称「HistoryDrawer 第 5 sub-tab「🔮 假说」渲染折线图」——

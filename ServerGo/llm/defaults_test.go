@@ -68,7 +68,7 @@ func TestDefaultProviders_AnthropicProviderType(t *testing.T) {
 // configuration: DeepSeek + GLM ship with thinking_required=true /
 // budget=4096; the other six models ship with thinking_required=false.
 // Changing a single row's flag here is a deliberate change that MUST also
-// update docs/LLM与Agent/LLM供应商设计.md.
+// update lag_docs/LLM与Agent/LLM供应商设计.md.
 func TestDefaultProviders_ThinkingFlags(t *testing.T) {
 	want := map[string]struct {
 		required bool

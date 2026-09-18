@@ -1,7 +1,7 @@
 // Package wwtypes — short_memory.go: 短期记忆(本局本 bot 关键事件 ring buffer)。
 //
 // 2026-08-13 §20260813-01 优化: 借鉴 agent-studio 多类型记忆设计
-// (docs/其他Agent代码分析/agent-studio_记忆管理系统分析.md §4),
+// (lag_docs/其他Agent代码分析/agent-studio_记忆管理系统分析.md §4),
 // 在 §131 长期记忆之外新增"短期记忆"通道,弥补 MEMORY.md 跨局经验
 // 与本局高频事件之间的空白。
 //

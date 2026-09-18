@@ -12,7 +12,7 @@
 //   - 状态变更通过 DebateManager 集中调度,DebateRoom 自身不启动 goroutine
 //   - 线程安全由 debateRoom.mu 保护(粒度=整个房间)
 //
-// 详细设计见 docs/辩论比赛/00-辩论比赛总体架构设计.md §3.1。
+// 详细设计见 lag_docs/辩论比赛/00-辩论比赛总体架构设计.md §3.1。
 package debate
 
 import (

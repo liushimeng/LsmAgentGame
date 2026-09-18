@@ -258,7 +258,7 @@ type ClientGameState struct {
 	// §20260810-09 — 上帝视角观战快照。**仅** spectator(viewer<0)下发;
 	// 玩家侧与 REST 房间视图永远 omitempty(§135 公平性 + §121 数据形状契约)。
 	// 服务端**不**做开关(由前端 localStorage.ww_god_mode 控制是否渲染),
-	// 见 docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260810-09.md §2.1.2。
+	// 见 lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260810-09.md §2.1.2。
 	GodMode *GodModeSnapshot `json:"god_mode,omitempty"`
 
 	// §20260812-03 U1 — 阵营胜率热力图概率数组。**仅** spectator(viewer<0)下发;
@@ -607,7 +607,7 @@ func BuildClientState(roomID string, seats [MaxPlayers]string, viewer int, gs *G
 			IsSheriff: Seat(i) == gs.SheriffSeat,
 		}
 		// 是否让该玩家在本座位看到角色?
-		// §135: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+		// §135: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 		if uid != "" && gs.RolePubliclyRevealed(Seat(i)) {
 			pj.RoleRevealed = true

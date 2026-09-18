@@ -2,7 +2,7 @@
  * ReasoningChainsPanel — 公开推理链渲染(spectator only)
  *
  * 2026-08-11 §20260811-06 U3 — reasoning_chain 工具首个前端消费者。
- * 设计文档:`docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-06.md` §U3。
+ * 设计文档:`lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-06.md` §U3。
  *
  * 背景:LLM 在关键决策(speak / vote / night_action)前可显性调用
  * reasoning_chain 工具,公开自己的推理链(steps / evidence / conclusion /

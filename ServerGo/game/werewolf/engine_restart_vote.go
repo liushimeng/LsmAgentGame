@@ -1,5 +1,5 @@
 // Package werewolf — engine_restart_vote.go: 狼人杀一局结束后"重开局投票"
-// 的引擎辅助函数。详见 docs/狼人杀-Agent与系统/狼人杀重开局投票设计.md。
+// 的引擎辅助函数。详见 lag_docs/狼人杀-Agent与系统/狼人杀重开局投票设计.md。
 //
 // 设计要点:
 //   - checkWinner 把 Status="over" + Phase=PhaseGameOver;manager 持有 r.mu

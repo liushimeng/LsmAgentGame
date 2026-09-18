@@ -39,21 +39,21 @@ const (
 	// AgentClassWerewolfPlayer 是狼人杀玩家 Bot 的 AgentClassName。
 	// 由 ServerGo/agent/wwplayer/(原 ServerGo/agent/)的 Agent struct
 	// 实现;驱动 WWerewolf 引擎参与游戏(发言/投票/技能/私聊)。
-	// 详见 docs/狼人杀-Agent与系统/狼人杀Agent设计.md / docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md。
+	// 详见 lag_docs/狼人杀-Agent与系统/狼人杀Agent设计.md / lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md。
 	AgentClassWerewolfPlayer AgentClassName = "LsmAgentGame-Werewolf-Player"
 
 	// AgentClassWerewolfJudge 是狼人杀法官(主持人)Bot 的 AgentClassName。
 	// 由 ServerGo/agent/wwjudge/(原 ServerGo/agent/judge*.go)的
 	// AgentJudge struct 实现;负责公开宣告/阶段切换口播/死因宣告/
 	// 整局总结。**不**参与投票/夜间行动/胜负。
-	// 详见 docs/狼人杀-重构方案/主持人Agent重构设计.md / docs/狼人杀-重构方案/主持人Agent重构设计.md。
+	// 详见 lag_docs/狼人杀-重构方案/主持人Agent重构设计.md / lag_docs/狼人杀-重构方案/主持人Agent重构设计.md。
 	AgentClassWerewolfJudge AgentClassName = "LsmAgentGame-Werewolf-Judge"
 
 	// AgentClassWerewolfMemoryIter 是狼人杀 Agent 持久化记忆(MEMORY.md)
 	// 自我迭代的 AgentClassName。由 ServerGo/agent/wwplayer/memory_iterate.go
 	// 的 IterateAgentMemoriesAsync 调用;读旧记忆 + 本局事实 + 法官总结,
 	// 生成新 MEMORY.md 写回 t_lsm_game_agent_memory。
-	// 详见 docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md §131。
+	// 详见 lag_docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md §131。
 	AgentClassWerewolfMemoryIter AgentClassName = "LsmAgentGame-Werewolf-MemoryIter"
 
 	// AgentClassWerewolfProfileIter 是狼人杀 Agent「玩家行为画像」迭代的
@@ -61,21 +61,21 @@ const (
 	// IteratePlayerProfilesAsync 调用;每局结束后对每个 (bot model_key ×
 	// 人类 user_id) 组合异步生成/更新打法画像,写回
 	// t_lsm_game_agent_player_profile。
-	// 详见 docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-05.md §U1。
+	// 详见 lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-05.md §U1。
 	AgentClassWerewolfProfileIter AgentClassName = "LsmAgentGame-Werewolf-ProfileIter"
 
 	// AgentClassWerewolfRecall 是狼人杀「赛后复盘问答」的 AgentClassName。
 	// 由 ServerGo/game/werewolf/recall_chat.go 的 RecallChat 调用;对局结束后
 	// 玩家/观战者向指定 bot 座位提问,bot 用冻结的本局 Memory 快照 + 复盘
 	// system 指令做单轮问答(不写回 Memory,不进 chat 表)。
-	// 详见 docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-05.md §U2。
+	// 详见 lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-05.md §U2。
 	AgentClassWerewolfRecall AgentClassName = "LsmAgentGame-Werewolf-Recall"
 
 	// AgentClassWerewolfCommentator 是狼人杀「AI 实时解说」的 AgentClassName。
 	// 由 ServerGo/agent/wwcommentator/ 的 CommentatorAgent struct 实现;
 	// 观战模式新增 🎙️ 解说席,事件驱动 + 双风格(pro 严谨 / fun 吐槽),
 	// 仅推送给观战者(Hub.BroadcastRoomSpectators),玩家与 Agent 不可见。
-	// 详见 docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-09.md §U1。
+	// 详见 lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-09.md §U1。
 	AgentClassWerewolfCommentator AgentClassName = "LsmAgentGame-Werewolf-Commentator"
 
 	// AgentClassWerewolfMemoryCompact 是狼人杀 Agent 决策记忆 LLM 压缩的
@@ -84,7 +84,7 @@ const (
 	// 调用;把 messages 数组压缩为 8 段结构化摘要,失败走规则式 fallback。
 	// **注意**:此前为硬编码字面量,现统一登记以对齐 §24「所有 Agent 都
 	// 必须登记 class_names.go」。德扑侧对应 AgentClassTexasHoldemMemoryCompact。
-	// 详见 docs/狼人杀-Agent与系统/狼人杀Agent设计.md。
+	// 详见 lag_docs/狼人杀-Agent与系统/狼人杀Agent设计.md。
 	AgentClassWerewolfMemoryCompact AgentClassName = "LsmAgentGame-Werewolf-MemoryCompact"
 
 	// AgentClassTexasHoldemPlayer 是德州扑克玩家 Bot 的 AgentClassName(2026-08-19 §德州扑克Agent)。
@@ -93,13 +93,13 @@ const (
 	//   - 每轮仅 1 次 tool_use(扑克无试探/反悔)
 	//   - 每手牌最多 2 次公屏发言(限流更严)
 	//   - 决策依据 = HandStrength + PotOdds + BluffHint(纯数学)
-	// 详见 docs/德州扑克/德州扑克Agent设计.md。
+	// 详见 lag_docs/德州扑克/德州扑克Agent设计.md。
 	AgentClassTexasHoldemPlayer AgentClassName = "LsmAgentGame-TexasHoldem-Player"
 
 	// AgentClassTexasHoldemJudge 是德州扑克法官(裁判)Bot 的 AgentClassName(2026-08-19)。
 	// 由 ServerGo/agent/thpagent/judge/ 的 AgentJudge struct 实现(预留,v1.0 不实现);
 	// 负责摊牌讲解 / 旁观解说。**不**参与决策/胜负。
-	// 详见 docs/德州扑克/德州扑克Agent设计.md §10 v1.1 路线。
+	// 详见 lag_docs/德州扑克/德州扑克Agent设计.md §10 v1.1 路线。
 	AgentClassTexasHoldemJudge AgentClassName = "LsmAgentGame-TexasHoldem-Judge"
 
 	// AgentClassTexasHoldemProfileIter 是德州扑克 Agent「玩家行为画像」迭代的
@@ -107,7 +107,7 @@ const (
 	// 的 IteratePlayerProfilesAsync 调用(预留,v1.0 不实现);每局结束后对每个
 	// (bot model_key × 人类 user_id) 组合异步生成/更新打法画像,写回
 	// t_lsm_game_agent_player_profile。
-	// 详见 docs/德州扑克/德州扑克Agent设计.md §10 v1.1 路线。
+	// 详见 lag_docs/德州扑克/德州扑克Agent设计.md §10 v1.1 路线。
 	AgentClassTexasHoldemProfileIter AgentClassName = "LsmAgentGame-TexasHoldem-ProfileIter"
 
 	// AgentClassTexasPokerMemoryIter 是德州扑克 Agent 持久化记忆(MEMORY.md)
@@ -115,7 +115,7 @@ const (
 	// 由 ws/game_service_texas_memoryiter.go 的 IterateTexasAgentMemoriesAsync
 	// 调用;读旧记忆 + 本局事实(风格画像 + 对手笔记两段式),生成新 MEMORY.md
 	// 写回 t_lsm_game_agent_memory(复用狼人杀的存储布局)。
-	// 详见 docs/德州扑克/德州扑克Agent聊天系统设计.md §3.4。
+	// 详见 lag_docs/德州扑克/德州扑克Agent聊天系统设计.md §3.4。
 	AgentClassTexasPokerMemoryIter AgentClassName = "LsmAgentGame-TexasPoker-MemoryIter"
 
 	// AgentClassTexasHoldemMemoryCompact 是德州扑克 Agent 决策 prompt LLM
@@ -125,7 +125,7 @@ const (
 	// LastCompactSummary,失败走规则式 fallback。**注意**:与
 	// AgentClassTexasPokerMemoryIter 不同 — 前者是「本局内压缩」,后者
 	// 是「跨局 MEMORY.md 迭代」。
-	// 详见 docs/德州扑克/德州扑克Agent聊天系统设计.md §3.4。
+	// 详见 lag_docs/德州扑克/德州扑克Agent聊天系统设计.md §3.4。
 	AgentClassTexasHoldemMemoryCompact AgentClassName = "LsmAgentGame-TexasHoldem-MemoryCompact"
 )
 
@@ -173,15 +173,15 @@ const (
 	// 由 ServerGo/agent/debateplayer/ 的 Agent struct 实现;驱动 DebateManager
 	// 引擎参与比赛(立论/驳论/质询/小结/自由辩/总结)。与狼人杀玩家的核心差异:
 	//   - 单一角色(立论/驳论/质询/总结),无角色切换
-	//   - 工具集随 phase + role 动态过滤(详见 docs/辩论比赛/05 §1.2)
+	//   - 工具集随 phase + role 动态过滤(详见 lag_docs/辩论比赛/05 §1.2)
 	//   - 无夜间行动 / 投票 / 阵营博弈
-	// 详见 docs/辩论比赛/02-辩论比赛Agent设计.md。
+	// 详见 lag_docs/辩论比赛/02-辩论比赛Agent设计.md。
 	AgentClassDebatePlayer AgentClassName = "LsmAgentGame-Debate-Player"
 
 	// AgentClassDebateJudge 是辩论比赛裁判 Bot 的 AgentClassName。
 	// 由 ServerGo/agent/debatejudge/ 的 AgentJudge struct 实现;负责
 	// 5 维度评分 + 评语 + 多数决投票。**不**参与辩论发言。
-	// 详见 docs/辩论比赛/02 §3 + 06 §4。
+	// 详见 lag_docs/辩论比赛/02 §3 + 06 §4。
 	AgentClassDebateJudge AgentClassName = "LsmAgentGame-Debate-Judge"
 
 	// AgentClassDebateMemoryCompact 是辩论比赛 Agent 决策记忆 LLM 压缩的
@@ -189,14 +189,14 @@ const (
 	// ServerGo/agent/debateplayer/memory_compact.go 的 compactMemory 调用;
 	// 把 messages 压缩为 8 段结构化摘要(辩题立场/双方论点/交锋点/局势),
 	// 失败保留原记忆下次再试。
-	// 详见 docs/辩论比赛/05-辩论比赛工具与记忆系统设计.md §5。
+	// 详见 lag_docs/辩论比赛/05-辩论比赛工具与记忆系统设计.md §5。
 	AgentClassDebateMemoryCompact AgentClassName = "LsmAgentGame-Debate-MemoryCompact"
 
 	// AgentClassDebateCommentator 是辩论比赛「AI 实时解说」的 AgentClassName。
 	// 由 ServerGo/agent/debatecommentator/ 的 CommentatorAgent struct 实现;
 	// 观战模式新增 🎙️ 解说席,事件驱动 + 双风格(pro 严谨 / fun 吐槽),
 	// 仅推送给观战者(spectator-only),玩家与 Agent 不可见。
-	// 详见 docs/辩论比赛/辩论比赛总体的流程设计.md §20260831-03。
+	// 详见 lag_docs/辩论比赛/辩论比赛总体的流程设计.md §20260831-03。
 	AgentClassDebateCommentator AgentClassName = "LsmAgentGame-Debate-Commentator"
 
 	// AgentClassWealthPlayer 是财商流游戏玩家 Bot 的 AgentClassName(2026-09-14 §财商流P0)。
@@ -204,6 +204,6 @@ const (
 	// 按月度节拍参与人生沙盘(每月 ≤3 个动作工具 + ≤1 次 speak + submit_month)。
 	// 与狼人杀玩家的核心差异: 无阵营/隐藏身份博弈,决策对象是个人三表与市场周期;
 	// 与德扑的差异: 每月多次动作(德扑每轮仅 1 次 tool_use)。
-	// 详见 docs/财商流游戏/已实现/03-Agent设计/财商流游戏-WealthPlayer-Agent设计-v1.md。
+	// 详见 lag_docs/财商流游戏/已实现/03-Agent设计/财商流游戏-WealthPlayer-Agent设计-v1.md。
 	AgentClassWealthPlayer AgentClassName = "LsmAgentGame-Wealth-Player"
 )

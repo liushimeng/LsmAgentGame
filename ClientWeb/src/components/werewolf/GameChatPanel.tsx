@@ -4,7 +4,7 @@
 // page offer @mention autocomplete and the 💬 whisper shortcut without
 // duplicating the chat UI.
 //
-// See docs/狼人杀/00-游戏信息与Agent现状综合文档.md §3.4.
+// See lag_docs/狼人杀/00-游戏信息与Agent现状综合文档.md §3.4.
 
 import React, { useMemo } from 'react';
 import { GameChatPanel as SharedGameChatPanel } from '@/components/chat/GameChatPanel';

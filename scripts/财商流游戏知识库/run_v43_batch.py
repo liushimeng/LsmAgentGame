@@ -8,7 +8,7 @@
 约定：
   - 起 ID：N9014200
   - batch_tag: v4.3
-  - 输出目录：docs/财商流游戏/玩家职业设计/
+  - 输出目录：lag_docs/财商流游戏/玩家职业设计/
   - 总数 ≥ 1500 张
   - 完整度 _completeness ≥ 0.80（Generator 内部 uniform 0.85~0.97，已自动满足）
 

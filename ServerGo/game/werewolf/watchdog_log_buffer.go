@@ -2,7 +2,7 @@
 // 100 条 watchdog tick / skip / wake / quarantine 事件,供前端调试面板拉取。
 //
 // 2026-08-13 §20260813-01 优化: 借鉴 agent-studio `TriggerExecutionLogDB`
-// (docs/其他Agent代码分析/agent-studio_意图识别与任务分解分析.md §3),
+// (lag_docs/其他Agent代码分析/agent-studio_意图识别与任务分解分析.md §3),
 // 替代当前仅依赖 logger 文件的"看不见历史"模式,提供 per-room 内存级
 // 时间线(进程重启即丢失,符合"内存态"定位)。
 //

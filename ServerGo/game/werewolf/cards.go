@@ -1,6 +1,6 @@
 // Package werewolf implements the "狼人杀 13 人标准竞技局" engine.
 //
-// 13 人标准竞技局配置(默认 v2026-07-10,详见 docs/狼人杀13人标准局规则.md):
+// 13 人标准竞技局配置(默认 v2026-07-10,详见 lag_docs/狼人杀13人标准局规则.md):
 //   - 4 名普通狼人 (werewolf 阵营)
 //   - 1 预言家 (好人阵营神职)
 //   - 1 女巫 (好人阵营神职,持有解药+毒药各一次)
@@ -177,7 +177,7 @@ const NoSeat Seat = -1
 // StandardDeck13 13 人标准竞技局的固定角色牌组合:
 // 4狼 + 预言家 + 女巫 + 猎人 + 白痴 + 5平民 = 13
 // 12 人局相比,多加 1 个好人平民(好人阵营规模优势更大,
-// 倒逼 4 狼提高夜间协同与白天欺骗能力 — 详见 docs/design/狼人杀13人局重构设计.md §2.1)。
+// 倒逼 4 狼提高夜间协同与白天欺骗能力 — 详见 lag_docs/design/狼人杀13人局重构设计.md §2.1)。
 func StandardDeck13() []Role {
 	return []Role{
 		RoleWerewolf,
@@ -333,9 +333,9 @@ func IsGodRole(r Role) bool {
 // 继续留在 godRolePool 会让玩家拿到"无效身份"(违反 §134/§198 守则)。已从活动卡池中移除,
 // 枚举值/String()/FactionOf()/IsGodRole()/RoleDisplayName() 仍保留 wire 兼容。
 // 注意(2026-07-30 §198 骑士复活):骑士已通过全链路实现守卫同等公民(详见
-// `docs/狼人杀骑士角色设计.md`),重新纳入 godRolePool。
+// `lag_docs/狼人杀骑士角色设计.md`),重新纳入 godRolePool。
 // 注意(2026-07-30 §猎魔人 复活):猎魔人已通过全链路补全(详见
-// `docs/狼人杀猎魔人角色设计.md`),重新纳入 godRolePool。
+// `lag_docs/狼人杀猎魔人角色设计.md`),重新纳入 godRolePool。
 // 当前 godRolePool 含 6 个完整实现的神职:女巫/猎人/白痴/守卫/骑士/猎魔人。
 var godRolePool = []Role{
 	RoleWitch,
@@ -503,7 +503,7 @@ func ParseRoleName(name string) (Role, bool) {
 // 不变式:返回的 roles 与输入是同一多重集(每张牌总数不变,仅座位归属变化),
 // 因此 13 人标准竞技局的牌组组成契约(4狼+1预言家+2~3神职+平民补齐)不被破坏。
 //
-// 语义(详见 docs/狼人杀13人局-优化和解决-20260806-03.md §3.4):
+// 语义(详见 lag_docs/狼人杀13人局-优化和解决-20260806-03.md §3.4):
 //   - 按座位号升序处理,先到先得(确定性,可单测);
 //   - 偏好座位已命中 → no-op;
 //   - 牌组中无该角色(如本局随机牌组未抽到骑士)→ 该座位保持随机(降级),

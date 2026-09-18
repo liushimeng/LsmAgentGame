@@ -102,7 +102,7 @@
 4. 敲定**本轮唯一待测角色**并写入进度草稿;无历史则从 `SELECTABLE_ROLES` 第 1 个开始。
 5. 已充分覆盖的模块可跳过;变更项必须覆盖。
 6. 读 `go-web-debug-tool/MCP_Proc_Def.md` 确认 MCP 操作/抓包接口可用;启动 MCP 子 Agent 前确认 `/usr/local/LsmHttpAgent/MCP_ChatAnalysisInterface_def.md` 可连。
-7. 准备 `test_account.json` 中的白名单账号(验证码自动旁路,见 `docs/通用功能/测试账号凭证.md`)。
+7. 准备 `test_account.json` 中的白名单账号(验证码自动旁路,见 `lag_docs/通用功能/测试账号凭证.md`)。
 
 ### 5. 大模型 API 异常与协议层诊断
 
@@ -393,7 +393,7 @@ SELECT id, status, phase, current_count FROM t_lsm_game_room WHERE id=:room_id;
 
 1. **绝对禁止修改 `CLAUDE.md`、`AGENTS.md` 这两个规则文件。**
    - 两个文件是仓库的**项目规则唯一事实来源**(其中 `AGENTS.md` 是 `CLAUDE.md` 的符号链接),任何 AI Agent 都不应在自动修复流程中追加、删除或修改其内容。
-   - 修复摘要 / 版本基线 / commit hash / 教训只写到旁路文档(如 `TestReport/<BugID>_validation.md` 或对应 `docs/` 归档),**绝不写入规则文件**。
+   - 修复摘要 / 版本基线 / commit hash / 教训只写到旁路文档(如 `TestReport/<BugID>_validation.md` 或对应 `lag_docs/` 归档),**绝不写入规则文件**。
    - 如果发现某条结论「必须写进 `CLAUDE.md` 才有效」,说明规则设计有缺陷,应改 prompt 而非写规则文件。
 
 2. **每一份被处理的报告文件都必须有明确归宿**(判定规则见 §12.6):
@@ -432,7 +432,7 @@ SELECT id, status, phase, current_count FROM t_lsm_game_room WHERE id=:room_id;
 
 ### 12.5 文档同步(仅旁路,≤ 2 min)
 
-- 修复涉及架构调整 / API 变更 / 新增常量 → **只**更新业务/技术文档(`docs/*.md`)与代码内注释。
+- 修复涉及架构调整 / API 变更 / 新增常量 → **只**更新业务/技术文档(`lag_docs/*.md`)与代码内注释。
 - **禁止**追加、删除、修改 `CLAUDE.md` / `AGENTS.md`。
 - 修复摘要 / commit hash / 回归结果可写 `TestReport/<BugID>_validation.md` 作为本轮验证记录。
 - **本步骤仅在「实际改了代码」时执行**;分支 B 跳过。
@@ -446,7 +446,7 @@ SELECT id, status, phase, current_count FROM t_lsm_game_room WHERE id=:room_id;
   `修复: [BugID] <问题简述> (关联报告: YYYYMMDD_HHMMSS)`
   示例: `修复: BUG-WW-RELOAD 狼人杀重连状态覆盖问题 (关联报告: 20260806_143022)`
 - 提交成功后自动 `git push` 同步远程。
-- **推送完成后立即删除**已处理的对应报告文件(主工程 `TestReport/`,子工程 `UseReport/`);原始报告不应在仓库长期堆积。如需保留修复摘要,迁移到 `docs/` 下按主题归档,**不要让原始报告留存**。
+- **推送完成后立即删除**已处理的对应报告文件(主工程 `TestReport/`,子工程 `UseReport/`);原始报告不应在仓库长期堆积。如需保留修复摘要,迁移到 `lag_docs/` 下按主题归档,**不要让原始报告留存**。
 
 **分支 B: 无问题(无需改代码、无新提交)**
 - 判定条件**同时满足**: 问题经核查不成立或早已修复、本轮**未修改任何代码**、**无新 Git 提交**。

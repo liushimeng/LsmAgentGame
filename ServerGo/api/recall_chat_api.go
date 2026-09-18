@@ -6,7 +6,7 @@
 //
 // 权限:JWT 必須 + 调用者是该房间的入座玩家(含已死亡)或观战者;
 // 对局必须已结束(PhaseGameOver);每用户每房间限流(默认 10 次)。
-// 详见 docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-05.md §U2。
+// 详见 lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-05.md §U2。
 package api
 
 import (

@@ -5,7 +5,7 @@
 // This is NOT an "Anthropic→OpenAI translation shim": the OpenAI protocol is
 // its own system with its own message roles (system/user/assistant/tool),
 // tool_calls envelope, and streaming chunk shape. This file owns the complete
-// mapping rules; docs/LLM与Agent/AgentOpenAI工具集与道具协议.md §2 is the
+// mapping rules; lag_docs/LLM与Agent/AgentOpenAI工具集与道具协议.md §2 is the
 // human-readable contract these functions implement.
 //
 // Authoritative wire samples (opencode Agent captures):

@@ -248,7 +248,7 @@ func main() {
 				zap.Int("usable", llmRegistry.Count()),
 				zap.Int("placeholder_or_empty", placeholderCount),
 				zap.Strings("models", models),
-				zap.String("fix_docs", "docs/LLM与Agent/LLM供应商设计.md"),
+				zap.String("fix_docs", "lag_docs/LLM与Agent/LLM供应商设计.md"),
 				zap.String("fix_ui", "/api/admin/llm/providers (or set real api_key in LsmAgentGame.conf)"))
 		}
 
@@ -303,7 +303,7 @@ func main() {
 	// 凭据与邀请码必须从 LsmAgentGame.conf 读取,绝不在源码中硬编码。
 	// 空 DB 时若未配置 root.password,则随机生成一个强密码并仅通过 INFO 日志
 	// 输出一次(供运维首次登录后立即轮换)。RootInviteCode 同理:缺省随机生成。
-	// 2026-08-25 §首次运行引导 — root 生命周期(docs/通用功能/首次运行引导与超级管理员生命周期.md):
+	// 2026-08-25 §首次运行引导 — root 生命周期(lag_docs/通用功能/首次运行引导与超级管理员生命周期.md):
 	//   - 空库(首次启动):随机生成 用户名/密码/邀请码,种子落库后把明文凭据回写
 	//     LsmAgentGame.conf,运维直接从 conf 读取并首次登录;
 	//   - 已有用户(非首次):SeedRootUserIfEmpty no-op,把 conf 的 root_account /
@@ -447,8 +447,8 @@ func main() {
 	// (每局结束自我迭代)使用;WerewolfManager 只依赖窄接口 AgentMemoryStore。
 	agentMemorySvc := service.NewAgentMemoryService(gormDB)
 	modelAgentMemoryAPI := api.NewModelAgentMemoryAPI(userSvc, gormDB, agentMemorySvc)
-	// Wiki —— 项目根 docs/ 目录的内容查看器。与 rebuild_restart_app.sh
-	// 启动 CWD 一致(项目根),docs/ 在仓库根。
+	// Wiki —— 项目根 lag_docs/ 目录的内容查看器。与 rebuild_restart_app.sh
+	// 启动 CWD 一致(项目根),lag_docs/ 在仓库根。
 	wikiAPI := api.NewWikiAPI("./docs")
 	// 源码统计 —— 标题栏"源码统计"按钮触发的弹窗数据源。
 	// 扫描前端 ClientWeb/src + 后端 ServerGo 的代码文件,统计文件数/行数/字节数。
@@ -563,7 +563,7 @@ func main() {
 
 	// 2026-08-31 §20260831-01 — 辩论比赛 REST 入口(独立 DebateManager,
 	// 不与狼人杀 / 德扑的 in-memory 引擎共享)。WS 帧派发由 ws/debate_service.go
-	// 完成,详见 docs/辩论比赛/00 §4.1。
+	// 完成,详见 lag_docs/辩论比赛/00 §4.1。
 	debateMgr := debate.NewDebateManagerWithRegistry(llmRegistry)
 	// 注入 Agent 启动器(独立包 debaterun 避免循环引用)。
 	// §20260831-09 — 返回类型增 BotStats / JudgeStats(房间级 Token 聚合用)。
@@ -831,7 +831,7 @@ func main() {
 
 	// 12 人局警徽流结算回调:engine 在 dawn 结算警徽流后通过此钩子委托 ws 层
 	// 广播 game.sheriff_stream_settle 帧(前端据此渲染移交/撕警徽动效)。
-	// 规则详见 docs/狼人杀13人标准局规则.md §7.4。
+	// 规则详见 lag_docs/狼人杀13人标准局规则.md §7.4。
 	gameSvcWs.WerewolfManager().SetOnSheriffStreamSettle(func(roomID string, payload map[string]any) {
 		hub.BroadcastRoom(roomID, ws.Envelope{
 			Type:    "game.sheriff_stream_settle",
@@ -841,7 +841,7 @@ func main() {
 
 	// 12 人局白痴翻牌结算回调:engine 在 IdiotReveal 结算后通过此钩子委托 ws 层
 	// 广播 game.idiot_revealed 帧(前端据此渲染翻牌结果动效)。
-	// 规则详见 docs/狼人杀13人标准局规则.md §3.5。
+	// 规则详见 lag_docs/狼人杀13人标准局规则.md §3.5。
 	gameSvcWs.WerewolfManager().SetOnIdiotRevealed(func(roomID string, seat int, choice string, revealed bool) {
 		hub.BroadcastRoom(roomID, ws.Envelope{
 			Type: "game.idiot_revealed",
@@ -858,7 +858,7 @@ func main() {
 	// engine 在 broadcastPropUseLocked 内通过此钩子委托 ws 层发送完整道具事件
 	// (from/target/prop_key/emoji/hit),驱动前端 PropUseOverlay 特效叠加 UI。
 	// 该前端帧原已解析(useWerewolf.ts),但后端长期未发送而沦为死代码;此钩子
-	// 让道具特效叠加 UI 成为可能。详见 docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md。
+	// 让道具特效叠加 UI 成为可能。详见 lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md。
 	gameSvcWs.WerewolfManager().SetOnPropUsed(func(roomID string, payload map[string]any) {
 		hub.BroadcastRoom(roomID, ws.Envelope{
 			Type:    "game.werewolf_prop_used",

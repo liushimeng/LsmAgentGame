@@ -10,7 +10,7 @@
 //   - 隐藏内部系统字段(closed / manager 引用)
 //   - 保留 Agent 思考过程(由 SpectatorConfig.RevealAgentThought 控制)
 //
-// 详细设计见 docs/辩论比赛/00-辩论比赛总体架构设计.md §3.3。
+// 详细设计见 lag_docs/辩论比赛/00-辩论比赛总体架构设计.md §3.3。
 package debate
 
 // ClientTeam 客户端可见的队伍信息。

@@ -7,7 +7,7 @@
 // 两种身份均可连接房间、订阅 WS 帧、聊天互动,但**不可**发送 bot action 帧。
 // 与狼人杀观战者架构对齐:Hub.rooms(玩家)+ Hub.spectators(观众)互不相交。
 //
-// 详细设计见 docs/架构与协议/观战者架构.md + docs/辩论比赛/04-辩论比赛界面与交互设计.md §1。
+// 详细设计见 lag_docs/架构与协议/观战者架构.md + lag_docs/辩论比赛/04-辩论比赛界面与交互设计.md §1。
 package debate
 
 import (

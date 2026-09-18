@@ -3,7 +3,7 @@
 // 2026-07-20 §131 新增。本文件是 leaf 逻辑(纯函数 + 常量),
 // 禁止 import models / service / db — agent 包保持不依赖 DB 层。
 // 迭代编排(goroutine + LLM 调用 + DB 读写)在 game/werewolf/agent_memory_bridge.go。
-// 详见 docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md。
+// 详见 lag_docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md。
 package wwplayer
 
 import (

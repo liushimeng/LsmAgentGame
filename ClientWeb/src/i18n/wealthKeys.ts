@@ -5,7 +5,7 @@
 
 export interface WealthDict {
   // ── 财商流游戏 / wealth — 第 7 款游戏（Agent 组，2026-09-14 P0）──
-  // 键清单出处：docs/财商流游戏/已实现/02-架构设计/财商流游戏-前端架构与2.5D地图-v1.md §7
+  // 键清单出处：lag_docs/财商流游戏/已实现/02-架构设计/财商流游戏-前端架构与2.5D地图-v1.md §7
   // + 实现补齐（面板 / 动作表单 / 终局 / 建房弹窗）。districts/actions/endings
   // 子键由代码枚举展开，locales 按扁平键书写。
   'nav.wealth': string;

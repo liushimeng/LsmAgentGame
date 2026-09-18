@@ -10,7 +10,7 @@
 // 线程安全:由 DebateRoom.scoreboardsMu 保护;r.mu 与 scoreboardsMu 不同层级,
 // 不存在锁序倒置(§92a 范式)。
 //
-// 详细设计见 docs/辩论比赛/07-辩论比赛Agent统计与裁判实时打分设计.md §3。
+// 详细设计见 lag_docs/辩论比赛/07-辩论比赛Agent统计与裁判实时打分设计.md §3。
 package debate
 
 import (

@@ -1,6 +1,6 @@
 # 财商流游戏 · 人物卡字段字典（Schema v1.1）
 
-> 适用对象：`docs/财商流游戏/玩家职业设计/<L1>/<L2>/<L3>/<L4>/<L5>/<编号>-<姓名>.md`
+> 适用对象：`lag_docs/财商流游戏/玩家职业设计/<L1>/<L2>/<L3>/<L4>/<L5>/<编号>-<姓名>.md`
 > 所有人物卡 **必须** 遵循本字典。字段增删须升 `schema_version` 并回填全库。
 >
 > **v1.1（2026-09-14）增量扩展**：在 v1.0 59 字段基础上**纯新增** 6 个全息画像字段（personality / behavior_traits / risk_preference / birth_family / life_story / opening_hook）。

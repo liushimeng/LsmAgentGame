@@ -47,7 +47,7 @@ export interface SettlementModalProps {
  * SettlementModal —— 单局结束后的结算弹层。
  * 纯展示，所有数字由后端计算后通过 game.over / game.settlement 帧下发。
  *
- * 视觉处方（docs/狼人杀13人局金币系统设计.md §11）：
+ * 视觉处方（lag_docs/狼人杀13人局金币系统设计.md §11）：
  *   - win  → 金色 + 金币 fly-in + 光晕脉冲 + netGain 显 +N（庆祝）
  *   - lose → 暗红 / 低饱和（克制，无粒子）
  *   - draw → 中性蓝灰（平静，无特效）

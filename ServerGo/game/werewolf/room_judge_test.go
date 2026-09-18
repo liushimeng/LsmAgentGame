@@ -1,6 +1,6 @@
 // room_judge_test.go — 2026-07-16 主持人重构单测
 //
-// 验证 docs/狼人杀-重构方案/主持人Agent重构设计.md §6.3 映射表:judgeKindForPhase 把对局 phase 映射
+// 验证 lag_docs/狼人杀-重构方案/主持人Agent重构设计.md §6.3 映射表:judgeKindForPhase 把对局 phase 映射
 // 为法官唤醒事件 kind,秘密阶段(NightWolves/Seer/Witch)返回空字符串 → 法官夜间静默。
 package werewolf
 

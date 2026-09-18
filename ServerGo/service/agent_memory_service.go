@@ -4,7 +4,7 @@
 // 写路径用 version 乐观锁防多房间(重开局相邻触发)并发覆盖:
 // UPDATE ... WHERE id=? AND version=?;影响 0 行则重读合并重试 1 次,再失败返回错误
 // (调用方仅 log,绝不阻塞游戏流)。
-// 详见 docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md。
+// 详见 lag_docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md。
 package service
 
 import (

@@ -19,7 +19,7 @@
 //     观战者能看的是 GodMode 快照（已有独立 spectator 通道），
 //     不是「以别人的身份视角看复盘」。
 //
-// 详见 docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260814-01.md §U1。
+// 详见 lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260814-01.md §U1。
 package api
 
 import (

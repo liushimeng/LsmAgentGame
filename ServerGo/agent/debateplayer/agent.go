@@ -14,7 +14,7 @@
 //   - 工具集随 phase + role 动态过滤
 //   - 跨局 MEMORY.md 迭代仍未实现(本版本)
 //
-// 详细设计见 docs/辩论比赛/02-辩论比赛Agent设计.md。
+// 详细设计见 lag_docs/辩论比赛/02-辩论比赛Agent设计.md。
 package debateplayer
 
 import (
@@ -150,7 +150,7 @@ func (a *Agent) Run(ctx context.Context) {
 
 // runTurn 执行一轮完整的多轮 tool_use 循环(§20260831-02)。
 //
-// 流程(对齐 docs/辩论比赛/02 §2.3 + §5.1):
+// 流程(对齐 lag_docs/辩论比赛/02 §2.3 + §5.1):
 //
 //	user prompt 入 memory → 循环(≤ maxToolUseRounds):
 //	  Chat(memory 快照) → 无 tool_use:
@@ -555,7 +555,7 @@ func (a *Agent) Quarantine() {
 
 // buildSystemPrompt 构造系统提示词。
 //
-// 设计见 docs/辩论比赛/02 §2.7。
+// 设计见 lag_docs/辩论比赛/02 §2.7。
 func (a *Agent) buildSystemPrompt() string {
 	var b strings.Builder
 	b.WriteString(debaterSystemBase)

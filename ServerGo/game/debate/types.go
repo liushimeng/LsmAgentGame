@@ -22,7 +22,7 @@
 //   - fair_assignment.go 模型公平分配算法
 //   - doc.go           包文档
 //
-// 详细设计见 docs/辩论比赛/*.md(2026-08-31 §00-§06 体系)。
+// 详细设计见 lag_docs/辩论比赛/*.md(2026-08-31 §00-§06 体系)。
 package debate
 
 import (
@@ -210,7 +210,7 @@ const (
 	ToolJudgeSubmitScore  ToolName = "submit_score"            // 提交评分
 	ToolJudgeAnnounce     ToolName = "announce"                // 公开宣告
 	// §20260831-06 — 裁判回答观众提问(观众提问闭环,
-	// docs/辩论比赛/01 §6.1「可向裁判 Agent 提问,裁判可选择性回应」)。
+	// lag_docs/辩论比赛/01 §6.1「可向裁判 Agent 提问,裁判可选择性回应」)。
 	ToolJudgeAnswerSpectator ToolName = "answer_spectator"     // 回答观众提问
 	// §20260831-09 — 裁判实时打分(阶段性);可在每个发言阶段后调用,
 	// 累计到该裁判对各队的加权平均,IsFinal=false;最终通过 submit_score 提交。
@@ -218,7 +218,7 @@ const (
 )
 
 // AllowedToolsForPhaseRole 返回「辩位 × 阶段」下辩方 Bot 可调用的工具集。
-// 设计见 docs/辩论比赛/05-辩论比赛工具与记忆系统设计.md §1.2 工具过滤规则。
+// 设计见 lag_docs/辩论比赛/05-辩论比赛工具与记忆系统设计.md §1.2 工具过滤规则。
 func AllowedToolsForPhaseRole(phase Phase, role Role) []ToolName {
 	// 默认有 idle_silent
 	allowed := []ToolName{ToolIdleSilent}
@@ -329,7 +329,7 @@ type PhaseConfig struct {
 }
 
 // DefaultPhaseConfig 默认阶段参数(标准 25 分钟赛制)。
-// 设计见 docs/辩论比赛/03-辩论比赛房间创建与配置设计.md §4。
+// 设计见 lag_docs/辩论比赛/03-辩论比赛房间创建与配置设计.md §4。
 func DefaultPhaseConfig() PhaseConfig {
 	return PhaseConfig{
 		PreparationSec:      30,
@@ -528,7 +528,7 @@ type SpectatorQuestion struct {
 	AnsweredAtMS  int64  `json:"answered_at_ms,omitempty"`   // 回答时间(毫秒)
 }
 
-// ModelStats 模型辩论统计(docs/辩论比赛/06 §9.1)。
+// ModelStats 模型辩论统计(lag_docs/辩论比赛/06 §9.1)。
 //
 // 每局结束(评审结果产出)时由 DebateManager.recordGameResult 累加;
 // GET /api/games/debate/stats 返回全量快照(按胜率降序)。

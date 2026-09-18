@@ -608,7 +608,7 @@ type WerewolfRoom struct {
 
 // cfgWerewolfRoomPropBudget 读取房间级道具全局金币预算（v2 重设计）。
 // 0 = 不启用全局预算（仅保留个人上限 + 冷却）。
-// 2026-07-21 v2 重设计（docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §5.2）。
+// 2026-07-21 v2 重设计（lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §5.2）。
 
 // cfgWerewolfWolfTeammateHintRate 读取"开局狼队友互认"概率百分比。
 // 默认 30;0/-1 都视为禁用(本设计关);100 = 全部狼 bot 开局互认。
@@ -617,7 +617,7 @@ type WerewolfRoom struct {
 
 // cfgWerewolfWolfTeammateHintMaxPairs 读取"开局狼队友互认"每局最多几对(v3 新增)。
 // 1 对 = 2 只狼互知;0/-1 都视为禁用;>= 狼总数时降级为最多狼总数/2 对。
-// 2026-07-21 §G4 v3 增强。docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §4.1。
+// 2026-07-21 §G4 v3 增强。lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §4.1。
 
 // collectWolfSeatsLocked 收集本局所有狼人座位(0-indexed,内部用)。
 // 调用方必须持 r.mu。StartAgentsLocked 用于 §5.2 狼队友互认注入;
@@ -746,12 +746,12 @@ func (r *WerewolfRoom) IsPaused() bool {
 // main.go's bootstrap sequence). Passing nil disables restart recovery.
 
 // SetOnSheriffStreamSettle 注册警徽流结算回调。
-// 13 人标准竞技局(docs/狼人杀13人标准局规则.md §7.4):engine 在 dawn 结算警徽流后通过此回调
+// 13 人标准竞技局(lag_docs/狼人杀13人标准局规则.md §7.4):engine 在 dawn 结算警徽流后通过此回调
 // 委托 ws 层 BroadcastRoom(game.sheriff_stream_settle),避免 engine 反向依赖 hub。
 // nil-safe:旧部署不接也不影响(结算逻辑仍运行,仅不广播)。
 
 // SetOnIdiotRevealed 注册白痴翻牌结算回调。
-// 13 人标准竞技局(docs/狼人杀13人标准局规则.md §3.5):engine 在白痴翻牌结算后通过此回调
+// 13 人标准竞技局(lag_docs/狼人杀13人标准局规则.md §3.5):engine 在白痴翻牌结算后通过此回调
 // 委托 ws 层 BroadcastRoom(game.idiot_revealed),避免 engine 反向依赖 hub。
 // nil-safe:旧部署不接也不影响(结算逻辑仍运行,仅不广播)。
 
@@ -830,7 +830,7 @@ func (r *WerewolfRoom) IsPaused() bool {
 // Structural compatibility is required because main.go converts via
 // werewolf.ChatActivityEvent before calling RecordRoomActivity.
 //
-// 2026-07-09 §13 增强 §115 房间聊天 — see docs/狼人杀-Agent与系统/狼人杀房间聊天设计.md.
+// 2026-07-09 §13 增强 §115 房间聊天 — see lag_docs/狼人杀-Agent与系统/狼人杀房间聊天设计.md.
 
 // RecordRoomMessage is the per-manager dispatcher for incoming room chat
 // events. main.go wires the chat service's onRoomMessage hook to call this
@@ -848,7 +848,7 @@ func (r *WerewolfRoom) IsPaused() bool {
 // It is wired through ChatService.SetRoomActivityHook in main.go and decides
 // whether the event should also land in the per-bot 500K chat queue.
 //
-// 2026-07-09 §13 增强 §115 房间聊天 — see docs/狼人杀-Agent与系统/狼人杀房间聊天设计.md.
+// 2026-07-09 §13 增强 §115 房间聊天 — see lag_docs/狼人杀-Agent与系统/狼人杀房间聊天设计.md.
 // silent_for_bots=true events are pure UI cues ("system auto-skip") and must
 // NOT pollute the LLM context. silent_for_bots=false events (e.g. "wolf kill",
 // "vote result") are also written into the queue so the LLM sees them.
@@ -1421,11 +1421,11 @@ func (m *WerewolfManager) maybeSpectatorWake(r *WerewolfRoom) {
 // Action_SheriffElect: 警长选举结算。
 
 // Action_StartDay: 天亮后启动白天(由 GM / 计时器调用)。
-// 13 人标准竞技局扩展(docs/狼人杀13人标准局规则.md §7.4):StartDay 阶段若上夜警长死亡(sheriffSlain) ,
+// 13 人标准竞技局扩展(lag_docs/狼人杀13人标准局规则.md §7.4):StartDay 阶段若上夜警长死亡(sheriffSlain) ,
 // 自动结算警徽流并把结果广播 game.sheriff_stream_settle。
 
 // maybeSettleSheriffStreamLocked 在 dawn→白天 转换时结算警徽流。
-// 规则(docs/狼人杀13人标准局规则.md §7.3):预言家警长按双警徽流结算金水/查杀/撕警徽;
+// 规则(lag_docs/狼人杀13人标准局规则.md §7.3):预言家警长按双警徽流结算金水/查杀/撕警徽;
 // 非预言家警长走 SheriffSuccessor(生前口头指定),无指定则撕。
 // caller 持 r.mu。结算后广播 game.sheriff_stream_settle。
 

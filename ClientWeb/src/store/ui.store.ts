@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-// 视口断点 —— 与 docs/架构与协议/产品设计.md 保持一致。
+// 视口断点 —— 与 lag_docs/架构与协议/产品设计.md 保持一致。
 export type Breakpoint = 'mobile' | 'pad' | 'desktop';
 
 export interface UiState {

@@ -12,7 +12,7 @@
 // 中招判定：服务端权威骰点（不依赖 LLM）。中招后效果 = 在 GameContext 中加入
 // "干扰信号"，LLM 自己决定如何响应（保护 Agent 自主权）。
 //
-// 2026-07-21 道具系统设计（docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md）。
+// 2026-07-21 道具系统设计（lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md）。
 package werewolf
 
 import (
@@ -287,7 +287,7 @@ func (e *PropEngine) UseProp(ctx context.Context, req PropUseRequest, r *Werewol
 	}
 }
 
-// 中招率修正常量（设计文档 docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §1.3）。
+// 中招率修正常量（设计文档 lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §1.3）。
 const (
 	// propRichAuraBalance 触发「富人光环」修正的使用者余额门槛。
 	propRichAuraBalance int64 = 2000

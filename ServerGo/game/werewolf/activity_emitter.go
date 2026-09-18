@@ -1,7 +1,7 @@
 // Package werewolf — activity_emitter.go: 暴露给 WerewolfManager 的最小活动
 // 事件接口,以及在关键游戏节点调用 ChatService.EmitRoomActivity 的 helper。
 //
-// 2026-07-09 §13 增强 §115 房间聊天 — see docs/狼人杀-Agent与系统/狼人杀房间聊天设计.md
+// 2026-07-09 §13 增强 §115 房间聊天 — see lag_docs/狼人杀-Agent与系统/狼人杀房间聊天设计.md
 // §3.4(后端实现)与 §3.3(wire 协议)。
 //
 // 设计:

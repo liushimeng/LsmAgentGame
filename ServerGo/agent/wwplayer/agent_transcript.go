@@ -37,7 +37,7 @@ import (
 // LLM 的 CoT 不再下发到 wire 协议(噪声 + 身份泄露风险),改用
 // 决策可观测性字段(输入摘要 + 工具调用 + 工具结果 + 决策结果)。
 // §128 对话即思考重构:LastThinking / FullThinking / RecentMessages 已物理删除,
-// ToolCalls 保留(用于决策可观测)。详见 docs/狼人杀对话即思考设计.md。
+// ToolCalls 保留(用于决策可观测)。详见 lag_docs/狼人杀对话即思考设计.md。
 //
 // 新增 5 字段:
 //   - LastDecisionSummary 1 句话(动作 + 目标)
@@ -165,7 +165,7 @@ type BotTranscript struct {
 	EmotionHistory   []EmotionRecord `json:"emotion_history,omitempty"`
 
 	// 2026-08-04 §表情特效 — emotion_switch_speak 扩展参数下发
-	// (docs/Agent拟人化和表情特效-解决和设计方案-20260804-02.md §5.2)。
+	// (lag_docs/Agent拟人化和表情特效-解决和设计方案-20260804-02.md §5.2)。
 	// 前端 SeatCell 据此渲染特效层;全部 omitempty,旧客户端零感知。
 	// **协议层隔离红线**(对齐 §119/§133):EmotionCaption 只进本结构,
 	// **绝不**写入 chat_message 表 / chat_history 队列 / HeartThought。
@@ -208,7 +208,7 @@ type BotTranscript struct {
 	//
 	// 写入位置:run.go 的 6 个 hook(safety-net / limiter / semaphore /
 	// MarkLLMCallStart / retry loop / MarkLLMCallEnd)。前端 BotPhaseIndicator
-	// 据此渲染 5 态指示器,详见 docs/狼人杀-Agent与系统/狼人杀对话即思考设计.md。
+	// 据此渲染 5 态指示器,详见 lag_docs/狼人杀-Agent与系统/狼人杀对话即思考设计.md。
 	LLMCallPhase     string `json:"llm_call_phase,omitempty"`     // idle|calling|streaming|retrying|quarantined
 	RetryAttempt     int    `json:"retry_attempt,omitempty"`      // 1..N,0=首次
 	RetryMaxAttempts int    `json:"retry_max_attempts,omitempty"` // 默认 1

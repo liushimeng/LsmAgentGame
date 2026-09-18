@@ -211,7 +211,7 @@ git submodule update --init --recursive  # オプション
 #   - どちらも存在しなければ → コード内デフォルトから両方を生成
 #     (2026-08-25 より生成ファイルは db.host=127.0.0.1 / db.port=3306 /
 #      db.name=lsmDB / db.user=root などのデフォルト値を同梱 —
-#      docs/通用功能/首次运行引导与超级管理员生命周期.md 参照)
+#      lag_docs/通用功能/首次运行引导与超级管理员生命周期.md 参照)
 # LsmAgentGame.conf を編集 — db.password、jwt.secret、llm.endpoint 等を設定
 # 実秘钥は LsmAgentGame.conf のみ(.gitignore で除外)
 
@@ -225,7 +225,7 @@ git submodule update --init --recursive  # オプション
 # 自動的に "disable" に書き戻されます(無効化)。ログイン / 登録の認証は
 # 設定ファイルの管理者資格情報を一切読みません — 設定ファイル経由の
 # バックドアは存在しません。
-# ライフサイクル詳細: docs/通用功能/首次运行引导与超级管理员生命周期.md
+# ライフサイクル詳細: lag_docs/通用功能/首次运行引导与超级管理员生命周期.md
 
 # 3. フロントエンド依存をインストール
 cd ClientWeb && npm install && cd ..
@@ -283,15 +283,15 @@ curl -sk https://127.0.0.1:39001/api/version
 ServerGo/                       Go バックエンド(HTTPS 39001, WSS 39002)
 ClientWeb/                      React + Vite フロントエンド
 proto/                          Protobuf ソースファイル(単一事実源)
-docs/                           アーキテクチャ設計、認証フロー、API 参考、Agent 教訓
+lag_docs/                           アーキテクチャ設計、認証フロー、API 参考、Agent 教訓
 python-generate-image-tool/     [オプション サブモジュール] AI 画像生成(火山引擎 Ark API)
 go-web-debug-tool/              [オプション サブモジュール] Chrome CDP 自動デバッグ/スクリーンショット
 ProjectPic/                     プロジェクト資料(ローカル表示) —— werewolf-*.png は実機対局スクリーンショット
 ```
 
-完全設計:[docs/架构与协议/整体架构.md](docs/架构与协议/整体架构.md)、
-認証生命周期:[docs/架构与协议/鉴权流程.md](docs/架构与协议/鉴权流程.md)、
-HTTP/WS API:[docs/架构与协议/API参考.md](docs/架构与协议/API参考.md)。
+完全設計:[lag_docs/架构与协议/整体架构.md](lag_docs/架构与协议/整体架构.md)、
+認証生命周期:[lag_docs/架构与协议/鉴权流程.md](lag_docs/架构与协议/鉴权流程.md)、
+HTTP/WS API:[lag_docs/架构与协议/API参考.md](lag_docs/架构与协议/API参考.md)。
 
 ---
 

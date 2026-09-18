@@ -1,7 +1,7 @@
 /**
  * 辩论比赛 WS 帧订阅与发送 hook (2026-08-31 §20260831-01 + §20260831-04 + §20260831-07)
  *
- * 对齐 ServerGo/ws/debate_service.go 帧类型 + docs/辩论比赛/00 §4.2。
+ * 对齐 ServerGo/ws/debate_service.go 帧类型 + lag_docs/辩论比赛/00 §4.2。
  *
  * §20260831-04 — 增补:
  *   - debate.commentary 帧订阅:把 AI 解说追加到 store.commentaries

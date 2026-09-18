@@ -1,7 +1,7 @@
 /**
  * 辩论比赛 REST API 封装 (2026-08-31 §20260831-01)
  *
- * 对齐 ServerGo/api/debate_api.go,与 docs/辩论比赛/00 §4.1 端点。
+ * 对齐 ServerGo/api/debate_api.go,与 lag_docs/辩论比赛/00 §4.1 端点。
  */
 import { http } from '@/services/http';
 import type {

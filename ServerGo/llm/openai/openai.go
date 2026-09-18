@@ -4,7 +4,7 @@
 // anthropic provider. It owns its request body (chatRequest), SSE chunk parser
 // (chatChunk), and circuit breaking.
 //
-// Design contract: docs/LLM与Agent/AgentOpenAI工具集与道具协议.md §3.
+// Design contract: lag_docs/LLM与Agent/AgentOpenAI工具集与道具协议.md §3.
 //
 // Outbound headers (no Anthropic-private headers):
 //

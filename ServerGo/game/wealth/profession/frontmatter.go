@@ -1,7 +1,7 @@
 // Package profession — frontmatter.go: 文档池 frontmatter 容错解析
 // (2026-09-16 §文档池解析修复 P0)。
 //
-// 事故背景: 知识库 `docs/财商流游戏/玩家职业设计/`(75,115 张人物卡,
+// 事故背景: 知识库 `lag_docs/财商流游戏/玩家职业设计/`(75,115 张人物卡,
 // Schema v1.0 → v1.1 混存)的真实 frontmatter 形状与旧 `docCard` 不匹配:
 //
 //	work_intensity:            {weekly_hours: 48, overtime: 中, risk: 中}   ← map,旧代码按 string 解

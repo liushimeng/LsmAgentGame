@@ -5,8 +5,8 @@
 //   - 裁判使用与辩方不同的模型
 //   - 立场平衡:正反方模型能力尽量对等
 //
-// 详见 docs/辩论比赛/03-辩论比赛房间创建与配置设计.md §5
-//  + docs/辩论比赛/06-辩论比赛公平性与评审系统设计.md §2。
+// 详见 lag_docs/辩论比赛/03-辩论比赛房间创建与配置设计.md §5
+//  + lag_docs/辩论比赛/06-辩论比赛公平性与评审系统设计.md §2。
 package debate
 
 import (
@@ -168,7 +168,7 @@ func ValidateAssignment(teamAssignments map[int]map[int]string, judgeAssignments
 
 // DefaultStancesForMode 根据 Mode 返回默认立场分配。
 //
-// 设计见 docs/辩论比赛/03-辩论比赛房间创建与配置设计.md §3.3。
+// 设计见 lag_docs/辩论比赛/03-辩论比赛房间创建与配置设计.md §3.3。
 func DefaultStancesForMode(mode Mode) []Stance {
 	switch mode {
 	case ModeTwoTeam:

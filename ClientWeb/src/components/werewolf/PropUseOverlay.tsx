@@ -34,7 +34,7 @@ interface Props {
 }
 
 // ── 每种道具的独特视觉身份(配色 + 运动关键词)──────────────────────────────
-// 色值与 docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md 第六类 LLM 注入攻击手法对应:
+// 色值与 lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md 第六类 LLM 注入攻击手法对应:
 //  markdown_bomb=Markdown注入(紧急红) nested_maze=套娃(幻紫)
 //  char_confuse=字符欺骗(混乱青) long_swear=注意力失焦(卷轴金)
 //  task_disguise=任务马甲(马戏橙) task_disguise_v3=进阶马甲(影视洋红)

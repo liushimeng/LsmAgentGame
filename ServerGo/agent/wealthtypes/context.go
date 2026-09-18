@@ -8,7 +8,7 @@
 // **持锁态**构造 GameContext 快照;Agent 侧(wealthplayer)锁外只读消费。
 // 各 Brief 结构的字段名与协议文档 §3 的 JSON 键一一对应。
 //
-// 详见 docs/财商流游戏/已实现/03-Agent设计/财商流游戏-WealthPlayer-Agent设计-v1.md §3。
+// 详见 lag_docs/财商流游戏/已实现/03-Agent设计/财商流游戏-WealthPlayer-Agent设计-v1.md §3。
 package wealthtypes
 
 // GameContext 是财商流 Bot 单月决策所需的全部上下文快照。

@@ -6,7 +6,7 @@
 //   3. 在 wwtypes.GameContext 中添加道具相关字段（PropInjectText / PropCooldown 等）。
 //   4. 在 30% 对局中为 2 只狼人 Agent 注入初始身份互知。
 //
-// 2026-07-21 道具系统设计（docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md）。
+// 2026-07-21 道具系统设计（lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md）。
 package wwplayer
 
 import (

@@ -1,6 +1,6 @@
 // room_suicide_take.go — §20260830-02 自爆带走(房间/管理层)
 //
-// 设计文档:docs/狼人杀-角色设计/狼人杀自爆遗言与带走设计-20260830-02.md
+// 设计文档:lag_docs/狼人杀-角色设计/狼人杀自爆遗言与带走设计-20260830-02.md
 //
 // 人类(WS 帧 game.werewolf_suicide_take)与 Agent(工具 wolf_suicide_take)
 // 同源进入 Action_SuicideTake → suicideTakeLocked(公平性不变式 3)。

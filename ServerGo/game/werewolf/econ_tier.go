@@ -1,6 +1,6 @@
 // Package werewolf — econ_tier.go: 经济档位感知（v4 → v5 增强）。
 //
-// 设计动机（docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §13.2 + §16.3）：
+// 设计动机（lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §13.2 + §16.3）：
 //   - v3 经济模型"50%彩池/30%销毁/20%补偿"是硬切，无法应对不同房间的金币存量分布。
 //   - v4 引入 3 档（Health / Caution / Danger），解决两端极端（>50K 富足 / <10K 通缩）
 //     但忽略 Boom（>100K 富到爆 → 刺激消费）与 Critical（<5K 流动性枯竭 → 强反通胀）。
@@ -14,7 +14,7 @@
 // 阈值可由 LsmAgentGame.conf 配置(5 个常量均为变量;ConfigureEconTier 注入);
 // 默认值与常量一致。
 //
-// 2026-07-21 v5 重构（docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.3）。
+// 2026-07-21 v5 重构（lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.3）。
 package werewolf
 
 import (
@@ -38,7 +38,7 @@ const (
 )
 
 // EconTier 阈值常量（v5 §16.3 配置；可由 LsmAgentGame.conf + ConfigureEconTier 注入）。
-// 默认值与 docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.3 表一致。
+// 默认值与 lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.3 表一致。
 const (
 	EconBoomThreshold     int64 = 100000 // ≥ 此值 → Boom
 	EconCautionThreshold  int64 = 50000  // [CautionThreshold, BoomThreshold) → Health

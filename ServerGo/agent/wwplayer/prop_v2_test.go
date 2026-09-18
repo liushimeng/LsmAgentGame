@@ -5,7 +5,7 @@
 //   · 空 snapshot → 不暴露 use_prop 工具（节省 tool slot）。
 //   · propKeyToEmoji 本地副本与 werewolf 包一致。
 //
-// 2026-07-21 道具系统 v2 重设计（docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md）。
+// 2026-07-21 道具系统 v2 重设计（lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md）。
 package wwplayer
 
 import (

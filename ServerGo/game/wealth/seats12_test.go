@@ -178,7 +178,7 @@ func newRoomWithSeats(t *testing.T, n int) *WealthRoom {
 	return r
 }
 
-// docsPoolRoot 返回真实文档池根目录(仓库根 + docs/财商流游戏/玩家职业设计)。
+// docsPoolRoot 返回真实文档池根目录(仓库根 + lag_docs/财商流游戏/玩家职业设计)。
 // 用 runtime.Caller 定位本文件,再上溯 3 层到仓库根:
 // ServerGo/game/wealth → ServerGo/game → 仓库根。
 func docsPoolRootWealth(t *testing.T) string {

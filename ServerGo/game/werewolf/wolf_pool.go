@@ -18,7 +18,7 @@
 //   - 简化实现:不引入 wallet service;WolfPoolBalance 仅是 GameState 字段,
 //     通过 view.go 下发到 ClientGameState.WolfPoolBalance(全场可见)。
 //
-// 历史参考:docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-10.md §U3
+// 历史参考:lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-10.md §U3
 package werewolf
 
 // wolfPoolPenaltyCoin 是每次悍跳失败从阵营金币池扣除的固定金额。

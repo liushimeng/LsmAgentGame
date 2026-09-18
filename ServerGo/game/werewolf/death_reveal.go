@@ -2,7 +2,7 @@ package werewolf
 
 // death_reveal.go — §20260830-01 房间级「死亡亮身份」(reveal_role_on_death)引擎侧核心。
 //
-// 设计事实来源: docs/狼人杀-角色设计/狼人杀死亡身份公开设计-20260830-01.md §4。
+// 设计事实来源: lag_docs/狼人杀-角色设计/狼人杀死亡身份公开设计-20260830-01.md §4。
 // 本文件集中承载全部新逻辑(engine.go 的 ⑦ 分支与 room.go 的字段声明除外),
 // 以满足 §4 对 room.go / view.go / room_agent.go 三个超限文件的净增约束。
 //

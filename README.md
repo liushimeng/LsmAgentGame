@@ -218,7 +218,7 @@ git submodule update --init --recursive  # 可选
 #   - 若两者都不存在 → 用代码内默认值同时生成两份
 #     (2026-08-25 起生成文件自带 db.host=127.0.0.1 / db.port=3306 /
 #      db.name=lsmDB / db.user=root 等全套默认值,见
-#      docs/通用功能/首次运行引导与超级管理员生命周期.md)
+#      lag_docs/通用功能/首次运行引导与超级管理员生命周期.md)
 # 编辑 LsmAgentGame.conf —— 设置 db.password、jwt.secret、llm.endpoint 等
 # 真实密钥仅入 LsmAgentGame.conf(已在 .gitignore 中排除)
 
@@ -229,7 +229,7 @@ git submodule update --init --recursive  # 可选
 # 之后任何一次重启检测到用户表已有记录,会自动把这两个字段回写为
 # "disable"(禁用);登录/注册鉴权从不读取配置文件中的超管账密,
 # 不存在配置文件直登后门。详见
-# docs/通用功能/首次运行引导与超级管理员生命周期.md
+# lag_docs/通用功能/首次运行引导与超级管理员生命周期.md
 
 # 3. 安装前端依赖
 cd ClientWeb && npm install && cd ..
@@ -290,15 +290,15 @@ Chrome CDP 调试工具脚本,不含后端核心代码**;它们因涉及 API Key
 ServerGo/                       后端核心(HTTPS 39001, WSS 39002)
 ClientWeb/                      前端指挥台
 proto/                          Protobuf 源文件(唯一事实源)
-docs/                           架构设计、鉴权流程、API 参考、Agent 教训
+lag_docs/                           架构设计、鉴权流程、API 参考、Agent 教训
 python-generate-image-tool/     [可选子模块] AI 图像生成(火山引擎 Ark API)
 go-web-debug-tool/              [可选子模块] Chrome CDP 自动化调试/截图
 ProjectPic/                     项目资源(本地展示用) —— werewolf-*.png 为实机对局截图
 ```
 
-完整设计见 [docs/架构与协议/整体架构.md](docs/架构与协议/整体架构.md),
-登录生命周期见 [docs/架构与协议/鉴权流程.md](docs/架构与协议/鉴权流程.md),
-HTTP/WS 接口见 [docs/架构与协议/API参考.md](docs/架构与协议/API参考.md)。
+完整设计见 [lag_docs/架构与协议/整体架构.md](lag_docs/架构与协议/整体架构.md),
+登录生命周期见 [lag_docs/架构与协议/鉴权流程.md](lag_docs/架构与协议/鉴权流程.md),
+HTTP/WS 接口见 [lag_docs/架构与协议/API参考.md](lag_docs/架构与协议/API参考.md)。
 
 ---
 

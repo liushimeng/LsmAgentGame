@@ -1,7 +1,7 @@
 // Package agent — tools_cache.go: 按 (phase, role, aliveHash, shapeExtra) 缓存 BuildTools 输出。
 //
 // 2026-08-13 §20260813-01 优化: 借鉴 agent-studio `plugin_key` 去重模式
-// (docs/其他Agent代码分析/agent-studio_意图识别与任务分解分析.md §4.2),
+// (lag_docs/其他Agent代码分析/agent-studio_意图识别与任务分解分析.md §4.2),
 // 13 bot 房间 × 4 角色 × 6 phase 累计 BuildTools 调用频次高,缓存按
 // (phase, role, aliveHash, shapeExtra) 维度避免重复构造 []llm.ToolDef。
 //

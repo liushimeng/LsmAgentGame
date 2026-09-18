@@ -81,7 +81,7 @@ type DebateManager struct {
 	commentatorBroadcast func(roomID, text, style string)
 
 	// §20260831-06 — 裁判公开宣告广播钩子(裁判 announce 工具不再是空操作:
-	// docs/辩论比赛/05 §1.2 裁判全阶段持有 announce 工具)。
+	// lag_docs/辩论比赛/05 §1.2 裁判全阶段持有 announce 工具)。
 	onJudgeAnnounce func(roomID string, judgeID int, text string)
 
 	// §20260831-06 — 裁判回答观众提问广播钩子(answer_spectator 工具成功后)。

@@ -105,7 +105,7 @@ const (
 	ErrRestartVoteWrongPhase = 30200
 
 	// 35001–35012 — 财商流游戏(wealth)专用段(2026-09-14 §财商流P0)。
-	// 契约: docs/财商流游戏/已实现/02-架构设计/财商流游戏-WS与HTTP协议契约-v1.md §5。
+	// 契约: lag_docs/财商流游戏/已实现/02-架构设计/财商流游戏-WS与HTTP协议契约-v1.md §5。
 	ErrWealthRoomNotFound           = 35001
 	ErrWealthNotPlaying             = 35002
 	ErrWealthNotEnoughPlayers       = 35003

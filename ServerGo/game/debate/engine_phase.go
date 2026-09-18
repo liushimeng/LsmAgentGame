@@ -6,7 +6,7 @@
 //   - 通过 SetCurrentSpeaker 标识当前发言者,Agent driver 监听后发起 LLM
 //   - 收到 speech 提交后自动推进到下一位 / 下一阶段
 //
-// 阶段推进逻辑(详见 docs/辩论比赛/01 §3.1):
+// 阶段推进逻辑(详见 lag_docs/辩论比赛/01 §3.1):
 //
 //	PhaseFilling → PhasePreparation (timer)
 //
@@ -26,7 +26,7 @@ import (
 
 // SpeakingOrderForPhase 返回指定阶段的发言顺序(返回 team_id 列表)。
 //
-// 设计依据:docs/辩论比赛/01 §2.3-2.8 + §3.1 阶段内轮换规则。
+// 设计依据:lag_docs/辩论比赛/01 §2.3-2.8 + §3.1 阶段内轮换规则。
 func SpeakingOrderForPhase(phase Phase, room *DebateRoom) []int {
 	teams := room.Config.Teams
 	teamCount := len(teams)

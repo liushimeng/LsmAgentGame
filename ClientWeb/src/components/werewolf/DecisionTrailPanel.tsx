@@ -2,7 +2,7 @@
  * DecisionTrailPanel — 决策留痕运行时回放(spectator only)
  *
  * 2026-08-11 §20260811-02 U2 — 接线修复。
- * 设计文档:`docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-02.md` §U2。
+ * 设计文档:`lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-02.md` §U2。
  *
  * 背景:后端 §20260810-12 D1 起就在 `agent.go:1309` 累积 `DecisionTrail`(30 条 FIFO),
  * 经 `bot_contexts[].decision_trail` 下发给观战者,且 `decision_trail.go:5` 注释声称

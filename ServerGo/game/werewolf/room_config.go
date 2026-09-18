@@ -27,7 +27,7 @@ import (
 
 // cfgWerewolfJudgeModelKey 2026-07-10 §125 增强 — 法官使用的 LLM model_key。
 
-// judgeKindForPhase 把对局 phase 映射为法官唤醒事件 kind(对齐 docs/狼人杀-重构方案/主持人Agent重构设计.md
+// judgeKindForPhase 把对局 phase 映射为法官唤醒事件 kind(对齐 lag_docs/狼人杀-重构方案/主持人Agent重构设计.md
 // §6.3 映射表)。秘密阶段(NightWolves/Seer/Witch)返回空字符串 → phaseWatchdogTick 不调
 // wake,法官在夜间静默观察。
 

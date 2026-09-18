@@ -1,7 +1,7 @@
 /**
  * 单个辩方 Bot Token 统计卡片 (2026-08-31 §20260831-09)
  *
- * 对齐 docs/辩论比赛/07 §5.1 — 每个 Bot 卡片:
+ * 对齐 lag_docs/辩论比赛/07 §5.1 — 每个 Bot 卡片:
  * 模型名(简称) + LLM 调用次数 + 输入/输出/总 Token。
  *
  * 样式由 debate-stats.css 统一管理(.debate-bot-token-card)。

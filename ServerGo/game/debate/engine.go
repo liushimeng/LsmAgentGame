@@ -7,7 +7,7 @@
 //   - 阶段推进回调:PhaseOpening / PhaseRebuttal / ... 由 engine_phase.go 实现
 //   - watchdog:每阶段 PhaseConfig.PreparationSec 时长,超时自动切下一阶段
 //
-// 详细设计见 docs/辩论比赛/01-辩论比赛游戏流程设计.md §3。
+// 详细设计见 lag_docs/辩论比赛/01-辩论比赛游戏流程设计.md §3。
 package debate
 
 import (

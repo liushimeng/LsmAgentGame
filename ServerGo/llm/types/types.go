@@ -7,7 +7,7 @@
 // same shape used in `CluadeCode请求RequestBody的Anthropic协议定义数据用例.json`
 // at the repo root (top-level keys: model / system / messages / tools /
 // metadata / output_config / max_tokens, etc.). See
-// `docs/LLM与Agent/LLM供应商设计.md` for the per-field rationale.
+// `lag_docs/LLM与Agent/LLM供应商设计.md` for the per-field rationale.
 package types
 
 import (
@@ -391,7 +391,7 @@ const PlaceholderKey = "API-KEY-PLACEHOLDER"
 // The two protocol systems this project speaks. They are NOT translations of
 // each other: each has its own provider package (llm/anthropic, llm/openai)
 // with its own wire types, SSE parser and circuit breaking. See
-// docs/LLM与Agent/AgentOpenAI工具集与道具协议.md.
+// lag_docs/LLM与Agent/AgentOpenAI工具集与道具协议.md.
 const (
 	// ProviderTypeAnthropicMessages is the canonical id for the Anthropic
 	// Messages API (POST {endpoint}/v1/messages).

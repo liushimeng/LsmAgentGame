@@ -6,7 +6,7 @@
 //   - 收集评分 → 中位数聚合 → 产生 DebateResult
 //   - 中位数为单数裁判(3 取中)天然支持
 //
-// 详细设计见 docs/辩论比赛/06-辩论比赛公平性与评审系统设计.md §4。
+// 详细设计见 lag_docs/辩论比赛/06-辩论比赛公平性与评审系统设计.md §4。
 package debate
 
 import (
@@ -17,7 +17,7 @@ import (
 //
 // 算法:每个队伍的每维度取 3 裁判中位数(排序后取第 2 个)。
 //
-// 设计依据:docs/辩论比赛/06 §4.3。
+// 设计依据:lag_docs/辩论比赛/06 §4.3。
 func ComputeFinalScores(judges []JudgeScore, teamCount int) []TeamFinalScore {
 	results := make([]TeamFinalScore, teamCount)
 

@@ -1,7 +1,7 @@
 /**
  * SuicideTakeInline — §20260830-02 自爆带走面板(自爆狼本人操作)。
  *
- * 设计文档:docs/狼人杀-角色设计/狼人杀自爆遗言与带走设计-20260830-02.md §7。
+ * 设计文档:lag_docs/狼人杀-角色设计/狼人杀自爆遗言与带走设计-20260830-02.md §7。
  *
  * 渲染条件(由 WerewolfGamePage 控制):phase === 'suicide_take' &&
  * my_seat === suicided_wolf_seat。此时自爆狼已死亡但拥有「带走一名存活

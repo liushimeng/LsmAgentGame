@@ -8,7 +8,7 @@
 // EffectRegistry 是效果落地函数的注册表（key = effect_type）。
 // 新效果接入：RegisterEffect(key, fn) 即可。
 //
-// 2026-07-21 道具系统 v2 重设计（docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §3）。
+// 2026-07-21 道具系统 v2 重设计（lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §3）。
 package werewolf
 
 import (

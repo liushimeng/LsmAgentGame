@@ -57,12 +57,12 @@ type WerewolfManager struct {
 	rewardSvc *SettlementRewardService
 
 	// onSheriffStreamSettle, when non-nil, is invoked after the engine settles
-	// the sheriff stream at dawn (docs/狼人杀13人标准局规则.md §7.4). The callback
+	// the sheriff stream at dawn (lag_docs/狼人杀13人标准局规则.md §7.4). The callback
 	// receives the settlement payload so the ws layer can broadcast
 	// game.sheriff_stream_settle to the room. nil-safe:旧部署不接也不影响。
 	onSheriffStreamSettle func(roomID string, payload map[string]any)
 	// onIdiotRevealed, when non-nil, is invoked after the engine settles the
-	// idiot reveal (docs/狼人杀13人标准局规则.md §3.5). The callback receives seat +
+	// idiot reveal (lag_docs/狼人杀13人标准局规则.md §3.5). The callback receives seat +
 	// choice so the ws layer can broadcast game.idiot_revealed. nil-safe。
 	onIdiotRevealed func(roomID string, seat int, choice string, revealed bool)
 	// onPropUsed, when non-nil, is invoked from broadcastPropUseLocked (while

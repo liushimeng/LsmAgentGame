@@ -247,7 +247,7 @@ func TestEnsureRuntimeConfigFile_SynthesizesBoth(t *testing.T) {
 
 // =============================================================================
 // 2026-08-25 §首次运行引导 — DB 默认值 + root disable 哨兵测试
-// (docs/通用功能/首次运行引导与超级管理员生命周期.md)
+// (lag_docs/通用功能/首次运行引导与超级管理员生命周期.md)
 // =============================================================================
 
 // TestDBConfig_DefaultsOnEmpty 验证 db 段为空时 applyDefaults 填充首次部署默认值。

@@ -162,7 +162,7 @@ type ChatMessage struct {
 // ActivityEvent represents a structured game event broadcast into the room
 // chat stream alongside regular chat messages (speak / interject / whisper).
 //
-// 2026-07-09 §13 增强 (§115 房间聊天) — see docs/狼人杀-Agent与系统/狼人杀房间聊天设计.md
+// 2026-07-09 §13 增强 (§115 房间聊天) — see lag_docs/狼人杀-Agent与系统/狼人杀房间聊天设计.md
 // for the full schema. Activity events are not persisted to
 // t_lsm_game_chat_message; they are transient UI cues for "phase change",
 // "vote ended", "wolf kill", etc. The chat history replay uses
@@ -299,7 +299,7 @@ func (s *ChatService) SetFactionLookup(fn func(roomID, userID string) (faction s
 // SetRoomActivityHook installs a callback fired by EmitRoomActivity after
 // the activity envelope is broadcast. The werewolf manager uses this to push
 // non-silent events into the per-bot 500K chat queue. Pass nil to clear.
-// See docs/狼人杀-Agent与系统/狼人杀房间聊天设计.md §3.4.
+// See lag_docs/狼人杀-Agent与系统/狼人杀房间聊天设计.md §3.4.
 func (s *ChatService) SetRoomActivityHook(fn func(ev *ActivityEvent)) {
 	s.onRoomActivity = fn
 }
@@ -705,7 +705,7 @@ func (s *ChatService) Whisper(c *Client, roomID, toUserID, toAccount, text strin
 	}
 
 	payload, _ := json.Marshal(msg)
-	// BUG-WEREWOLF-R55-WHISPER: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+	// BUG-WEREWOLF-R55-WHISPER: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 	redactedMsg := *msg
 	redactedMsg.Text = "[私聊]"
@@ -856,7 +856,7 @@ func (s *ChatService) SendFromBot(roomID, botUserID, botAccount, modelKey, text 
 		display = "Bot-" + suffix
 	}
 
-	// BUG-WEREWOLF-P1-NEW-32: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+	// BUG-WEREWOLF-P1-NEW-32: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 	playerMsg := &ChatMessage{
 		ID:            row.ID,
@@ -1014,7 +1014,7 @@ func (s *ChatService) SendFromJudge(roomID, fromAccount, modelKey, text, kind st
 	return &wwplayer.BotChatSendResult{}, nil
 }
 
-// §127: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+// §127: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 
 // SendBotStreamStart 发送 chat.stream_start 帧,标记 bot 开始流式输出。
@@ -1122,7 +1122,7 @@ func (s *ChatService) WhisperFromBot(roomID, botUserID, botAccount, modelKey, to
 		msg.TS = time.Now().UnixMilli()
 	}
 	payload, _ := json.Marshal(msg)
-	// BUG-WEREWOLF-R55-WHISPER: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+	// BUG-WEREWOLF-R55-WHISPER: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 	redactedMsg := *msg
 	redactedMsg.Text = "[私聊]"
@@ -1336,7 +1336,7 @@ func (s *ChatService) lookupSeatAccount(roomID, userID string) string {
 // game state itself remains the source of truth for replays (see
 // game.state.phase, round_number, players[].alive).
 //
-// 2026-07-09 §13 增强 §115 房间聊天 — see docs/狼人杀-Agent与系统/狼人杀房间聊天设计.md.
+// 2026-07-09 §13 增强 §115 房间聊天 — see lag_docs/狼人杀-Agent与系统/狼人杀房间聊天设计.md.
 //
 // Parameters:
 //   - roomID         : the room to broadcast to

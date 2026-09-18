@@ -31,7 +31,7 @@ type PersonalityVector struct {
 	RiskTolerance      float64 `json:"risk_tolerance"`
 }
 
-// 5 种预设人设的固定向量值（与 docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-04.md §U2 表对齐）。
+// 5 种预设人设的固定向量值（与 lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-04.md §U2 表对齐）。
 var PersonalityPresets = map[string]PersonalityVector{
 	// 逻辑流:发言引用编号/概率/对仗,投票只看逻辑证据。
 	"logical": {

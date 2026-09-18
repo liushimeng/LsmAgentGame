@@ -113,7 +113,7 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		git.GET("/log/:id", gitLogAPI.Detail)
 	}
 
-	// Wiki —— 项目文档列表与内容查看。docs/ 目录是公开知识库,无需鉴权。
+	// Wiki —— 项目文档列表与内容查看。lag_docs/ 目录是公开知识库,无需鉴权。
 	// 安全性由 WikiAPI.Content 的 baseName + .md 白名单 + 大小上限兜底。
 	wiki := r.Group("/api/wiki")
 	{
@@ -206,13 +206,13 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 	}
 
 	// 2026-08-31 §20260831-01 — 辩论比赛 REST 入口。
-	// 路径设计对齐 docs/辩论比赛/00 §4.1;HTTP 入口保护由 AuthRequired 中间件保证。
+	// 路径设计对齐 lag_docs/辩论比赛/00 §4.1;HTTP 入口保护由 AuthRequired 中间件保证。
 	debateGames := r.Group("/api/games/debate")
 	debateGames.Use(middleware.AuthRequired(cfg))
 	{
 		// 辩题池
 		debateGames.GET("/topics", debateAPI.Topics)
-		// §20260831-08 — 辩题详情 + 管理员添加自定义辩题(docs/辩论比赛/03 §2.4)。
+		// §20260831-08 — 辩题详情 + 管理员添加自定义辩题(lag_docs/辩论比赛/03 §2.4)。
 		debateGames.GET("/topics/:id", debateAPI.TopicDetail)
 		debateGames.POST("/topics", debateAPI.CreateTopic)
 		debateGames.GET("/stats", debateAPI.Stats) // §20260831-06 模型胜率统计

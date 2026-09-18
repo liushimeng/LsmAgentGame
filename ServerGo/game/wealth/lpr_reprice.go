@@ -1,6 +1,6 @@
 // Package wealth — lpr_reprice.go: LPR 年度重定价引擎 + 等额本息计算(2026-09-16 §财商流P1)。
 //
-// 实现设计文档: docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-Minsky与LPR引擎-v1.md §3。
+// 实现设计文档: lag_docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-Minsky与LPR引擎-v1.md §3。
 // 纯引擎层:RepriceMortgageLPR 由 settlement.go 持房间锁调用。
 package wealth
 

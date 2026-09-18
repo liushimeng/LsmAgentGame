@@ -17,7 +17,7 @@ import (
 	"testing"
 )
 
-// docsPoolRoot 返回真实文档池根目录(仓库根 + docs/财商流游戏/玩家职业设计)。
+// docsPoolRoot 返回真实文档池根目录(仓库根 + lag_docs/财商流游戏/玩家职业设计)。
 // 用 runtime.Caller 定位本文件,再上溯 4 层到仓库根:
 // ServerGo/game/wealth/profession → ServerGo/game/wealth → ServerGo/game →
 // ServerGo → 仓库根。

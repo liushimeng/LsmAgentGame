@@ -929,10 +929,10 @@ func (s *GameService) HandleClientFrame(c *Client, env Envelope) {
 	case "game.werewolf_fast_restart":
 		s.handleWerewolfFastRestart(c, env)
 	case "game.werewolf_sheriff_stream":
-		// 13 人标准竞技局:预言家警长声明 / 撤回警徽流(docs/狼人杀13人标准局规则.md §7)。
+		// 13 人标准竞技局:预言家警长声明 / 撤回警徽流(lag_docs/狼人杀13人标准局规则.md §7)。
 		s.handleWerewolfSheriffStream(c, env)
 	case "game.werewolf_idiot_reveal":
-		// 13 人标准竞技局:白痴翻牌结算(docs/狼人杀13人标准局规则.md §3.5)。
+		// 13 人标准竞技局:白痴翻牌结算(lag_docs/狼人杀13人标准局规则.md §3.5)。
 		s.handleWerewolfIdiotReveal(c, env)
 	case "game.werewolf_propose_vote":
 		// 2026-07-11: 预言家发起投票。
@@ -1396,7 +1396,7 @@ func (s *GameService) leaveRoomQuiet(roomID, userID string) {
 // 并在 passed 时调用 restartGameLocked。所以这里只需要广播一次 state 即可,
 // 后续由 watchdog 5s tick 维持 deadline。
 
-// handleWerewolfSheriffStream 处理 13 人标准竞技局警徽流声明 / 撤回( docs/狼人杀13人标准局规则.md §7 )。
+// handleWerewolfSheriffStream 处理 13 人标准竞技局警徽流声明 / 撤回( lag_docs/狼人杀13人标准局规则.md §7 )。
 // 客户端→服务端:
 //
 //	{ "room_id": "uuid", "slot": 1|2, "target": -1|0..11 }
@@ -1404,7 +1404,7 @@ func (s *GameService) leaveRoomQuiet(roomID, userID string) {
 // 仅 seat==SheriffSeat 且 role==seer 的玩家可声明(动作服务端再校验);
 // 观战者不可操作。target=-1 表示撤回该槽位。
 
-// handleWerewolfIdiotReveal 处理 13 人标准竞技局白痴翻牌结算( docs/狼人杀13人标准局规则.md §3.5 )。
+// handleWerewolfIdiotReveal 处理 13 人标准竞技局白痴翻牌结算( lag_docs/狼人杀13人标准局规则.md §3.5 )。
 // 客户端→服务端:
 //
 //	{ "room_id": "uuid", "choice": "reveal" | "skip" }

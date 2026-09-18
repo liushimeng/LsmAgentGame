@@ -34,7 +34,7 @@
 ServerGo/                   Go 后端（HTTPS 39001, WSS 39002）
 ClientWeb/                  React + Vite 前端
 proto/                      .proto 源文件（唯一事实来源）
-docs/                       架构设计、鉴权流程、API 参考
+lag_docs/                       架构设计、鉴权流程、API 参考
 python-generate-image-tool/ 子模块 —— AI 图像生成
 go-web-debug-tool/          子模块 —— Chrome CDP 自动化调试服务
 ```
@@ -42,7 +42,7 @@ go-web-debug-tool/          子模块 —— Chrome CDP 自动化调试服务
 ### 2.1 前端目录约定（`ClientWeb/src`）
 
 > 2026-08-07 §20260807-03 重构确立。方案见
-> [`docs/狼人杀-前端UI/狼人杀13人局-前端代码结构优化-20260807-03.md`](docs/狼人杀-前端UI/狼人杀13人局-前端代码结构优化-20260807-03.md)。
+> [`lag_docs/狼人杀-前端UI/狼人杀13人局-前端代码结构优化-20260807-03.md`](lag_docs/狼人杀-前端UI/狼人杀13人局-前端代码结构优化-20260807-03.md)。
 
 ```
 ClientWeb/src/
@@ -63,28 +63,28 @@ ClientWeb/src/
 3. **共享工具只有一处**：`shared/utils/`。不得再新建 `util/` 或 `utils/`。
 4. **`styles/globals.css` 的 `@import` 顺序不可调整** —— `werewolf.css` → `werewolf-v2.css` → `werewolf-emotion.css` → `werewolf-speech.css` 之间存在同优先级选择器覆盖链（`.werewolf-seat` 等），改序即样式回归。CSS 文件超 §4 行数上限时，**只能整段搬移 + 在原位置插入 `@import`**，并以「构建产物 CSS 字节一致」验证零回归。
 
-## 2.5 docs/ 知识库索引
+## 2.5 lag_docs/ 知识库索引
 
-按主题分组的完整索引见 [`docs/README.md`](docs/README.md)。新增/迁移文档前请先阅读 §3 命名规约。
+按主题分组的完整索引见 [`lag_docs/README.md`](lag_docs/README.md)。新增/迁移文档前请先阅读 §3 命名规约。
 
 | 主题 | 路径 |
 |---|---|
-| LLM Provider 协议 / API 优化 / 工具集 / 拟人化 | `docs/LLM与Agent/` |
-| 注入攻击演示（道具系统事实来源） | `docs/注入攻击演示/` |
-| 架构、API、WS 协议、鉴权、观战者 | `docs/架构与协议/` |
-| 狼人杀 Agent 设计 / 升级批次 / 上下文压缩 | `docs/狼人杀-Agent与系统/` |
-| 狼人杀重构方案 / 借鉴第三方 Agent 平台 | `docs/狼人杀-重构方案/` |
-| 狼人杀角色卡池完整性 / 死亡语义 | `docs/狼人杀-角色设计/` |
-| 狼人杀 UI 与设计 | `docs/狼人杀-前端UI/` / `docs/狼人杀-设计/` |
-| 狼人杀道具系统 / 金币 / 模型玩家 | `docs/狼人杀-道具与经济/` |
-| 通用功能（i18n / 测试 / 布局 / 子代理） | `docs/通用功能/` |
-| 第三方 Agent 平台分析（DeepSeek / Hermes / OpenCode / PI） | `docs/其他Agent代码分析/` |
+| LLM Provider 协议 / API 优化 / 工具集 / 拟人化 | `lag_docs/LLM与Agent/` |
+| 注入攻击演示（道具系统事实来源） | `lag_docs/注入攻击演示/` |
+| 架构、API、WS 协议、鉴权、观战者 | `lag_docs/架构与协议/` |
+| 狼人杀 Agent 设计 / 升级批次 / 上下文压缩 | `lag_docs/狼人杀-Agent与系统/` |
+| 狼人杀重构方案 / 借鉴第三方 Agent 平台 | `lag_docs/狼人杀-重构方案/` |
+| 狼人杀角色卡池完整性 / 死亡语义 | `lag_docs/狼人杀-角色设计/` |
+| 狼人杀 UI 与设计 | `lag_docs/狼人杀-前端UI/` / `lag_docs/狼人杀-设计/` |
+| 狼人杀道具系统 / 金币 / 模型玩家 | `lag_docs/狼人杀-道具与经济/` |
+| 通用功能（i18n / 测试 / 布局 / 子代理） | `lag_docs/通用功能/` |
+| 第三方 Agent 平台分析（DeepSeek / Hermes / OpenCode / PI） | `lag_docs/其他Agent代码分析/` |
 
 ## 3. 文件命名规范
 
 - `ServerGo/models/` 下的 **GORM 模型文件** 使用前缀 `t_lsm_game_*.go`（例如 `t_lsm_game_user.go`）。这是**唯一允许**使用此前缀的目录。
 - `ServerGo/` 下的**其他所有 Go 文件** 使用 `snake_case.go`（例如 `user_login.go`、`game_logic.go`）。非模型文件切勿使用 `TLsmGame_xxx.go`。
-- **Markdown** 规则文件（CLAUDE.md、AGENTS.md）不超过 800 行。如文件过长，请按主题拆分到 `docs/` 目录。
+- **Markdown** 规则文件（CLAUDE.md、AGENTS.md）不超过 800 行。如文件过长，请按主题拆分到 `lag_docs/` 目录。
 
 ## 4. 代码约束
 
@@ -151,7 +151,7 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 
 1. 从计划中选取一个阶段，将其任务标记为 `in_progress`。
 2. 编译 → 测试 → 小步提交。尽可能每个逻辑阶段对应一次提交。
-3. 进行任何非琐碎更改前，重新阅读相关的 `docs/` 文件。如有结构性变更，请同步更新文档。
+3. 进行任何非琐碎更改前，重新阅读相关的 `lag_docs/` 文件。如有结构性变更，请同步更新文档。
 4. 切勿在提交中重写 `LsmAgentGame.conf`、`server.crt` 或 `server.key`。
 
 ### 10.1 所有改动保持在 `main` 分支
@@ -188,13 +188,13 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 
 ## 12. 国际化与命名补充
 
-- **多国语言(i18n)**、`t_lsm_game_user.language` 字段、`/api/user/*` 偏好接口，以及**服务器测试文件 `test_*_test.go`、临时/数据补全文件 `temp_*.go`** 的命名约定，统一记录在 [`docs/通用功能/国际化与命名规范.md`](docs/通用功能/国际化与命名规范.md)。
+- **多国语言(i18n)**、`t_lsm_game_user.language` 字段、`/api/user/*` 偏好接口，以及**服务器测试文件 `test_*_test.go`、临时/数据补全文件 `temp_*.go`** 的命名约定，统一记录在 [`lag_docs/通用功能/国际化与命名规范.md`](lag_docs/通用功能/国际化与命名规范.md)。
 - 涉及上述任一主题前请先阅读该文档；新增/删除语言时前后端 `SUPPORTED`/`SupportedLanguages` 必须同步。
 
 ## 12.5 "我方在底部" 布局设计规范
 
 > 5 款多人游戏的**界面布局**统一规则："我"的座位 / 棋子 / 手牌永远在屏幕底部。
-> Agent 新增 / 修改游戏布局前**必须**先阅读 [`docs/通用功能/底部玩家布局设计.md`](docs/通用功能/底部玩家布局设计.md)。
+> Agent 新增 / 修改游戏布局前**必须**先阅读 [`lag_docs/通用功能/底部玩家布局设计.md`](lag_docs/通用功能/底部玩家布局设计.md)。
 
 **三种实现模式**（按游戏类型选用）：
 
@@ -209,7 +209,7 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 ## 13. SubAgent 分工协作规则
 
 > **核心原则：按职责拆分，每条职责线 = 一个独立 SubAgent。** 无法精确覆盖的工作面必须
-> 新建独立 SubAgent 并写入 [`docs/通用功能/子代理角色.md`](docs/通用功能/子代理角色.md)。
+> 新建独立 SubAgent 并写入 [`lag_docs/通用功能/子代理角色.md`](lag_docs/通用功能/子代理角色.md)。
 
 ### 13.1 8 条职责线
 
@@ -220,7 +220,7 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 | 3 | 游戏规则与产品设计 | `game-designer` | 仅产出 markdown 文档与契约 | 规则、玩法、需求、产品规划 |
 | 4 | 界面设计与图像生成 | `art-designer` | `python-generate-image-tool` + `ClientWeb/src/assets/` | 美术素材、图片生成、配色 |
 | 5 | 跨端联调 / 复杂规则 | `integration-tester` | 同时涉及 `ClientWeb/` 与 `ServerGo/` | 跨端联调、全栈、Game QA |
-| 6 | 游戏策划视觉设计 | `game-visual-designer` | 仅产出 `docs/design/**` 设计文档 | 视觉稿、布局、design tokens |
+| 6 | 游戏策划视觉设计 | `game-visual-designer` | 仅产出 `lag_docs/design/**` 设计文档 | 视觉稿、布局、design tokens |
 | 7 | **LLM Provider 模块** | `llm-provider` | `ServerGo/llm/`, `api/llm_api.go`, `config.LLMConfig` | LLM、Anthropic、OpenAI、Provider |
 | 8 | **狼人杀 Agent 驱动** | `werewolf-agent` | `ServerGo/agent/`, `ServerGo/game/werewolf/` 的 Agent 接入 | Agent、bot、Memory、工具派发 |
 
@@ -234,7 +234,7 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 
 ## 14. LLM Provider 模块（Anthropic 协议 + OpenAI 预留）
 
-> 通过统一 `LLMProvider` 接口调用大模型。详见 [`docs/LLM与Agent/LLM供应商设计.md`](docs/LLM与Agent/LLM供应商设计.md)。
+> 通过统一 `LLMProvider` 接口调用大模型。详见 [`lag_docs/LLM与Agent/LLM供应商设计.md`](lag_docs/LLM与Agent/LLM供应商设计.md)。
 
 - **`ServerGo/llm/types/`** —— leaf 包：Anthropic wire 类型 + `LLMProvider` 接口 + `PlaceholderKey` + `ModelInfo`。
 - **`ServerGo/llm/anthropic/`** —— 真实 provider 实现：`Authorization: Bearer <key>` + `anthropic-version: 2023-06-01`，5xx/429 重试。
@@ -283,11 +283,11 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 
 ## 15. 狼人杀 13 人局 Agent（in-process 驱动）
 
-> **现状综合索引**：[`docs/狼人杀/00-游戏信息与Agent现状综合文档.md`](docs/狼人杀/00-游戏信息与Agent现状综合文档.md)
-> 详见 [`docs/狼人杀-Agent与系统/狼人杀Agent设计.md`](docs/狼人杀-Agent与系统/狼人杀Agent设计.md)。
+> **现状综合索引**：[`lag_docs/狼人杀/00-游戏信息与Agent现状综合文档.md`](lag_docs/狼人杀/00-游戏信息与Agent现状综合文档.md)
+> 详见 [`lag_docs/狼人杀-Agent与系统/狼人杀Agent设计.md`](lag_docs/狼人杀-Agent与系统/狼人杀Agent设计.md)。
 > **角色实现状态**：`godRolePool` 含 6 个全链路可玩神职：女巫/猎人/白痴/**守卫**/**骑士**/**猎魔人**；
 > 魔术师/奇迹商人/射梦人/乌鸦/稻草人/定序王子/纯白之女 已退役（仅保留 wire 兼容）。
-> 守卫规则与实现见 [`docs/狼人杀-角色设计/狼人杀守卫角色设计.md`](docs/狼人杀-角色设计/狼人杀守卫角色设计.md)。
+> 守卫规则与实现见 [`lag_docs/狼人杀-角色设计/狼人杀守卫角色设计.md`](lag_docs/狼人杀-角色设计/狼人杀守卫角色设计.md)。
 > **硬约束**：进卡池的角色要么完整实现，要么移出卡池 —— 「半实现」= 玩家持有无效身份。
 
 - **核心结构** —— `ServerGo/agent/`：`agent.go` / `memory.go` / `tools.go` / `prompt.go` / `ratelimit.go`
@@ -327,37 +327,37 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 ## 17. 历史教训索引（§编号 → 文档路径）
 
 > §编号是项目内部 **lesson 标记**，引用时用 `CLAUDE.md §<编号>` 即可。
-> 本节仅保留 Agent 须**熟记**的核心教训；完整索引按主题归档到 `docs/` 子目录（`docs/狼人杀-Agent与系统/`、`docs/狼人杀-重构方案/`、`docs/狼人杀-角色设计/` 等）。
+> 本节仅保留 Agent 须**熟记**的核心教训；完整索引按主题归档到 `lag_docs/` 子目录（`lag_docs/狼人杀-Agent与系统/`、`lag_docs/狼人杀-重构方案/`、`lag_docs/狼人杀-角色设计/` 等）。
 
 #### 必须熟记的 5 条核心教训
 
 | §  | 教训 | 速记 | 详细文档 |
 |---|---|---|---|
-| **§92a** | **`sync.Mutex` 不可重入**：`Action_*` 必须建 `*Locked` 锁内变体；凡 `WerewolfRoom` 方法被 `BuildClientState*` 调用必查 | 凡改 `Action_*` 先 grep `BuildClientState` | [`docs/狼人杀-Agent与系统/`](docs/狼人杀-Agent与系统/) |
-| **§130** | 「声明了却从不接线」：**新 helper / 字段 / 角色**必须有 grep 验证接线 | 写完新字段立即 `git grep "<新字段名>"` | [`docs/狼人杀-重构方案/`](docs/狼人杀-重构方案/) |
-| **§134** | 守卫(Guard)等角色「全链路补全」：进卡池的角色必须完整实现，否则玩家持有无效身份 | 上卡池前先 grep 该角色全部用例 | [`docs/狼人杀-角色设计/狼人杀守卫角色设计.md`](docs/狼人杀-角色设计/狼人杀守卫角色设计.md) |
-| **§135** | 身份公开公平性 —— 死者身份公开与否由房间级开关 `reveal_role_on_death` 决定（§20260830-01：默认**开启**=死亡即法官宣告身份；关闭=竞技规则死者牌不翻开）；服务端权威下发 `my_role` / `my_seat` | 涉及身份字段必查 `RolePubliclyRevealed`（第⑦分支门控死亡亮身份） | [`docs/狼人杀-角色设计/狼人杀死亡语义设计.md`](docs/狼人杀-角色设计/狼人杀死亡语义设计.md) + [`狼人杀死亡身份公开设计-20260830-01.md`](docs/狼人杀-角色设计/狼人杀死亡身份公开设计-20260830-01.md) |
-| **§197** | 流式续命 ——「接收到字节即刷新超时」 | 长上下文 LLM 调用必带流式 + 字节刷新 | [`docs/狼人杀-Agent与系统/`](docs/狼人杀-Agent与系统/) |
+| **§92a** | **`sync.Mutex` 不可重入**：`Action_*` 必须建 `*Locked` 锁内变体；凡 `WerewolfRoom` 方法被 `BuildClientState*` 调用必查 | 凡改 `Action_*` 先 grep `BuildClientState` | [`lag_docs/狼人杀-Agent与系统/`](lag_docs/狼人杀-Agent与系统/) |
+| **§130** | 「声明了却从不接线」：**新 helper / 字段 / 角色**必须有 grep 验证接线 | 写完新字段立即 `git grep "<新字段名>"` | [`lag_docs/狼人杀-重构方案/`](lag_docs/狼人杀-重构方案/) |
+| **§134** | 守卫(Guard)等角色「全链路补全」：进卡池的角色必须完整实现，否则玩家持有无效身份 | 上卡池前先 grep 该角色全部用例 | [`lag_docs/狼人杀-角色设计/狼人杀守卫角色设计.md`](lag_docs/狼人杀-角色设计/狼人杀守卫角色设计.md) |
+| **§135** | 身份公开公平性 —— 死者身份公开与否由房间级开关 `reveal_role_on_death` 决定（§20260830-01：默认**开启**=死亡即法官宣告身份；关闭=竞技规则死者牌不翻开）；服务端权威下发 `my_role` / `my_seat` | 涉及身份字段必查 `RolePubliclyRevealed`（第⑦分支门控死亡亮身份） | [`lag_docs/狼人杀-角色设计/狼人杀死亡语义设计.md`](lag_docs/狼人杀-角色设计/狼人杀死亡语义设计.md) + [`狼人杀死亡身份公开设计-20260830-01.md`](lag_docs/狼人杀-角色设计/狼人杀死亡身份公开设计-20260830-01.md) |
+| **§197** | 流式续命 ——「接收到字节即刷新超时」 | 长上下文 LLM 调用必带流式 + 字节刷新 | [`lag_docs/狼人杀-Agent与系统/`](lag_docs/狼人杀-Agent与系统/) |
 
 #### 完整索引按主题归档
 
 | 主题 | 归档目录 |
 |---|---|
-| 狼人杀 Agent（死锁 / 接线 / 上下文 / 工具派发 / 重启投票 / 阶段 Watchdog 等） | [`docs/狼人杀-Agent与系统/`](docs/狼人杀-Agent与系统/) |
-| 狼人杀 Agent 推理与战术博弈（猜疑链现状/多假说推演/暗号系统/§20260826-01 心理博弈增强） | [`docs/狼人杀-Agent与系统/Agent升级/Agent推理与战术博弈/`](docs/狼人杀-Agent与系统/Agent升级/Agent推理与战术博弈/) |
-| 法官 Agent 重构 / Provider 注入 / 死亡语义 / §130 复发集中清算 | [`docs/狼人杀-重构方案/`](docs/狼人杀-重构方案/) |
-| 角色卡池完整性（守卫 / 骑士 / 猎魔人 等） | [`docs/狼人杀-角色设计/`](docs/狼人杀-角色设计/) |
-| 道具系统 + 模型玩家金币 + 注入攻击对齐 | [`docs/狼人杀-道具与经济/`](docs/狼人杀-道具与经济/) |
-| 前端目录结构 + UI 对比度 + 游戏状态重构 | [`docs/狼人杀-前端UI/`](docs/狼人杀-前端UI/) + [`docs/狼人杀-设计/`](docs/狼人杀-设计/) |
-| LLM Provider / Anthropic 协议 / 工具集 / 拟人化 | [`docs/LLM与Agent/`](docs/LLM与Agent/) |
-| 第三方 Agent 平台借鉴（DeepSeek / Hermes / OpenCode / PI / jiuwenswarm） | [`docs/其他Agent代码分析/`](docs/其他Agent代码分析/) |
-| WS 重连 / 鉴权 / 观战者架构 / 用户权限 | [`docs/架构与协议/`](docs/架构与协议/) |
+| 狼人杀 Agent（死锁 / 接线 / 上下文 / 工具派发 / 重启投票 / 阶段 Watchdog 等） | [`lag_docs/狼人杀-Agent与系统/`](lag_docs/狼人杀-Agent与系统/) |
+| 狼人杀 Agent 推理与战术博弈（猜疑链现状/多假说推演/暗号系统/§20260826-01 心理博弈增强） | [`lag_docs/狼人杀-Agent与系统/Agent升级/Agent推理与战术博弈/`](lag_docs/狼人杀-Agent与系统/Agent升级/Agent推理与战术博弈/) |
+| 法官 Agent 重构 / Provider 注入 / 死亡语义 / §130 复发集中清算 | [`lag_docs/狼人杀-重构方案/`](lag_docs/狼人杀-重构方案/) |
+| 角色卡池完整性（守卫 / 骑士 / 猎魔人 等） | [`lag_docs/狼人杀-角色设计/`](lag_docs/狼人杀-角色设计/) |
+| 道具系统 + 模型玩家金币 + 注入攻击对齐 | [`lag_docs/狼人杀-道具与经济/`](lag_docs/狼人杀-道具与经济/) |
+| 前端目录结构 + UI 对比度 + 游戏状态重构 | [`lag_docs/狼人杀-前端UI/`](lag_docs/狼人杀-前端UI/) + [`lag_docs/狼人杀-设计/`](lag_docs/狼人杀-设计/) |
+| LLM Provider / Anthropic 协议 / 工具集 / 拟人化 | [`lag_docs/LLM与Agent/`](lag_docs/LLM与Agent/) |
+| 第三方 Agent 平台借鉴（DeepSeek / Hermes / OpenCode / PI / jiuwenswarm） | [`lag_docs/其他Agent代码分析/`](lag_docs/其他Agent代码分析/) |
+| WS 重连 / 鉴权 / 观战者架构 / 用户权限 | [`lag_docs/架构与协议/`](lag_docs/架构与协议/) |
 
 > **早期高频速览（§43–§51、§80–§92、§94–§108、§111–§112 等 30+ 条细节）已迁出本文件**，按需查阅归档目录或在 git log 检索 `§<编号>`。
 
 - 自动重连、Loading 遮罩、刷新/断线后恢复（会话+房间+对局），以及用户列表 `user.*` 帧的完整规则，
-  记录在 [`docs/架构与协议/WebSocket重连与恢复.md`](docs/架构与协议/WebSocket重连与恢复.md)。
-- 用户列表权限分级见 [`docs/架构与协议/用户类型与权限.md`](docs/架构与协议/用户类型与权限.md)。
+  记录在 [`lag_docs/架构与协议/WebSocket重连与恢复.md`](lag_docs/架构与协议/WebSocket重连与恢复.md)。
+- 用户列表权限分级见 [`lag_docs/架构与协议/用户类型与权限.md`](lag_docs/架构与协议/用户类型与权限.md)。
 - 前端 WS 连接生命周期由 `AppLayout` 唯一持有，页面切换不得 connect/close。
 
 ## 19. 斗地主 (Doudizhu) 架构
@@ -370,13 +370,13 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 
 **两种风格**：`traditional_landlord` / `urban_worker`。美术资源由 `python-generate-image-tool/generate_doudizhu_assets.py` 生成 PNG。
 
-完整规则与 WS 帧协议见 [`docs/斗地主/斗地主规则与协议.md`](docs/斗地主/斗地主规则与协议.md)。
+完整规则与 WS 帧协议见 [`lag_docs/斗地主/斗地主规则与协议.md`](lag_docs/斗地主/斗地主规则与协议.md)。
 
 ## 19.5 观战者 (Spectator) — 跨 5 款游戏
 
 任何登录用户都可以进入任意活跃者房间以观察者身份实时观看，**不消耗座位，不影响玩家 UI**。
 底层隔离由 `Hub.rooms` 与 `Hub.spectators` 两组互不相交的广播集合实现。详见
-[`docs/架构与协议/观战者架构.md`](docs/架构与协议/观战者架构.md)。
+[`lag_docs/架构与协议/观战者架构.md`](lag_docs/架构与协议/观战者架构.md)。
 
 **要点**：
 - 玩家输入帧在观察者身上后端硬性拒绝 → `ErrSpectatorInputForbidden = 30011`。
@@ -392,7 +392,7 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 
 **两种风格**：`western_cowboy` / `wilderness_escape`。美术资源由 `python-generate-image-tool/generate_texasholdem_assets.py` 生成 PNG。
 
-完整规则与 WS 帧协议见 [`docs/德州扑克/德州扑克规则与协议.md`](docs/德州扑克/德州扑克规则与协议.md)。
+完整规则与 WS 帧协议见 [`lag_docs/德州扑克/德州扑克规则与协议.md`](lag_docs/德州扑克/德州扑克规则与协议.md)。
 
 ## 21. Agent 自动化测试账号
 
@@ -401,7 +401,7 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 > **所有账号登录一律需要 `captcha_id` / `captcha_answer`**,无任何绕过路径。
 
 AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,可使用
-[`docs/通用功能/测试账号凭证.md`](docs/通用功能/测试账号凭证.md) 中预置的账号
+[`lag_docs/通用功能/测试账号凭证.md`](lag_docs/通用功能/测试账号凭证.md) 中预置的账号
 (`test_01` ~ `test_04` 等;密码从仓库根目录 `test_account.json` 读取,
 该文件已被 `.gitignore` 排除):
 
@@ -413,11 +413,11 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,可使用
 
 ## 22. 自动化测试与修复处理流程
 
-> R46–R51 等多轮「报告→修复→验证」历史快照已迁出本文件，按需查阅 `docs/` 下归档或 git log。
+> R46–R51 等多轮「报告→修复→验证」历史快照已迁出本文件，按需查阅 `lag_docs/` 下归档或 git log。
 > 本节仅保留**流程规约**，不再记录每轮具体报告内容。
 > **§20260915-01 重构**：原独立 Debug 流程 (`AutoDebugTestReport.md`) 已合并入各游戏测试提示词，
 > 文件命名统一为 `AutoTestAndDebug_<Game>`；Agent 测试完成后在同一会话内直接执行修复 + 提交推送，
-> 无需外部脚本接力。方案详见 [`docs/通用功能/自动化测试与调试流程合并方案-20260915.md`](docs/通用功能/自动化测试与调试流程合并方案-20260915.md)。
+> 无需外部脚本接力。方案详见 [`lag_docs/通用功能/自动化测试与调试流程合并方案-20260915.md`](lag_docs/通用功能/自动化测试与调试流程合并方案-20260915.md)。
 
 - **检索入口**：主工程 `TestReport/<游戏>自动化测试报告_*.md`（glob 来源: `auto_run_common.sh::GAME_GLOBS`）；子工程 `go-web-debug-tool/UseReport/<游戏>测试工具使用报告_*.md`。
 - **处理入口**：各游戏独立入口脚本 `AutoTestAndDebug_{Werewolf,TexasPoker,Debate,Wealth}.sh` —— **首选 Claude Code CLI 执行**（claude 不可用降级随机选；公共库 `agent_cli_common.sh`，`AGENT_CLI=<name>` 可强制指定），加载同名的 `AutoTestAndDebug_*.md` 作为 prompt；`AutoScreenshot_{Werewolf,TexasPoker}.sh` 等同机制（全部可用 Agent 随机选择）。
@@ -427,7 +427,7 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,可使用
 
 ## 23. 狼人杀 Web 运行时 UI（房间总运行时间 + 历史抽屉）
 
-> 2026-07-18 用户反馈响应。完整规约见 [`docs/狼人杀-设计/狼人杀13人局UI运行时优化设计.md`](docs/狼人杀-设计/狼人杀13人局UI运行时优化设计.md)。
+> 2026-07-18 用户反馈响应。完整规约见 [`lag_docs/狼人杀-设计/狼人杀13人局UI运行时优化设计.md`](lag_docs/狼人杀-设计/狼人杀13人局UI运行时优化设计.md)。
 
 **核心交付**：
 - `game_started_at` 下发到 `ClientGameState`（`view.go`，`omitempty` 保 0 不污染回放）
@@ -459,7 +459,7 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,可使用
 
 ## 25. Agent 道具与 LLM 注入攻击对齐（§20260807-04）
 
-> 仓库 6 份注入攻击演示文件(`docs/注入攻击演示/01-06-*.md`)是 Agent 道具系统的事实来源。详见 [`docs/狼人杀-道具与经济/狼人杀13人局-Agent道具-20260807-04.md`](docs/狼人杀-道具与经济/狼人杀13人局-Agent道具-20260807-04.md)。
+> 仓库 6 份注入攻击演示文件(`lag_docs/注入攻击演示/01-06-*.md`)是 Agent 道具系统的事实来源。详见 [`lag_docs/狼人杀-道具与经济/狼人杀13人局-Agent道具-20260807-04.md`](lag_docs/狼人杀-道具与经济/狼人杀13人局-Agent道具-20260807-04.md)。
 
 ### 25.1 三类攻击分类（事实来源 vs 落地方向）
 
@@ -472,11 +472,11 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,可使用
 | `第五种：任务马甲` | Agent → Agent | `expose_identity` + `emotion_disturb_light` 干扰信号 | `task_disguise` + `task_disguise_v3` |
 | `第六种：情绪操控` | Agent → Agent | `emotion_disturb`(下轮 confused/guilty) | `emotion_plea` |
 
-> 关键修复清单 + 道具速查 + 验收依据，详见 [`docs/狼人杀-道具与经济/狼人杀13人局-Agent道具-20260807-04.md`](docs/狼人杀-道具与经济/狼人杀13人局-Agent道具-20260807-04.md) §3/§4/§6。
+> 关键修复清单 + 道具速查 + 验收依据，详见 [`lag_docs/狼人杀-道具与经济/狼人杀13人局-Agent道具-20260807-04.md`](lag_docs/狼人杀-道具与经济/狼人杀13人局-Agent道具-20260807-04.md) §3/§4/§6。
 
 ## 26. 前端 UI 颜色对比度与可读性规范
 
-> **2026-08-08 §20260808-02 用户反馈响应**。通用规约全文见 [`docs/狼人杀-前端UI/前端UI颜色对比度与可读性规范.md`](docs/狼人杀-前端UI/前端UI颜色对比度与可读性规范.md)。
+> **2026-08-08 §20260808-02 用户反馈响应**。通用规约全文见 [`lag_docs/狼人杀-前端UI/前端UI颜色对比度与可读性规范.md`](lag_docs/狼人杀-前端UI/前端UI颜色对比度与可读性规范.md)。
 
 ### 26.1 暗色主题对比度硬阈值
 
@@ -499,4 +499,4 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,可使用
 
 任何后端下发枚举值拼接为 className 的样式,**必须**同提交完成:JSX 拼接 + CSS 类规则 + `@keyframes + prefers-reduced-motion` 兜底。写完 JSX 后**立即** `grep -rn "<新class前缀>" ClientWeb/src/styles/`,零命中即 P1 缺陷(2026-08-08 §20260808-02 已踩坑:`econ-tier-${econTier}` 三档零 CSS 规则)。
 
-> 8 行状态徽章色相库 + 5 项验收 checklist + 实战 diff，详见规范文档 §2.4/§6 + [审计报告 20260808-02](docs/狼人杀-前端UI/狼人杀13人局-前端UI颜色对比度审计报告-20260808-02.md)。
+> 8 行状态徽章色相库 + 5 项验收 checklist + 实战 diff，详见规范文档 §2.4/§6 + [审计报告 20260808-02](lag_docs/狼人杀-前端UI/狼人杀13人局-前端UI颜色对比度审计报告-20260808-02.md)。

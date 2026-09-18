@@ -1,6 +1,6 @@
 // Package agent — tools_registry.go: Agent 工具统一注册中心（v5 重构）。
 //
-// 设计动机（docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.2 + docs/AgentAnthropic工具集与道具协议.md）：
+// 设计动机（lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.2 + lag_docs/AgentAnthropic工具集与道具协议.md）：
 //   - v4 把 use_prop / prop_inspect / prop_status / prop_history / wolf_whisper
 //     5 个工具嵌在 tools.go::BuildTools(add) 串联调用里，新增工具需要：
 //     1) 在 tools.go 选一个 add* 函数接入 / 写新 add*

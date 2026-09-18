@@ -2,7 +2,7 @@ package werewolf
 
 // engine_demon_hunter_test.go — §猎魔人 猎魔人角色测试。
 //
-// 按 docs/狼人杀猎魔人角色设计.md §8 列出的 D-01..D-14 用例实现。
+// 按 lag_docs/狼人杀猎魔人角色设计.md §8 列出的 D-01..D-14 用例实现。
 // 13 人局强制使用 makeStartedGame13;7 人局强制使用 makeStartedGame。
 //
 // 设计原则:

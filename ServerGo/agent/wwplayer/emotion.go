@@ -1,6 +1,6 @@
 // Package agent — emotion.go: Agent 情绪模块 (2026-07-10 §124)
 //
-// 设计要点(详见 docs/狼人杀-Agent与系统/狼人杀Agent情绪模块设计.md):
+// 设计要点(详见 lag_docs/狼人杀-Agent与系统/狼人杀Agent情绪模块设计.md):
 //   - 10 类情绪,模仿人类狼人杀玩家常见的情绪模式;
 //   - 每个 Agent 在 NewWithRoom 末尾随机选一个初始情绪;
 //   - LLM 通过 emotion_switch 工具自主切换情绪;
@@ -168,7 +168,7 @@ type EmotionRecord struct {
 const emotionHistoryMaxLen = 5
 
 // EmotionFx 是 emotion_switch_speak 的表现层参数(2026-08-04 §表情特效,
-// 见 docs/Agent拟人化和表情特效-解决和设计方案-20260804-02.md §5)。
+// 见 lag_docs/Agent拟人化和表情特效-解决和设计方案-20260804-02.md §5)。
 // 全部字段可省略(零值) → 服务端按默认 pulse/mid/12s 处理,契约向后兼容。
 //
 // **时单位约定**(防御性注释):DurationSec 是**秒**(外部 wire / LLM 视角),

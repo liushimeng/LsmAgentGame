@@ -34,12 +34,12 @@ const (
 	PhaseHunterShoot                   // 猎人开枪(被放逐或被狼杀时)
 	PhaseDeathLyric                    // 遗言:LastWords=true 的死者公开发言(2026-07-09 新增)
 	// 2026-07-10: 游戏结束后「重开局投票」阶段(5 分钟窗口)。详见
-	// docs/狼人杀-Agent与系统/狼人杀重开局投票设计.md。
+	// lag_docs/狼人杀-Agent与系统/狼人杀重开局投票设计.md。
 	PhaseRestartVote
 	PhaseGameOver // 对局结束
 	// §20260830-02 — 自爆带走阶段:自爆狼遗言结束后选择带走一名存活玩家
 	// (target=-1 放弃)。枚举追加在末尾,不重排既有值。
-	// 设计文档:docs/狼人杀-角色设计/狼人杀自爆遗言与带走设计-20260830-02.md
+	// 设计文档:lag_docs/狼人杀-角色设计/狼人杀自爆遗言与带走设计-20260830-02.md
 	PhaseSuicideTake
 )
 
@@ -186,7 +186,7 @@ const LastWordsRounds = 2
 
 // DeathCause 死因代码。cause → verdict 由 verdictFor(cause) 派生。
 // 2026-07-10 §123 增强:在原 wolf/vote/hunter/witch_poison/suicide 基础上,
-// 引入"处决 / 死亡"二分语义(详见 docs/狼人杀死亡语义设计.md)。
+// 引入"处决 / 死亡"二分语义(详见 lag_docs/狼人杀死亡语义设计.md)。
 // §198 扩展:新增 DeathCauseDuel = "duel"(骑士自决)— verdictFor → execution。
 // §猎魔人 扩展:新增 DeathCauseDemonHunterMisjudge = "demon_hunter_misjudge"(猎魔人误杀自决)— verdictFor → execution。
 const (
@@ -419,7 +419,7 @@ type GameState struct {
 	DeathLyricCurrent Seat                  // 当前应遗言座位;NoSeat = 无
 	DeathLyricOnDone  func() *errcode.Error // 队列清空后恢复路径的闭包(仅遗言阶段内非 nil)
 
-	// 2026-07-10: 重开局投票状态(见 docs/狼人杀-Agent与系统/狼人杀重开局投票设计.md §2)。
+	// 2026-07-10: 重开局投票状态(见 lag_docs/狼人杀-Agent与系统/狼人杀重开局投票设计.md §2)。
 	// RestartVoteDeadlineAt 用 PhaseDeadlineAt 字段共用,此处只存投票明细。
 	RestartVoteYes     map[Seat]bool // seat → 已投 yes
 	RestartVoteNo      map[Seat]bool // seat → 已投 no
@@ -509,7 +509,7 @@ type GameState struct {
 	// 末尾填 JudgePendingAnnounce 并触发 judgeWake。auto/human 模式 = false。
 	JudgeEnabled bool
 	// JudgePendingAnnounce 下一次应唤醒法官的事件类型;空字符串 = 无。
-	// 取值(对应 docs/狼人杀-重构方案/主持人Agent重构设计.md §6.3 映射表,judge_ 前缀):
+	// 取值(对应 lag_docs/狼人杀-重构方案/主持人Agent重构设计.md §6.3 映射表,judge_ 前缀):
 	//   "judge_filling_welcome" | "judge_pre_wolves" | "judge_dawn_announce"
 	//   "judge_sheriff_start" | "judge_speak_start" | "judge_vote_start"
 	//   "judge_death_announce" | "judge_sheriff_stream_settle" | "judge_idiot_reveal"

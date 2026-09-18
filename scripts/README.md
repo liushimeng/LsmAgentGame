@@ -20,7 +20,7 @@ scripts/
 
 ### smoke/ — 后端冒烟测试
 
-规约见 [`docs/通用功能/自动化测试策略.md`](../docs/通用功能/自动化测试策略.md):
+规约见 [`lag_docs/通用功能/自动化测试策略.md`](../docs/通用功能/自动化测试策略.md):
 新增冒烟脚本必须放本目录、加 `test_` 前缀;**禁止**新增 Python 协议级测试脚本(§3 反模式)。
 
 | 文件 | 用途 |
@@ -50,7 +50,7 @@ scripts/
 | `scripts/wsclient.go` | `scripts/smoke/wsclient.go` |
 | `scripts/auto3/atx.py` | `scripts/screenshot/atx.py` |
 | `scripts/werewolf_{screenshot,highlight_capture}.py` | `scripts/screenshot/` |
-| `scripts/r14_*.py` / `scripts/r15/` / `scripts/.wsclient` / `auto3/login_screen.jpg` | **已删除**(历史轮次脚本/编译产物,见 `docs/通用功能/自动化测试策略.md` §4) |
+| `scripts/r14_*.py` / `scripts/r15/` / `scripts/.wsclient` / `auto3/login_screen.jpg` | **已删除**(历史轮次脚本/编译产物,见 `lag_docs/通用功能/自动化测试策略.md` §4) |
 
-> 历史归档文档(如 `docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260814-01.md`)中
+> 历史归档文档(如 `lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260814-01.md`)中
 > 出现的旧路径为时间快照,不回改;以本表为准。

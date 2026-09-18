@@ -12,7 +12,7 @@
 // §20260831-08 起自定义辩题可经 POST /api/games/debate/topics 落库
 // (t_lsm_game_debate_topic),列表接口返回「内置 + DB 自定义」合并结果。
 //
-// 详见 docs/辩论比赛/03-辩论比赛房间创建与配置设计.md §2.3。
+// 详见 lag_docs/辩论比赛/03-辩论比赛房间创建与配置设计.md §2.3。
 package debate
 
 import "math/rand"

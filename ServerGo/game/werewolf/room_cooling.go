@@ -1,5 +1,5 @@
 // Package werewolf — room_cooling.go: 狼人杀一局结束后的「冷却期」机制。
-// 详见 docs/狼人杀冷却期设计.md(待写) + CLAUDE.md §129。
+// 详见 lag_docs/狼人杀冷却期设计.md(待写) + CLAUDE.md §129。
 //
 // 设计要点:
 //   - 所有 *Locked 函数假定 caller 已持 r.mu(见 §92a sync.Mutex 不可重入)。

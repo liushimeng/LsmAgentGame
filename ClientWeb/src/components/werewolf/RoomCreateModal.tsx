@@ -33,7 +33,7 @@ interface JudgeModeOpt {
 
 // 2026-07-30 §重构 — 法官配置改为两选项(Agent 法官 / 真人法官)。
 // Agent 法官 = 原"主持人 Agent (法官)/ AI 法官";真人法官当前等同 Agent 法官
-// 运行(后端真人接入尚未实现,UI 占位对齐 docs/狼人杀-重构方案/主持人Agent重构设计.md §2)。
+// 运行(后端真人接入尚未实现,UI 占位对齐 lag_docs/狼人杀-重构方案/主持人Agent重构设计.md §2)。
 const JUDGE_MODES: JudgeModeOpt[] = [
   { mode: 'agent', labelKey: 'werewolf.judge.mode.agent' },
   { mode: 'human', labelKey: 'werewolf.judge.mode.human' },

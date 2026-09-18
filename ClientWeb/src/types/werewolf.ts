@@ -4,7 +4,7 @@
  * 与后端 ServerGo/game/werewolf/view.go 对齐。
  * 2026-07-10: 升级到 13 人标准竞技局为默认人数(4 狼 + 4 神 + 5 民)—— 新增 RoleIdiot /
  * PhaseIdiotReveal / 警徽流 (SheriffStreams) / wolf_kill 空刀=[-1]。详见
- * docs/狼人杀13人标准局规则.md。
+ * lag_docs/狼人杀13人标准局规则.md。
  * 2026-07-11: 12/7 人局保留为历史兼容 game_kind (werewolf_12 / werewolf_7)。
  */
 
@@ -20,11 +20,11 @@ export type WerewolfRole =
   // 2026-07-11: 扩展神职角色(13人随机牌组池)
   | 'guard'
   // §198 骑士角色(2026-07-30 加入 godRolePool):白天决斗 — 命中狼则对方出局,
-  // 否则骑士自决出。每局限一次,发动即亮身份。详见 docs/狼人杀骑士角色设计.md。
+  // 否则骑士自决出。每局限一次,发动即亮身份。详见 lag_docs/狼人杀骑士角色设计.md。
   | 'knight'
   // §猎魔人 猎魔人角色(2026-07-30 加入 godRolePool):第 2 晚起每晚狩猎 —
   // 命中狼则对方死亡(verdict=death),命中好人则自己出局(verdict=execution)。
-  // 每晚可发动,发动即亮身份。详见 docs/狼人杀猎魔人角色设计.md。
+  // 每晚可发动,发动即亮身份。详见 lag_docs/狼人杀猎魔人角色设计.md。
   | 'demon_hunter'
   // ⚠️ 2026-07-29 已退役:无引擎/工具/美术实现,前端隐藏。保留字符串值作历史兼容。
   // | 'magician' | 'merchant' | 'dreamer' | 'crow'
@@ -301,7 +301,7 @@ export interface WerewolfGameState {
   wolf_vote_view?: WolfPeerView;
 
   // 2026-07-21 §13 道具系统 — 道具使用事件流(挂在 game.state 上,所有人都可见)。
-  // 对齐 docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §4.2 步骤 8:服务端广播道具使用公开事件。
+  // 对齐 lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §4.2 步骤 8:服务端广播道具使用公开事件。
   // 前端 <PropPanel> 监听此字段追加到最近事件流。
   prop_events?: PropUseEvent[];
   // 道具使用后,服务端下发的"我方最新金币余额"——客户端 store 不必每次 GET /api/games/werewolf/props。
@@ -924,7 +924,7 @@ export type WerewolfStyle = 'dark_medieval';
 export type WerewolfRoomInfo = RoomInfo & { game_kind: 'werewolf' };
 
 // ============================================================================
-// 2026-07-21 §13 道具系统 — TS 类型契约(对齐 docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §6)
+// 2026-07-21 §13 道具系统 — TS 类型契约(对齐 lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §6)
 //
 // 字段命名遵循 §121 教训:后端 wrapper 形状与前端类型严格对齐。
 // ============================================================================
@@ -1002,7 +1002,7 @@ export interface PropListResponse {
 /**
  * 道具使用公开事件(挂在 game.state.prop_events[] / 单独的
  * game.werewolf_prop_used WS 帧上)。
- * 对齐 docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §4.2 步骤 8。
+ * 对齐 lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §4.2 步骤 8。
  */
 export interface PropUseEvent {
   /** 使用者座位(0-indexed)。 */

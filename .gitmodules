@@ -4,3 +4,6 @@
 [submodule "go-web-debug-tool"]
 	path = go-web-debug-tool
 	url = git@gitee.com:liushimeng109117198_admin/go-web-debug-tool.git
+[submodule "lag_docs"]
+	path = lag_docs
+	url = git@gitee.com:liushimeng109117198_admin/lag_docs.git

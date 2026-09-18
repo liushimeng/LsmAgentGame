@@ -1,6 +1,6 @@
 // Package wealth — labor.go: 劳动力市场 + 社会结构统计(2026-09-16 §财商流P1-2)。
 //
-// 契约: docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-真实经济循环引擎-v1.md §4/§5。
+// 契约: lag_docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-真实经济循环引擎-v1.md §4/§5。
 // 纯引擎层:无锁、无 goroutine、无 IO;月度更新由 SettleMonth 持房间锁调用
 // (LaborMonthStep 本步确定性,个体裁员掷骰仍在 events.go 经 w.Rand)。
 package wealth

@@ -1,7 +1,7 @@
 // Package models — 辩论比赛持久化表(2026-08-31 §20260831-08)。
 //
-// 设计依据:docs/辩论比赛/03-辩论比赛房间创建与配置设计.md §8(数据库设计)+
-// docs/辩论比赛/06-辩论比赛公平性与评审系统设计.md §9(历史统计落库)。
+// 设计依据:lag_docs/辩论比赛/03-辩论比赛房间创建与配置设计.md §8(数据库设计)+
+// lag_docs/辩论比赛/06-辩论比赛公平性与评审系统设计.md §9(历史统计落库)。
 //
 // 按 CLAUDE.md §3:models/ 目录下 GORM 模型文件使用 t_lsm_game_*.go 前缀,
 // 本文件是该前缀唯一允许目录下的辩论比赛 5 张表合一:
@@ -16,7 +16,7 @@
 // ServerGo/api/debate_api.go(history / topics 端点)。
 package models
 
-// TLsmGameDebateRoom 辩论房间记录(docs/辩论比赛/03 §8.1 + §20260831-08 扩展)。
+// TLsmGameDebateRoom 辩论房间记录(lag_docs/辩论比赛/03 §8.1 + §20260831-08 扩展)。
 //
 // 一行 = 一场辩论比赛的最终快照。比赛正常结束(评审结果产出)时 upsert 全字段;
 // 比赛被强制终止(StopGame,无评审结果)时 upsert 且 IsAbnormal=true。
@@ -52,7 +52,7 @@ type TLsmGameDebateRoom struct {
 // TableName pins the SQL table name.
 func (TLsmGameDebateRoom) TableName() string { return "t_lsm_game_debate_room" }
 
-// TLsmGameDebateSpeech 发言记录(docs/辩论比赛/03 §8.2)。
+// TLsmGameDebateSpeech 发言记录(lag_docs/辩论比赛/03 §8.2)。
 //
 // 由 onSpeech 钩子异步写入;ID 复用引擎内 Speech.ID("sp_<ms>_<rand>"),
 // 兜底 "<room_id>:s<ms>"。References 为 JSON 字符串数组。
@@ -77,7 +77,7 @@ type TLsmGameDebateSpeech struct {
 // TableName pins the SQL table name.
 func (TLsmGameDebateSpeech) TableName() string { return "t_lsm_game_debate_speech" }
 
-// TLsmGameDebateScore 评审记录(docs/辩论比赛/03 §8.3)。
+// TLsmGameDebateScore 评审记录(lag_docs/辩论比赛/03 §8.3)。
 //
 // 一行 = 一名裁判对一支队伍的评分(JudgeScore.Rankings 展开写入)。
 // ID 确定性生成 "<room_id>:j<judge_id>:t<team_id>",重复评分 upsert 幂等覆盖。
@@ -104,7 +104,7 @@ type TLsmGameDebateScore struct {
 // TableName pins the SQL table name.
 func (TLsmGameDebateScore) TableName() string { return "t_lsm_game_debate_score" }
 
-// TLsmGameDebateModelStats 模型胜率统计落库(docs/辩论比赛/06 §9.1)。
+// TLsmGameDebateModelStats 模型胜率统计落库(lag_docs/辩论比赛/06 §9.1)。
 //
 // 替代 §20260831-06 进程内 statsStore 的「重启清零」缺陷:model_key 主键,
 // 每局结束 UPSERT 原子累加(total_games = total_games + ?)。
@@ -122,7 +122,7 @@ type TLsmGameDebateModelStats struct {
 // TableName pins the SQL table name.
 func (TLsmGameDebateModelStats) TableName() string { return "t_lsm_game_debate_model_stats" }
 
-// TLsmGameDebateTopic 自定义辩题(§20260831-08,docs/辩论比赛/03 §2.4)。
+// TLsmGameDebateTopic 自定义辩题(§20260831-08,lag_docs/辩论比赛/03 §2.4)。
 //
 // 仅管理员经 POST /api/games/debate/topics 写入(IsOfficial 恒 false);
 // GET /api/games/debate/topics 返回「内置题(cards.go) + 本表」合并列表。

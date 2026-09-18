@@ -10,7 +10,7 @@
  * §7.1:失败必须当前页最高可见 — 使用 formError 内联 + reportGlobalError 兜底。
  * §12.5:挂在右侧栏或中栏不影响底部座位布局;这里采用中栏内嵌面板,与 DayControlPanel 同位。
  *
- * 对齐 docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §6。
+ * 对齐 lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §6。
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -322,7 +322,7 @@ const PropPanel: React.FC<Props> = ({ gameState, mySeat, myRole, myFaction, onUs
       {/* §20260823-02 P1 — 原 __collapsed-hint 段落已由 header 内联摘要取代,
           收起态保持单行 ≤36px。 */}
       {/* v5 EconTier 5 档徽章 — 展示当前房间经济档位 + 销毁率。
-          后端 ComputeEconTier 输出;UI 与 server docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.3 表格对齐 */}
+          后端 ComputeEconTier 输出;UI 与 server lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.3 表格对齐 */}
       <p
         className={`werewolf-prop-panel__econ-tier econ-tier-${econTier}`}
         data-testid="werewolf-prop-econ-tier"

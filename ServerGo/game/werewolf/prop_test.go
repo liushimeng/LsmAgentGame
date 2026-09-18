@@ -6,7 +6,7 @@
 //   - 道具彩池分配（prop_engine.go）
 //   - Agent prompt 注入（agent_prop.go）
 //
-// 2026-07-21 道具系统设计（docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md）。
+// 2026-07-21 道具系统设计（lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md）。
 package werewolf
 
 import (

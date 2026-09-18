@@ -148,7 +148,7 @@ func (m *WerewolfManager) StartAgentsLocked(r *WerewolfRoom) {
 		// 走 BuildSystemPrompt 末尾追加路径)。startAgentsLocked 已持 r.mu,
 		// 直接读 r.agentDifficulty 即可(§92a)。
 		ag.DifficultyDirective = ProfileFor(AgentDifficulty(r.agentDifficulty)).PromptDirective
-		// §5: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+		// §5: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 		if faction == "wolf" {
 			ag.SetWolfTeammateSeats(allWolfSeats)
@@ -227,7 +227,7 @@ func (m *WerewolfManager) StartAgentsLocked(r *WerewolfRoom) {
 		streamSeat := seat
 		streamRoomID := r.RoomID
 		if streamSvc, ok := m.chatSvc.(streamChatSvc); ok {
-			// BUG-R121-SEC-01: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+			// BUG-R121-SEC-01: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 			streamEnableIdentity := runner.filterCfg.EnableIdentityFilter
 			streamSeatRef := streamSeat
@@ -322,7 +322,7 @@ func (m *WerewolfManager) StartAgentsLocked(r *WerewolfRoom) {
 		// 后续 push 的消息会按 WindowFor 全部可见;新加入的 bot 同样初始化为 0。
 		r.chatQueue.SetReadPointer(seat, agentcore.ReadPointerNil)
 
-		// BUG-WEREWOLF-P0-NEW-27: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+		// BUG-WEREWOLF-P0-NEW-27: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 		quarantineSeat := seat
 		quarantineRoomID := r.RoomID
@@ -433,7 +433,7 @@ func tryDispatchQuarantinedActingSkip(m *WerewolfManager, r *WerewolfRoom, ag *w
 	if !ag.IsQuarantined() || !gc.MyTurn {
 		return false
 	}
-	// BUG-WEREWOLF-P0-NEW-43: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+	// BUG-WEREWOLF-P0-NEW-43: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 	r.quarantineSkipDepth++
 	defer func() { r.quarantineSkipDepth-- }()
@@ -649,19 +649,19 @@ func (m *WerewolfManager) dispatchQuarantinedSkipLocked(r *WerewolfRoom, seat in
 		}
 		return m.seerCheckLocked(r, userID, Seat(target))
 	case "witch_act_skip":
-		// BUG-WEREWOLF-P0-NEW-42: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+		// BUG-WEREWOLF-P0-NEW-42: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 		return m.witchLocked(r, userID, "none", NoSeat)
 	case "guard_protect_skip":
-		// §134: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+		// §134: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 		return m.guardProtectFallbackLocked(r, userID)
 	case "finish_speak":
-		// BUG-WEREWOLF-P0-NEW-16: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+		// BUG-WEREWOLF-P0-NEW-16: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 		return m.finishSpeakLocked(r, userID)
 	case "vote_skip":
-		// BUG-WEREWOLF-P0-NEW-35: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+		// BUG-WEREWOLF-P0-NEW-35: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 		return m.dayVoteLocked(r, userID, NoSeat)
 	case "sheriff_elect":
@@ -1039,7 +1039,7 @@ func (m *WerewolfManager) JoinGame(roomID, userID string) (*WerewolfRoom, bool, 
 				// §20260811-09 U1 — 启动 AI 实时解说 goroutine(若 commentaryDesired=true)。
 				// spectator-only 回调走 Hub.BroadcastRoomSpectators(玩家收不到)。
 				m.startCommentatorGoroutine(r, commentarySpectatorHook)
-				// BUG-WEREWOLF-NO-WAKE: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+				// BUG-WEREWOLF-NO-WAKE: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 				m.wakeAllAgentsLocked(r, "state_change", wwtypes.GameContext{Phase: r.State.Phase.String()})
 				// Notify caller to update DB room status from "open" to "playing".
@@ -1260,7 +1260,7 @@ func (m *WerewolfManager) SetJudgeConfig(roomID string, desired bool, mode strin
 	r.JudgeModelKey = modelKey
 	// 初值哨兵:确保首个真实 phase 的切换能被检测到(PhaseFilling=0 是零值,
 	// 若不加哨兵,首 tick 在 PhasePreWolves 时 lastJudgePhase=PhaseFilling 仍会触发,
-	// 但显式哨兵更稳健,且与 docs/狼人杀-重构方案/主持人Agent重构设计.md §1.3 一致)。
+	// 但显式哨兵更稳健,且与 lag_docs/狼人杀-重构方案/主持人Agent重构设计.md §1.3 一致)。
 	r.lastJudgePhase = Phase(-1)
 }
 

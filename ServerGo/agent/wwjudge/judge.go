@@ -2,8 +2,8 @@
 //
 // 2026-07-10 §123 增强。法官不是身份牌,是身份牌之外的系统角色,由 LLM 驱动,
 // 负责公开宣告、流程引导、阶段切换口播、死因宣告。详见:
-//   - docs/狼人杀-重构方案/主持人Agent重构设计.md
-//   - docs/狼人杀死亡语义设计.md
+//   - lag_docs/狼人杀-重构方案/主持人Agent重构设计.md
+//   - lag_docs/狼人杀死亡语义设计.md
 //
 // 与 Agent(玩家 bot)的区别:
 //   - 工具集分离(announce/prompt_actor/summary/declare_cause/idle_silent)
@@ -27,9 +27,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// JudgePendingAnnounceKind 法官事件类型常量(与 docs/狼人杀-重构方案/主持人Agent重构设计.md §2.3 一一对应)。
+// JudgePendingAnnounceKind 法官事件类型常量(与 lag_docs/狼人杀-重构方案/主持人Agent重构设计.md §2.3 一一对应)。
 //
-// 2026-07-16 主持人重构 — 取值改为 judge_ 前缀(对齐 docs/狼人杀-重构方案/主持人Agent重构设计.md §6.3
+// 2026-07-16 主持人重构 — 取值改为 judge_ 前缀(对齐 lag_docs/狼人杀-重构方案/主持人Agent重构设计.md §6.3
 // 映射表),让前端/活动流能按前缀识别法官事件;旧 unprefixed 值不再使用。
 // 秘密阶段(NightWolves/Seer/Witch)不单独成常量 — judgeKindForPhase 对它们返回空字符串。
 const (

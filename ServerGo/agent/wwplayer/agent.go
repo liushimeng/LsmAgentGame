@@ -540,7 +540,7 @@ type AgentEvent struct {
 // LLM 的 CoT 不再下发到 wire 协议(噪声 + 身份泄露风险),改用
 // 决策可观测性字段(输入摘要 + 工具调用 + 工具结果 + 决策结果)。
 // §128 对话即思考重构:LastThinking / FullThinking / RecentMessages 已物理删除,
-// ToolCalls 保留(用于决策可观测)。详见 docs/狼人杀对话即思考设计.md。
+// ToolCalls 保留(用于决策可观测)。详见 lag_docs/狼人杀对话即思考设计.md。
 //
 // 新增 5 字段:
 //   - LastDecisionSummary 1 句话(动作 + 目标)
@@ -787,7 +787,7 @@ func (a *Agent) MarkWhisper() {
 // 旧 LastThinking / FullThinking / RecentMessages 字段保留 wire 兼容但置空。
 // 新增 5 个决策可观测字段:LastDecisionSummary / LastTool / LastToolInput /
 // LastToolResult / LastOutcome / DecisionInputs(详见
-// docs/Agent交互设计.md §2.2)。
+// lag_docs/Agent交互设计.md §2.2)。
 //
 // 旧 5 个 chatQueue 统计字段(ChatHistoryBytes / ChatHistoryCap /
 // LastCompressionAt / SpeakCountLastMin)保留,这些与决策正交。

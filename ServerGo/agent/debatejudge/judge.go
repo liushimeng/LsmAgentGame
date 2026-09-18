@@ -11,7 +11,7 @@
 //   - 多轮循环主要用于:LLM 首次未调 submit_score 时,把错误喂回重试
 //   - 工具集固定:submit_score + announce + idle_silent
 //
-// 详细设计见 docs/辩论比赛/02 §3 + 06 §4。
+// 详细设计见 lag_docs/辩论比赛/02 §3 + 06 §4。
 package debatejudge
 
 import (
@@ -115,7 +115,7 @@ const llmTurnTimeoutSec = 90
 
 // runJudgeTurn 执行一轮评审(多轮 tool_use 循环)。
 //
-// 流程(对齐 docs/辩论比赛/02 §3.5 + §5.1):
+// 流程(对齐 lag_docs/辩论比赛/02 §3.5 + §5.1):
 //
 //	user prompt 入 memory → 循环(≤ maxToolUseRounds):
 //	  Chat(memory 快照) → 无 tool_use:

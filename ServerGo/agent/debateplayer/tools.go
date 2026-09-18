@@ -8,7 +8,7 @@
 //   - finish_speak         主动结束发言
 //   - idle_silent          沉默
 //
-// 详细字段定义见 docs/辩论比赛/05-辩论比赛工具与记忆系统设计.md §2。
+// 详细字段定义见 lag_docs/辩论比赛/05-辩论比赛工具与记忆系统设计.md §2。
 package debateplayer
 
 import (

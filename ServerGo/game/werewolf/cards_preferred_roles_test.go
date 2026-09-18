@@ -1,6 +1,6 @@
 // Package werewolf — cards_preferred_roles_test.go: 2026-08-06 §20260806-03
 // 自选角色注入(ApplyPreferredRoles)的单元测试。
-// 详见 docs/狼人杀13人局-优化和解决-20260806-03.md §6。
+// 详见 lag_docs/狼人杀13人局-优化和解决-20260806-03.md §6。
 package werewolf
 
 import (

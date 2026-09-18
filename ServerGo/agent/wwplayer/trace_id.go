@@ -1,7 +1,7 @@
 // Package wwplayer — trace_id.go: 每次 LLM 调用的全链路追踪 ID 与 AgentRunTrace。
 //
 // 2026-08-13 §20260813-01 优化: 借鉴 agent-studio `set_session_id` 全链路追踪
-// (docs/其他Agent代码分析/agent-studio_Context管理分析.md §5.3),
+// (lag_docs/其他Agent代码分析/agent-studio_Context管理分析.md §5.3),
 // 给每次 LLM 调用分配唯一 RequestID,贯穿 RunLoop / callProvider /
 // tool dispatch 全路径,所有 logger 自动带同一 ID,排查 §197 误杀 / §82b
 // 配对失败等问题时可一键 grep 还原。

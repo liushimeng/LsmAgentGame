@@ -5,7 +5,7 @@
 // (重开局相邻触发)并发覆盖,与 §131 AgentMemoryService 同一模式:
 // UPDATE ... WHERE id=? AND version=?;影响 0 行则重读重试 1 次,再失败返回错误
 // (调用方仅 log,绝不阻塞游戏流)。
-// 详见 docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-05.md §U1。
+// 详见 lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-05.md §U1。
 package service
 
 import (

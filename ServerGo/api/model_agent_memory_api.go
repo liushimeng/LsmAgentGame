@@ -8,7 +8,7 @@
 //
 // 路由参数 :id 是 provider 行 ID(t_lsm_game_llm_provider.id);handler 先按
 // id 查 provider 拿 model_key,再走 AgentMemoryService。详见
-// docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md §8。
+// lag_docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md §8。
 package api
 
 import (

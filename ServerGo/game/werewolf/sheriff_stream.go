@@ -1,7 +1,7 @@
 // Package werewolf — sheriff_stream.go: 警徽流核心机制。
 //
 // 警徽流是 13 人标准竞技局预言家在无遗言的夜间死亡后,向全场传递验人信息的
-// 唯一方式。详见 docs/狼人杀13人标准局规则.md §7。
+// 唯一方式。详见 lag_docs/狼人杀13人标准局规则.md §7。
 //
 // 数据承载在 GameState 字段(SheriffStreams / SheriffStreamsAt / SheriffSuccessor /
 // sheriffSlain),本文件提供结算逻辑 SettleSheriffOnDeathLocked。
@@ -51,7 +51,7 @@ func isWolfKill(gs *GameState, seer Seat, target Seat) bool {
 }
 
 // SettleSheriffOnDeathLocked 在白天 dawn 阶段结算夜间死亡的警徽流。
-// 规则(docs/狼人杀13人标准局规则.md §7.3):
+// 规则(lag_docs/狼人杀13人标准局规则.md §7.3):
 //   - 死者非警长 → (successor=NoSeat, ripped=false),本函数不处理。
 //   - 死者为警长且为预言家 → 按双警徽流结算:
 //     双金水 → 移交第一警徽流目标; 一金一查杀 → 移交金水目标; 双查杀 → 撕警徽。

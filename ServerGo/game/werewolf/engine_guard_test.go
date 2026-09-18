@@ -2,7 +2,7 @@ package werewolf
 
 // engine_guard_test.go — §134 守卫角色测试。
 //
-// 按 docs/狼人杀-角色设计/狼人杀守卫角色设计.md §8 列出的 G-01..G-12 用例实现。
+// 按 lag_docs/狼人杀-角色设计/狼人杀守卫角色设计.md §8 列出的 G-01..G-12 用例实现。
 // 13 人局强制使用 makeStartedGame13;7 人局强制使用 makeStartedGame(makeStartedGame
 // 选 7 人牌组,但 7 人牌组不含守卫 — 见 StandardDeck() / StandardDeck13())。
 //

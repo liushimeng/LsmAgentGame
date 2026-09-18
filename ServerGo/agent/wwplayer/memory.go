@@ -216,7 +216,7 @@ func identityPromptWithWolfHint(role, faction, win string, seat int, wolfTeammat
 // 本函数被 StartAgentsLocked 在构造 agent.Agent 之前调用,以决定每个
 // bot 的 wolfTeammateSeat 注入值;可单测(不依赖 LLM / DB / WS)。
 //
-// 设计动机(docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §5.2):
+// 设计动机(lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §5.2):
 //   - 100% 互知 → 机械感,失去"信息不对称"博弈;
 //   - 0% 互知 → 狼人首夜协调成本极高,好人阵营过强;
 //   - 30% 部分互知 → 70% 的对局仍需"试探/识别/私聊",30% 的对局里有
@@ -257,7 +257,7 @@ func PickWolfTeammateHint(myRole, myFaction string, mySeat int, allWolfSeats []i
 // 给定本局所有狼人座位 + 启用概率 + 每局最多几对,返回"本局要互知的狼人配对列表"。
 // 例如 maxPairs=1, allWolfSeats=[0,2,5,8] → 可能返回 [[0,2]] 或 [[5,8]]（取决于 rng）。
 //
-// 设计动机（docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §4.1）：
+// 设计动机（lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §4.1）：
 //   - v1.1 单只独立 PickWolfTeammateHint 调用无法保证"对称互知"（A 知道 B 但 B 不知道 A）；
 //   - v3 引入配对列表后，配对的两只狼互为队友（对称）。
 //   - 30% 概率启用；启用后最多 max_pairs 对 = 2 * max_pairs 只狼互知。

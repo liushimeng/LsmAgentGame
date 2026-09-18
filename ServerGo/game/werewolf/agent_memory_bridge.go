@@ -26,7 +26,7 @@
 //   - goroutine 内访问 r.State / r.seatModelKeys 一律走 lockRoomBriefly 快照,
 //     绝不裸持 r.mu 跨 LLM 调用(§92a)。
 //
-// 详见 docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md。
+// 详见 lag_docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md。
 package werewolf
 
 import (

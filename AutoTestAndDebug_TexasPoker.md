@@ -115,7 +115,7 @@
 2. 读 `AutoTestProgress/德州扑克自动化测试进度_*.md` 最新一份,沿用其「已测 / 待测」清单与「未覆盖项跟踪表」。
 3. **敲定本阶段**:`当前阶段=A` 还是 `B`,决定人类玩家数与 N 取值,写入进度草稿。
 4. 读 `go-web-debug-tool/MCP_Proc_Def.md` 确认 MCP 操作/抓包接口可用。
-5. 准备 `test_account.json` 中的白名单账号(验证码自动旁路,见 `docs/通用功能/测试账号凭证.md`),阶段 B 需 2 套不同账号。
+5. 准备 `test_account.json` 中的白名单账号(验证码自动旁路,见 `lag_docs/通用功能/测试账号凭证.md`),阶段 B 需 2 套不同账号。
 6. **服务探活**(`curl -sk https://127.0.0.1:39001/api/health` → `code: 0`)。
 
 ### 5. 大模型 API 异常与协议层诊断
@@ -388,7 +388,7 @@ SELECT id, status, phase, current_count FROM t_lsm_game_room WHERE id=:room_id;
 ### 12.1 硬约束（不可违反）
 
 1. **绝对禁止修改 `CLAUDE.md`、`AGENTS.md` 这两个规则文件。**
-   - 修复摘要 / 版本基线 / commit hash / 教训只写到旁路文档(如 `TestReport/<BugID>_validation.md` 或对应 `docs/` 归档),**绝不写入规则文件**。
+   - 修复摘要 / 版本基线 / commit hash / 教训只写到旁路文档(如 `TestReport/<BugID>_validation.md` 或对应 `lag_docs/` 归档),**绝不写入规则文件**。
 2. **每一份被处理的报告文件都必须有明确归宿**:
    - **A. 有问题已修复并推送成功** → **删除**该报告文件。
    - **B. 经核查无问题** → **就地重命名**,追加 `_无问题` 后缀。
@@ -421,7 +421,7 @@ SELECT id, status, phase, current_count FROM t_lsm_game_room WHERE id=:room_id;
 
 ### 12.5 文档同步(仅旁路,≤ 2 min)
 
-- 修复涉及架构调整 / API 变更 / 新增常量 → **只**更新业务/技术文档(`docs/*.md`)与代码内注释。
+- 修复涉及架构调整 / API 变更 / 新增常量 → **只**更新业务/技术文档(`lag_docs/*.md`)与代码内注释。
 - **禁止**追加、删除、修改 `CLAUDE.md` / `AGENTS.md`。
 - 修复摘要 / commit hash / 回归结果可写 `TestReport/<BugID>_validation.md` 作为本轮验证记录。
 - **本步骤仅在「实际改了代码」时执行**;分支 B 跳过。

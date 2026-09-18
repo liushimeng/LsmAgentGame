@@ -30,7 +30,7 @@
 //   - 身份公开:终局后 RolePubliclyRevealed 白名单第 1 条已全场公开,
 //     无泄密面;但仍跑一遍 ScrubIdentityLeak 兜底引擎内部字段名泄漏。
 //
-// 详见 docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-05.md §U2。
+// 详见 lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260811-05.md §U2。
 package werewolf
 
 import (

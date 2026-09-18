@@ -1,6 +1,6 @@
 // Package agent — run.go: the Agent.Run decision loop.
 //
-// Implements the Phase 4 main loop from docs/狼人杀-Agent与系统/狼人杀Agent设计.md §9:
+// Implements the Phase 4 main loop from lag_docs/狼人杀-Agent与系统/狼人杀Agent设计.md §9:
 // block on the per-seat events channel, build an LLM request (system + memory +
 // current wwtypes.GameContext + phase-appropriate tools), send it, and dispatch any
 // tool_use blocks via ToolRunner. Loop runs until the room tears down (ctx
@@ -163,7 +163,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 		return
 	}
 
-	// BUG-WEREWOLF-P1-NEW-45: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+	// BUG-WEREWOLF-P1-NEW-45: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 	_, _, mySeat, aliveList, _, _, doneCheck := rp()
 	if doneCheck {
@@ -487,7 +487,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 		// §128 对话即思考重构:thinking 注入与 auto-healing fallback 已删除。
 		// LLM API 输出的 text + tool_use 即是模型"思考"的产物。
 
-		// BUG-WEREWOLF-P0-NEW-31: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+		// BUG-WEREWOLF-P0-NEW-31: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 		a.ResetLLMCallState()
 
@@ -542,7 +542,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 		// §127: 聊天 SSE 流式解析 — 实时 text_delta → 前端气泡 token 瀑布流。
 		var streamText strings.Builder
 
-		// BUG-R124-PERF-02: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+		// BUG-R124-PERF-02: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 		callTimeout := cfgLLMCallTimeoutSec(evt.Context.SeatCount)
 		if callTimeout <= 0 {
@@ -689,7 +689,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 				logger.L().Warn("agent: provider chat failed (all retries exhausted)",
 					zap.Int("seat", a.Seat), zap.String("phase", phase),
 					zap.String("model", a.ModelKey), zap.Error(err))
-				// BUG-WEREWOLF-P1-NEW-46: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+				// BUG-WEREWOLF-P1-NEW-46: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 				a.SetLastError(err.Error())
 				// 2026-07-10 §重构 — 写入失败分类供前端多态重试徽章区分:
@@ -739,7 +739,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 				// 2026-07-15 R131 修复: 任何失败(永久 + retryable)都走 60s 冷却窗口。
 				// 此前永久错误绕开 cooldown,2 次连续 401/403 就 ban;现在与 retryable
 				// 一视同仁,防止上游抖动导致 1-2 秒内累计到 2 次永久错误。
-				// BUG-R48-P0-1: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+				// BUG-R48-P0-1: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 				now := time.Now()
 				transient := isNetworkOrTimeoutTransient(err)
@@ -799,10 +799,10 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 						zap.Int("consecutive_failures", curCF))
 				}
 
-				// BUG-WEREWOLF-P0-NEW-3: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+				// BUG-WEREWOLF-P0-NEW-3: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 				isPermanent := !retryable
-				// BUG-R172-P2: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+				// BUG-R172-P2: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 				circuitOpen := false
 				if isModel400CircuitErr(err) {
@@ -838,7 +838,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 					return
 				}
 
-				// BUG-WEREWOLF-P0-2: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+				// BUG-WEREWOLF-P0-2: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 				if a.ConsecutiveFailures() >= failAutoSkipThreshold {
 					currentPhase, currentRole, _, _, currentSpeakTurn, currentTurnActing, _ := rp()
@@ -898,7 +898,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 				// would be stuck forever — no new wake comes because no
 				// action was taken, and no action can be taken without a wake.
 				//
-				// BUG-R232-P1-02: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+				// BUG-R232-P1-02: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 				reWakeDelayForThisCycle := reWakeDelay
 				if circuitOpen {
@@ -923,7 +923,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 			// 修复(2026-08-04)§计数器复位 — 原 a.ResetConsecutiveFailures()
 			// 调用位于此处(retry-success 路径),已上提到 `if err != nil {}`
 			// 块之后统一执行,避免"首次调用即成功"时永不复位。
-			// §130: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+			// §130: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 			a.Memory.CompressAndPrune(DefaultPruneTurns, DefaultCompressTurns)
 		}
@@ -1174,7 +1174,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 			})
 		}
 		// 2026-08-04 §重构 — emotion_switch 单独工具已删除(合并到 emotion_switch_speak)。
-		// emotion-only 三次重试逻辑不再需要,见 docs/Agent工具定义-解决和设计方案-20260804-01.md。
+		// emotion-only 三次重试逻辑不再需要,见 lag_docs/Agent工具定义-解决和设计方案-20260804-01.md。
 
 		// 2026-07-29 修复:speak 阶段当前发言者不可仅调 idle_silent。
 		// 若当前是 speakTurn 且 LLM 只调了 idle_silent,视为无效调用,让 LLM 重试。
@@ -1251,7 +1251,7 @@ func (a *Agent) handleEvent(ctx context.Context, runner ToolRunner, rp RolePhase
 			}
 		}
 
-		// §130: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+		// §130: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 		if phaseAllowsPublicSpeech(phase) {
 			// BUG-R233-P1-01 (2026-08-02): 仅判 != "" 会放过 LLM 返回的纯空白字符
@@ -1412,7 +1412,7 @@ alive:
 		return
 	}
 
-	// §14: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+	// §14: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 	// 2026-08-13 §20260813-02 U2 — 与主路径同源,走 per-Agent 工具缓存。
 	tools := BuildToolsCached(a.toolsCache, phase, role, seat, alive, evt.Context.SpeakTurn, &evt.Context)
@@ -1561,7 +1561,7 @@ alive:
 			continue
 		}
 		if tu.Name == "speak" {
-			// BUG-R71-EMPTY-SPEAK: 复述段落已压缩 — git blame 与 docs/ 索引可还原
+			// BUG-R71-EMPTY-SPEAK: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
 
 			if strings.TrimSpace(result) == "" {
 				logger.L().Warn("agent: speak_floor_tick speak result empty after dedup; not counting",

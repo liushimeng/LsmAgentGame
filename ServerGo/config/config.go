@@ -113,7 +113,7 @@ type WerewolfConfig struct {
 	// §20260830-02 — 自爆强化(遗言+带走)总开关,默认 true。
 	// true : 狼人自爆 → 遗言 → 自爆带走(suicide_take 阶段)→ 入夜。
 	// false: 回退旧行为(自爆无遗言,直接 startNight)。
-	// 设计文档:docs/狼人杀-角色设计/狼人杀自爆遗言与带走设计-20260830-02.md
+	// 设计文档:lag_docs/狼人杀-角色设计/狼人杀自爆遗言与带走设计-20260830-02.md
 	SuicideTakeEnabled bool `json:"suicide_take_enabled"`
 
 	// 2026-07-14 BUG-R116-03 — 同一座位在一轮发言阶段的最小发言间隔(秒)。
@@ -133,7 +133,7 @@ type WerewolfConfig struct {
 	LLMCallTimeoutSec int `json:"llm_call_timeout_sec"`
 
 	// RestartVote 是 2026-07-10 新增的"游戏结束后重开局投票"配置。
-	// 详见 docs/狼人杀-Agent与系统/狼人杀重开局投票设计.md。
+	// 详见 lag_docs/狼人杀-Agent与系统/狼人杀重开局投票设计.md。
 	RestartVote RestartVoteConfig `json:"restart_vote"`
 
 	// 2026-07-10 §125 增强 — Agent 法官配置。
@@ -157,24 +157,24 @@ type WerewolfConfig struct {
 	// 2026-07-21 §5.2 增强 — 开局狼队友互认概率(0-100 整数百分比)。
 	// 默认 30:每个狼 bot 有 30% 概率开局即知道另一位狼队友身份(identity prompt
 	// 注入"X 号是你的狼队友");0 = 完全关闭本设计;100 = 全部开局互认。
-	// docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §5.2 详解设计动机与权衡。
+	// lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §5.2 详解设计动机与权衡。
 	WolfTeammateHintRate int `json:"wolf_teammate_hint_rate"`
 
 	// 2026-07-21 v3 重构 — 开局狼队友互认每局最多几对。
 	// 默认 1(每局最多 1 对狼互知 = 2 只狼);2 = 4 只狼全部互知(几乎"全狼抱团")。
-	// docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §4.1。
+	// lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §4.1。
 	WolfTeammateHintMaxPairs int `json:"wolf_teammate_hint_max_pairs"`
 
 	// 2026-07-21 v2 重设计 — 房间级道具全局预算(金币)。
 	// 本局所有玩家的道具消耗累计不得超过该值,逼人类/Agent 把道具当稀缺资源博弈
 	// ("一方多用→另一方无道具可用")。默认 900 币(≈ 3~6 道具均价 × 容量系数)。
 	// 0 = 不启用全局预算(仅保留个人上限+冷却)。
-	// docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §5.2。
+	// lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §5.2。
 	RoomPropBudget int64 `json:"room_prop_budget"`
 
 	// 2026-07-21 v5 重构 — EconTier 5 档阈值(可由 LsmAgentGame.conf 覆盖)。
 	// 必须单调：EconTierBoomThreshold > EconTierCautionThreshold > EconTierDangerThreshold > EconTierCriticalThreshold >= 0。
-	// 默认值与 docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.3 表一致。
+	// 默认值与 lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.3 表一致。
 	// = 0 走 werewolf 包常量默认值。
 	EconTierBoomThreshold     int64 `json:"econ_tier_boom_threshold"`
 	EconTierCautionThreshold  int64 `json:"econ_tier_caution_threshold"`
@@ -342,12 +342,12 @@ type TexasHoldemConfig struct {
 }
 
 // WealthConfig 控制财商流游戏(game_kind=wealth)的月度节奏与 Agent(P0 v1)。
-// 契约: docs/财商流游戏/已实现/02-架构设计/财商流游戏-后端架构与经济引擎-v1.md §3。
+// 契约: lag_docs/财商流游戏/已实现/02-架构设计/财商流游戏-后端架构与经济引擎-v1.md §3。
 type WealthConfig struct {
 	// MonthMs 1 游戏月的窗口毫秒数(默认 8000,clamp [3000,30000])。
 	MonthMs int `json:"month_ms"`
 	// ProfessionDocsPath 文档池(75k 人物卡)磁盘根,默认
-	// "./docs/财商流游戏/玩家职业设计"。
+	// "./lag_docs/财商流游戏/玩家职业设计"。
 	ProfessionDocsPath string `json:"profession_docs_path"`
 	// ProfessionPoolDefault 建房缺省卡池: "docs"(75k 文档池,2026-09-16 起默认) |
 	// "curated"(内嵌 14 精选卡,文档池不可用时的兜底)。
@@ -376,7 +376,7 @@ type WealthConfig struct {
 // RootDisabledSentinel 是 conf 中 root_account / root_password 的「禁用」哨兵值。
 // 用户表已有记录后 main.go 会把这两个字段回写为该值;引导逻辑识别到它时不会
 // 把它当账号/密码种子,而是重新随机生成(防删库重装后种子出 "disable" 账号)。
-// 详见 docs/通用功能/首次运行引导与超级管理员生命周期.md。
+// 详见 lag_docs/通用功能/首次运行引导与超级管理员生命周期.md。
 const RootDisabledSentinel = "disable"
 
 // ServerConfig holds the listener addresses and TLS material.
@@ -462,7 +462,7 @@ type GameConfig struct {
 
 // ProviderConfig describes one model entry under llm.providers[]. The API key
 // MUST come from LsmAgentGame.conf (gitignored), never from source. See
-// `docs/LLM与Agent/LLM供应商设计.md`.
+// `lag_docs/LLM与Agent/LLM供应商设计.md`.
 //
 // DEPRECATED (2026-07-10 kind-skipping-moth, hardened 2026-08-12): the
 // runtime source of truth for LLM models is t_lsm_game_llm_provider, edited
@@ -788,7 +788,7 @@ func applyDefaults(c *Config) {
 	if c.Server.TLSKey == "" {
 		c.Server.TLSKey = "./server.key"
 	}
-	// 2026-08-25 §首次运行引导 — DB 默认值(docs/通用功能/首次运行引导与超级管理员生命周期.md)。
+	// 2026-08-25 §首次运行引导 — DB 默认值(lag_docs/通用功能/首次运行引导与超级管理员生命周期.md)。
 	// 仅在字段为空时填充,存量部署不受影响;password 无安全默认值,必须由运维填写。
 	if c.DB.Host == "" {
 		c.DB.Host = "127.0.0.1"
@@ -1037,7 +1037,7 @@ func applyDefaults(c *Config) {
 		c.Wealth.MonthMs = 30000
 	}
 	if c.Wealth.ProfessionDocsPath == "" {
-		c.Wealth.ProfessionDocsPath = "./docs/财商流游戏/玩家职业设计"
+		c.Wealth.ProfessionDocsPath = "./lag_docs/财商流游戏/玩家职业设计"
 	}
 	if c.Wealth.ProfessionPoolDefault == "" {
 		// 2026-09-16 §文档池解析修复:默认切到 "docs"。文档池 75k 卡经形状容错

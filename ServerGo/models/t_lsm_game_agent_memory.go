@@ -3,7 +3,7 @@
 // 2026-07-20 §131 新增(狼人杀 Agent 持久化记忆)。每个 LLM 模型(model_key)
 // 拥有一份跨局、跨进程的 Markdown 记忆(类比 Claude Code 的 MEMORY.md),
 // 每局结束后由该模型自己的 LLM 自我迭代总结,下一局每次 LLM 调用注入。
-// 详见 docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md。
+// 详见 lag_docs/狼人杀-Agent与系统/狼人杀Agent持久化记忆设计.md。
 //
 // Per CLAUDE.md §3, models in this directory use the t_lsm_game_*.go prefix.
 package models

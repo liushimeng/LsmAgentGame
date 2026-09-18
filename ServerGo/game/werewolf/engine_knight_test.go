@@ -2,7 +2,7 @@ package werewolf
 
 // engine_knight_test.go — §198 骑士角色测试。
 //
-// 按 docs/狼人杀骑士角色设计.md §9 列出的 K-01..K-11 用例实现。
+// 按 lag_docs/狼人杀骑士角色设计.md §9 列出的 K-01..K-11 用例实现。
 // 13 人随机牌组 AssignRoles13Random 从 godRolePool 随机抽取神职,
 // 骑士可能不发,所以用 ensureKnightSeat 兜底(seed 巧合无骑士则注入)。
 //

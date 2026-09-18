@@ -2,7 +2,7 @@
 // (2026-09-16 §文档池解析修复 P0)。
 //
 // 用例直接内联**真实知识库 Schema v1.1 的字段形状**(从
-// docs/财商流游戏/玩家职业设计/…/N2005-彭民凯.md 节选),确保「map 形
+// lag_docs/财商流游戏/玩家职业设计/…/N2005-彭民凯.md 节选),确保「map 形
 // work_intensity / []map 形 goals_short / employment / name」永不再把整卡
 // 解析打挂 —— 旧实现正是因为只测合成 v1.0 纯字符串 fixture 而全绿漏过事故。
 package profession

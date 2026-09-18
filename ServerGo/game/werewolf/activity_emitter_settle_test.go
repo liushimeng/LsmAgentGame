@@ -8,7 +8,7 @@
 //   - the pot is bounded zero-sum: Σ delta ∈ (-winCount, 0] (integer-division
 //     remainder stays with the house, never creates coins — FIX 4).
 //
-// See docs/狼人杀13人局金币系统设计.md §12 for the authoritative test matrix.
+// See lag_docs/狼人杀13人局金币系统设计.md §12 for the authoritative test matrix.
 package werewolf
 
 import "testing"

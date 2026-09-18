@@ -12,7 +12,7 @@
 // 所有 Action 走 debateRoom mutex,线程安全。
 // 与狼人杀 Action_* 风格一致(见 werewolf/room_action.go),便于 WS handler 复用派发模式。
 //
-// 详细设计见 docs/辩论比赛/02-辩论比赛Agent设计.md §2.6 + 05 §2。
+// 详细设计见 lag_docs/辩论比赛/02-辩论比赛Agent设计.md §2.6 + 05 §2。
 package debate
 
 import (

@@ -2,7 +2,7 @@ import type { TKey } from '@/i18n';
 
 // ─── 财商流游戏 (Wealth) types ───
 //
-// 与 docs/财商流游戏/已实现/02-架构设计/财商流游戏-WS与HTTP协议契约-v1.md §3
+// 与 lag_docs/财商流游戏/已实现/02-架构设计/财商流游戏-WS与HTTP协议契约-v1.md §3
 // 「game.state 载荷逐字段契约」**逐字段对齐**（字段名 / 可空性一字不改；
 // 后端 game/wealth/view.go::BuildClientState 是协议唯一实现）。
 // 静态表（城区 / 职业色 / 动作元数据）出处：协议 §4 + 后端架构文档 §4 DistrictDefs
@@ -317,7 +317,7 @@ export interface WealthMinskyOverview {
 
 // ── P1 真实经济循环引擎（消费品市场 / 劳动力市场 / 社会结构）────────────
 //
-// 与 docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-真实经济循环引擎-v1.md
+// 与 lag_docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-真实经济循环引擎-v1.md
 // §6「视图与协议」逐字段对齐（JSON 名不可改；后端 view.go 是唯一实现）。
 
 /** CPI 八大类消费单品（game.state.consumer_market.goods[]，按 §2.1 权重表序）。 */
@@ -378,7 +378,7 @@ export interface WealthSociety {
 
 // ── P1 社会调研系统（对全体 Agent 的预测模拟）───────────────────────────
 //
-// 与 docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-社会调研系统-v1.md
+// 与 lag_docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-社会调研系统-v1.md
 // §5「视图与协议」逐字段对齐。
 
 /** 调研聚合结果（WealthSurvey.result；选项文本一并下发，前端免查表）。 */
@@ -413,7 +413,7 @@ export interface WealthSurvey {
   result?: WealthSurveyResult;
 }
 
-// ── P2 玩家间交易与财富流动系统（docs/财商流游戏/已实现/06-P2交易系统/）────
+// ── P2 玩家间交易与财富流动系统（lag_docs/财商流游戏/已实现/06-P2交易系统/）────
 //
 // 与 §3 数据结构逐字段对齐（JSON 名不可改；后端 view.go 是唯一实现）。
 

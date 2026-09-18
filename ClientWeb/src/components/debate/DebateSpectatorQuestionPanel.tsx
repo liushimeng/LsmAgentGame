@@ -1,7 +1,7 @@
 /**
  * 辩论比赛 观众提问面板 (2026-08-31 §20260831-05)
  *
- * 对齐 docs/辩论比赛/04 §6.1 观众交互 + §20260831-05:
+ * 对齐 lag_docs/辩论比赛/04 §6.1 观众交互 + §20260831-05:
  *   - 观众可向裁判 Agent 提问(走 debate.spectator_question WS 帧)
  *   - 问题广播给所有观众(含提问者自己)
  *   - 仅在 SpectatorConfig.AllowSpectatorQuestion=true 时展示

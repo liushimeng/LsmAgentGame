@@ -1,7 +1,7 @@
 // Package agent — tools_anthropic_wire.go: Agent ToolRegistry → Anthropic wire 转换。
 //
-// 2026-07-21 v5 重构（docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.2.4 +
-// docs/AgentAnthropic工具集与道具协议.md 第 5 章）：
+// 2026-07-21 v5 重构（lag_docs/狼人杀-道具与经济/狼人杀13人局道具系统设计.md §16.2.4 +
+// lag_docs/AgentAnthropic工具集与道具协议.md 第 5 章）：
 //
 //   - v4 把 Agent 工具 schema 直接塞到 anthropic.ChatRequest.Tools，schema 由调用
 //     方（agent.Run）传入；Anthropic provider 只做字段拷贝（`req.Tools`），不

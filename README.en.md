@@ -214,7 +214,7 @@ git submodule update --init --recursive  # optional
 #   - If neither file exists → synthesize both from the in-process defaults
 #     (since 2026-08-25 the synthesized file carries full defaults such as
 #      db.host=127.0.0.1 / db.port=3306 / db.name=lsmDB / db.user=root — see
-#      docs/通用功能/首次运行引导与超级管理员生命周期.md)
+#      lag_docs/通用功能/首次运行引导与超级管理员生命周期.md)
 # Edit LsmAgentGame.conf — set db.password, jwt.secret, llm.endpoint, etc.
 # Real secrets go only in LsmAgentGame.conf (excluded via .gitignore)
 
@@ -226,7 +226,7 @@ git submodule update --init --recursive  # optional
 # On any later restart, once the users table has records, both fields are
 # rewritten to "disable". Login/registration auth NEVER reads super-admin
 # credentials from the config file — there is no config-file backdoor.
-# Full lifecycle: docs/通用功能/首次运行引导与超级管理员生命周期.md
+# Full lifecycle: lag_docs/通用功能/首次运行引导与超级管理员生命周期.md
 
 # 3. Install frontend dependencies
 cd ClientWeb && npm install && cd ..
@@ -285,15 +285,15 @@ curl -sk https://127.0.0.1:39001/api/version
 ServerGo/                       Go backend (HTTPS 39001, WSS 39002)
 ClientWeb/                      React + Vite frontend
 proto/                          Protobuf source files (single source of truth)
-docs/                           Architecture, auth flow, API reference, Agent lessons
+lag_docs/                           Architecture, auth flow, API reference, Agent lessons
 python-generate-image-tool/     [Optional submodule] AI image generation (Volcengine Ark API)
 go-web-debug-tool/              [Optional submodule] Chrome CDP automated debug/screenshot
 ProjectPic/                     Project assets (local display) — werewolf-*.png are real-match screenshots
 ```
 
-Full design: [docs/架构与协议/整体架构.md](docs/架构与协议/整体架构.md),
-auth lifecycle: [docs/架构与协议/鉴权流程.md](docs/架构与协议/鉴权流程.md),
-HTTP/WS API: [docs/架构与协议/API参考.md](docs/架构与协议/API参考.md).
+Full design: [lag_docs/架构与协议/整体架构.md](lag_docs/架构与协议/整体架构.md),
+auth lifecycle: [lag_docs/架构与协议/鉴权流程.md](lag_docs/架构与协议/鉴权流程.md),
+HTTP/WS API: [lag_docs/架构与协议/API参考.md](lag_docs/架构与协议/API参考.md).
 
 ---
 

@@ -414,7 +414,7 @@ export interface Dict extends WealthDict {
   'werewolf.judge.summaryReady': string;
   // 2026-07-30 §重构 — 创建界面法官配置卡改为两选项:Agent 法官 / 真人法官。
   // AI 法官与原「主持人 Agent (法官)」是同一概念,真人法官当前等同 Agent 法官
-  // 运行(后端真人接入尚未实现,UI 占位对齐 docs/狼人杀-重构方案/主持人Agent重构设计.md)。
+  // 运行(后端真人接入尚未实现,UI 占位对齐 lag_docs/狼人杀-重构方案/主持人Agent重构设计.md)。
   'werewolf.judge.modeLabel': string;
   'werewolf.judge.mode.agent': string;
   'werewolf.judge.mode.human': string;

@@ -1,6 +1,6 @@
 // Package ws — 辩论比赛 WS 帧派发(2026-08-31 §20260831-01)。
 //
-// 端点对齐 docs/辩论比赛/00 §4.2:
+// 端点对齐 lag_docs/辩论比赛/00 §4.2:
 //
 //	C → S: debate.subscribe / debate.unsubscribe / debate.spectator_question / debate.like
 //	S → C: debate.state / debate.phase / debate.speech / debate.cross_exam / debate.score

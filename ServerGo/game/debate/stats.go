@@ -1,6 +1,6 @@
 // Package debate — 模型胜率统计(§20260831-06)。
 //
-// 设计依据:docs/辩论比赛/06-辩论比赛公平性与评审系统设计.md §9「历史统计」:
+// 设计依据:lag_docs/辩论比赛/06-辩论比赛公平性与评审系统设计.md §9「历史统计」:
 //
 //	每局评审结果产出后,按辩手模型累加 TotalGames / WinCount /
 //	BestDebaterCount / 队伍总分;GET /api/games/debate/stats 返回快照。

@@ -1,7 +1,7 @@
 package wwplayer
 
 // 2026-08-10 §20260810-08 — 信息账本二期 L2-12：KnowledgeDigestBlock 渲染。
-// 设计文档：docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260810-08.md
+// 设计文档：lag_docs/狼人杀-Agent与系统/狼人杀13人局Agent升级-20260810-08.md
 
 import (
 	"strings"

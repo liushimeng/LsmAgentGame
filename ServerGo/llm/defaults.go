@@ -18,7 +18,7 @@
 //   - The 8 models here are mirrored 1:1 with the historical LsmAgentGame.conf
 //     rows. Changing one without a coordinated DB migration will produce a
 //     different seed on first boot — fine, but document the change in
-//     docs/LLM与Agent/LLM供应商设计.md.
+//     lag_docs/LLM与Agent/LLM供应商设计.md.
 //   - Add new providers via t_lsm_game_llm_provider admin API after the room
 //     is running; only edit this list when the deployment is brand-new and the
 //     DB has never been seeded.

@@ -1,6 +1,6 @@
 // Package wealth — minsky.go: 明斯基金融不稳定引擎(2026-09-16 §财商流P1)。
 //
-// 实现设计文档: docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-Minsky与LPR引擎-v1.md §2。
+// 实现设计文档: lag_docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-Minsky与LPR引擎-v1.md §2。
 // 纯引擎层:无锁、无 goroutine、无 IO;triggerMinskyMoment / forceLiquidate 由
 // settlement.go 持房间锁调用。
 package wealth
