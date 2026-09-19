@@ -199,6 +199,9 @@
     "economy_enabled": true,
     // 社会调研系统(P1-2):默认 true;false 时发起入口返回 35010,
     // 既有 open 调研照常走完关闭流程。
-    "survey_enabled": true
+    "survey_enabled": true,
+    // 商业保险与风险转移引擎(P1-4,2026-09-19):默认 true;false 时投保/退保
+    // 返回 35041,月结不扣缴保费,意外事件不掷骰,view 不下发 insurance 段。
+    "insurance_enabled": true
   }
 }

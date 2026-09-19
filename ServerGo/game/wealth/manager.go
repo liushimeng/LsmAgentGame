@@ -49,6 +49,10 @@ type Config struct {
 	// NewManager 归一:零值 → true(false 回退 P0 行为;与 cfg.Wealth 同名键)。
 	EconomyEnabled bool
 	SurveyEnabled  bool
+	// P1-4(2026-09-19 §财商流P1-4 §11):商业保险与风险转移引擎总开关。
+	// NewManager 归一:零值 → true(false 时投保/退保返回 35041、月结不扣缴、
+	// 意外事件不掷骰)。
+	InsuranceEnabled bool
 }
 
 // LLMRegistry 窄接口(llm.Registry 满足;避免 manager 包 import llm)。
@@ -85,6 +89,10 @@ func NewManager(cfg Config, reg LLMRegistry) *Manager {
 	}
 	if !cfg.SurveyEnabled {
 		cfg.SurveyEnabled = true
+	}
+	// P1-4(§财商流P1-4 §11):零值 → true(默认开启)。
+	if !cfg.InsuranceEnabled {
+		cfg.InsuranceEnabled = true
 	}
 	return &Manager{
 		cfg:      cfg,
@@ -174,6 +182,8 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 	r = NewWealthRoom(roomID, m.cfg.MonthMs, m.cfg.PoolDefault, m.cfg.Seed, m.cfg.AgentConcurrency)
 	// P1(§6.5):economy/survey 房间级开关接线(Start 前回写)。
 	r.SetEconomyFlags(m.cfg.EconomyEnabled, m.cfg.SurveyEnabled)
+	// P1-4(§财商流P1-4 §11):保险引擎开关接线(Start 前回写)。
+	r.SetInsuranceEnabled(m.cfg.InsuranceEnabled)
 	if m.loader != nil {
 		r.mu.Lock()
 		r.docLoader = m.loader

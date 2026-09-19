@@ -14,15 +14,15 @@ import (
 
 // 月结常量(§9.2 P0 新定)。
 const (
-	livingSpouseCNY   = 2000 // 已婚配偶月支出
-	livingChildCNY    = 5000 // 每孩月支出
-	livingElderCNY    = 1000 // 赡养老人每位
-	propertyFeeCNY    = 500  // 物业费(有房者)
-	overtimeBonusRate = 0.3  // 加班奖金 = 当月工资 × 0.3
-	sideEnergyCost    = 2    // 副业月耗精力
-	overdueCreditHit  = 50   // 逾期信用分惩罚
-	creditCap         = 850
-	bankruptStopMonths = 3
+	livingSpouseCNY     = 2000 // 已婚配偶月支出
+	livingChildCNY      = 5000 // 每孩月支出
+	livingElderCNY      = 1000 // 赡养老人每位
+	propertyFeeCNY      = 500  // 物业费(有房者)
+	overtimeBonusRate   = 0.3  // 加班奖金 = 当月工资 × 0.3
+	sideEnergyCost      = 2    // 副业月耗精力
+	overdueCreditHit    = 50   // 逾期信用分惩罚
+	creditCap           = 850
+	bankruptStopMonths  = 3
 	liquidationDiscount = 0.7 // 破产清算房产/商铺 70% 变现
 )
 
@@ -38,8 +38,8 @@ type MonthSummary struct {
 
 // SettleResult 单月结算产出(广播 game.month 用)。
 type SettleResult struct {
-	Month int
-	Age   int
+	Month     int
+	Age       int
 	Summaries []MonthSummary
 	Events    []EventRecord // 本月新增事件
 	// MarketChanges 本月漂移后的市场快照(game.month.market_changes)。
@@ -92,6 +92,10 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		}
 		if p.StoppedMonths > 0 {
 			sum.Note = "停赛恢复中"
+		}
+		// P1-4(§财商流P1-4 §5.3): 意外身故座位摘要 note(身故赔付已入遗产池)。
+		if !p.Alive && p.Ending == EndingAccidentDeath {
+			sum.Note = "意外身故"
 		}
 		res.Summaries = append(res.Summaries, sum)
 	}
@@ -327,6 +331,12 @@ func (w *World) settlePlayer(p *Player, age int) {
 	if p.ownsProperty() {
 		w.Pay(seat, SeatEntity(seat), w.consumerPayTo(), propertyFeeCNY, CatProperty, "物业费")
 		addExpense(propertyFeeCNY, "property", "物业费")
+	}
+
+	// P1-4(§财商流P1-4 §4.1): 步骤3 末尾追加保费扣缴(《规则》§3.5 保险费属
+	// 保障支出;断缴/宽限期/失效语义在 insurance.go::SettlePremiums)。
+	if prem := w.SettlePremiums(p); prem > 0 {
+		addExpense(prem, "insurance", "保险费")
 	}
 
 	// ── 步骤4 税 + 社保(仅工资;8% 养老金个人账户 gov→seat 回流)。
@@ -628,6 +638,8 @@ func (w *World) AnnualAdjust() {
 			p.CreditScore += 20
 		}
 		p.OnTimeStreak = 0 // 年度滚动
+		// P1-4(§财商流P1-4 §4.3): 年结保费重定价(年龄档上浮 + CPI 累积上浮)。
+		w.RepricePolicies(p)
 		w.emitEvent("settle", seat, fmt.Sprintf("%d 号位年度调整:工资 %+d%%", seat, int(g*100)))
 	}
 }
@@ -636,13 +648,13 @@ func (w *World) AnnualAdjust() {
 
 // FinalScore 单座位三维评分。
 type FinalScore struct {
-	Seat       int     `json:"seat"`
-	FIScore    float64 `json:"fi_score"`
-	LifeScore  float64 `json:"life_score"`
+	Seat        int     `json:"seat"`
+	FIScore     float64 `json:"fi_score"`
+	LifeScore   float64 `json:"life_score"`
 	SocialScore float64 `json:"social_score"`
-	Total      float64 `json:"total"`
-	Ending     string  `json:"ending"`
-	Report     string  `json:"report"`
+	Total       float64 `json:"total"`
+	Ending      string  `json:"ending"`
+	Report      string  `json:"report"`
 }
 
 // FinalScores 终局评分(引擎确定性计算,report 纯模板拼接,不调 LLM)。

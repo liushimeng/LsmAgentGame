@@ -61,6 +61,8 @@ const (
 	EndingIndebted  = "indebted"    // 债务缠身(30–49)
 	EndingBankrupt  = "bankrupt"    // 破产出局(<30)
 	EndingLonelyRic = "lonely_rich" // 孤独富翁(FI≥1.5 且人生满意度<40)
+	// P1-4: 意外身故结局(2026-09-19 §财商流P1-4 §5.3;HandleDeath 唯一登记口)。
+	EndingAccidentDeath = "accident_death" // 意外身故(寿险/意外险赔付入遗产池)
 )
 
 // EventRecord 单条事件(10.3 事件播报;view 层映射 game.event / events_recent)。
@@ -90,6 +92,11 @@ type World struct {
 	// P1: 社会调研系统(§财商流P1-2 调研契约 §2)。
 	Surveys   []*Survey // 全房调研(≤20,按发起序)
 	SurveySeq int       // id 自增序列
+
+	// P1-4: 商业保险与风险转移引擎(2026-09-19 §财商流P1-4 §11)。NewWorld 恒置
+	// true;房间层 Start 时按配置回写(false 时投保/退保 35041、月结不扣缴、
+	// 意外事件不掷骰 —— rand 序列零偏移,固定种子存量对局回归一致)。
+	InsuranceEnabled bool
 
 	Players [MaxSeats]*Player // 空座 nil
 
@@ -131,8 +138,10 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		// P1: 真实经济循环恒开启(§6.5);economy_enabled=false 由房间层
 		// Start 时回写(NewManager 归一后传入)。
 		EconomyEnabled: true,
-		Goods:          NewGoodsMarket(),
-		Labor:          NewFirmSector(),
+		// P1-4: 保险引擎默认开启(§11;SetInsuranceEnabled 可覆盖)。
+		InsuranceEnabled: true,
+		Goods:            NewGoodsMarket(),
+		Labor:            NewFirmSector(),
 		// P2: 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
 		ListingBook:  NewListingBook(),
 		AuctionHouse: NewAuctionHouse(),

@@ -371,6 +371,11 @@ type WealthConfig struct {
 	// SurveyEnabled 社会调研系统(§财商流P1-2 调研契约 §6)。默认 true;false 时
 	// 发起入口返回 35010,既有 open 调研照常走完关闭流程。
 	SurveyEnabled bool `json:"survey_enabled"`
+	// InsuranceEnabled 商业保险与风险转移引擎(2026-09-19 §财商流P1-4)。默认 true;
+	// false 时:投保/退保返回 35041,月结不扣缴保费,意外事件不掷骰(rand 序列零偏移,
+	// 固定种子存量对局回归一致),view 不下发 insurance 段。零值强制 true
+	// (与 economy_enabled 同款取舍)。
+	InsuranceEnabled bool `json:"insurance_enabled"`
 }
 
 // RootDisabledSentinel 是 conf 中 root_account / root_password 的「禁用」哨兵值。
@@ -1064,6 +1069,10 @@ func applyDefaults(c *Config) {
 	}
 	if !c.Wealth.SurveyEnabled {
 		c.Wealth.SurveyEnabled = true
+	}
+	// P1-4(2026-09-19 §财商流P1-4 §11):商业保险默认开启;零值强制 true。
+	if !c.Wealth.InsuranceEnabled {
+		c.Wealth.InsuranceEnabled = true
 	}
 	// §128 对话即思考重构:AgentParallel 默认值已删除(原 §122)。
 

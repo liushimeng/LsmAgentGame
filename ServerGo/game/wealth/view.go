@@ -219,44 +219,73 @@ type MinskyOverview struct {
 
 // MarketJSON 是 market 字段(契约 §3,districts 顺序 = DistrictDefs)。
 type MarketJSON struct {
-	StockIndex float64                `json:"stock_index"`
-	GoldPrice  float64                `json:"gold_price"`
-	BondYield  float64                `json:"bond_yield"`
-	Districts  []MarketDistrictJSON   `json:"districts"`
+	StockIndex float64              `json:"stock_index"`
+	GoldPrice  float64              `json:"gold_price"`
+	BondYield  float64              `json:"bond_yield"`
+	Districts  []MarketDistrictJSON `json:"districts"`
 }
 
 // MarketDistrictJSON 是 districts 单项(idx_d / rent_index)。
 type MarketDistrictJSON struct {
-	ID        string  `json:"id"`
-	PriceIdx  float64 `json:"price_index"`
-	RentIdx   float64 `json:"rent_index"`
+	ID       string  `json:"id"`
+	PriceIdx float64 `json:"price_index"`
+	RentIdx  float64 `json:"rent_index"`
 }
 
 // PlayerJSON 是单座位公开信息。
 type PlayerJSON struct {
-	Seat          int     `json:"seat"`
-	Account       string  `json:"account"`
-	Nickname      string  `json:"nickname"`
-	IsBot         bool    `json:"is_bot"`
-	ModelDisplay  string  `json:"model_display"`
-	Profession    ProfJSON `json:"profession"`
-	District      string  `json:"district"`
-	HomeDistrict  string  `json:"home_district"`
-	Alive         bool    `json:"alive"`
-	Retired       bool    `json:"retired"`
-	Age           int     `json:"age"`
-	Resources     ResourceJSON `json:"resources"`
-	NetWorth      int64   `json:"net_worth"`
-	FIIndex       float64 `json:"fi_index"`
-	IncomeBand    string  `json:"income_band"`
-	StatusIcon    string  `json:"status_icon"`
-	LastAction    string  `json:"last_action"`
-	Ending        string  `json:"ending"`
+	Seat         int          `json:"seat"`
+	Account      string       `json:"account"`
+	Nickname     string       `json:"nickname"`
+	IsBot        bool         `json:"is_bot"`
+	ModelDisplay string       `json:"model_display"`
+	Profession   ProfJSON     `json:"profession"`
+	District     string       `json:"district"`
+	HomeDistrict string       `json:"home_district"`
+	Alive        bool         `json:"alive"`
+	Retired      bool         `json:"retired"`
+	Age          int          `json:"age"`
+	Resources    ResourceJSON `json:"resources"`
+	NetWorth     int64        `json:"net_worth"`
+	FIIndex      float64      `json:"fi_index"`
+	IncomeBand   string       `json:"income_band"`
+	StatusIcon   string       `json:"status_icon"`
+	LastAction   string       `json:"last_action"`
+	Ending       string       `json:"ending"`
 	// P1: 明斯基状态(v2.60 N11-4)。
-	MinskyTier   string  `json:"minsky_tier"`   // hedge/speculative/ponzi(主导等级)
+	MinskyTier   string  `json:"minsky_tier"`    // hedge/speculative/ponzi(主导等级)
 	DebtToIncome float64 `json:"debt_to_income"` // 主导贷款月供/月收入(0-1+)
 	// P1(§财商流P1-2 §6.2):消费档位(0-3,档位是公开生活方式)。
 	ConsumptionLevel int `json:"consumption_level"`
+	// P1-4(§财商流P1-4 §8.2):该座位 Active 保单险种列表(是否投保是公开信息)。
+	InsuredKinds []string `json:"insured_kinds,omitempty"`
+}
+
+// InsuranceJSON 是 my.insurance 子结构(P1-4 §8.2;insurance_enabled=false 时 omit)。
+type InsuranceJSON struct {
+	Policies       []PolicyJSON `json:"policies"`        // 已有保单(含失效,最近 8 张)
+	MonthlyPremium int64        `json:"monthly_premium"` // 当前月缴合计
+	Quotes         []QuoteJSON  `json:"quotes"`          // 未投保/已失效险种的当前报价
+}
+
+// PolicyJSON 是 my.insurance.policies 单张(P1-4 §8.2)。
+type PolicyJSON struct {
+	Kind              string `json:"kind"`
+	AnnualPremiumCNY  int64  `json:"annual_premium_cny"`
+	MonthlyPremiumCNY int64  `json:"monthly_premium_cny"`
+	CoverageCNY       int64  `json:"coverage_cny"`
+	StartMonth        int    `json:"start_month"`
+	PaidMonths        int    `json:"paid_months"`
+	WaitingLeft       int    `json:"waiting_left"` // 等待期剩余月(0=已过)
+	Status            string `json:"status"`       // active|waiting|grace|lapsed(§2.3 派生)
+	ClaimsTotalCNY    int64  `json:"claims_total_cny"`
+}
+
+// QuoteJSON 是 my.insurance.quotes 单条(P1-4 §8.2;当前年龄档现价)。
+type QuoteJSON struct {
+	Kind             string `json:"kind"`
+	AnnualPremiumCNY int64  `json:"annual_premium_cny"`
+	CoverageCNY      int64  `json:"coverage_cny"`
 }
 
 // ProfJSON 是职业卡公开字段。
@@ -275,34 +304,36 @@ type ResourceJSON struct {
 
 // MyJSON 是 my.* 全量快照(仅本人/已登录玩家可见,观战者 = nil)。
 type MyJSON struct {
-	Cash          int64           `json:"cash"`
-	SavingsDeposit int64          `json:"savings_deposit"` // P1: 定期存款(M2)
-	Salary        int64           `json:"salary"`
-	SpouseIncome  int64           `json:"spouse_income"`
-	SideIncome    int64           `json:"side_income"`
-	PassiveIncome int64           `json:"passive_income"`
-	Monthly       MyMonthlyJSON   `json:"monthly"`
-	Resources     ResourceJSON    `json:"resources"`
-	Assets        []MyAssetJSON   `json:"assets"`
-	Loans         []MyLoanJSON    `json:"loans"`
-	PensionCNY    int64           `json:"pension_cny"`
-	CreditScore   int             `json:"credit_score"`
-	Family        MyFamilyJSON    `json:"family"`
-	FIIndex       float64         `json:"fi_index"`
-	NetWorth      int64           `json:"net_worth"`
-	Goals         []string        `json:"goals"`
+	Cash           int64         `json:"cash"`
+	SavingsDeposit int64         `json:"savings_deposit"` // P1: 定期存款(M2)
+	Salary         int64         `json:"salary"`
+	SpouseIncome   int64         `json:"spouse_income"`
+	SideIncome     int64         `json:"side_income"`
+	PassiveIncome  int64         `json:"passive_income"`
+	Monthly        MyMonthlyJSON `json:"monthly"`
+	Resources      ResourceJSON  `json:"resources"`
+	Assets         []MyAssetJSON `json:"assets"`
+	Loans          []MyLoanJSON  `json:"loans"`
+	PensionCNY     int64         `json:"pension_cny"`
+	CreditScore    int           `json:"credit_score"`
+	Family         MyFamilyJSON  `json:"family"`
+	FIIndex        float64       `json:"fi_index"`
+	NetWorth       int64         `json:"net_worth"`
+	Goals          []string      `json:"goals"`
 	// P1(§财商流P1-2 §6.2):上月消费结构(仅本人;nil→{})。
 	ConsumptionByGoods map[string]float64 `json:"consumption_by_goods"`
+	// P1-4(§财商流P1-4 §8.2):商业保险段(仅本人;insurance_enabled=false 时 omit)。
+	Insurance *InsuranceJSON `json:"insurance,omitempty"`
 }
 
 // MyMonthlyJSON 是 my.monthly 子结构。
 type MyMonthlyJSON struct {
-	Income  int64                `json:"income"`
-	Expense int64                `json:"expense"`
-	Net     int64                `json:"net"`
-	Tax     int64                `json:"tax"`
-	Social  int64                `json:"social"`
-	Detail  []MyMonthlyItemJSON  `json:"detail"`
+	Income  int64               `json:"income"`
+	Expense int64               `json:"expense"`
+	Net     int64               `json:"net"`
+	Tax     int64               `json:"tax"`
+	Social  int64               `json:"social"`
+	Detail  []MyMonthlyItemJSON `json:"detail"`
 }
 
 // MyMonthlyItemJSON 是 my.monthly.detail 单行。
@@ -478,18 +509,21 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 			Seat: s, Account: pp.Card.ID, Nickname: nicknames[s],
 			IsBot: botSeats[s], ModelDisplay: ModelDisplayName(modelKeys[s]),
 			Profession: ProfJSON{ID: pp.Card.ID, Title: pp.Card.Title, Avatar: avatarID(pp.Card.ID)},
-			District: pp.District, HomeDistrict: pp.HomeDistrict,
+			District:   pp.District, HomeDistrict: pp.HomeDistrict,
 			Alive: pp.Alive, Retired: false, Age: pp.Age,
-			Resources: ResourceJSON{Energy: pp.Energy, Network: pp.Network, Cognition: pp.Cognition},
-			NetWorth:  pp.NetWorth(world.Market),
-			FIIndex:   pp.FIIndex(world.Market, world.Age()),
-			IncomeBand: pp.IncomeBand(),
-			StatusIcon: pp.StatusIcon,
-			LastAction: pp.LastActionText,
-			Ending:     pp.Ending,
-			MinskyTier: minskyTier,
-			DebtToIncome: dti,
+			Resources:        ResourceJSON{Energy: pp.Energy, Network: pp.Network, Cognition: pp.Cognition},
+			NetWorth:         pp.NetWorth(world.Market),
+			FIIndex:          pp.FIIndex(world.Market, world.Age()),
+			IncomeBand:       pp.IncomeBand(),
+			StatusIcon:       pp.StatusIcon,
+			LastAction:       pp.LastActionText,
+			Ending:           pp.Ending,
+			MinskyTier:       minskyTier,
+			DebtToIncome:     dti,
 			ConsumptionLevel: pp.ConsumptionLevelSafe(),
+			// P1-4 §8.2:insurance_enabled=false 时 insured_kinds 恒空(与
+			// my.insurance omit 同口径,防中途关开关后冻结保单泄漏公开字段)。
+			InsuredKinds: world.insuredKindsOf(pp),
 		}
 		cs.Players[s] = pj
 	}
@@ -499,6 +533,10 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 	if !isSpectator && viewer >= 0 && viewer < MaxSeats {
 		cs.MySeat = viewer
 		cs.My = myJSONFor(world.Players[viewer])
+		// P1-4(§财商流P1-4 §8.2):insurance_enabled=false 时整体 omit。
+		if world.InsuranceEnabled && cs.My != nil {
+			cs.My.Insurance = world.buildInsuranceJSON(world.Players[viewer])
+		}
 	} else {
 		cs.MySeat = -1
 		cs.My = nil

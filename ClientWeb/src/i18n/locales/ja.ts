@@ -1,5 +1,6 @@
 import type { Dict } from '../types';
 import wealthP2 from './wealthP2-ja';
+import wealthInsurance from './wealthInsurance-ja';
 
 // 日本語 — ja
 const ja: Dict = {
@@ -1683,6 +1684,9 @@ const ja: Dict = {
 
   // ── P2 取引システムを wealthP2-ja.ts に分割 ──
   ...wealthP2,
+
+  // ── P1-4 商業保険を wealthInsurance-ja.ts に分割（≤1800 行制約）──
+  ...wealthInsurance,
 
   // ── P1 ミンスキーエンジン + LPR リプライシング + 早期返済 ──
   'minsky.title': 'ミンスキー融資状態',

@@ -53,6 +53,14 @@ func (w *World) MonthlyEvents() {
 		p.RehireSalaryRatio = ratio
 		w.emitEvent("life", seat, fmt.Sprintf("%d 号位(%s)被裁员,失业 %d 个月", seat, p.Card.Title, months))
 	}
+
+	// P1-4(§财商流P1-4 §5.2): 尾部意外事件掷骰。insurance_enabled=false 时
+	// 不掷骰(零 rand 消费,固定种子存量对局回归零偏移)。
+	if w.InsuranceEnabled {
+		for _, seat := range w.alivePlayers() {
+			w.rollAccident(seat)
+		}
+	}
 }
 
 // advanceUnemployment 失业期推进(月结步骤1 前调用):期满自动再就业
@@ -143,6 +151,9 @@ func (w *World) BellEvents() {
 			} else {
 				w.emitEvent("life", seat, fmt.Sprintf("%d 号位健康亮红灯,医疗支出 ¥%d", seat, cost))
 			}
+			// P1-4(§财商流P1-4 §5.1): 医疗事件理赔管线(百万医疗报销 90% +
+			// 重疾定额给付;等待期/未投保不赔)。isMajor 与既有重疾判定同阈值。
+			w.SettleMedicalClaims(seat, cost, cost >= 100000)
 		}
 
 		// 生日恢复:当年无大病 → 精力 +2(《规则》§2.4)。

@@ -39,28 +39,31 @@ type Action struct {
 
 // 动作类型常量(协议 §4)。
 const (
-	ActBuyAsset         = "buy_asset"
-	ActSellAsset        = "sell_asset"
-	ActBuyHouse         = "buy_house"
-	ActTakeLoan         = "take_loan"
-	ActRepayLoan        = "repay_loan"
-	ActStartSide        = "start_side_business"
-	ActStopSide         = "stop_side_business"
-	ActStudy            = "study"
-	ActSocialize        = "socialize"
-	ActRest             = "rest"
-	ActWorkOvertime     = "work_overtime"
-	ActMoveDistrict     = "move_district"
-	ActConsume          = "consume"
-	ActDonate           = "donate"
-	ActSubmitMonth      = "submit_month"
+	ActBuyAsset     = "buy_asset"
+	ActSellAsset    = "sell_asset"
+	ActBuyHouse     = "buy_house"
+	ActTakeLoan     = "take_loan"
+	ActRepayLoan    = "repay_loan"
+	ActStartSide    = "start_side_business"
+	ActStopSide     = "stop_side_business"
+	ActStudy        = "study"
+	ActSocialize    = "socialize"
+	ActRest         = "rest"
+	ActWorkOvertime = "work_overtime"
+	ActMoveDistrict = "move_district"
+	ActConsume      = "consume"
+	ActDonate       = "donate"
+	ActSubmitMonth  = "submit_month"
 	// P1 新增: 活期→定期 / 定期→活期。
-	ActDeposit          = "deposit"
-	ActWithdraw         = "withdraw"
+	ActDeposit  = "deposit"
+	ActWithdraw = "withdraw"
 	// P1 新增: 提前还款(v2.60 N12-5)。
-	ActEarlyRepay       = "early_repay"
+	ActEarlyRepay = "early_repay"
 	// P1 新增(§财商流P1-2 §3.5): 设置消费档位(0-3)。
-	ActSetConsumption   = "set_consumption"
+	ActSetConsumption = "set_consumption"
+	// P1 新增(§财商流P1-4 §8.1): 商业保险投保/退保(复用 Kind 字段,Action struct 零变更)。
+	ActBuyInsurance    = "buy_insurance"
+	ActCancelInsurance = "cancel_insurance"
 )
 
 // 信用贷档位面额(协议 §4:credit 档位必须是 50000/100000/200000 之一)。
@@ -131,6 +134,10 @@ func (w *World) ApplyAction(seat int, a Action) (string, *errcode.Error) {
 		return w.actEarlyRepay(p, a)
 	case ActSetConsumption:
 		return w.actSetConsumption(p, a)
+	case ActBuyInsurance:
+		return w.actBuyInsurance(p, a)
+	case ActCancelInsurance:
+		return w.actCancelInsurance(p, a)
 	default:
 		return "", errcode.CodeMsg(errcode.ErrValidationFailed, "unknown wealth action: "+a.Type)
 	}

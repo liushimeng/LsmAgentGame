@@ -106,22 +106,22 @@ const (
 
 	// 35001–35012 — 财商流游戏(wealth)专用段(2026-09-14 §财商流P0)。
 	// 契约: lag_docs/财商流游戏/已实现/02-架构设计/财商流游戏-WS与HTTP协议契约-v1.md §5。
-	ErrWealthRoomNotFound           = 35001
-	ErrWealthNotPlaying             = 35002
-	ErrWealthNotEnoughPlayers       = 35003
-	ErrWealthWrongPhase             = 35004
-	ErrWealthPlayerInactive         = 35005
-	ErrWealthActionBudgetExhausted  = 35006
-	ErrWealthInsufficientCash       = 35007
-	ErrWealthAssetInvalid           = 35008
-	ErrWealthLoanInvalid            = 35009
-	ErrWealthGateFailed             = 35010
-	ErrWealthNotOwner               = 35011
-	ErrWealthProfessionPoolEmpty    = 35012
+	ErrWealthRoomNotFound          = 35001
+	ErrWealthNotPlaying            = 35002
+	ErrWealthNotEnoughPlayers      = 35003
+	ErrWealthWrongPhase            = 35004
+	ErrWealthPlayerInactive        = 35005
+	ErrWealthActionBudgetExhausted = 35006
+	ErrWealthInsufficientCash      = 35007
+	ErrWealthAssetInvalid          = 35008
+	ErrWealthLoanInvalid           = 35009
+	ErrWealthGateFailed            = 35010
+	ErrWealthNotOwner              = 35011
+	ErrWealthProfessionPoolEmpty   = 35012
 	// P1: 财商流提前还款 / 明斯基(v2.60 N11-4/N11-5/N12-3/N12-5)专用错误码。
-	ErrLoanNotFound          = 35013
+	ErrLoanNotFound           = 35013
 	ErrEarlyRepayOnlyMortgage = 35014
-	ErrCashNotEnoughRepay    = 35015
+	ErrCashNotEnoughRepay     = 35015
 	// 35016–35020 — 财商流 P1 真实经济循环 + 社会调研(2026-09-16 §财商流P1-2)。
 	ErrWealthSurveyOptionsInvalid    = 35016 // 调研选项数非法(须 2-6)或选项索引越界
 	ErrWealthSurveyOpenExists        = 35017 // 已有进行中的调研(每房同时 1 个 open)
@@ -129,22 +129,29 @@ const (
 	ErrWealthSurveyNotFound          = 35019 // 调研不存在/已关闭/已回答
 	ErrWealthConsumptionLevelInvalid = 35020 // 消费档位非法(须 0-3)
 	// 35021–35035 — 财商流 P2 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
-	ErrWealthListingInvalid      = 35021 // 挂单无效(资产不存在/参数非法)
-	ErrWealthListingExpired      = 35022 // 挂单已过期
-	ErrWealthListingNotFound     = 35023 // 挂单不存在
-	ErrWealthNegotiateNotFound   = 35024 // 议价会话不存在
-	ErrWealthNotYourTurn         = 35025 // 非议价轮次(非本方出价)
-	ErrWealthLoanRateInvalid     = 35026 // 借贷利率超限(0.3%-3.6%/月)
-	ErrWealthLoanNoCredit        = 35027 // 信用不足(无法借贷)
-	ErrWealthGuarantorConflict   = 35028 // 担保人冲突(不可自担保/已担保过)
-	ErrWealthAuctionEnded        = 35029 // 拍卖已结束
-	ErrWealthBidTooLow           = 35030 // 出价低于当前最高价/起拍价
-	ErrWealthNoPrivilege         = 35031 // 权限不足(非自由圈)
-	ErrWealthListingFull         = 35032 // 挂单已满(每座位最多 3 笔)
-	ErrWealthSelfTrade           = 35033 // 不可自交易(买卖双方相同)
-	ErrWealthAuctionNotFound     = 35034 // 拍卖不存在
-	ErrWealthInfoNotFound        = 35035 // 信息不存在/未成交
-	ErrWealthFullAgentReject    = 35036 // 全 Agent 房间拒绝人类加入(2026-09-19 §全Agent模式)
+	ErrWealthListingInvalid    = 35021 // 挂单无效(资产不存在/参数非法)
+	ErrWealthListingExpired    = 35022 // 挂单已过期
+	ErrWealthListingNotFound   = 35023 // 挂单不存在
+	ErrWealthNegotiateNotFound = 35024 // 议价会话不存在
+	ErrWealthNotYourTurn       = 35025 // 非议价轮次(非本方出价)
+	ErrWealthLoanRateInvalid   = 35026 // 借贷利率超限(0.3%-3.6%/月)
+	ErrWealthLoanNoCredit      = 35027 // 信用不足(无法借贷)
+	ErrWealthGuarantorConflict = 35028 // 担保人冲突(不可自担保/已担保过)
+	ErrWealthAuctionEnded      = 35029 // 拍卖已结束
+	ErrWealthBidTooLow         = 35030 // 出价低于当前最高价/起拍价
+	ErrWealthNoPrivilege       = 35031 // 权限不足(非自由圈)
+	ErrWealthListingFull       = 35032 // 挂单已满(每座位最多 3 笔)
+	ErrWealthSelfTrade         = 35033 // 不可自交易(买卖双方相同)
+	ErrWealthAuctionNotFound   = 35034 // 拍卖不存在
+	ErrWealthInfoNotFound      = 35035 // 信息不存在/未成交
+	ErrWealthFullAgentReject   = 35036 // 全 Agent 房间拒绝人类加入(2026-09-19 §全Agent模式)
+	// 35037–35041 — 财商流 P1 商业保险与风险转移引擎(2026-09-19 §财商流P1-4)。
+	// 契约: lag_docs/财商流游戏/已实现/10-P1保险系统/财商流游戏-P1-商业保险与风险转移引擎-v1.md §9。
+	ErrWealthInsuranceKindInvalid = 35037 // kind 非 4 险种之一
+	ErrWealthInsuranceExists      = 35038 // 重复投保同险种(每人每险种 1 张有效保单)
+	ErrWealthInsuranceNotFound    = 35039 // 退保/操作时无有效保单
+	ErrWealthInsuranceAgeGate     = 35040 // 主时钟年龄 > 55 禁止新投保
+	ErrWealthInsuranceDisabled    = 35041 // insurance_enabled=false 引擎关闭
 	// ErrAlreadyWolfVoted: 狼人在 night_wolves 阶段已投过票(含弃权),
 	// 再次调用 wolf_kill 一律拒绝。R196 报告 P1:Bot 8 (GLM-5.2) 反复投票
 	// 15+ 次服务端仅覆盖不报错,LLM 看不到反馈陷入循环。
@@ -221,9 +228,9 @@ var DefaultMessages = map[int]string{
 	ErrWealthNotOwner:              "wealth operation requires room owner",
 	ErrWealthProfessionPoolEmpty:   "wealth profession pool unavailable",
 	// P1: 财商流提前还款 / 明斯基错误码默认英文消息。
-	ErrLoanNotFound:          "loan not found",
+	ErrLoanNotFound:           "loan not found",
 	ErrEarlyRepayOnlyMortgage: "early repay only allowed for mortgage loans",
-	ErrCashNotEnoughRepay:    "cash not enough for early repayment (including penalty)",
+	ErrCashNotEnoughRepay:     "cash not enough for early repayment (including penalty)",
 	// 35016–35020 — 财商流 P1 真实经济循环 + 社会调研(2026-09-16 §财商流P1-2)。
 	ErrWealthSurveyOptionsInvalid:    "survey options invalid (need 2-6 non-empty) or option index out of range",
 	ErrWealthSurveyOpenExists:        "an open survey already exists (one open per room)",
@@ -231,22 +238,28 @@ var DefaultMessages = map[int]string{
 	ErrWealthSurveyNotFound:          "survey not found / closed / already answered",
 	ErrWealthConsumptionLevelInvalid: "consumption level invalid (must be 0-3)",
 	// 35021–35035 — 财商流 P2 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
-	ErrWealthListingInvalid:      "wealth listing invalid (asset not found or params invalid)",
-	ErrWealthListingExpired:      "wealth listing expired",
-	ErrWealthListingNotFound:     "wealth listing not found",
-	ErrWealthNegotiateNotFound:   "wealth negotiate session not found",
-	ErrWealthNotYourTurn:         "wealth negotiate not your turn to respond",
-	ErrWealthLoanRateInvalid:     "wealth loan rate out of range (0.3%-3.6% per month)",
-	ErrWealthLoanNoCredit:        "wealth loan credit score too low",
-	ErrWealthGuarantorConflict:   "wealth guarantor conflict (self-guarantee or already guaranteed)",
-	ErrWealthAuctionEnded:        "wealth auction already ended",
-	ErrWealthBidTooLow:           "wealth bid too low (below current highest/reserve)",
-	ErrWealthNoPrivilege:         "wealth operation requires free-circle privilege",
-	ErrWealthListingFull:         "wealth listing full (max 3 per seat)",
-	ErrWealthSelfTrade:           "wealth self-trade not allowed (buyer=seller)",
-	ErrWealthAuctionNotFound:     "wealth auction not found",
-	ErrWealthInfoNotFound:        "wealth info not found or not won",
-	ErrWealthFullAgentReject:    "wealth full-agent room rejects human join, use spectate instead",
+	ErrWealthListingInvalid:    "wealth listing invalid (asset not found or params invalid)",
+	ErrWealthListingExpired:    "wealth listing expired",
+	ErrWealthListingNotFound:   "wealth listing not found",
+	ErrWealthNegotiateNotFound: "wealth negotiate session not found",
+	ErrWealthNotYourTurn:       "wealth negotiate not your turn to respond",
+	ErrWealthLoanRateInvalid:   "wealth loan rate out of range (0.3%-3.6% per month)",
+	ErrWealthLoanNoCredit:      "wealth loan credit score too low",
+	ErrWealthGuarantorConflict: "wealth guarantor conflict (self-guarantee or already guaranteed)",
+	ErrWealthAuctionEnded:      "wealth auction already ended",
+	ErrWealthBidTooLow:         "wealth bid too low (below current highest/reserve)",
+	ErrWealthNoPrivilege:       "wealth operation requires free-circle privilege",
+	ErrWealthListingFull:       "wealth listing full (max 3 per seat)",
+	ErrWealthSelfTrade:         "wealth self-trade not allowed (buyer=seller)",
+	ErrWealthAuctionNotFound:   "wealth auction not found",
+	ErrWealthInfoNotFound:      "wealth info not found or not won",
+	ErrWealthFullAgentReject:   "wealth full-agent room rejects human join, use spectate instead",
+	// 35037–35041 — 财商流 P1 商业保险(2026-09-19 §财商流P1-4 §9 默认英文消息)。
+	ErrWealthInsuranceKindInvalid: "wealth insurance kind invalid",
+	ErrWealthInsuranceExists:      "wealth active policy already exists for this kind",
+	ErrWealthInsuranceNotFound:    "wealth no active policy for this kind",
+	ErrWealthInsuranceAgeGate:     "wealth insurance purchase not allowed above age 55",
+	ErrWealthInsuranceDisabled:    "wealth insurance engine disabled by config",
 }
 
 // Code constructs a Coded error.

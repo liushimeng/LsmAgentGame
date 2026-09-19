@@ -23,10 +23,11 @@ import { WEALTH_MIN_SEATS, wealthOccupiedSeats, wealthSeatCapacity } from '@/typ
  * 右侧面板 Tab（聊天 / Agent 思维独立于 Tab 栈之外）。
  * P1 第二期扩展：economy（经济循环引擎）/ survey（社会调研系统）。
  * P2 第三期扩展：listing（挂单簿）/ loan（借贷）/ infomarket（信息市场）。
+ * P1-4 扩展：insurance（商业保险，§财商流P1-4 §10.1）。
  */
 export type WealthPanelTab =
   | 'finance' | 'market' | 'ledger' | 'economy' | 'survey'
-  | 'listing' | 'loan' | 'infomarket';
+  | 'listing' | 'loan' | 'infomarket' | 'insurance';
 
 /** 市场快照（走势迷你图 + 相对上月箭头用）。 */
 export interface WealthMarketPoint {

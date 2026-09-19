@@ -1,0 +1,199 @@
+/* ─── 财商流 P1-4 商业保险（InsurancePanel）样式 — 2026-09-19 §财商流P1-4 ───
+ *
+ * 独立成文件：wealth.css 已 1738 行（逼近 CLAUDE.md §4 的 1800 行上限），
+ * 经 globals.css 链尾 @import 加载（只追加不改序，§2.1 约束 4）。
+ * 选择器全部为新增 .wealth-insurance-* 前缀，与既有规则零级联冲突。
+ *
+ * 对比度硬阈值（CLAUDE.md §26）：徽章白字 ≥5:1 / 正文 ≥4.5:1；
+ * 禁用按钮沿用 wealth.css 的 .wealth-root .btn:disabled（独立灰底 +
+ * cursor:not-allowed + 显式 opacity:1，无低透明反模式）；
+ * 状态徽章四色全部白字实底（§26.2 反模式 #1/#2 一票否决项均不触碰）。
+ * 触控目标 --wealth-touch-target: 44px；prefers-reduced-motion 关闭过渡。
+ */
+
+/* ── 面板骨架 ── */
+.wealth-insurance {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.wealth-insurance__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--wealth-border);
+}
+
+.wealth-insurance__title {
+  font-weight: 700;
+  color: var(--wealth-text); /* #e5e7eb on #161d28 ≈ 13:1 */
+  white-space: nowrap;
+}
+
+.wealth-insurance__monthly {
+  font-size: 12px;
+  color: var(--wealth-text-dim); /* ≈ 8:1 */
+  white-space: nowrap;
+}
+
+.wealth-insurance__monthly b {
+  font-size: 13px;
+}
+
+/* 观战 / 全 Agent 模式只读提示（黄底深字改为琥珀实底白字，≥5:1） */
+.wealth-insurance__hint {
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #ffffff;
+  background: #4c1d95; /* 紫底白字 ≈ 8:1（与 wealth-badge--spectator 同源） */
+}
+
+/* ── 4 险种卡网格（2×2；窄侧栏回落单列）── */
+.wealth-insurance__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 1280px) {
+  .wealth-insurance__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wealth-insurance__card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--wealth-border);
+  border-radius: 10px;
+  background: var(--wealth-panel-2); /* #1c2431 */
+  transition: border-color 0.15s ease;
+}
+
+.wealth-insurance__card:hover {
+  border-color: var(--wealth-accent-strong);
+}
+
+/* 持有中：绿色左边条（与徽章同语义；非选中态，仅 2px 装饰） */
+.wealth-insurance__card--holding {
+  border-left: 3px solid var(--wealth-pos);
+}
+
+/* 已失效：灰化边框 + 虚线（数据仍可读，仅弱化容器） */
+.wealth-insurance__card--lapsed {
+  border-left: 3px dashed #4b5563;
+}
+
+.wealth-insurance__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.wealth-insurance__kind {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--wealth-text); /* ≈ 12:1 */
+}
+
+/* ── 状态徽章四色 + 未投保空态（白字实底，全部 ≥5:1；§26.3 三件套）── */
+.wealth-insurance__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 17px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #374151; /* 灰底白字 ≈ 8.6:1（默认兜底） */
+  white-space: nowrap;
+}
+
+.wealth-insurance__badge--active  { background: #15803d; } /* 绿底白字 ≈ 5.0:1 */
+.wealth-insurance__badge--waiting { background: #b45309; } /* 琥珀底白字 ≈ 5.3:1 */
+.wealth-insurance__badge--grace   { background: #92400e; } /* 橙底白字 ≈ 5.6:1 */
+.wealth-insurance__badge--lapsed  { background: #374151; } /* 灰底白字 ≈ 8.6:1 */
+.wealth-insurance__badge--none    { background: #374151; } /* 未投保占位 ─ */
+
+/* ── 保单数据行 ── */
+.wealth-insurance__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--wealth-text-dim); /* #b7bfcc on #1c2431 ≈ 8:1 */
+}
+
+.wealth-insurance__rows li {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.wealth-insurance__sub {
+  color: var(--wealth-text-dim);
+  font-size: 11px;
+}
+
+/* 身故理赔进遗产池提示行（白字紫底弱化版 → 直接紫底白字徽标行） */
+.wealth-insurance__note {
+  padding: 2px 8px;
+  border-radius: 6px;
+  color: #ffffff;
+  background: #4c1d95; /* ≈ 8:1 */
+}
+
+/* ── 报价区（未投保 / 已失效 → 当前年龄档现价）── */
+.wealth-insurance__quote {
+  margin: 0;
+  font-size: 12px;
+  color: var(--wealth-text-dim);
+}
+
+.wealth-insurance__quote small {
+  color: var(--wealth-text-dim); /* ≈ 8:1 */
+}
+
+/* ── 投保 / 退保按钮（全宽；禁用态走 .btn:disabled 既有合规规则）── */
+.wealth-insurance__buy,
+.wealth-insurance__cancel {
+  width: 100%;
+  margin-top: auto;
+  min-height: var(--wealth-touch-target);
+  font-size: 13px;
+}
+
+/* ── 面板内联错误条（§7.1 优先级 1；实底暗红 + 浅红字 ≈ 9.9:1）── */
+.wealth-insurance__error {
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #fecaca;
+  background: #7f1d1d;
+}
+
+/* ── 意外身故结局徽章（P1-4 §5.3；白字 ≈ 7.5:1）── */
+.wealth-ending--accident_death { background: #334155; }
+
+/* ── 动效兜底（§26.3：prefers-reduced-motion 关闭过渡）── */
+@media (prefers-reduced-motion: reduce) {
+  .wealth-insurance__card,
+  .wealth-insurance__card:hover {
+    transition: none;
+  }
+}

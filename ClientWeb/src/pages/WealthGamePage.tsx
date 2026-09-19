@@ -39,6 +39,7 @@ import { MonthTicker } from '@/components/wealth/MonthTicker';
 import { ListingPanel } from '@/components/wealth/ListingPanel';
 import { LoanPanel } from '@/components/wealth/LoanPanel';
 import { InfoMarketPanel } from '@/components/wealth/InfoMarketPanel';
+import { InsurancePanel } from '@/components/wealth/InsurancePanel';
 import { GameOverModal } from '@/components/wealth/GameOverModal';
 import { WealthBotPanel } from '@/components/wealth/WealthBotPanel';
 import { WealthGameChatPanel } from '@/components/wealth/WealthGameChatPanel';
@@ -177,6 +178,8 @@ export function WealthGamePage() {
     { key: 'listing', label: `📋 ${t('wealth.tab.listing' as TKey)}` },
     { key: 'loan', label: `🏦 ${t('wealth.tab.loan' as TKey)}` },
     { key: 'infomarket', label: `🔍 ${t('wealth.tab.infomarket' as TKey)}` },
+    // P1 第四期：商业保险（观战视图空态只读，按钮对观战者隐藏）。
+    { key: 'insurance', label: `🛡 ${t('wealth.tab.insurance' as TKey)}` },
   ];
 
   return (
@@ -340,6 +343,15 @@ export function WealthGamePage() {
                 mySeat={effectiveSeat}
                 sendTrade={sendTrade}
                 onRefresh={() => sendTrade({ type: 'listing_view' })}
+              />
+            )}
+            {/* P1 第四期：商业保险（my.insurance 驱动；观战 / 全 Agent 模式只读）。 */}
+            {panelTab === 'insurance' && (
+              <InsurancePanel
+                insurance={gameState?.my?.insurance ?? null}
+                myCash={gameState?.my?.cash ?? 0}
+                spectator={spectator || (gameState?.my_seat ?? -1) < 0}
+                onAction={sendAction}
               />
             )}
           </div>

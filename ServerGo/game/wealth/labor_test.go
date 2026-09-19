@@ -24,6 +24,10 @@ func laborWorld(seed int64, n int) *World {
 		p.HomeDistrict = "residential"
 		w.Players[s] = p
 	}
+	// P1-4(2026-09-19 §财商流P1-4):关闭保险引擎掷骰 —— 本文件聚焦劳动力市场,
+	// 意外事件 rand 消费会平移固定种子轨迹,破坏 §10.2 单调性标定(§12 契约:
+	// insurance_enabled=false 时 rand 序列零偏移,等价 P1-4 前行为)。
+	w.InsuranceEnabled = false
 	w.StartGame()
 	return w
 }

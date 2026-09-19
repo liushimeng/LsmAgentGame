@@ -14,7 +14,7 @@ const (
 	EntityBank    = "bank"    // 银行:贷款放出/还本付息;工资代发(雇主并入 bank)
 	EntityMarket  = "market"  // 市场:资产买卖/租金/佣金/中介费/资本利得
 	EntityGov     = "gov"     // 政府:个税/社保(pension 类白名单 gov→seat)
-	EntityInsurer = "insurer" // 保险(P0 预留,无交易)
+	EntityInsurer = "insurer" // 保险公司:保费收 / 理赔付(P1-4 激活,2026-09-19 §财商流P1-4)
 	EntityWorld   = "world"   // 系统外:from=world 仅限初始注入;to=world=公益转移/消费类
 	// EntityFirms 企业部门(P1 §财商流P1-2):家庭消费的接收方;只收不付
 	// (工资仍由 bank 代发;企业营收回流玩家为 P2 分红)。
@@ -73,6 +73,9 @@ const (
 	CatAuctionFee   = "auction_fee"   // 拍卖佣金
 	CatInfoTrade    = "info_trade"    // 信息交易
 	CatNegotiateFee = "negotiate_fee" // 议价服务费
+	// P1-4: 商业保险(2026-09-19 §财商流P1-4 §6.1)。
+	CatPremium = "premium" // 保费(座位→保险公司)
+	CatClaim   = "claim"   // 理赔(保险公司→座位)
 )
 
 // Entry 单条双式流水。
@@ -114,13 +117,27 @@ var firmsInCategories = map[string]bool{
 //   - world 只能作为 from(初始注入)或 to(donate 公益转移 + 消费类 —— 后者
 //     为 economy_enabled=false 的 P0 回退路径保留,§6.5 回退是一等公民);
 //   - gov 只收不付(pension 类白名单除外);
-//   - insurer P0 无交易。
+//   - insurer 只与座位交易(P1-4 激活,§财商流P1-4 §6.1):
+//     seat→insurer 仅 CatPremium;insurer→seat 仅 CatClaim。
 func validFromTo(from, to, category string) error {
 	if !validEntity(from) || !validEntity(to) {
 		return fmt.Errorf("invalid entity: %s → %s", from, to)
 	}
-	if from == EntityInsurer || to == EntityInsurer {
-		return fmt.Errorf("insurer has no trades in P0: %s → %s", from, to)
+	if to == EntityInsurer {
+		if category != CatPremium {
+			return fmt.Errorf("insurer only receives premium (category=%s)", category)
+		}
+		if _, ok := IsSeatEntity(from); !ok {
+			return fmt.Errorf("insurer only trades with seats: %s → %s", from, to)
+		}
+	}
+	if from == EntityInsurer {
+		if category != CatClaim {
+			return fmt.Errorf("insurer only pays claims (category=%s)", category)
+		}
+		if _, ok := IsSeatEntity(to); !ok {
+			return fmt.Errorf("insurer only trades with seats: %s → %s", from, to)
+		}
 	}
 	if from == EntityFirms {
 		return fmt.Errorf("firms never pays out (wages are paid by bank): %s → %s", from, to)
@@ -196,6 +213,21 @@ func (l *Ledger) WorldInjectCount() int {
 		}
 	}
 	return n
+}
+
+// EntityNet 实体净流入 = Σ(to=entity) − Σ(from=entity)(I4,调试/验收用)。
+// insurer 净额 = Σ保费 − Σ理赔 = 保险公司利润(可为负,大灾年亏损是教学内容)。
+func (l *Ledger) EntityNet(entity string) int64 {
+	var net int64
+	for _, e := range l.Entries {
+		if e.To == entity {
+			net += e.AmountCNY
+		}
+		if e.From == entity {
+			net -= e.AmountCNY
+		}
+	}
+	return net
 }
 
 // SeatRecent 本人相关 + 公共条目最近 limit 条(view 下发用,§13)。

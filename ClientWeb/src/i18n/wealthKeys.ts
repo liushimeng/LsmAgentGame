@@ -545,4 +545,39 @@ export interface WealthDict {
   'wealth.dashboard.flow.node.player': string;
   'wealth.dashboard.flow.node.world': string;
   'wealth.dashboard.flow.tooltip': string; // {from} {to} {amount}
+
+  // ── P1-4 商业保险与风险转移引擎（2026-09-19 §财商流P1-4 §10.2）──
+  // insurance = InsurancePanel 侧栏 Tab；locales 拆到 wealthInsurance-*.ts（≤1800 行约束）。
+  'wealth.tab.insurance': string;
+  'wealth.insurance.title': string;
+  'wealth.insurance.monthlyTotal': string;
+  'wealth.insurance.kind.critical_illness': string;
+  'wealth.insurance.kind.medical_million': string;
+  'wealth.insurance.kind.term_life': string;
+  'wealth.insurance.kind.accident': string;
+  'wealth.insurance.status.active': string;
+  'wealth.insurance.status.waiting': string; // {n}
+  'wealth.insurance.status.grace': string;
+  'wealth.insurance.status.lapsed': string;
+  'wealth.insurance.coverage': string;
+  'wealth.insurance.reimburse': string; // {pct}
+  'wealth.insurance.annualPremium': string;
+  'wealth.insurance.monthlyPremium': string; // {n}
+  'wealth.insurance.paidMonths': string; // {n}
+  'wealth.insurance.claimsTotal': string;
+  'wealth.insurance.buy': string;
+  'wealth.insurance.cancel': string;
+  'wealth.insurance.cancelConfirm': string;
+  'wealth.insurance.empty': string;
+  'wealth.insurance.spectatorHint': string;
+  'wealth.insurance.deathClaim': string;
+  'wealth.insurance.quoteAtAge': string;
+  // 保险错误码 35037–35041（现金不足复用 wealth.error.cash 35007）
+  'wealth.error.insuranceKindInvalid': string;
+  'wealth.error.insuranceExists': string;
+  'wealth.error.insuranceNotFound': string;
+  'wealth.error.insuranceAgeGate': string;
+  'wealth.error.insuranceDisabled': string;
+  // 结局 id 新增：意外身故（§5.3 HandleDeath）
+  'wealth.ending.accident_death': string;
 }

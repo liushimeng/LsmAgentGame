@@ -73,17 +73,17 @@ func (a *Asset) SetSelfOccupied(v bool) {
 
 // 贷款 kind(后端架构 §7.1)。
 const (
-	LoanMortgage   = "mortgage"     // 房贷 LPR+0.5%,360 期等额本息
-	LoanConsumer   = "consumer"     // 消费贷 10% 年化,36 期等额本息
-	LoanCreditT1   = "credit_tier1" // 信用贷 tier1 月息 0.8%,到期一次性还本
-	LoanCreditT2   = "credit_tier2" // tier2 月息 1.2%
-	LoanCreditT3   = "credit_tier3" // tier3 月息 1.8%
-	LoanBusiness   = "business"     // 经营贷 LPR+2%,60 期先息后本
+	LoanMortgage = "mortgage"     // 房贷 LPR+0.5%,360 期等额本息
+	LoanConsumer = "consumer"     // 消费贷 10% 年化,36 期等额本息
+	LoanCreditT1 = "credit_tier1" // 信用贷 tier1 月息 0.8%,到期一次性还本
+	LoanCreditT2 = "credit_tier2" // tier2 月息 1.2%
+	LoanCreditT3 = "credit_tier3" // tier3 月息 1.8%
+	LoanBusiness = "business"     // 经营贷 LPR+2%,60 期先息后本
 )
 
 // Loan 是单笔负债。
 type Loan struct {
-	ID             string  // "L1"…
+	ID             string // "L1"…
 	Kind           string
 	Principal      int64   // 放款本金
 	Balance        int64   // 当前余额
@@ -101,9 +101,24 @@ type Loan struct {
 
 // SideBusiness 副业状态。
 type SideBusiness struct {
-	Kind         string  // delivery|content|tutoring|freelance
-	BaseIncome   int64   // 档位基准(展示)
-	OpenedMonth  int
+	Kind        string // delivery|content|tutoring|freelance
+	BaseIncome  int64  // 档位基准(展示)
+	OpenedMonth int
+}
+
+// Policy 一张有效/历史保单(2026-09-19 §财商流P1-4 §2.2)。
+// 每位玩家每险种最多 1 张有效保单(硬约束);失效/终止后允许重新投保
+// (等待期重新计算,P1 新定)。
+type Policy struct {
+	Kind             string  `json:"kind"`               // 4 险种之一
+	AnnualPremiumCNY int64   `json:"annual_premium_cny"` // 当前年保费(年结按年龄档×CPI 重定价)
+	CoverageCNY      int64   `json:"coverage_cny"`       // 保额(名义,投保时锁定;医疗险 0)
+	StartMonth       int     `json:"start_month"`        // 生效月(投保当月)
+	PaidMonths       int     `json:"paid_months"`        // 已缴月数
+	GraceActive      bool    `json:"grace_active"`       // 处于宽限期(上月断缴,本月兜底)
+	Active           bool    `json:"active"`             // 有效中(含宽限期);失效/退保/赔付终止 → false
+	CPIFactor        float64 `json:"cpi_factor"`         // 投保时 1.0,年结 ×(1+clamp(CPIYoY,0,0.10))
+	ClaimsTotalCNY   int64   `json:"claims_total_cny"`   // 累计已赔付(展示用)
 }
 
 // FlowItem 月结损益明细单行(my.monthly.detail)。
@@ -165,12 +180,12 @@ type Player struct {
 
 	Family Family
 
-	UnemployedMonths   int
-	RehireSalaryRatio  float64
+	UnemployedMonths  int
+	RehireSalaryRatio float64
 
-	SalaryBase   int64 // 当前基准月薪(年增长累积;P16 为波动带中值)
-	SalaryLow     int64 // P16 波动带下界(非波动卡 = SalaryBase)
-	SalaryHigh    int64 // P16 波动带上界
+	SalaryBase     int64 // 当前基准月薪(年增长累积;P16 为波动带中值)
+	SalaryLow      int64 // P16 波动带下界(非波动卡 = SalaryBase)
+	SalaryHigh     int64 // P16 波动带上界
 	SalaryVolatile bool
 
 	SideBusiness *SideBusiness
@@ -186,11 +201,11 @@ type Player struct {
 	DonationTotalCNY int64
 	DonationCount    int
 
-	OverdueCount    int
-	OnTimeStreak    int // 连续按时还款月数(满 12 期 +20 信用分)
-	BankruptCount   int
-	MajorIllness    bool
-	HadIllnessYear  bool // 当年有大病 → 生日不加精力
+	OverdueCount   int
+	OnTimeStreak   int // 连续按时还款月数(满 12 期 +20 信用分)
+	BankruptCount  int
+	MajorIllness   bool
+	HadIllnessYear bool // 当年有大病 → 生日不加精力
 
 	NegativeCashMonths int // 连续现金 < 0 月数(破产触发)
 	InReorganization   bool
@@ -202,6 +217,9 @@ type Player struct {
 	// P1: 真实经济循环(2026-09-16 §财商流P1-2 契约 §3.1)。
 	ConsumptionLevel   int                // 0 节俭/1 标准/2 精致/3 奢侈;默认 1(newPlayerFromCard 显式置 1)
 	ConsumptionByGoods map[string]float64 // 上月消费结构(元,id→金额;nil=未初始化,视为档位 1)
+
+	// P1-4: 商业保险保单(2026-09-19 §财商流P1-4 §2.2)。key=kind;nil=从未投保。
+	Policies map[string]*Policy `json:"-"`
 
 	Monthly         MonthlyResult
 	NetWorthHistory []int64

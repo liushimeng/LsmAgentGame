@@ -1,5 +1,6 @@
 import type { Dict } from '../types';
 import wealthP2 from './wealthP2-en';
+import wealthInsurance from './wealthInsurance-en';
 
 // English — en
 const en: Dict = {
@@ -1684,6 +1685,9 @@ const en: Dict = {
 
   // ── P2 trading system split to wealthP2-en.ts (≤1800 line cap) ──
   ...wealthP2,
+
+  // ── P1-4 commercial insurance split to wealthInsurance-en.ts (≤1800 line cap) ──
+  ...wealthInsurance,
 
   // ── P1 Minsky Engine + LPR Reprice + Early Repayment ──
   'minsky.title': 'Minsky Financing Status',

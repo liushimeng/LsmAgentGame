@@ -111,6 +111,9 @@ type WealthRoom struct {
 	// Manager.CreateRoom 按 Manager.Config 调 SetEconomyFlags 回写)。
 	economyEnabled bool
 	surveyEnabled  bool
+	// P1-4(2026-09-19 §财商流P1-4 §11):商业保险引擎开关(默认 true;
+	// Manager.CreateRoom 按 Manager.Config 调 SetInsuranceEnabled 回写)。
+	insuranceEnabled bool
 	// FullAgentMode 标记该房间为全 Agent 模式（人类不能参与对局）。
 	// 2026-09-19 §全Agent模式 新增：创建时由 agent_seats 满 MinSeats 自动置位，
 	// 或前端显式请求 full_agent=true 置位。
@@ -156,8 +159,9 @@ func NewWealthRoom(roomID string, monthMs int, pool string, seed int64, llmConcu
 		done:       make(chan struct{}),
 		settleCh:   make(chan struct{}, 1),
 		// P1: 真实经济循环 / 社会调研默认开启(§6.5;SetEconomyFlags 可覆盖)。
-		economyEnabled: true,
-		surveyEnabled:  true,
+		economyEnabled:   true,
+		surveyEnabled:    true,
+		insuranceEnabled: true,
 	}
 }
 
@@ -173,6 +177,19 @@ func (r *WealthRoom) SetEconomyFlags(economy, survey bool) {
 		r.World.EconomyEnabled = economy
 	}
 }
+
+// SetInsuranceEnabled 回写房间级保险引擎开关(P1-4 §11;由 Manager.CreateRoom
+// 调用,须在 Start 之前)。false 时投保/退保返回 35041、月结不扣缴保费、
+// 意外事件不掷骰(rand 序列零偏移,固定种子存量对局回归一致)。
+func (r *WealthRoom) SetInsuranceEnabled(enabled bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.insuranceEnabled = enabled
+	if r.World != nil {
+		r.World.InsuranceEnabled = enabled
+	}
+}
+
 // SetFullAgentMode 设置房间的全 Agent 模式标志(2026-09-19 §全Agent模式)。
 // 全 Agent 模式下人类玩家不能加入对局,仅可以观战者身份观看。
 func (r *WealthRoom) SetFullAgentMode(enabled bool) {
@@ -401,6 +418,8 @@ func (r *WealthRoom) Start(loader *profession.Loader) *errcode.Error {
 	r.World = NewWorld(seed, cards)
 	// P1(§6.5):NewWorld 恒置 EconomyEnabled=true,此处按房间级开关回写。
 	r.World.EconomyEnabled = r.economyEnabled
+	// P1-4(§财商流P1-4 §11):NewWorld 恒置 InsuranceEnabled=true,此处按开关回写。
+	r.World.InsuranceEnabled = r.insuranceEnabled
 	r.World.StartGame()
 	r.Status = StatusPlaying
 	r.Phase = PhaseActing

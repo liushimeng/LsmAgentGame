@@ -442,6 +442,41 @@ func (a *AgentRunner) QueryEconomy(seat int) (string, error) {
 	return b.String(), nil
 }
 
+// ── P1-4(§财商流P1-4 §7): 商业保险三工具 ──
+
+// BuyInsurance 投保(耗 1 次动作预算;走 ApplyAction 与人类同一路径)。
+func (a *AgentRunner) BuyInsurance(seat int, kind string) error {
+	return a.apply(seat, wealthplayer.ToolBuyInsurance, "", func() (string, error) {
+		return a.room.World.ApplyAction(seat, Action{Type: ActBuyInsurance, Kind: kind})
+	})
+}
+
+// CancelInsurance 退保(耗 1 次动作预算;消费型零现金价值)。
+func (a *AgentRunner) CancelInsurance(seat int, kind string) error {
+	return a.apply(seat, wealthplayer.ToolCancelInsurance, "", func() (string, error) {
+		return a.room.World.ApplyAction(seat, Action{Type: ActCancelInsurance, Kind: kind})
+	})
+}
+
+// GetInsuranceStatus 查询本人保单状态(不耗动作预算,check_state 同惯例;
+// 锁内读引擎,返回人读文本 + 结构化 JSON)。
+func (a *AgentRunner) GetInsuranceStatus(seat int) (string, error) {
+	a.room.mu.Lock()
+	defer a.room.mu.Unlock()
+	if a.room.closed || a.room.Status != StatusPlaying || a.room.World == nil {
+		return "", errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	w := a.room.World
+	if !w.InsuranceEnabled {
+		return "保险引擎未启用(insurance_enabled=false)", nil
+	}
+	p := w.Players[seat]
+	if p == nil {
+		return "", errcode.Code(errcode.ErrWealthPlayerInactive)
+	}
+	return w.InsuranceStatusText(p), nil
+}
+
 func (a *AgentRunner) Speak(seat int, text, internalThought string) error {
 	// speak 走 chat sender,不耗动作预算。
 	a.room.mu.Lock()
@@ -936,6 +971,21 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 	}
 	for i := range p.Loans {
 		me.Loans = append(me.Loans, loanBriefFor(&p.Loans[i]))
+	}
+	// P1-4(§财商流P1-4 §7.4):保单摘要(prompt 保单行渲染)。
+	if r.World.InsuranceEnabled {
+		for _, kind := range insuranceKindOrder {
+			pol := p.Policies[kind]
+			if pol == nil {
+				continue
+			}
+			me.Policies = append(me.Policies, wealthtypes.PolicyBrief{
+				Kind:              pol.Kind,
+				MonthlyPremiumCNY: monthlyPremium(pol.AnnualPremiumCNY),
+				Status:            pol.Status(r.World.Month),
+				WaitingLeft:       pol.waitingLeft(r.World.Month),
+			})
+		}
 	}
 
 	// Peers 公开字段。

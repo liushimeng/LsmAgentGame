@@ -91,7 +91,15 @@ func SystemPromptBlocks(card wealthtypes.CardBrief) []llmtypes.SystemBlock {
   档位决定生活支出与精力,也决定全城物价与就业(恩格尔定律:收入越低食品占比越高)。
 - 经济循环:你的消费 → 企业营收 → 劳动需求 → 失业率 → 裁员概率与再就业薪资;
   失业率高时保守消费、留现金;菲利普斯定律:失业率高→年度涨薪低。
-- 有进行中的社会调研时,用 answer_survey 表达真实偏好(不耗动作次数)。`
+- 有进行中的社会调研时,用 answer_survey 表达真实偏好(不耗动作次数)。
+- 商业保险(消费型,不产生收益,只转移风险;每人每险种限 1 张):
+  重疾险(年缴约 5,000,确诊重疾一次性赔 40 万,等待期 3 个月);
+  百万医疗险(年缴约 1,000,住院费报销 90%,等待期 1 个月);
+  定期寿险(年缴约 2,000,身故赔 100 万给遗产继承人,保到 60 岁,期满不返);
+  意外险(年缴约 350,意外伤残赔 25 万/意外身故赔 50 万,当月生效)。
+  保费随年龄档上浮,并每年随 CPI 微调;现金断缴有 1 个月宽限期,之后保单失效。
+  退保不退钱(消费型零现金价值)。保费预算建议控制在月收入的 5%–10%(《规则》§5.3)。
+  未买保险时一场大病要自付 5–20 万,可能直接破产——保险是现金流安全垫,不是投资。`
 
 	seg5 := `【第 5 段 · 明斯基风险与 LPR(v2.60)】
 - 明斯基三阶段融资:对冲(月供≤收入 40%)、投机(40%-70%)、庞氏(>70%)。投机 +0.5% 利率,庞氏 -0.5%(诱人陷阱)。
@@ -199,7 +207,11 @@ func UserPrompt(ctx *wealthtypes.GameContext, memText string) string {
 	} else {
 		fmt.Fprintf(&b, "家庭:%s", marital)
 	}
-	fmt.Fprintf(&b, " ｜ 本月剩余动作次数 %d\n\n", me.ActionBudget)
+	// P1-4(§财商流P1-4 §7.4):有保单时「我的财务」段末尾追加保单行。
+	if line := insurancePolicyLine(me.Policies); line != "" {
+		fmt.Fprintf(&b, "\n保单:%s", line)
+	}
+	fmt.Fprintf(&b, "\n本月剩余动作次数 %d\n\n", me.ActionBudget)
 
 	if len(ctx.RecentEvents) > 0 {
 		b.WriteString("■ 最近发生\n")
@@ -235,6 +247,44 @@ func UserPrompt(ctx *wealthtypes.GameContext, memText string) string {
 	}
 	b.WriteString("请决定本月怎么做(≤3 个动作 + 可选 1 次 speak),然后调用 submit_month。")
 	return b.String()
+}
+
+// insuranceKindCN 险种中文名(P1-4;本包不 import game/wealth,与引擎侧
+// insurance.go::kindCN 各持一份文案)。
+func insuranceKindCN(kind string) string {
+	switch kind {
+	case "critical_illness":
+		return "重疾险"
+	case "medical_million":
+		return "百万医疗险"
+	case "term_life":
+		return "定期寿险"
+	case "accident":
+		return "意外险"
+	default:
+		return kind
+	}
+}
+
+// insurancePolicyLine 保单摘要行(§7.4 示例:「重疾险(¥417/月,有效) ｜ …」)。
+func insurancePolicyLine(policies []wealthtypes.PolicyBrief) string {
+	if len(policies) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(policies))
+	for _, p := range policies {
+		status := "有效"
+		switch p.Status {
+		case "waiting":
+			status = fmt.Sprintf("等待期剩 %d 月", p.WaitingLeft)
+		case "grace":
+			status = "宽限期"
+		case "lapsed":
+			status = "已失效"
+		}
+		parts = append(parts, fmt.Sprintf("%s(¥%d/月,%s)", insuranceKindCN(p.Kind), p.MonthlyPremiumCNY, status))
+	}
+	return strings.Join(parts, " ｜ ")
 }
 
 // consumptionLevelCN 消费档位中文名(P1 §财商流P1-2 §3.2;本包不 import

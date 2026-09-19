@@ -26,10 +26,13 @@ const ENDING_CLASS: Record<string, string> = {
   indebted: 'wealth-ending--indebted',
   bankrupt: 'wealth-ending--bankrupt',
   lonely_rich: 'wealth-ending--lonely_rich',
+  accident_death: 'wealth-ending--accident_death', // P1-4 意外身故（§5.3）
 };
 
 function endingKey(ending: string): TKey {
-  const known: WealthEndingId[] = ['winner', 'affluent', 'ordinary', 'indebted', 'bankrupt', 'lonely_rich'];
+  const known: WealthEndingId[] = [
+    'winner', 'affluent', 'ordinary', 'indebted', 'bankrupt', 'lonely_rich', 'accident_death',
+  ];
   return (known.includes(ending as WealthEndingId)
     ? `wealth.ending.${ending}`
     : 'wealth.ending.ordinary') as TKey;

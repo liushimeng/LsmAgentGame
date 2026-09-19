@@ -47,6 +47,10 @@ type ToolRunner interface {
 	SetConsumption(seat int, level int) error
 	AnswerSurvey(seat int, surveyID string, optionIdx int, reason string) error
 	QueryEconomy(seat int) (string, error)
+	// P1-4(2026-09-19 §财商流P1-4 §7): 商业保险(投保/退保走 ApplyAction 同一路径)。
+	BuyInsurance(seat int, kind string) error
+	CancelInsurance(seat int, kind string) error
+	GetInsuranceStatus(seat int) (string, error)
 	// P2(2026-09-16 §财商流P2): 玩家间交易与财富流动系统 12 工具。
 	ListAsset(seat int, assetIndex int, askCNY, minCNY int64) error
 	CancelListing(seat int, listingID string) error
@@ -94,6 +98,10 @@ const (
 	ToolSetConsumption = "set_consumption"
 	ToolAnswerSurvey   = "answer_survey"
 	ToolQueryEconomy   = "query_economy"
+	// P1-4(2026-09-19 §财商流P1-4 §7): 商业保险三工具。
+	ToolBuyInsurance       = "buy_insurance"        // 动作类,耗 1 点月预算
+	ToolCancelInsurance    = "cancel_insurance"     // 动作类,耗 1 点月预算
+	ToolGetInsuranceStatus = "get_insurance_status" // 查询类,不耗月预算
 )
 
 // schema helpers。
@@ -355,13 +363,51 @@ func BuildTools() []llmtypes.ToolDef {
 			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
 		},
 	}
+	// P1-4(§财商流P1-4 §7):商业保险三工具(Schema 逐字照抄契约 §7.1–§7.3)。
+	base = append(base, []llmtypes.ToolDef{
+		{
+			Name:        ToolBuyInsurance,
+			Description: "购买商业保险(每人每险种限 1 张有效保单)。保险不产生收益,只转移风险:重疾确诊一次性赔付,百万医疗报销住院费 90%,寿险/意外险身故时赔付给遗产继承人。年保费按月扣缴,现金断缴 1 个月宽限期后保单失效。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"kind": map[string]any{
+						"type":        "string",
+						"enum":        []string{"critical_illness", "medical_million", "term_life", "accident"},
+						"description": "险种:critical_illness=重疾险 / medical_million=百万医疗险 / term_life=定期寿险 / accident=意外险",
+					},
+				},
+				"required": []string{"kind"},
+			},
+		},
+		{
+			Name:        ToolCancelInsurance,
+			Description: "退保。消费型保险零现金价值:不退还已缴保费,次月起停止扣缴,保障立即终止。退保前请确认已有替代保障。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"kind": map[string]any{
+						"type": "string",
+						"enum": []string{"critical_illness", "medical_million", "term_life", "accident"},
+					},
+				},
+				"required": []string{"kind"},
+			},
+		},
+		{
+			Name:        ToolGetInsuranceStatus,
+			Description: "查询本人全部保单状态:险种/年保费/月缴/保额/已缴月数/状态(有效/等待期/宽限期/失效)/累计赔付,以及未投保的险种与当前报价。无副作用,不消耗动作预算。",
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		},
+	}...)
 	// 追加 P2 交易工具(挂牌/议价/借贷/拍卖/信息)。
 	base = append(base, TradeToolDefinitions()...)
 	return base
 }
 
 // ToolNames 返回全部工具名(测试/lint 用)。
-// 包括 P0 基础 17 + P1 央行/银行 5 + 明斯基/提前还款 2 + P1-2 经济循环 3 + P2 交易 12 = 39。
+// P0 基础 17 + P1 央行/银行 5 + 明斯基/提前还款 2 + P1-2 经济循环 3 +
+// P1-4 商业保险 3 + P2 交易 12 = 42。
 func ToolNames() []string {
 	out := []string{
 		ToolCheckState, ToolBuyAsset, ToolSellAsset, ToolBuyHouse, ToolTakeLoan,
@@ -372,6 +418,7 @@ func ToolNames() []string {
 		ToolDepositSavings, ToolWithdrawSavings,
 		ToolQueryMinsky, ToolEarlyRepay,
 		ToolSetConsumption, ToolAnswerSurvey, ToolQueryEconomy,
+		ToolBuyInsurance, ToolCancelInsurance, ToolGetInsuranceStatus,
 	}
 	out = append(out, TradeToolNames()...)
 	return out
@@ -510,6 +557,16 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 		return failOr(a.runner.AnswerSurvey(seat, getStr("survey_id"), int(getInt("option_index")), getStr("reason")), "已回答调研", res)
 	case ToolQueryEconomy:
 		s, err := a.runner.QueryEconomy(seat)
+		if err != nil {
+			return fail(err)
+		}
+		return ok(s)
+	case ToolBuyInsurance:
+		return failOr(a.runner.BuyInsurance(seat, getStr("kind")), "投保成功", res)
+	case ToolCancelInsurance:
+		return failOr(a.runner.CancelInsurance(seat, getStr("kind")), "退保成功", res)
+	case ToolGetInsuranceStatus:
+		s, err := a.runner.GetInsuranceStatus(seat)
 		if err != nil {
 			return fail(err)
 		}

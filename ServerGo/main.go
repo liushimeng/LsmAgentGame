@@ -899,6 +899,8 @@ func main() {
 		// P1(2026-09-16 §财商流P1-2 §6.5):真实经济循环 / 社会调研开关。
 		EconomyEnabled: cfg.Wealth.EconomyEnabled,
 		SurveyEnabled:  cfg.Wealth.SurveyEnabled,
+		// P1-4(2026-09-19 §财商流P1-4 §11):商业保险与风险转移引擎开关。
+		InsuranceEnabled: cfg.Wealth.InsuranceEnabled,
 	}, llmRegistry)
 	// 2026-09-14 §财商流P0-bugfix: 服务重启后内存房间 Seats/BotSeats 全空,必须从
 	// t_lsm_game_player 恢复人类 + bot 座位,否则 Start() 永远 ErrWealthNotEnoughPlayers。

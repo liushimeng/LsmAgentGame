@@ -63,6 +63,17 @@ func (f *fakeTradeRunner) AnswerSurvey(seat int, surveyID string, optionIdx int,
 }
 func (f *fakeTradeRunner) QueryEconomy(seat int) (string, error) { return "", nil }
 
+// P1-4 商业保险实现。
+func (f *fakeTradeRunner) BuyInsurance(seat int, kind string) error {
+	f.lastTool, f.lastSeat = ToolBuyInsurance, seat
+	return nil
+}
+func (f *fakeTradeRunner) CancelInsurance(seat int, kind string) error {
+	f.lastTool, f.lastSeat = ToolCancelInsurance, seat
+	return nil
+}
+func (f *fakeTradeRunner) GetInsuranceStatus(seat int) (string, error) { return "", nil }
+
 // P2 实现。
 func (f *fakeTradeRunner) ListAsset(seat int, assetIndex int, askCNY, minCNY int64) error {
 	f.lastTool, f.lastSeat = ToolListAsset, seat
@@ -142,11 +153,11 @@ func TestTradeTools_InputSchema(t *testing.T) {
 	}
 }
 
-// TestToolNames_IncludesTrade P2 交易工具已并入 ToolNames()(总计 39)。
+// TestToolNames_IncludesTrade P2 交易工具已并入 ToolNames()(总计 42)。
 func TestToolNames_IncludesTrade(t *testing.T) {
 	names := ToolNames()
-	if len(names) != 39 {
-		t.Errorf("names count: got %d, want 39 (17 P0 + 5 P1 央行/银行 + 2 明斯基 + 3 P1-2 + 12 P2)", len(names))
+	if len(names) != 42 {
+		t.Errorf("names count: got %d, want 42 (17 P0 + 5 P1 央行/银行 + 2 明斯基 + 3 P1-2 + 3 P1-4 保险 + 12 P2)", len(names))
 	}
 	for _, tn := range TradeToolNames() {
 		found := false

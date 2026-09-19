@@ -1,5 +1,6 @@
 import type { Dict } from '../types';
 import wealthP2 from './wealthP2-zh';
+import wealthInsurance from './wealthInsurance-zh';
 
 // 中文 (默认) — zh-CN
 const zhCN: Dict = {
@@ -1685,6 +1686,9 @@ const zhCN: Dict = {
 
   // ── P2 交易系统拆到 wealthP2-zh.ts（≤1800 行约束）──
   ...wealthP2,
+
+  // ── P1-4 商业保险拆到 wealthInsurance-zh.ts（≤1800 行约束）──
+  ...wealthInsurance,
 
   // ── P1 明斯基引擎 + LPR 重定价 + 提前还款 ──
   'minsky.title': '明斯基融资状态',

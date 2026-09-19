@@ -48,17 +48,17 @@ type GameContext struct {
 
 	// P1: 央行只读快照 + 信贷约束参数(AltAgent 可见)。
 	CentralBank     *CentralBankSnapshot // 央行快照(CB 为 nil 时回退 PhaseTable 基础值)
-	CreditTightness float64               // 信贷约束系数
-	LoanQuotaFactor float64               // 贷款额度乘数
+	CreditTightness float64              // 信贷约束系数
+	LoanQuotaFactor float64              // 贷款额度乘数
 
 	// P1(2026-09-16 §财商流P1-2 §7.2): 真实经济循环(引擎侧 BuildContextForAgent 填充)。
-	CPIYoY            float64  // 篮子 CPI 同比(小数)
-	UnemploymentRate  float64  // 内生失业率(小数)
-	ConsumptionLevel  int      // 本人当前档位(0-3,兜底后)
-	OpenSurveyID      string   // 进行中调研 id(无则 "")
-	OpenSurveyQuestion string  // 问题文本
-	OpenSurveyOptions []string // 选项列表
-	EconomyBrief      string   // 一行价格涨跌摘要,如 "CPI同比2.3% 失业5.1% 涨幅前二:食品+1.2% 交通+0.8%"
+	CPIYoY             float64  // 篮子 CPI 同比(小数)
+	UnemploymentRate   float64  // 内生失业率(小数)
+	ConsumptionLevel   int      // 本人当前档位(0-3,兜底后)
+	OpenSurveyID       string   // 进行中调研 id(无则 "")
+	OpenSurveyQuestion string   // 问题文本
+	OpenSurveyOptions  []string // 选项列表
+	EconomyBrief       string   // 一行价格涨跌摘要,如 "CPI同比2.3% 失业5.1% 涨幅前二:食品+1.2% 交通+0.8%"
 }
 
 // CentralBankSnapshot 央行只读快照(AltAgent 可见)。
@@ -91,17 +91,17 @@ type MarketBrief struct {
 
 // FlowDetailItem 是月结损益明细单行(my.monthly.detail)。
 type FlowDetailItem struct {
-	Key        string // "salary" | "tax" | "living" | ...
-	AmountCNY  int64  // 正=收入,负=支出
-	Text       string
+	Key       string // "salary" | "tax" | "living" | ...
+	AmountCNY int64  // 正=收入,负=支出
+	Text      string
 }
 
 // SelfBrief 是 my.* 的全量镜像。
 type SelfBrief struct {
-	Cash         int64
-	Salary       int64  // 当前基准月薪(税前)
-	SpouseIncome int64  // 税后净额
-	SideIncome   int64  // 上月副业净收入
+	Cash          int64
+	Salary        int64 // 当前基准月薪(税前)
+	SpouseIncome  int64 // 税后净额
+	SideIncome    int64 // 上月副业净收入
 	PassiveIncome int64 // 上月被动收入合计
 
 	Monthly MonthlyBrief // 最近一次月结
@@ -116,14 +116,25 @@ type SelfBrief struct {
 	PensionCNY  int64
 	CreditScore int
 
-	Marital   string // single | married
-	Children  int
+	Marital  string // single | married
+	Children int
 
 	FIIndex  float64
 	NetWorth int64
 
-	ActionBudget int    // 本月剩余动作数
+	ActionBudget int // 本月剩余动作数
 	Goals        []string
+
+	// P1-4(2026-09-19 §财商流P1-4 §7.4):商业保险保单摘要(prompt 渲染用)。
+	Policies []PolicyBrief
+}
+
+// PolicyBrief 是单张保单摘要(P1-4;引擎侧 BuildContextForAgent 填充)。
+type PolicyBrief struct {
+	Kind              string // critical_illness|medical_million|term_life|accident
+	MonthlyPremiumCNY int64  // 月缴
+	Status            string // active|waiting|grace|lapsed
+	WaitingLeft       int    // 等待期剩余月
 }
 
 // MonthlyBrief 是最近一次月结摘要。
@@ -141,36 +152,36 @@ type MonthlyBrief struct {
 
 // AssetBrief 是单笔持仓。
 type AssetBrief struct {
-	Kind            string  // stock_index|bond|gold|house:<d>|shop:<d>|side_business|pension
-	Name            string
-	Units           float64
-	Price           float64
-	ValueCNY        int64
-	MonthlyFlowCNY  int64
+	Kind           string // stock_index|bond|gold|house:<d>|shop:<d>|side_business|pension
+	Name           string
+	Units          float64
+	Price          float64
+	ValueCNY       int64
+	MonthlyFlowCNY int64
 }
 
 // LoanBrief 是单笔负债。
 type LoanBrief struct {
-	ID            string
-	Kind          string
-	Principal     int64
-	Balance       int64
-	AnnualRate    float64
+	ID             string
+	Kind           string
+	Principal      int64
+	Balance        int64
+	AnnualRate     float64
 	MonthlyPayment int64
-	MonthsLeft    int
+	MonthsLeft     int
 }
 
 // PeerBrief 是同场玩家的公开信息。
 type PeerBrief struct {
-	Seat        int
-	Account     string
-	Nickname    string
-	IsBot       bool
+	Seat            int
+	Account         string
+	Nickname        string
+	IsBot           bool
 	ProfessionTitle string
-	District    string
-	NetWorth    int64
-	FIIndex     float64
-	Alive       bool
+	District        string
+	NetWorth        int64
+	FIIndex         float64
+	Alive           bool
 }
 
 // EventBrief 是单条事件记录。
@@ -183,12 +194,12 @@ type EventBrief struct {
 
 // LedgerBrief 是单条流水。
 type LedgerBrief struct {
-	Month      int
-	From       string
-	To         string
-	AmountCNY  int64
-	Category   string
-	Note       string
+	Month     int
+	From      string
+	To        string
+	AmountCNY int64
+	Category  string
+	Note      string
 }
 
 // BotIdentityBrief 是 Bot 自己的身份信息。

@@ -155,6 +155,8 @@ export interface WealthPlayer {
   debt_to_income?: number;
   /** 消费档位 0-3（P1 真实经济循环引擎；档位是公开生活方式，全座位下发）。 */
   consumption_level?: number;
+  /** Active 保单险种列表（P1-4 商业保险；是否投保是公开信息，全座位下发）。 */
+  insured_kinds?: string[];
 }
 
 export interface WealthMonthlyDetail {
@@ -230,6 +232,8 @@ export interface WealthMyState {
   goals: string[];
   /** 上月消费结构（CPI 八大类 id → 金额元；P1 真实经济循环引擎，仅本人座位下发）。 */
   consumption_by_goods?: Record<string, number>;
+  /** 商业保险段（P1-4 保险引擎；仅本人座位下发，insurance_enabled=false 时整体 omit）。 */
+  insurance?: WealthInsuranceState;
 }
 
 /** Agent 思维可见性：本人座位 + 观战者可见；其他玩家不可见。 */
@@ -644,6 +648,63 @@ export interface WealthSurveyAnswer {
   model_key: string;
 }
 
+// ── P1-4 商业保险与风险转移引擎（2026-09-19 §财商流P1-4）────────────────
+//
+// 与 lag_docs/财商流游戏/已实现/10-P1保险系统/财商流游戏-P1-商业保险与风险转移引擎-v1.md
+// §8.2 逐字段对齐（JSON 名不可改；后端 view.go/insurance.go 是唯一实现）。
+
+/** 险种（每人每险种最多 1 张有效保单；顺序 = 后端 insuranceKindOrder）。 */
+export type WealthInsuranceKind =
+  | 'critical_illness' | 'medical_million' | 'term_life' | 'accident';
+
+/** 保单展示状态（后端 Policy.Status 派生，§2.3：active 有效 / waiting 等待期 / grace 宽限期 / lapsed 失效）。 */
+export type WealthPolicyStatus = 'active' | 'waiting' | 'grace' | 'lapsed';
+
+/** 单张保单（my.insurance.policies[]，含失效，每险种最多 1 张、最近 8 张）。 */
+export interface WealthInsurancePolicy {
+  kind: WealthInsuranceKind | string;
+  annual_premium_cny: number;
+  /** 月缴 = round(年缴/12)，后端下发。 */
+  monthly_premium_cny: number;
+  /** 保额（投保时名义锁定）；medical_million 为 0 = 比例报销 90%（UI 显示「报销 90%」）。 */
+  coverage_cny: number;
+  start_month: number;
+  paid_months: number;
+  /** 等待期剩余月（0=已过）。 */
+  waiting_left: number;
+  status: WealthPolicyStatus | string;
+  /** 累计已赔付（展示用）。 */
+  claims_total_cny: number;
+}
+
+/** 未投保 / 已失效险种的当前年龄档报价（my.insurance.quotes[]）。 */
+export interface WealthInsuranceQuote {
+  kind: WealthInsuranceKind | string;
+  annual_premium_cny: number;
+  coverage_cny: number;
+}
+
+/** 商业保险段（game.state.my.insurance；观战者与 insurance_enabled=false 时 omit）。 */
+export interface WealthInsuranceState {
+  policies: WealthInsurancePolicy[];
+  /** Active 保单月缴合计（后端按 Active 求和）。 */
+  monthly_premium: number;
+  quotes: WealthInsuranceQuote[];
+}
+
+/** 4 险种固定展示顺序（§10.1：重疾 → 百万医疗 → 定期寿险 → 意外）。 */
+export const WEALTH_INSURANCE_KINDS: WealthInsuranceKind[] = [
+  'critical_illness', 'medical_million', 'term_life', 'accident',
+];
+
+/** 百万医疗报销比例（医疗险 coverage_cny=0 时的展示口径，§2.1）。 */
+export const WEALTH_MEDICAL_REIMBURSE_PCT = 90;
+
+/** 投保 / 退保动作载荷（game.wealth_action，§8.1；复用 Action{Type,Kind}）。 */
+export type WealthInsuranceAction =
+  | { type: 'buy_insurance'; kind: WealthInsuranceKind }
+  | { type: 'cancel_insurance'; kind: WealthInsuranceKind };
+
 // ── 座位容量常量（2026-09-16 §财商流10–12座位改造）──────────────────────
 //
 // 与后端 ServerGo/game/wealth/engine.go 的 MaxSeats / MinSeats 同值同义：
@@ -738,7 +799,8 @@ export interface WealthMonthFrame {
 }
 
 export type WealthEndingId =
-  | 'winner' | 'affluent' | 'ordinary' | 'indebted' | 'bankrupt' | 'lonely_rich';
+  | 'winner' | 'affluent' | 'ordinary' | 'indebted' | 'bankrupt' | 'lonely_rich'
+  | 'accident_death'; // P1-4 意外身故（HandleDeath，§5.3）
 
 export interface WealthScore {
   seat: number;
@@ -771,7 +833,8 @@ export type WealthActionType =
   | 'rest' | 'work_overtime' | 'move_district' | 'consume' | 'donate'
   | 'submit_month'
   | 'early_repay'
-  | 'set_consumption';
+  | 'set_consumption'
+  | 'buy_insurance' | 'cancel_insurance';
 
 export type WealthAction =
   | { type: 'buy_asset'; asset: 'stock_index' | 'bond' | 'gold'; amount_cny: number }
@@ -790,7 +853,9 @@ export type WealthAction =
   | { type: 'donate'; amount_cny: number }
   | { type: 'submit_month' }
   | { type: 'early_repay'; loan_id: string; amount_cny: number }
-  | { type: 'set_consumption'; level: number };
+  | { type: 'set_consumption'; level: number }
+  | { type: 'buy_insurance'; kind: WealthInsuranceKind }
+  | { type: 'cancel_insurance'; kind: WealthInsuranceKind };
 
 // ── P2 交易系统：交易类动作（走 game.wealth_xxx 帧）──────────────────────
 
@@ -838,6 +903,24 @@ export const TRADE_ERR_I18N: Record<number, TKey> = {
   [WEALTH_TRADE_ERR.NoPrivilege]: 'wealth.error.noPrivilege' as TKey,
   [WEALTH_TRADE_ERR.ListingFull]: 'wealth.error.listingFull' as TKey,
   [WEALTH_TRADE_ERR.SelfTrade]: 'wealth.error.selfTrade' as TKey,
+};
+
+/** P1-4 商业保险错误码（errcode.go §9：35037–35041；现金不足复用 35007）。 */
+export const WEALTH_INSURANCE_ERR = {
+  KindInvalid: 35037,
+  Exists: 35038,
+  NotFound: 35039,
+  AgeGate: 35040,
+  Disabled: 35041,
+} as const;
+
+/** P1-4 商业保险错误码 → i18n key 映射（InsurancePanel mapError 用）。 */
+export const INSURANCE_ERR_I18N: Record<number, TKey> = {
+  [WEALTH_INSURANCE_ERR.KindInvalid]: 'wealth.error.insuranceKindInvalid' as TKey,
+  [WEALTH_INSURANCE_ERR.Exists]: 'wealth.error.insuranceExists' as TKey,
+  [WEALTH_INSURANCE_ERR.NotFound]: 'wealth.error.insuranceNotFound' as TKey,
+  [WEALTH_INSURANCE_ERR.AgeGate]: 'wealth.error.insuranceAgeGate' as TKey,
+  [WEALTH_INSURANCE_ERR.Disabled]: 'wealth.error.insuranceDisabled' as TKey,
 };
 
 /** POST /api/games/wealth/rooms 的 wealth 段（协议 §6）。 */

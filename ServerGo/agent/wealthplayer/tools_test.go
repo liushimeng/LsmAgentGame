@@ -8,12 +8,12 @@ import (
 	"LsmAgentGame/errcode"
 )
 
-// TestBuildTools_AllToolsPresent 39 工具齐备(P0 17 + P1 央行/银行 5 + 明斯基/提前还款 2 +
-// P1-2 经济循环 3 + P2 交易系统 12)。
+// TestBuildTools_AllToolsPresent 42 工具齐备(P0 17 + P1 央行/银行 5 + 明斯基/提前还款 2 +
+// P1-2 经济循环 3 + P1-4 商业保险 3 + P2 交易系统 12)。
 func TestBuildTools_AllToolsPresent(t *testing.T) {
 	tools := BuildTools()
-	if len(tools) != 39 {
-		t.Errorf("tools count: got %d, want 39", len(tools))
+	if len(tools) != 42 {
+		t.Errorf("tools count: got %d, want 42", len(tools))
 	}
 	want := map[string]bool{
 		ToolCheckState: false, ToolBuyAsset: false, ToolSellAsset: false,
@@ -29,6 +29,8 @@ func TestBuildTools_AllToolsPresent(t *testing.T) {
 		ToolQueryMinsky: false, ToolEarlyRepay: false,
 		// P1-2(§财商流P1-2 §7.1): 消费档位 / 社会调研 / 经济查询。
 		ToolSetConsumption: false, ToolAnswerSurvey: false, ToolQueryEconomy: false,
+		// P1-4(§财商流P1-4 §7): 商业保险工具。
+		ToolBuyInsurance: false, ToolCancelInsurance: false, ToolGetInsuranceStatus: false,
 		// P2 交易系统: 玩家间交易工具。
 		ToolListAsset: false, ToolCancelListing: false, ToolViewListings: false,
 		ToolNegotiateStart: false, ToolRespondNegotiate: false,
@@ -62,11 +64,11 @@ func TestBuildTools_RequiredFields(t *testing.T) {
 	}
 }
 
-// TestToolNames_Returns39Names 工具名列表 = 39(P0 17 + P1 10 + P1-2 3 + P2 交易 12 - 3重复)。
+// TestToolNames_Returns39Names 工具名列表 = 42(P0 17 + P1 10 + P1-2 3 + P1-4 保险 3 + P2 交易 12 - 3重复)。
 func TestToolNames_Returns39Names(t *testing.T) {
 	names := ToolNames()
-	if len(names) != 39 {
-		t.Errorf("names count: got %d, want 39", len(names))
+	if len(names) != 42 {
+		t.Errorf("names count: got %d, want 42", len(names))
 	}
 	for _, n := range names {
 		if !strings.HasPrefix(n, "check_state") &&
@@ -92,6 +94,10 @@ func TestToolNames_Returns39Names(t *testing.T) {
 			!strings.HasPrefix(n, "early_") &&
 			!strings.HasPrefix(n, "set_consumption") &&
 			!strings.HasPrefix(n, "answer_survey") &&
+			// P1-4 商业保险工具。
+			!strings.HasPrefix(n, "buy_insurance") &&
+			!strings.HasPrefix(n, "cancel_insurance") &&
+			!strings.HasPrefix(n, "get_insurance_status") &&
 			// P2 交易系统工具。
 			!strings.HasPrefix(n, "list_asset") &&
 			!strings.HasPrefix(n, "cancel_listing") &&
