@@ -1,22 +1,35 @@
-/** 财商流游戏 (Wealth) 资产索引。
+/**
+ * 财商流游戏 (Wealth) 资产索引。
  *
- * 降级策略（前端架构文档 §9）：所有 PNG 由 python-generate-image-tool/
- * generate_wealth_assets.py 并行生成（skip-if-exists 可续跑），前端构建
- * **不依赖**生成成功 —— import.meta.glob 按构建时存在的文件打包容错，
- * 缺失的键返回 ''，组件运行时用职业色 / emoji / CSS 渐变兜底。
+ * 降级策略（前端架构文档 §9 + 08-UI优化/02-架构设计 §5）：所有 PNG 由
+ * python-generate-image-tool/{generate_wealth_assets,generate_wealth_city_assets}.py
+ * 并行生成（skip-if-exists 可续跑），前端构建 **不依赖**生成成功 ——
+ * import.meta.glob 按构建时存在的文件打包容错，缺失的键返回 ''，组件运行时
+ * 用职业色 / emoji / CSS 渐变 / 简化几何 兜底。
  *
  * 文件清单：
- *   banner.png                                2560×1440
- *   agents/{p01,p03,p05,p07,p08,p09,p10,p11,p15,p16}.png   512×512 透明
+ *   banner.png                                          2560×1440
+ *   agents/{p01,p03,p05,p07,p08,p09,p10,p11,p15,p16}.png 512×512 透明
  *   districts/{finance,tech,industry,oldtown,commerce,residential,suburb,riverside}.png
+ *     1024×1024（城区俯视底板纹理）
  *   goods/{food,clothing,housing,household,transport,education,healthcare,misc}.png
  *     128×128 透明（统计局 CPI 八大类消费品图标，P1 真实经济循环引擎）
+ *   facades/<districtId>_{base,mid}.png                  512×1024 透明（P1-B 楼宇贴图）
+ *   roofs/<districtId>.png                               512×512  透明
+ *   streets/{asphalt_main,asphalt_side,sidewalk_main,sidewalk_side,crosswalk,centerline}.png
+ *     街道铺装贴图（P1-A 道路重做）
+ *   props/{streetlamp,tree,vehicle,pedestrian,sign,rooftop}/<variant>_<category>.png
+ *     街景道具贴图（P1-C 街道道具层）
  */
 
 const agentImgs = import.meta.glob<string>('./agents/*.png', { eager: true, import: 'default' });
 const districtImgs = import.meta.glob<string>('./districts/*.png', { eager: true, import: 'default' });
 const goodsImgs = import.meta.glob<string>('./goods/*.png', { eager: true, import: 'default' });
 const bannerImgs = import.meta.glob<string>('./banner.png', { eager: true, import: 'default' });
+const facadeImgs = import.meta.glob<string>('./facades/*.png', { eager: true, import: 'default' });
+const roofImgs = import.meta.glob<string>('./roofs/*.png', { eager: true, import: 'default' });
+const streetImgs = import.meta.glob<string>('./streets/*.png', { eager: true, import: 'default' });
+const propImgs = import.meta.glob<string>('./props/**/*.png', { eager: true, import: 'default' });
 
 /** 大厅 banner（缺失 = ''，WealthLobbyPage 回落 CSS 渐变）。 */
 export const WEALTH_BANNER: string = bannerImgs['./banner.png'] ?? '';
@@ -37,4 +50,54 @@ export function districtTexture(id: string): string {
 /** CPI 八大类消费品图标 URL（缺失 = ''，组件回落类别主色/emoji）。 */
 export function goodsIcon(id: string): string {
   return goodsImgs[`./goods/${id}.png`] ?? '';
+}
+
+// ── 08-UI优化 v2 新增（P1-A / P1-B / P1-C）────────────────────
+
+/** 楼宇立面 variant 字面量（与 generate_wealth_city_assets.py::FACADES 对齐）。 */
+export type FacadeVariant = 'base' | 'mid';
+
+/**
+ * 城区楼宇侧立面贴图 URL（缺失 = ''，BuildingMesh 退回到 DistrictDefs 主色）。
+ *
+ * @param districtId 城区 id（finance / tech / ... / riverside）
+ * @param variant    'base' = 楼栋底层 / 'mid' = 楼栋中上层（循环贴图避免接缝）
+ */
+export function districtFacadeUrl(districtId: string, variant: FacadeVariant): string {
+  return facadeImgs[`./facades/${districtId}_${variant}.png`] ?? '';
+}
+
+/** 城区楼顶贴图 URL（缺失 = ''，BuildingMesh 退回到 DistrictDefs 主色）。 */
+export function districtRoofUrl(districtId: string): string {
+  return roofImgs[`./roofs/${districtId}.png`] ?? '';
+}
+
+/** 街道铺装类型字面量（与 generate_wealth_city_assets.py::STREETS 对齐）。 */
+export type StreetTileName =
+  | 'asphalt_main'
+  | 'asphalt_side'
+  | 'sidewalk_main'
+  | 'sidewalk_side'
+  | 'crosswalk'
+  | 'centerline';
+
+/**
+ * 街道铺装贴图 URL（缺失 = ''，Road / Ground 退回到纯色 / 简化几何）。
+ * 路面贴图通常配 RepeatWrapping × N 平铺。
+ */
+export function streetTileUrl(name: StreetTileName): string {
+  return streetImgs[`./streets/${name}.png`] ?? '';
+}
+
+/** 街景道具类别字面量（与 generate_wealth_city_assets.py::PROPS 对齐）。 */
+export type PropCategory = 'streetlamp' | 'tree' | 'vehicle' | 'pedestrian' | 'sign' | 'rooftop';
+
+/**
+ * 街景道具贴图 URL（缺失 = ''，对应组件退回到简化几何 / 颜色块）。
+ *
+ * @param category 类别（streetlamp / tree / vehicle / pedestrian / sign / rooftop）
+ * @param variant  变种（a/b/c / oak/pine/palm / sedan/truck/bus/taxi / warm/cool / traffic/info / ac/tank/antenna）
+ */
+export function propUrl(category: PropCategory, variant: string): string {
+  return propImgs[`./props/${category}/${variant}_${category}.png`] ?? '';
 }
