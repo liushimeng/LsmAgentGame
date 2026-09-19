@@ -1071,6 +1071,9 @@ export interface Dict extends WealthDict {
   'lobby.status.open': string;    // 等待中
   'lobby.status.playing': string; // 游戏中
   'lobby.status.over': string;    // 已结束
+  // §2026-09-19 全Agent模式：房间列表徽章与提示
+  'lobby.fullAgent': string;     // 全Agent 徽章
+  'lobby.fullAgentHint': string; // 全 Agent 模式说明（仅可观战）
 
   // Per-game "观战中…" label.
   'xiangqi.spectating': string;

@@ -26,7 +26,6 @@ import type { TKey } from '@/i18n';
 import type { AgentSeatRequest } from '@/types/api';
 import {
   CURATED_PROFESSIONS,
-  WEALTH_DEFAULT_AGENT_COUNT,
   WEALTH_MAX_SEATS,
   WEALTH_MIN_SEATS,
   professionColor,
