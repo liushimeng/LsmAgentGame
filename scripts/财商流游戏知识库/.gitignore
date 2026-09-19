@@ -1,4 +1,0 @@
-# 中间产物：可由 extract2.py / build_cards.py 全量重建，体积过大不入库
-work/records.jsonl
-work/persons.jsonl
-work/*.jsonl
