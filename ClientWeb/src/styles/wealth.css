@@ -1,8 +1,8 @@
 /* ─── 财商流游戏 (wealth) 样式 — 2026-09-14 §财商流 P0 ───
  *
  * 命名空间：全部选择器前缀 .wealth-（杜绝与既有样式互染）；
- * CSS 变量挂 .wealth-root 作用域。globals.css 的 @import 链**末尾**追加
- * （CLAUDE.md §2.1 约束 4：只追加不改序）。
+ * CSS 变量挂 :root 作用域（2026-09-19 起；原先挂 .wealth-root 导致 portal 弹窗取不到）。
+ * globals.css 的 @import 链**末尾**追加（CLAUDE.md §2.1 约束 4：只追加不改序）。
  *
  * 对比度硬阈值（CLAUDE.md §26）：正文 ≥4.5:1 / 徽章 ≥5:1 / 选中态 ≥6:1；
  * 五大反模式一票否决（红底红字 / 浅字+低透明底 / color:inherit+半透明 /
@@ -10,7 +10,13 @@
  * 触控目标：--wealth-touch-target: 44px；prefers-reduced-motion 关闭动画。
  */
 
-.wealth-root {
+/* 令牌挂 :root —— 前缀已自带命名空间（--wealth-*），全局无碰撞风险；
+   AppModal 经 createPortal 渲染到 document.body，位于 .wealth-root 之外
+   （建房 / 拍卖 / 议价 / 提前还款 / 终局 5 个弹窗），令牌若仍挂在 .wealth-root，
+   弹窗内 200 处 var(--wealth-*) 全部解析失败 → 声明计算期无效 → 等价 unset
+   （背景透明 / 边框归零 / min-height 失效 / color 继承）→ 黑字压深蓝底。
+   2026-09-19 §财商流08-UI优化-06。 */
+:root {
   --wealth-accent: #c9a227;
   --wealth-accent-strong: #d4a017;
   --wealth-bg: #10151d;
@@ -22,7 +28,11 @@
   --wealth-pos: #4ade80;
   --wealth-neg: #f87171;
   --wealth-touch-target: 44px;
+}
 
+/* 仅保留布局与自身作用域语义（color/background 走 .wealth-root 而非 :root，
+   避免污染全站根节点背景）。 */
+.wealth-root {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -666,7 +676,9 @@
 .wealth-botpanel__result { color: var(--wealth-text-dim); margin: 4px 0 0; }
 
 /* ── 建房弹窗 ─────────────────────────────────────── */
-.wealth-create-form { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+/* color-scheme: dark —— 让原生控件（滚动条 / 日期选择器 / 默认 focus ring）走暗色语义，
+   原先沿用系统浅色 UI，与 #10151d 底反差突兀（2026-09-19 §财商流08-UI优化-06 F5）。 */
+.wealth-create-form { display: flex; flex-direction: column; gap: 10px; font-size: 14px; color-scheme: dark; }
 .wealth-create-form__row {
   display: grid;
   grid-template-columns: 150px 1fr;
@@ -705,6 +717,14 @@
   white-space: nowrap;
 }
 .wealth-create-form__seatrow select { flex: 1; min-height: 38px; }
+/* 原生 <select> 下拉弹层：Chrome 用控件自身计算色渲染 option 面板，
+   暗底若不显式声明，部分平台回落系统浅色 → 浅底浅字（2026-09-19 F5）。 */
+.wealth-create-form__seatrow select option { background: #0f141c; color: var(--wealth-text); }
+/* 滑杆主题色 —— 原先沿用 UA 默认蓝，与金色主题不一致。 */
+.wealth-create-form__row input[type="range"] { accent-color: var(--wealth-accent-strong); }
+/* placeholder 默认 UA 灰 #757575 在 #0f141c 上仅 ≈4.05:1，
+   低于 CLAUDE.md §26.1 正文硬阈值 4.5:1（2026-09-19 F5）。 */
+.wealth-create-form__row input::placeholder { color: #8b949e; }
 .wealth-create-form__hint { color: #fde68a; font-size: 12.5px; }
 /* 座位数达标（不小于 MinSeats）时的绿色确认提示（与黄条警示同位置，避免布局跳动）。 */
 .wealth-create-form__hint--ok { color: #86efac; }
@@ -1025,7 +1045,9 @@
   0%, 100% { background-color: rgba(244, 67, 54, 0); }
   50% { background-color: rgba(244, 67, 54, 0.3); }
 }
-.minsky-moment-flash {
+/* 2026-09-19 §财商流08-UI优化-06 F4（CLAUDE.md §130「声明了却从不接线」复发）：
+   原类名缺 wealth- 前缀，与 MinskyStatusBar.tsx:69 的 JSX 类名对不上 → 从未命中。 */
+.wealth-minsky-moment-flash {
   animation: minsky-flash 0.5s ease-in-out 6;
 }
 
@@ -1125,8 +1147,18 @@
   background: #b45309;
 }
 
-/* ── 按钮（btn 系列；与 debate/xiangqi 同规格，避免跨游戏 CSS 依赖）── */
-.btn {
+/* ── 按钮（btn 系列；与 debate/xiangqi 同规格，避免跨游戏 CSS 依赖）──
+ * 2026-09-19 §财商流08-UI优化-06 F2：本条块原为**无前缀全局选择器**，
+ * 因 wealth.css 是 globals.css 的最后一条 @import，同级特异度下压过
+ * debate.css:924 与 xiangqi.css:163，污染全站按钮（辩论/象棋/狼人杀/大厅）。
+ * 三个上下文缺一不可：
+ *   ① .wealth-root  —— 对局页内（WealthGamePage.tsx 唯一挂载点）；
+ *   ② .wealth-lobby —— 大厅页，含「创建房间」按钮 .btn.btn-primary.wealth-lobby__create；
+ *   ③ .app-modal    —— 5 个弹窗经 createPortal 渲染在 .wealth-root 之外。
+ * 加作用域后特异度升为 (0,2,0)，不再以同级压过 xiangqi/debate 的规则（D6 根治）。 */
+.wealth-root .btn,
+.wealth-lobby .btn,
+.app-modal .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1142,41 +1174,67 @@
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
-.btn:hover:not(:disabled) {
+.wealth-root .btn:hover:not(:disabled),
+.wealth-lobby .btn:hover:not(:disabled),
+.app-modal .btn:hover:not(:disabled) {
   border-color: var(--wealth-accent-strong);
   color: #fff;
 }
-.btn:disabled {
-  opacity: 0.5;
+/* 原 opacity: 0.5 命中 CLAUDE.md §26.2 反模式 #5（低透明表 disabled 会污染选中态判定），
+   改为独立灰底 + 灰字 + cursor:not-allowed，显式 opacity:1 抵消旧值。 */
+.wealth-root .btn:disabled,
+.wealth-lobby .btn:disabled,
+.app-modal .btn:disabled {
+  background: #2a3240;
+  border-color: #3a4655;
+  color: #8b949e;
   cursor: not-allowed;
+  opacity: 1;
 }
-.btn-primary {
+.wealth-root .btn-primary,
+.wealth-lobby .btn-primary,
+.app-modal .btn-primary {
   background: var(--wealth-accent-strong);
   border-color: #f0d387;
   color: #1a1305;
 }
-.btn-primary:hover:not(:disabled) {
+.wealth-root .btn-primary:hover:not(:disabled),
+.wealth-lobby .btn-primary:hover:not(:disabled),
+.app-modal .btn-primary:hover:not(:disabled) {
   background: #e5b638;
 }
-.btn-secondary {
+.wealth-root .btn-secondary,
+.wealth-lobby .btn-secondary,
+.app-modal .btn-secondary {
   background: var(--wealth-panel-2);
   border-color: var(--wealth-border);
   color: var(--wealth-text);
 }
-.btn-secondary:hover:not(:disabled) {
+.wealth-root .btn-secondary:hover:not(:disabled),
+.wealth-lobby .btn-secondary:hover:not(:disabled),
+.app-modal .btn-secondary:hover:not(:disabled) {
   background: #243040;
 }
-.btn-danger {
+.wealth-root .btn-danger,
+.wealth-lobby .btn-danger,
+.app-modal .btn-danger {
   background: #b91c1c; /* 红底白字 ≈ 5.9:1 */
   border-color: #f87171;
   color: #fff;
 }
-.btn-danger:hover:not(:disabled) {
+.wealth-root .btn-danger:hover:not(:disabled),
+.wealth-lobby .btn-danger:hover:not(:disabled),
+.app-modal .btn-danger:hover:not(:disabled) {
   background: #dc2626;
 }
-.btn-danger:disabled {
+.wealth-root .btn-danger:disabled,
+.wealth-lobby .btn-danger:disabled,
+.app-modal .btn-danger:disabled {
   background: #4c1d95;
-  opacity: 0.5;
+  border-color: #6d28d9;
+  color: #c4b5fd;
+  cursor: not-allowed;
+  opacity: 1;
 }
 
 /* ── P1 第二期：涨跌色（A 股习惯：涨红跌绿，2026-09-16 §财商流P1-2）────
@@ -1573,7 +1631,8 @@
   .wealth-economy__quintile-fill,
   .wealth-survey__progress-fill,
   .wealth-survey__result-fill,
-  .minsky-moment-flash {
+  /* 同上 F4：类名对齐 MinskyStatusBar.tsx:69（原 .minsky-moment-flash 从未命中）。 */
+  .wealth-minsky-moment-flash {
     transition: none !important;
     animation: none !important;
   }
