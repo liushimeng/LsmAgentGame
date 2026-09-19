@@ -106,6 +106,10 @@ type World struct {
 	// P2: 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
 	ListingBook  *ListingBook  // 挂单簿 + 议价 + P2P 借贷合约
 	AuctionHouse *AuctionHouse // 拍卖行(四种拍卖)
+
+	// P2 v2: 资金流向缓存(2026-09-19 §财商流P2-可视化)。SettleMonth ⑨ 之后
+	// 调用 RecordFlowStat 刷新,只保留本月。
+	LastFlowStat *FlowStat
 }
 
 // NewWorld 构造世界(seed=0 时用时间随机;cards[seat] 可为零值 Card 表示空座)。

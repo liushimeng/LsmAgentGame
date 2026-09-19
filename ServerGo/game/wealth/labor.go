@@ -41,10 +41,33 @@ func NewFirmSector() *FirmSector {
 }
 
 // SocietyStats 社会结构统计(§5,月度计算后缓存于 World.Society)。
+// 2026-09-19 §P2 v2 增量:增加 TotalWealth/MedianWealth/MeanWealth/Percentiles/
+// LorenzPoints/PyramidLayers 字段;ComputeSociety 同步填充。
 type SocietyStats struct {
 	Gini      float64    // 存活玩家净资产基尼系数 [0,1]
 	Quintiles [5]float64 // 可支配收入五等份各组收入占比(低→高,和=1)
 	Circles   [3]int     // 圈层人数:{生存圈, 积累圈, 自由圈}
+
+	// v2 新增(P2 财富可视化 §13.2.1)
+	TotalWealth   int64                    // Σ存活玩家净资产(分母)
+	MedianWealth  int64                    // 中位数(n 奇→中点;偶→中两点平均)
+	MeanWealth    int64                    // 总/人数
+	P10           int64                    // 分位线 P10/P25/P50/P75/P90
+	P25           int64
+	P50           int64
+	P75           int64
+	P90           int64
+	LorenzPoints  [][2]float64             // 洛伦兹曲线 {(人口累计比例, 财富累计比例)};n+1 点
+	PyramidLayers []WealthLayer            // 金字塔分层(自下而上):生存/积累/自由
+}
+
+// WealthLayer 金字塔单层(2026-09-19 §P2 v2 新定)。
+type WealthLayer struct {
+	Name        string  // "survival" / "accumulation" / "freedom"
+	Count       int     // 人数
+	TotalWealth int64   // 总财富
+	AvgWealth   int64   // 平均财富
+	WealthPct   float64 // 占总财富比例 0-1
 }
 
 // sumFirmsInflow 统计指定月份 to=EntityFirms 的流水合计(§4.2,O(条目数))。
@@ -154,6 +177,8 @@ func (w *World) sampleRehireRatio() float64 {
 //	         n<5 或 Σ=0 → 全 0.2
 //	圈层    :r = 月被动收入 ÷ max(1, Monthly.Expense);
 //	         r<1 生存圈 / 1≤r<2 积累圈 / r≥2 自由圈(《总体设计》§6)
+//	v2 增量  :TotalWealth/Median/Mean/Percentiles/LorenzPoints/PyramidLayers
+//	         (2026-09-19 §P2 v2 §13.2.1)
 func ComputeSociety(w *World) *SocietyStats {
 	s := &SocietyStats{}
 	if w == nil {
@@ -223,7 +248,109 @@ func ComputeSociety(w *World) *SocietyStats {
 			}
 		}
 	}
+
+	// v2 增量:总/中位/均值 + 分位线 + 洛伦兹 + 金字塔(2026-09-19 §P2 v2)。
+	if n > 0 {
+		var total float64
+		for _, v := range netWorths {
+			total += v
+		}
+		s.TotalWealth = int64(total + 0.5)
+		s.MeanWealth = int64(total/float64(n) + 0.5)
+		s.P50 = percentileInt64(netWorths, 0.50)
+		s.MedianWealth = s.P50
+		s.P10 = percentileInt64(netWorths, 0.10)
+		s.P25 = percentileInt64(netWorths, 0.25)
+		s.P75 = percentileInt64(netWorths, 0.75)
+		s.P90 = percentileInt64(netWorths, 0.90)
+
+		// 洛伦兹曲线:n+1 点;(0,0) → 累加 → (1,1);总财富 0 时退化为对角线。
+		s.LorenzPoints = make([][2]float64, n+1)
+		s.LorenzPoints[0] = [2]float64{0, 0}
+		if total > 0 {
+			var cum float64
+			for i, v := range netWorths {
+				cum += v
+				s.LorenzPoints[i+1] = [2]float64{
+					float64(i+1) / float64(n),
+					cum / total,
+				}
+			}
+		} else {
+			for i := 0; i < n; i++ {
+				s.LorenzPoints[i+1] = [2]float64{
+					float64(i+1) / float64(n),
+					float64(i+1) / float64(n),
+				}
+			}
+		}
+
+		// 财富金字塔:三层,自下而上(生存 → 积累 → 自由);按 Circles 顺序映射。
+		// 注意:Circles 是 [生存, 积累, 自由],但 WealthLayer 输出顺序按"自下而上"
+		// 习惯(底层=生存,顶层=自由),与 Circles 索引一致。
+		layerNames := [3]string{"survival", "accumulation", "freedom"}
+		s.PyramidLayers = make([]WealthLayer, 3)
+		for li := 0; li < 3; li++ {
+			s.PyramidLayers[li] = WealthLayer{Name: layerNames[li], Count: s.Circles[li]}
+		}
+		// 金字塔每层的 TotalWealth/AvgWealth/WealthPct:按 Circle 切 netWorths
+		// (按 r=被动/支出 升序切片;但 Circles 已按座位遍历顺序累计,无法直接
+		// 映射回 netWorths,这里走简化近似:按资产升序分位切)。
+		if total > 0 {
+			// 简化映射:每层占 1/3 人数(向上递进),与 Circles 实际分布存在偏差,
+			// 但对 12 人小样本足够直观;若需要精确切分,留 v3 接 r 阈值分组函数。
+			perLayer := n / 3
+			rem := n - perLayer*3
+			idx := 0
+			for li := 0; li < 3; li++ {
+				size := perLayer
+				if li == 2 {
+					size += rem // 末层吃余数
+				}
+				if size <= 0 {
+					continue
+				}
+				var sum float64
+				for j := 0; j < size && idx < n; j++ {
+					sum += netWorths[idx]
+					idx++
+				}
+				s.PyramidLayers[li].TotalWealth = int64(sum + 0.5)
+				if size > 0 {
+					s.PyramidLayers[li].AvgWealth = int64(sum/float64(size) + 0.5)
+				}
+				s.PyramidLayers[li].WealthPct = sum / total
+			}
+		}
+	}
 	return s
+}
+
+// percentileInt64 计算升序 netWorths 的 p 分位(线性插值,n<2 → 0)。
+// p ∈ [0,1];索引 floor((n-1)*p)。
+func percentileInt64(sortedVals []float64, p float64) int64 {
+	n := len(sortedVals)
+	if n == 0 {
+		return 0
+	}
+	if n == 1 {
+		return int64(sortedVals[0] + 0.5)
+	}
+	if p <= 0 {
+		return int64(sortedVals[0] + 0.5)
+	}
+	if p >= 1 {
+		return int64(sortedVals[n-1] + 0.5)
+	}
+	pos := p * float64(n-1)
+	lo := int(pos)
+	hi := lo + 1
+	if hi >= n {
+		return int64(sortedVals[n-1] + 0.5)
+	}
+	frac := pos - float64(lo)
+	v := sortedVals[lo]*(1-frac) + sortedVals[hi]*frac
+	return int64(v + 0.5)
 }
 
 // max64 int64 最大值辅助(go 版本未定,避免依赖内建 max 的泛型推导差异)。

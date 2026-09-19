@@ -27,6 +27,9 @@ import {
   type WealthGameState,
   type WealthGoodsItem,
 } from '@/types/wealth';
+import { LorenzCurvePanel } from './LorenzCurvePanel';
+import { WealthPyramidPanel } from './WealthPyramidPanel';
+import { FundFlowSankeyPanel } from './FundFlowSankeyPanel';
 
 interface Props {
   gameState: WealthGameState | null;
@@ -326,6 +329,20 @@ export function EconomyPanel({ gameState }: Props) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ④ P2 v2 财富结构(2026-09-19 §P2-可视化):洛伦兹/金字塔/资金流向。
+         * 折叠块:条件渲染;空字段时各组件内部走 wealth-panel__empty 兜底。
+         * 顺序固定:Lorenz → Pyramid → Flow(由宏观 → 微观 → 闭环)。 */}
+      {(soc?.lorenz_points || soc?.pyramid_layers || gameState?.flow_stat) && (
+        <div className="wealth-dashboard">
+          <div className="wealth-dashboard__title">
+            {t('wealth.dashboard.structure' as TKey)}
+          </div>
+          {soc?.lorenz_points && <LorenzCurvePanel society={soc} my={gameState?.my ?? null} />}
+          {soc?.pyramid_layers && <WealthPyramidPanel layers={soc.pyramid_layers} />}
+          {gameState?.flow_stat && <FundFlowSankeyPanel flowStat={gameState.flow_stat} />}
         </div>
       )}
 

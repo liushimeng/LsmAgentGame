@@ -299,6 +299,8 @@ export interface WealthGameState {
   surveys?: WealthSurvey[];
   /** 挂单簿（P2 交易系统；房间级）。 */
   listing_book?: WealthListingBook;
+  /** 月度资金流向（P2 v2 §13.2.4 财富流动可视化）。 */
+  flow_stat?: WealthFlowStat;
 }
 
 /** 明斯基全局概览（game.state.minsky_overview，P1 明斯基引擎）。 */
@@ -374,6 +376,56 @@ export interface WealthSociety {
   quintiles: number[];
   /** 圈层人数分布。 */
   circles: WealthSocietyCircles;
+  // ── P2 v2(2026-09-19 §P2-可视化 §13.2.4)。omitempty 字段;缺省时为 0/空数组。 ──
+  /** 存活玩家净资产合计（分母）。 */
+  total_wealth?: number;
+  /** 净资产中位数（线性插值）。 */
+  median_wealth?: number;
+  /** 净资产均值 = total / 人数。 */
+  mean_wealth?: number;
+  /** 分位线 {p10, p25, p50, p75, p90}。 */
+  percentiles?: Record<string, number>;
+  /** 洛伦兹曲线点集 [(人口累计, 财富累计)];n+1 点。 */
+  lorenz_points?: [number, number][];
+  /** 财富金字塔三层（自下而上：生存 / 积累 / 自由）。 */
+  pyramid_layers?: WealthPyramidLayer[];
+}
+
+/** 财富金字塔单层（v2 新增）。 */
+export interface WealthPyramidLayer {
+  name: 'survival' | 'accumulation' | 'freedom';
+  count: number;
+  total_wealth: number;
+  avg_wealth: number;
+  /** 占总财富比例 0-1。 */
+  wealth_pct: number;
+}
+
+/** 月度资金流向统计（v2 新增）。 */
+export interface WealthFlowStat {
+  period: string;
+  period_label: string;
+  nodes: WealthFlowNode[];
+  links: WealthFlowLink[];
+  total_in_cny: number;
+  total_out_cny: number;
+}
+
+/** 资金流向节点。 */
+export interface WealthFlowNode {
+  id: 'salary' | 'firms' | 'market' | 'bank' | 'gov' | 'player' | 'world';
+  label: string;
+  kind: 'source' | 'sink' | 'pass';
+  amount_cny: number;
+}
+
+/** 资金流向边。 */
+export interface WealthFlowLink {
+  from: WealthFlowNode['id'];
+  to: WealthFlowNode['id'];
+  amount_cny: number;
+  /** 占最大边比例 0-1，用于决定贝塞尔连线宽度。 */
+  pct: number;
 }
 
 // ── P1 社会调研系统（对全体 Agent 的预测模拟）───────────────────────────

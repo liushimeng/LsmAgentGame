@@ -298,3 +298,207 @@
 .wealth-badge--cat-market { background: #1d4ed8; }
 .wealth-badge--cat-intel { background: #7c3aed; }
 .wealth-badge--cat-personal { background: #0e7490; }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * P2 v2 财富流动可视化（洛伦兹 / 金字塔 / 资金流向）
+ * 2026-09-19 §P2-可视化 §13.3 §13.5。
+ * 对比度 CLAUDE.md §26：暗色主题正文 ≥4.5:1；徽章 ≥5:1。
+ * ══════════════════════════════════════════════════════════════════════ */
+
+/* 折叠块容器（挂在 EconomyPanel 内部） */
+.wealth-dashboard {
+  border-top: 1px dashed var(--wealth-border);
+  padding-top: 12px;
+  margin-top: 8px;
+}
+.wealth-dashboard__title {
+  font-size: 13px;
+  color: var(--wealth-text);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+/* ── 洛伦兹曲线面板 ── */
+.wealth-lorenz {
+  background: var(--wealth-bg-soft);
+  border: 1px solid var(--wealth-border);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.wealth-lorenz__title {
+  font-size: 12px;
+  color: var(--wealth-text-dim);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.wealth-lorenz__gini {
+  font-weight: 700;
+  color: #a78bfa;
+  font-variant-numeric: tabular-nums;
+}
+.wealth-lorenz__svg {
+  display: block;
+  width: 100%;
+  height: 160px;
+  background: var(--wealth-bg);
+  border-radius: 4px;
+}
+.wealth-lorenz__legend {
+  font-size: 11px;
+  color: var(--wealth-text-dim);
+  margin-top: 4px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.wealth-lorenz__legend-dot {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.wealth-lorenz__legend-dot--equal { background: #94a3b8; border-top: 1px dashed #94a3b8; }
+.wealth-lorenz__legend-dot--curve { background: #a78bfa; height: 2px; }
+.wealth-lorenz__me {
+  fill: #f472b6;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.wealth-lorenz__me-label {
+  fill: #f472b6;
+  font-size: 10px;
+  font-weight: 600;
+}
+.wealth-lorenz__empty {
+  font-size: 12px;
+  color: var(--wealth-text-dim);
+  padding: 14px 0;
+  text-align: center;
+}
+
+/* ── 财富金字塔面板 ── */
+.wealth-pyramid {
+  background: var(--wealth-bg-soft);
+  border: 1px solid var(--wealth-border);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.wealth-pyramid__title {
+  font-size: 12px;
+  color: var(--wealth-text-dim);
+  margin-bottom: 8px;
+}
+.wealth-pyramid__layers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wealth-pyramid__row {
+  display: grid;
+  grid-template-columns: 80px 1fr 110px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--wealth-bg);
+  border: 1px solid var(--wealth-border);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.wealth-pyramid__row-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--wealth-text);
+}
+.wealth-pyramid__row-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.wealth-pyramid__row-dot--survival { background: #60a5fa; }
+.wealth-pyramid__row-dot--accumulation { background: #d4a017; }
+.wealth-pyramid__row-dot--freedom { background: #34d399; }
+.wealth-pyramid__row-bar {
+  height: 14px;
+  background: var(--wealth-bg-soft);
+  border-radius: 3px;
+  position: relative;
+  overflow: hidden;
+}
+.wealth-pyramid__row-bar-fill {
+  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.wealth-pyramid__row-bar-fill--survival { background: #60a5fa; }
+.wealth-pyramid__row-bar-fill--accumulation { background: #d4a017; }
+.wealth-pyramid__row-bar-fill--freedom { background: #34d399; }
+.wealth-pyramid__row-meta {
+  color: var(--wealth-text-dim);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 资金流向桑基图面板（简化：左源右汇 + 贝塞尔连线） ── */
+.wealth-flow {
+  background: var(--wealth-bg-soft);
+  border: 1px solid var(--wealth-border);
+  border-radius: 6px;
+  padding: 10px;
+}
+.wealth-flow__title {
+  font-size: 12px;
+  color: var(--wealth-text-dim);
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.wealth-flow__totals {
+  display: flex;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.wealth-flow__total--in { color: #34d399; }
+.wealth-flow__total--out { color: #fb923c; }
+.wealth-flow__svg {
+  display: block;
+  width: 100%;
+  height: 200px;
+  background: var(--wealth-bg);
+  border-radius: 4px;
+}
+.wealth-flow__node-label {
+  fill: var(--wealth-text);
+  font-size: 11px;
+  font-weight: 500;
+}
+.wealth-flow__node-amount {
+  fill: var(--wealth-text-dim);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.wealth-flow__link {
+  fill: none;
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+.wealth-flow__link:hover { opacity: 0.85; }
+.wealth-flow__link--source { stroke: #34d399; }
+.wealth-flow__link--sink   { stroke: #fb923c; }
+.wealth-flow__link--pass   { stroke: #a78bfa; }
+.wealth-flow__empty {
+  font-size: 12px;
+  color: var(--wealth-text-dim);
+  padding: 14px 0;
+  text-align: center;
+}

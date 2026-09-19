@@ -43,6 +43,8 @@ type ClientGameState struct {
 	LaborMarket    LaborMarketJSON   `json:"labor_market"`
 	Society        SocietyJSON       `json:"society"`
 	Surveys        []SurveyJSON      `json:"surveys"` // 调研契约 §5.1
+	// P2 v2(2026-09-19 §P2-可视化):本月资金流向;omitempty 保证空月份不下发。
+	FlowStat *FlowStatJSON `json:"flow_stat,omitempty"`
 }
 
 // ConsumerMarketJSON 是 consumer_market 子结构(P1 §6.1)。
@@ -69,7 +71,7 @@ type LaborMarketJSON struct {
 	LayoffWave       int     `json:"layoff_wave"`
 }
 
-// SocietyJSON 是 society 子结构(P1 §6.1)。
+// SocietyJSON 是 society 子结构(P1 §6.1 + P2 v2 §13.2.4)。
 type SocietyJSON struct {
 	Gini      float64    `json:"gini"`
 	Quintiles [5]float64 `json:"quintiles"`
@@ -78,6 +80,48 @@ type SocietyJSON struct {
 		Accumulate int `json:"accumulate"`
 		Freedom    int `json:"freedom"`
 	} `json:"circles"`
+	// P2 v2 新增(2026-09-19 §P2-可视化)。omitzero 保证未开 economy_enabled 不下发。
+	TotalWealth   int64                `json:"total_wealth,omitempty"`
+	MedianWealth  int64                `json:"median_wealth,omitempty"`
+	MeanWealth    int64                `json:"mean_wealth,omitempty"`
+	Percentiles   map[string]int64     `json:"percentiles,omitempty"` // {"p10":..,"p25":..,"p50":..,"p75":..,"p90":..}
+	LorenzPoints  [][2]float64         `json:"lorenz_points,omitempty"`
+	PyramidLayers []WealthLayerJSON    `json:"pyramid_layers,omitempty"`
+}
+
+// WealthLayerJSON 是金字塔单层视图(P2 v2 §13.2.4)。
+type WealthLayerJSON struct {
+	Name        string  `json:"name"`        // "survival" | "accumulation" | "freedom"
+	Count       int     `json:"count"`       // 人数
+	TotalWealth int64   `json:"total_wealth"`
+	AvgWealth   int64   `json:"avg_wealth"`
+	WealthPct   float64 `json:"wealth_pct"` // 占总财富 0-1
+}
+
+// FlowStatJSON 是 cs.FlowStat 视图(P2 v2 §13.2.4)。
+type FlowStatJSON struct {
+	Period      string         `json:"period"`
+	PeriodLabel string         `json:"period_label"`
+	Nodes       []FlowNodeJSON `json:"nodes"`
+	Links       []FlowLinkJSON `json:"links"`
+	TotalInCNY  int64          `json:"total_in_cny"`
+	TotalOutCNY int64          `json:"total_out_cny"`
+}
+
+// FlowNodeJSON 是节点视图。
+type FlowNodeJSON struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	Kind      string `json:"kind"`
+	AmountCNY int64  `json:"amount_cny"`
+}
+
+// FlowLinkJSON 是边视图。
+type FlowLinkJSON struct {
+	From      string  `json:"from"`
+	To        string  `json:"to"`
+	AmountCNY int64    `json:"amount_cny"`
+	Pct       float64 `json:"pct"`
 }
 
 // SurveyJSON 是 game.state.surveys 单项(调研契约 §5.1;view 层映射)。
@@ -520,6 +564,48 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		cs.Society.Circles.Survival = world.Society.Circles[0]
 		cs.Society.Circles.Accumulate = world.Society.Circles[1]
 		cs.Society.Circles.Freedom = world.Society.Circles[2]
+		// P2 v2 新增字段(2026-09-19 §P2-可视化 §13.2.4)。omitempty 保障
+		// economy_enabled=false 或无玩家时不污染 ws 帧。
+		cs.Society.TotalWealth = world.Society.TotalWealth
+		cs.Society.MedianWealth = world.Society.MedianWealth
+		cs.Society.MeanWealth = world.Society.MeanWealth
+		if world.Society.P10 > 0 || world.Society.P90 > 0 || world.Society.MeanWealth > 0 {
+			cs.Society.Percentiles = map[string]int64{
+				"p10": world.Society.P10,
+				"p25": world.Society.P25,
+				"p50": world.Society.P50,
+				"p75": world.Society.P75,
+				"p90": world.Society.P90,
+			}
+		}
+		if len(world.Society.LorenzPoints) > 0 {
+			cs.Society.LorenzPoints = world.Society.LorenzPoints
+		}
+		if len(world.Society.PyramidLayers) > 0 {
+			cs.Society.PyramidLayers = make([]WealthLayerJSON, len(world.Society.PyramidLayers))
+			for i, l := range world.Society.PyramidLayers {
+				cs.Society.PyramidLayers[i] = WealthLayerJSON{
+					Name: l.Name, Count: l.Count,
+					TotalWealth: l.TotalWealth, AvgWealth: l.AvgWealth, WealthPct: l.WealthPct,
+				}
+			}
+		}
+	}
+	// P2 v2:本月资金流向(SettleMonth 末尾 RecordFlowStat 已刷缓存;空月份 omit)。
+	if world.LastFlowStat != nil && len(world.LastFlowStat.Links) > 0 {
+		fs := world.LastFlowStat
+		cs.FlowStat = &FlowStatJSON{
+			Period: fs.Period, PeriodLabel: fs.PeriodLabel,
+			TotalInCNY: fs.TotalInCNY, TotalOutCNY: fs.TotalOutCNY,
+		}
+		cs.FlowStat.Nodes = make([]FlowNodeJSON, len(fs.Nodes))
+		for i, n := range fs.Nodes {
+			cs.FlowStat.Nodes[i] = FlowNodeJSON{ID: n.ID, Label: n.Label, Kind: n.Kind, AmountCNY: n.AmountCNY}
+		}
+		cs.FlowStat.Links = make([]FlowLinkJSON, len(fs.Links))
+		for i, l := range fs.Links {
+			cs.FlowStat.Links[i] = FlowLinkJSON{From: l.From, To: l.To, AmountCNY: l.AmountCNY, Pct: l.Pct}
+		}
 	}
 	// Surveys:open(≤1)+ 最近 4 个 closed(含 Result),倒序(调研契约 §5.1)。
 	cs.Surveys = make([]SurveyJSON, 0)

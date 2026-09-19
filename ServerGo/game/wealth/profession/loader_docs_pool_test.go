@@ -12,12 +12,17 @@ package profession
 
 import (
 	"math/rand"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 )
 
 // docsPoolRoot 返回真实文档池根目录(仓库根 + lag_docs/财商流游戏/玩家职业设计)。
+// 2026-09-19: 知识库已迁移为 lag_docs submodule,旧路径 docs/... 不再存在;
+// 若 root 不存在则 SkipDir 类警告而非 panic(被 TestDocsPool_DistrictSpread
+// rand.Intn(len=0) 撞上),引导 reviewer 检出 submodule。
+//
 // 用 runtime.Caller 定位本文件,再上溯 4 层到仓库根:
 // ServerGo/game/wealth/profession → ServerGo/game/wealth → ServerGo/game →
 // ServerGo → 仓库根。
@@ -28,10 +33,13 @@ func docsPoolRoot(t *testing.T) string {
 		t.Skip("runtime.Caller unavailable; cannot locate docs pool")
 	}
 	root := filepath.Join(filepath.Dir(file), "..", "..", "..", "..",
-		"docs", "财商流游戏", "玩家职业设计")
+		"lag_docs", "财商流游戏", "玩家职业设计")
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		t.Fatalf("abs(%s): %v", root, err)
+	}
+	if _, err := os.Stat(abs); err != nil {
+		t.Skipf("docs pool not present at %s (请执行 `git submodule update --init --recursive` 检出 lag_docs): %v", abs, err)
 	}
 	return abs
 }

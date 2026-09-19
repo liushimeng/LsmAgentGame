@@ -298,3 +298,92 @@ func TestSocietyCircles(t *testing.T) {
 		t.Errorf("accumulate circle: got %d, want 0", st.Circles[1])
 	}
 }
+
+// TestComputeSociety_V2_LorenzAndPercentiles P2 v2 §13.2.1:验证洛伦兹曲线
+// 起止点、单调递增、PyramidLayers 三层结构(2026-09-19)。
+// 注:laborWorld 已含初始 SalaryBase/住宅资产,本测试只校验**形状**:
+//   - TotalWealth > 0, MeanWealth = TotalWealth/n
+//   - P50 == MedianWealth;LorenzPoints[0]=(0,0),末点=(1,1)
+//   - LorenzPoints 单调递增(累计比例)
+//   - PyramidLayers 三层,顺序 survival→freedom,WealthPct 和 ≈ 1.0
+func TestComputeSociety_V2_LorenzAndPercentiles(t *testing.T) {
+	w := laborWorld(1, 4)
+	for _, p := range w.Players {
+		if p == nil {
+			continue
+		}
+		p.Alive = true
+	}
+
+	st := ComputeSociety(w)
+	n := 4
+	if st.TotalWealth <= 0 {
+		t.Errorf("TotalWealth = %d, want > 0", st.TotalWealth)
+	}
+	if st.MeanWealth != st.TotalWealth/int64(n) {
+		t.Errorf("MeanWealth = %d, want %d", st.MeanWealth, st.TotalWealth/int64(n))
+	}
+	if st.P50 != st.MedianWealth {
+		t.Errorf("P50 (%d) should equal MedianWealth (%d)", st.P50, st.MedianWealth)
+	}
+	if len(st.LorenzPoints) != n+1 {
+		t.Fatalf("LorenzPoints length = %d, want %d", len(st.LorenzPoints), n+1)
+	}
+	if st.LorenzPoints[0] != [2]float64{0, 0} {
+		t.Errorf("LorenzPoints[0] = %v, want {0,0}", st.LorenzPoints[0])
+	}
+	if st.LorenzPoints[n] != [2]float64{1, 1} {
+		t.Errorf("LorenzPoints[%d] = %v, want {1,1}", n, st.LorenzPoints[n])
+	}
+	// 单调递增校验
+	for i := 1; i <= n; i++ {
+		if st.LorenzPoints[i][0] < st.LorenzPoints[i-1][0] {
+			t.Errorf("LorenzPoints not monotonic x at %d: %v vs %v", i, st.LorenzPoints[i], st.LorenzPoints[i-1])
+		}
+		if st.LorenzPoints[i][1] < st.LorenzPoints[i-1][1] {
+			t.Errorf("LorenzPoints not monotonic y at %d: %v vs %v", i, st.LorenzPoints[i], st.LorenzPoints[i-1])
+		}
+	}
+	// 金字塔:3 层,顺序 survival/accumulation/freedom
+	if len(st.PyramidLayers) != 3 {
+		t.Fatalf("PyramidLayers length = %d, want 3", len(st.PyramidLayers))
+	}
+	if st.PyramidLayers[0].Name != "survival" {
+		t.Errorf("PyramidLayers[0].Name = %q, want survival", st.PyramidLayers[0].Name)
+	}
+	if st.PyramidLayers[2].Name != "freedom" {
+		t.Errorf("PyramidLayers[2].Name = %q, want freedom", st.PyramidLayers[2].Name)
+	}
+	// 三层 WealthPct 之和应约等于 1.0
+	var sumPct float64
+	for _, l := range st.PyramidLayers {
+		sumPct += l.WealthPct
+	}
+	if sumPct < 0.99 || sumPct > 1.01 {
+		t.Errorf("PyramidLayers WealthPct sum = %f, want ≈1.0", sumPct)
+	}
+}
+
+// TestComputeSociety_V2_AllZeroWealth 当 n<2 时应走空态兜底,不为空时不 panic。
+// 注:laborWorld 已含资产,所以 TotalWealth > 0;本测试只验证 n=1 边角。
+func TestComputeSociety_V2_AllZeroWealth(t *testing.T) {
+	w := laborWorld(1, 1)
+	for _, p := range w.Players {
+		if p == nil {
+			continue
+		}
+		p.Alive = true
+	}
+	st := ComputeSociety(w)
+	if st == nil {
+		t.Fatal("ComputeSociety returned nil")
+	}
+	// 单玩家情况:Percentiles 应等于该玩家净资产(所有分位数同值)。
+	if st.MedianWealth != st.P50 {
+		t.Errorf("n=1 MedianWealth (%d) should equal P50 (%d)", st.MedianWealth, st.P50)
+	}
+	// 洛伦兹点:2 点 (0,0) → (1,1)
+	if len(st.LorenzPoints) != 2 {
+		t.Errorf("n=1 LorenzPoints len = %d, want 2", len(st.LorenzPoints))
+	}
+}

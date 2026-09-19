@@ -133,6 +133,10 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		w.Society = ComputeSociety(w)
 	}
 
+	// ④.65 资金流向统计(P2 v2 §13.2.5,2026-09-19 §P2-可视化):
+	// 在 ④.6 之后立即聚合本月 Ledger,刷新 World.LastFlowStat 供 view 下发。
+	w.RecordFlowStat()
+
 	// P2: 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
 	// ④.7 借贷月结:逐笔 P2PLoan 月供扣款/逾期判定/担保代偿。
 	w.SettleP2PLoans(res)

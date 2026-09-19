@@ -506,4 +506,31 @@ export interface WealthDict {
   'earlyrepay.partialAmount': string;
   'earlyrepay.dangerTitle': string;
   'earlyrepay.dangerBody': string; // {amount}
+  // ── P2 v2 财富流动可视化(2026-09-19 §P2-可视化 §13.4) ──
+  'wealth.dashboard.structure': string;
+  'wealth.dashboard.lorenz.title': string;
+  'wealth.dashboard.lorenz.myPos': string;
+  'wealth.dashboard.lorenz.myRank': string; // {rank} {total}
+  'wealth.dashboard.lorenz.equalLine': string;
+  'wealth.dashboard.lorenz.lorenzCurve': string;
+  'wealth.dashboard.lorenz.giniBadge': string; // {value}
+  'wealth.dashboard.lorenz.empty': string;
+  'wealth.dashboard.pyramid.title': string;
+  'wealth.dashboard.pyramid.survival': string;
+  'wealth.dashboard.pyramid.accumulation': string;
+  'wealth.dashboard.pyramid.freedom': string;
+  'wealth.dashboard.pyramid.peopleCount': string; // {n}
+  'wealth.dashboard.pyramid.wealthPct': string; // {pct}
+  'wealth.dashboard.flow.title': string;
+  'wealth.dashboard.flow.in': string;
+  'wealth.dashboard.flow.out': string;
+  'wealth.dashboard.flow.empty': string;
+  'wealth.dashboard.flow.node.salary': string;
+  'wealth.dashboard.flow.node.firms': string;
+  'wealth.dashboard.flow.node.market': string;
+  'wealth.dashboard.flow.node.bank': string;
+  'wealth.dashboard.flow.node.gov': string;
+  'wealth.dashboard.flow.node.player': string;
+  'wealth.dashboard.flow.node.world': string;
+  'wealth.dashboard.flow.tooltip': string; // {from} {to} {amount}
 }
