@@ -2,6 +2,9 @@
  * DistrictBlock — 单城区：8×8 底板（纹理缺失降级主色）+ 4–6 栋确定性伪随机楼群
  * + hover 信息卡（区名 / 房价 / 租金 / beta / 在区玩家数）。
  *
+ * P1-B 改造：楼群渲染段由 inline boxGeometry 改为 <BuildingMesh />。
+ * BuildingMesh 内部按 4 侧面 + 顶面分别贴 facade / roof 纹理，缺失 → 退色。
+ *
  * 楼群高度映射 price_index（0.8–1.6 → 1–5 单位）：繁荣期楼变高、萧条期变矮
  * = 可视化市场周期（前端架构文档 §3）。伪随机 **不用 Math.random**——seed 由
  * district id hash，重渲染布局稳定。
@@ -13,6 +16,7 @@ import { Html } from '@react-three/drei';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import { districtTexture } from '@/assets/images/wealth';
+import { BuildingMesh, type BuildingSpec } from './BuildingMesh';
 import {
   WEALTH_DISTRICTS,
   formatCny,
@@ -41,13 +45,7 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-interface BuildingSpec {
-  x: number;        // 相对区中心偏移
-  z: number;
-  w: number;
-  d: number;
-  factor: number;   // 0.6–1.0 楼高系数
-}
+// BuildingSpec 由 ./BuildingMesh 统一导出，此处不再重复定义
 
 /** 楼群布局（seed = district id；与 price_index 无关，仅高度随行情缩放）。 */
 function buildingsFor(def: WealthDistrictDef): BuildingSpec[] {
@@ -154,26 +152,15 @@ export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect
           />
         </mesh>
       )}
-      {/* 楼群 */}
-      {buildings.map((b, i) => {
-        const h = heightBase * b.factor;
-        return (
-          <mesh
-            key={i}
-            castShadow
-            position={[b.x, h / 2, b.z]}
-          >
-            <boxGeometry args={[b.w, h, b.d]} />
-            <meshStandardMaterial
-              color={def.color}
-              roughness={0.65}
-              metalness={0.15}
-              emissive={def.color}
-              emissiveIntensity={prosperity * 0.25}
-            />
-          </mesh>
-        );
-      })}
+      {/* 楼群（P1-B：BuildingMesh 接管，单 box → 4 侧面 + 顶面） */}
+      {buildings.map((b, i) => (
+        <BuildingMesh
+          key={i}
+          spec={b}
+          def={def}
+          prosperity={prosperity}
+        />
+      ))}
       {/* hover 信息卡 */}
       {hovered && (
         <Html position={[0, heightBase + 1.6, 0]} center distanceFactor={16}>

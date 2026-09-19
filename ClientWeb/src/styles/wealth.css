@@ -1579,4 +1579,39 @@
   }
 }
 
+/* ── 08-UI优化 v2 街景道具图例（P1-C，2026-09-19） ────────────────
+ * 命名空间 .wealth-city-prop-legend*；CSS 仅追加（CLAUDE.md §2.1）。
+ * 颜色对比度：rgba(11,15,22,0.78) 底 + #e5e7eb 文 → ≥ 7:1（CLAUDE.md §26）。
+ */
+.wealth-city-prop-legend {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 4;
+  font-size: 12px;
+  line-height: 1.5;
+  background: rgba(11, 15, 22, 0.78);
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: #e5e7eb;
+  pointer-events: none;
+  user-select: none;
+  backdrop-filter: blur(2px);
+}
+.wealth-city-prop-legend__row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 2px;
+}
+.wealth-city-prop-legend__row:last-child {
+  margin-bottom: 0;
+}
+.wealth-city-prop-legend__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
 @import url("./wealth-p2.css");

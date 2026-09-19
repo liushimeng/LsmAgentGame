@@ -1,21 +1,27 @@
 /**
- * WealthCityMap — r3f 主场景（首个正式 R3F 游戏场景，规范见前端架构文档 §3）：
- * Canvas（shadows, dpr 1–2, 相机 [14,12,14] fov45）+ 40×40 地面 + gridHelper +
- * 8 城区 DistrictBlock + 道路薄板（各城区 → finance）+ AgentToken +
- * ambient/directional 灯光 + OrbitControls（pan/zoom/rotate, maxPolarAngle 1.2）。
+ * WealthCityMap — r3f 主场景（08-UI优化 v2）：
  *
- * 相机联动：viewRef 由场景内 CameraReporter 每帧回写（target + distance），
- * 小地图据此画视野框；focusRef 由小地图 / 面板写入目标区中心，
- * FocusController 平滑移动 OrbitControls.target。
+ * P1-A 改造：
+ *   - 删除 gridHelper 黑线（line 56 of v1），地面改用 RepeatWrapping 沥青贴图。
+ *   - 单 plane Roads() 替换为分层 <Road />（4 层组合 + 路灯阵列）。
+ *   - 追加 hemisphereLight（天/地反弹）+ <fog />（远景雾化）。
+ *
+ * P1-C 追加：
+ *   - <StreetPropsLayer /> 在 Token 之前注入，绘制路灯、树、车辆、行人、屋顶杂物。
+ *
+ * 相机 / OrbitControls / CameraReporter / FocusController 行为不变（与 v1 完全兼容）。
  */
 
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { DistrictBlock } from './DistrictBlock';
 import { AgentToken } from './AgentToken';
+import { Road } from './Road';
+import { StreetPropsLayer } from './StreetPropsLayer';
+import { streetTileUrl } from '@/assets/images/wealth';
 import {
   WEALTH_DISTRICTS,
   districtCenter,
@@ -46,43 +52,89 @@ interface Props {
   onSelectDistrict: (id: WealthDistrictId) => void;
 }
 
+/**
+ * 地面：40×40 plane + RepeatWrapping 沥青贴图（缺失 → 纯色 #141a24）。
+ * 旧 gridHelper 已删除（消除黑线）。
+ */
 function Ground() {
+  const [tex, setTex] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    const url = streetTileUrl('asphalt_main');
+    if (!url) {
+      setTex(null);
+      return;
+    }
+    let disposed = false;
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      url,
+      (loaded) => {
+        if (disposed) {
+          loaded.dispose();
+          return;
+        }
+        loaded.colorSpace = THREE.SRGBColorSpace;
+        loaded.wrapS = loaded.wrapT = THREE.RepeatWrapping;
+        loaded.repeat.set(5, 5); // 40 / 8
+        loaded.magFilter = THREE.LinearFilter;
+        loaded.minFilter = THREE.LinearMipmapLinearFilter;
+        setTex(prev => {
+          if (prev) prev.dispose();
+          return loaded;
+        });
+      },
+      undefined,
+      () => setTex(null),
+    );
+    return () => {
+      disposed = true;
+    };
+  }, []);
+
   return (
-    <>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[40, 40]} />
-        <meshStandardMaterial color="#141a24" roughness={1} />
-      </mesh>
-      <gridHelper args={[40, 20, '#2a3342', '#1d2530']} position={[0, 0.01, 0]} />
-    </>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+      <planeGeometry args={[40, 40]} />
+      <meshStandardMaterial
+        map={tex ?? undefined}
+        color={tex ? '#ffffff' : '#141a24'}
+        roughness={0.95}
+        metalness={0.02}
+      />
+    </mesh>
   );
 }
 
-/** 深色薄板道路：各城区中心 → finance(0,0)，宽 0.8，y=0.02。 */
-function Roads() {
+/**
+ * 道路层：从每个非 finance 城区中心辐射到原点（金融 CBD）。
+ * 主干道 vs 次干道按 from→to 距离判：len > 12 → main，否则 side。
+ */
+function RoadsLayer() {
   const roads = useMemo(() => {
-    return WEALTH_DISTRICTS.filter((d) => d.id !== 'finance').map((d) => {
-      const dx = 0 - d.x;
-      const dz = 0 - d.z;
-      const len = Math.sqrt(dx * dx + dz * dz);
-      return {
-        key: d.id,
-        midX: d.x + dx / 2,
-        midZ: d.z + dz / 2,
-        len,
-        angle: Math.atan2(dx, dz),
-      };
-    });
+    return WEALTH_DISTRICTS
+      .filter((d) => d.id !== 'finance')
+      .map((d) => {
+        const c = districtCenter(d.id);
+        const dx = 0 - c.x;
+        const dz = 0 - c.z;
+        const len = Math.sqrt(dx * dx + dz * dz);
+        return {
+          key: d.id,
+          from: [c.x, c.z] as [number, number],
+          to: [0, 0] as [number, number],
+          len,
+        };
+      });
   }, []);
+
   return (
     <>
       {roads.map((r) => (
-        <group key={r.key} position={[r.midX, 0, r.midZ]} rotation={[0, r.angle, 0]}>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-            <planeGeometry args={[0.8, r.len]} />
-            <meshStandardMaterial color="#232b38" roughness={1} />
-          </mesh>
-        </group>
+        <Road
+          key={r.key}
+          from={r.from}
+          to={r.to}
+          kind={r.len > 12 ? 'main' : 'side'}
+        />
       ))}
     </>
   );
@@ -175,7 +227,11 @@ export function WealthCityMap({
         camera={{ position: [14, 12, 14], fov: 45 }}
       >
         <color attach="background" args={['#0b0f16']} />
+        {/* P1-A 新增：远景雾化（与背景色一致自然消失） */}
+        <fog attach="fog" args={['#0b0f16', 28, 60]} />
         <ambientLight intensity={0.7} />
+        {/* P1-A 新增：天/地反弹 */}
+        <hemisphereLight args={['#7a93b8', '#1a1f2a', 0.35]} />
         <directionalLight
           castShadow
           position={[10, 16, 8]}
@@ -194,7 +250,10 @@ export function WealthCityMap({
             onSelect={onSelectDistrict}
           />
         ))}
-        <Roads />
+        {/* P1-A：单 plane → 分层 <Road /> 道路（含路灯阵列） */}
+        <RoadsLayer />
+        {/* P1-C：街道道具层（树 / 车辆 / 行人 / 标识 / 屋顶杂物） */}
+        <StreetPropsLayer />
         {players.map((p, i) => {
           const inDistrict = byDistrict.get(p.district) ?? [];
           const index = inDistrict.indexOf(i);
