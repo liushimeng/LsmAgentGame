@@ -2,10 +2,10 @@
 // (2026-09-14 §财商流P0)。
 //
 // 设计原则(对齐 thpagent,§15/§128):
-//   1. 一个 bot 座位 = 一个 Agent struct;月度事件驱动(每月 acting 一次决策)。
-//   2. Agent 经 ToolRunner 接口调用引擎(in-process,不走 WS,与人类同一路径)。
-//   3. AgentClassName = "LsmAgentGame-Wealth-Player"(class_names.go 登记)。
-//   4. 每月 ≤ BotMaxActionsPerMonth(3)个动作工具 + ≤1 次 speak + submit_month。
+//  1. 一个 bot 座位 = 一个 Agent struct;月度事件驱动(每月 acting 一次决策)。
+//  2. Agent 经 ToolRunner 接口调用引擎(in-process,不走 WS,与人类同一路径)。
+//  3. AgentClassName = "LsmAgentGame-Wealth-Player"(class_names.go 登记)。
+//  4. 每月 ≤ BotMaxActionsPerMonth(3)个动作工具 + ≤1 次 speak + submit_month。
 package wealthplayer
 
 import (
@@ -26,11 +26,11 @@ type LLMRegistry interface {
 // Agent 是单个财商流 Bot。
 type Agent struct {
 	// 身份静态。
-	RoomID   string
-	GameKind string // 固定 "wealth"
-	MySeat   int
-	MyUserID string
-	ModelKey string
+	RoomID    string
+	GameKind  string // 固定 "wealth"
+	MySeat    int
+	MyUserID  string
+	ModelKey  string
 	ModelName string
 
 	// LLM 依赖(构造期经 BindRegistry 注入;Provider 每次 wake 现取,
@@ -39,6 +39,11 @@ type Agent struct {
 
 	// runner:引擎桥(game/wealth/agent_runner.go 注入)。
 	runner ToolRunner
+
+	// transcriptSink 由 game/wealth.AgentRunner 实现。Agent 在每次月度决策
+	// 开始 / 结束前先把带 month + updated_at 的快照写入房间,避免 LLM 延迟
+	// 或 submit 月结竞态导致前端 bot_contexts 停留在旧值。
+	transcriptSink TranscriptSink
 
 	memory *Memory
 
@@ -57,10 +62,26 @@ type Agent struct {
 
 // BotTranscript 是 game.state.bot_contexts 单座位快照。
 type BotTranscript struct {
+	Month               int
+	UpdatedAt           int64
+	Active              bool
 	LastDecisionSummary string
 	LastToolInput       string
 	LastToolResult      string
 	HeartThought        string
+}
+
+// TranscriptSink 把 Agent 思维快照同步到权威房间状态。它不并入 ToolRunner,
+// 避免所有测试 fake 被迫实现 39 个工具以外的观测接口。
+type TranscriptSink interface {
+	RecordTranscript(seat int, transcript BotTranscript)
+}
+
+// DecisionScheduler 是房间级 expected-month 调度令牌。Agent 必须先在房间锁内
+// 原子获取本月决策槽;动作桥执行时会再次校验同一 expected month。
+type DecisionScheduler interface {
+	BeginDecision(seat, month int) error
+	EndDecision(seat, month int)
 }
 
 // Transcript 返回最近思维快照(线程安全)。
@@ -104,6 +125,9 @@ func (a *Agent) BindRegistry(r LLMRegistry) {
 // BindRunner 注入引擎桥(ToolRunner)。
 func (a *Agent) BindRunner(runner ToolRunner) {
 	a.runner = runner
+	if sink, ok := runner.(TranscriptSink); ok {
+		a.transcriptSink = sink
+	}
 }
 
 // Memory 返回记忆对象(测试可见)。

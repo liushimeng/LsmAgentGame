@@ -1,8 +1,11 @@
 package wealth
 
 import (
+	"fmt"
 	"testing"
 	"time"
+
+	"LsmAgentGame/errcode"
 )
 
 // TestManager_CreateRoom_NoDeadlock 回归: 2026-09-14 P0 死锁 —— CreateRoom
@@ -77,5 +80,63 @@ func TestWealthRoom_RegisterBotSeats_SeatsUsers(t *testing.T) {
 	// bot 座位参与 occupied 计数(影响满 8 自动开局判定)。
 	if r.Occupied() != 3 {
 		t.Fatalf("occupied = %d, want 3", r.Occupied())
+	}
+}
+
+// TestManager_CreateRoom_HydratedTenOrElevenBotsRestoreFullAgentMode 覆盖
+// 服务重启恢复语义:10/11 bot 房虽仍有 1-2 个物理空位,但已属于全 Agent 房,
+// 恢复后不得重新接受人类入座。
+func TestManager_CreateRoom_HydratedTenOrElevenBotsRestoreFullAgentMode(t *testing.T) {
+	for _, count := range []int{MinSeats, MinSeats + 1} {
+		t.Run(fmt.Sprintf("%dbots", count), func(t *testing.T) {
+			seats := make([]SeatRestoreInfo, count)
+			for seat := 0; seat < count; seat++ {
+				seats[seat] = SeatRestoreInfo{
+					Seat:     seat,
+					UserID:   fmt.Sprintf("restored-bot-%d", seat),
+					IsBot:    true,
+					ModelKey: fmt.Sprintf("RestoredModel%d", seat),
+				}
+			}
+			m := NewManager(Config{
+				MonthMs: 3000, PoolDefault: "curated",
+				AgentEnabled: true, AgentConcurrency: DefaultAgentConcurrency,
+			}, nil)
+			m.SetSeatHydrator(func(roomID string) ([]SeatRestoreInfo, error) {
+				return seats, nil
+			})
+
+			r := m.CreateRoom("room-hydrated-full-agent")
+			if !r.IsFullAgentMode() {
+				t.Fatal("hydrated 10/11 bot room did not restore FullAgentMode")
+			}
+			if got := r.Occupied(); got != count {
+				t.Fatalf("occupied = %d, want %d", got, count)
+			}
+			seat, _, err := r.JoinGame("human-after-restore", "human")
+			if err == nil || err.Code != errcode.ErrWealthFullAgentReject {
+				t.Fatalf("JoinGame error = %v, want ErrWealthFullAgentReject", err)
+			}
+			if seat != -1 {
+				t.Fatalf("human seat = %d, want -1", seat)
+			}
+		})
+	}
+
+	// 9 bot 恢复房不触发全 Agent 语义,保留一个可加入物理空位。
+	m := NewManager(Config{MonthMs: 3000, PoolDefault: "curated"}, nil)
+	m.SetSeatHydrator(func(roomID string) ([]SeatRestoreInfo, error) {
+		seats := make([]SeatRestoreInfo, MinSeats-1)
+		for seat := range seats {
+			seats[seat] = SeatRestoreInfo{
+				Seat: seat, UserID: fmt.Sprintf("bot-%d", seat),
+				IsBot: true, ModelKey: "RestoredModel",
+			}
+		}
+		return seats, nil
+	})
+	r := m.CreateRoom("room-hydrated-nine-bots")
+	if r.IsFullAgentMode() {
+		t.Fatal("9 bot restored room should not be full-agent")
 	}
 }

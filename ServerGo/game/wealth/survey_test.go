@@ -37,6 +37,17 @@ func mustLaunch(t *testing.T, r *WealthRoom, q string, opts ...string) *Survey {
 	return sv
 }
 
+// mustBeginAgentRunner 为直接调用工具桥的测试获取当月决策令牌。
+func mustBeginAgentRunner(t *testing.T, r *WealthRoom, seat int) *AgentRunner {
+	t.Helper()
+	runner := NewAgentRunner(r, seat)
+	if err := runner.BeginDecision(seat, r.Month()); err != nil {
+		t.Fatalf("begin agent decision seat %d: %v", seat, err)
+	}
+	t.Cleanup(func() { runner.EndDecision(seat, r.Month()) })
+	return runner
+}
+
 // TestSurvey_LaunchValidation 发起校验:options 1 个/7 个 → 35016;
 // question 空 → 35016(§9.1)。
 func TestSurvey_LaunchValidation(t *testing.T) {
@@ -118,9 +129,9 @@ func TestSurvey_LaunchLimits(t *testing.T) {
 func TestSurvey_AnswerAggregate(t *testing.T) {
 	r, w := newPlayingSurveyRoom(t)
 	sv := mustLaunch(t, r, "支持哪种?", "A 方案", "B 方案")
-	a0 := NewAgentRunner(r, 0)
-	a1 := NewAgentRunner(r, 1)
-	a2 := NewAgentRunner(r, 2)
+	a0 := mustBeginAgentRunner(t, r, 0)
+	a1 := mustBeginAgentRunner(t, r, 1)
+	a2 := mustBeginAgentRunner(t, r, 2)
 
 	if e := a0.AnswerSurvey(0, sv.ID, 0, "便宜实惠"); e != nil {
 		t.Fatalf("answer 0: %v", e)
@@ -183,7 +194,7 @@ func TestSurvey_EarlyCloseWhenAllBotsAnswered(t *testing.T) {
 	r, w := newPlayingSurveyRoom(t)
 	sv := mustLaunch(t, r, "全员表态?", "赞成", "反对")
 	for seat := 0; seat < 10; seat++ {
-		if e := NewAgentRunner(r, seat).AnswerSurvey(seat, sv.ID, seat%2, "理由"); e != nil {
+		if e := mustBeginAgentRunner(t, r, seat).AnswerSurvey(seat, sv.ID, seat%2, "理由"); e != nil {
 			t.Fatalf("answer seat %d: %v", seat, e)
 		}
 	}
@@ -215,7 +226,7 @@ func TestSurvey_DeadlineClose(t *testing.T) {
 	if sv.DeadlineMonth != 7 {
 		t.Fatalf("deadline: got %d, want 7", sv.DeadlineMonth)
 	}
-	NewAgentRunner(r, 0).AnswerSurvey(0, sv.ID, 1, "选 B")
+	mustBeginAgentRunner(t, r, 0).AnswerSurvey(0, sv.ID, 1, "选 B")
 	// 月结 1:5→6 未到期;月结 2:6→7 未到期;月结 3:7→8 > 7 → 关闭。
 	for i := 0; i < 2; i++ {
 		if _, res := w.SettleMonth(); len(res.ClosedSurveys) != 0 {
@@ -280,7 +291,7 @@ func TestSurvey_DisabledSwitch(t *testing.T) {
 	if _, e := r.LaunchSurvey("再发起?", []string{"A", "B"}); e == nil || e.Code != errcode.ErrWealthGateFailed {
 		t.Errorf("launch when disabled: got %v, want %d (35010)", e, errcode.ErrWealthGateFailed)
 	}
-	if e := NewAgentRunner(r, 0).AnswerSurvey(0, sv.ID, 0, "照常作答"); e != nil {
+	if e := mustBeginAgentRunner(t, r, 0).AnswerSurvey(0, sv.ID, 0, "照常作答"); e != nil {
 		t.Fatalf("answer on existing open survey: %v", e)
 	}
 	w.CloseAndAggregate(sv)

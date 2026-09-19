@@ -25,6 +25,10 @@ import (
 
 // BotTranscript 单座位 Agent 思维可见性(game.state.bot_contexts)。
 type BotTranscript struct {
+	Month               int
+	LastDecisionMonth   int
+	UpdatedAt           int64
+	Active              bool
 	LastDecisionSummary string
 	LastToolInput       string
 	LastToolResult      string
@@ -81,6 +85,10 @@ type WealthRoom struct {
 	Paused      bool
 
 	Transcripts [MaxSeats]BotTranscript
+	// Agent 月度调度槽:expected month + active 构成房间级 token。旧月 LLM
+	// 响应必须同时匹配 active 与 World.Month 才能执行动作/提交。
+	agentDecisionActive [MaxSeats]bool
+	agentDecisionMonth  [MaxSeats]int
 
 	// 卡池与随机源(房间级;开局抽卡用)。
 	pool      string // curated | docs
@@ -88,13 +96,14 @@ type WealthRoom struct {
 	rng       *rand.Rand
 	docLoader *profession.Loader // pool="docs" 时由 Manager 注入
 
-	hooks       BroadcastHooks
-	chatSender  ChatSender
-	agents      map[int]*wealthplayer.Agent
-	agentSem    chan struct{} // 房间级 LLM 并发信号量(默认 DefaultAgentConcurrency=8)
-	eventsSent  int           // World.Events 已下发条数
-	cardPool    []profession.Card
-	cardPoolIdx int
+	hooks            BroadcastHooks
+	chatSender       ChatSender
+	agents           map[int]*wealthplayer.Agent
+	agentSem         chan struct{} // 房间级 LLM 并发信号量(默认 DefaultAgentConcurrency=8)
+	eventsSent       int           // World.Events 已下发条数
+	cardPool         []profession.Card
+	cardPoolIdx      int
+	openingHooksSent bool
 
 	gameStartedAt int64 // 开局 unix s(view 下发 game_started_at 字段)
 
@@ -254,10 +263,11 @@ func (r *WealthRoom) JoinGame(userID, nickname string) (int, bool, *errcode.Erro
 	defer r.mu.Unlock()
 	if r.Status == StatusOver {
 		return -1, false, errcode.Code(errcode.ErrWealthNotPlaying)
-	// 2026-09-19 §全Agent模式: 全 Agent 房间拒绝人类加入
+	}
+	// 2026-09-19 §全Agent模式: 全 Agent 房间拒绝人类加入。该检查必须覆盖
+	// open / playing 两种状态,不能只挂在 StatusOver 分支内。
 	if r.FullAgentMode {
 		return -1, false, errcode.Code(errcode.ErrWealthFullAgentReject)
-	}
 	}
 	// 幂等。
 	for i, u := range r.Seats {
@@ -398,6 +408,7 @@ func (r *WealthRoom) Start(loader *profession.Loader) *errcode.Error {
 	r.MonthMs = clampInt(r.MonthMs, 3000, 30000)
 	r.NextMonthAt = time.Now().Add(time.Duration(r.MonthMs) * time.Millisecond)
 	r.resetMonthFlagsLocked()
+	openings := r.openingHooksLocked()
 
 	professions := make([]SeatProfession, 0, MaxSeats)
 	age := r.World.Age()
@@ -421,6 +432,7 @@ func (r *WealthRoom) Start(loader *profession.Loader) *errcode.Error {
 	if hooks.OnState != nil {
 		hooks.OnState(r.RoomID)
 	}
+	r.sendOpeningHooks(openings)
 	r.wakeBots()
 	logger.L().Info("wealth game started",
 		zap.String("room_id", r.RoomID), zap.Int("seats", len(professions)))
@@ -432,7 +444,8 @@ func (r *WealthRoom) resetMonthFlagsLocked() {
 	if r.World == nil {
 		return
 	}
-	for _, p := range r.World.Players {
+	now := time.Now().UnixMilli()
+	for seat, p := range r.World.Players {
 		if p == nil {
 			continue
 		}
@@ -441,6 +454,113 @@ func (r *WealthRoom) resetMonthFlagsLocked() {
 		p.Submitted = false
 		p.LastActionText = ""
 		p.StatusIcon = "idle"
+		r.refreshTranscriptLocked(seat, p, now)
+	}
+}
+
+// openingHooksLocked 收集全部 bot 职业卡开场白(锁内快照,锁外发送)。
+func (r *WealthRoom) openingHooksLocked() []openingHookMessage {
+	if r.openingHooksSent || r.World == nil {
+		return nil
+	}
+	out := make([]openingHookMessage, 0, MaxSeats)
+	for seat, p := range r.World.Players {
+		if p == nil || !r.BotSeats[seat] || p.Card.OpeningHook == "" {
+			continue
+		}
+		account := r.Nicknames[seat]
+		if account == "" {
+			account = r.SeatModelKeys[seat]
+		}
+		out = append(out, openingHookMessage{
+			seat: seat, userID: r.Seats[seat], account: account,
+			modelKey: r.SeatModelKeys[seat], text: clip(p.Card.OpeningHook, 100),
+		})
+	}
+	r.openingHooksSent = true
+	return out
+}
+
+type openingHookMessage struct {
+	seat                            int
+	userID, account, modelKey, text string
+}
+
+// sendOpeningHooks 逐个走 ChatService.SendFromBot;单个持久化失败不阻断开局,
+// 但必须记录错误,便于观测 12 条 opening_hook 的实际到达率。
+func (r *WealthRoom) sendOpeningHooks(messages []openingHookMessage) {
+	if len(messages) == 0 {
+		return
+	}
+	r.mu.Lock()
+	chat := r.chatSender
+	roomID := r.RoomID
+	r.mu.Unlock()
+	if chat == nil {
+		return
+	}
+	for _, msg := range messages {
+		if err := chat.SendFromBot(roomID, msg.userID, msg.account, msg.modelKey, msg.text); err != nil {
+			logger.L().Warn("wealth opening hook send failed",
+				zap.String("room_id", roomID), zap.Int("seat", msg.seat), zap.Error(err))
+		}
+	}
+}
+
+// refreshTranscriptLocked 每月刷新权威 transcript 元数据。存活 bot 从
+// “等待决策”重新开始;出局 bot 清空旧决策并标记 inactive,避免前端把历史
+// 摘要误读为仍在参与。
+func (r *WealthRoom) refreshTranscriptLocked(seat int, p *Player, nowUnixMilli int64) {
+	t := r.Transcripts[seat]
+	t.Month = r.World.Month
+	t.UpdatedAt = nowUnixMilli
+	t.Active = p.Alive
+	if !p.Alive {
+		t.LastDecisionSummary = "已出局,停止月度决策"
+		t.LastDecisionMonth = r.World.Month
+		t.LastToolInput = ""
+		t.LastToolResult = ""
+		t.HeartThought = ""
+	} else {
+		// Month 表示房间当前月;LastDecisionMonth 表示摘要所属月。
+		// 月结后保留上一月“无动作/超时/已提交”的结论,直到本月 Agent 发布
+		// 新快照,避免强制结算结论在锁内被新月初始化覆盖而不可见。
+		if t.LastDecisionMonth == 0 {
+			t.LastDecisionMonth = r.World.Month
+			t.LastDecisionSummary = "等待 Agent 月度决策"
+			t.LastToolInput = ""
+			t.LastToolResult = ""
+			t.HeartThought = ""
+		}
+	}
+	r.Transcripts[seat] = t
+}
+
+// markUnsubmittedBotsLocked 在月窗强制结束前为未提交 bot 写入系统超时摘要,
+// 保证“无动作 / LLM 未返回”也能被 bot_contexts 观测到。
+func (r *WealthRoom) markUnsubmittedBotsLocked() {
+	now := time.Now().UnixMilli()
+	for seat, p := range r.World.Players {
+		if p == nil || !r.BotSeats[seat] {
+			continue
+		}
+		t := r.Transcripts[seat]
+		t.Month = r.World.Month
+		t.LastDecisionMonth = r.World.Month
+		t.UpdatedAt = now
+		t.Active = p.Alive
+		if !p.Alive {
+			t.LastDecisionSummary = "已出局,停止月度决策"
+			t.LastDecisionMonth = r.World.Month
+			t.LastToolInput = ""
+			t.LastToolResult = ""
+			t.HeartThought = ""
+		} else if !p.Submitted {
+			t.LastDecisionSummary = "月窗结束,Agent 未提交动作,系统自动结算"
+			t.LastToolInput = "system_timeout"
+			t.LastToolResult = "强制 submit_month"
+		}
+		r.Transcripts[seat] = t
 	}
 }
 
@@ -498,6 +618,7 @@ func (r *WealthRoom) trySettle(onFinish func(roomID string)) bool {
 
 	// settling:停止接收动作。
 	r.Phase = PhaseSettling
+	r.markUnsubmittedBotsLocked()
 	for _, p := range r.World.Players {
 		if p != nil && !p.Submitted {
 			p.Submitted = true // 窗口强制结束(watchdog 兜底语义)

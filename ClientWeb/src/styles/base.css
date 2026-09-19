@@ -10,11 +10,13 @@
   --danger: #f85149;
   --ok: #3fb950;
   --header-h: 56px;
-  --header-h-collapsed: 32px;
+  /* 折叠态仍保留 44px 高度，避免真实触控目标小于 §23 下限。 */
+  --header-h-collapsed: 44px;
   --sidebar-w: 200px;
-  --sidebar-w-collapsed: 48px;
+  /* 44px 命中区 + 水平 padding/border，折叠窄栏不依赖负外扩热区。 */
+  --sidebar-w-collapsed: 56px;
   --chat-w: 320px;
-  --chat-w-collapsed: 36px;
+  --chat-w-collapsed: 48px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color-scheme: dark;
 }
@@ -109,17 +111,19 @@ a:hover { text-decoration: underline; }
   gap: 12px;
   flex: 0 0 auto;
 }
+.app-header__toolbar > * { min-height: 44px; }
 .app-header__hamburger {
   padding: 4px 10px;
   font-size: 16px;
-  min-height: 40px;
-  min-width: 40px;
+  min-height: 44px;
+  min-width: 44px;
 }
 .app-header__toggle {
   padding: 2px 8px;
   font-size: 11px;
   line-height: 1.2;
-  min-height: 28px;
+  min-height: 44px;
+  min-width: 44px;
 }
 .toolbar__user { color: var(--muted); font-size: 12px; }
 
@@ -128,7 +132,8 @@ a:hover { text-decoration: underline; }
   width: auto;
   padding: 4px 8px;
   font-size: 12px;
-  min-height: 32px;
+  min-height: 44px;
+  min-width: 44px;
   cursor: pointer;
 }
 
@@ -187,7 +192,9 @@ a:hover { text-decoration: underline; }
 .app-sidebar--collapsed .sidebar-link__label { display: none; }
 .app-sidebar--collapsed .sidebar-link {
   justify-content: center;
-  padding: 9px 6px;
+  width: 44px;
+  margin: 0 auto;
+  padding: 9px 0;
 }
 
 .app-sidebar__nav {
@@ -204,7 +211,7 @@ a:hover { text-decoration: underline; }
   border-radius: 6px;
   color: var(--text);
   font-size: 14px;
-  min-height: 40px;
+  min-height: 44px;
 }
 .sidebar-link:hover {
   background: rgba(255, 255, 255, 0.05);
@@ -226,20 +233,9 @@ a:hover { text-decoration: underline; }
   min-width: 44px;
   position: relative;
 }
-/* §20260831-11(P2-A):折叠态侧栏宽 48px、水平 padding 4px → 可视宽仅 40px,
- * min-width:44 会溢出 —— 改为撑满轨宽(40px),::after 左右各外扩 2px
- * 把点击热区补足到 44px 宽。 */
+/* 折叠轨宽 56px，实际链接可保持 44px 宽，不再用负外扩伪元素。 */
 .app-sidebar--collapsed .app-sidebar__toggle {
-  min-width: 0;
   width: 100%;
-}
-.app-sidebar--collapsed .app-sidebar__toggle::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -2px;
-  right: -2px;
 }
 
 .app-sidebar__backdrop {
@@ -273,6 +269,7 @@ a:hover { text-decoration: underline; }
   border-top: 1px solid var(--border);
   margin-top: 4px;
   text-align: left;
+  min-height: 44px;
 }
 .sidebar-group__header:hover {
   color: var(--text);
@@ -540,28 +537,14 @@ a:hover { text-decoration: underline; }
   padding: 2px 8px;
   font-size: 11px;
   line-height: 1.2;
-  /* §20260831-11(P2-A):触控目标补齐 —— 展开态 44×44。
-   * 折叠态见下方 --collapsed 覆盖(侧栏仅 36px 宽,44px min-width 会撑破)。 */
+  /* §20260831-11(P2-A):触控目标补齐。折叠轨宽已扩到 48px，
+   * 使用真实 44×44 命中区，避免伪元素外扩造成 document 横向溢出。 */
   min-height: 44px;
   min-width: 44px;
   position: relative;
 }
-/* §20260831-11(P2-A):折叠态侧栏宽 --chat-w-collapsed: 36px,放不下 44px 宽按钮 ——
- * 视觉宽度收窄回紧凑尺寸,用 ::after 伪元素把点击热区外扩到 ≥44×44(不影响布局)。 */
-.chat-panel--collapsed .chat-panel__toggle {
-  min-width: 0;
-  padding: 2px 6px;
-}
-.chat-panel--collapsed .chat-panel__toggle::after {
-  content: '';
-  position: absolute;
-  /* 相对按钮自身 padding box 取百分比:上下各外扩 50%、左右各 60%,
-   * 视觉 ~24×44 → 热区 ≥44×44 */
-  top: -50%;
-  bottom: -50%;
-  left: -60%;
-  right: -60%;
-}
+.chat-panel--collapsed .chat-panel__toggle { width: 100%; }
+.chat-panel--collapsed .chat-panel__header { padding: 0; }
 .chat-panel__header-actions {
   display: flex;
   align-items: center;
@@ -571,7 +554,8 @@ a:hover { text-decoration: underline; }
   padding: 2px 8px;
   font-size: 14px;
   line-height: 1.2;
-  min-height: 28px;
+  min-height: 44px;
+  min-width: 44px;
   cursor: pointer;
   opacity: 0.7;
   transition: opacity 0.2s;
@@ -714,4 +698,3 @@ a:hover { text-decoration: underline; }
   }
   .chat-panel--mobile .chat-panel__title { writing-mode: horizontal-tb; transform: none; }
 }
-

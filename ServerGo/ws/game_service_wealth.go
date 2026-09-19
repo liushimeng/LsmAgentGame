@@ -69,8 +69,8 @@ func (s *GameService) handleWealthJoin(c *Client, env Envelope, roomID string) {
 // handleWealthAction 处理 game.wealth_action。
 func (s *GameService) handleWealthAction(c *Client, env Envelope) {
 	var req struct {
-		RoomID string         `json:"room_id"`
-		Action wealth.Action  `json:"action"`
+		RoomID string        `json:"room_id"`
+		Action wealth.Action `json:"action"`
 	}
 	if err := json.Unmarshal(env.Payload, &req); err != nil || req.RoomID == "" {
 		s.sendError(c, env.Seq, errcode.ErrValidationFailed, "invalid game.wealth_action payload")
@@ -100,12 +100,12 @@ func (s *GameService) handleWealthAction(c *Client, env Envelope) {
 	// 成功广播 game.event(action)+ game.state 单发刷新。
 	if text != "" {
 		s.hub.BroadcastRoomIncludingSpectators(req.RoomID, wsEnvelope("game.event", 0, map[string]any{
-			"room_id":  req.RoomID,
+			"room_id":   req.RoomID,
 			"game_kind": "wealth",
-			"month":    r.Month(),
-			"seat":     seat,
-			"type":     "action",
-			"text":     text,
+			"month":     r.Month(),
+			"seat":      seat,
+			"type":      "action",
+			"text":      text,
 		}))
 	}
 	s.broadcastWealthState(req.RoomID)
@@ -182,11 +182,12 @@ func (s *GameService) startWealthRoom(roomID string) *errcode.Error {
 	})
 	// chat sender 注入。
 	r.SetChatSender(&wealthChatSender{chat: s.chatSvc})
+	// 先装配 bot agents,再 Start。Start() 末尾会立即 wakeBots;若装配晚于
+	// Start,首月 wake 时 agents map 仍为空,12 个 bot 将错过 M1 决策。
+	s.wealthMgr.EnsureAgents(r)
 	if err := r.Start(s.wealthLoader); err != nil {
 		return err
 	}
-	// 装配 bot agents。
-	s.wealthMgr.EnsureAgents(r)
 	// 标记 DB 房间状态为 playing(开局成功回调路径,锁外执行 §92a)。
 	// 此前仅 werewolf/debate 接线;P1-Ghost-03: wealth 永远 open,大厅
 	// 在终局内存房被清理后仍显示可加入,触发「幽灵房」重建。

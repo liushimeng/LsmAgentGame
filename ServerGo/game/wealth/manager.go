@@ -205,6 +205,12 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 				}
 			}
 			r.mu.Unlock()
+			// 重启恢复的 10/11 bot 房同样具有全 Agent 语义。必须在房间锁
+			// 释放后、房间登记可见前恢复标记,剩余 1-2 物理空位不得重新
+			// 接受人类创建者/加入者。
+			if hydratedBots >= MinSeats {
+				r.SetFullAgentMode(true)
+			}
 			logger.L().Info("wealth room seats hydrated from DB",
 				zap.String("room_id", roomID),
 				zap.Int("restored", len(seats)))
@@ -218,10 +224,6 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 		}
 	}
 	m.rooms[roomID] = r
-	logger.L().Info("wealth room created",
-		zap.String("room_id", roomID),
-		zap.Int("month_ms", m.cfg.MonthMs),
-		zap.String("pool", m.cfg.PoolDefault))
 	// 把 pending opts 应用到新建房间；必须先把 m.rooms[roomID] 已登记再释放锁，
 	// 避免与并发的 Get/CreateRoom 出现「先读 m.rooms、后补 opts」的可见性窗口。
 	opts := m.pendingOpts[roomID]
@@ -230,7 +232,21 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 	if opts != nil {
 		r.applyOpts(opts)
 	}
+	// 日志必须读取 pending opts 应用后的房间最终配置,不能打印 Manager 默认值;
+	// 否则 3000/curated 房间会被误记为 8000/docs。
+	monthMs, pool := r.roomConfigForLog()
+	logger.L().Info("wealth room created",
+		zap.String("room_id", roomID),
+		zap.Int("month_ms", monthMs),
+		zap.String("pool", pool))
 	return r
+}
+
+// roomConfigForLog 返回房间级配置快照,专供创建日志使用。
+func (r *WealthRoom) roomConfigForLog() (monthMs int, pool string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.MonthMs, r.pool
 }
 
 // RemoveRoom 移除房间(终局清理时由 ws 层调用)。

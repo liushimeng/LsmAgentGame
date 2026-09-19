@@ -52,6 +52,11 @@ func (s *GameService) registerWealthAgentSeats(roomID string, seats []service.Ag
 	if len(seatUsers) == 0 {
 		return nil
 	}
+	// 必须在 RegisterBotSeats / 自动开局前置位。否则 10-11 bot 房会在
+	// FullAgentMode=false 的窗口内自动开局,创建者或并发人类仍可能尝试入座。
+	if len(seatUsers) >= wealth.MinSeats {
+		r.SetFullAgentMode(true)
+	}
 	r.RegisterBotSeats(seatUsers, seatModels, nil)
 	logger.L().Info("wealth bot seats registered",
 		zap.String("room_id", roomID),
@@ -67,10 +72,6 @@ func (s *GameService) registerWealthAgentSeats(roomID string, seats []service.Ag
 			logger.L().Warn("registerWealthAgentSeats: auto-start failed",
 				zap.String("room_id", roomID), zap.Error(e))
 		}
-	}
-	// 2026-09-19 §全Agent模式: bot 数量 >= MinSeats 时自动置位
-	if r.Occupied() >= wealth.MinSeats {
-		r.SetFullAgentMode(true)
 	}
 	return nil
 }

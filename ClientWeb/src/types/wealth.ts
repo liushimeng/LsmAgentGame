@@ -234,6 +234,14 @@ export interface WealthMyState {
 
 /** Agent 思维可见性：本人座位 + 观战者可见；其他玩家不可见。 */
 export interface WealthBotContext {
+  /** 房间当前月（服务端 BotCtxJSON.month）。 */
+  month: number;
+  /** last_decision_summary 所属月；0 表示尚无决策。 */
+  last_decision_month: number;
+  /** transcript 更新时间，unix_ms。 */
+  updated_at: number;
+  /** 座位是否存活；等价 players.alive，旧帧缺失时前端回退该字段。 */
+  active: boolean;
   seat: number;
   /** Agent 自述本月决策（≤120 字）。 */
   last_decision_summary: string;

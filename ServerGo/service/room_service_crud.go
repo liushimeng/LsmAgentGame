@@ -485,7 +485,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	}
 	creatorSeat := -1
 	creatorAsSpectator := false
-	if len(freeSeats) == 0 {
+	if creatorShouldBeSpectator(gameKind, len(freeSeats), len(agentSeats)) {
 		// 2026-08-19 §德州扑克Agent: texasholdem 同样允许全 AI 房间(创建者降级为观战者)。
 		// 2026-09-14 §财商流P0 / 2026-09-16 §12座扩容:wealth 同款支持(创建者降级为观战者,
 		// 满 MinSeats(10) 即自动开局;MaxSeats=12 留 2 头寸给人类玩家)。
@@ -640,7 +640,9 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 			zap.Int("month_ms", wealthCfg.MonthMs),
 			zap.String("pool", wealthCfg.Pool))
 	}
-	if (gameKind == "werewolf" || gameKind == "texasholdem" || gameKind == "wealth") && len(agentSeats) > 0 && s.agentSeater != nil {
+	if gameKind == "wealth" && len(agentSeats) > 0 {
+		s.prepareWealthAgentRoom(room.ID, agentSeats)
+	} else if (gameKind == "werewolf" || gameKind == "texasholdem") && len(agentSeats) > 0 && s.agentSeater != nil {
 		// BUG-R136-RACE-001: 复述段落已压缩 — git blame 与 docs/ 索引可还原
 
 		if gameKind == "werewolf" {
@@ -724,16 +726,6 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 				zap.Int("code", e.Code),
 				zap.String("msg", e.Message))
 		}
-		// 2026-09-19 §全Agent模式: wealth 房间 agent_seats >= MinSeats(10) 时
-		// 自动标记为全 Agent 模式,人类创建者降级为观战者
-		if gameKind == "wealth" && len(agentSeats) >= 10 && s.gameJoiner != nil {
-			if e := s.gameJoiner.SetFullAgentMode(gameKind, room.ID, true); e != nil {
-				logger.L().Warn("set full agent mode failed",
-					zap.String("room_id", room.ID),
-					zap.Int("code", e.Code),
-					zap.String("msg", e.Message))
-			}
-		}
 	} else if gameKind == "texasholdem" && texasCfg != nil && texasCfg.BigBlind > 0 && s.texasHoldemConfigurer != nil {
 		// 2026-08-22 §BUG-TEXAS-ROOMCFG — 无 agent_seats 的纯人类房间:
 		// SyncSeat → JoinGame 也会读 configForLocked,同理必须在 SyncSeat 之前
@@ -808,6 +800,40 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		rd.Players = append(rd.Players, RoomPlayerInfo{UserID: p.UserID, Seat: p.Seat, Role: p.Role})
 	}
 	return rd, nil
+}
+
+// wealthMinAgentSeats 是 wealth 全 Agent 房间的社会最小座位数。10-11 个
+// bot 已会在注册阶段自动开局,虽然物理容量仍为 12。
+const wealthMinAgentSeats = 10
+
+// creatorShouldBeSpectator 判定创建者是否必须降级为观战者。wealth 除 12/12
+// 外,10/11 bot 也属于全 Agent 房,不能把剩余物理空位误当成可加入座位。
+func creatorShouldBeSpectator(gameKind string, freeSeatCount, agentSeatCount int) bool {
+	return freeSeatCount == 0 || (gameKind == "wealth" && agentSeatCount >= wealthMinAgentSeats)
+}
+
+// prepareWealthAgentRoom 是 wealth 专用的内存镜像顺序:先设置 FullAgentMode,
+// 再注册 bot seats。RegisterAgentSeats 到达 MinSeats 后可能立即自动开局,
+// 顺序反置会出现短暂人类可加入窗口。
+func (s *RoomService) prepareWealthAgentRoom(roomID string, agentSeats []AgentSeatConfig) {
+	if len(agentSeats) >= wealthMinAgentSeats && s.gameJoiner != nil {
+		if e := s.gameJoiner.SetFullAgentMode("wealth", roomID, true); e != nil {
+			logger.L().Warn("set full agent mode failed",
+				zap.String("room_id", roomID),
+				zap.Int("code", e.Code),
+				zap.String("msg", e.Message))
+		}
+	}
+	if s.agentSeater == nil {
+		return
+	}
+	if e := s.agentSeater.RegisterAgentSeats("wealth", roomID, agentSeats); e != nil {
+		logger.L().Warn("agent seater registration failed",
+			zap.String("room_id", roomID),
+			zap.String("game_kind", "wealth"),
+			zap.Int("code", e.Code),
+			zap.String("msg", e.Message))
+	}
 }
 
 func (s *RoomService) JoinRoom(roomID, userID string) (*RoomDetail, *errcode.Error) {

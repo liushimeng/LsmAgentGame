@@ -125,14 +125,23 @@ func TestSeats12_TenBotFullAgentRoom_RunsOneMonth(t *testing.T) {
 		botModels[seat] = "M" + string(rune('A'+seat))
 	}
 	r.RegisterBotSeats(botUsers, botModels, nil)
+	// 与真实 ws startWealthRoom 时序一致:先装配 agents,再 Start。
+	// Start 末尾会自动 wakeBots;若后装配,首月 wake 时 agents map 为空。
+	m.EnsureAgents(r)
+	r.mu.Lock()
+	for seat := 0; seat < 10; seat++ {
+		if r.agents[seat] == nil {
+			r.mu.Unlock()
+			t.Fatalf("seat %d agent must be installed before Start", seat)
+		}
+	}
+	r.mu.Unlock()
 	if e := r.Start(nil); e != nil {
 		t.Fatalf("10 bot start: %v", e)
 	}
-	m.EnsureAgents(r)
 	// 启动月度主循环(驱动 settleCh → SettleMonth → month++);后台 goroutine,
 	// 测试退出时 Close 兜底(房间不持久化,无需 onFinish 清理)。
 	go r.RunLoop(func(roomID string) {})
-	r.wakeBots()
 	t.Cleanup(func() { r.Close() })
 
 	deadline := time.Now().Add(8 * time.Second)

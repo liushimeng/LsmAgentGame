@@ -32,13 +32,13 @@ func (a *Agent) actionsLimit() int {
 // 累积在 caller OnMonthStart 内部循环)。
 func (a *Agent) BuildLLMRequest(sysBlocks []llmtypes.SystemBlock, userText string, tools []llmtypes.ToolDef) *llmtypes.LLMRequest {
 	return &llmtypes.LLMRequest{
-		Model:           a.ModelKey,
-		System:          sysBlocks,
-		Messages:        []llmtypes.Message{{Role: "user", Content: []llmtypes.ContentBlock{{Type: "text", Text: userText}}}},
-		Tools:           tools,
-		MaxTokens:       4096,
-		Metadata:        llmtypes.Metadata{UserID: a.MyUserID},
-		AgentClassName:  string(a.AgentClass()),
+		Model:          a.ModelKey,
+		System:         sysBlocks,
+		Messages:       []llmtypes.Message{{Role: "user", Content: []llmtypes.ContentBlock{{Type: "text", Text: userText}}}},
+		Tools:          tools,
+		MaxTokens:      4096,
+		Metadata:       llmtypes.Metadata{UserID: a.MyUserID},
+		AgentClassName: string(a.AgentClass()),
 	}
 }
 
@@ -96,6 +96,9 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *wealthtypes.GameContex
 				zap.String("stack", string(debug.Stack())),
 			)
 			if a.runner != nil {
+				a.finalizeTranscript("", "", "panic recovered; 强制提交")
+			}
+			if a.runner != nil {
 				if err := a.runner.SubmitMonth(a.MySeat); err != nil {
 					logger.L().Warn("wealthplayer recover: submit_month fallback failed",
 						zap.Int("seat", a.MySeat),
@@ -103,16 +106,34 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *wealthtypes.GameContex
 					)
 				}
 			}
-			a.finalizeTranscript("", "", "panic recovered; 强制提交")
 		}
 	}()
 	if a.IsCancelled() || a.runner == nil {
 		return
 	}
+	decisionMonth := 0
+	if ctx != nil {
+		decisionMonth = ctx.Month
+	}
+	if scheduler, ok := a.runner.(DecisionScheduler); ok {
+		if err := scheduler.BeginDecision(a.MySeat, decisionMonth); err != nil {
+			// 旧月排队上下文或同座位上一轮 LLM 未结束:直接丢弃,不得把旧
+			// prompt 的 tool_use 延迟 apply 到当前月。
+			return
+		}
+		defer scheduler.EndDecision(a.MySeat, decisionMonth)
+	}
 	a.mu.Lock()
-	a.transcript = BotTranscript{}
+	now := time.Now().UnixMilli()
+	a.transcript = BotTranscript{
+		Month:               decisionMonth,
+		UpdatedAt:           now,
+		Active:              true,
+		LastDecisionSummary: "等待模型月度决策",
+	}
 	a.spokenThisMonth = false
 	a.mu.Unlock()
+	a.publishTranscript()
 
 	// context with timeout(§197 字节刷新)。
 	timeout := a.decisionTimeout
@@ -175,6 +196,9 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *wealthtypes.GameContex
 		if rawText != "" {
 			lastSummary = maxRunes(rawText, 120)
 		}
+		// 在任何 tool dispatch(尤其 submit_month 可能立即触发月结)之前,
+		// 先把本轮模型摘要发布到房间权威 transcript,避免提交/结算竞态。
+		a.publishDecision(lastSummary, lastToolInput, lastToolResult)
 
 		// 解析 tool_use。
 		tus := toolUseBlocks(resp)
@@ -185,8 +209,10 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *wealthtypes.GameContex
 
 		// 第一轮就提交 → 不耗预算(§9)。
 		if round == 0 && len(tus) == 1 && tus[0].Name == ToolSubmitMonth {
+			lastToolInput, lastToolResult = ToolSubmitMonth, "准备提交本月"
+			a.publishDecision(lastSummary, lastToolInput, lastToolResult)
 			_ = a.runner.SubmitMonth(a.MySeat)
-			lastToolInput, lastToolResult = "{}", "已提交"
+			lastToolInput, lastToolResult = ToolSubmitMonth, "已提交"
 			break
 		}
 
@@ -235,8 +261,8 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *wealthtypes.GameContex
 		}
 	}
 	// 3. 默认 submit(超时 / LLM 失败 / 全程无 tool_use / 预算耗尽)。
-	_ = a.runner.SubmitMonth(a.MySeat)
 	a.finalizeTranscript(lastSummary, lastToolInput, lastToolResult)
+	_ = a.runner.SubmitMonth(a.MySeat)
 }
 
 // isBudgetAction 是否耗动作预算(check_state / submit_month / view_listings 不耗)。
@@ -271,28 +297,65 @@ func (a *Agent) appendMessages(messages *[]llmtypes.Message, assistantContent []
 
 // recordTimeoutSummary 写决策摘要为"timeout"。
 func (a *Agent) recordTimeoutSummary() {
-	a.mu.Lock()
-	a.transcript.LastDecisionSummary = "timeout"
-	a.mu.Unlock()
+	month := a.currentTranscriptMonth()
+	a.finalizeTranscript("决策超时,系统自动提交本月", "timeout", "强制 submit_month", month)
 	_ = a.runner.SubmitMonth(a.MySeat)
 }
 
-// finalizeTranscript 写入决策摘要 + 最近 tool 细节;追加 Memory。
-func (a *Agent) finalizeTranscript(summary, toolInput, toolResult string) {
+// currentTranscriptMonth 返回本轮决策捕获的月份(仅观测,不回读引擎)。
+func (a *Agent) currentTranscriptMonth() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.transcript.Month
+}
+
+// publishDecision 发布模型文本摘要,保留最近工具结果。
+func (a *Agent) publishDecision(summary, toolInput, toolResult string) {
 	a.mu.Lock()
 	a.transcript.LastDecisionSummary = summary
 	a.transcript.LastToolInput = toolInput
 	a.transcript.LastToolResult = toolResult
 	a.mu.Unlock()
+	a.publishTranscript()
+}
+
+// finalizeTranscript 写入决策摘要 + 最近 tool 细节;追加 Memory。
+func (a *Agent) finalizeTranscript(summary, toolInput, toolResult string, month ...int) {
+	if summary == "" {
+		summary = "模型未给出有效动作,系统自动提交本月"
+	}
+	decisionMonth := a.currentTranscriptMonth()
+	if len(month) > 0 {
+		decisionMonth = month[0]
+	}
+	a.mu.Lock()
+	a.transcript.Month = decisionMonth
+	a.transcript.UpdatedAt = time.Now().UnixMilli()
+	a.transcript.Active = true
+	a.transcript.LastDecisionSummary = summary
+	a.transcript.LastToolInput = toolInput
+	a.transcript.LastToolResult = toolResult
+	a.mu.Unlock()
+	a.publishTranscript()
 	if a.memory != nil {
 		a.memory.AppendDecision(MonthDecision{
-			Month:       -1, // 房间侧在月结时修正
-			Actions:     nil,
-			Summary:     summary,
-			CashAfter:   -1,
-			NetAfter:    -1,
-			FI:          -1,
+			Month:     decisionMonth,
+			Actions:   nil,
+			Summary:   summary,
+			CashAfter: -1,
+			NetAfter:  -1,
+			FI:        -1,
 		})
+	}
+}
+
+// publishTranscript 把本地快照写入房间 sink;sink 会按 month 拒绝旧月结果。
+func (a *Agent) publishTranscript() {
+	a.mu.Lock()
+	snapshot := a.transcript
+	a.mu.Unlock()
+	if a.transcriptSink != nil {
+		a.transcriptSink.RecordTranscript(a.MySeat, snapshot)
 	}
 }
 

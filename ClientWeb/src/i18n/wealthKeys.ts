@@ -221,6 +221,15 @@ export interface WealthDict {
   'wealth.seatsWaiting': string; // {n} {min}
   'wealth.botPanel.seat': string;
   'wealth.botPanel.titleCount': string; // {count}
+  // 2026-09-19 §财商流观战 UI — 12 Agent 卡片过滤与出局状态可读性。
+  'wealth.botPanel.titleFiltered': string; // {visible} {total}
+  'wealth.botPanel.filterGroup': string;
+  'wealth.botPanel.filterActive': string;
+  'wealth.botPanel.filterDecision': string;
+  'wealth.botPanel.filterAll': string;
+  'wealth.botPanel.filterEmpty': string;
+  'wealth.botPanel.statusActive': string;
+  'wealth.botPanel.statusOut': string;
   'wealth.chat.playerFallback': string;
   'wealth.minimap.aria': string;
   'wealth.pool.cardsTitle': string;

@@ -28,6 +28,61 @@ func NewAgentRunner(r *WealthRoom, seat int) *AgentRunner {
 	return &AgentRunner{room: r, seat: seat}
 }
 
+// BeginDecision 原子获取本月决策槽。月窗推进后,旧上下文无法再获取/执行;
+// 同一座位上一轮 LLM 未结束时,新一轮 wake 直接放弃,避免排队旧决策堆叠。
+func (a *AgentRunner) BeginDecision(seat, month int) error {
+	a.room.mu.Lock()
+	defer a.room.mu.Unlock()
+	if seat < 0 || seat >= MaxSeats || a.room.World == nil {
+		return errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	if a.room.closed || a.room.Status != StatusPlaying || a.room.Phase != PhaseActing {
+		return errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	p := a.room.World.Players[seat]
+	if p == nil || !p.Alive {
+		return errcode.Code(errcode.ErrWealthPlayerInactive)
+	}
+	if a.room.agentDecisionActive[seat] {
+		return errcode.CodeMsg(errcode.ErrWealthWrongPhase, "agent decision already active")
+	}
+	if month != a.room.World.Month {
+		return errcode.CodeMsg(errcode.ErrWealthWrongPhase, "stale agent month")
+	}
+	a.room.agentDecisionActive[seat] = true
+	a.room.agentDecisionMonth[seat] = month
+	return nil
+}
+
+// EndDecision 释放匹配的决策槽;若释放时房间已进入更新月份,则补一次 wake,
+// 避免本轮 LLM 占用槽位导致当前月 wake 被丢弃后无人再触发。
+func (a *AgentRunner) EndDecision(seat, month int) {
+	a.room.mu.Lock()
+	matched := a.room.agentDecisionActive[seat] && a.room.agentDecisionMonth[seat] == month
+	if matched {
+		a.room.agentDecisionActive[seat] = false
+	}
+	shouldWake := matched && a.room.Status == StatusPlaying &&
+		a.room.Phase == PhaseActing && a.room.World != nil &&
+		a.room.World.Month > month
+	a.room.mu.Unlock()
+	if shouldWake {
+		a.room.wakeBots()
+	}
+}
+
+// checkAgentDecisionLocked 在房间锁内原子校验 expected month / active token。
+func (a *AgentRunner) checkAgentDecisionLocked(seat int) error {
+	p := a.room.World.Players[seat]
+	if p == nil || !p.Alive {
+		return errcode.Code(errcode.ErrWealthPlayerInactive)
+	}
+	if !a.room.agentDecisionActive[seat] || a.room.agentDecisionMonth[seat] != a.room.World.Month {
+		return errcode.CodeMsg(errcode.ErrWealthWrongPhase, "stale agent month")
+	}
+	return nil
+}
+
 // ── ToolRunner 实现 ─ ──
 
 func (a *AgentRunner) CheckState(seat int) string {
@@ -298,16 +353,20 @@ func (a *AgentRunner) AnswerSurvey(seat int, surveyID string, optionIdx int, rea
 		return errcode.Code(errcode.ErrWealthNotPlaying)
 	}
 	w := a.room.World
-	sv := w.findSurveyByID(surveyID)
-	if sv == nil || sv.Status != SurveyOpen {
-		a.room.mu.Unlock()
-		return errcode.Code(errcode.ErrWealthSurveyNotFound) // 35019
-	}
 	p := w.Players[seat]
 	if p == nil || !p.Alive || !a.room.BotSeats[seat] {
 		// 仅 alive 且 bot 座位可答(人类在座玩家作答入口为 P2 扩展)。
 		a.room.mu.Unlock()
 		return errcode.Code(errcode.ErrWealthPlayerInactive)
+	}
+	if err := a.checkAgentDecisionLocked(seat); err != nil {
+		a.room.mu.Unlock()
+		return err
+	}
+	sv := w.findSurveyByID(surveyID)
+	if sv == nil || sv.Status != SurveyOpen {
+		a.room.mu.Unlock()
+		return errcode.Code(errcode.ErrWealthSurveyNotFound) // 35019
 	}
 	if _, dup := sv.Answers[seat]; dup {
 		a.room.mu.Unlock()
@@ -390,6 +449,10 @@ func (a *AgentRunner) Speak(seat int, text, internalThought string) error {
 		a.room.mu.Unlock()
 		return errcode.Code(errcode.ErrWealthWrongPhase)
 	}
+	if err := a.checkAgentDecisionLocked(seat); err != nil {
+		a.room.mu.Unlock()
+		return err
+	}
 	p := a.room.World.Players[seat]
 	if p == nil || !p.Alive || p.SpokenThisMonth {
 		a.room.mu.Unlock()
@@ -400,10 +463,13 @@ func (a *AgentRunner) Speak(seat int, text, internalThought string) error {
 	userID := a.room.Seats[seat]
 	modelKey := a.room.SeatModelKeys[seat]
 	// 写入 transcript 内心独白(供前端 BotThoughtPanel 渲染)。
-	a.room.Transcripts[seat] = BotTranscript{
-		HeartThought: clip(internalThought, 200),
-		LastDecisionSummary: clip(a.room.Transcripts[seat].LastDecisionSummary, 120),
-	}
+	t := a.room.Transcripts[seat]
+	t.Month = a.room.World.Month
+	t.LastDecisionMonth = a.room.World.Month
+	t.UpdatedAt = time.Now().UnixMilli()
+	t.Active = p.Alive
+	t.HeartThought = clip(internalThought, 200)
+	a.room.Transcripts[seat] = t
 	p.SpokenThisMonth = true
 	a.room.mu.Unlock()
 
@@ -417,7 +483,79 @@ func (a *AgentRunner) Speak(seat int, text, internalThought string) error {
 }
 
 func (a *AgentRunner) SubmitMonth(seat int) error {
-	return a.room.SubmitMonth(seat)
+	a.room.mu.Lock()
+	if a.room.closed || a.room.Status != StatusPlaying || a.room.Phase != PhaseActing {
+		a.room.mu.Unlock()
+		return errcode.Code(errcode.ErrWealthNotPlaying)
+	}
+	if err := a.checkAgentDecisionLocked(seat); err != nil {
+		a.room.mu.Unlock()
+		return err
+	}
+	p := a.room.World.Players[seat]
+	if p == nil || !p.Alive {
+		a.room.mu.Unlock()
+		return errcode.Code(errcode.ErrWealthPlayerInactive)
+	}
+	if p.Submitted {
+		a.room.mu.Unlock()
+		return nil
+	}
+	p.Submitted = true
+	all := a.room.allSubmittedLocked()
+	a.room.mu.Unlock()
+	if all {
+		select {
+		case a.room.settleCh <- struct{}{}:
+		default:
+		}
+	}
+	return nil
+}
+
+// RecordTranscript 实现 wealthplayer.TranscriptSink。这是 bot_contexts 的
+// 权威写入点:Agent 在月初、LLM 返回后、submit 前都会调用;旧月快照会被
+// 拒绝,避免 3s 月窗下长 LLM 调用回写覆盖新月状态。
+func (a *AgentRunner) RecordTranscript(seat int, transcript wealthplayer.BotTranscript) {
+	a.room.mu.Lock()
+	if a.room.World == nil || seat < 0 || seat >= MaxSeats {
+		a.room.mu.Unlock()
+		return
+	}
+	if transcript.Month < a.room.World.Month {
+		a.room.mu.Unlock()
+		return
+	}
+	p := a.room.World.Players[seat]
+	if p == nil {
+		a.room.mu.Unlock()
+		return
+	}
+	t := a.room.Transcripts[seat]
+	t.Month = transcript.Month
+	t.LastDecisionMonth = transcript.Month
+	t.UpdatedAt = time.Now().UnixMilli()
+	t.Active = p.Alive
+	if !p.Alive {
+		t.LastDecisionSummary = "已出局,停止月度决策"
+		t.LastDecisionMonth = a.room.World.Month
+		t.LastToolInput = ""
+		t.LastToolResult = ""
+		t.HeartThought = ""
+	} else {
+		t.LastDecisionSummary = clip(transcript.LastDecisionSummary, 120)
+		t.LastToolInput = clip(transcript.LastToolInput, 200)
+		t.LastToolResult = clip(transcript.LastToolResult, 200)
+		t.HeartThought = clip(transcript.HeartThought, 200)
+	}
+	a.room.Transcripts[seat] = t
+	hooks := a.room.hooks
+	roomID := a.room.RoomID
+	a.room.mu.Unlock()
+
+	if hooks.OnState != nil {
+		hooks.OnState(roomID)
+	}
 }
 
 // ── P2(2026-09-16 §财商流P2): 玩家间交易与财富流动系统 12 工具 ──
@@ -647,6 +785,10 @@ func (a *AgentRunner) apply(seat int, toolName, toolID string, fn func() (string
 		a.room.mu.Unlock()
 		return errcode.Code(errcode.ErrWealthWrongPhase)
 	}
+	if err := a.checkAgentDecisionLocked(seat); err != nil {
+		a.room.mu.Unlock()
+		return err
+	}
 	p := a.room.World.Players[seat]
 	if p == nil || !p.Alive {
 		a.room.mu.Unlock()
@@ -678,13 +820,28 @@ func (a *AgentRunner) apply(seat int, toolName, toolID string, fn func() (string
 	// 锁外记入 agent transcript(供 bot_contexts)。
 	a.room.mu.Lock()
 	t := a.room.Transcripts[seat]
+	t.Month = monthAfter
+	t.LastDecisionMonth = monthAfter
+	t.UpdatedAt = time.Now().UnixMilli()
+	t.Active = true
 	t.LastDecisionSummary = clip(text, 120)
 	t.LastToolInput = toolName
 	t.LastToolResult = text
 	a.room.Transcripts[seat] = t
 	// 全员 submitted 检查(触发 settle 提前推进)。
 	all := a.room.allSubmittedLocked()
+	hooks := a.room.hooks
+	roomID := a.room.RoomID
 	a.room.mu.Unlock()
+	if hooks.OnEvent != nil {
+		eventType := "action"
+		if toolName == wealthplayer.ToolMoveDistrict {
+			eventType = "move"
+		}
+		hooks.OnEvent(roomID, EventRecord{
+			Month: monthAfter, Type: eventType, Seat: seat, Text: text,
+		})
+	}
 	if all {
 		select {
 		case a.room.settleCh <- struct{}{}:
@@ -728,7 +885,9 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 		return nil, false
 	}
 	p := r.World.Players[seat]
-	if p == nil {
+	// 已出局座位不再构建决策上下文;否则每继续浪费一次 LLM 调用,
+	// 并把死亡前 transcript 回写为“活跃”。
+	if p == nil || !p.Alive {
 		return nil, false
 	}
 	age := r.World.Age()
@@ -736,9 +895,9 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 
 	// Market/Cycle 快照。
 	cycle := wealthtypes.CycleBrief{
-		Phase: string(r.World.Market.CyclePhase),
-		LPR:   r.World.Market.Params().LPR,
-		CPI:   r.World.Market.Params().CPI,
+		Phase:      string(r.World.Market.CyclePhase),
+		LPR:        r.World.Market.Params().LPR,
+		CPI:        r.World.Market.Params().CPI,
 		MonthsLeft: r.World.Market.CycleMonthsLeft,
 	}
 	market := wealthtypes.MarketBrief{
@@ -760,15 +919,15 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 			Tax: p.Monthly.Tax, Social: p.Monthly.Social,
 			PassiveIncome: p.Monthly.PassiveIncome, SideIncome: p.Monthly.SideIncome,
 			OvertimeBonus: p.Monthly.OvertimeBonus,
-			Detail: convertFlowItems(p.Monthly.Detail),
+			Detail:        convertFlowItems(p.Monthly.Detail),
 		},
 		Energy: p.Energy, Network: p.Network, Cognition: p.Cognition,
-		PensionCNY:  p.PensionCNY,
-		CreditScore: p.CreditScore,
-		Marital:     p.Family.Marital,
-		Children:    p.Family.Children,
-		FIIndex:     fiIndexFor(r, p),
-		NetWorth:    p.NetWorth(r.World.Market),
+		PensionCNY:   p.PensionCNY,
+		CreditScore:  p.CreditScore,
+		Marital:      p.Family.Marital,
+		Children:     p.Family.Children,
+		FIIndex:      fiIndexFor(r, p),
+		NetWorth:     p.NetWorth(r.World.Market),
 		ActionBudget: p.ActionBudget,
 		Goals:        append([]string(nil), p.Card.Goals...),
 	}
@@ -800,7 +959,7 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 	// 近期流水(本人最近 20)。
 	ledgerRecent := ledgerRecent(r, seat, 20)
 	// BotIdentity。
-  botIdent := wealthtypes.BotIdentityBrief{
+	botIdent := wealthtypes.BotIdentityBrief{
 		UserID: p.Card.ID, ModelKey: r.SeatModelKeys[seat], ModelName: ModelDisplayName(r.SeatModelKeys[seat]),
 		AgentClass: "LsmAgentGame-Wealth-Player",
 	}
@@ -830,10 +989,10 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 	}
 
 	// Card 投影。
-  cardBrief := wealthtypes.CardBrief{
+	cardBrief := wealthtypes.CardBrief{
 		ID: p.Card.ID, Title: p.Card.Title, Name: p.Card.Name,
 		HomeDistrictCN: DistrictCN(p.HomeDistrict),
-		Salary: p.Card.Salary, Expense: p.Card.Expense, Savings: p.Card.Savings,
+		Salary:         p.Card.Salary, Expense: p.Card.Expense, Savings: p.Card.Savings,
 		StartAge: p.Card.StartAge, Energy: p.Card.Energy,
 		Network: p.Card.Network, Cognition: p.Card.Cognition,
 		CreditScore: p.Card.CreditScore, RiskPreference: p.Card.RiskPreference,
@@ -842,7 +1001,7 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 		HealthGrade:    p.Card.HealthGrade,
 		Marital:        p.Card.Marital, ChildrenCount: p.Card.ChildrenCount,
 		EldersDependent: p.Card.EldersDependent,
-		Goals:          append([]string(nil), p.Card.Goals...),
+		Goals:           append([]string(nil), p.Card.Goals...),
 	}
 
 	// P1(§财商流P1-2 §7.2):真实经济循环 + 社会调研上下文。
@@ -867,19 +1026,19 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 		MySeat: seat, MyUserID: r.Seats[seat], ModelKey: r.SeatModelKeys[seat],
 		Month: month, Age: age, Phase: r.Phase,
 		TimeRemainingSec: int(time.Until(r.NextMonthAt).Seconds()),
-		Cycle: cycle, Market: market,
+		Cycle:            cycle, Market: market,
 		Me: me, Peers: peers,
 		RecentEvents: evRecent, RecentLedger: ledgerRecent,
 		BotIdentity: botIdent, MyCard: cardBrief,
 		CentralBank: cbSnapshot, CreditTightness: creditTightness, LoanQuotaFactor: loanQuotaFactor,
 		// P1: 经济环境 + 待答调研。
-		CPIYoY:            ecoCPIYoY,
-		UnemploymentRate:  ecoUnemployment,
-		ConsumptionLevel:  p.ConsumptionLevelSafe(),
-		OpenSurveyID:      openSurveyID,
+		CPIYoY:             ecoCPIYoY,
+		UnemploymentRate:   ecoUnemployment,
+		ConsumptionLevel:   p.ConsumptionLevelSafe(),
+		OpenSurveyID:       openSurveyID,
 		OpenSurveyQuestion: openSurveyQ,
-		OpenSurveyOptions: openSurveyOpts,
-		EconomyBrief:      ecoBrief,
+		OpenSurveyOptions:  openSurveyOpts,
+		EconomyBrief:       ecoBrief,
 	}, true
 }
 
@@ -892,8 +1051,8 @@ func fiIndexFor(r *WealthRoom, p *Player) float64 {
 func assetBriefFor(r *WealthRoom, a *Asset) wealthtypes.AssetBrief {
 	b := wealthtypes.AssetBrief{
 		Kind: a.Kind, Units: a.Units,
-		Price: assetPrice(r, a),
-		ValueCNY: AssetValue(a, r.World.Market),
+		Price:          assetPrice(r, a),
+		ValueCNY:       AssetValue(a, r.World.Market),
 		MonthlyFlowCNY: assetMonthlyFlow(r, a),
 	}
 	b.Name = assetNameCN(a)

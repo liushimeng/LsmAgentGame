@@ -641,18 +641,82 @@
 }
 .wealth-botpanel--empty { color: var(--wealth-text-dim); }
 .wealth-botpanel__title { font-weight: 700; color: #fff; margin-bottom: 4px; }
-.wealth-botpanel__card { border-bottom: 1px dashed #26303e; padding: 4px 0; }
+.wealth-botpanel__filters {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0 6px;
+}
+.wealth-botpanel__filter {
+  flex: 1;
+  min-height: var(--wealth-touch-target);
+  border: 1px solid var(--wealth-border);
+  border-radius: 6px;
+  background: var(--wealth-panel-2);
+  color: var(--wealth-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.wealth-botpanel__filter:hover {
+  border-color: var(--wealth-accent-strong);
+  color: #fff;
+}
+/* 选中态：金底深字 + 光晕，对比度 ≈7.4:1（≥6:1）。 */
+.wealth-botpanel__filter--active {
+  background: var(--wealth-accent-strong);
+  border-color: #f0d387;
+  color: #1a1305;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.55);
+}
+.wealth-botpanel__filtered-empty {
+  margin: 6px 0;
+  color: var(--wealth-text-dim);
+}
+.wealth-botpanel__card { border-bottom: 1px dashed #26303e; padding: 2px 0; }
+.wealth-botpanel__card--out { background: rgba(15, 20, 27, 0.72); }
 .wealth-botpanel__card summary {
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 6px;
   color: var(--wealth-text);
-  min-height: 32px;
+  min-height: var(--wealth-touch-target);
+  padding: 2px 0;
+}
+.wealth-botpanel__meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wealth-botpanel__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wealth-botpanel__status {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: #374151; /* 灰底白字 ≈8.6:1 */
+}
+.wealth-botpanel__status--out { background: #7f1d1d; /* 深红底白字 ≈10.8:1 */ }
+.wealth-botpanel__decision-month {
+  flex-shrink: 0;
+  color: var(--wealth-text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 .wealth-botpanel__dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .wealth-botpanel__model {
-  margin-left: auto;
   font-size: 11px;
   color: var(--wealth-text-dim);
   border: 1px solid var(--wealth-border);

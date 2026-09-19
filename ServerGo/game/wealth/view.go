@@ -19,30 +19,30 @@ import (
 // ClientGameState 是面向客户端的单座位视图(完整 game.state 载荷)。
 // 见协议契约 §3 — 字段名与 JSON 键逐一对应;omitempty 用于协议约定的可选字段。
 type ClientGameState struct {
-	RoomID         string         `json:"room_id"`
-	GameKind       string         `json:"game_kind"`
-	Status         string         `json:"status"`
-	Month          int            `json:"month"`
-	Age            int            `json:"age"`
-	Phase          string         `json:"phase"`
-	Cycle          CycleJSON      `json:"cycle"`
-	Market         MarketJSON     `json:"market"`
-	CentralBank    CentralBankJSON `json:"central_bank"` // P1: 央行快照
-	MaxSeat        int            `json:"max_seat"`
-	NextMonthAt    int64          `json:"next_month_at"`
-	GameStartedAt  int64          `json:"game_started_at"`
-	Players        []PlayerJSON   `json:"players"`
-	MySeat         int            `json:"my_seat"`
-	My             *MyJSON        `json:"my"` // nil = 观战者
-	BotContexts    []BotCtxJSON   `json:"bot_contexts"`
-	LedgerRecent   []LedgerJSON    `json:"ledger_recent"`
-	EventsRecent   []EventJSON     `json:"events_recent"`
-	Minsky         MinskyOverview  `json:"minsky_overview"`
+	RoomID        string          `json:"room_id"`
+	GameKind      string          `json:"game_kind"`
+	Status        string          `json:"status"`
+	Month         int             `json:"month"`
+	Age           int             `json:"age"`
+	Phase         string          `json:"phase"`
+	Cycle         CycleJSON       `json:"cycle"`
+	Market        MarketJSON      `json:"market"`
+	CentralBank   CentralBankJSON `json:"central_bank"` // P1: 央行快照
+	MaxSeat       int             `json:"max_seat"`
+	NextMonthAt   int64           `json:"next_month_at"`
+	GameStartedAt int64           `json:"game_started_at"`
+	Players       []PlayerJSON    `json:"players"`
+	MySeat        int             `json:"my_seat"`
+	My            *MyJSON         `json:"my"` // nil = 观战者
+	BotContexts   []BotCtxJSON    `json:"bot_contexts"`
+	LedgerRecent  []LedgerJSON    `json:"ledger_recent"`
+	EventsRecent  []EventJSON     `json:"events_recent"`
+	Minsky        MinskyOverview  `json:"minsky_overview"`
 	// P1(§财商流P1-2 §6.1):economy_enabled=false 时为零值/空数组下发。
 	ConsumerMarket ConsumerMarketJSON `json:"consumer_market"`
-	LaborMarket    LaborMarketJSON   `json:"labor_market"`
-	Society        SocietyJSON       `json:"society"`
-	Surveys        []SurveyJSON      `json:"surveys"` // 调研契约 §5.1
+	LaborMarket    LaborMarketJSON    `json:"labor_market"`
+	Society        SocietyJSON        `json:"society"`
+	Surveys        []SurveyJSON       `json:"surveys"` // 调研契约 §5.1
 	// P2 v2(2026-09-19 §P2-可视化):本月资金流向;omitempty 保证空月份不下发。
 	FlowStat *FlowStatJSON `json:"flow_stat,omitempty"`
 }
@@ -81,18 +81,18 @@ type SocietyJSON struct {
 		Freedom    int `json:"freedom"`
 	} `json:"circles"`
 	// P2 v2 新增(2026-09-19 §P2-可视化)。omitzero 保证未开 economy_enabled 不下发。
-	TotalWealth   int64                `json:"total_wealth,omitempty"`
-	MedianWealth  int64                `json:"median_wealth,omitempty"`
-	MeanWealth    int64                `json:"mean_wealth,omitempty"`
-	Percentiles   map[string]int64     `json:"percentiles,omitempty"` // {"p10":..,"p25":..,"p50":..,"p75":..,"p90":..}
-	LorenzPoints  [][2]float64         `json:"lorenz_points,omitempty"`
-	PyramidLayers []WealthLayerJSON    `json:"pyramid_layers,omitempty"`
+	TotalWealth   int64             `json:"total_wealth,omitempty"`
+	MedianWealth  int64             `json:"median_wealth,omitempty"`
+	MeanWealth    int64             `json:"mean_wealth,omitempty"`
+	Percentiles   map[string]int64  `json:"percentiles,omitempty"` // {"p10":..,"p25":..,"p50":..,"p75":..,"p90":..}
+	LorenzPoints  [][2]float64      `json:"lorenz_points,omitempty"`
+	PyramidLayers []WealthLayerJSON `json:"pyramid_layers,omitempty"`
 }
 
 // WealthLayerJSON 是金字塔单层视图(P2 v2 §13.2.4)。
 type WealthLayerJSON struct {
-	Name        string  `json:"name"`        // "survival" | "accumulation" | "freedom"
-	Count       int     `json:"count"`       // 人数
+	Name        string  `json:"name"`  // "survival" | "accumulation" | "freedom"
+	Count       int     `json:"count"` // 人数
 	TotalWealth int64   `json:"total_wealth"`
 	AvgWealth   int64   `json:"avg_wealth"`
 	WealthPct   float64 `json:"wealth_pct"` // 占总财富 0-1
@@ -120,7 +120,7 @@ type FlowNodeJSON struct {
 type FlowLinkJSON struct {
 	From      string  `json:"from"`
 	To        string  `json:"to"`
-	AmountCNY int64    `json:"amount_cny"`
+	AmountCNY int64   `json:"amount_cny"`
 	Pct       float64 `json:"pct"`
 }
 
@@ -139,11 +139,11 @@ type SurveyJSON struct {
 
 // SurveyResultJSON 是聚合结果(选项文本一并下发,前端免查表)。
 type SurveyResultJSON struct {
-	Options     []string  `json:"options"`
-	Counts      []int     `json:"counts"`
-	Percents    []float64 `json:"percents"`
-	Total       int       `json:"total"`
-	TopReasons  []string  `json:"top_reasons"`
+	Options    []string  `json:"options"`
+	Counts     []int     `json:"counts"`
+	Percents   []float64 `json:"percents"`
+	Total      int       `json:"total"`
+	TopReasons []string  `json:"top_reasons"`
 }
 
 // SurveyJSONFrom 把引擎 Survey 映射为 SurveyJSON(ws 层 game.survey_result 与
@@ -341,21 +341,25 @@ type MyFamilyJSON struct {
 
 // BotCtxJSON 是 bot_contexts 单条。
 type BotCtxJSON struct {
-	Seat              int    `json:"seat"`
+	Month               int    `json:"month"`
+	LastDecisionMonth   int    `json:"last_decision_month"`
+	UpdatedAt           int64  `json:"updated_at"`
+	Active              bool   `json:"active"`
+	Seat                int    `json:"seat"`
 	LastDecisionSummary string `json:"last_decision_summary"`
-	LastToolInput     string `json:"last_tool_input"`
-	LastToolResult    string `json:"last_tool_result"`
-	HeartThought      string `json:"heart_thought"`
+	LastToolInput       string `json:"last_tool_input"`
+	LastToolResult      string `json:"last_tool_result"`
+	HeartThought        string `json:"heart_thought"`
 }
 
 // LedgerJSON 是 ledger_recent 单条。
 type LedgerJSON struct {
-	Month      int    `json:"month"`
-	From       string `json:"from"`
-	To         string `json:"to"`
-	AmountCNY  int64  `json:"amount_cny"`
-	Category   string `json:"category"`
-	Note       string `json:"note"`
+	Month     int    `json:"month"`
+	From      string `json:"from"`
+	To        string `json:"to"`
+	AmountCNY int64  `json:"amount_cny"`
+	Category  string `json:"category"`
+	Note      string `json:"note"`
 }
 
 // EventJSON 是 events_recent 单条。
@@ -371,10 +375,10 @@ type EventJSON struct {
 func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]string, nicknames [MaxSeats]string, botSeats [MaxSeats]bool, modelKeys [MaxSeats]string, transcripts [MaxSeats]BotTranscript, gameStartedAt, nextMonthAtUnixMs int64) *ClientGameState {
 	cs := &ClientGameState{
 		RoomID: roomID, GameKind: "wealth",
-		Status:StatusOpen, MaxSeat: MaxSeats,
+		Status: StatusOpen, MaxSeat: MaxSeats,
 		MySeat: viewer, NextMonthAt: nextMonthAtUnixMs,
 		GameStartedAt: gameStartedAt,
-		Players: make([]PlayerJSON, MaxSeats),
+		Players:       make([]PlayerJSON, MaxSeats),
 		// 2026-09-14 §财商流P0-bugfix: 数组字段必须序列化为 [] 而非 null ——
 		// Go nil slice → JSON null,前端 xxx.map 直接 TypeError 整页崩溃
 		// (ErrorBoundary 兜底)。空集合统一初始化。
@@ -508,11 +512,15 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 			continue
 		}
 		cs.BotContexts = append(cs.BotContexts, BotCtxJSON{
-			Seat: s,
+			Month:               t.Month,
+			LastDecisionMonth:   t.LastDecisionMonth,
+			UpdatedAt:           t.UpdatedAt,
+			Active:              t.Active,
+			Seat:                s,
 			LastDecisionSummary: t.LastDecisionSummary,
-			LastToolInput:     t.LastToolInput,
-			LastToolResult:    t.LastToolResult,
-			HeartThought:      t.HeartThought,
+			LastToolInput:       t.LastToolInput,
+			LastToolResult:      t.LastToolResult,
+			HeartThought:        t.HeartThought,
 		})
 	}
 
@@ -686,11 +694,11 @@ func myJSONFor(p *Player) *MyJSON {
 	}
 	for i := range p.Assets {
 		my.Assets = append(my.Assets, MyAssetJSON{
-			Kind: p.Assets[i].Kind,
-			Name: assetNameCN(&p.Assets[i]),
-			Units: p.Assets[i].Units,
-			Price: assetPriceSnap(&p.Assets[i]),
-			ValueCNY: AssetValue(&p.Assets[i], globalMarketSnap(p)),
+			Kind:           p.Assets[i].Kind,
+			Name:           assetNameCN(&p.Assets[i]),
+			Units:          p.Assets[i].Units,
+			Price:          assetPriceSnap(&p.Assets[i]),
+			ValueCNY:       AssetValue(&p.Assets[i], globalMarketSnap(p)),
 			MonthlyFlowCNY: assetMonthlyFlowSnap(&p.Assets[i]),
 		})
 	}
@@ -725,7 +733,7 @@ type MyMy struct {
 	CreditScore   int
 	Family        MyFamilyJSON
 	FIIndex       float64
-	NetWorth     int64
+	NetWorth      int64
 	Goals         []string
 	// P1: 上月消费结构(nil→{})。
 	ConsumptionByGoods map[string]float64
@@ -739,11 +747,11 @@ func jsonMy(m *MyMy) *MyJSON {
 	return &MyJSON{
 		Cash: m.Cash, Salary: m.Salary, SpouseIncome: m.SpouseIncome,
 		SideIncome: m.SideIncome, PassiveIncome: m.PassiveIncome,
-		Monthly:    m.Monthly, Resources: m.Resources,
-		Assets:     m.Assets, Loans: m.Loans,
+		Monthly: m.Monthly, Resources: m.Resources,
+		Assets: m.Assets, Loans: m.Loans,
 		PensionCNY: m.PensionCNY, CreditScore: m.CreditScore,
-		Family:    m.Family,
-		FIIndex:   m.FIIndex, NetWorth: m.NetWorth, Goals: m.Goals,
+		Family:  m.Family,
+		FIIndex: m.FIIndex, NetWorth: m.NetWorth, Goals: m.Goals,
 		ConsumptionByGoods: m.ConsumptionByGoods,
 	}
 }
@@ -773,7 +781,7 @@ func globalMarketSnap(p *Player) *MarketState {
 func globalAgeSnap(p *Player) int { return 25 }
 
 // assetPriceSnap / assetMonthlyFlowSnap myJSONFor 退化路径用。
-func assetPriceSnap(a *Asset) float64 { return 0 }
+func assetPriceSnap(a *Asset) float64     { return 0 }
 func assetMonthlyFlowSnap(a *Asset) int64 { return 0 }
 
 func convertMyDetail(in []FlowItem) []MyMonthlyItemJSON {
