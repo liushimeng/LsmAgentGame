@@ -41,9 +41,11 @@ export default function DebateCommentaryPanel() {
         </span>
       </header>
 
+      {/* 2026-09-19 §20260919-辩论UI-v2 O1:时间戳移到文本之前(纵向 flex 头部行),
+          不再绝对定位悬浮于滚动容器正文上方 */}
       <div className="commentary-latest">
-        <p className="commentary-text">{latest.text}</p>
         <span className="commentary-time">{formatTime(latest.timestamp)}</span>
+        <p className="commentary-text">{latest.text}</p>
       </div>
 
       {history.length > 0 && (
@@ -52,8 +54,8 @@ export default function DebateCommentaryPanel() {
           <ul>
             {history.map((c, idx) => (
               <li key={`${c.timestamp}-${idx}`} className="commentary-history-item">
-                <p>{c.text}</p>
                 <span className="commentary-time">{formatTime(c.timestamp)}</span>
+                <p>{c.text}</p>
               </li>
             ))}
           </ul>

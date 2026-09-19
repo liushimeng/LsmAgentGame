@@ -632,6 +632,14 @@ func (m *DebateManager) StartGame(roomID, callerUserID string) *errcode.Error {
 	r.MarkStarted()
 	r.SetPhase(PhasePreparation)
 
+	// §20260919-辩论UI-v2:启动即广播 phase 帧 —— 裸 SetPhase 不触发 onPhaseChange,
+	// 前端(房主与观战者)要等引擎首次 advanceTo 才收到第一个 debate.phase 帧,
+	// 表现为「点击开始后界面长时间无反馈,疑似要点两次」。
+	// 模式对齐 engine.go advanceTo:go 异步广播,不阻塞启动路径。
+	if m.onPhaseChange != nil {
+		go m.onPhaseChange(roomID, PhasePreparation)
+	}
+
 	// 触发 onGameStart 钩子
 	if m.onGameStart != nil {
 		go m.onGameStart(roomID)

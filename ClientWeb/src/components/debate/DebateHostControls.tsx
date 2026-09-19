@@ -41,14 +41,9 @@ export default function DebateHostControls({ roomId }: Props) {
   const [forceDisbanding, setForceDisbanding] = useState(false);
   const [forceDisbandErr, setForceDisbandErr] = useState('');
 
-  if (!isOwner) {
-    return (
-      <div className="debate-host-controls debate-host-controls--readonly">
-        <span className="host-badge">👁 观战者</span>
-        <small>房主可点击「开始比赛」</small>
-      </div>
-    );
-  }
+  // 2026-09-19 §20260919-辩论UI-v2:删除上方「if (!isOwner) return 观战者标识」死代码早返回
+  // —— 它使非房主超管永远到不了下方 §20260831-12 的超管入口;早返回统一收敛到
+  // 组件尾部「非房主且非超管」一处(条件互斥,只保留正确条件的那个)。
 
   const canStart = phase === 'filling';
 
@@ -59,7 +54,11 @@ export default function DebateHostControls({ roomId }: Props) {
     setLoading(true);
     debateService
       .start(roomId)
-      .then(() => {
+      .then((state) => {
+        // 2026-09-19 §20260919-辩论UI-v2:后端 Start 返回完整 DebateClientState,
+        // 立即写入 store —— 不再等 WS phase 帧(服务端启动时裸 SetPhase 不广播,
+        // 否则 preparation 全程 UI 停留 filling,看似点击无效导致用户重复点击)
+        useDebateStore.getState().setGameState(state);
         setLoading(false);
       })
       .catch((e: Error) => {

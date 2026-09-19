@@ -224,7 +224,8 @@ function ReplayScoresSection({ room, scores }: { room: DebateHistoryRoom; scores
         return (
           <div key={teamId} className={`team-score${isWinner ? ' team-score--winner' : ''}`}>
             <header className="team-score__header">
-              <span>
+              {/* 2026-09-19 §20260919-辩论UI-v2 O7:队名容器补 .team-name 以便 CSS 截断 */}
+              <span className="team-name">
                 {isWinner ? '🥇' : '🥈'} {teamLabel(room, teamId)}
                 <span className="replay-avg-hint">
                   {t('debate.replay.avgOf' as TKey, { n: rows.length })}

@@ -1,0 +1,261 @@
+/* §20260919-辩论UI-v2：本文件由 debate.css §20260919-辩论UI-v2 整段搬移而来（纯搬移，规则内容零改动）。
+ * 级联位置不变：在 globals.css 中紧跟 debate-commentary.css 之后、debate-history.css 之前按序引入。
+ * 主题：§05 观众提问 / §06 裁判宣告与统计（原 debate.css 行 1567-1814）。
+ * 拆分原因：debate.css 1894 行 > CLAUDE.md §4 的 1800 行硬上限。 */
+/* ============================================================================
+   §20260831-05 — 观众提问面板
+   ============================================================================ */
+
+.debate-spectator-questions {
+  background: rgba(31, 41, 55, 0.5);
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+}
+
+.spectator-questions-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  /* 2026-09-19 §20260919-辩论UI-v2 O12:窄栏允许换行,子项可收缩 */
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.spectator-questions-header h3 {
+  margin: 0;
+  font-size: 13px;
+  color: #f1f5f9;
+  min-width: 0;
+}
+
+.spectator-questions-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  min-width: 0;
+}
+
+.spectator-questions-list {
+  /* 2026-09-19 §辩论游戏UI修复:增加提问列表高度限制,防止问题堆积溢出 */
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+.spectator-questions-empty {
+  font-size: 12px;
+  color: #64748b;
+  margin: 8px 0;
+}
+
+.spectator-questions-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.spectator-question-item {
+  padding: 6px 8px;
+  border-bottom: 1px solid #1e293b;
+  font-size: 12px;
+}
+
+.question-user {
+  color: #fbbf24;
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.question-text {
+  color: #e2e8f0;
+  /* 2026-09-19 §辩论游戏UI修复:长问题文字换行保护 */
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.question-time {
+  color: #64748b;
+  font-size: 10px;
+  margin-left: 8px;
+}
+
+.spectator-questions-input {
+  display: flex;
+  gap: 6px;
+}
+
+.spectator-question-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
+.spectator-question-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.spectator-questions-error {
+  color: #ef4444;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* ============================================================================
+   §20260831-05 — 房主操作(危险按钮)
+   2026-09-19 §财商流-UI修复：本节的 .btn-danger* 三块已整体迁至 buttons.css。
+   注意：这一组此前排在 debate.css 末尾，是**全站** .btn-danger 的实际生效值
+   （padding:4px 12px / font-size:12px），并非辩论私有样式。
+   此处不再定义 .btn* 规则。
+   ============================================================================ */
+
+.host-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.host-error {
+  color: #ef4444;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* ============================================================================
+   §20260831-06 — 观众提问闭环(裁判回答) + 裁判宣告 + 模型胜率统计
+   ============================================================================ */
+
+/* 观众提问:问题行 + 裁判回答 */
+.spectator-question-item .question-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.question-answer {
+  margin-top: 4px;
+  margin-left: 12px;
+  padding: 4px 8px;
+  border-left: 2px solid #f59e0b;
+  background-color: rgba(245, 158, 11, 0.08);
+  border-radius: 0 4px 4px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.question-answer-badge {
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.question-answer-text {
+  color: #e5e7eb;
+  font-size: 12px;
+  line-height: 1.5;
+  /* 2026-09-19 §20260919-辩论UI-v2 O6:长词换行,不横向溢出右栏 */
+  overflow-wrap: anywhere;
+}
+
+/* 裁判公开宣告(裁判面板上方) */
+.judge-announcements {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.judge-announce-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 4px;
+  background-color: rgba(245, 158, 11, 0.06);
+}
+
+.judge-announce-badge {
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.judge-announce-text {
+  color: #e5e7eb;
+  font-size: 12px;
+  line-height: 1.5;
+  /* 2026-09-19 §20260919-辩论UI-v2 O6:长词换行,不横向溢出右栏 */
+  overflow-wrap: anywhere;
+}
+
+/* 大厅模型胜率统计 */
+.debate-model-stats {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  background-color: #1f2937;
+}
+
+.model-stats-toggle {
+  background: none;
+  border: none;
+  color: #e5e7eb;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.model-stats-toggle:hover {
+  color: #fbbf24;
+}
+
+.model-stats-empty {
+  color: #9ca3af;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.model-stats-table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.model-stats-table th {
+  color: #9ca3af;
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid #374151;
+}
+
+.model-stats-table td {
+  color: #e5e7eb;
+  padding: 6px 8px;
+  border-bottom: 1px solid #273243;
+}
+
+.model-stats-name {
+  font-weight: 600;
+}
+
+.model-stats-winrate {
+  color: #fbbf24;
+  font-weight: 600;
+}
+

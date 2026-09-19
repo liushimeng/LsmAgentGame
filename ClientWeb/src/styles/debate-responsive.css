@@ -1,0 +1,84 @@
+/* §20260919-辩论UI-v2：本文件由 debate.css §20260919-辩论UI-v2 整段搬移而来（纯搬移，规则内容零改动）。
+ * 级联位置不变：在 globals.css 中紧跟 debate-spectator.css 之后、debate-history.css 之前按序引入。
+ * 主题：§03 响应式布局断点（原 debate.css 行 1815-1894）。
+ * 拆分原因：debate.css 1894 行 > CLAUDE.md §4 的 1800 行硬上限。 */
+/* ============================================================================
+   §20260831-03 — 响应式布局断点
+   ============================================================================ */
+
+/* 中屏 1024px - 1279px: 缩小侧栏宽度 */
+@media (max-width: 1279px) {
+  .sidebar-left {
+    width: 220px;
+  }
+  .sidebar-right {
+    width: 260px;
+  }
+}
+
+/* 窄屏 <1024px: 侧栏变 overlay 抽屉 */
+@media (max-width: 1023px) {
+  .sidebar-left {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 50;
+    width: 280px;
+    transform: translateX(-100%);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+  }
+  .sidebar-left.open {
+    transform: translateX(0);
+  }
+  .sidebar-left.sidebar-collapsed {
+    width: 280px; /* 窄屏下不使用折叠态,直接用抽屉 */
+  }
+  .sidebar-right {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 50;
+    width: 300px;
+    transform: translateX(100%);
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3);
+  }
+  .sidebar-right.open {
+    transform: translateX(0);
+  }
+  .sidebar-right.sidebar-collapsed {
+    width: 300px;
+  }
+  /* 折叠按钮在窄屏隐藏 */
+  .sidebar-toggle {
+    display: none;
+  }
+  /* 中栏撑满全屏 */
+  .main-col {
+    width: 100%;
+  }
+}
+
+/* 超小屏 <768px: 进一步精简 */
+@media (max-width: 767px) {
+  .game-header {
+    padding: 8px 12px;
+  }
+  .game-header h1 {
+    font-size: 14px;
+  }
+  .debate-game-page .header-meta .topic-text {
+    max-width: 200px;
+  }
+  .main-col {
+    padding: 8px;
+    gap: 8px;
+  }
+  .debate-stage {
+    padding: 12px;
+  }
+  .stage-header .topic {
+    font-size: 16px;
+  }
+}

@@ -1,0 +1,674 @@
+/* §20260919-辩论UI-v2：本文件由 debate.css §20260919-辩论UI-v2 整段搬移而来（纯搬移，规则内容零改动）。
+ * 级联位置不变：在 globals.css 中紧跟 debate.css 之后、debate-history.css 之前按序引入。
+ * 主题：队伍/裁判/评分面板 + 主舞台 + 发言历史 + Modal（原 debate.css 行 307-945）。
+ * 拆分原因：debate.css 1894 行 > CLAUDE.md §4 的 1800 行硬上限。 */
+/* ========= 队伍面板 ========= */
+
+.debate-team-panel,
+.debate-judge-panel,
+.debate-score-panel,
+.debate-speech-panel {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+/* 左栏队伍面板更紧凑 */
+.sidebar-left .debate-team-panel {
+  background: rgba(31, 41, 55, 0.6);
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid #374151;
+  margin-bottom: 0;
+  padding: 8px 12px;
+}
+
+.sidebar-left .debate-speech-panel {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  margin-bottom: 0;
+  padding: 8px 12px;
+}
+
+.debate-team-panel h3,
+.debate-judge-panel h3,
+.debate-score-panel h3 {
+  margin: 0 0 10px;
+  color: #f3f4f6;
+  font-size: 13px;
+}
+
+.sidebar-left .debate-speech-panel h3,
+.sidebar-left .debate-team-panel h3 {
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.team-card {
+  margin-bottom: 8px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  border-left: 4px solid #4b5563;
+}
+
+/* 左栏队伍卡片更紧凑 */
+.sidebar-left .team-card {
+  margin-bottom: 4px;
+  padding: 6px 8px;
+  border-left-width: 3px;
+}
+
+.team-card--pro,
+.team-card--gov_upper,
+.team-card--gov_lower {
+  border-left-color: #3b82f6;
+}
+
+.team-card--con,
+.team-card--opp_upper,
+.team-card--opp_lower {
+  border-left-color: #ef4444;
+}
+
+.team-card--neutral {
+  border-left-color: #8b5cf6;
+}
+
+/* §20260831-04 — 五队发散模式角度立场专属配色(五色相区分,边框对暗底 ≥ 3:1) */
+.team-card--angle_1 {
+  border-left-color: #4dd0e1;
+}
+
+.team-card--angle_2 {
+  border-left-color: #f5c518;
+}
+
+.team-card--angle_3 {
+  border-left-color: #7bd47b;
+}
+
+.team-card--angle_4 {
+  border-left-color: #ff9d5c;
+}
+
+.team-card--angle_5 {
+  border-left-color: #e070c8;
+}
+
+.team-card__header {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #f3f4f6;
+  font-size: 12px;
+}
+
+.team-card__agents {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agent-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 2px 0;
+  color: #d1d5db;
+  font-size: 12px;
+}
+
+.agent-row--speaking {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+/* 2026-09-19 §20260919-辩论UI-v2 O4:.agent-name 此前仅在 DebateTeamPanel /
+   DebateReplayModal 的 JSX 使用、CSS 无规则,长 Agent 名撑破 260px 左栏 → 补换行保护 */
+.agent-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ========= 裁判面板 ========= */
+
+.judge-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.judge-card {
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+}
+
+.judge-card__name {
+  font-size: 12px;
+  color: #f3f4f6;
+}
+
+.judge-card__comment {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #d1d5db;
+  line-height: 1.4;
+  /* 2026-09-19 §20260919-辩论UI-v2 O5:终评限高滚动 + 换行保护(上轮只补了
+     ScorePanel 的 .judge-comment__text,漏了 JudgePanel 这个同类容器) */
+  max-height: 120px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+/* ========= 评分面板 ========= */
+
+.debate-score-panel--pending {
+  text-align: center;
+  color: #9ca3af;
+}
+
+.winner-banner {
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.1));
+  color: #fcd34d;
+  padding: 12px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.team-score {
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.team-score--winner {
+  border: 2px solid #fbbf24;
+}
+
+.team-score__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  color: #f3f4f6;
+  margin-bottom: 8px;
+  /* 2026-09-19 §20260919-辩论UI-v2 O7:长队名不挤压总分 */
+  gap: 8px;
+  min-width: 0;
+}
+
+/* O7:队名收窄截断(DebateScorePanel / DebateReplayModal 已把队名文本包进该 span) */
+.team-score__header .team-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-score__header .total {
+  font-size: 18px;
+  color: #fbbf24;
+  /* O7:总分徽标不被长队名挤压 */
+  flex-shrink: 0;
+}
+
+/* §20260831-04 — 雷达图 + 分数条并排布局(窄栏时上下堆叠) */
+.team-score__body {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.team-score__body .team-score__bars {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 1500px) {
+  .team-score__body {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* §20260831-04 — 5 维评分雷达图(DebateRadarChart) */
+.debate-radar {
+  flex-shrink: 0;
+  display: block;
+}
+
+.debate-radar__ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1;
+}
+
+.debate-radar__axis {
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1;
+}
+
+/* 填充 ≥ 45% 不透明度叠描边,保证暗底可读(§26.2 反模式 2) */
+.debate-radar__poly {
+  fill-opacity: 0.45;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.debate-radar__label {
+  fill: #d1d5db;
+  font-size: 11px;
+  user-select: none;
+}
+
+.score-bar {
+  display: grid;
+  /* 2026-09-19 §20260919-辩论UI-v2 O8:固定 100px 标签列改 minmax(0,100px),
+     维度 key 回退英文长标签时不再压进度条 */
+  grid-template-columns: minmax(0, 100px) minmax(0, 1fr) 40px;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.score-bar__label {
+  color: #d1d5db;
+  /* O8:标签超长截断 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-bar__track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.score-bar__fill {
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  height: 100%;
+  transition: width 0.3s;
+}
+
+.score-bar__value {
+  text-align: right;
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.best-debater {
+  margin-top: 12px;
+  padding: 8px;
+  background: rgba(245, 158, 11, 0.15);
+  border-radius: 6px;
+  color: #fcd34d;
+  font-size: 14px;
+  text-align: center;
+}
+
+.judge-comments {
+  margin-top: 12px;
+}
+
+.judge-comments summary {
+  cursor: pointer;
+  color: #93c5fd;
+  font-size: 13px;
+}
+
+.judge-comments ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+
+.judge-comments li {
+  padding: 8px;
+  margin-bottom: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+.judge-comments strong {
+  color: #93c5fd;
+}
+
+.judge-comments p {
+  margin: 4px 0 0;
+  color: #d1d5db;
+  font-size: 12px;
+}
+
+/* ========= 主舞台 ========= */
+
+.debate-stage {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 180px;
+}
+
+.debate-stage--loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  color: #9ca3af;
+}
+
+/* §20260831-07 — R6 报告 §3.5 修复:
+   顶部 stage-header(辩题 + phase-tag + timer)1920×1080 视口下常被
+   DebateSpeechPanel 内容挤出首屏。改为 sticky 定位 + 暗背景 + z-index,
+   保证滚动时阶段/计时始终可见。 */
+.stage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #374151;
+  margin-bottom: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #1f2937;
+  margin-top: -4px;
+  padding-top: 4px;
+}
+
+/* 2026-09-19 §辩论游戏UI修复:header-meta 限制宽度,防止长辩题挤压 DebateHostControls */
+.game-header .header-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* 2026-09-19 §20260919-辩论UI-v2 O2:删除 .game-header .topic-text{max-width:300px} 死代码
+   (特异性 0,2,0 被 debate-commentary.css 的 .debate-game-page .header-meta .topic-text
+    0,3,0 / 380px 旧规则覆盖,从未生效);380px 为唯一事实源,勿在此重复定义。 */
+
+.stage-header .topic {
+  margin: 0;
+  font-size: 18px;
+  color: #f3f4f6;
+  flex: 1;
+}
+
+.phase-info {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.phase-tag {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.timer {
+  font-family: monospace;
+  font-size: 18px;
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.current-speaker {
+  margin-top: 12px;
+}
+
+.speaker-tag {
+  color: #f3f4f6;
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.speech-content {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 14px;
+  color: #e5e7eb;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  /* 2026-09-19 §辩论游戏UI修复:限制发言内容高度,防止长发言挤出视口 */
+  max-height: 200px;
+  overflow-y: auto;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.preparation,
+.free-debate-idle,
+.result-pending {
+  text-align: center;
+  padding: 28px;
+  color: #9ca3af;
+}
+
+/* ========= 发言历史 ========= */
+
+.speech-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  color: #f3f4f6;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.speech-panel__header .toggle {
+  color: #9ca3af;
+}
+
+.speech-panel__body {
+  margin-top: 12px;
+}
+
+.phase-section {
+  margin-bottom: 8px;
+}
+
+.phase-section__header {
+  cursor: pointer;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  color: #d1d5db;
+  font-size: 13px;
+}
+
+.speech-list {
+  list-style: none;
+  padding: 8px 0;
+  margin: 0;
+}
+
+.speech-item {
+  padding: 10px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  border-left: 4px solid #4b5563;
+}
+
+.speech-item.pro,
+.speech-item.gov_upper,
+.speech-item.gov_lower {
+  border-left-color: #3b82f6;
+}
+
+.speech-item.con,
+.speech-item.opp_upper,
+.speech-item.opp_lower {
+  border-left-color: #ef4444;
+}
+
+.speech-item.neutral {
+  border-left-color: #8b5cf6;
+}
+
+.speech-item__speaker {
+  color: #93c5fd;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.speech-item__content {
+  color: #e5e7eb;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  font-size: 13px;
+  /* 2026-09-19 §20260919-辩论UI-v2 O3:长发言限高滚动,长 URL 不横向撑破复盘弹窗 */
+  max-height: 160px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+.speech-item__thought {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.speech-item__thought summary {
+  cursor: pointer;
+  color: #9ca3af;
+}
+
+.speech-item__thought div {
+  margin-top: 4px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  color: #d1d5db;
+}
+
+/* ========= Modal ========= */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-card {
+  background: #1f2937;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 640px;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid #374151;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #f3f4f6;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-body fieldset {
+  border: 1px solid #374151;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.modal-body legend {
+  padding: 0 8px;
+  color: #f3f4f6;
+  font-weight: 600;
+}
+
+.modal-body .form-row,
+.modal-body .form-grid,
+.modal-body .radio-group,
+.modal-body .checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.modal-body label {
+  color: #d1d5db;
+  font-size: 13px;
+}
+
+.modal-body input,
+.modal-body select {
+  background: #111827;
+  border: 1px solid #4b5563;
+  color: #f3f4f6;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.modal-body .info-line {
+  color: #93c5fd;
+  font-size: 13px;
+}
+
+.modal-body .form-error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #374151;
+}
+
+/* 2026-09-19 §财商流-UI修复：.btn-primary / .btn-secondary 的基础块
+   （含 :hover / :disabled 变体）已整体迁至 buttons.css ——
+   它们此前是「全站事实基础样式」而非辩论私有样式。此处不再定义 .btn* 规则。 */
+

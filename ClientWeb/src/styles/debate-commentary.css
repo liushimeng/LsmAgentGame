@@ -1,0 +1,635 @@
+/* §20260919-辩论UI-v2：本文件由 debate.css §20260919-辩论UI-v2 整段搬移而来（纯搬移，规则内容零改动）。
+ * 级联位置不变：在 globals.css 中紧跟 debate-panels.css 之后、debate-history.css 之前按序引入。
+ * 主题：§04 AI 实时解说/房主操作/点赞/折叠 + §01 大厅补齐/房主操作区 + §02 创建弹窗（原 debate.css 行 946-1566）。
+ * 拆分原因：debate.css 1894 行 > CLAUDE.md §4 的 1800 行硬上限。 */
+/* ============================================================================
+ * §20260831-04 — AI 实时解说面板 + 房主操作 + 点赞 + 阶段折叠样式
+ * ============================================================================ */
+
+/* 房主操作 */
+.debate-host-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 6px;
+}
+
+.debate-host-controls--readonly {
+  background: rgba(107, 114, 128, 0.08);
+  border-color: rgba(107, 114, 128, 0.25);
+  color: #d1d5db;
+}
+
+.debate-host-controls .host-badge {
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 2px 8px;
+  background: rgba(251, 191, 36, 0.18);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 4px;
+  color: #fde68a;
+}
+
+.debate-host-controls .host-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.debate-host-controls .host-running {
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+.debate-host-controls .host-error {
+  color: #fca5a5;
+  font-size: 0.875rem;
+  /* 2026-09-19 §20260919-辩论UI-v2 O14:长错误信息换行,不横向膨胀 header */
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+/* 按钮尺寸变体 / .btn-block / 危险按钮(解散) —— 2026-09-19 §财商流-UI修复：
+   上述 .btn-sm / .btn-block / .btn-danger* 规则已整体迁至 buttons.css
+   （它们是全站按钮变体的事实来源，非辩论私有）。此处不再定义 .btn* 规则。 */
+
+/* 点赞按钮 */
+.like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(107, 114, 128, 0.18);
+  border: 1px solid rgba(107, 114, 128, 0.4);
+  border-radius: 999px;
+  color: #e5e7eb;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.like-btn:hover {
+  background: rgba(107, 114, 128, 0.32);
+  border-color: rgba(156, 163, 175, 0.7);
+}
+
+.like-btn--active {
+  background: rgba(251, 191, 36, 0.22);
+  border-color: rgba(251, 191, 36, 0.6);
+  color: #fde68a;
+}
+
+.like-btn--sm {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+}
+
+.like-btn .like-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* 立场徽章 */
+.stance-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-left: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.stance-tag--pro,
+.stance-tag--gov_upper,
+.stance-tag--gov_lower {
+  color: #93c5fd;
+}
+
+.stance-tag--con,
+.stance-tag--opp_upper,
+.stance-tag--opp_lower {
+  color: #fca5a5;
+}
+
+.stance-tag--neutral,
+.stance-tag--angle_1,
+.stance-tag--angle_2,
+.stance-tag--angle_3,
+.stance-tag--angle_4,
+.stance-tag--angle_5 {
+  color: #c4b5fd;
+}
+
+/* AI 实时解说面板 */
+.debate-commentary {
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.debate-commentary--empty {
+  background: rgba(107, 114, 128, 0.06);
+  border-color: rgba(107, 114, 128, 0.25);
+}
+
+.debate-commentary .commentary-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.debate-commentary .commentary-icon {
+  font-size: 1rem;
+}
+
+.debate-commentary h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: #fde68a;
+  font-weight: 600;
+}
+
+.debate-commentary .commentary-style-tag {
+  margin-left: auto;
+  padding: 1px 8px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: 3px;
+  letter-spacing: 0.04em;
+}
+
+.debate-commentary .commentary-style-tag--pro {
+  background: rgba(59, 130, 246, 0.22);
+  color: #bfdbfe;
+}
+
+.debate-commentary .commentary-style-tag--fun {
+  background: rgba(236, 72, 153, 0.22);
+  color: #fbcfe8;
+}
+
+.debate-commentary .commentary-empty-text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.debate-commentary .commentary-latest {
+  padding: 8px 10px;
+  background: rgba(245, 158, 11, 0.1);
+  border-left: 3px solid #f59e0b;
+  border-radius: 4px;
+  /* 2026-09-19 §20260919-辩论UI-v2 O1:时间戳改正常文档流 —— 容器改纵向 flex,
+     不再用 position:relative + 绝对定位时间戳(长文滚动时时间戳压字/被滚出视野) */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* 2026-09-19 §辩论游戏UI修复:限制最新解说高度,防止长文字溢出 */
+  max-height: 180px;
+  overflow-y: auto;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.debate-commentary .commentary-text {
+  margin: 0;
+  color: #fef3c7;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.debate-commentary .commentary-time {
+  /* 2026-09-19 §20260919-辩论UI-v2 O1:绝对定位 → 文档流(右对齐、随内容一起滚动);
+     #9ca3af 于 #1f2937 底 ≈ 4.7:1,满足 §26.1 正文 AA ≥ 4.5:1 */
+  align-self: flex-end;
+  font-size: 11px;
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+}
+
+.debate-commentary .commentary-history {
+  margin-top: 8px;
+  font-size: 0.8125rem;
+  /* 2026-09-19 §辩论游戏UI修复:限制历史解说列表总高度 */
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.debate-commentary .commentary-history summary {
+  cursor: pointer;
+  color: #d1d5db;
+  padding: 4px 0;
+}
+
+.debate-commentary .commentary-history-item {
+  list-style: none;
+  padding: 6px 0;
+  border-top: 1px dashed rgba(245, 158, 11, 0.18);
+  /* 2026-09-19 §20260919-辩论UI-v2 O13:同 O1 改纵向 flex,时间戳进文档流 */
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: #f3f4f6;
+}
+
+.debate-commentary .commentary-history-item p {
+  margin: 0;
+  /* 2026-09-19 §20260919-辩论UI-v2 O13:删除 padding-right:64px 时间戳避让 hack
+     (只保护首行,其余行文本仍会顶到时间戳下);时间戳已进文档流,无需避让 */
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* 发言阶段分组折叠 */
+.debate-speech-panel .phase-group {
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: rgba(31, 41, 55, 0.5);
+  border: 1px solid rgba(75, 85, 99, 0.45);
+  border-radius: 6px;
+}
+
+.debate-speech-panel .phase-group[open] {
+  background: rgba(31, 41, 55, 0.85);
+  border-color: rgba(156, 163, 175, 0.55);
+}
+
+.debate-speech-panel .phase-group summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #f3f4f6;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.debate-speech-panel .phase-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.debate-speech-panel .phase-group-icon {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  width: 14px;
+  text-align: center;
+}
+
+.debate-speech-panel .phase-group-count {
+  margin-left: auto;
+  font-size: 0.8125rem;
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+.debate-speech-panel .phase-group-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.debate-speech-panel .speech-item {
+  margin: 6px 0;
+  padding: 8px 12px;
+  background: rgba(17, 24, 39, 0.5);
+  border-left: 3px solid #4b5563;
+  border-radius: 4px;
+}
+
+.debate-speech-panel .speech-item--pro,
+.debate-speech-panel .speech-item--gov_upper,
+.debate-speech-panel .speech-item--gov_lower {
+  border-left-color: #3b82f6;
+}
+
+.debate-speech-panel .speech-item--con,
+.debate-speech-panel .speech-item--opp_upper,
+.debate-speech-panel .speech-item--opp_lower {
+  border-left-color: #ef4444;
+}
+
+.debate-speech-panel .speech-item--neutral,
+.debate-speech-panel .speech-item--angle_1,
+.debate-speech-panel .speech-item--angle_2,
+.debate-speech-panel .speech-item--angle_3,
+.debate-speech-panel .speech-item--angle_4,
+.debate-speech-panel .speech-item--angle_5 {
+  border-left-color: #8b5cf6;
+}
+
+.debate-speech-panel .speech-item--question {
+  border-left-color: #f59e0b;
+}
+
+.debate-speech-panel .speech-item--answer {
+  border-left-color: #14b8a6;
+  margin-left: 16px;
+}
+
+.debate-speech-panel .speech-item-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.debate-speech-panel .speaker {
+  font-weight: 600;
+  color: #f3f4f6;
+  font-size: 0.8125rem;
+}
+
+.debate-speech-panel .speech-item-content {
+  margin: 0 0 4px;
+  color: #e5e7eb;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  /* 2026-09-19 §辩论游戏UI修复:限制单条发言高度,防止长内容撑破左栏 */
+  max-height: 160px;
+  overflow-y: auto;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.debate-speech-panel .speech-item-thought {
+  margin: 4px 0;
+  font-size: 0.75rem;
+}
+
+.debate-speech-panel .speech-item-thought summary {
+  cursor: pointer;
+  color: #d1d5db;
+  font-weight: 500;
+}
+
+.debate-speech-panel .speech-item-thought p {
+  margin: 4px 0 0;
+  padding: 4px 8px;
+  background: rgba(107, 114, 128, 0.08);
+  border-left: 2px solid #6b7280;
+  color: #d1d5db;
+  font-style: italic;
+  border-radius: 3px;
+}
+
+.debate-speech-panel .speech-item-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* 比赛结束后的快捷操作 */
+.post-game-actions {
+  margin-top: 8px;
+  padding: 10px;
+  background: rgba(31, 41, 55, 0.4);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 主舞台空挡变体 */
+.debate-stage .filling-pending,
+.debate-stage .judging-pending,
+.debate-stage .result-pending {
+  text-align: center;
+  padding: 24px 16px;
+  color: #d1d5db;
+  background: rgba(31, 41, 55, 0.5);
+  border-radius: 6px;
+  font-size: 0.9375rem;
+}
+
+/* Header 元数据 */
+.debate-game-page .game-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.debate-game-page .header-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #d1d5db;
+  font-size: 0.8125rem;
+}
+
+.debate-game-page .header-meta .topic-text {
+  font-weight: 500;
+  color: #f3f4f6;
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debate-game-page .header-meta .spectator-count {
+  padding: 2px 8px;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+}
+/* ========= §20260831-01 — 大厅页补齐样式 ========= */
+
+.debate-lobby .empty-hint {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.room-card--mine {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+}
+
+/* 2026-09-19 §财商流-UI修复：此处的 .btn-sm 已并入 buttons.css 的 .btn-sm 合并块。 */
+
+/* ========= §20260831-01 — 对局页房主操作区 ========= */
+
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  border-bottom: 1px solid #374151;
+}
+
+.game-header__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.game-header .room-id {
+  font-family: monospace;
+  font-size: 12px;
+  color: #9ca3af;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+/* ========= 创建辩论房间弹窗 (§20260831-02) ========= */
+/* 全部挂 .debate-create-modal 作用域, 不改动 .modal-card 等共享基类(§2.1 约束4) */
+
+.debate-create-modal {
+  max-width: 960px; /* 640px +50% */
+  width: 95%;
+}
+
+.debate-create-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.debate-create-body fieldset.debate-create-section {
+  margin-bottom: 12px;
+  padding: 12px 16px 14px;
+}
+
+.debate-create-body .debate-create-section legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.debate-create-body .section-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.35);
+  color: #bfdbfe; /* 对比度 ≥4.5:1 (§26) */
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* 双栏布局: ≥900px 双栏, <900px 回退单栏 */
+.debate-create-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+
+@media (max-width: 899px) {
+  .debate-create-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 单选一行控件: 按钮 + 文字不换行, 右侧扩展控件自适应拉伸 */
+.debate-create-modal .radio-option-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+
+.debate-create-modal .radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.debate-create-modal .radio-option input {
+  margin: 0;
+  accent-color: #3b82f6;
+}
+
+.debate-create-modal .debate-create-flex-input {
+  flex: 1;
+  min-width: 220px;
+}
+
+.debate-create-modal .debate-create-flex-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ② 辩论模式 2×2 网格 */
+.debate-create-modal .mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  margin-top: 4px;
+}
+
+@media (max-width: 480px) {
+  .debate-create-modal .mode-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ③ 阶段参数 */
+.debate-create-modal .preset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.debate-create-modal .preset-label {
+  white-space: nowrap;
+}
+
+.debate-create-modal .phase-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: #d1d5db;
+  font-variant-numeric: tabular-nums;
+}
+
+.debate-create-modal .phase-total {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #4b5563;
+  font-size: 13px;
+  font-weight: 600;
+  color: #93c5fd; /* 对比度 ≥4.5:1 (§26) */
+}
+
+/* ⑤ 观众设置 */
+.debate-create-modal .spectator-checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  margin-top: 4px;
+}
+
+.debate-create-modal .check-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.debate-create-modal .check-option input {
+  margin: 0;
+  accent-color: #3b82f6;
+}
+

@@ -79,7 +79,10 @@ export default function DebateScorePanel() {
               className={`team-score${isWinner ? ' team-score--winner' : ''}`}
             >
               <header className="team-score__header">
-                {isWinner ? '🥇' : '🥈'} {safeName(ts.team_name)} #{ts.rank ?? idx + 1}
+                {/* 2026-09-19 §20260919-辩论UI-v2 O7:队名包进 .team-name span 以便 CSS 截断 */}
+                <span className="team-name">
+                  {isWinner ? '🥇' : '🥈'} {safeName(ts.team_name)} #{ts.rank ?? idx + 1}
+                </span>
                 <span className="total">{(ts.total_score ?? 0).toFixed(1)}</span>
               </header>
               <div className="team-score__body">

@@ -45,6 +45,10 @@
 
 .history-topic-cell {
   max-width: 320px;
+  /* 2026-09-19 §20260919-辩论UI-v2 O11:长辩题截断,不撑宽表格横向溢出 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* §26.1 状态徽章对比度 ≥ 5:1:亮金文字 #fcd34d 于 #1f2937 面板底 ≈ 9.6:1 */
@@ -79,6 +83,10 @@
   color: #9ca3af;
   font-size: 12px;
   white-space: nowrap;
+  /* 2026-09-19 §20260919-辩论UI-v2 O11:长文本限宽截断,不撑宽表格 */
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .history-pager {
