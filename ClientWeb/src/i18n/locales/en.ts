@@ -1574,6 +1574,9 @@ const en: Dict = {
   'wealth.create.creatorPlayer': 'Seated player (random seat)',
   'wealth.create.needMinSeats': 'At least {min} seats are required to start (currently {n}) — add Agent seats or wait for players to join',
   'wealth.create.seatsOk': '{n}/{max} seats · minimum reached, the game auto-starts after creation',
+  // 2026-09-19 random & even model assignment — reshuffle + model-reuse hint.
+  'wealth.create.reshuffle': '🎲 Reshuffle',
+  'wealth.create.modelReuseHint': 'Fewer models ({n}) than AI seats ({m}); some models will be reused evenly',
   'wealth.seatsCount': '{n}/{max} seats',
   'wealth.seatsWaiting': 'Seated {n}/{min} · at least {min} seats are required to start — waiting for players…',
   'wealth.botPanel.seat': 'Seat {n}',

@@ -1574,6 +1574,9 @@ const zhCN: Dict = {
   'wealth.create.creatorPlayer': '入座玩家（座位随机）',
   'wealth.create.needMinSeats': '最少 {min} 个座位才能开局（当前 {n} 座）：请增加 Agent 座位，或等待其他玩家加入',
   'wealth.create.seatsOk': '当前 {n}/{max} 座 · 已满足最少开局座位，创建后自动开局',
+  // 2026-09-19 建房模型随机均匀分配 — 重摇 + 模型不足均匀复用提示。
+  'wealth.create.reshuffle': '🎲 重新分配',
+  'wealth.create.modelReuseHint': '模型数（{n}）少于 Agent 座位数（{m}），将按均匀原则复用部分模型',
   'wealth.seatsCount': '{n}/{max} 座',
   'wealth.seatsWaiting': '已占座 {n}/{min} · 最少 {min} 个座位才能开局，正在等待玩家加入…',
   'wealth.botPanel.seat': '{n} 号',

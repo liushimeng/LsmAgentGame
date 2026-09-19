@@ -1573,6 +1573,9 @@ const ja: Dict = {
   'wealth.create.creatorPlayer': '着席プレイヤー（席はランダム）',
   'wealth.create.needMinSeats': '開始には最少{min}席が必要です（現在{n}席）：Agent席を増やすか、他の参加をお待ちください',
   'wealth.create.seatsOk': '現在{n}/{max}席 · 最少席数を満たしています（作成後に自動開始）',
+  // 2026-09-19 モデルのランダム均等割当 — 再配分 + モデル不足時の再利用ヒント。
+  'wealth.create.reshuffle': '🎲 再配分',
+  'wealth.create.modelReuseHint': 'モデル数（{n}）がAI席数（{m}）より少ないため、一部のモデルを均等に再利用します',
   'wealth.seatsCount': '{n}/{max}席',
   'wealth.seatsWaiting': '着席{n}/{min} · 開始には最少{min}席が必要です。参加を待機中…',
   'wealth.botPanel.seat': '{n}番',

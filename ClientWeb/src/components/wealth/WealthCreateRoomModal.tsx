@@ -5,8 +5,9 @@
  *     0..N-1，创建者由后端从剩余空位中随机入座；N = 12（= 房间容量）时后端
  *     freeSeats 为空 → 创建者自动降级为观战者，即「全 Agent 房」。
  *     默认 10 个 Agent（+ 创建者 = 11 座 ≥ MinSeats=10 → 后端自动开局）。
- *     每个 Agent 座位独立选模型，模型来自 /api/llm/models；模型数 < 座位数时
- *     按 models[i % models.length] 轮询（后端 §14.2 仍会 Fisher-Yates 去重兜底）。
+ *     每个 Agent 座位独立选模型，模型来自 /api/llm/models；模型按「随机均匀
+ *     分配」（Fisher-Yates 多轮洗牌 + 相邻去重，各模型次数差 ≤ 1），支持一键
+ *     重摇，详见 lag_docs/财商流游戏/已实现/08-UI优化/05-产品设计-创建房间Agent模型随机分配与均匀去重-v1.md。
  *   - 月节拍速度（3000 / 8000 / 15000ms 预设 + 3000–30000 滑杆）
  *   - 职业卡池（curated 精选 10 卡 / docs 文档池）+ 职业卡一览
  *     （GET /api/games/wealth/professions，失败回落静态镜像，不阻塞建房）
@@ -69,6 +70,56 @@ function toDisplayCards(cards: WealthProfessionCard[]): WealthProfessionCard[] {
   }));
 }
 
+/**
+ * Fisher-Yates 洗牌，返回新数组（不改动入参）。
+ * 每次调用独立随机 —— 多次「重新分配」得到不同排列（R1 随机性）。
+ */
+function shuffle<T>(arr: readonly T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
+ * 均匀随机分配座位模型（方案文档 §3.1）：
+ * ceil(slots / models.length) 轮独立洗牌拼接 → 截断前 slots 个。
+ * - models.length ≥ slots：等价于随机排列取前 slots 个 → 座位间零重复（R2）；
+ * - models.length < slots：多轮洗牌拼接保证任意前缀中每个模型出现
+ *   floor(slots/len) 或 ceil(slots/len) 次，次数差 ≤ 1（R3 均匀）；
+ * - 相邻同模型修复：拼接边界可能出现「…A | A…」，从 i+1 起找最近的异值
+ *   元素与 out[i] 交换消除相邻重复；交换只挪位置不改各模型总次数，
+ *   均匀性保持。len == 1 时无模型可换（物理上限），保持原样；
+ * - 与后端 alternateModelsLocked（Fisher-Yates 去重兜底，CLAUDE.md §14.2）
+ *   对齐：即便客户端被绕过直发重复 key，服务端仍会随机改写重复项。
+ */
+function shuffledRoundRobinModels(models: ModelInfo[], slots: number): string[] {
+  if (models.length === 0 || slots <= 0) return [];
+  // ceil 轮洗牌拼接成候选池：任何前缀内各模型出现次数差 ≤ 1（均匀性来源）。
+  const rounds = Math.ceil(slots / models.length);
+  const pool: string[] = [];
+  for (let r = 0; r < rounds; r++) {
+    pool.push(...shuffle(models.map((m) => m.model)));
+  }
+  const out = pool.slice(0, slots);
+  // 相邻同模型修复（len >= 2 才有交换空间）：向后找第一个异值元素交换，
+  // 找不到（如尾部只剩同一模型）保持原样，交给后端 alternateModelsLocked 兜底。
+  if (models.length >= 2) {
+    for (let i = 1; i < out.length; i++) {
+      if (out[i] !== out[i - 1]) continue;
+      for (let j = i + 1; j < out.length; j++) {
+        if (out[j] !== out[i]) {
+          [out[i], out[j]] = [out[j], out[i]];
+          break;
+        }
+      }
+    }
+  }
+  return out;
+}
+
 export const WealthCreateRoomModal: React.FC<Props> = ({
   open, onClose, onSubmit, submitting = false,
 }) => {
@@ -109,13 +160,10 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
         if (cancelled) return;
         setModels(ms ?? []);
         if (ms && ms.length > 0) {
-          // 默认每个 Agent 座位轮转分配不同模型（§14.2 去重随机化后端仍会兜底）；
-          // 槽位数 = WEALTH_MAX_SEATS(12)，实际渲染按 agentCount 截取。
-          setSeatModels((prev) =>
-            prev.length === 0
-              ? Array.from({ length: WEALTH_MAX_SEATS }, (_, i) => ms[i % ms.length]?.model ?? '')
-              : prev,
-          );
+          // 每次弹窗打开、模型加载成功都整体重新随机均匀分配 12 槽位
+          // （方案文档 W1：R1 随机 —— 去掉「仅首次初始化」守卫，关闭重开
+          // 组合大概率不同；用户上次的手动改选随默认值一并重置）。
+          setSeatModels(shuffledRoundRobinModels(ms, WEALTH_MAX_SEATS));
         }
       })
       .catch((e: Error) => {
@@ -137,15 +185,13 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
 
   const busy = submitting || localSubmitting;
 
-  // 座位模型槽位固定 12 个（= 房间容量）；模型数不足时按 i % models.length 轮询。
+  // 座位模型槽位固定 12 个（= 房间容量）。模型列表仅由 listModels() 写入，
+  // 与上面 W1 的随机分配同源同步，确定性轮询补齐不再需要 —— 这里只做纯
+  // 长度对齐（截断到 12）；prev 长度已对齐时返回原引用，避免无效重渲染。
   useEffect(() => {
-    setSeatModels((prev) => {
-      const next = [...prev];
-      while (next.length < WEALTH_MAX_SEATS) {
-        next.push(models.length > 0 ? models[next.length % models.length]?.model ?? '' : '');
-      }
-      return next.slice(0, WEALTH_MAX_SEATS);
-    });
+    setSeatModels((prev) =>
+      prev.length === WEALTH_MAX_SEATS ? prev : prev.slice(0, WEALTH_MAX_SEATS),
+    );
   }, [models]);
 
   const agentSeats: AgentSeatRequest[] = useMemo(
@@ -288,32 +334,60 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
         )}
 
         {agentCount > 0 && (
-          <div className="wealth-create-form__seats">
-            {Array.from({ length: agentCount }, (_, i) => (
-              <label key={i} className="wealth-create-form__seatrow">
-                <span className="wealth-create-form__seatno">
-                  {t('wealth.create.seatNo' as TKey, { n: i + 1 })}
-                </span>
-                <select
-                  value={seatModels[i] ?? ''}
-                  onChange={(e) => {
-                    const next = [...seatModels];
-                    next[i] = e.target.value;
-                    setSeatModels(next);
-                  }}
-                  disabled={busy}
-                  data-testid={`wealth-create-seat-model-${i}`}
-                >
-                  {models.length === 0 && <option value="">{t('wealth.create.noModels' as TKey)}</option>}
-                  {models.map((m) => (
-                    <option key={m.model} value={m.model}>
-                      {m.agent_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ))}
-          </div>
+          <>
+            {/* 座位区标题行（方案文档 W3）：座位数文案 + 一键「🎲 重新分配」
+                整体重摇。内联 flex 两端对齐 + 复用 wealth-tier-btn 系列，
+                不新增 CSS 规则（规避 §26.3 JSX 拼接零 CSS 命中缺陷）；
+                结构参考狼人杀 seatblock-head，但零 import（跨游戏 import 硬禁令）。 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>
+                {t('wealth.agentSeats' as TKey)} × {agentCount}
+              </span>
+              <button
+                type="button"
+                className="wealth-tier-btn wealth-tier-btn--sm"
+                data-testid="wealth-create-reshuffle"
+                onClick={() => setSeatModels(shuffledRoundRobinModels(models, WEALTH_MAX_SEATS))}
+                disabled={busy || models.length === 0}
+              >
+                {t('wealth.create.reshuffle' as TKey)}
+              </button>
+            </div>
+            <div className="wealth-create-form__seats">
+              {Array.from({ length: agentCount }, (_, i) => (
+                <label key={i} className="wealth-create-form__seatrow">
+                  <span className="wealth-create-form__seatno">
+                    {t('wealth.create.seatNo' as TKey, { n: i + 1 })}
+                  </span>
+                  <select
+                    value={seatModels[i] ?? ''}
+                    onChange={(e) => {
+                      const next = [...seatModels];
+                      next[i] = e.target.value;
+                      setSeatModels(next);
+                    }}
+                    disabled={busy}
+                    data-testid={`wealth-create-seat-model-${i}`}
+                  >
+                    {models.length === 0 && <option value="">{t('wealth.create.noModels' as TKey)}</option>}
+                    {models.map((m) => (
+                      <option key={m.model} value={m.model}>
+                        {m.agent_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+            {/* 模型数 < Agent 座位数（方案文档附带 W4）：重复是物理约束而非
+                bug —— 前端已按均匀原则复用（次数差 ≤ 1 + 相邻去重），后端
+                alternateModelsLocked 仍会随机改写重复项兜底。 */}
+            {models.length > 0 && models.length < agentCount && (
+              <p className="wealth-create-form__hint">
+                ⚠️ {t('wealth.create.modelReuseHint' as TKey, { n: models.length, m: agentCount })}
+              </p>
+            )}
+          </>
         )}
 
         {/* 月节拍速度 */}

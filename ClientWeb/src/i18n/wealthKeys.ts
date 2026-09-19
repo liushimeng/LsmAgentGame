@@ -214,6 +214,9 @@ export interface WealthDict {
   'wealth.create.creatorPlayer': string;
   'wealth.create.needMinSeats': string;
   'wealth.create.seatsOk': string;
+  // 2026-09-19 建房模型随机均匀分配 — 一键重摇 + 模型不足复用提示。
+  'wealth.create.reshuffle': string;
+  'wealth.create.modelReuseHint': string; // {n} 模型数 {m} Agent 座位数
   'wealth.seatsCount': string; // {n} {max}
   'wealth.seatsWaiting': string; // {n} {min}
   'wealth.botPanel.seat': string;
