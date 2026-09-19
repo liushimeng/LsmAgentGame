@@ -911,38 +911,9 @@
   border-top: 1px solid #374151;
 }
 
-.btn-primary,
-.btn-secondary {
-  padding: 8px 16px;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: #ffffff;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.btn-primary:disabled {
-  background: #4b5563;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: #374151;
-  color: #f3f4f6;
-}
-
-.btn-secondary:hover {
-  background: #4b5563;
-}
+/* 2026-09-19 §财商流-UI修复：.btn-primary / .btn-secondary 的基础块
+   （含 :hover / :disabled 变体）已整体迁至 buttons.css ——
+   它们此前是「全站事实基础样式」而非辩论私有样式。此处不再定义 .btn* 规则。 */
 
 /* ============================================================================
  * §20260831-04 — AI 实时解说面板 + 房主操作 + 点赞 + 阶段折叠样式
@@ -991,32 +962,9 @@
   font-size: 0.875rem;
 }
 
-/* 按钮尺寸变体 */
-.btn-sm {
-  padding: 6px 14px;
-  font-size: 0.875rem;
-}
-
-.btn-block {
-  width: 100%;
-  padding: 10px 16px;
-  font-weight: 600;
-}
-
-/* 危险按钮(解散) */
-.btn-danger {
-  background: #dc2626;
-  color: #ffffff;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background: #b91c1c;
-}
-
-.btn-danger:disabled {
-  background: #4b5563;
-  cursor: not-allowed;
-}
+/* 按钮尺寸变体 / .btn-block / 危险按钮(解散) —— 2026-09-19 §财商流-UI修复：
+   上述 .btn-sm / .btn-block / .btn-danger* 规则已整体迁至 buttons.css
+   （它们是全站按钮变体的事实来源，非辩论私有）。此处不再定义 .btn* 规则。 */
 
 /* 点赞按钮 */
 .like-btn {
@@ -1395,10 +1343,7 @@
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
 }
 
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 13px;
-}
+/* 2026-09-19 §财商流-UI修复：此处的 .btn-sm 已并入 buttons.css 的 .btn-sm 合并块。 */
 
 /* ========= §20260831-01 — 对局页房主操作区 ========= */
 
@@ -1672,26 +1617,11 @@
 
 /* ============================================================================
    §20260831-05 — 房主操作(危险按钮)
+   2026-09-19 §财商流-UI修复：本节的 .btn-danger* 三块已整体迁至 buttons.css。
+   注意：这一组此前排在 debate.css 末尾，是**全站** .btn-danger 的实际生效值
+   （padding:4px 12px / font-size:12px），并非辩论私有样式。
+   此处不再定义 .btn* 规则。
    ============================================================================ */
-
-.btn-danger {
-  background-color: #dc2626;
-  color: #ffffff;
-  border: 1px solid #b91c1c;
-  border-radius: 4px;
-  padding: 4px 12px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background-color: #b91c1c;
-}
-
-.btn-danger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 
 .host-actions {
   display: flex;

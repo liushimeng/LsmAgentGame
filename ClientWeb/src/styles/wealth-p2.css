@@ -101,7 +101,21 @@
 /* 自己的条目：左侧金色竖条（不依赖 color，避反模式） */
 .wealth-table__row--mine { box-shadow: inset 3px 0 0 var(--wealth-accent-strong); background: rgba(212,160,23,0.06); }
 .wealth-table__row--overdue { box-shadow: inset 3px 0 0 #f87171; background: rgba(248,113,113,0.07); }
-.btn-mini {
+/* ── 小尺寸按钮变体（.btn-mini） ──
+ * 使用点仅 3 处，均在财商流内：components/wealth/InfoMarketPanel.tsx /
+ * LoanPanel.tsx / ListingPanel.tsx。
+ * 三个上下文缺一不可：
+ *   .wealth-root  = 对局页侧栏（三处使用点的实际所在）；
+ *   .wealth-lobby = 大厅页；
+ *   .app-modal    = 弹窗（经 createPortal 渲染到 body，在 .wealth-root 之外）。
+ * 为什么必须加作用域：wealth.css 里 .btn 已改写成 `.wealth-root .btn` 等
+ * (0,2,0) 特异的规则（见 wealth.css 的 F2 修复），若 .btn-mini 仍是无作用域的
+ * (0,1,0)，会被 `.wealth-root .btn` 的 padding/border-radius 反压，小尺寸变体失效；
+ * 加成 (0,2,0) 后靠 wealth-p2.css 排在 wealth.css 之后（globals.css 链尾）的顺序胜出。
+ * 2026-09-19 §财商流-UI修复。 */
+.wealth-root .btn-mini,
+.wealth-lobby .btn-mini,
+.app-modal .btn-mini {
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 6px;
@@ -111,10 +125,18 @@
   color: var(--wealth-text);
   min-height: 24px;
 }
-.btn-mini:hover { border-color: var(--wealth-accent-strong); }
-.btn-mini.btn-primary { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
-.btn-mini.btn-danger  { background: #b91c1c; border-color: #b91c1c; color: #fff; }
-.btn-mini.btn-secondary { background: #374151; border-color: #374151; color: #fff; }
+.wealth-root .btn-mini:hover,
+.wealth-lobby .btn-mini:hover,
+.app-modal .btn-mini:hover { border-color: var(--wealth-accent-strong); }
+.wealth-root .btn-mini.btn-primary,
+.wealth-lobby .btn-mini.btn-primary,
+.app-modal .btn-mini.btn-primary { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+.wealth-root .btn-mini.btn-danger,
+.wealth-lobby .btn-mini.btn-danger,
+.app-modal .btn-mini.btn-danger  { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+.wealth-root .btn-mini.btn-secondary,
+.wealth-lobby .btn-mini.btn-secondary,
+.app-modal .btn-mini.btn-secondary { background: #374151; border-color: #374151; color: #fff; }
 
 /* ── 议价弹窗 ── */
 .wealth-negotiate { display: flex; flex-direction: column; gap: 8px; }

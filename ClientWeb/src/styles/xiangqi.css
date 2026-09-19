@@ -143,58 +143,11 @@
   margin-top: 4px;
 }
 
-/* ─── Button variants ─── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: background 0.15s, border-color 0.15s;
-}
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
-}
-.btn-primary:hover:not(:disabled) {
-  background: #2563eb;
-}
-.btn-secondary {
-  background: var(--card);
-  border-color: var(--border);
-  color: var(--fg);
-}
-.btn-secondary:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-.btn-danger {
-  background: #dc2626;
-  color: #fff;
-}
-.btn-danger:hover:not(:disabled) {
-  background: #b91c1c;
-}
-.btn-ghost {
-  background: transparent;
-  color: var(--muted);
-  border-color: var(--border);
-}
-.btn-ghost:hover:not(:disabled) {
-  color: var(--fg);
-  border-color: var(--accent);
-}
-.btn-sm {
-  padding: 4px 10px;
-  font-size: 12px;
-}
+/* ─── Button variants ───
+ * 2026-09-19 §财商流-UI修复：本文件的 .btn* 块实为「全站事实基础样式」，
+ * 已整体迁出到 buttons.css（本文件不再定义任何 .btn* 规则）。
+ * 切勿在此重新定义：它会被误认为象棋私有样式而遭作用域化，
+ * 从而打断全站（RoomListTable 7 个大厅页 / ConfirmModal 20 个挂载点 / ProfilePage 等）。 */
 
 /* ─── Responsive ─── */
 @media (max-width: 768px) {

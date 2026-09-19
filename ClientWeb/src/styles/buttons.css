@@ -1,0 +1,197 @@
+/* ============================================================================
+ * buttons.css —— 全站按钮变体（.btn 系列）的**唯一事实来源**
+ *
+ * 2026-09-19 §财商流-UI修复
+ *
+ * 【为什么会有这个文件】
+ *   下列规则此前散落在两份「看起来是游戏私有」的样式表里 ——
+ *   `xiangqi.css`（提供全站唯一的 .btn 盒模型，以及 .btn-ghost）
+ *   与 `debate.css`（提供 .btn-primary / .btn-secondary / .btn-danger /
+ *   .btn-sm / .btn-block）。
+ *   它们之所以实际作用于全站，纯粹是**级联顺序的意外**：
+ *   globals.css 里 xiangqi.css 排第 3 位、debate.css 排第 76 位，
+ *   同特异度下后者压过前者；而 debate.css 又排位早于 wealth.css。
+ *   实测后果：全站 `.btn-danger` 实际生效的是 debate.css「房主解散小按钮」
+ *   那一块（padding:4px 12px / font-size:12px / border-radius:4px），
+ *   而不是 xiangqi.css 的 #dc2626 基础块 —— debate 的私有样式泄漏到了全站。
+ *
+ * 【本文件做了什么】
+ *   把「当前实际生效」的结果显式化并集中到这一处。合并规则：
+ *   ① 选择器**完全相同**的块按源顺序合并，后面的声明覆盖前面的同名属性，
+ *      其余属性全部保留（等价于 CSS 的自然级联结果）。
+ *      ⚠️ 「同名」必须按**展开到长属性之后**判定：简写属性（`border` /
+ *      `background` / `font` / `padding` / `border-radius` / `transition` 等）
+ *      视为对其**全部长属性**的覆盖，并会重置未写出的部分为初始值。
+ *      典型陷阱：`border: none` 会把 `border-color` 重置为初始值
+ *      `currentColor`（即 `color`），因此**不得**把已被该简写覆盖掉的
+ *      `border-color` 再带进合并结果 —— 否则长属性会反压前面那条简写。
+ *      本文件 `.btn-secondary` 即为此例（详见该规则上方注释）；
+ *   ② 选择器**不同**的块（例如 `.btn-secondary:hover` 与
+ *      `.btn-secondary:hover:not(:disabled)` 特异度不同）保持为两条独立规则，
+ *      绝不合并；
+ *   ③ 属性值一律沿用原声明的字面写法（保留 var(--border) / var(--accent) 等
+ *      变量引用，不替换为计算值）。
+ *   因此本文件与迁移前的级联结果**逐像素等价**（新增的 .btn-warning 与
+ *   CommitmentButton 的双横线类名笔误修正除外）。
+ *
+ * 【⚠️ 规则排列顺序：按「最后一次出现」，不是「首次出现」】
+ *   合并后每条规则的摆放位置 = 该选择器**最后一个**贡献块在源文件中的位置
+ *   （`(globals @import 序号, 行号)` 升序）。
+ *   为什么必须是「最后一次」：同一选择器的多个块被折叠成一条后，只有把合并块
+ *   放在**最后一个**块的位置，它相对其它选择器的胜负关系才与迁移前一致。
+ *   反面教材（本次已踩坑并修正）：`.btn-sm` 的**首次**出现是 `xiangqi.css:194`，
+ *   而分组规则 `.btn-primary, .btn-secondary` 首次出现在 `debate.css:913`。
+ *   若按「首次出现」排序，`.btn-sm` 会被排到分组规则**之前**，于是
+ *   `.btn-primary, .btn-secondary` 的 `padding:8px 16px / font-size:14px`
+ *   就会反压 `.btn-sm` 的 `6px 12px / 13px`，使 `.btn.btn-sm.btn-primary`
+ *   这类元素发生 `padding 6→8px / font-size 13→14px` 的可见回归。
+ *   而迁移前的真实级联是：`.btn-sm` 的**最后一次**出现是 `debate.css:1398`，
+ *   晚于 `debate.css:913` 的分组规则，所以 `.btn-sm` 才是胜出方。
+ *   新增规则（.btn-warning）按惯例追加在文件末尾。
+ *
+ * 【插入位置硬约束】
+ *   本文件在 globals.css 中的 @import **必须**紧邻 `@import './wealth.css';`
+ *   的上方（即排在 wealth.css 之前）。若排到 wealth.css 之后，同特异度的
+ *   `.btn-*:hover:not(:disabled)` 会靠源码顺序反压 `.wealth-root` /
+ *   `.wealth-lobby` / `.app-modal` 作用域下的财富按钮变体。
+ *   本次是「在既有两项之间插入一项」，既有 @import 项之间的相对次序不变
+ *   （CLAUDE.md §2.1 约束 4）。
+ *
+ * 【维护约定】
+ *   本文件建立后，`xiangqi.css` / `debate.css` **不得**再定义任何 `.btn*` 规则。
+ *   新增/修改规则时，请一并维护「最后贡献块位置」的顺序不变式。
+ * ============================================================================ */
+
+/* ─── 最后贡献块：xiangqi.css:146-158 ─── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+/* ─── 最后贡献块：xiangqi.css:159-162 ─── */
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── 最后贡献块：xiangqi.css:175-177 ─── */
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+/* ─── 最后贡献块：xiangqi.css:185-189 ─── */
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+/* ─── 最后贡献块：xiangqi.css:190-193 ─── */
+.btn-ghost:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+
+/* ─── 最后贡献块：debate.css:913-922 ─── */
+.btn-primary,
+.btn-secondary {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+
+/* ─── 合并：xiangqi.css:163-166 + debate.css:924-927；最后贡献块：debate.css:924-927 ─── */
+.btn-primary {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+/* ─── 合并：xiangqi.css:167-169 + debate.css:929-931；最后贡献块：debate.css:929-931 ─── */
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+/* ─── 最后贡献块：debate.css:933-936 ─── */
+.btn-primary:disabled {
+  background: #4b5563;
+  cursor: not-allowed;
+}
+
+/* ─── 合并：xiangqi.css:170-174 + debate.css:938-941；最后贡献块：debate.css:938-941 ───
+ * ⚠️ xiangqi.css:172 的 `border-color: var(--border)` **有意不保留**：
+ *    它被源顺序更靠后的 debate.css:913-922 分组规则的简写 `border: none` 覆盖，
+ *    `border-color` 因此被重置为初始值 `currentColor`（= 本规则的 `color`）。
+ *    若把它带进合并结果，长属性会反压排在前面的那条简写，
+ *    border-color 将变成 var(--border)，与本文件迁移前的级联结果不符。 */
+.btn-secondary {
+  background: #374151;
+  color: #f3f4f6;
+}
+
+/* ─── 最后贡献块：debate.css:943-945 ─── */
+.btn-secondary:hover {
+  background: #4b5563;
+}
+
+/* ─── 最后贡献块：debate.css:1000-1004 ─── */
+.btn-block {
+  width: 100%;
+  padding: 10px 16px;
+  font-weight: 600;
+}
+
+/* ─── 合并：xiangqi.css:194-197 + debate.css:995-998 + debate.css:1398-1401；
+ *     最后贡献块：debate.css:1398-1401（**必须**排在上一分组规则之后，见文件头 ⚠️）─── */
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* ─── 合并：xiangqi.css:178-181 + debate.css:1007-1010 + debate.css:1677-1685；
+ *     最后贡献块：debate.css:1677-1685 ─── */
+.btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+  background-color: #dc2626;
+  border: 1px solid #b91c1c;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* ─── 合并：xiangqi.css:182-184 + debate.css:1012-1014 + debate.css:1687-1689；
+ *     最后贡献块：debate.css:1687-1689 ─── */
+.btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+  background-color: #b91c1c;
+}
+
+/* ─── 合并：debate.css:1016-1019 + debate.css:1691-1694；最后贡献块：debate.css:1691-1694 ─── */
+.btn-danger:disabled {
+  background: #4b5563;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* §2026-09-19：btn-warning 此前全站无定义（4 处使用只拿到裸 .btn），补齐琥珀变体。
+ * 色值与既有 amber 徽章同源（#b45309），白字 ≈5.3:1（CLAUDE.md §26.1 徽章 ≥5:1）。
+ * 新增规则，追加在文件末尾。 */
+.btn-warning {
+  background: #b45309;
+  color: #ffffff;
+}
+.btn-warning:hover:not(:disabled) {
+  background: #92400e;
+}

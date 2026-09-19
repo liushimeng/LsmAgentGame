@@ -67,7 +67,7 @@ export function CommitmentButton({ roomId, mySeat, aliveSeats, disabled }: Commi
   return (
     <>
       <button
-        className="btn btn--secondary commitment-button"
+        className="btn btn-secondary commitment-button"
         onClick={() => setOpen(true)}
         disabled={disabled}
         title={t('werewolf.commitment.buttonTitle')}
@@ -134,14 +134,14 @@ export function CommitmentButton({ roomId, mySeat, aliveSeats, disabled }: Commi
 
             <div className="commitment-modal__actions">
               <button
-                className="btn btn--secondary"
+                className="btn btn-secondary"
                 onClick={() => setOpen(false)}
                 disabled={submitting}
               >
                 {t('common.cancel')}
               </button>
               <button
-                className="btn btn--primary"
+                className="btn btn-primary"
                 onClick={handleSubmit}
                 disabled={submitting}
               >
