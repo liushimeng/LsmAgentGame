@@ -44,6 +44,10 @@ type createRoomRequest struct {
 	// 2026-09-14 §财商流P0 — wealth 房间配置(仅 wealth 生效)。
 	// month_ms clamp [3000,30000] 由 service 层校验。
 	Wealth *service.WealthRoomOptions `json:"wealth,omitempty"`
+	// FullAgent 2026-09-19 §全Agent模式 — 是否全 Agent 模式(仅 wealth 生效)。
+	// 缺省 / true = 全 Agent 模式;false = 允许人类加入(不推荐)。
+	// 当 agent_seats >= MinSeats(10) 时自动置位,无需前端显式传递。
+	FullAgent *bool `json:"full_agent,omitempty"`
 }
 
 // RoomAPI serves the room management endpoints.
@@ -137,11 +141,16 @@ func (a *RoomAPI) Create(c *gin.Context) {
 	}
 	// BUG-WEREWOLF-P0-NEW-14: echo agent_seats_count in response so the caller
 	// can verify the server actually registered the expected number of bots.
+	fullAgent := false
+	if kind == "wealth" && len(req.AgentSeats) >= 10 {
+		fullAgent = true
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"code":    errcode.OK,
 		"message": "ok",
 		"data":    detail,
 		"agent_seats_count": len(req.AgentSeats),
+		"full_agent": fullAgent,
 	})
 }
 

@@ -237,6 +237,11 @@ export interface RoomInfo {
    * 刷新后 lobby 用此字段决定按钮是 "进入房间" / "👁 观战" / "已满"。
    */
   my_role?: string;
+  /**
+   * 2026-09-19 §全Agent模式: 是否为全 Agent 房间(仅 wealth 生效)。
+   * 全 Agent 房间人类不能加入对局,仅可以观战者身份观看。
+   */
+  full_agent?: boolean;
 }
 
 export interface RoomPlayerInfo {

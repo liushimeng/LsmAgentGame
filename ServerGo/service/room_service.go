@@ -75,6 +75,11 @@ type WealthRoomOptions struct {
 // import cycle (service → ws).
 type GameJoiner interface {
 	SyncSeat(gameKind, roomID, userID string) (started bool, err *errcode.Error)
+	// SetFullAgentMode 设置房间的全 Agent 模式标志(仅 wealth 生效;其他游戏静默忽略)。
+	// 2026-09-19 §全Agent模式 新增。
+	SetFullAgentMode(gameKind, roomID string, enabled bool) *errcode.Error
+	// IsFullAgentRoom 查询房间是否为全 Agent 模式(仅 wealth 生效;其他游戏返回 false)。
+	IsFullAgentRoom(roomID string) (bool, *errcode.Error)
 }
 
 // AgentSeater is the callback RoomService uses to register agent bot seats
@@ -643,6 +648,9 @@ type RoomInfo struct {
 	// 其余 4 款游戏本字段为 ""。R66 修复: 作为 in-memory 字段透传,不新增
 	// DB 列,不写 DB,纯内存快照。
 	Winner string `json:"winner,omitempty"`
+	// FullAgent 2026-09-19 §全Agent模式 — 是否为全 Agent 房间(仅 wealth 生效)。
+	// 全 Agent 房间人类不能加入对局,仅可以观战者身份观看。
+	FullAgent bool `json:"full_agent,omitempty"`
 }
 
 // gameKindCN maps a game-kind code to its Chinese display name, used to

@@ -102,6 +102,10 @@ type WealthRoom struct {
 	// Manager.CreateRoom 按 Manager.Config 调 SetEconomyFlags 回写)。
 	economyEnabled bool
 	surveyEnabled  bool
+	// FullAgentMode 标记该房间为全 Agent 模式（人类不能参与对局）。
+	// 2026-09-19 §全Agent模式 新增：创建时由 agent_seats 满 MinSeats 自动置位，
+	// 或前端显式请求 full_agent=true 置位。
+	FullAgentMode bool
 
 	done     chan struct{}
 	settleCh chan struct{}
@@ -159,6 +163,20 @@ func (r *WealthRoom) SetEconomyFlags(economy, survey bool) {
 	if r.World != nil {
 		r.World.EconomyEnabled = economy
 	}
+}
+// SetFullAgentMode 设置房间的全 Agent 模式标志(2026-09-19 §全Agent模式)。
+// 全 Agent 模式下人类玩家不能加入对局,仅可以观战者身份观看。
+func (r *WealthRoom) SetFullAgentMode(enabled bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.FullAgentMode = enabled
+}
+
+// IsFullAgentMode 返回房间是否为全 Agent 模式。
+func (r *WealthRoom) IsFullAgentMode() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.FullAgentMode
 }
 
 // SetHooks 注入 ws 广播钩子(房间创建后、Start 前调用一次)。
@@ -236,6 +254,10 @@ func (r *WealthRoom) JoinGame(userID, nickname string) (int, bool, *errcode.Erro
 	defer r.mu.Unlock()
 	if r.Status == StatusOver {
 		return -1, false, errcode.Code(errcode.ErrWealthNotPlaying)
+	// 2026-09-19 §全Agent模式: 全 Agent 房间拒绝人类加入
+	if r.FullAgentMode {
+		return -1, false, errcode.Code(errcode.ErrWealthFullAgentReject)
+	}
 	}
 	// 幂等。
 	for i, u := range r.Seats {

@@ -23,6 +23,9 @@ export type WealthMinskyTier = 'hedge' | 'speculative' | 'ponzi';
 export type WealthPhase = 'acting' | 'settling';
 
 export type WealthStatus = 'open' | 'playing' | 'over';
+/** 全 Agent 模式标志(2026-09-19 §全Agent模式): true = 全 Agent 房间,人类不能加入对局。 */
+export type WealthFullAgentMode = boolean;
+
 
 /** 月总收入档（《规则》§5.3）。 */
 export type WealthIncomeBand = 'low' | 'mid' | 'high' | 'top';

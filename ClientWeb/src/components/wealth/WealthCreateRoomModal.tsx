@@ -39,6 +39,8 @@ export interface WealthCreateRequest {
   month_ms: number;
   pool: 'curated' | 'docs';
   seed?: number;
+  /** 2026-09-19 §全Agent模式: 是否全 Agent 模式(默认 true)。 */
+  full_agent?: boolean;
 }
 
 interface Props {
@@ -128,7 +130,7 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
   // 2026-09-16 §财商流10–12座位：默认 10 个 Agent（+ 创建者 = 11 座 ≥ MinSeats）。
-  const [agentCount, setAgentCount] = useState(WEALTH_DEFAULT_AGENT_COUNT);
+  const [agentCount, setAgentCount] = useState(WEALTH_MAX_SEATS); // 2026-09-19 §全Agent模式: 默认全 Agent
   const [seatModels, setSeatModels] = useState<string[]>([]);
   const [monthMs, setMonthMs] = useState(8000);
   const [pool, setPool] = useState<'curated' | 'docs'>('curated');
@@ -228,6 +230,7 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
         month_ms: monthMs,
         pool,
         ...(seedNum > 0 ? { seed: seedNum } : {}),
+        full_agent: true, // 2026-09-19 §全Agent模式: 财商流游戏默认全 Agent
       });
       if (!ok) {
         // 父组件已 setErr + reportGlobalError；这里不重复上报，仅保留弹窗。

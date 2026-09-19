@@ -68,5 +68,9 @@ func (s *GameService) registerWealthAgentSeats(roomID string, seats []service.Ag
 				zap.String("room_id", roomID), zap.Error(e))
 		}
 	}
+	// 2026-09-19 §全Agent模式: bot 数量 >= MinSeats 时自动置位
+	if r.Occupied() >= wealth.MinSeats {
+		r.SetFullAgentMode(true)
+	}
 	return nil
 }

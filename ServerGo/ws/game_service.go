@@ -749,6 +749,36 @@ func (s *GameService) RemoveRoomState(roomID string) {
 	s.cleanupTexasHoldemBotRuntime(roomID)
 }
 
+// SetFullAgentMode 设置 wealth 房间的全 Agent 模式标志(2026-09-19 §全Agent模式)。
+// 非 wealth kind 静默忽略。
+func (s *GameService) SetFullAgentMode(gameKind, roomID string, enabled bool) *errcode.Error {
+	if gameKind != "wealth" {
+		return nil
+	}
+	if s.wealthMgr == nil {
+		return nil
+	}
+	r := s.wealthMgr.Get(roomID)
+	if r == nil {
+		return nil
+	}
+	r.SetFullAgentMode(enabled)
+	return nil
+}
+
+// IsFullAgentRoom 查询 wealth 房间是否为全 Agent 模式(2026-09-19 §全Agent模式)。
+// 非 wealth kind 或房间不存在返回 false。
+func (s *GameService) IsFullAgentRoom(roomID string) (bool, *errcode.Error) {
+	if s.wealthMgr == nil {
+		return false, nil
+	}
+	r := s.wealthMgr.Get(roomID)
+	if r == nil {
+		return false, nil
+	}
+	return r.IsFullAgentMode(), nil
+}
+
 // BroadcastRoomRemoved fans a single `game.removed` envelope out to every
 // player AND every spectator currently subscribed to `roomID`, then
 // detaches them from the per-room broadcast sets so the client-side WS

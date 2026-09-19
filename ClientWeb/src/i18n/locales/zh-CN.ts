@@ -90,6 +90,9 @@ const zhCN: Dict = {
   'lobby.next': '下一页',
   'lobby.join': '加入',
   'lobby.full': '已满',
+  // 2026-09-19 §全Agent模式: 全 Agent 房间标签
+  'lobby.fullAgent': '全Agent',
+  'lobby.fullAgentHint': '全 Agent 模式：人类不能参与对局，仅可观战',
   // BUG-R200-P2-05 (2026-07-30): 刷新后重新进入房间的按钮文案。
   'lobby.reenter': '进入房间',
   'lobby.copyId': '复制编号',

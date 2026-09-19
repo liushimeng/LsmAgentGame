@@ -108,6 +108,12 @@ func (s *RoomService) ListRoomsForUser(ctx context.Context, gameKind, userID str
 				info.Winner = w
 			}
 		}
+		// 2026-09-19 §全Agent模式: wealth 房间 FullAgent 标志下发
+		if r.GameKind == "wealth" && s.gameJoiner != nil {
+			if isFullAgent, e := s.gameJoiner.IsFullAgentRoom(r.ID); e == nil && isFullAgent {
+				info.FullAgent = true
+			}
+		}
 		out = append(out, info)
 	}
 	return out
@@ -718,6 +724,16 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 				zap.Int("code", e.Code),
 				zap.String("msg", e.Message))
 		}
+		// 2026-09-19 §全Agent模式: wealth 房间 agent_seats >= MinSeats(10) 时
+		// 自动标记为全 Agent 模式,人类创建者降级为观战者
+		if gameKind == "wealth" && len(agentSeats) >= 10 && s.gameJoiner != nil {
+			if e := s.gameJoiner.SetFullAgentMode(gameKind, room.ID, true); e != nil {
+				logger.L().Warn("set full agent mode failed",
+					zap.String("room_id", room.ID),
+					zap.Int("code", e.Code),
+					zap.String("msg", e.Message))
+			}
+		}
 	} else if gameKind == "texasholdem" && texasCfg != nil && texasCfg.BigBlind > 0 && s.texasHoldemConfigurer != nil {
 		// 2026-08-22 §BUG-TEXAS-ROOMCFG — 无 agent_seats 的纯人类房间:
 		// SyncSeat → JoinGame 也会读 configForLocked,同理必须在 SyncSeat 之前
@@ -801,6 +817,12 @@ func (s *RoomService) JoinRoom(roomID, userID string) (*RoomDetail, *errcode.Err
 	}
 	if room.Status != "open" {
 		return nil, errcode.Code(errcode.ErrRoomFull)
+	}
+	// 2026-09-19 §全Agent模式: wealth 全 Agent 房间拒绝人类加入
+	if room.GameKind == "wealth" && s.gameJoiner != nil {
+		if isFullAgent, e := s.gameJoiner.IsFullAgentRoom(roomID); e == nil && isFullAgent {
+			return nil, errcode.Code(errcode.ErrWealthFullAgentReject)
+		}
 	}
 
 	// Check if already in room — idempotent: return room detail for reconnecting users.
@@ -1093,6 +1115,14 @@ func (s *RoomService) GetRoomDetailForUser(ctx context.Context, roomID, userID s
 		finalStatus = status
 	}
 
+	// 2026-09-19 §全Agent模式: wealth 房间 FullAgent 标志下发
+	fullAgent := false
+	if room.GameKind == "wealth" && s.gameJoiner != nil {
+		if isFullAgent, e := s.gameJoiner.IsFullAgentRoom(roomID); e == nil && isFullAgent {
+			fullAgent = true
+		}
+	}
+
 	return &RoomDetail{
 		RoomInfo: RoomInfo{
 			ID:             room.ID,
@@ -1106,6 +1136,7 @@ func (s *RoomService) GetRoomDetailForUser(ctx context.Context, roomID, userID s
 			Phase:          phase,
 			RoundNumber:    roundNumber,
 			Winner:         winner,
+			FullAgent:      fullAgent,
 		},
 		Players:    pis,
 		Spectators: sis,

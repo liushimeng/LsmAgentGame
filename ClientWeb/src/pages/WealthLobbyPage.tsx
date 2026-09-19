@@ -89,6 +89,7 @@ export function WealthLobbyPage() {
           name: req.name,
           agent_seats: req.agent_seats,
           wealth: { month_ms: req.month_ms, pool: req.pool, ...(req.seed ? { seed: req.seed } : {}) },
+          ...(req.full_agent !== undefined ? { full_agent: req.full_agent } : {}),
         });
         // 先导航，副作用 best-effort（BUG-R229 教训）。
         if (detail.my_role === 'spectator') {
@@ -127,7 +128,11 @@ export function WealthLobbyPage() {
         nav(`/wealth/${roomId}`);
       }
     } catch (e: any) {
-      if (e.code === 30001 || e.code === 30003) {
+      if (e.code === 35013) {
+        // 2026-09-19 §全Agent模式: 全 Agent 房间拒绝人类加入,自动跳转观战
+        setMyRoles((prev) => ({ ...prev, [roomId]: 'spectator' }));
+        nav(`/wealth/spectate/${roomId}`);
+      } else if (e.code === 30001 || e.code === 30003) {
         // playing / 已满：已知角色直接走路由；未知兜底玩家路由由 GamePage 纠正。
         const known = myRoles[roomId];
         if (known === 'spectator') {

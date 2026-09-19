@@ -239,6 +239,12 @@ export function RoomListTable({
                 </td>
                 <td className="room-list-td room-list-td--name">
                   {room.name?.trim() || <span className="room-list-muted">-</span>}
+                  {/* 2026-09-19 §全Agent模式: 全 Agent 房间显示标签 */}
+                  {room.full_agent && (
+                    <span className="room-list-full-agent-badge" title={t('lobby.fullAgentHint')}>
+                      🤖 {t('lobby.fullAgent')}
+                    </span>
+                  )}
                 </td>
                 <td className="room-list-td room-list-td--created">
                   {formatTime(room.created_at)}

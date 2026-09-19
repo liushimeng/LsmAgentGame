@@ -144,6 +144,7 @@ const (
 	ErrWealthSelfTrade           = 35033 // 不可自交易(买卖双方相同)
 	ErrWealthAuctionNotFound     = 35034 // 拍卖不存在
 	ErrWealthInfoNotFound        = 35035 // 信息不存在/未成交
+	ErrWealthFullAgentReject    = 35036 // 全 Agent 房间拒绝人类加入(2026-09-19 §全Agent模式)
 	// ErrAlreadyWolfVoted: 狼人在 night_wolves 阶段已投过票(含弃权),
 	// 再次调用 wolf_kill 一律拒绝。R196 报告 P1:Bot 8 (GLM-5.2) 反复投票
 	// 15+ 次服务端仅覆盖不报错,LLM 看不到反馈陷入循环。
@@ -245,6 +246,7 @@ var DefaultMessages = map[int]string{
 	ErrWealthSelfTrade:           "wealth self-trade not allowed (buyer=seller)",
 	ErrWealthAuctionNotFound:     "wealth auction not found",
 	ErrWealthInfoNotFound:        "wealth info not found or not won",
+	ErrWealthFullAgentReject:    "wealth full-agent room rejects human join, use spectate instead",
 }
 
 // Code constructs a Coded error.

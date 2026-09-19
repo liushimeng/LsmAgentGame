@@ -89,6 +89,9 @@ const en: Dict = {
   'lobby.next': 'Next',
   'lobby.join': 'Join',
   'lobby.full': 'Full',
+  // 2026-09-19 §全Agent模式
+  'lobby.fullAgent': 'Full Agent',
+  'lobby.fullAgentHint': 'Full Agent mode: humans cannot play, spectate only',
   // BUG-R200-P2-05 (2026-07-30): re-enter room button label after refresh.
   'lobby.reenter': 'Enter',
   'lobby.copyId': 'Copy ID',

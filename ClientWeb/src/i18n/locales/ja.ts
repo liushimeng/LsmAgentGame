@@ -89,6 +89,9 @@ const ja: Dict = {
   'lobby.next': '次へ',
   'lobby.join': '参加',
   'lobby.full': '満員',
+  // 2026-09-19 §全Agent模式
+  'lobby.fullAgent': '全Agent',
+  'lobby.fullAgentHint': '全Agentモード：人間は参加不可、観戦のみ',
   // BUG-R200-P2-05 (2026-07-30): リフレッシュ後にルーム再入室ボタン。
   'lobby.reenter': '入室',
   'lobby.copyId': 'IDコピー',
