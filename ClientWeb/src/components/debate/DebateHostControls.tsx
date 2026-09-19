@@ -53,6 +53,8 @@ export default function DebateHostControls({ roomId }: Props) {
   const canStart = phase === 'filling';
 
   const handleStart = () => {
+    // 2026-09-19 §辩论游戏UI修复:防重入保护,防止快速双击重复提交
+    if (loading || disbanding) return;
     setErr('');
     setLoading(true);
     debateService

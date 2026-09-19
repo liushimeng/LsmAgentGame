@@ -237,6 +237,14 @@
   gap: 12px;
 }
 
+/* 2026-09-19 §辩论游戏UI修复:中栏子元素允许 flex 收缩,防止内容溢出 */
+.debate-stage,
+.debate-commentary,
+.debate-spectator-questions {
+  min-height: 0;
+  flex-shrink: 0;
+}
+
 /* ========= 右栏 ========= */
 
 .sidebar-right {
@@ -652,6 +660,21 @@
   padding-top: 4px;
 }
 
+/* 2026-09-19 §辩论游戏UI修复:header-meta 限制宽度,防止长辩题挤压 DebateHostControls */
+.game-header .header-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* 2026-09-19 §辩论游戏UI修复:辩题文本截断,防止换行顶出按钮 */
+.game-header .topic-text {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .stage-header .topic {
   margin: 0;
   font-size: 18px;
@@ -699,6 +722,11 @@
   color: #e5e7eb;
   line-height: 1.6;
   white-space: pre-wrap;
+  /* 2026-09-19 §辩论游戏UI修复:限制发言内容高度,防止长发言挤出视口 */
+  max-height: 200px;
+  overflow-y: auto;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .preparation,
@@ -1098,6 +1126,11 @@
   border-left: 3px solid #f59e0b;
   border-radius: 4px;
   position: relative;
+  /* 2026-09-19 §辩论游戏UI修复:限制最新解说高度,防止长文字溢出 */
+  max-height: 180px;
+  overflow-y: auto;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .debate-commentary .commentary-text {
@@ -1119,6 +1152,10 @@
 .debate-commentary .commentary-history {
   margin-top: 8px;
   font-size: 0.8125rem;
+  /* 2026-09-19 §辩论游戏UI修复:限制历史解说列表总高度 */
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .debate-commentary .commentary-history summary {
@@ -1138,6 +1175,9 @@
 .debate-commentary .commentary-history-item p {
   margin: 0;
   padding-right: 64px;
+  /* 2026-09-19 §辩论游戏UI修复:长解说文字换行保护 */
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 /* 发言阶段分组折叠 */
@@ -1245,6 +1285,11 @@
   font-size: 0.875rem;
   line-height: 1.5;
   white-space: pre-wrap;
+  /* 2026-09-19 §辩论游戏UI修复:限制单条发言高度,防止长内容撑破左栏 */
+  max-height: 160px;
+  overflow-y: auto;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .debate-speech-panel .speech-item-thought {
@@ -1550,7 +1595,8 @@
 }
 
 .spectator-questions-list {
-  max-height: 140px;
+  /* 2026-09-19 §辩论游戏UI修复:增加提问列表高度限制,防止问题堆积溢出 */
+  max-height: 200px;
   overflow-y: auto;
   margin-bottom: 8px;
 }
@@ -1581,6 +1627,9 @@
 
 .question-text {
   color: #e2e8f0;
+  /* 2026-09-19 §辩论游戏UI修复:长问题文字换行保护 */
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .question-time {

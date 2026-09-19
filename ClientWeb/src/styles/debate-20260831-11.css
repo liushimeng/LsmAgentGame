@@ -68,4 +68,9 @@
 .judge-comment__text {
   margin: 4px 0 0;
   white-space: pre-line;
+  /* 2026-09-19 §辩论游戏UI修复:限制裁判点评高度,防止长评语溢出 */
+  max-height: 120px;
+  overflow-y: auto;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
