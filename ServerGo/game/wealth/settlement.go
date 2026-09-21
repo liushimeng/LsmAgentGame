@@ -137,6 +137,16 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		w.Society = ComputeSociety(w)
 	}
 
+	// ⑨ 阶段4 政府财政月结(2026-09-21 §城市扩张v2.12;在 RecordFlowStat
+	// 之前执行,使转移支付进入本月资金流向)。内部顺序锁定(treasury.go):
+	//   ⑨A CollectMonthTax 税收汇总 → ⑨B PayTransferPayments 转移支付 →
+	//   ⑨C ExecuteFiscalSpending 财政支出 → ⑨D MonthlyBondStep 国债月度
+	//   处理 → ⑨E History 记录 + DeficitRun 更新。
+	// economy_enabled=false 完整跳过;零 rand 消费,固定种子存量对局回归一致。
+	if w.EconomyEnabled && w.Treasury != nil {
+		w.Treasury.SettleTreasuryMonth(w)
+	}
+
 	// ④.65 资金流向统计(P2 v2 §13.2.5,2026-09-19 §P2-可视化):
 	// 在 ④.6 之后立即聚合本月 Ledger,刷新 World.LastFlowStat 供 view 下发。
 	w.RecordFlowStat()

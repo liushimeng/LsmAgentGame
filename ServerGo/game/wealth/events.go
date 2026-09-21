@@ -119,6 +119,9 @@ func (w *World) BellEvents() {
 		// 生育:已婚 50%(子女 <3)。
 		if p.Family.Marital == "married" && p.Family.Children < 3 && w.Rand.Float64() < 0.50 {
 			p.Family.Children++
+			// 阶段4(2026-09-21 §城市扩张v2.12):记录生育月份 ——
+			// 儿童津贴"6 岁以下"判定口径(transfer_payment.go::childrenUnder6)。
+			p.BirthMonths = append(p.BirthMonths, w.Month)
 			p.Energy -= 3
 			p.Cognition++
 			if p.Cognition > 10 {

@@ -19,6 +19,11 @@ const (
 	// EntityFirms 企业部门(P1 §财商流P1-2):家庭消费的接收方;只收不付
 	// (工资仍由 bank 代发;企业营收回流玩家为 P2 分红)。
 	EntityFirms = "firms"
+	// EntityGovernment 国库(阶段4 2026-09-21 §城市扩张v2.12):政府财政
+	// 子系统的唯一付款方(treasury.go / fiscal_policy.go / transfer_payment.go)。
+	// 与 EntityGov 分离:gov 是 P0 既有税收归集实体(个税/社保/养老金回流);
+	// gov:treasury 是阶段4 国库 —— 只付不收(转移支付/财政直发 CatWelfare)。
+	EntityGovernment = "gov:treasury"
 )
 
 // SeatEntity 拼装座位实体 id。
@@ -76,6 +81,8 @@ const (
 	// P1-4: 商业保险(2026-09-19 §财商流P1-4 §6.1)。
 	CatPremium = "premium" // 保费(座位→保险公司)
 	CatClaim   = "claim"   // 理赔(保险公司→座位)
+	// 阶段4: 政府财政(2026-09-21 §城市扩张v2.12)。
+	CatWelfare = "welfare" // 转移支付/财政直发(gov:treasury → seat;I1 守恒走 w.Pay)
 )
 
 // Entry 单条双式流水。
@@ -96,7 +103,7 @@ type Ledger struct {
 // validEntity 实体白名单(I3)。
 func validEntity(e string) bool {
 	switch e {
-	case EntityBank, EntityMarket, EntityGov, EntityInsurer, EntityWorld, EntityFirms:
+	case EntityBank, EntityMarket, EntityGov, EntityInsurer, EntityWorld, EntityFirms, EntityGovernment:
 		return true
 	default:
 		if _, ok := IsSeatEntity(e); ok {
@@ -158,6 +165,21 @@ func validFromTo(from, to, category string) error {
 	}
 	if from == EntityGov && category != CatPension {
 		return fmt.Errorf("gov never pays out except pension (category=%s)", category)
+	}
+	// 阶段4: gov:treasury 通道(2026-09-21 §城市扩张v2.12,I3 增补):
+	//   - to=gov:treasury 恒非法(税收经 EntityGov 归集;国库现金由
+	//     TreasuryState 簿记,不经 Ledger 收款 —— 防止双重入账);
+	//   - from=gov:treasury 仅允许 → seat + CatWelfare(转移支付/财政直发)。
+	//     R4-1:gov:treasury 与央行/银行/市场/企业/保险公司/系统外之间
+	//     **不存在任何通道** —— 财政部不能向央行透支;财政采购与国债还本
+	//     付息为国库账内核算(treasury.go 头注释),不产生 Ledger 条目。
+	if to == EntityGovernment {
+		return fmt.Errorf("gov:treasury never receives via ledger (taxes flow to gov): %s → %s", from, to)
+	}
+	if from == EntityGovernment {
+		if _, ok := IsSeatEntity(to); !ok || category != CatWelfare {
+			return fmt.Errorf("gov:treasury only pays welfare to seats: %s → %s (category=%s)", from, to, category)
+		}
 	}
 	return nil
 }

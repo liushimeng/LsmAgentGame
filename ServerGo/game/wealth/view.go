@@ -47,6 +47,9 @@ type ClientGameState struct {
 	Surveys        []SurveyJSON       `json:"surveys"` // 调研契约 §5.1
 	// P2 v2(2026-09-19 §P2-可视化):本月资金流向;omitempty 保证空月份不下发。
 	FlowStat *FlowStatJSON `json:"flow_stat,omitempty"`
+	// 阶段4(2026-09-21 §城市扩张v2.12):政府财政国库快照(nil → 不下发;
+	// 阶段4 前对局/未开 economy_enabled 兼容)。
+	Treasury *TreasuryJSON `json:"treasury,omitempty"`
 	// 2026-09-21 §虚拟城市(契约 04 §1.3):城市背景层快照(resident_count>0
 	// 时非 nil;旧房/未建城 omit)。无座位隐私,观战/玩家全量可见。
 	City *city.Snapshot `json:"city,omitempty"`
@@ -101,6 +104,17 @@ type WealthLayerJSON struct {
 	TotalWealth int64   `json:"total_wealth"`
 	AvgWealth   int64   `json:"avg_wealth"`
 	WealthPct   float64 `json:"wealth_pct"` // 占总财富 0-1
+}
+
+// TreasuryJSON 是 treasury 子结构(阶段4 2026-09-21 §城市扩张v2.12;
+// 政府/观战者全量可见,无座位隐私)。
+type TreasuryJSON struct {
+	CashCNY             int64   `json:"cash_cny"`
+	BondsOutstandingCNY int64   `json:"bonds_outstanding_cny"`
+	LastMonthRevenueCNY int64   `json:"last_month_revenue_cny"`
+	LastMonthExpenseCNY int64   `json:"last_month_expense_cny"`
+	DeficitRun          int     `json:"deficit_run"`
+	PublicServiceIdx    float64 `json:"public_service_idx"`
 }
 
 // FlowStatJSON 是 cs.FlowStat 视图(P2 v2 §13.2.4)。
@@ -487,6 +501,19 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		cj.LoanQuotaFactor = world.CB.LoanQuotaFactor
 	}
 	cs.CentralBank = cj
+
+	// Treasury 子结构(阶段4 2026-09-21 §城市扩张v2.12;nil → omitempty
+	// 不下发,阶段4 前对局兼容)。
+	if world.Treasury != nil {
+		cs.Treasury = &TreasuryJSON{
+			CashCNY:             world.Treasury.Cash,
+			BondsOutstandingCNY: world.Treasury.BondsOutstanding,
+			LastMonthRevenueCNY: world.Treasury.LastMonthRevenue,
+			LastMonthExpenseCNY: world.Treasury.LastMonthExpense,
+			DeficitRun:          world.Treasury.DeficitRun,
+			PublicServiceIdx:    world.Treasury.PublicServiceIndex(),
+		}
+	}
 
 	// Players(全公开)。
 	for s, pp := range world.Players {

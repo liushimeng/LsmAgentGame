@@ -69,6 +69,7 @@ var flowCategoryMap = map[string]struct {
 	CatTax:          {FlowNodePlayer, FlowNodeGov},    // 税收
 	CatSocial:       {FlowNodePlayer, FlowNodeGov},    // 社保
 	CatPension:      {FlowNodeGov, FlowNodePlayer},    // 养老金
+	CatWelfare:      {FlowNodeGov, FlowNodePlayer},    // 阶段4 转移支付/财政直发(gov:treasury)
 	CatMortgage:     {FlowNodePlayer, FlowNodeBank},   // 房贷还款
 	CatInterest:     {FlowNodePlayer, FlowNodeBank},   // 利息
 	CatPrincipal:    {FlowNodePlayer, FlowNodeBank},   // 还本

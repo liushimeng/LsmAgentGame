@@ -183,6 +183,11 @@ type Player struct {
 	UnemployedMonths  int
 	RehireSalaryRatio float64
 
+	// 阶段4(2026-09-21 §城市扩张v2.12):政府财政子系统依赖字段
+	// (transfer_payment.go 消费)。
+	UnemployedAccumMonths int   // 终生累计失业月数(月末仍失业 +1;救济等待期/递减系数/低保门槛)
+	BirthMonths           []int // 每次生育的主钟月份(儿童津贴 6 岁以下判定;events.go 生育时追加)
+
 	SalaryBase     int64 // 当前基准月薪(年增长累积;P16 为波动带中值)
 	SalaryLow      int64 // P16 波动带下界(非波动卡 = SalaryBase)
 	SalaryHigh     int64 // P16 波动带上界

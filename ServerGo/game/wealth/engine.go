@@ -145,6 +145,10 @@ type World struct {
 	Market *MarketState
 	Ledger *Ledger
 	CB     *CentralBankState // 央行-商业银行体系(P1,nil 时回退 P0 硬编码)
+	// Treasury 政府财政国库(阶段4,2026-09-21 §城市扩张v2.12;nil 时
+	// SettleMonth 跳过财政月结)。税收汇总/转移支付/财政支出/国债簿记,
+	// 见 treasury.go;与 CB 严格隔离(R4-1 禁止央行透支)。
+	Treasury *TreasuryState
 
 	// P1: 真实经济循环(2026-09-16 §财商流P1-2)。NewWorld 恒置
 	// EconomyEnabled=true;房间层 Start 时按配置回写(§6.5 回退开关)。
@@ -197,6 +201,8 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		Market:   NewMarket(rng),
 		Ledger:   &Ledger{},
 		CB:       NewCentralBank(),
+		// 阶段4: 政府财政国库(初始现金 500 万;2026-09-21 §城市扩张v2.12)。
+		Treasury: NewTreasury(),
 		Rand:     rng,
 		startAge: MasterStartAge,
 		// P1: 真实经济循环恒开启(§6.5);economy_enabled=false 由房间层
