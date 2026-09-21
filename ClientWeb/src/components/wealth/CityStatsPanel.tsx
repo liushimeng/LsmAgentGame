@@ -4,41 +4,121 @@
  * 数据源 game.state.city（WealthCitySnapshot，view.go omitempty）：
  * resident_count=0 的旧房不下发 → 本面板整块不渲染（return null）。
  *
- * 展示分三段：
- *   ① 头部 `🏙 城市 · N 人` + 指标网格（就业率 / 收入中位数 / 居民储蓄合计 /
+ * 展示分四段：
+ *   ① 头部 `🏙 城市 · N 人`（+ 「👥 居民档案」按钮 → ResidentProfileDrawer）
+ *      + 锚定进度条（city.profiles：hydrating=done/total 进度条；
+ *      ready=✓ 已锚定 N 份真实档案；failed/idle=灰字说明 —— 档案锚定设计 §8.3）
+ *   ② 指标网格（就业率 / 收入中位数 / 居民储蓄合计 /
  *      压力率；金额千分位、率百分比 —— formatCny / formatPct 复用）
- *   ② 8 城区人口迷你条形（纯 CSS div 宽度百分比，相对最大区人口；
+ *   ③ 8 城区人口迷你条形（纯 CSS div 宽度百分比，相对最大区人口；
  *      条形用城区主色实底 ≥45% 不透明度，数值以文本显式 color 标注在条外，
  *      色盲不依赖颜色单独判读 —— CLAUDE.md §26）
- *   ③ 「居民之声」最近列表（月份 + 代号 + 一句话 + 服务模型小徽标）
+ *   ④ 「居民之声」最近列表（月份 + 姓名 + 一句话 + 服务模型小徽标；
+ *      锚定后 resident_id 非空 → 显示「姓名·职业」并可点击打开档案抽屉定位该卡）
  *
  * 样式在同名 CityStatsPanel.css（组件内直接 import， precedent：
  * ChatSettingsModal.css / WalletModal.css；不新增 globals.css 入口）。
+ * 抽屉样式在 styles/wealth-residents.css（globals.css 链尾 @import）。
  */
 
+import { useState } from 'react';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import { formatCny, formatPct, type WealthCitySnapshot } from '@/types/wealth';
+import { ResidentProfileDrawer } from '@/components/wealth/ResidentProfileDrawer';
+import './CityStatsPanel.css';
 
 interface Props {
   /** 城市背景层快照；缺省（旧房 / 尚未到达）时整面板不渲染。 */
   city?: WealthCitySnapshot | null;
+  /** 房间 ID（居民档案抽屉 REST 拉取用）。 */
+  roomId: string;
 }
 
-export function CityStatsPanel({ city }: Props) {
+export function CityStatsPanel({ city, roomId }: Props) {
   const t = useT();
+  // 档案抽屉开关 + 定位卡号（城市之声 resident_id 点击进入）。
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerCardId, setDrawerCardId] = useState<string | null>(null);
+
+  const openDrawer = (cardId: string | null) => {
+    setDrawerCardId(cardId);
+    setDrawerOpen(true);
+  };
+
   if (!city) return null;
 
   const districts = city.districts ?? [];
   const maxPop = districts.reduce((m, d) => Math.max(m, d.population || 0), 0) || 1;
   const voices = (city.voices ?? []).slice(-8).reverse();
+  const prof = city.profiles ?? null;
+  const hydratePct =
+    prof && prof.status === 'hydrating' && prof.total > 0
+      ? Math.min(100, Math.round((prof.done / prof.total) * 100))
+      : 0;
 
   return (
     <div className="wealth-citypanel" data-testid="wealth-city-panel">
-      {/* ① 头部：城市 · N 人 */}
+      {/* ① 头部：城市 · N 人 + 居民档案入口 */}
       <div className="wealth-citypanel__title">
-        🏙 {t('wealth.cityTitle' as TKey)} · {(city.resident_count || 0).toLocaleString()}
+        <span>
+          🏙 {t('wealth.cityTitle' as TKey)} · {(city.resident_count || 0).toLocaleString()}
+        </span>
+        <button
+          type="button"
+          className="wealth-citypanel__open"
+          onClick={() => openDrawer(null)}
+          aria-label={t('wealth.cityProfiles.openDrawer' as TKey)}
+          data-testid="wealth-city-open-profiles"
+        >
+          👥 {t('wealth.cityProfiles.openDrawer' as TKey)}
+        </button>
       </div>
+
+      {/* ①+ 锚定进度条（档案锚定设计 §8.3；city.profiles 缺省=旧房不渲染） */}
+      {prof && (
+        <div
+          className={`wealth-citypanel__anchor wealth-citypanel__anchor--${prof.status}`}
+          title={t('wealth.cityProfiles.title' as TKey)}
+          data-testid="wealth-city-anchor"
+        >
+          {prof.status === 'hydrating' ? (
+            <>
+              <span className="wealth-citypanel__anchor-text">
+                {t('wealth.cityProfiles.anchorProgress' as TKey, {
+                  done: prof.done,
+                  total: prof.total,
+                  pool: prof.pool_size,
+                })}
+              </span>
+              <span
+                className="wealth-citypanel__anchor-bar"
+                role="progressbar"
+                aria-valuenow={hydratePct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <span
+                  className="wealth-citypanel__anchor-fill"
+                  style={{ width: `${hydratePct}%` }}
+                  aria-hidden="true"
+                />
+              </span>
+              <span className="wealth-citypanel__anchor-pct">{hydratePct}%</span>
+            </>
+          ) : prof.status === 'ready' ? (
+            <span className="wealth-citypanel__anchor-text wealth-citypanel__anchor-text--ready">
+              ✓ {t('wealth.cityProfiles.anchorReady' as TKey, { n: prof.anchored })}
+            </span>
+          ) : (
+            <span className="wealth-citypanel__anchor-text">
+              {prof.status === 'failed'
+                ? t('wealth.cityProfiles.anchorFailed' as TKey)
+                : t('wealth.cityProfiles.anchorIdle' as TKey)}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* 指标网格：就业率 / 收入中位数 / 居民储蓄合计 / 压力率 */}
       <div className="wealth-citypanel__stats">
@@ -104,7 +184,21 @@ export function CityStatsPanel({ city }: Props) {
                 <span className="wealth-citypanel__voice-month">
                   {t('wealth.cityVoiceOfMonth' as TKey, { month: v.month })}
                 </span>
-                <span className="wealth-citypanel__voice-name">{v.name}</span>
+                {/* 锚定后 resident_id 非空 → 「姓名·职业」可点击打开档案抽屉定位该卡 */}
+                {v.resident_id ? (
+                  <button
+                    type="button"
+                    className="wealth-citypanel__voice-name wealth-citypanel__voice-name--link"
+                    onClick={() => openDrawer(v.resident_id ?? null)}
+                    title={t('wealth.residentDrawer.voiceOf' as TKey, { name: v.name })}
+                    data-testid={`wealth-city-voice-link-${i}`}
+                  >
+                    {v.name}
+                    {v.occupation ? `·${v.occupation}` : ''}
+                  </button>
+                ) : (
+                  <span className="wealth-citypanel__voice-name">{v.name}</span>
+                )}
                 {v.model && (
                   <span className="wealth-citypanel__voice-model" title={v.model}>
                     🤖 {v.model}
@@ -116,6 +210,19 @@ export function CityStatsPanel({ city }: Props) {
           ))}
         </div>
       )}
+
+      {/* 居民档案抽屉（fixed 覆盖层，挂载点不影响布局；观战/玩家同可见）。
+          key=定位卡号：切换定位卡 / 重新打开时整体重挂载，state 归零。 */}
+      <ResidentProfileDrawer
+        key={drawerCardId ?? 'all'}
+        open={drawerOpen}
+        roomId={roomId}
+        focusCardId={drawerCardId}
+        onClose={() => {
+          setDrawerOpen(false);
+          setDrawerCardId(null);
+        }}
+      />
     </div>
   );
 }

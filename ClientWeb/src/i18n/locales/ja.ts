@@ -1,6 +1,7 @@
 import type { Dict } from '../types';
 import wealthP2 from './wealthP2-ja';
 import wealthInsurance from './wealthInsurance-ja';
+import wealthResidents from './wealthResidents-ja';
 
 // 日本語 — ja
 const ja: Dict = {
@@ -1386,7 +1387,7 @@ const ja: Dict = {
   'wealth.monthMs.slow': '15s 低速',
   'wealth.pool': '職業カードプール',
   'wealth.pool.curated': '精選10枚',
-  'wealth.pool.docs': '文書プール',
+  'wealth.pool.docs': '文書プール（10 万人物カード）',
   'wealth.pool.cards': '職業カード一覧',
   'wealth.pool.stats': '文書プール全{total}枚・索引済み{indexed}枚',
   'wealth.pool.indexing': '文書プール索引を構築中（初回 docs プール建房後に生成）…',
@@ -1585,7 +1586,7 @@ const ja: Dict = {
   'wealth.create.modelReuseHint': 'モデル数（{n}）がAI席数（{m}）より少ないため、一部のモデルを均等に再利用します',
   // ── §20260921 ルーム作成デカップリング + 都市背景レイヤ（契約 04 §3）──
   'wealth.residentCount': '都市住民数',
-  'wealth.residentCountHint': '住民は 10 万枚の職業カードから生成され、背景住民は月ごとにシミュレーションされます',
+  'wealth.residentCountHint': '各住民は 10 万枚の人物カード知識ベースから専用プロファイルを自動ロードし、月ごとにシミュレーションされます',
   'wealth.linePoolInfo': 'LLM ラインプール：{n} ライン（Agent 同時実行数）',
   'wealth.linePoolEmpty': '利用可能な LLM ラインがありません。先にモデル管理で設定してください',
   'wealth.cityTitle': '都市',
@@ -1703,6 +1704,9 @@ const ja: Dict = {
 
   // ── P1-4 商業保険を wealthInsurance-ja.ts に分割（≤1800 行制約）──
   ...wealthInsurance,
+
+  // ── 住民人物カードプロファイル固定を wealthResidents-ja.ts に分割（≤1800 行制約）──
+  ...wealthResidents,
 
   // ── P1 ミンスキーエンジン + LPR リプライシング + 早期返済 ──
   'minsky.title': 'ミンスキー融資状態',

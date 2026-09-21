@@ -359,8 +359,9 @@ export function WealthGamePage() {
           {gameState && !spectator && gameState.my_seat < 0 && (
             <div className="wealth-join-hint">{t('wealth.joinHint' as TKey)}</div>
           )}
-          {/* §20260921 城市背景层 — city 缺省（旧房）时整面板不渲染 */}
-          <CityStatsPanel city={gameState?.city} />
+          {/* §20260921 城市背景层 — city 缺省（旧房）时整面板不渲染；
+              roomId 供居民档案抽屉（档案锚定设计 §8.3）拉取 REST。 */}
+          <CityStatsPanel city={gameState?.city} roomId={roomId} />
           <WealthBotPanel
             botContexts={gameState?.bot_contexts ?? []}
             players={gameState?.players ?? []}

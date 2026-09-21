@@ -61,6 +61,18 @@ type Backdrop struct {
 	month     int           // 已 tick 月数(b.month%12==0 时全员 +1 岁)
 	voices    []VoiceRecord // 环形缓冲(最近 voicesRingCap 条)
 	voiceRng  *rand.Rand    // 城市之声抽样专用(与经济演化 rng 流分离)
+
+	// ── 2026-09-21 §档案锚定(契约 §4)──
+	// profiles 与 residents 同长;未锚定位保持零值,有效范围为前 profAnchored
+	// 个(锚定是一次性前缀热替换:池不足时只锚定前 len(cards) 名)。
+	// profDone/profTotal/profPoolSize 为锚定流水线进度(mu 内读写即可,无需
+	// atomic —— 编排 goroutine 回写与 Snapshot 读取频率都极低)。
+	profiles     []ResidentProfile
+	profStatus   int // ProfIdle | ProfHydrating | ProfReady | ProfFailed
+	profDone     int // 已水合张数(进度)
+	profTotal    int // 本轮水合总数
+	profPoolSize int // 文档池索引总数(展示「卡池 10 万」)
+	profAnchored int // 已锚定居民数(前缀长度)
 }
 
 // NewBackdrop 确定性合成 n 名背景居民(契约 03 §4.2)。
@@ -231,6 +243,9 @@ type Snapshot struct {
 	StressedRate   float64       `json:"stressed_rate"`
 	Districts      []DistrictPop `json:"districts"`        // [{id,name,population}]
 	Voices         []VoiceRecord `json:"voices,omitempty"` // 最近 20 条城市之声
+	// Profiles 档案锚定进度(2026-09-21 §档案锚定契约 §4;从未启动锚定的
+	// 房间(nil/纯合成)恒 nil → omitempty 不下发,前端向后兼容)。
+	Profiles *ProfileProgress `json:"profiles,omitempty"`
 }
 
 // Snapshot 聚合快照(契约 03 §4.4;锁内计算,纯函数视图)。
@@ -285,6 +300,12 @@ func (b *Backdrop) Snapshot() Snapshot {
 	}
 	if len(b.voices) > 0 {
 		s.Voices = append([]VoiceRecord(nil), b.voices...)
+	}
+	// 2026-09-21 §档案锚定(契约 §4):锚定流水线被启动过(非 idle)或已有
+	// 进度时随快照下发;纯合成房(从未启动)不下发该块。
+	if b.profStatus != ProfIdle || b.profTotal > 0 {
+		pp := b.profileProgressLocked()
+		s.Profiles = &pp
 	}
 	return s
 }
@@ -362,6 +383,17 @@ type residentBrief struct {
 	Stressed     bool
 	SavingsCNY   float64
 	MonthsRunway float64 // 储蓄可支撑月数(savings/expense)
+
+	// ── 2026-09-21 §档案锚定(契约 §6):锚定后增补的真实档案字段。
+	// 未锚定居民全零值(CardID=="" 即 voice.go 的「未锚定」判定信号),
+	// 城市之声回退代号语义,零行为变化。
+	CardID      string
+	Name        string
+	Occupation  string
+	Personality string
+	OpeningHook string
+	Goal        string
+	Age         int
 }
 
 // briefLocked 锁内取单居民摘要。
@@ -387,11 +419,24 @@ func (b *Backdrop) briefLocked(idx int) (residentBrief, bool) {
 	if r.expense > 0 {
 		br.MonthsRunway = float64(r.savings) / float64(r.expense)
 	}
+	// 档案锚定字段(前 profAnchored 个居民已锚定;同一把锁内直读 profiles,
+	// 城市之声 prompt 由此拿到真实姓名/职业/人格)。
+	if idx < b.profAnchored && idx < len(b.profiles) {
+		p := &b.profiles[idx]
+		br.CardID = p.CardID
+		br.Name = p.Name
+		br.Occupation = p.Occupation
+		br.Personality = p.Personality
+		br.OpeningHook = p.OpeningHook
+		br.Goal = p.Goal
+		br.Age = p.Age
+	}
 	return br, true
 }
 
-// codenameLocked 居民代号 `<域字母><序号>·<城区>`(契约 03 §5:背景居民
-// 不解析真实姓名卡,真实姓名只属于焦点座位)。
+// codenameLocked 居民代号 `<域字母><序号>·<城区>`(契约 03 §5:未锚定的
+// 背景居民无真实姓名卡,用代号;已锚定居民由 voice.go 改用档案真实姓名,
+// 代号仅作回退)。
 func (b *Backdrop) codenameLocked(idx int) string {
 	letter := byte('U')
 	if idx >= 0 && idx < len(b.residents) {

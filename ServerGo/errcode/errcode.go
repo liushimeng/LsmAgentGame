@@ -152,6 +152,11 @@ const (
 	ErrWealthInsuranceNotFound    = 35039 // 退保/操作时无有效保单
 	ErrWealthInsuranceAgeGate     = 35040 // 主时钟年龄 > 55 禁止新投保
 	ErrWealthInsuranceDisabled    = 35041 // insurance_enabled=false 引擎关闭
+	// ErrWealthResidentNotFound: 居民人物卡档案不存在(未锚定/卡号未命中)。
+	// 2026-09-21 §档案锚定契约 §7。注:契约原文写 35013,该码已被
+	// ErrLoanNotFound(提前还款)占用,顺延取本段首个空闲码 35042 ——
+	// 前端契约以 errcode 常量为准。
+	ErrWealthResidentNotFound = 35042
 	// ErrAlreadyWolfVoted: 狼人在 night_wolves 阶段已投过票(含弃权),
 	// 再次调用 wolf_kill 一律拒绝。R196 报告 P1:Bot 8 (GLM-5.2) 反复投票
 	// 15+ 次服务端仅覆盖不报错,LLM 看不到反馈陷入循环。
@@ -260,6 +265,8 @@ var DefaultMessages = map[int]string{
 	ErrWealthInsuranceNotFound:    "wealth no active policy for this kind",
 	ErrWealthInsuranceAgeGate:     "wealth insurance purchase not allowed above age 55",
 	ErrWealthInsuranceDisabled:    "wealth insurance engine disabled by config",
+	// 35042 — 虚拟城市居民人物卡档案(2026-09-21 §档案锚定契约 §7)。
+	ErrWealthResidentNotFound: "居民档案不存在",
 }
 
 // Code constructs a Coded error.

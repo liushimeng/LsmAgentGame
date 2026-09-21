@@ -9,13 +9,16 @@ package wealth
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"LsmAgentGame/game/wealth/city"
 	"LsmAgentGame/game/wealth/profession"
 	"LsmAgentGame/llm"
 	llmtypes "LsmAgentGame/llm/types"
@@ -460,5 +463,154 @@ func TestManager_ApplyRoomOptions_ResidentCount(t *testing.T) {
 	r2 := m.CreateRoom("room-rc-neg")
 	if r2.ResidentCount != 0 {
 		t.Fatalf("negative resident_count must clamp to 0, got %d", r2.ResidentCount)
+	}
+}
+
+// ── 2026-09-21 §档案锚定(契约 §5/§12):Start 后台锚定流水线接线 ──
+
+// writeAnchorFixture 造 n 张最小可解析人物卡(docs 池;L1 域目录 Q-)。
+func writeAnchorFixture(t *testing.T, n int) string {
+	t.Helper()
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "Q-金融与保险")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	for i := 0; i < n; i++ {
+		md := fmt.Sprintf(`---
+id: A%04d
+name: 锚定居民%04d
+occupation: 锚定测试职业%02d
+income_monthly: %d
+monthly_expense: 4000
+savings_stock: 30000
+age: %d
+work_intensity: 中
+health_grade: A
+risk_preference: balanced
+marital: 单身
+personality: ["务实主义","尽责坚韧"]
+opening_hook: 我是锚定流水线端到端测试居民,验证建房后档案自动加载链路。
+goals_short: ["5 年内把储蓄翻一番"]
+housing_city: 一线城市
+employment_type: 全职
+---
+正文略`, 5000+i, i, i%30, 6000+100*i, 25+i%30)
+		path := filepath.Join(sub, fmt.Sprintf("A%04d.md", i))
+		if err := os.WriteFile(path, []byte(md), 0o644); err != nil {
+			t.Fatalf("write %s: %v", path, err)
+		}
+	}
+	return dir
+}
+
+// TestStart_AnchorCityProfiles(契约 §5):docs 房 Start 后台锚定 → 进度 ready、
+// 档案可查(姓名非空 + source_file 指向真实相对路径)、Snapshot.profiles 下发、
+// 终态 city_profiles 事件发出。
+func TestStart_AnchorCityProfiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("-short: 跳过锚定流水线接线")
+	}
+	const poolN, residents = 12, 6
+	dir := writeAnchorFixture(t, poolN)
+	m := NewManager(Config{MonthMs: 3000, PoolDefault: "docs", Seed: 314}, nil)
+	m.SetLoader(profession.NewLoader(dir))
+	r := m.CreateRoom("room-anchor")
+	botUsers := make(map[int]string, 12)
+	for seat := 0; seat < 12; seat++ {
+		botUsers[seat] = "b" + string(rune('a'+seat))
+	}
+	r.RegisterBotSeats(botUsers, nil, nil)
+	r.SetResidentCount(residents)
+	events := make(chan EventRecord, 16)
+	r.SetHooks(BroadcastHooks{OnEvent: func(_ string, ev EventRecord) {
+		select {
+		case events <- ev:
+		default:
+		}
+	}})
+	if e := r.Start(m.loader); e != nil {
+		t.Fatalf("start: %v", e)
+	}
+	// 轮询锚定终态(后台 goroutine;fixture 极小,亚秒完成,上限 10s)。
+	deadline := time.Now().Add(10 * time.Second)
+	var page []city.ResidentProfile
+	var matched int
+	var prog city.ProfileProgress
+	for time.Now().Before(deadline) {
+		page, matched, prog = r.CityProfilePage(0, 50, "")
+		if prog.Status == "ready" {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if prog.Status != "ready" {
+		t.Fatalf("anchor did not reach ready: %+v", prog)
+	}
+	if prog.Anchored != residents || prog.Total != residents || prog.PoolSize != poolN {
+		t.Fatalf("progress drifted: %+v (want anchored/total=%d pool=%d)", prog, residents, poolN)
+	}
+	if matched != residents || len(page) != residents {
+		t.Fatalf("page = %d matched = %d, want %d", len(page), matched, residents)
+	}
+	for _, p := range page {
+		if p.Name == "" {
+			t.Fatalf("anchored profile %s has empty name (真实档案姓名必须非空)", p.CardID)
+		}
+		if p.SourceFile == "" || !strings.HasSuffix(p.SourceFile, ".md") {
+			t.Fatalf("anchored profile %s source_file = %q, want relative md path", p.CardID, p.SourceFile)
+		}
+		if p.Occupation == "" || p.DomainName != "Q-金融与保险" {
+			t.Fatalf("anchored profile %s occupation/domain drifted: %+v", p.CardID, p)
+		}
+	}
+	// Snapshot.profiles 透出(view 路径)。
+	snap := r.CitySnapshotView()
+	if snap == nil || snap.Profiles == nil || snap.Profiles.Status != "ready" || snap.Profiles.Anchored != residents {
+		t.Fatalf("snapshot profiles = %+v, want ready/%d", snap.Profiles, residents)
+	}
+	// 终态 city_profiles 事件(锁外 BroadcastHooks)。
+	evDeadline := time.Now().Add(5 * time.Second)
+	found := false
+	for time.Now().Before(evDeadline) && !found {
+		select {
+		case ev := <-events:
+			if ev.Type == "city_profiles" {
+				if ev.Seat != -1 || !strings.Contains(ev.Text, fmt.Sprintf("%d/%d", residents, residents)) {
+					t.Fatalf("bad city_profiles event: %+v", ev)
+				}
+				found = true
+			}
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	if !found {
+		t.Fatal("city_profiles event not emitted")
+	}
+}
+
+// TestStart_CuratedRoomNeverAnchors(契约 §10):pool=curated / 纯合成房不启动
+// 锚定 —— profiles 恒 idle 且 Snapshot 不下发 profiles 块(向后兼容)。
+func TestStart_CuratedRoomNeverAnchors(t *testing.T) {
+	dir := writeAnchorFixture(t, 4)
+	m := NewManager(Config{MonthMs: 3000, PoolDefault: "curated", Seed: 271}, nil)
+	m.SetLoader(profession.NewLoader(dir)) // loader 注入但 pool=curated → 不锚定
+	r := m.CreateRoom("room-anchor-curated")
+	botUsers := make(map[int]string, 12)
+	for seat := 0; seat < 12; seat++ {
+		botUsers[seat] = "b" + string(rune('a'+seat))
+	}
+	r.RegisterBotSeats(botUsers, nil, nil)
+	r.SetResidentCount(4)
+	if e := r.Start(m.loader); e != nil {
+		t.Fatalf("start: %v", e)
+	}
+	time.Sleep(200 * time.Millisecond) // 若误启动锚定,给它暴露机会
+	_, _, prog := r.CityProfilePage(0, 10, "")
+	if prog.Status != "idle" {
+		t.Fatalf("curated room must stay idle, got %+v", prog)
+	}
+	if snap := r.CitySnapshotView(); snap != nil && snap.Profiles != nil {
+		t.Fatalf("curated room must omit snapshot profiles block, got %+v", snap.Profiles)
 	}
 }

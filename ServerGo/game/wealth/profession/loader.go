@@ -1,6 +1,9 @@
 // Package profession — loader.go: 文档池懒加载器(P0 v1,2026-09-14 §财商流P0)。
 //
 // 契约: lag_docs/虚拟城市/已实现/03-Agent设计/虚拟城市-职业卡与加载器设计-v1.md §3。
+// 池规模动态化(2026-09-21 §档案锚定 §3):人物卡总数以 PoolSize() 实测为准
+// —— 2026-09-21 实测 100,267 张;早期设计文档里的「75,115 张 / 75k」为设计期
+// 静态数字,已过时,注释一律不再引用固定值。
 // 三段式:
 //   - 阶段 0(NewLoader):不读盘,仅记录根路径 + sync.Once。
 //   - 阶段 1(buildIndex):首次抽卡 / HTTP professions 触发;walk 收集 *.md 相对
@@ -180,7 +183,8 @@ func (l *Loader) PoolInfo() (available bool, total, indexed, parseFail int) {
 
 // ForceIndex 显式触发阶段 1(HTTP professions / 首次抽卡共用)。
 // 索引完成后**同步**跑一次 200 张采样自检(200 张 + parseFile ≈30–60ms,远
-// 小于 buildIndex walk 75k 卡的 ≈1s;同步避免 t.TempDir() 测试清理与 goroutine
+// 小于 buildIndex walk 全池的 2~6s(以 PoolSize() 实测为准,2026-09-21 实测
+// 100,267 张);同步避免 t.TempDir() 测试清理与 goroutine
 // 争用导致「目录已删」误报,失败判定走 selfCheckMinSuccessRate,日志留前 5
 // 条原因于 PoolSelfCheck.FirstErrors —— 2026-09-16 §文档池解析修复)。
 func (l *Loader) ForceIndex() {

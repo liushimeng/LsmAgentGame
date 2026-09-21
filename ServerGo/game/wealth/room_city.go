@@ -20,6 +20,7 @@ import (
 	"runtime/debug"
 
 	"LsmAgentGame/game/wealth/city"
+	"LsmAgentGame/game/wealth/profession"
 	"LsmAgentGame/llm"
 	"LsmAgentGame/logger"
 
@@ -29,6 +30,11 @@ import (
 // citySeedSalt 城市 rng 派生盐:城市演化流 = seed ^ salt,与引擎 rng
 // (NewWorld(seed))流完全分离,互不扰动确定性。
 const citySeedSalt int64 = -7046029254386353131 // 0x9E3779B97F4A7C15 的 int64 表示
+
+// cityProfileSeedSalt 档案锚定 rng 派生盐(2026-09-21 §档案锚定契约 §5:
+// rng2 独立流,与合成/演化/voice 流分离 → 同 seed 同路径集 → 同档案)。
+// 取 ASCII "CITYPF" 的 int64 编码,与 citySeedSalt 无碰撞。
+const cityProfileSeedSalt int64 = 0x4349545950524F46
 
 // defaultCityCPI 引擎查不到月环比通胀时的缺省(契约 03 §6:0.002)。
 const defaultCityCPI = 0.002
@@ -85,6 +91,122 @@ func (r *WealthRoom) startCityLocked() {
 		zap.Int("residents", r.ResidentCount),
 		zap.Int64("seed", r.seed),
 		zap.Int("pool_lines", poolLines))
+	// 2026-09-21 §档案锚定(契约 §5):pool=docs 且文档池注入时,后台异步把
+	// 人物卡档案锚定到居民(不阻塞开局/月结,期间合成数值兜底)。锁纪律:
+	// Start(锁内)在此把全部入参拷贝进 goroutine 参数(§11:goroutine 不读
+	// r.mu 保护的可变字段);goroutine 只拿 Backdrop.mu,绝不触碰 r.mu(§92a)。
+	if r.pool == "docs" && r.docLoader != nil {
+		loader, n, seed, b := r.docLoader, r.ResidentCount, r.seed, r.City
+		go r.anchorCityProfiles(b, loader, n, seed)
+	}
+}
+
+// anchorCityProfiles 档案锚定流水线(后台 goroutine 锁外执行;契约 §5)。
+// 1. DrawPaths 抽 n 条不重复路径(零 IO)→ 2. 置 hydrating 进度 →
+// 3. HydrateBatch 并行水合(进度每 512 张经 SetProfileProgress 回写,随
+// Snapshot 自然下发,无额外广播)→ 4. AnchorProfiles 一次性热替换 →
+// 5. Info 日志 + 终态 city_profiles 事件(BroadcastHooks 锁外)。
+func (r *WealthRoom) anchorCityProfiles(b *city.Backdrop, loader *profession.Loader, n int, seed int64) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.L().Error("wealth city profile anchor panic recovered",
+				zap.String("room_id", r.RoomID),
+				zap.Any("panic", rec),
+				zap.String("stack", string(debug.Stack())))
+		}
+	}()
+	if b == nil || loader == nil || n <= 0 {
+		return
+	}
+	rng2 := rand.New(rand.NewSource(seed ^ cityProfileSeedSalt))
+	paths := loader.DrawPaths(n, rng2)
+	poolSize := loader.PoolSize()
+	if len(paths) == 0 {
+		// 根目录缺失/索引空:failed + 合成兜底(契约 §10),REST progress
+		// 如实披露,终态事件照发(前端灰字提示)。
+		b.SetProfileProgress(city.ProfFailed, 0, 0, poolSize)
+		logger.L().Warn("wealth city profile anchor failed: docs pool empty",
+			zap.String("room_id", r.RoomID),
+			zap.String("pool_root", loader.Root()),
+			zap.Int("residents", n))
+		r.emitCityProfilesEvent(0, 0, false)
+		return
+	}
+	b.SetProfileProgress(city.ProfHydrating, 0, len(paths), poolSize)
+	cards, failed := loader.HydrateBatch(paths, 0, func(done, total int) {
+		b.SetProfileProgress(city.ProfHydrating, done, total, poolSize)
+	})
+	// 成功路径集 = paths − failed(与 cards 按序一一对应,供 SourceFile 审计)。
+	successPaths := paths
+	if len(failed) > 0 {
+		bad := make(map[string]struct{}, len(failed))
+		for _, p := range failed {
+			bad[p] = struct{}{}
+		}
+		successPaths = make([]string, 0, len(cards))
+		for _, p := range paths {
+			if _, isBad := bad[p]; !isBad {
+				successPaths = append(successPaths, p)
+			}
+		}
+	}
+	anchored := b.AnchorProfiles(cards, successPaths)
+	b.SetProfileProgress(city.ProfReady, len(paths), len(paths), poolSize)
+	logger.L().Info("wealth city profiles anchored",
+		zap.String("room_id", r.RoomID),
+		zap.Int("anchored", anchored),
+		zap.Int("hydrated", len(paths)),
+		zap.Int("parse_failed", len(failed)),
+		zap.Int("pool_size", poolSize),
+		zap.Int64("seed", seed))
+	r.emitCityProfilesEvent(anchored, len(paths), true)
+}
+
+// emitCityProfilesEvent 档案锚定终态事件(契约 §5:仅终态发一条)。追加在
+// 锁内、BroadcastHooks 回调在锁外(§92a,与 emitCityVoiceEvent 同款)。
+// 进度明细经 game.state.city.profiles 下发,事件 Text 只携带人类可读摘要。
+func (r *WealthRoom) emitCityProfilesEvent(anchored, total int, ok bool) {
+	text := fmt.Sprintf("城市人物档案锚定完成 %d/%d", anchored, total)
+	if !ok {
+		text = "城市人物档案锚定失败,居民数值走合成兜底"
+	}
+	r.mu.Lock()
+	inGame := !r.closed && r.Status == StatusPlaying && r.World != nil
+	var ev EventRecord
+	if inGame {
+		ev = EventRecord{Month: r.World.Month, Type: EventCityProfiles, Seat: -1, Text: text}
+		r.World.Events = append(r.World.Events, ev)
+	}
+	hooks := r.hooks
+	roomID := r.RoomID
+	r.mu.Unlock()
+	if inGame && hooks.OnEvent != nil {
+		hooks.OnEvent(roomID, ev)
+	}
+}
+
+// CityProfilePage 分页居民档案(2026-09-21 §档案锚定契约 §7 REST 薄代理)。
+// 先短锁取 City 指针,查询在 r.mu 锁外执行(Backdrop 自带互斥)—— 10 万级
+// 线性扫绝不持 r.mu;未建城返回 idle 空页(不算错误)。
+func (r *WealthRoom) CityProfilePage(offset, limit int, q string) ([]city.ResidentProfile, int, city.ProfileProgress) {
+	r.mu.Lock()
+	b := r.City
+	r.mu.Unlock()
+	if b == nil {
+		return nil, 0, city.ProfileProgress{Status: "idle"}
+	}
+	return b.ProfilesPage(offset, limit, q)
+}
+
+// CityProfileOf 按人物卡编号查单份档案(§7;未建城/未锚定/卡号未命中 → false)。
+func (r *WealthRoom) CityProfileOf(cardID string) (city.ResidentProfile, bool) {
+	r.mu.Lock()
+	b := r.City
+	r.mu.Unlock()
+	if b == nil {
+		return city.ResidentProfile{}, false
+	}
+	return b.ProfileByCardID(cardID)
 }
 
 // resizeAgentSemLocked 线路池可用时把房间信号量容量抬到总线路数
@@ -148,11 +270,11 @@ func (r *WealthRoom) launchCityVoices(voiceMonth int) {
 }
 
 // emitCityVoiceEvent 把一条城市之声追加进房间事件流并广播 game.event
-// (EventRecord type="city_voice",契约 04 §1.3)。追加在锁内、广播在锁外(§92a)。
+// (EventRecord type=EventCityVoice,契约 04 §1.3)。追加在锁内、广播在锁外(§92a)。
 func (r *WealthRoom) emitCityVoiceEvent(vr city.VoiceRecord) {
 	ev := EventRecord{
 		Month: vr.Month,
-		Type:  "city_voice",
+		Type:  EventCityVoice,
 		Seat:  -1,
 		Text:  fmt.Sprintf("%s:%s", vr.Name, vr.Text),
 	}

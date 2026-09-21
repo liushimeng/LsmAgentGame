@@ -1,6 +1,7 @@
 import type { Dict } from '../types';
 import wealthP2 from './wealthP2-zh';
 import wealthInsurance from './wealthInsurance-zh';
+import wealthResidents from './wealthResidents-zh';
 
 // 中文 (默认) — zh-CN
 const zhCN: Dict = {
@@ -1387,7 +1388,7 @@ const zhCN: Dict = {
   'wealth.monthMs.slow': '15s 慢速',
   'wealth.pool': '职业卡池',
   'wealth.pool.curated': '精选 10 卡',
-  'wealth.pool.docs': '文档池（75 万卡）',
+  'wealth.pool.docs': '文档池（10 万人物卡）',
   'wealth.pool.cards': '职业卡一览',
   'wealth.pool.stats': '文档池共 {total} 卡，已索引 {indexed} 张',
   'wealth.pool.indexing': '文档池索引统计中（首次使用文档池建房后生成）…',
@@ -1586,7 +1587,7 @@ const zhCN: Dict = {
   'wealth.create.modelReuseHint': '模型数（{n}）少于 Agent 座位数（{m}），将按均匀原则复用部分模型',
   // ── §20260921 建房解耦 + 城市背景层（契约 04 §3 键表）──
   'wealth.residentCount': '城市居民数量',
-  'wealth.residentCountHint': '居民由 10 万职业卡生成，背景居民逐月模拟',
+  'wealth.residentCountHint': '每位居民将从 10 万人物卡知识库自动加载专属档案，逐月模拟',
   'wealth.linePoolInfo': 'LLM 线路池：{n} 条线路（Agent 并发数）',
   'wealth.linePoolEmpty': '当前无可用 LLM 线路，请先在模型管理配置',
   'wealth.cityTitle': '城市',
@@ -1705,6 +1706,9 @@ const zhCN: Dict = {
 
   // ── P1-4 商业保险拆到 wealthInsurance-zh.ts（≤1800 行约束）──
   ...wealthInsurance,
+
+  // ── 居民人物卡档案锚定拆到 wealthResidents-zh.ts（≤1800 行约束）──
+  ...wealthResidents,
 
   // ── P1 明斯基引擎 + LPR 重定价 + 提前还款 ──
   'minsky.title': '明斯基融资状态',

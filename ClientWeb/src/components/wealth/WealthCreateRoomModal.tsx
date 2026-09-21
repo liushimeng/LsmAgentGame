@@ -7,7 +7,8 @@
  *     一律送空串 = 座位走 LLM 线路池驱动（后端 wealth 校验放行空 key；
  *     werewolf 建房不受影响，仍强制合法 key）。
  *   - 城市居民数量（§20260921 城市背景层）：数字输入 + 预设档 12 / 1千 / 1万 /
- *     10万，clamp 1..100000，默认 10000。居民由 10 万职业卡生成、逐月模拟。
+ *     10万，clamp 1..100000，默认 10000。每位居民从 10 万人物卡知识库自动加载
+ *     专属档案（档案锚定设计 §8.4），开局后台异步锚定、逐月模拟。
  *   - LLM 线路池信息行：listModels() → Σ concurrency_lines →
  *     「LLM 线路池：N 条线路（Agent 并发数）」；N=0 黄色警示。
  *   - 月节拍速度（3000 / 8000 / 15000ms 预设 + 3000–30000 滑杆）
@@ -338,7 +339,9 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
             data-testid="wealth-create-resident-count"
           />
         </label>
-        <p className="wealth-create-form__hint">🏙 {t('wealth.residentCountHint' as TKey)}</p>
+        <p className="wealth-create-form__hint" data-testid="wealth-create-resident-hint">
+          🏙 {t('wealth.residentCountHint' as TKey)}
+        </p>
 
         {/* §20260921 线路池信息行 — N=0 黄色警示（无可调模型，先去模型管理配置）。
             listModels 失败：内联红条展示错误原文（reportGlobalError 已在 catch 上报）。 */}
@@ -411,6 +414,12 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
         </div>
         {pool === 'docs' && poolInfo && !poolInfo.available && (
           <p className="wealth-create-form__hint">⚠️ {t('wealth.pool.unavailable' as TKey)}</p>
+        )}
+        {/* 档案锚定设计 §8.3 — docs 池人物卡库提示（≈10 万张，开局自动锚定专属档案） */}
+        {pool === 'docs' && (
+          <p className="wealth-create-form__hint" data-testid="wealth-create-docs-pool-hint">
+            📦 {t('wealth.pool.docsProfiles' as TKey)}
+          </p>
         )}
         {poolInfo && poolInfo.total >= 0 && (
           <p className="wealth-create-form__hint">

@@ -122,3 +122,8 @@
  * 1800 行上限）；选择器全部为新增 .wealth-insurance-* 前缀，与既有规则
  * 零级联冲突。只追加在链尾，不调整既有 @import 链顺序（§2.1 约束 4）。 */
 @import './wealth-insurance.css';
+/* 虚拟城市居民人物卡档案抽屉（ResidentProfileDrawer + CityStatsPanel 锚定进度条）。
+ * 档案锚定设计 §8.5：独立成文件（wealth.css 已 1738 行，追加会突破 §4 的
+ * 1800 行上限）；选择器全部为新增 .wealth-resident-drawer-* 前缀，与既有规则
+ * 零级联冲突。只追加在链尾，不调整既有 @import 链顺序（§2.1 约束 4）。 */
+@import './wealth-residents.css';

@@ -240,7 +240,7 @@ func BuildCalibTable(loader *profession.Loader, sampleSize int) *CalibTable {
 	if sampleSize <= 0 {
 		sampleSize = defaultCalibSampleSize
 	}
-	loader.ForceIndex() // 后台路径:walk 75k 卡 ≈1s,不阻塞房间创建
+	loader.ForceIndex() // 后台路径:walk 全池(以 PoolSize() 实测为准,2026-09-21 实测 100,267)≈2~6s,不阻塞房间创建
 	avail, total, _, _ := loader.PoolInfo()
 	if avail && total > 0 {
 		rng := rand.New(rand.NewSource(calibSeed))

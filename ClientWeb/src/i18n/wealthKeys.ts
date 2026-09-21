@@ -597,4 +597,52 @@ export interface WealthDict {
   'wealth.error.insuranceDisabled': string;
   // 结局 id 新增：意外身故（§5.3 HandleDeath）
   'wealth.ending.accident_death': string;
+
+  // ── 城市居民人物卡档案锚定（2026-09-21 档案锚定设计 §8.4）──
+  // cityProfiles = CityStatsPanel 锚定进度条 + MonthTicker 终态事件 + 建房 docs 池提示；
+  // residentDrawer = ResidentProfileDrawer（搜索 / 分页列表 / 详情卡）。
+  'wealth.cityProfiles.title': string;
+  /** {n} = 已锚定居民数。 */
+  'wealth.cityProfiles.anchorReady': string;
+  /** {done} {total} = 水合进度；{pool} = 文档池卡总数。 */
+  'wealth.cityProfiles.anchorProgress': string;
+  'wealth.cityProfiles.anchorFailed': string;
+  'wealth.cityProfiles.anchorIdle': string;
+  /** MonthTicker city_profiles 终态行：{done} {total}。 */
+  'wealth.cityProfiles.anchorDoneEvent': string;
+  'wealth.cityProfiles.anchorFailedEvent': string;
+  'wealth.cityProfiles.openDrawer': string;
+  'wealth.residentDrawer.title': string;
+  'wealth.residentDrawer.close': string;
+  'wealth.residentDrawer.searchPlaceholder': string;
+  'wealth.residentDrawer.prev': string;
+  'wealth.residentDrawer.next': string;
+  /** {page} {pages}。 */
+  'wealth.residentDrawer.pageInfo': string;
+  /** {n} = q 过滤命中总数。 */
+  'wealth.residentDrawer.matched': string;
+  'wealth.residentDrawer.income': string;
+  'wealth.residentDrawer.expense': string;
+  'wealth.residentDrawer.savings': string;
+  'wealth.residentDrawer.employed': string;
+  'wealth.residentDrawer.unemployed': string;
+  'wealth.residentDrawer.stressed': string;
+  'wealth.residentDrawer.goal': string;
+  'wealth.residentDrawer.personality': string;
+  'wealth.residentDrawer.openingHook': string;
+  'wealth.residentDrawer.marital': string;
+  'wealth.residentDrawer.healthGrade': string;
+  'wealth.residentDrawer.sourceFile': string;
+  'wealth.residentDrawer.empty': string;
+  /** {name} = 发声居民姓名（城市之声可点击条目 tooltip/aria）。 */
+  'wealth.residentDrawer.voiceOf': string;
+  'wealth.residentDrawer.age': string;
+  'wealth.residentDrawer.district': string;
+  'wealth.residentDrawer.occupation': string;
+  'wealth.residentDrawer.domain': string;
+  'wealth.residentDrawer.cardId': string;
+  /** focusCardId 单卡查询未命中（35013）。 */
+  'wealth.residentDrawer.notFound': string;
+  /** 建房弹窗 docs 池提示（人物卡库规模 + 自动锚定说明）。 */
+  'wealth.pool.docsProfiles': string;
 }

@@ -1,6 +1,7 @@
 import type { Dict } from '../types';
 import wealthP2 from './wealthP2-en';
 import wealthInsurance from './wealthInsurance-en';
+import wealthResidents from './wealthResidents-en';
 
 // English — en
 const en: Dict = {
@@ -1387,7 +1388,7 @@ const en: Dict = {
   'wealth.monthMs.slow': '15s slow',
   'wealth.pool': 'Profession pool',
   'wealth.pool.curated': 'Curated 10',
-  'wealth.pool.docs': 'Docs pool',
+  'wealth.pool.docs': 'Docs pool (100k persona cards)',
   'wealth.pool.cards': 'Profession cards',
   'wealth.pool.stats': 'Docs pool: {total} cards, {indexed} indexed',
   'wealth.pool.indexing': 'Docs pool index pending (built on first docs-pool room)…',
@@ -1586,7 +1587,7 @@ const en: Dict = {
   'wealth.create.modelReuseHint': 'Fewer models ({n}) than AI seats ({m}); some models will be reused evenly',
   // ── §20260921 room-create decoupling + city background layer (contract 04 §3) ──
   'wealth.residentCount': 'City residents',
-  'wealth.residentCountHint': 'Residents are generated from the 100k profession cards; background residents are simulated month by month',
+  'wealth.residentCountHint': 'Each resident auto-loads a dedicated profile from the ~100k persona-card knowledge base, simulated month by month',
   'wealth.linePoolInfo': 'LLM line pool: {n} lines (Agent concurrency)',
   'wealth.linePoolEmpty': 'No LLM lines available — configure models in Model Management first',
   'wealth.cityTitle': 'City',
@@ -1704,6 +1705,9 @@ const en: Dict = {
 
   // ── P1-4 commercial insurance split to wealthInsurance-en.ts (≤1800 line cap) ──
   ...wealthInsurance,
+
+  // ── resident profile anchoring split to wealthResidents-en.ts (≤1800 line cap) ──
+  ...wealthResidents,
 
   // ── P1 Minsky Engine + LPR Reprice + Early Repayment ──
   'minsky.title': 'Minsky Financing Status',

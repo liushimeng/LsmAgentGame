@@ -37,9 +37,12 @@ const (
 // Backdrop 环形缓冲随 Snapshot 下发)。
 type VoiceRecord struct {
 	Month    int    `json:"month"`
-	Name     string `json:"name"`  // 域·城区 代号(如 "A1024·金融CBD")
+	Name     string `json:"name"`  // 已锚定:真实姓名;未锚定:域·城区 代号(如 "A1024·金融CBD")
 	Text     string `json:"text"`  // ≤100 字
 	ModelKey string `json:"model"` // 服务线路的模型 key
+	// 2026-09-21 §档案锚定(契约 §6):锚定后增补;未锚定为空(前端兼容)。
+	ResidentID string `json:"resident_id,omitempty"` // 人物卡编号(CardID)
+	Occupation string `json:"occupation,omitempty"`  // 职业
 }
 
 // LinePoolSource 返回当前 LLM 线路池(nil-safe;Registry.LinePool 满足)。
@@ -89,6 +92,8 @@ func (s *VoiceScheduler) Run(b *Backdrop, month int, onRecord func(VoiceRecord))
 }
 
 // speakOne 单名居民一次极短对话(经线路池)。
+// 2026-09-21 §档案锚定(契约 §6):锚定后 persona 用真实档案(姓名/年龄/
+// 职业/域/城区/人格/opening_hook/目标/本月状态);未锚定保持代号语义零变化。
 func (s *VoiceScheduler) speakOne(b *Backdrop, pool *llm.LinePool, month, idx int) (VoiceRecord, bool) {
 	br, codename, ok := b.voiceBrief(idx)
 	if !ok {
@@ -103,18 +108,37 @@ func (s *VoiceScheduler) speakOne(b *Backdrop, pool *llm.LinePool, month, idx in
 	}
 	defer lease.Release()
 
-	status := "就业中"
+	employDesc := "就业中"
 	if !br.Employed {
-		status = "失业中,正在找活路"
+		employDesc = "失业中,正在找活路"
 	}
 	stress := "心态平稳"
 	if br.Stressed {
 		stress = "积蓄见底,压力很大"
 	}
-	sys := fmt.Sprintf(
-		"你是虚拟城市的一名普通居民,代号 %s,从事 %s 行业,住在%s。本月状态:%s;储蓄约 %.0f 元(约 %.1f 个月开支),%s。请始终以这名居民的口吻说话。",
-		codename, br.DomainName, br.DistrictName, status, br.SavingsCNY, br.MonthsRunway, stress,
-	)
+	// 锚定判定信号:brief.CardID 非空即已锚定(未锚定 brief 恒零值)。
+	anchored := br.CardID != ""
+	sys := ""
+	name := codename
+	if anchored {
+		if br.Name != "" {
+			name = br.Name
+		}
+		status := employDesc
+		if br.Stressed {
+			status += "," + stress
+		}
+		sys = fmt.Sprintf(
+			"你是虚拟城市居民「%s」,%d岁,%s(%s,住在%s)。性格:%s。%s 你的 5 年目标:%s。本月状态:%s;储蓄约 %.0f 元(约 %.1f 个月开支)。请始终以这名居民的口吻说话。",
+			name, br.Age, br.Occupation, br.DomainName, br.DistrictName,
+			br.Personality, br.OpeningHook, br.Goal, status, br.SavingsCNY, br.MonthsRunway,
+		)
+	} else {
+		sys = fmt.Sprintf(
+			"你是虚拟城市的一名普通居民,代号 %s,从事 %s 行业,住在%s。本月状态:%s;储蓄约 %.0f 元(约 %.1f 个月开支),%s。请始终以这名居民的口吻说话。",
+			codename, br.DomainName, br.DistrictName, employDesc, br.SavingsCNY, br.MonthsRunway, stress,
+		)
+	}
 	req := llm.LLMRequest{
 		Model: lease.ModelKey,
 		System: []llm.SystemBlock{
@@ -129,19 +153,24 @@ func (s *VoiceScheduler) speakOne(b *Backdrop, pool *llm.LinePool, month, idx in
 	resp, err := chatViaLease(ctx, lease, req)
 	if err != nil {
 		logger.L().Debug("city voice llm call failed, dropped",
-			zap.Int("month", month), zap.String("name", codename), zap.Error(err))
+			zap.Int("month", month), zap.String("name", name), zap.Error(err))
 		return VoiceRecord{}, false
 	}
 	text := strings.TrimSpace(resp.Text())
 	if text == "" {
 		return VoiceRecord{}, false
 	}
-	return VoiceRecord{
+	vr := VoiceRecord{
 		Month:    month,
-		Name:     codename,
+		Name:     name,
 		Text:     clipRunes(text, voiceTextMaxRunes),
 		ModelKey: lease.ModelKey,
-	}, true
+	}
+	if anchored {
+		vr.ResidentID = br.CardID
+		vr.Occupation = br.Occupation
+	}
+	return vr, true
 }
 
 // chatViaLease 用租约内的 Provider/APIKey 发起调用(流式优先,§197 字节刷新;

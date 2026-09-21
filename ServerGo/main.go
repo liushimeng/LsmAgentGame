@@ -945,8 +945,10 @@ func main() {
 	professionAPI := api.NewProfessionAPI(wealthLoader)
 	// 2026-09-16 §财商流P1-2 — 社会调研 HTTP 入口(房间源 = wealthMgr)。
 	wealthSurveyAPI := api.NewWealthSurveyAPI(wealthMgr)
+	// 2026-09-21 §档案锚定契约 §7 — 居民人物卡档案两端点(房间源 = wealthMgr)。
+	wealthCityAPI := api.NewWealthCityAPI(wealthMgr)
 
-	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, professionAPI, wealthSurveyAPI)
+	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, professionAPI, wealthSurveyAPI, wealthCityAPI)
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.

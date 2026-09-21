@@ -284,12 +284,64 @@ export interface WealthCityDistrictPop {
   population: number;
 }
 
-/** 居民之声条目（city.voices[]，最近若干条；model = 服务该次生成的模型名）。 */
+/**
+ * 居民人物卡档案锚定进度（city.profiles，档案锚定设计 §8.1）。
+ * status：idle=未启用（精选手卡 / 未建城）| hydrating=后台水合中 | ready=已锚定 | failed=失败（合成兜底）。
+ * pool_size = 文档池人物卡总数（≈100,267）；anchored = 已锚定居民数。
+ */
+export interface WealthCityProfileProgress {
+  status: 'idle' | 'hydrating' | 'ready' | 'failed';
+  done: number;
+  total: number;
+  pool_size: number;
+  anchored: number;
+}
+
+/** 居民之声条目（city.voices[]，最近若干条；model = 服务该次生成的模型名）。
+ *  resident_id / occupation 仅在档案锚定后下发（锚定前为空，前端兼容）。 */
 export interface WealthCityVoice {
   month: number;
   name: string;
   text: string;
   model: string;
+  /** 发声居民的人物卡号（ResidentProfile.card_id）；锚定后才有。 */
+  resident_id?: string;
+  /** 发声居民的职业；锚定后才有。 */
+  occupation?: string;
+}
+
+/**
+ * 单名居民的档案投影（REST /city/residents 行 + 抽屉详情卡；档案锚定设计 §4/§8.1）。
+ * 全部字段来自人物卡 frontmatter，公开合成人格（无隐私，观战者/玩家同可见）。
+ */
+export interface WealthCityResidentProfile {
+  card_id: string;
+  name: string;
+  occupation: string;
+  /** L1 域展示名（行业）。 */
+  domain_name: string;
+  /** 城区展示名。 */
+  district: string;
+  age: number;
+  /** 月收入（元，档案值；后续月结演化可变）。 */
+  income: number;
+  expense: number;
+  savings: number;
+  employed: boolean;
+  /** 储蓄 < 3×月支出（对齐合成判定）。 */
+  stressed: boolean;
+  /** 「、」连接的 2-4 个人格词。 */
+  personality: string;
+  /** 档案开场白（≤60 rune）。 */
+  opening_hook: string;
+  /** goals[0]（5 年目标）。 */
+  goal: string;
+  /** single|married。 */
+  marital: string;
+  /** A|B|C。 */
+  health_grade: string;
+  /** 相对路径（审计：可回溯源 md）。 */
+  source_file: string;
 }
 
 /** 城市背景层快照（game.state.city）。 */
@@ -307,6 +359,8 @@ export interface WealthCitySnapshot {
   stressed_rate: number;
   districts: WealthCityDistrictPop[];
   voices: WealthCityVoice[];
+  /** 人物卡档案锚定进度（档案锚定设计 §8.1；锚定未启用的旧房 omit）。 */
+  profiles?: WealthCityProfileProgress;
 }
 
 /** game.state 全量快照（按座位脱敏，BroadcastTo 单发）。 */
@@ -800,7 +854,9 @@ export interface WealthStartedFrame {
 export type WealthEventType =
   | 'action' | 'move' | 'settle' | 'market' | 'life' | 'chat' | 'error'
   // §20260921 城市背景层 — 居民之声事件（走既有事件流 UI，无需新组件）。
-  | 'city_voice';
+  | 'city_voice'
+  // 档案锚定设计 §5 — 档案锚定终态事件（hydrating 中间态不发，走 Snapshot 轮询）。
+  | 'city_profiles';
 
 /** game.event。 */
 export interface WealthEventFrame {
@@ -810,6 +866,8 @@ export interface WealthEventFrame {
   type: WealthEventType | string;
   text: string;
   data?: unknown;
+  /** city_profiles 事件的进度载荷（档案锚定设计 §5：{profiles:{status,done,total,…}}）。 */
+  profiles?: WealthCityProfileProgress;
 }
 
 export interface WealthMonthSummary {

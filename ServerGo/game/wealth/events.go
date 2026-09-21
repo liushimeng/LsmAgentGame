@@ -9,6 +9,15 @@ import (
 	"fmt"
 )
 
+// 城市背景层事件类型(EventRecord.Type;2026-09-21 §虚拟城市)。
+const (
+	// EventCityVoice 城市之声单条(月结后异步产出,room_city.go emit)。
+	EventCityVoice = "city_voice"
+	// EventCityProfiles 居民人物卡档案锚定终态(2026-09-21 §档案锚定契约 §5:
+	// 仅终态发一条 —— hydrating 中间态走 Snapshot 轮询,不发事件)。
+	EventCityProfiles = "city_profiles"
+)
+
 // negativeGuard 负面事件认知折扣:×(1 − min(0.05×K, 0.30))。
 func negativeGuard(cognition int) float64 {
 	f := 0.05 * float64(cognition)

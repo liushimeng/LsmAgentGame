@@ -7,14 +7,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
-import { formatCny, formatDelta, type WealthGameState } from '@/types/wealth';
+import { formatCny, formatDelta, type WealthCityProfileProgress, type WealthGameState } from '@/types/wealth';
 import type { WealthEventFrame, WealthMonthFrame } from '@/types/wealth';
 
 /** 事件类型 → emoji 前缀（产品设计 §8.2 呈现规则）。 */
 const EVENT_EMOJI: Record<string, string> = {
   action: '🎯', move: '🚚', settle: '🧾', market: '📈',
   life: '📅', chat: '💬', error: '⚠️',
+  // 档案锚定设计 §8.3 — 档案锚定终态事件（📦 前缀，文案前端 i18n 合成）。
+  city_profiles: '📦',
 };
+
+/**
+ * city_profiles 事件 → i18n 文案（§8.3：「城市人物档案锚定完成 done/total」或失败提示）。
+ * 载荷优先取 frame.profiles，兼容后端把它放进 data.profiles 的形状；
+ * 无法解析时返回 null（回退渲染服务端 text）。
+ */
+function cityProfilesPayload(e: WealthEventFrame): WealthCityProfileProgress | null {
+  if (e.type !== 'city_profiles') return null;
+  if (e.profiles) return e.profiles;
+  if (e.data && typeof e.data === 'object') {
+    const d = e.data as { profiles?: WealthCityProfileProgress };
+    if (d.profiles) return d.profiles;
+  }
+  return null;
+}
 
 function tick(): number {
   return Date.now();
@@ -62,18 +79,30 @@ export function MonthTicker({ gameState, eventFeed, lastMonth }: Props) {
         <span className="wealth-ticker__remain">{remainSec}s</span>
       </div>
       <div className="wealth-ticker__events">
-        {recentEvents.map((e, i) => (
-          <span
-            key={`${i}-${e.month}-${e.text}`}
-            className={
-              'wealth-ticker__event' +
-              (e.type === 'error' ? ' wealth-ticker__event--error' : '') +
-              (e.type === 'life' ? ' wealth-ticker__event--life' : '')
-            }
-          >
-            {EVENT_EMOJI[e.type] ?? '•'} {e.text}
-          </span>
-        ))}
+        {recentEvents.map((e, i) => {
+          // city_profiles：前端 i18n 合成三语文案（服务端 text 仅作解析失败兜底）。
+          const cp = cityProfilesPayload(e);
+          const text = cp
+            ? cp.status === 'failed'
+              ? t('wealth.cityProfiles.anchorFailedEvent' as TKey)
+              : t('wealth.cityProfiles.anchorDoneEvent' as TKey, {
+                  done: cp.done,
+                  total: cp.total,
+                })
+            : e.text;
+          return (
+            <span
+              key={`${i}-${e.month}-${e.text}`}
+              className={
+                'wealth-ticker__event' +
+                (e.type === 'error' ? ' wealth-ticker__event--error' : '') +
+                (e.type === 'life' ? ' wealth-ticker__event--life' : '')
+              }
+            >
+              {EVENT_EMOJI[e.type] ?? '•'} {text}
+            </span>
+          );
+        })}
         {recentEvents.length === 0 && (
           <span className="wealth-ticker__event wealth-ticker__event--muted">
             {t('wealth.ticker.empty' as TKey)}
