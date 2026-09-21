@@ -177,6 +177,13 @@ type World struct {
 	ShortBook   *ShortBook          // 融券台账(R6-1 双护栏)
 	QuantEngine *QuantFundEngine    // 量化基金引擎(R6-2 自适应权重)
 
+	// 阶段8(2026-09-21 §城市扩张v2.12,最终阶段):公共服务 + 监管体系 +
+	// 市长选举。见 public_services.go / civic_election.go / regulators/ 子包。
+	// 零 rand —— 固定种子存量对局回归零偏移;nil 时 settlement ⑨G 惰性初始化。
+	PublicSvc *PublicServices  // 公共服务五件套(月度 ⑨G)
+	Regulators *RegulatorBundle // 证监会/反垄断/消协/隐私四监管(月度 ⑨G)
+	Election  *CivicElection    // 市长选举(R8-2 默认关闭 → no-op)
+
 	// P1: 社会调研系统(§财商流P1-2 调研契约 §2)。
 	Surveys   []*Survey // 全房调研(≤20,按发起序)
 	SurveySeq int       // id 自增序列
@@ -243,6 +250,11 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		CBonds:      nil, // stepConvertibleBonds 空池惰性初始化(锚当期股指)。
 		ShortBook:   NewShortBook(),
 		QuantEngine: NewQuantFundEngine(),
+		// 阶段8: 公共服务 + 监管 + 市长选举(2026-09-21 §城市扩张v2.12;
+		// 选举默认关闭 → MonthlyStep no-op,零偏移)。
+		PublicSvc:  NewPublicServices(),
+		Regulators: NewRegulatorBundle(),
+		Election:   NewCivicElection(),
 		// P2: 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
 		ListingBook:  NewListingBook(),
 		AuctionHouse: NewAuctionHouse(),

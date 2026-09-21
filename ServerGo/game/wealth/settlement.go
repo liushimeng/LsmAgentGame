@@ -198,6 +198,28 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 	// (ClusterMonthStep 内部守卫)。
 	w.ClusterMonthStep()
 
+	// ⑨G 公共服务与监管月步(阶段8,2026-09-21 §城市扩张v2.12,最终阶段):
+	// 公共服务五件套(质量累积/住房可负担性/就业)→ 四监管(证监会内幕
+	// 检测/反垄断分拆/消协预警/隐私审计)→ 市长选举(R8-2 默认关闭 no-op;
+	// 开启时津贴走 gov:treasury→seat CatWelfare)。位于 ⑨F 之后:
+	// 消费 Treasury.LastMonthExpense(⑨E 已记)与当月 Ledger(⑨C 前的
+	// 动作/结算流水)。零 rand;economy_enabled=false 完整跳过;nil 惰性
+	// 初始化(防直接构造的 World 解引用)。
+	if w.EconomyEnabled {
+		if w.PublicSvc == nil {
+			w.PublicSvc = NewPublicServices()
+		}
+		if w.Regulators == nil {
+			w.Regulators = NewRegulatorBundle()
+		}
+		if w.Election == nil {
+			w.Election = NewCivicElection()
+		}
+		w.PublicSvc.MonthlyStep(w)
+		w.Regulators.MonthlyStep(w)
+		w.Election.MonthlyStep(w) // Enabled=false 时 no-op(R8-2)
+	}
+
 	// ④.65 资金流向统计(P2 v2 §13.2.5,2026-09-19 §P2-可视化):
 	// 在 ④.6 之后立即聚合本月 Ledger,刷新 World.LastFlowStat 供 view 下发。
 	w.RecordFlowStat()
@@ -702,6 +724,16 @@ func (w *World) AnnualAdjust() {
 		// P1-4(§财商流P1-4 §4.3): 年结保费重定价(年龄档上浮 + CPI 累积上浮)。
 		w.RepricePolicies(p)
 		w.emitEvent("settle", seat, fmt.Sprintf("%d 号位年度调整:工资 %+d%%", seat, int(g*100)))
+	}
+
+	// 阶段8(2026-09-21 §城市扩张v2.12):教育代际效应年度步(月收入 > 门槛的
+	// 座位累积 0.1/年,满 1.0 → Cognition +1;§130 接线:economy_enabled 才生效,
+	// PublicSvc nil 惰性初始化与 ⑨G 同款守卫)。
+	if w.EconomyEnabled {
+		if w.PublicSvc == nil {
+			w.PublicSvc = NewPublicServices()
+		}
+		w.PublicSvc.AnnualEduStep(w)
 	}
 }
 

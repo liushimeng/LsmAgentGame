@@ -59,6 +59,10 @@ type ClientGameState struct {
 	// 阶段6(2026-09-21 §城市扩张v2.12):金融市场快照(量化指数 / CD 利率 /
 	// 可转债 top3 / 融券余额 / 基金评级 top5;economy_enabled=false → omitempty)。
 	FinMarket *FinMarketJSON `json:"fin_market,omitempty"`
+	// 阶段8(2026-09-21 §城市扩张v2.12,最终阶段):公共服务 + 监管 + 市长选举
+	// 快照(五件套指标 / 监管罚款与分拆计数 / 选举状态;economy_enabled=false
+	// → omitempty)。
+	PublicSvc *PublicServicesJSON `json:"public_services,omitempty"`
 	// 2026-09-21 §虚拟城市(契约 04 §1.3):城市背景层快照(resident_count>0
 	// 时非 nil;旧房/未建城 omit)。无座位隐私,观战/玩家全量可见。
 	City *city.Snapshot `json:"city,omitempty"`
@@ -246,6 +250,60 @@ type FundRatingJSON struct {
 	Sharpe      float64 `json:"sharpe"`
 	MaxDrawdown float64 `json:"max_drawdown"`
 	AUMWan      float64 `json:"aum_wan"`
+}
+
+// PublicServicesJSON 是 public_services 子结构(阶段8 2026-09-21 §城市扩张v2.12):
+// 公共服务五件套 + 四监管监测面 + 市长选举状态。
+type PublicServicesJSON struct {
+	EduQuality    float64 `json:"edu_quality"`
+	MedQuality    float64 `json:"med_quality"`
+	PensionLevel  float64 `json:"pension_level"`
+	HousingAfford float64 `json:"housing_afford"`
+	Employment    float64 `json:"employment"`
+	EduStockWan   float64 `json:"edu_stock_wan"` // 公共教育累积投入(万元)
+	MedStockWan   float64 `json:"med_stock_wan"` // 公共医疗累积投入(万元)
+	// 监管监测面。
+	InsiderFinesTotal int64 `json:"insider_fines_total"` // 证监会累计罚款(元)
+	InsiderCases      int   `json:"insider_cases"`       // 累计认定笔数
+	AntitrustSplits   int   `json:"antitrust_splits"`    // 反垄断累计分拆次数
+	// 市长选举(R8-2 默认关闭:enabled=false / mayor_seat=-1 / votes 空)。
+	ElectionEnabled bool           `json:"election_enabled"`
+	MayorSeat       int            `json:"mayor_seat"`
+	LastVotes       []ElectionVote `json:"last_votes,omitempty"`
+}
+
+// buildPublicServicesJSON 公共服务+监管+选举快照(阶段8;nil 守卫)。
+func buildPublicServicesJSON(world *World) *PublicServicesJSON {
+	if world == nil {
+		return nil
+	}
+	ps := &PublicServicesJSON{}
+	if world.PublicSvc != nil {
+		ps.EduQuality = world.PublicSvc.EduQuality
+		ps.MedQuality = world.PublicSvc.MedQuality
+		ps.PensionLevel = world.PublicSvc.PensionLevel
+		ps.HousingAfford = world.PublicSvc.HousingAfford
+		ps.Employment = world.PublicSvc.Employment
+		if world.PublicSvc.Edu != nil {
+			ps.EduStockWan = world.PublicSvc.Edu.PublicEduStock
+		}
+		if world.PublicSvc.Med != nil {
+			ps.MedStockWan = world.PublicSvc.Med.PublicMedStock
+		}
+	}
+	if world.Regulators != nil && world.Regulators.Securities != nil {
+		ps.InsiderFinesTotal = world.Regulators.Securities.InsiderTradeFines
+		ps.InsiderCases = world.Regulators.Securities.InsiderCases
+	}
+	if world.Regulators != nil && world.Regulators.Antitrust != nil {
+		ps.AntitrustSplits = world.Regulators.Antitrust.Splits
+	}
+	if world.Election != nil {
+		ps.ElectionEnabled = world.Election.Enabled
+		ps.MayorSeat = world.Election.MayorSeat
+		ps.LastVotes = world.Election.LastVotes
+	}
+	return ps
 }
 
 // buildFinMarketJSON 金融市场快照(阶段6;确定性:排序 tie-break 用稳定序)。
@@ -734,6 +792,12 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 	// 或量化引擎 nil → omitempty 不下发)。
 	if world.EconomyEnabled && world.QuantEngine != nil {
 		cs.FinMarket = buildFinMarketJSON(world)
+	}
+
+	// 阶段8(2026-09-21 §城市扩张v2.12,最终阶段):公共服务+监管+选举快照
+	// (economy_enabled=false 或 PublicSvc nil → omitempty 不下发)。
+	if world.EconomyEnabled && world.PublicSvc != nil {
+		cs.PublicSvc = buildPublicServicesJSON(world)
 	}
 
 	// Players(全公开)。
