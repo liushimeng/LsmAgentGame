@@ -1,6 +1,6 @@
-// 财商流 P1-4 商业保险 i18n（zh-CN）— 拆自 zh-CN.ts 以满足 ≤1800 行约束。
+// 虚拟城市 P1-4 商业保险 i18n（zh-CN）— 拆自 zh-CN.ts 以满足 ≤1800 行约束。
 // 与 wealthKeys.ts 的 WealthDict P1-4 段键集合完全对齐；
-// 键文案出处：lag_docs/财商流游戏/已实现/10-P1保险系统/财商流游戏-P1-商业保险与风险转移引擎-v1.md §10.2。
+// 键文案出处：lag_docs/虚拟城市/已实现/10-P1保险系统/虚拟城市-P1-商业保险与风险转移引擎-v1.md §10.2。
 const wealthInsurance = {
   // 侧栏 Tab
   'wealth.tab.insurance': '保险',

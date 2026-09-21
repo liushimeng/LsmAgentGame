@@ -1,7 +1,7 @@
 /**
  * SurveyPanel — 社会调研面板（P1 第二期，tab `survey`）。
  *
- * 契约：lag_docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-社会调研系统-v1.md §7。
+ * 契约：lag_docs/虚拟城市/已实现/05-P1扩展/虚拟城市-P1-社会调研系统-v1.md §7。
  * 面向全体 Agent（模型玩家）的预测模拟：人类发起问题 → 存活 bot 在月度决策
  * 上下文中 answer_survey（零额外 LLM 成本）→ 聚合 → game.survey_result 广播。
  *

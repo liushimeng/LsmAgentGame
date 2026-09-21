@@ -1,5 +1,5 @@
 /**
- * WealthCreateRoomModal — 财商流建房弹窗：
+ * WealthCreateRoomModal — 虚拟城市建房弹窗：
  *   - 房间名（可选）
  *   - Agent 座位（2026-09-16 §财商流10–12座位：档位 0–12，Agent 依次占座位号
  *     0..N-1，创建者由后端从剩余空位中随机入座；N = 12（= 房间容量）时后端
@@ -7,7 +7,7 @@
  *     默认 10 个 Agent（+ 创建者 = 11 座 ≥ MinSeats=10 → 后端自动开局）。
  *     每个 Agent 座位独立选模型，模型来自 /api/llm/models；模型按「随机均匀
  *     分配」（Fisher-Yates 多轮洗牌 + 相邻去重，各模型次数差 ≤ 1），支持一键
- *     重摇，详见 lag_docs/财商流游戏/已实现/08-UI优化/05-产品设计-创建房间Agent模型随机分配与均匀去重-v1.md。
+ *     重摇，详见 lag_docs/虚拟城市/已实现/08-UI优化/05-产品设计-创建房间Agent模型随机分配与均匀去重-v1.md。
  *   - 月节拍速度（3000 / 8000 / 15000ms 预设 + 3000–30000 滑杆）
  *   - 职业卡池（curated 精选 10 卡 / docs 文档池）+ 职业卡一览
  *     （GET /api/games/wealth/professions，失败回落静态镜像，不阻塞建房）
@@ -229,7 +229,7 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
         month_ms: monthMs,
         pool,
         ...(seedNum > 0 ? { seed: seedNum } : {}),
-        full_agent: true, // 2026-09-19 §全Agent模式: 财商流游戏默认全 Agent
+        full_agent: true, // 2026-09-19 §全Agent模式: 虚拟城市默认全 Agent
       });
       if (!ok) {
         // 父组件已 setErr + reportGlobalError；这里不重复上报，仅保留弹窗。

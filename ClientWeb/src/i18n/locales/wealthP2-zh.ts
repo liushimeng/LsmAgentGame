@@ -1,4 +1,4 @@
-// 财商流 P2 交易系统 i18n（zh-CN）— 拆自 zh-CN.ts 以满足 ≤1800 行约束。
+// 虚拟城市 P2 交易系统 i18n（zh-CN）— 拆自 zh-CN.ts 以满足 ≤1800 行约束。
 // 与 wealthKeys.ts 的 WealthDict P2 段键集合完全对齐。
 const wealthP2 = {
   // 挂单簿侧栏 Tab

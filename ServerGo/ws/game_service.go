@@ -44,7 +44,7 @@ type GameService struct {
 	// 2026-08-19 §德州扑克Agent — Bot 驱动器
 	thpDriver      *thpagent.Driver
 
-	// 2026-09-14 §财商流P0 — 财商流游戏管理器 + 文档池加载器(由 main.go 注入)。
+	// 2026-09-14 §财商流P0 — 虚拟城市管理器 + 文档池加载器(由 main.go 注入)。
 	wealthMgr     *wealth.Manager
 	wealthLoader  *wealth.Loader
 
@@ -92,7 +92,7 @@ func (s *GameService) SetTexasAgentMemoryStore(store texasAgentMemoryStore) {
 	s.thpMemoryStore = store
 }
 
-// SetWealthManager 注入财商流管理器(2026-09-14 §财商流P0)。
+// SetWealthManager 注入虚拟城市管理器(2026-09-14 §财商流P0)。
 func (s *GameService) SetWealthManager(m *wealth.Manager) {
 	s.wealthMgr = m
 }
@@ -697,7 +697,7 @@ func (s *GameService) SyncSeat(gameKind, roomID, userID string) (bool, *errcode.
 		}
 		return started, nil
 	case "wealth":
-		// 财商流 WS join Game 入座(§1 中途加入允许);SyncSeat 路径备用。
+		// 虚拟城市 WS join Game 入座(§1 中途加入允许);SyncSeat 路径备用。
 		if s.wealthMgr == nil {
 			return false, nil
 		}
@@ -1224,7 +1224,7 @@ func (s *GameService) handleSpectate(c *Client, env Envelope) {
 			return
 		}
 		s.hub.SpectateRoom(req.RoomID, c)
-		// 财商流无独立 spectator manager:view 路径对 -1 viewer 输出公开视图。
+		// 虚拟城市无独立 spectator manager:view 路径对 -1 viewer 输出公开视图。
 		s.sendOK(c, env.Seq, "game.spectated", map[string]any{
 			"room_id":   req.RoomID,
 			"game_kind": "wealth",
@@ -1263,7 +1263,7 @@ func (s *GameService) handleUnspectate(c *Client, env Envelope) {
 	case "texasholdem":
 		_ = s.texasHoldemMgr.UnspectateGame(req.RoomID, c.UserID)
 	case "wealth":
-		// 财商流 spectator 走 hub.Spectators 集合,此处 no-op。
+		// 虚拟城市 spectator 走 hub.Spectators 集合,此处 no-op。
 	case "werewolf":
 		_ = s.werewolfMgr.UnspectateGame(req.RoomID, c.UserID)
 	}

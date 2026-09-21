@@ -1,7 +1,7 @@
 /**
  * EconomyPanel — 真实经济循环引擎仪表盘（P1 第二期，tab `economy`）。
  *
- * 契约：lag_docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-真实经济循环引擎-v1.md §8。
+ * 契约：lag_docs/虚拟城市/已实现/05-P1扩展/虚拟城市-P1-真实经济循环引擎-v1.md §8。
  * 数据源 game.state.consumer_market / labor_market / society（economy_enabled=false
  * 时后端零值/缺失下发）。
  *

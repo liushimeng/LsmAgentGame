@@ -113,7 +113,7 @@ func intSchema(min int64, desc string) map[string]any {
 	return map[string]any{"type": "integer", "minimum": min, "description": desc}
 }
 
-// BuildTools 返回全部工具定义(全部座位相同——财商流信息不对称在 my.* 快照,
+// BuildTools 返回全部工具定义(全部座位相同——虚拟城市信息不对称在 my.* 快照,
 // 不在工具裁剪)。
 // P0/P1/P1-2 基础工具 + P2 交易工具(§财商流P2),返回前追加 TradeToolDefinitions()。
 func BuildTools() []llmtypes.ToolDef {

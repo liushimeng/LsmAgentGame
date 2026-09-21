@@ -1,5 +1,5 @@
 /**
- * 财商流游戏 zustand store（仿 doudizhu.store / texasholdem.store）。
+ * 虚拟城市 zustand store（仿 doudizhu.store / texasholdem.store）。
  *
  * 单向数据流：useWealth hook 收 WS 帧 → 写 store → 页面/面板订阅渲染。
  * UI 态（panelTab / selectedDistrict）与对局态同库但分命名空间。

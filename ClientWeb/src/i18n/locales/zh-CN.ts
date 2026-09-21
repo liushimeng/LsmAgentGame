@@ -1371,9 +1371,9 @@ const zhCN: Dict = {
   // 2026-08-12 §20260812-01 U3 — 情绪传染
   'werewolf.contagion.infected': '🦠 受感染',
 
-  // ── 财商流游戏 / wealth（2026-09-14 P0）──
-  'nav.wealth': '财商流游戏',
-  'wealth.title': '财商流游戏',
+  // ── 虚拟城市 / wealth（2026-09-14 P0）──
+  'nav.wealth': '虚拟城市',
+  'wealth.title': '虚拟城市',
   'wealth.subtitle': '25 到 60 岁的人生财商沙盘',
   'wealth.createRoom': '创建房间',
   'wealth.roomName': '房间名称',
@@ -1393,7 +1393,7 @@ const zhCN: Dict = {
   'wealth.join': '进入房间',
   'wealth.spectate': '观战',
   'wealth.full': '已满',
-  'wealth.noRooms': '暂无财商流房间',
+  'wealth.noRooms': '暂无虚拟城市房间',
   'wealth.createFirst': '点击「创建房间」开启你的 25→60 岁人生',
   // 2026-09-16 §财商流10–12座位：容量 8 → 12，最少开局座位 3 → 10（后端 MinSeats）。
   'wealth.lobbyHint': '10–12 人（人类 + Agent）· 满 12 座或已占座 ≥10 自动开局',
@@ -1595,7 +1595,7 @@ const zhCN: Dict = {
   'wealth.botPanel.statusActive': '活跃',
   'wealth.botPanel.statusOut': '已出局',
   'wealth.chat.playerFallback': '玩家{n}号',
-  'wealth.minimap.aria': '财商流城市小地图',
+  'wealth.minimap.aria': '虚拟城市小地图',
   'wealth.pool.cardsTitle': '职业卡一览（{n}）',
   'wealth.pool.cardSalary': '¥{v}/月',
   'wealth.pool.cardSavings': '储蓄 ¥{v}万',

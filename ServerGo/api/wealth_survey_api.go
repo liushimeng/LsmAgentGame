@@ -1,7 +1,7 @@
-// Package api — wealth_survey_api.go: 财商流社会调研 HTTP 入口
+// Package api — wealth_survey_api.go: 虚拟城市社会调研 HTTP 入口
 // (2026-09-16 §财商流P1-2,调研契约 §3.1)。
 //
-// 契约: lag_docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-社会调研系统-v1.md §3。
+// 契约: lag_docs/虚拟城市/已实现/05-P1扩展/虚拟城市-P1-社会调研系统-v1.md §3。
 //   POST /api/games/wealth/rooms/:id/survey    发起调研(任意登录用户)
 //   GET  /api/games/wealth/rooms/:id/surveys   全部历史调研(≤20)
 // 房间不存在 → 35001;全部业务校验在 wealth.WealthRoom.LaunchSurvey(持锁)。

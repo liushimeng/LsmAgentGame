@@ -1,6 +1,6 @@
-// 財商流 P1-4 商業保険 i18n（ja）— ja.ts から分割（≤1800 行制約）。
+// 仮想都市 P1-4 商業保険 i18n（ja）— ja.ts から分割（≤1800 行制約）。
 // wealthKeys.ts の WealthDict P1-4 セクションと完全に対応；
-// 文言出典：lag_docs/财商流游戏/已实现/10-P1保险系统/财商流游戏-P1-商业保险与风险转移引擎-v1.md §10.2。
+// 文言出典：lag_docs/虚拟城市/已实现/10-P1保险系统/虚拟城市-P1-商业保险与风险转移引擎-v1.md §10.2。
 const wealthInsurance = {
   // サイドバータブ
   'wealth.tab.insurance': '保険',

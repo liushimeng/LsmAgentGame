@@ -1,4 +1,4 @@
-// Package wealthtypes — 财商流游戏玩家 Agent 的 GameContext 契约类型
+// Package wealthtypes — 虚拟城市玩家 Agent 的 GameContext 契约类型
 // (2026-09-14 §财商流P0)。
 //
 // 本包与 agent/thptypes/ 同源设计,是 **leaf 包**:仅依赖基本类型,
@@ -8,10 +8,10 @@
 // **持锁态**构造 GameContext 快照;Agent 侧(wealthplayer)锁外只读消费。
 // 各 Brief 结构的字段名与协议文档 §3 的 JSON 键一一对应。
 //
-// 详见 lag_docs/财商流游戏/已实现/03-Agent设计/财商流游戏-WealthPlayer-Agent设计-v1.md §3。
+// 详见 lag_docs/虚拟城市/已实现/03-Agent设计/虚拟城市-WealthPlayer-Agent设计-v1.md §3。
 package wealthtypes
 
-// GameContext 是财商流 Bot 单月决策所需的全部上下文快照。
+// GameContext 是虚拟城市 Bot 单月决策所需的全部上下文快照。
 type GameContext struct {
 	// 身份元数据
 	RoomID   string

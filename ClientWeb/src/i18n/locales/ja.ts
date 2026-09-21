@@ -1370,9 +1370,9 @@ const ja: Dict = {
   // 2026-08-12 §20260812-01 U3 — 感情伝染
   'werewolf.contagion.infected': '🦠 感染',
 
-  // ── 財商流ゲーム / wealth（2026-09-14 P0）──
-  'nav.wealth': '財商流ゲーム',
-  'wealth.title': '財商流ゲーム',
+  // ── 仮想都市 / wealth（2026-09-14 P0）──
+  'nav.wealth': '仮想都市',
+  'wealth.title': '仮想都市',
   'wealth.subtitle': '25〜60歳の人生ファイナンス沙盤',
   'wealth.createRoom': 'ルーム作成',
   'wealth.roomName': 'ルーム名',
@@ -1392,7 +1392,7 @@ const ja: Dict = {
   'wealth.join': '入室',
   'wealth.spectate': '観戦',
   'wealth.full': '満員',
-  'wealth.noRooms': '財商流ルームはまだありません',
+  'wealth.noRooms': '仮想都市ルームはまだありません',
   'wealth.createFirst': '「ルーム作成」で25→60歳の人生を始めよう',
   // 2026-09-16 §財商流10–12席：定員 8 → 12、開始最少席 3 → 10（後端 MinSeats）。
   'wealth.lobbyHint': '10〜12人（人間+Agent）· 12席または着席10以上で自動開始',
@@ -1594,7 +1594,7 @@ const ja: Dict = {
   'wealth.botPanel.statusActive': '存続',
   'wealth.botPanel.statusOut': '退出',
   'wealth.chat.playerFallback': 'プレイヤー{n}',
-  'wealth.minimap.aria': '財商流シティミニマップ',
+  'wealth.minimap.aria': '仮想都市ミニマップ',
   'wealth.pool.cardsTitle': '職業カード一覧（{n}）',
   'wealth.pool.cardSalary': '¥{v}/月',
   'wealth.pool.cardSavings': '貯蓄 ¥{v}万',

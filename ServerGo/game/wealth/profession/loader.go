@@ -1,6 +1,6 @@
 // Package profession — loader.go: 文档池懒加载器(P0 v1,2026-09-14 §财商流P0)。
 //
-// 契约: lag_docs/财商流游戏/已实现/03-Agent设计/财商流游戏-职业卡与加载器设计-v1.md §3。
+// 契约: lag_docs/虚拟城市/已实现/03-Agent设计/虚拟城市-职业卡与加载器设计-v1.md §3。
 // 三段式:
 //   - 阶段 0(NewLoader):不读盘,仅记录根路径 + sync.Once。
 //   - 阶段 1(buildIndex):首次抽卡 / HTTP professions 触发;walk 收集 *.md 相对

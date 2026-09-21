@@ -1,7 +1,7 @@
 // Package wealth — survey.go: 社会调研(对全体 Agent 的预测模拟)
 // (2026-09-16 §财商流P1-2)。
 //
-// 契约: lag_docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-社会调研系统-v1.md §2/§4。
+// 契约: lag_docs/虚拟城市/已实现/05-P1扩展/虚拟城市-P1-社会调研系统-v1.md §2/§4。
 // 纯引擎层:调研生命周期全部在 World.Surveys(无锁状态);广播由房间层钩子
 // (BroadcastHooks.OnSurvey)在锁外完成(§92a 锁纪律)。
 package wealth

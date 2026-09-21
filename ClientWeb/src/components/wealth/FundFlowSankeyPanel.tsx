@@ -1,7 +1,7 @@
 /**
  * FundFlowSankeyPanel — 资金流向简化桑基图（2026-09-19 §P2 v2 §13.3）
  *
- * 契约: lag_docs/财商流游戏/已实现/07-P2财富可视化/.../§13.3。
+ * 契约: lag_docs/虚拟城市/已实现/07-P2财富可视化/.../§13.3。
  * 数据源: game.state.flow_stat(本月);节点固定 6 个(salary/firms/market/bank/gov/player)。
  *
  * 渲染: 左侧源节点 + 右侧汇节点 + 中间贝塞尔连线(宽 ∝ amount);

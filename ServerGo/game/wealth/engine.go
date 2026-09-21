@@ -36,7 +36,7 @@ const MinSeats = 10
 // (2026-09-16 §12 座扩容 新定)。
 //
 // 设计取舍:
-//   - 狼人杀 / 德扑的 bot 是「轮到才动」,4 并发够用;财商流 12 个 bot 每
+//   - 狼人杀 / 德扑的 bot 是「轮到才动」,4 并发够用;虚拟城市 12 个 bot 每
 //     个月**同时**决策 → 4 并发会把 12 人压成 4 批串行,月窗口(默认 8s)内
 //     后几批根本来不及跑 → 「10+ Agent 跑全场」等于 4 个在跑、其余被强制
 //     submit。放宽到 8(≈ MaxSeats 的 2/3)后,12 人分 2 批,配合月窗口上限
@@ -73,7 +73,7 @@ type EventRecord struct {
 	Text  string
 }
 
-// World 财商流纯引擎世界状态。
+// World 虚拟城市纯引擎世界状态。
 type World struct {
 	Month  int // 1..420(主钟)
 	Status string

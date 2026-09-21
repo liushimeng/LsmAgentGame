@@ -102,7 +102,7 @@
 .wealth-table__row--mine { box-shadow: inset 3px 0 0 var(--wealth-accent-strong); background: rgba(212,160,23,0.06); }
 .wealth-table__row--overdue { box-shadow: inset 3px 0 0 #f87171; background: rgba(248,113,113,0.07); }
 /* ── 小尺寸按钮变体（.btn-mini） ──
- * 使用点仅 3 处，均在财商流内：components/wealth/InfoMarketPanel.tsx /
+ * 使用点仅 3 处，均在虚拟城市内：components/wealth/InfoMarketPanel.tsx /
  * LoanPanel.tsx / ListingPanel.tsx。
  * 三个上下文缺一不可：
  *   .wealth-root  = 对局页侧栏（三处使用点的实际所在）；

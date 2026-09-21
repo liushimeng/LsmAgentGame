@@ -1,11 +1,11 @@
-// Wealth-game i18n keys (extracted from types.ts Dict to keep that file < 1800 lines).
+// Virtual City i18n keys (extracted from types.ts Dict to keep that file < 1800 lines).
 //
-// Covers: P0 财商流基础 / P1 央行+明斯基+经济循环+社会调研+LPR+提前还款 /
+// Covers: P0 虚拟城市基础 / P1 央行+明斯基+经济循环+社会调研+LPR+提前还款 /
 // P2 玩家间交易与财富流动系统。locales/zh-CN.ts · locales/en.ts 按本接口实现。
 
 export interface WealthDict {
-  // ── 财商流游戏 / wealth — 第 7 款游戏（Agent 组，2026-09-14 P0）──
-  // 键清单出处：lag_docs/财商流游戏/已实现/02-架构设计/财商流游戏-前端架构与2.5D地图-v1.md §7
+  // ── 虚拟城市 / wealth — 第 7 款游戏（Agent 组，2026-09-14 P0）──
+  // 键清单出处：lag_docs/虚拟城市/已实现/02-架构设计/虚拟城市-前端架构与2.5D地图-v1.md §7
   // + 实现补齐（面板 / 动作表单 / 终局 / 建房弹窗）。districts/actions/endings
   // 子键由代码枚举展开，locales 按扁平键书写。
   'nav.wealth': string;

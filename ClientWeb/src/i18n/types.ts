@@ -3,7 +3,7 @@ import type { WealthDict } from './wealthKeys';
 // Translation dictionary type. Every locale file (zh-CN.ts / en.ts / ja.ts)
 // implements this exact shape so missing keys surface as type errors.
 //
-// ⚠️ 财商流/P2 海量 i18n 键已拆到 wealthKeys.ts（本文件硬上限 ≤1800 行）。
+// ⚠️ 虚拟城市/P2 海量 i18n 键已拆到 wealthKeys.ts（本文件硬上限 ≤1800 行）。
 // 新增 wealth.* / minsky.* / lpr.* / earlyrepay.* 键请去 wealthKeys.ts。
 export interface Dict extends WealthDict {
   // 通用 / common
@@ -1452,7 +1452,7 @@ export interface Dict extends WealthDict {
   // 2026-08-12 §20260812-01 U3 — 情绪传染
   'werewolf.contagion.infected': string;
 
-  // ── 财商流 / minsky / lpr / earlyrepay 键已拆到 wealthKeys.ts（≤1800 行约束）──
+  // ── 虚拟城市 / minsky / lpr / earlyrepay 键已拆到 wealthKeys.ts（≤1800 行约束）──
 
 
 }

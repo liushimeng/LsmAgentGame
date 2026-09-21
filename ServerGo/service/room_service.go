@@ -669,7 +669,7 @@ func gameKindCN(kind string) string {
 	case "texasholdem":
 		return "德州扑克"
 	case "wealth":
-		return "财商流游戏"
+		return "虚拟城市"
 	case "werewolf":
 		return "狼人杀"
 	default:

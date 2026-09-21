@@ -18,7 +18,7 @@ import (
 	"testing"
 )
 
-// docsPoolRoot 返回真实文档池根目录(仓库根 + lag_docs/财商流游戏/玩家职业设计)。
+// docsPoolRoot 返回真实文档池根目录(仓库根 + lag_docs/虚拟城市/玩家职业设计)。
 // 2026-09-19: 知识库已迁移为 lag_docs submodule,旧路径 docs/... 不再存在;
 // 若 root 不存在则 SkipDir 类警告而非 panic(被 TestDocsPool_DistrictSpread
 // rand.Intn(len=0) 撞上),引导 reviewer 检出 submodule。
@@ -33,7 +33,7 @@ func docsPoolRoot(t *testing.T) string {
 		t.Skip("runtime.Caller unavailable; cannot locate docs pool")
 	}
 	root := filepath.Join(filepath.Dir(file), "..", "..", "..", "..",
-		"lag_docs", "财商流游戏", "玩家职业设计")
+		"lag_docs", "虚拟城市", "玩家职业设计")
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		t.Fatalf("abs(%s): %v", root, err)

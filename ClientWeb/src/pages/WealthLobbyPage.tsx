@@ -1,5 +1,5 @@
 /**
- * 财商流游戏 — 大厅页（/wealth）。
+ * 虚拟城市 — 大厅页（/wealth）。
  *
  * 与既有 6 款 Lobby 页同构：banner 头图（PNG 缺失回落 CSS 渐变）+ 房间列表
  * （RoomListTable 复用 + 5s HTTP 轮询 + useLobbyLiveUpdate room.state WS 实时更新）

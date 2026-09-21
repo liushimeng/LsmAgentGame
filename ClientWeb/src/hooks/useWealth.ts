@@ -1,7 +1,7 @@
 /**
- * useWealth — 订阅财商流游戏 WS 帧，写入 store，提供操作函数。
+ * useWealth — 订阅虚拟城市 WS 帧，写入 store，提供操作函数。
  *
- * 帧协议（lag_docs/财商流游戏/已实现/02-架构设计/财商流游戏-WS与HTTP协议契约-v1.md）：
+ * 帧协议（lag_docs/虚拟城市/已实现/02-架构设计/虚拟城市-WS与HTTP协议契约-v1.md）：
  *   C→S：game.join / game.leave / game.spectate / game.unspectate / game.state
  *         / game.wealth_action{room_id, action:{type,…}}
  *         / game.wealth_start{room_id} / game.wealth_pause{room_id, pause}

@@ -20,7 +20,7 @@ export const GAME_ACCENT: Record<GameKind, string> = {
   doudizhu: '#c93636',      // 斗地主 — 红（地主身份 / 主色调）
   texasholdem: '#1f7a4d',   // 德州 — 绿（牌桌绒布）
   werewolf: '#7b2c2c',      // 狼人杀 — 暗血红（暗黑中世纪 / 哥特）
-  wealth: '#c9a227',        // 财商流 — 金（暗底对比度 6.1:1，前端架构文档 §6）
+  wealth: '#c9a227',        // 虚拟城市 — 金（暗底对比度 6.1:1，前端架构文档 §6）
 };
 
 /** URL of the markdown file for the given game. */

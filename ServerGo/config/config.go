@@ -341,13 +341,13 @@ type TexasHoldemConfig struct {
 	MaxPotPerHand         int  `json:"max_pot_per_hand"`          // 默认 100000
 }
 
-// WealthConfig 控制财商流游戏(game_kind=wealth)的月度节奏与 Agent(P0 v1)。
-// 契约: lag_docs/财商流游戏/已实现/02-架构设计/财商流游戏-后端架构与经济引擎-v1.md §3。
+// WealthConfig 控制虚拟城市(game_kind=wealth)的月度节奏与 Agent(P0 v1)。
+// 契约: lag_docs/虚拟城市/已实现/02-架构设计/虚拟城市-后端架构与经济引擎-v1.md §3。
 type WealthConfig struct {
 	// MonthMs 1 游戏月的窗口毫秒数(默认 8000,clamp [3000,30000])。
 	MonthMs int `json:"month_ms"`
 	// ProfessionDocsPath 文档池(75k 人物卡)磁盘根,默认
-	// "./lag_docs/财商流游戏/玩家职业设计"。
+	// "./lag_docs/虚拟城市/玩家职业设计"。
 	ProfessionDocsPath string `json:"profession_docs_path"`
 	// ProfessionPoolDefault 建房缺省卡池: "docs"(75k 文档池,2026-09-16 起默认) |
 	// "curated"(内嵌 14 精选卡,文档池不可用时的兜底)。
@@ -1042,7 +1042,7 @@ func applyDefaults(c *Config) {
 		c.Wealth.MonthMs = 30000
 	}
 	if c.Wealth.ProfessionDocsPath == "" {
-		c.Wealth.ProfessionDocsPath = "./lag_docs/财商流游戏/玩家职业设计"
+		c.Wealth.ProfessionDocsPath = "./lag_docs/虚拟城市/玩家职业设计"
 	}
 	if c.Wealth.ProfessionPoolDefault == "" {
 		// 2026-09-16 §文档池解析修复:默认切到 "docs"。文档池 75k 卡经形状容错

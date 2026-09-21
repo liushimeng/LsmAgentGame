@@ -1371,9 +1371,9 @@ const en: Dict = {
   // 2026-08-12 §20260812-01 U3 — Emotion Contagion
   'werewolf.contagion.infected': '🦠 infected',
 
-  // ── Wealth Game / wealth (2026-09-14 P0) ──
-  'nav.wealth': 'Wealth Game',
-  'wealth.title': 'Wealth Game',
+  // ── Virtual City / wealth (2026-09-14 P0) ──
+  'nav.wealth': 'Virtual City',
+  'wealth.title': 'Virtual City',
   'wealth.subtitle': 'Life finance sandbox, age 25–60',
   'wealth.createRoom': 'Create Room',
   'wealth.roomName': 'Room Name',
@@ -1393,7 +1393,7 @@ const en: Dict = {
   'wealth.join': 'Join',
   'wealth.spectate': 'Spectate',
   'wealth.full': 'Full',
-  'wealth.noRooms': 'No wealth rooms yet',
+  'wealth.noRooms': 'No Virtual City rooms yet',
   'wealth.createFirst': 'Click "Create Room" to start your age 25→60 life run',
   // 2026-09-16 wealth 10–12 seats: capacity 8 → 12, min seats to start 3 → 10.
   'wealth.lobbyHint': '10–12 players (human + Agents) · auto-starts at 12 seats or ≥10 seated',
@@ -1595,7 +1595,7 @@ const en: Dict = {
   'wealth.botPanel.statusActive': 'Active',
   'wealth.botPanel.statusOut': 'Out',
   'wealth.chat.playerFallback': 'Player {n}',
-  'wealth.minimap.aria': 'Wealth city minimap',
+  'wealth.minimap.aria': 'Virtual City minimap',
   'wealth.pool.cardsTitle': 'Profession cards ({n})',
   'wealth.pool.cardSalary': '¥{v}/mo',
   'wealth.pool.cardSavings': 'Savings (¥10k): {v}',

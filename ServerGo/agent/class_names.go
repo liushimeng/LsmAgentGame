@@ -152,7 +152,7 @@ func AllAgentClassNames() []AgentClassName {
 		AgentClassDebateMemoryCompact,
 		// 2026-08-31 §20260831-03 — 辩论比赛解说 Agent
 		AgentClassDebateCommentator,
-		// 2026-09-14 §财商流P0 — 财商流游戏玩家 Bot
+		// 2026-09-14 §财商流P0 — 虚拟城市玩家 Bot
 		AgentClassWealthPlayer,
 	}
 }
@@ -199,11 +199,11 @@ const (
 	// 详见 lag_docs/辩论比赛/辩论比赛总体的流程设计.md §20260831-03。
 	AgentClassDebateCommentator AgentClassName = "LsmAgentGame-Debate-Commentator"
 
-	// AgentClassWealthPlayer 是财商流游戏玩家 Bot 的 AgentClassName(2026-09-14 §财商流P0)。
+	// AgentClassWealthPlayer 是虚拟城市玩家 Bot 的 AgentClassName(2026-09-14 §财商流P0)。
 	// 由 ServerGo/agent/wealthplayer/ 的 Agent struct 实现;驱动 game/wealth 引擎
 	// 按月度节拍参与人生沙盘(每月 ≤3 个动作工具 + ≤1 次 speak + submit_month)。
 	// 与狼人杀玩家的核心差异: 无阵营/隐藏身份博弈,决策对象是个人三表与市场周期;
 	// 与德扑的差异: 每月多次动作(德扑每轮仅 1 次 tool_use)。
-	// 详见 lag_docs/财商流游戏/已实现/03-Agent设计/财商流游戏-WealthPlayer-Agent设计-v1.md。
+	// 详见 lag_docs/虚拟城市/已实现/03-Agent设计/虚拟城市-WealthPlayer-Agent设计-v1.md。
 	AgentClassWealthPlayer AgentClassName = "LsmAgentGame-Wealth-Player"
 )

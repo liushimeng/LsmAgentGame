@@ -28,7 +28,7 @@ func TestAgentClassWerewolfMemoryCompact_Wired(t *testing.T) {
 	}
 }
 
-// TestAgentClassWealthPlayer_Wired 校验财商流玩家 Bot 的 AgentClassName 已按
+// TestAgentClassWealthPlayer_Wired 校验虚拟城市玩家 Bot 的 AgentClassName 已按
 // §24 登记(常量 + AllAgentClassNames + IsValidAgentClassName)——防 §130
 // 「声明了却从不接线」复发(2026-09-14 §财商流P0,G3 门禁)。
 func TestAgentClassWealthPlayer_Wired(t *testing.T) {

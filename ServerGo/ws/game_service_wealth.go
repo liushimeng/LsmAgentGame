@@ -1,4 +1,4 @@
-// Package ws — game_service_wealth.go: 财商流游戏 WS 帧处理
+// Package ws — game_service_wealth.go: 虚拟城市 WS 帧处理
 // (2026-09-14 §财商流P0)。
 //
 // 契约: 协议契约文档 §1–§2(帧总表)+ §3(game.state 载荷)+ §4(动作语义);

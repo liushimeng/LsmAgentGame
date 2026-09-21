@@ -1,6 +1,6 @@
 // Package profession — card.go: 职业卡结构(P0 v1,2026-09-14 §财商流P0)。
 //
-// 契约: lag_docs/财商流游戏/已实现/03-Agent设计/财商流游戏-职业卡与加载器设计-v1.md §1。
+// 契约: lag_docs/虚拟城市/已实现/03-Agent设计/虚拟城市-职业卡与加载器设计-v1.md §1。
 // 精选 10 卡(curated.go)与文档池卡(loader.go)共用此结构。
 package profession
 

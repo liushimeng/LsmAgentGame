@@ -1,7 +1,7 @@
 // Package profession — frontmatter.go: 文档池 frontmatter 容错解析
 // (2026-09-16 §文档池解析修复 P0)。
 //
-// 事故背景: 知识库 `lag_docs/财商流游戏/玩家职业设计/`(75,115 张人物卡,
+// 事故背景: 知识库 `lag_docs/虚拟城市/玩家职业设计/`(75,115 张人物卡,
 // Schema v1.0 → v1.1 混存)的真实 frontmatter 形状与旧 `docCard` 不匹配:
 //
 //	work_intensity:            {weekly_hours: 48, overtime: 中, risk: 中}   ← map,旧代码按 string 解
@@ -434,11 +434,192 @@ func extractFrontmatter(s string) []byte {
 	return nil
 }
 
+// sanitizeFrontmatterYAML 修复真实文档池中三类可确定性恢复的 YAML 生成器瑕疵：
+//
+//  1. `key:` 下一行单独出现未缩进的 `[]`。yaml.v3 在 block sequence 上下文中
+//     会把该形状解析成 `could not find expected ':'`；合并为 `key: []` 后语义不变。
+//  2. `_enrich_v44.src_line` 是一条以竖线分隔的原始表格行，历史生成器写成了
+//     未闭合的单引号标量（内部还可能含 `:` / `|`）。该字段不属于 docCard 消费
+//     字段，但 YAML 语法错误会让整卡失败；这里重写为合法单引号标量并保留内容。
+//  3. 极少数 enrich 产物把根字段整段重复追加；按“后写覆盖前写”删除旧块，
+//     避免 yaml.v3 duplicate key 拒绝整卡。
+//
+// 修复必须只做语法等价变换，不用猜测业务字段，也不得修改磁盘上的 75k 张卡。
+// 若未来出现新的语法漂移，应继续保持“未知字段可丢弃/可修复，核心字段形状容错”的边界。
+func sanitizeFrontmatterYAML(fm []byte) []byte {
+	lines := dropDuplicateRootMappingKeys(
+		strings.Split(strings.TrimSuffix(string(fm), "\n"), "\n"))
+	out := make([]string, 0, len(lines))
+
+	for i := 0; i < len(lines); i++ {
+		ln := strings.TrimRight(lines[i], "\r")
+		trimmed := strings.TrimSpace(ln)
+
+		// 形状 1：`key:` + 下一行单独 `[]` → `key: []`。
+		if strings.HasSuffix(trimmed, ":") && i+1 < len(lines) &&
+			strings.TrimSpace(strings.TrimRight(lines[i+1], "\r")) == "[]" {
+			indent := ln[:len(ln)-len(strings.TrimLeft(ln, " \t"))]
+			key := strings.TrimSpace(strings.TrimSuffix(trimmed, ":"))
+			out = append(out, indent+key+": []")
+			i++
+			continue
+		}
+
+		// 形状 2：只修复已知的 src_line 元数据标量；核心字段不做猜测性改写。
+		if key, value, ok := splitYAMLScalarLine(trimmed); ok && key == "src_line" && value != "" {
+			indent := ln[:len(ln)-len(strings.TrimLeft(ln, " \t"))]
+			if srcLineQuoteUnclosed(lines, i, indent) {
+				out = append(out, indent+"src_line: "+yamlSingleQuote(value))
+				continue
+			}
+		}
+
+		out = append(out, ln)
+	}
+	return []byte(strings.Join(out, "\n") + "\n")
+}
+
+// rootMappingKey 返回零缩进 `key:` / `key: value` 的 key；序列项、注释、
+// 深层缩进行都不属于根 mapping key。
+func rootMappingKey(line string) (string, bool) {
+	if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "-") {
+		return "", false
+	}
+	if len(line)-len(strings.TrimLeft(line, " \t")) != 0 {
+		return "", false
+	}
+	i := strings.Index(line, ":")
+	if i <= 0 {
+		return "", false
+	}
+	key := strings.TrimSpace(line[:i])
+	if key == "" || strings.ContainsAny(key, "{}[]#'\"") {
+		return "", false
+	}
+	rest := strings.TrimSpace(line[i+1:])
+	if rest != "" && !strings.HasPrefix(rest, "'") && !strings.HasPrefix(rest, "\"") &&
+		strings.ContainsAny(rest, "{}[]") {
+		return "", false
+	}
+	return key, true
+}
+
+// dropDuplicateRootMappingKeys 对真实池 enrich 产物中重复追加的根字段做“后写覆盖”
+// 净化：删除前一次 key block，保留后一次。yaml.v3 在词法阶段就会拒绝 duplicate
+// key，因此必须在 Unmarshal 前处理；块边界由下一个零缩进 key 划定，缩进的儿子
+// 序列/映射全部随父块删除，不猜测字段内容。
+func dropDuplicateRootMappingKeys(lines []string) []string {
+	type keyBlock struct {
+		start int
+		end   int
+		drop  bool
+	}
+	latest := make(map[string]*keyBlock)
+	blocks := make([]*keyBlock, 0)
+	var current *keyBlock
+	for i := range lines {
+		ln := strings.TrimRight(lines[i], "\r")
+		key, ok := rootMappingKey(ln)
+		if !ok {
+			continue
+		}
+		if current != nil {
+			current.end = i
+		}
+		if old, exists := latest[key]; exists {
+			old.drop = true
+		}
+		current = &keyBlock{start: i, end: len(lines)}
+		blocks = append(blocks, current)
+		latest[key] = current
+	}
+
+	dropRanges := make(map[int]struct{})
+	for _, block := range blocks {
+		if !block.drop {
+			continue
+		}
+		for i := block.start; i < block.end && i < len(lines); i++ {
+			dropRanges[i] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(lines))
+	for i, ln := range lines {
+		if _, exists := dropRanges[i]; exists {
+			continue
+		}
+		out = append(out, ln)
+	}
+	return out
+}
+
+// srcLineQuoteUnclosed 判断 src_line 的单引号标量是否真的缺失闭合。
+// 部分合法数据会把竖线表格行折叠到 2–3 个物理行，闭合引号可能在后续更深层
+// 缩进行上；这些行必须原样保留，不能在首行提前补引号。
+func srcLineQuoteUnclosed(lines []string, start int, indent string) bool {
+	first := strings.TrimSpace(strings.TrimRight(lines[start], "\r"))
+	_, value, ok := splitYAMLScalarLine(first)
+	if !ok || !strings.HasPrefix(value, "'") {
+		return false
+	}
+	if len(value) >= 2 && strings.HasSuffix(value, "'") {
+		return false
+	}
+
+	srcIndent := len(indent)
+	for i := start + 1; i < len(lines); i++ {
+		ln := strings.TrimRight(lines[i], "\r")
+		trimmed := strings.TrimSpace(ln)
+		if trimmed == "" {
+			continue
+		}
+		lineIndent := len(ln) - len(strings.TrimLeft(ln, " \t"))
+		if lineIndent <= srcIndent {
+			// 回到同级 key仍未看到闭合引号，说明这是生成器遗留的未闭合标量。
+			return true
+		}
+		if strings.HasSuffix(trimmed, "'") {
+			return false
+		}
+	}
+	return true
+}
+
+// splitYAMLScalarLine 拆出简单 `key: value` 行；key 含集合/注释字符时视为
+// 非简单标量行，交回原样输出。
+func splitYAMLScalarLine(line string) (key, value string, ok bool) {
+	if strings.HasPrefix(line, "#") {
+		return "", "", false
+	}
+	i := strings.Index(line, ":")
+	if i <= 0 || i == len(line)-1 {
+		return "", "", false
+	}
+	key = strings.TrimSpace(line[:i])
+	if key == "" || strings.ContainsAny(key, "{}[]#") {
+		return "", "", false
+	}
+	value = strings.TrimSpace(line[i+1:])
+	return key, value, true
+}
+
+// yamlSingleQuote 把标量重写为合法 YAML 单引号形式。历史数据里已有引号只作为
+// 原始值边界处理；内部单引号按 YAML 规则双写，确保竖线、冒号、逗号均无需转义。
+func yamlSingleQuote(value string) string {
+	if len(value) >= 2 && value[0] == '\'' && value[len(value)-1] == '\'' {
+		value = value[1 : len(value)-1]
+		value = strings.ReplaceAll(value, "''", "'")
+	} else if strings.HasPrefix(value, "'") {
+		value = strings.TrimPrefix(value, "'")
+	}
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
 // parseDocCard 解析 frontmatter YAML → docCard(形状容错;仅 YAML 语法错误
 // 才返回 error)。
 func parseDocCard(fm []byte) (docCard, error) {
 	var raw docCard
-	if err := yaml.Unmarshal(fm, &raw); err != nil {
+	if err := yaml.Unmarshal(sanitizeFrontmatterYAML(fm), &raw); err != nil {
 		return docCard{}, err
 	}
 	return raw, nil

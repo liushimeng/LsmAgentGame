@@ -1,7 +1,7 @@
 /**
  * LorenzCurvePanel — 洛伦兹曲线 + 基尼系数 + 我的位置（2026-09-19 §P2 v2）
  *
- * 契约: lag_docs/财商流游戏/已实现/07-P2财富可视化/.../§13.3。
+ * 契约: lag_docs/虚拟城市/已实现/07-P2财富可视化/.../§13.3。
  * 数据源: game.state.society.lorenz_points / gini / 我的净资产(net_worth from my)。
  * 渲染: 纯 SVG 折线(13 点折线 + 完美平等对角线 + 我的位置点)。
  *

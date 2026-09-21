@@ -2,7 +2,7 @@
 // (2026-09-16 §文档池解析修复 P0)。
 //
 // 用例直接内联**真实知识库 Schema v1.1 的字段形状**(从
-// lag_docs/财商流游戏/玩家职业设计/…/N2005-彭民凯.md 节选),确保「map 形
+// lag_docs/虚拟城市/玩家职业设计/…/N2005-彭民凯.md 节选),确保「map 形
 // work_intensity / []map 形 goals_short / employment / name」永不再把整卡
 // 解析打挂 —— 旧实现正是因为只测合成 v1.0 纯字符串 fixture 而全绿漏过事故。
 package profession
@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -334,19 +335,117 @@ employment: 全职
 	}
 }
 
+// TestParse_RecoverRealPoolGeneratorYAMLFragments 覆盖真实池两类确定性 YAML 生成器瑕疵：
+// `key:` 后零缩进 `[]`，以及 src_line 未闭合单引号且含竖线/冒号。修复只发生在
+// 解析输入副本上，核心字段仍按原值解析，磁盘文档池不被批量改写。
+func TestParse_RecoverRealPoolGeneratorYAMLFragments(t *testing.T) {
+	fm := []byte("id: NTEST\r\n" +
+		"name: 测试丙\r\n" +
+		"occupation: 蔬菜大棚技术员\r\n" +
+		"industry_l1: A\r\n" +
+		"income_monthly: 12000\r\n" +
+		"monthly_expense: 6000\r\n" +
+		"savings_stock: 30000\r\n" +
+		"age: 36\r\n" +
+		"work_intensity: {weekly_hours: 48, overtime: 中, risk: 中}\r\n" +
+		"debts:\r\n" +
+		"[]\r\n" +
+		"_raw:\r\n" +
+		"_enrich_v44:\r\n" +
+		"  src_line: '| NTEST | 测试丙 · 36/健康B | 长沙租房2400 | 未婚 | O'Brien:大棚技术员,12000(8000-16000)\r\n" +
+		"  legacy_name: 测试丙\r\n")
+
+	clean := sanitizeFrontmatterYAML(fm)
+	if !strings.Contains(string(clean), "debts: []") {
+		t.Fatalf("空集合未合并为合法 flow sequence:\n%s", clean)
+	}
+	if !strings.Contains(string(clean), "src_line: '| NTEST | 测试丙 · 36/健康B | 长沙租房2400 | 未婚 | O''Brien:大棚技术员,12000(8000-16000)'") {
+		t.Fatalf("src_line 未重写为合法 YAML 单引号标量:\n%s", clean)
+	}
+
+	raw, err := parseDocCard(fm)
+	if err != nil {
+		t.Fatalf("parseDocCard: %v", err)
+	}
+	if raw.ID != "NTEST" || raw.Name.Text != "测试丙" || raw.Occupation.Text != "蔬菜大棚技术员" {
+		t.Fatalf("核心身份数据被 YAML 修复影响: %+v", raw)
+	}
+	if !raw.IncomeMonthly.Valid || raw.IncomeMonthly.Value != 12000 {
+		t.Fatalf("income_monthly = %+v, want 12000", raw.IncomeMonthly)
+	}
+	if raw.WorkIntensity.Level != "中" {
+		t.Fatalf("work_intensity.level = %q, want 中", raw.WorkIntensity.Level)
+	}
+}
+
+// TestParse_DuplicateEnrichKeysAreMerged 覆盖极少数真实卡的整段 enrich 重复追加：
+// duplicate key 不能让整卡失败；同名字段按后写覆盖前写合并，未知元数据重复同样被净化。
+func TestParse_DuplicateEnrichKeysAreMerged(t *testing.T) {
+	raw, err := parseDocCard([]byte(`id: DUP
+name: 重复字段卡
+occupation: 区块链应用工程师
+income_monthly: 18000
+personality:
+  - 保守
+personality:
+  - 理性
+opening_hook: 第一版开场白
+opening_hook: 第二版开场白，长度足以通过基础兜底校验。
+_enrich_v44:
+  ts: "2026-09-18T00:00:00Z"
+_enrich_v44:
+  ts: "2026-09-19T00:00:00Z"
+`))
+	if err != nil {
+		t.Fatalf("parseDocCard: %v", err)
+	}
+	if raw.ID != "DUP" || raw.Occupation.Text != "区块链应用工程师" || !raw.IncomeMonthly.Valid {
+		t.Fatalf("核心字段解析异常: %+v", raw)
+	}
+	if len(raw.Personality.Items) != 1 || raw.Personality.Items[0] != "理性" {
+		t.Fatalf("personality = %v, want 后写覆盖 [理性]", raw.Personality.Items)
+	}
+	if raw.OpeningHook.Text != "第二版开场白，长度足以通过基础兜底校验。" {
+		t.Fatalf("opening_hook = %q, want 后写覆盖", raw.OpeningHook.Text)
+	}
+}
+
+// TestParse_ValidMultilineSrcLineIsPreserved 真实池中合法 src_line 可以跨多个
+// 更深层缩进行，闭合引号在最后一行；净化器不得在首行提前补引号。
+func TestParse_ValidMultilineSrcLineIsPreserved(t *testing.T) {
+	fm := []byte(`id: MLINE
+name: 多行元数据卡
+occupation: 市场推广与营销
+income_monthly: 15000
+_raw:
+_enrich_v44:
+  src_line: '| NMLINE | 多行元数据卡 · 长沙租房2400
+    | 已婚;父母县城退休 | 市场推广与营销,15000(10000-20000)
+    |'
+  legacy_name: 多行元数据卡
+`)
+	raw, err := parseDocCard(fm)
+	if err != nil {
+		t.Fatalf("parseDocCard: %v", err)
+	}
+	if raw.ID != "MLINE" || raw.Occupation.Text != "市场推广与营销" || !raw.IncomeMonthly.Valid {
+		t.Fatalf("核心字段解析异常: %+v", raw)
+	}
+}
+
 // TestResolveDistrict_Priority 城区解析优先级:行业 > 城市关键词 > 城市分层 > 哈希散列。
 func TestResolveDistrict_Priority(t *testing.T) {
 	cases := []struct {
 		industry, city, id, want string
 	}{
-		{"Q", "县城", "X1", "finance"},           // 行业优先(金融与保险)
-		{"", "一线城市", "X2", "finance"},          // 关键词表
-		{"", "高新区", "X3", "tech"},              // 关键词表
-		{"", "北京", "X4", "finance"},            // 城市分层:一线
-		{"", "杭州", "X5", "tech"},               // 城市分层:新一线
-		{"", "厦门", "X6", "commerce"},           // 城市分层:二线
-		{"P", "未知", "X7", "tech"},              // 行业:信息与通信
-		{"A", "未知", "X8", "suburb"},            // 行业:农林牧渔
+		{"Q", "县城", "X1", "finance"},  // 行业优先(金融与保险)
+		{"", "一线城市", "X2", "finance"}, // 关键词表
+		{"", "高新区", "X3", "tech"},     // 关键词表
+		{"", "北京", "X4", "finance"},   // 城市分层:一线
+		{"", "杭州", "X5", "tech"},      // 城市分层:新一线
+		{"", "厦门", "X6", "commerce"},  // 城市分层:二线
+		{"P", "未知", "X7", "tech"},     // 行业:信息与通信
+		{"A", "未知", "X8", "suburb"},   // 行业:农林牧渔
 	}
 	for _, c := range cases {
 		got := resolveDistrict(c.industry, c.city, c.id)

@@ -1,6 +1,6 @@
 // Wealth P1-4 commercial insurance i18n (en) — split from en.ts (≤1800 line cap).
 // Key set mirrors the WealthDict P1-4 section in wealthKeys.ts;
-// wording source: lag_docs/财商流游戏/已实现/10-P1保险系统/财商流游戏-P1-商业保险与风险转移引擎-v1.md §10.2.
+// wording source: lag_docs/虚拟城市/已实现/10-P1保险系统/虚拟城市-P1-商业保险与风险转移引擎-v1.md §10.2.
 const wealthInsurance = {
   // Sidebar tab
   'wealth.tab.insurance': 'Insurance',

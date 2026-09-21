@@ -104,8 +104,8 @@ const (
 	// 2026-07-10.
 	ErrRestartVoteWrongPhase = 30200
 
-	// 35001–35012 — 财商流游戏(wealth)专用段(2026-09-14 §财商流P0)。
-	// 契约: lag_docs/财商流游戏/已实现/02-架构设计/财商流游戏-WS与HTTP协议契约-v1.md §5。
+	// 35001–35012 — 虚拟城市(wealth)专用段(2026-09-14 §财商流P0)。
+	// 契约: lag_docs/虚拟城市/已实现/02-架构设计/虚拟城市-WS与HTTP协议契约-v1.md §5。
 	ErrWealthRoomNotFound          = 35001
 	ErrWealthNotPlaying            = 35002
 	ErrWealthNotEnoughPlayers      = 35003
@@ -118,17 +118,17 @@ const (
 	ErrWealthGateFailed            = 35010
 	ErrWealthNotOwner              = 35011
 	ErrWealthProfessionPoolEmpty   = 35012
-	// P1: 财商流提前还款 / 明斯基(v2.60 N11-4/N11-5/N12-3/N12-5)专用错误码。
+	// P1: 虚拟城市提前还款 / 明斯基(v2.60 N11-4/N11-5/N12-3/N12-5)专用错误码。
 	ErrLoanNotFound           = 35013
 	ErrEarlyRepayOnlyMortgage = 35014
 	ErrCashNotEnoughRepay     = 35015
-	// 35016–35020 — 财商流 P1 真实经济循环 + 社会调研(2026-09-16 §财商流P1-2)。
+	// 35016–35020 — 虚拟城市 P1 真实经济循环 + 社会调研(2026-09-16 §财商流P1-2)。
 	ErrWealthSurveyOptionsInvalid    = 35016 // 调研选项数非法(须 2-6)或选项索引越界
 	ErrWealthSurveyOpenExists        = 35017 // 已有进行中的调研(每房同时 1 个 open)
 	ErrWealthSurveyMonthlyLimit      = 35018 // 本月已达调研发起上限(每月 1 个/累计 20 个)
 	ErrWealthSurveyNotFound          = 35019 // 调研不存在/已关闭/已回答
 	ErrWealthConsumptionLevelInvalid = 35020 // 消费档位非法(须 0-3)
-	// 35021–35035 — 财商流 P2 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
+	// 35021–35035 — 虚拟城市 P2 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
 	ErrWealthListingInvalid    = 35021 // 挂单无效(资产不存在/参数非法)
 	ErrWealthListingExpired    = 35022 // 挂单已过期
 	ErrWealthListingNotFound   = 35023 // 挂单不存在
@@ -145,8 +145,8 @@ const (
 	ErrWealthAuctionNotFound   = 35034 // 拍卖不存在
 	ErrWealthInfoNotFound      = 35035 // 信息不存在/未成交
 	ErrWealthFullAgentReject   = 35036 // 全 Agent 房间拒绝人类加入(2026-09-19 §全Agent模式)
-	// 35037–35041 — 财商流 P1 商业保险与风险转移引擎(2026-09-19 §财商流P1-4)。
-	// 契约: lag_docs/财商流游戏/已实现/10-P1保险系统/财商流游戏-P1-商业保险与风险转移引擎-v1.md §9。
+	// 35037–35041 — 虚拟城市 P1 商业保险与风险转移引擎(2026-09-19 §财商流P1-4)。
+	// 契约: lag_docs/虚拟城市/已实现/10-P1保险系统/虚拟城市-P1-商业保险与风险转移引擎-v1.md §9。
 	ErrWealthInsuranceKindInvalid = 35037 // kind 非 4 险种之一
 	ErrWealthInsuranceExists      = 35038 // 重复投保同险种(每人每险种 1 张有效保单)
 	ErrWealthInsuranceNotFound    = 35039 // 退保/操作时无有效保单
@@ -214,7 +214,7 @@ var DefaultMessages = map[int]string{
 	ErrPropPlayerDead:        "死亡玩家不能使用道具（仅存活玩家可用）",
 	ErrDeadPlayerAction:      "死亡玩家不能执行该动作（仅存活玩家可用）",
 
-	// 财商流游戏(wealth)专用段 — 协议契约文档 §5 默认英文消息照抄。
+	// 虚拟城市(wealth)专用段 — 协议契约文档 §5 默认英文消息照抄。
 	ErrWealthRoomNotFound:          "wealth room not found",
 	ErrWealthNotPlaying:            "wealth game not in playing state",
 	ErrWealthNotEnoughPlayers:      "wealth game needs at least 3 seated players",
@@ -227,17 +227,17 @@ var DefaultMessages = map[int]string{
 	ErrWealthGateFailed:            "wealth cognition/energy/network gate failed",
 	ErrWealthNotOwner:              "wealth operation requires room owner",
 	ErrWealthProfessionPoolEmpty:   "wealth profession pool unavailable",
-	// P1: 财商流提前还款 / 明斯基错误码默认英文消息。
+	// P1: 虚拟城市提前还款 / 明斯基错误码默认英文消息。
 	ErrLoanNotFound:           "loan not found",
 	ErrEarlyRepayOnlyMortgage: "early repay only allowed for mortgage loans",
 	ErrCashNotEnoughRepay:     "cash not enough for early repayment (including penalty)",
-	// 35016–35020 — 财商流 P1 真实经济循环 + 社会调研(2026-09-16 §财商流P1-2)。
+	// 35016–35020 — 虚拟城市 P1 真实经济循环 + 社会调研(2026-09-16 §财商流P1-2)。
 	ErrWealthSurveyOptionsInvalid:    "survey options invalid (need 2-6 non-empty) or option index out of range",
 	ErrWealthSurveyOpenExists:        "an open survey already exists (one open per room)",
 	ErrWealthSurveyMonthlyLimit:      "survey launch limit reached (1 per month / 20 per room)",
 	ErrWealthSurveyNotFound:          "survey not found / closed / already answered",
 	ErrWealthConsumptionLevelInvalid: "consumption level invalid (must be 0-3)",
-	// 35021–35035 — 财商流 P2 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
+	// 35021–35035 — 虚拟城市 P2 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
 	ErrWealthListingInvalid:    "wealth listing invalid (asset not found or params invalid)",
 	ErrWealthListingExpired:    "wealth listing expired",
 	ErrWealthListingNotFound:   "wealth listing not found",
@@ -254,7 +254,7 @@ var DefaultMessages = map[int]string{
 	ErrWealthAuctionNotFound:   "wealth auction not found",
 	ErrWealthInfoNotFound:      "wealth info not found or not won",
 	ErrWealthFullAgentReject:   "wealth full-agent room rejects human join, use spectate instead",
-	// 35037–35041 — 财商流 P1 商业保险(2026-09-19 §财商流P1-4 §9 默认英文消息)。
+	// 35037–35041 — 虚拟城市 P1 商业保险(2026-09-19 §财商流P1-4 §9 默认英文消息)。
 	ErrWealthInsuranceKindInvalid: "wealth insurance kind invalid",
 	ErrWealthInsuranceExists:      "wealth active policy already exists for this kind",
 	ErrWealthInsuranceNotFound:    "wealth no active policy for this kind",

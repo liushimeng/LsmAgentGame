@@ -840,7 +840,7 @@ func (a *AgentRunner) apply(seat int, toolName, toolID string, fn func() (string
 
 	if err != nil {
 		// 防御 typed nil:*errcode.Error 成功路径返回 nil 指针,装入 error 接口后
-		// err!=nil 为 true 但 .Error() panic(财商流 P0 崩溃根因)。
+		// err!=nil 为 true 但 .Error() panic(虚拟城市 P0 崩溃根因)。
 		if e, ok := err.(*errcode.Error); ok && e == nil {
 			err = nil
 		}

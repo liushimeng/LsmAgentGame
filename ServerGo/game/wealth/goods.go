@@ -1,6 +1,6 @@
 // Package wealth — goods.go: 消费品市场 + 内生 CPI + 恩格尔分配(2026-09-16 §财商流P1-2)。
 //
-// 契约: lag_docs/财商流游戏/已实现/05-P1扩展/财商流游戏-P1-真实经济循环引擎-v1.md §2/§3。
+// 契约: lag_docs/虚拟城市/已实现/05-P1扩展/虚拟城市-P1-真实经济循环引擎-v1.md §2/§3。
 // 纯引擎层:无锁、无 goroutine、无 IO;所有随机性经 w.Rand 驱动(确定性单测)。
 // 月度调用方(SettleMonth)持房间锁。
 package wealth

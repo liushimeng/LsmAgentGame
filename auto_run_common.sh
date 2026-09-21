@@ -95,13 +95,13 @@ declare -A GAME_GLOBS=(
     [debate_usage]="辩论比赛测试工具使用报告_*.md"
     [debate_protocol]="辩论比赛协议抓包分析报告_*.md"
 
-    # 财商流游戏(2026-09-15 起即带前缀,无 legacy)
-    [wealth_main]="财商流游戏自动化测试报告_*.md"
-    [wealth_progress]="财商流游戏自动化测试进度_*.md"
-    [wealth_screenshot]="财商流游戏截图报告_*.md"
-    [wealth_screenshot_progress]="财商流游戏截图进度_*.md"
-    [wealth_usage]="财商流游戏测试工具使用报告_*.md"
-    [wealth_protocol]="财商流游戏协议抓包分析报告_*.md"
+    # 虚拟城市(2026-09-15 起即带前缀,无 legacy)
+    [wealth_main]="虚拟城市自动化测试报告_*.md"
+    [wealth_progress]="虚拟城市自动化测试进度_*.md"
+    [wealth_screenshot]="虚拟城市截图报告_*.md"
+    [wealth_screenshot_progress]="虚拟城市截图进度_*.md"
+    [wealth_usage]="虚拟城市测试工具使用报告_*.md"
+    [wealth_protocol]="虚拟城市协议抓包分析报告_*.md"
 )
 
 # 游戏显示名(commit message / 日志头用)
@@ -112,7 +112,7 @@ declare -A GAME_DISPLAY_NAME=(
     [doudizhu]="斗地主"
     [junqi]="军棋"
     [debate]="辩论比赛"
-    [wealth]="财商流游戏"
+    [wealth]="虚拟城市"
 )
 
 # ---------- enqueue_game_glob <game> <kind> [<kind> ...] ----------

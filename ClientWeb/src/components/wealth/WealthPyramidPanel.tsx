@@ -2,7 +2,7 @@
  * WealthPyramidPanel — 财富金字塔（生存/积累/自由圈三层柱状）
  * 2026-09-19 §P2 v2 §13.3
  *
- * 契约: lag_docs/财商流游戏/已实现/07-P2财富可视化/.../§13.3。
+ * 契约: lag_docs/虚拟城市/已实现/07-P2财富可视化/.../§13.3。
  * 数据源: game.state.society.pyramid_layers(v2 新增)。
  * 复用 EconomyPanel 的 circles 视觉(同生存/积累/自由配色)。
  *

@@ -1,5 +1,5 @@
 /**
- * 财商流游戏 — 对局页（/wealth/:roomId 与 /wealth/spectate/:roomId）。
+ * 虚拟城市 — 对局页（/wealth/:roomId 与 /wealth/spectate/:roomId）。
  *
  * 布局（产品设计 §6.1 线框）：
  *   顶部信息栏（月 / 年龄 / 周期徽章 / 运行时钟 / 我的座位 / 提前开始 / 离开）

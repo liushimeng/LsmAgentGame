@@ -1,6 +1,6 @@
 // Package wealth — distribution_test.go: 资金流向聚合单测(2026-09-19 §P2 v2)。
 //
-// 契约: lag_docs/财商流游戏/已实现/07-P2财富可视化/.../§13.2.3。
+// 契约: lag_docs/虚拟城市/已实现/07-P2财富可视化/.../§13.2.3。
 // 覆盖目标:
 //   - ComputeFlowStat 正确聚合 6 个节点 + 12 类边;
 //   - 玩家间互转(CatTrade 等)被跳过;

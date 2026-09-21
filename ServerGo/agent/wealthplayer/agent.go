@@ -1,4 +1,4 @@
-// Package wealthplayer — agent.go: 财商流游戏玩家 Bot Agent 核心结构
+// Package wealthplayer — agent.go: 虚拟城市玩家 Bot Agent 核心结构
 // (2026-09-14 §财商流P0)。
 //
 // 设计原则(对齐 thpagent,§15/§128):
@@ -23,7 +23,7 @@ type LLMRegistry interface {
 	GetThinkingEnabled(modelKey string) (bool, int)
 }
 
-// Agent 是单个财商流 Bot。
+// Agent 是单个虚拟城市 Bot。
 type Agent struct {
 	// 身份静态。
 	RoomID    string

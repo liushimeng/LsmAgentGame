@@ -1,5 +1,5 @@
 /**
- * 财商流游戏 (Wealth) 资产索引。
+ * 虚拟城市 (Wealth) 资产索引。
  *
  * 降级策略（前端架构文档 §9 + 08-UI优化/02-架构设计 §5）：所有 PNG 由
  * python-generate-image-tool/{generate_wealth_assets,generate_wealth_city_assets}.py

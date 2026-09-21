@@ -1,4 +1,4 @@
-// Package ws — game_service_wealth_bot.go: 财商流游戏 Agent 座位注册
+// Package ws — game_service_wealth_bot.go: 虚拟城市 Agent 座位注册
 // (2026-09-14 §财商流P0-bugfix)。
 //
 // 背景: P0 骨架把 `RegisterAgentSeats` 的非 werewolf/texasholdem 分支直接

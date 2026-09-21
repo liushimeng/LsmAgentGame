@@ -2,10 +2,10 @@
 # AutoTestAndDebug_Wealth.sh
 # ---------------------------------------------------------------
 # 用途：
-#   财商流游戏 P0 专用自动化测试入口。随机选择一个可用的编程 Agent CLI
+#   虚拟城市 P0 专用自动化测试入口。随机选择一个可用的编程 Agent CLI
 #   （Claude Code / OpenCode / Codex），读取当前目录或仓库根
 #   的 AutoTestAndDebug_Wealth.md 作为提示词执行自动化测试；Agent
-#   退出后自动将 TestReport 中以「财商流游戏自动化测试报告_」开头的
+#   退出后自动将 TestReport 中以「虚拟城市自动化测试报告_」开头的
 #   报告文件以中文 git 提交，子模块 UseReport 在子仓库内单独提交。
 #   提示词已内嵌「自动修复流程」章节，Agent 测试完成后在同一会话内
 #   直接执行修复 + 提交推送。
@@ -20,9 +20,9 @@
 #     * 旧运行日志超过保留期自动清理
 #   - AutoTestAndDebug_Wealth.md 优先取当前目录，其次仓库根
 #   - Agent 退出后自动执行 `git add` + `git commit`（中文提交信息，逐路径容错）
-#   - **财商流游戏专用**：仅扫描 `财商流游戏自动化测试报告_*.md` 主报告 glob
-#     + `财商流游戏测试工具使用报告_*.md` 工具报告 glob
-#     + `财商流游戏协议抓包分析报告_*.md` 协议报告 glob
+#   - **虚拟城市专用**：仅扫描 `虚拟城市自动化测试报告_*.md` 主报告 glob
+#     + `虚拟城市测试工具使用报告_*.md` 工具报告 glob
+#     + `虚拟城市协议抓包分析报告_*.md` 协议报告 glob
 #   - 提示词内嵌「自动修复流程」，Agent 测试完成后直接修复 + 提交推送
 #   - 脚本本身赋予 755 权限
 #
@@ -93,10 +93,10 @@ BG_PID="$(start_agent_in_background "${LOG_FILE}" "
 
     # 注(§20260820-03)：TestReport/* 已整目录入 .gitignore(报告处理完即删,不在仓库
     # 堆积),本节 git add 通常无暂存内容、提交自动跳过,保留以兼容未来策略调整。
-    # 财商流游戏专用：仅 add 财商流游戏主报告 + 协议抓包报告 glob
+    # 虚拟城市专用：仅 add 虚拟城市主报告 + 协议抓包报告 glob
     WEALTH_MAIN_GLOB=\"\$(enqueue_game_glob wealth main)\"
     WEALTH_PROTOCOL_GLOB=\"\$(enqueue_game_glob wealth protocol)\"
-    git_add_safe \"TestReport/\${WEALTH_MAIN_GLOB}\" || bg_log '${SCRIPT_TAG}' '警告: TestReport/财商流游戏主报告无可暂存内容(已忽略)'
+    git_add_safe \"TestReport/\${WEALTH_MAIN_GLOB}\" || bg_log '${SCRIPT_TAG}' '警告: TestReport/虚拟城市主报告无可暂存内容(已忽略)'
     git_add_safe \"TestReport/\${WEALTH_PROTOCOL_GLOB}\" 2>/dev/null || true
 
     # 子模块 UseReport 需在子仓库内先提交，再回主仓库暂存 gitlink
@@ -106,7 +106,7 @@ BG_PID="$(start_agent_in_background "${LOG_FILE}" "
         if [[ -n \"\${WEALTH_USAGE_FILES}\" ]]; then
             git -C go-web-debug-tool add -- UseReport/ 2>/dev/null || true
             if ! git -C go-web-debug-tool diff --cached --quiet 2>/dev/null; then
-                if git -C go-web-debug-tool commit -m \"测试: 财商流游戏工具使用报告自动提交 ${TS}\" 2>/dev/null; then
+                if git -C go-web-debug-tool commit -m \"测试: 虚拟城市工具使用报告自动提交 ${TS}\" 2>/dev/null; then
                     bg_log '${SCRIPT_TAG}' '子模块 UseReport 提交成功'
                 else
                     bg_log '${SCRIPT_TAG}' '子模块提交失败(不阻塞主流程)'
@@ -122,7 +122,7 @@ BG_PID="$(start_agent_in_background "${LOG_FILE}" "
         append_run_index script=${SCRIPT_TAG} agent=${SELECTED_AGENT} event=commit_skip
     else
         COMMIT_TS=\"\$(date '+%Y%m%d_%H%M%S')\"
-        if git_commit_chinese '测试' 'wealth' \"\${COMMIT_TS}\" '${SCRIPT_TAG}.sh' 'TestReport/财商流游戏报告 + go-web-debug-tool 子模块 gitlink(如有)'; then
+        if git_commit_chinese '测试' 'wealth' \"\${COMMIT_TS}\" '${SCRIPT_TAG}.sh' 'TestReport/虚拟城市报告 + go-web-debug-tool 子模块 gitlink(如有)'; then
             COMMIT_HASH=\"\$(git rev-parse --short HEAD 2>/dev/null)\"
             bg_log '${SCRIPT_TAG}' 'git 提交成功: '\${COMMIT_HASH}
             append_run_index script=${SCRIPT_TAG} agent=${SELECTED_AGENT} event=commit_done commit=\"\${COMMIT_HASH}\"
