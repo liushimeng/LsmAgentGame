@@ -128,5 +128,5 @@ func FilterByVocab(words []string, vocab map[string]struct{}, keep int) []string
 }
 
 // PersonalityVocab / BehaviorVocab 导出词库(loader 与单测用)。
-func PersonalityVocab() map[string]struct{}  { return personalityVocab }
-func BehaviorVocab() map[string]struct{}     { return behaviorVocab }
+func PersonalityVocab() map[string]struct{} { return personalityVocab }
+func BehaviorVocab() map[string]struct{}    { return behaviorVocab }

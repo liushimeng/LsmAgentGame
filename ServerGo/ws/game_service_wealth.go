@@ -272,17 +272,18 @@ func (s *GameService) broadcastWealthState(roomID string) {
 	world := r.Engine()
 	gameStartedAt := r.GameStartedAtUnix()
 	nextMonth := r.NextMonthAtUnix()
+	citySnap := r.CitySnapshotView() // 2026-09-21 §虚拟城市:城市背景层快照(未建城 nil)
 	// 玩家座位单发。
 	for seat := 0; seat < wealth.MaxSeats; seat++ {
 		uid := seats[seat]
 		if uid == "" {
 			continue
 		}
-		cs := wealth.BuildClientState(roomID, seat, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth)
+		cs := wealth.BuildClientState(roomID, seat, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, citySnap)
 		s.hub.BroadcastTo(uid, wsEnvelope("game.state", 0, cs))
 	}
 	// 观战者(viewer = -1)。
-	cs := wealth.BuildClientState(roomID, -1, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth)
+	cs := wealth.BuildClientState(roomID, -1, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, citySnap)
 	for _, uid := range s.hub.connectedSpectatorUserIDs(roomID) {
 		s.hub.BroadcastTo(uid, wsEnvelope("game.state", 0, cs))
 	}

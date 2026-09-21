@@ -74,6 +74,12 @@ function joinable(r: RoomInfo): boolean {
   return r.status === 'open' && (r.current_count ?? 0) < r.capacity;
 }
 
+/** §20260921 建房解耦 — 居民数徽标紧凑显示(1234 → 1.2k / 100000 → 100k)。 */
+function fmtResidentBadge(n: number): string {
+  if (n >= 1000) return `${Math.round(n / 100) / 10}k`;
+  return String(n);
+}
+
 export function RoomListTable({
   rooms,
   onJoin,
@@ -243,6 +249,17 @@ export function RoomListTable({
                   {room.full_agent && (
                     <span className="room-list-full-agent-badge" title={t('lobby.fullAgentHint')}>
                       🤖 {t('lobby.fullAgent')}
+                    </span>
+                  )}
+                  {/* §20260921 建房解耦 — 城市背景层房间显示居民数徽标
+                      （title = 城市居民数全值；紧凑显示 1k/10k/100k）。 */}
+                  {(room.resident_count ?? 0) > 0 && (
+                    <span
+                      className="room-list-resident-badge"
+                      title={`${room.resident_count?.toLocaleString()}`}
+                      data-testid="room-list-resident-badge"
+                    >
+                      🏙 {fmtResidentBadge(room.resident_count ?? 0)}
                     </span>
                   )}
                 </td>

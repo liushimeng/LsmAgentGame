@@ -272,6 +272,43 @@ export interface WealthRecentEvent {
   text: string;
 }
 
+// ── 城市背景层（2026-09-21 §建房解耦，lag_docs/财商流游戏/已实现/03-城市层）──
+//
+// game.state.city（view.go omitempty）：resident_count=0 的旧房整体不下发，
+// CityStatsPanel 据此整面板不渲染。字段名与后端 view.go 逐字对齐。
+
+/** 城区人口条目（city.districts[]；id 为后端 DistrictDefs 数组下标）。 */
+export interface WealthCityDistrictPop {
+  id: number;
+  name: string;
+  population: number;
+}
+
+/** 居民之声条目（city.voices[]，最近若干条；model = 服务该次生成的模型名）。 */
+export interface WealthCityVoice {
+  month: number;
+  name: string;
+  text: string;
+  model: string;
+}
+
+/** 城市背景层快照（game.state.city）。 */
+export interface WealthCitySnapshot {
+  resident_count: number;
+  /** 就业率（0-1 小数）。 */
+  employment_rate: number;
+  /** 收入中位数（元/月）。 */
+  median_income: number;
+  /** 居民储蓄合计（元）。 */
+  total_savings: number;
+  /** 平均年龄（岁）。 */
+  avg_age: number;
+  /** 压力率（0-1 小数）。 */
+  stressed_rate: number;
+  districts: WealthCityDistrictPop[];
+  voices: WealthCityVoice[];
+}
+
 /** game.state 全量快照（按座位脱敏，BroadcastTo 单发）。 */
 export interface WealthGameState {
   room_id: string;
@@ -316,6 +353,8 @@ export interface WealthGameState {
   listing_book?: WealthListingBook;
   /** 月度资金流向（P2 v2 §13.2.4 财富流动可视化）。 */
   flow_stat?: WealthFlowStat;
+  /** 城市背景层快照（§20260921 建房解耦；resident_count=0 旧房 omit）。 */
+  city?: WealthCitySnapshot;
 }
 
 /** 明斯基全局概览（game.state.minsky_overview，P1 明斯基引擎）。 */
@@ -759,7 +798,9 @@ export interface WealthStartedFrame {
 }
 
 export type WealthEventType =
-  | 'action' | 'move' | 'settle' | 'market' | 'life' | 'chat' | 'error';
+  | 'action' | 'move' | 'settle' | 'market' | 'life' | 'chat' | 'error'
+  // §20260921 城市背景层 — 居民之声事件（走既有事件流 UI，无需新组件）。
+  | 'city_voice';
 
 /** game.event。 */
 export interface WealthEventFrame {

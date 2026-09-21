@@ -343,7 +343,7 @@ func TestSettle_EconomyEnabledResFields(t *testing.T) {
 	}
 	// view 快照:goods 8 类非空 + surveys 空数组(非 null)。
 	cs := BuildClientState("room-p1", 0, w, [MaxSeats]string{"u:0"}, [MaxSeats]string{"玩家0"},
-		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0)
+		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, nil)
 	if len(cs.ConsumerMarket.Goods) != len(goodsOrder) {
 		t.Errorf("consumer market goods: got %d, want %d", len(cs.ConsumerMarket.Goods), len(goodsOrder))
 	}

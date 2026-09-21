@@ -248,7 +248,7 @@ func (f *fakeAgentSeater) SetCommentaryConfig(gameKind, roomID string, cfg *Comm
 	return nil
 }
 
-func (f *fakeAgentSeater) ValidateAgentSeats(seats []AgentSeatConfig) *errcode.Error {
+func (f *fakeAgentSeater) ValidateAgentSeats(gameKind string, seats []AgentSeatConfig) *errcode.Error {
 	var bad []string
 	for _, s := range seats {
 		if f.invalid[s.ModelKey] {
@@ -319,7 +319,7 @@ func TestCreateRoomWithAgents_AllValidAgentSeatModelKeys_PassesValidation(t *tes
 	}
 	// Directly exercise the new hook the way CreateRoomWithAgents does, so we
 	// avoid the post-check MaxRoom DB round-trip that requires MariaDB.
-	if e := seater.ValidateAgentSeats(seats); e != nil {
+	if e := seater.ValidateAgentSeats("werewolf", seats); e != nil {
 		t.Fatalf("validation hook wrongly rejected all-valid keys: %s", e.Message)
 	}
 }
@@ -339,4 +339,28 @@ func TestCreateRoomWithAgents_NoAgentSeaterSkipsValidationWithWarn(t *testing.T)
 	}
 	// The production code at this point would log a warning and fall through;
 	// reaching this point without panic is the assertion.
+}
+
+// TestClampWealthResidentCount 2026-09-21 §虚拟城市(契约 04 §1.1):
+// resident_count 边界 —— 0/1/100000 原样;100001 → clamp 100000;负数 → 0
+// (API 层 400,service 层纵深防御);maxResidents<=0 回落默认 100000。
+func TestClampWealthResidentCount(t *testing.T) {
+	cases := []struct {
+		in, max, want int
+	}{
+		{0, 100000, 0},
+		{1, 100000, 1},
+		{100000, 100000, 100000},
+		{100001, 100000, 100000},
+		{150000, 100000, 100000},
+		{-5, 100000, 0},
+		{50000, 0, 50000},   // max<=0 → 默认 100000
+		{150000, 0, 100000}, // max<=0 → 默认 100000
+		{20000, 20000, 20000},
+	}
+	for _, c := range cases {
+		if got := clampWealthResidentCount(c.in, c.max); got != c.want {
+			t.Errorf("clamp(%d, %d) = %d, want %d", c.in, c.max, got, c.want)
+		}
+	}
 }

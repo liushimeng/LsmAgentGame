@@ -278,7 +278,21 @@ func (l *Loader) SelfCheckResult() PoolSelfCheck {
 // 现改为「失败即补抽」:候选上限 drawRetryFactor×n(不超过池大小),只有池真的
 // 供不出 n 张时才回退精选补足(加载器文档 §3.1 失败语义)。
 // rng 为注入的随机源(同 seed 同索引 → 同卡集,确定性单测)。
+//
+// 2026-09-21 §虚拟城市:核心逻辑抽到 drawPairs(随卡携带 L1 域名),
+// Draw 退化为丢弃 Domain 的薄包装 —— 行为与 rng 消耗序列零变化。
 func (l *Loader) Draw(n int, rng *rand.Rand) []Card {
+	pairs := l.drawPairs(n, rng)
+	out := make([]Card, len(pairs))
+	for i := range pairs {
+		out[i] = pairs[i].Card
+	}
+	return out
+}
+
+// drawPairs 是 Draw / DrawWithDomain 的共用实现:返回带 L1 域名的抽卡结果
+// (curated 回退卡的 Domain 恒为空串)。
+func (l *Loader) drawPairs(n int, rng *rand.Rand) []DomainCard {
 	if n <= 0 {
 		return nil
 	}
@@ -288,7 +302,7 @@ func (l *Loader) Draw(n int, rng *rand.Rand) []Card {
 	pool := append([]string(nil), l.indexPath...)
 	l.mu.RUnlock()
 
-	out := make([]Card, 0, n)
+	out := make([]DomainCard, 0, n)
 	if len(pool) > 0 {
 		// 候选上限:min(池大小, drawRetryFactor×n) —— 前缀 Fisher-Yates 部分洗牌,
 		// 逐个解析,失败(数据缺陷卡/形状漂移)就继续吃下一个候选。
@@ -308,7 +322,7 @@ func (l *Loader) Draw(n int, rng *rand.Rand) []Card {
 			if err != nil {
 				continue
 			}
-			out = append(out, card)
+			out = append(out, DomainCard{Card: card, Domain: domainOfPath(rel)})
 		}
 		if len(out) < n {
 			logger.L().Warn("wealth profession docs pool cannot supply requested card count, falling back to curated",
@@ -324,14 +338,14 @@ func (l *Loader) Draw(n int, rng *rand.Rand) []Card {
 		perm := rng.Perm(len(curated))
 		k := 0
 		for len(out) < n && k < len(perm) {
-			out = append(out, curated[perm[k]])
+			out = append(out, DomainCard{Card: curated[perm[k]]})
 			k++
 		}
 		if len(out) < n {
 			// 精选池也不足 n 张(理论上 curated ≥ MaxSeats=12,不该发生):
 			// 允许重复取用,保证返回张数 = n,座位不会因零值卡变成空洞。
 			for i := 0; len(out) < n && len(curated) > 0; i++ {
-				out = append(out, curated[i%len(curated)])
+				out = append(out, DomainCard{Card: curated[i%len(curated)]})
 			}
 			logger.L().Error("wealth profession curated pool smaller than requested draw",
 				zap.Int("requested", n), zap.Int("curated", len(curated)))

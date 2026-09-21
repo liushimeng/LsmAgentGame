@@ -48,7 +48,7 @@ func (f *texSeaterRecorder) SetJudgeConfig(gameKind, roomID string, desired bool
 	return nil
 }
 
-func (f *texSeaterRecorder) ValidateAgentSeats(seats []AgentSeatConfig) *errcode.Error {
+func (f *texSeaterRecorder) ValidateAgentSeats(gameKind string, seats []AgentSeatConfig) *errcode.Error {
 	return nil
 }
 

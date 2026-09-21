@@ -16,6 +16,8 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -180,7 +182,7 @@ func TestUpdateProviderRequest_PartialPointerSemantics(t *testing.T) {
 	}
 
 	// 场景 2:显式传入 model / provider_type / remark / enabled —— 指针应拿到值。
-	raw2 := `{"model":"NewModel","provider_type":"openai","remark":"note","enabled":false}`
+	raw2 := `{"model":"NewModel","provider_type":"openai","remark":"note","enabled":false,"concurrency_lines":4}`
 	var req2 UpdateProviderRequest
 	if err := json.Unmarshal([]byte(raw2), &req2); err != nil {
 		t.Fatalf("unmarshal failed: %v", err)
@@ -201,6 +203,10 @@ func TestUpdateProviderRequest_PartialPointerSemantics(t *testing.T) {
 	if req2.AgentName != nil {
 		t.Fatalf("agent_name want nil, got %+v", *req2.AgentName)
 	}
+	// concurrency_lines(2026-09-21 线路池)显式传入 → 非 nil 且值正确。
+	if req2.ConcurrencyLines == nil || *req2.ConcurrencyLines != 4 {
+		t.Fatalf("concurrency_lines want 4, got %+v", req2.ConcurrencyLines)
+	}
 
 	// 场景 3:空 body —— 全部 nil,对应后端「无更新直接返回原行」分支。
 	var req3 UpdateProviderRequest
@@ -210,6 +216,158 @@ func TestUpdateProviderRequest_PartialPointerSemantics(t *testing.T) {
 	if req3.AgentName != nil || req3.Model != nil || req3.ProviderType != nil ||
 		req3.APIKey != nil || req3.Endpoint != nil || req3.Enabled != nil || req3.Remark != nil {
 		t.Fatalf("empty body should yield all-nil pointers, got %+v", req3)
+	}
+	if req3.ConcurrencyLines != nil {
+		t.Fatalf("concurrency_lines want nil on empty body, got %+v", *req3.ConcurrencyLines)
+	}
+}
+
+// ─────────────────── concurrency_lines 校验与 agent_name 派生(2026-09-21) ───────────────────
+
+// TestValidateConcurrencyLines — Create/Update 共用校验: nil 与 [1,64] 合法,
+// 越界返回中文错误描述(供 invalid-param 400)。
+func TestValidateConcurrencyLines(t *testing.T) {
+	cases := []struct {
+		in      *int
+		wantErr bool
+	}{
+		{nil, false},
+		{intPtr(1), false},
+		{intPtr(64), false},
+		{intPtr(0), true},
+		{intPtr(-1), true},
+		{intPtr(65), true},
+		{intPtr(1000), true},
+	}
+	for _, tc := range cases {
+		msg := validateConcurrencyLines(tc.in)
+		if (msg != "") != tc.wantErr {
+			t.Fatalf("validateConcurrencyLines(%v) = %q, wantErr=%v", derefInt(tc.in), msg, tc.wantErr)
+		}
+	}
+}
+
+// intPtr / derefInt 是测试用小工具。
+func intPtr(v int) *int    { return &v }
+func derefInt(p *int) int  { if p == nil { return 0 }; return *p }
+
+// TestUniqueAgentName — agent_name 废弃路径的派生规则:
+// 初值 = model;与既有行冲突则 model-2、model-3… 直到唯一;
+// 长串先截断再追加后缀,保证 <= varchar(64);exists 报错时向上传播。
+func TestUniqueAgentName(t *testing.T) {
+	// 无冲突 → 原样返回。
+	got, err := uniqueAgentName("M1", func(string) (bool, error) { return false, nil })
+	if err != nil || got != "M1" {
+		t.Fatalf("uniqueAgentName(free) = %q, %v; want M1, nil", got, err)
+	}
+	// 「二次创建同 model」:已有 M1 与 M1-2 → 派生 M1-3。
+	taken := map[string]bool{"M1": true, "M1-2": true}
+	got, err = uniqueAgentName("M1", func(s string) (bool, error) { return taken[s], nil })
+	if err != nil || got != "M1-3" {
+		t.Fatalf("uniqueAgentName(M1 taken, M1-2 taken) = %q, %v; want M1-3, nil", got, err)
+	}
+	// 连续冲突:只有 M1-4 可用。
+	taken = map[string]bool{"M1": true, "M1-2": true, "M1-3": true}
+	got, err = uniqueAgentName("M1", func(s string) (bool, error) { return taken[s], nil })
+	if err != nil || got != "M1-4" {
+		t.Fatalf("uniqueAgentName(through -3 taken) = %q, %v; want M1-4, nil", got, err)
+	}
+	// 长串截断:64 字节 base 冲突 → base 截到 61 + "-2" 后仍 <= 64。
+	long := strings.Repeat("x", 64)
+	got, err = uniqueAgentName(long, func(s string) (bool, error) { return s == long, nil })
+	if err != nil {
+		t.Fatalf("long-name derive error: %v", err)
+	}
+	if len(got) > 64 || !strings.HasSuffix(got, "-2") {
+		t.Fatalf("long-name derive = %q (len %d), want <=64 bytes ending with -2", got, len(got))
+	}
+	// exists 报错 → 立即传播,不静默空转。
+	sentinel := errors.New("db down")
+	if _, err := uniqueAgentName("M1", func(string) (bool, error) { return false, sentinel }); !errors.Is(err, sentinel) {
+		t.Fatalf("uniqueAgentName must propagate exists error, got %v", err)
+	}
+}
+
+// TestCreateProviderRequest_AgentNameOptional_Unmarshal — 新契约:请求体
+// 不带 agent_name 也能解析(字段为空串);concurrency_lines 可解析为指针。
+func TestCreateProviderRequest_AgentNameOptional_Unmarshal(t *testing.T) {
+	var req CreateProviderRequest
+	body := `{"model":"M9","provider_type":"anthropic","api_key":"sk-x","concurrency_lines":7}`
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if req.AgentName != "" {
+		t.Fatalf("agent_name want empty string when omitted, got %q", req.AgentName)
+	}
+	if req.Model != "M9" {
+		t.Fatalf("model want M9, got %q", req.Model)
+	}
+	if req.ConcurrencyLines == nil || *req.ConcurrencyLines != 7 {
+		t.Fatalf("concurrency_lines want 7, got %+v", req.ConcurrencyLines)
+	}
+}
+
+// TestModelAdmin_CreateProvider_ConcurrencyLinesOutOfRange — 越界值在
+// gormDB 检查**之前**被拒:即便 db 未接线,也返回 invalid-param 400 而不是
+// 被 500 遮蔽。0 与 65 都是越界(合法区间 [1,64])。
+func TestModelAdmin_CreateProvider_ConcurrencyLinesOutOfRange(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := newTestModelAdminAPI(models.UserTypeAdmin)
+	for _, lines := range []int{0, 65} {
+		body := fmt.Sprintf(
+			`{"model":"m","provider_type":"anthropic","api_key":"k","concurrency_lines":%d}`, lines)
+		req := httptest.NewRequest(http.MethodPost, "/api/admin/llm/providers",
+			bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("concurrency_lines=%d: expected 400, got %d body=%s",
+				lines, w.Code, w.Body.String())
+		}
+		if !strings.Contains(w.Body.String(), "concurrency_lines") {
+			t.Fatalf("concurrency_lines=%d: error must mention the field, got %s",
+				lines, w.Body.String())
+		}
+	}
+}
+
+// TestModelAdmin_UpdateProvider_ConcurrencyLinesOutOfRange — Update 路径
+// 同样在查行之前拒绝越界值(400)。
+func TestModelAdmin_UpdateProvider_ConcurrencyLinesOutOfRange(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := newTestModelAdminAPI(models.UserTypeAdmin)
+	body := `{"concurrency_lines":99}`
+	req := httptest.NewRequest(http.MethodPut, "/api/admin/llm/providers/p-1",
+		bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for out-of-range concurrency_lines, got %d body=%s",
+			w.Code, w.Body.String())
+	}
+}
+
+// TestModelAdmin_CreateProvider_WithoutAgentName_ReachesDBLayer — 新契约的
+// 无 DB 表达:请求体不带 agent_name 时**不再被 400 拒绝**,而是继续走到
+// DB 层(此处 gormDB=nil → 500 "db not wired")。派生唯一值(M / M-2 / M-3)
+// 的落库路径由 uniqueAgentName 纯函数测试 + llmintegration 套件覆盖。
+func TestModelAdmin_CreateProvider_WithoutAgentName_ReachesDBLayer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := newTestModelAdminAPI(models.UserTypeAdmin)
+	body := `{"model":"m-no-agent","provider_type":"anthropic","api_key":"k"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/llm/providers",
+		bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("agent_name omitted: expected 500 (db not wired, i.e. validation passed), got %d body=%s",
+			w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "db not wired") {
+		t.Fatalf("expected db-not-wired envelope, got %s", w.Body.String())
 	}
 }
 
@@ -409,5 +567,40 @@ func TestProviderViewJSON_IncludesBalanceWhenSet(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), "\"balance\":12345") {
 		t.Fatalf("expected 'balance':12345 in JSON, got %s", raw)
+	}
+}
+
+// TestProviderViewJSON_IncludesConcurrencyLines — 2026-09-21 线路池改造:
+// providerView(embed 模型行)必须下发 concurrency_lines,且**无 omitempty**
+// —— 0 值(旧行未迁移前的读取瞬间)也显式下发,前端「线路数」列拿到确定的
+// 数字而不是 undefined。
+func TestProviderViewJSON_IncludesConcurrencyLines(t *testing.T) {
+	view := newProviderView(
+		models.TLsmGameLlmProvider{ID: "provider-1", ConcurrencyLines: 3},
+		"https://global.example/v1",
+		"",
+		nil,
+	)
+	raw, err := json.Marshal(view)
+	if err != nil {
+		t.Fatalf("marshal provider view: %v", err)
+	}
+	if !strings.Contains(string(raw), `"concurrency_lines":3`) {
+		t.Fatalf("expected concurrency_lines:3 in JSON, got %s", raw)
+	}
+
+	// 零值也必须出现(非 omitempty)。
+	zero := newProviderView(
+		models.TLsmGameLlmProvider{ID: "provider-2"},
+		"https://global.example/v1",
+		"",
+		nil,
+	)
+	rawZero, err := json.Marshal(zero)
+	if err != nil {
+		t.Fatalf("marshal zero view: %v", err)
+	}
+	if !strings.Contains(string(rawZero), `"concurrency_lines":0`) {
+		t.Fatalf("expected concurrency_lines:0 in JSON (no omitempty), got %s", rawZero)
 	}
 }

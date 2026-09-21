@@ -47,6 +47,10 @@ func (s *GameService) registerWealthAgentSeats(roomID string, seats []service.Ag
 			continue
 		}
 		seatUsers[seatCfg.Seat] = botUserID
+		// 2026-09-21 §虚拟城市(契约 04 §1.4):空 model_key = 线路池驱动座位,
+		// 照常建 bot 用户/注册座位;SeatModelKeys 存空串(下方 RegisterBotSeats
+		// 对空串跳过显式 key 写入,昵称走 AI·居民<seat>号 → Start 抽卡升级)。
+		// 全 Agent 模式判定(len(seatUsers) ≥ MinSeats)不受空 key 影响。
 		seatModels[seatCfg.Seat] = seatCfg.ModelKey
 	}
 	if len(seatUsers) == 0 {

@@ -43,7 +43,7 @@ func newWerewolfSvc(reg *llm.Registry) *GameService {
 
 func TestValidateAgentSeats_NilWerewolfMgr(t *testing.T) {
 	s := &GameService{werewolfMgr: nil}
-	err := s.ValidateAgentSeats([]service.AgentSeatConfig{{Seat: 0, ModelKey: "whatever"}})
+	err := s.ValidateAgentSeats("werewolf", []service.AgentSeatConfig{{Seat: 0, ModelKey: "whatever"}})
 	if err != nil {
 		t.Fatalf("nil werewolfMgr must short-circuit, got %v", err)
 	}
@@ -51,7 +51,7 @@ func TestValidateAgentSeats_NilWerewolfMgr(t *testing.T) {
 
 func TestValidateAgentSeats_NilRegistry(t *testing.T) {
 	s := &GameService{werewolfMgr: werewolf.NewWerewolfManagerWithRegistry(nil)}
-	err := s.ValidateAgentSeats([]service.AgentSeatConfig{{Seat: 0, ModelKey: "X"}})
+	err := s.ValidateAgentSeats("werewolf", []service.AgentSeatConfig{{Seat: 0, ModelKey: "X"}})
 	if err != nil {
 		t.Fatalf("nil registry must short-circuit, got %v", err)
 	}
@@ -59,10 +59,10 @@ func TestValidateAgentSeats_NilRegistry(t *testing.T) {
 
 func TestValidateAgentSeats_EmptySeats(t *testing.T) {
 	s := newWerewolfSvc(stubRegistry(t, map[string]string{"MeiTuan-model": "sk-real"}))
-	if err := s.ValidateAgentSeats(nil); err != nil {
+	if err := s.ValidateAgentSeats("werewolf", nil); err != nil {
 		t.Fatalf("nil seats must short-circuit, got %v", err)
 	}
-	if err := s.ValidateAgentSeats([]service.AgentSeatConfig{}); err != nil {
+	if err := s.ValidateAgentSeats("werewolf", []service.AgentSeatConfig{}); err != nil {
 		t.Fatalf("empty seats must short-circuit, got %v", err)
 	}
 }
@@ -72,7 +72,7 @@ func TestValidateAgentSeats_AllValid(t *testing.T) {
 		"MeiTuan-model": "sk-mt",
 		"DouBao-model":  "sk-db",
 	}))
-	err := s.ValidateAgentSeats([]service.AgentSeatConfig{
+	err := s.ValidateAgentSeats("werewolf", []service.AgentSeatConfig{
 		{Seat: 0, ModelKey: "MeiTuan-model"},
 		{Seat: 1, ModelKey: "DouBao-model"},
 	})
@@ -83,7 +83,7 @@ func TestValidateAgentSeats_AllValid(t *testing.T) {
 
 func TestValidateAgentSeats_UnknownKeyRejected(t *testing.T) {
 	s := newWerewolfSvc(stubRegistry(t, map[string]string{"MeiTuan-model": "sk-real"}))
-	err := s.ValidateAgentSeats([]service.AgentSeatConfig{
+	err := s.ValidateAgentSeats("werewolf", []service.AgentSeatConfig{
 		{Seat: 0, ModelKey: "MeiTuan-model"},
 		{Seat: 1, ModelKey: "GPT-4o"},          // not registered
 		{Seat: 2, ModelKey: "Claude-3.5"},      // not registered
@@ -105,7 +105,7 @@ func TestValidateAgentSeats_PlaceholderKeyRejected(t *testing.T) {
 	s := newWerewolfSvc(stubRegistry(t, map[string]string{
 		"MeiTuan-model": "API-KEY-PLACEHOLDER", // placeholder → not available
 	}))
-	err := s.ValidateAgentSeats([]service.AgentSeatConfig{
+	err := s.ValidateAgentSeats("werewolf", []service.AgentSeatConfig{
 		{Seat: 0, ModelKey: "MeiTuan-model"},
 	})
 	if err == nil || err.Code != errcode.ErrValidationFailed {
@@ -125,7 +125,7 @@ func TestValidateAgentSeats_ErrorListsAvailableModels(t *testing.T) {
 		"DouBao-model":  "sk-db",               // available
 		"GLM-model":     "API-KEY-PLACEHOLDER", // placeholder → NOT available
 	}))
-	err := s.ValidateAgentSeats([]service.AgentSeatConfig{
+	err := s.ValidateAgentSeats("werewolf", []service.AgentSeatConfig{
 		{Seat: 0, ModelKey: "Tencent-model"}, // unknown → rejected
 	})
 	if err == nil || err.Code != errcode.ErrValidationFailed {
@@ -174,11 +174,34 @@ func TestValidateAgentSeats_EmptyKeyRejected(t *testing.T) {
 	s := newWerewolfSvc(stubRegistry(t, map[string]string{
 		"MeiTuan-model": "", // empty key → not available
 	}))
-	err := s.ValidateAgentSeats([]service.AgentSeatConfig{
+	err := s.ValidateAgentSeats("werewolf", []service.AgentSeatConfig{
 		{Seat: 0, ModelKey: "MeiTuan-model"},
 	})
 	if err == nil || err.Code != errcode.ErrValidationFailed {
 		t.Fatalf("empty-key model must be rejected, got %v", err)
+	}
+}
+
+// TestValidateAgentSeats_WealthEmptyKeyPoolDriven 2026-09-21 §虚拟城市
+// (契约 04 §1.2): wealth 的空串 model_key = 线路池驱动,直接放行(不查
+// registry);纯空白 key 归一为空串后同样放行;非空 key 行为不变。
+// werewolf 空 key 仍 400(上一用例覆盖)。
+func TestValidateAgentSeats_WealthEmptyKeyPoolDriven(t *testing.T) {
+	s := newWerewolfSvc(stubRegistry(t, map[string]string{
+		"MeiTuan-model": "sk-real",
+	}))
+	if err := s.ValidateAgentSeats("wealth", []service.AgentSeatConfig{
+		{Seat: 0, ModelKey: ""},
+		{Seat: 1, ModelKey: "   "}, // 纯空白 → 归一空串 → 放行
+		{Seat: 2, ModelKey: "MeiTuan-model"},
+	}); err != nil {
+		t.Fatalf("wealth empty model_key must pass as pool-driven, got %v", err)
+	}
+	// 非空未知 key 在 wealth 下同样拒绝。
+	if err := s.ValidateAgentSeats("wealth", []service.AgentSeatConfig{
+		{Seat: 0, ModelKey: "NoSuch-model"},
+	}); err == nil || err.Code != errcode.ErrValidationFailed {
+		t.Fatalf("wealth unknown non-empty key must still be rejected, got %v", err)
 	}
 }
 
@@ -194,7 +217,7 @@ func TestValidateAgentSeats_InvisibleRuneKeyAccepted(t *testing.T) {
 	seats := []service.AgentSeatConfig{
 		{Seat: 0, ModelKey: "Tencent\u200c-model"}, // ZWNJ between "Tencent" and "-model"
 	}
-	if err := s.ValidateAgentSeats(seats); err != nil {
+	if err := s.ValidateAgentSeats("werewolf", seats); err != nil {
 		t.Fatalf("key with stray ZWNJ must match the clean registry key, got %v", err)
 	}
 	if seats[0].ModelKey != "Tencent-model" {

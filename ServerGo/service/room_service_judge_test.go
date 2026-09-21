@@ -333,7 +333,7 @@ func (f *fakeRecorderAgentSeater) SetJudgeConfig(_ string, _ string, desired boo
 	f.lastJudgeModel = modelKey
 	return nil
 }
-func (f *fakeRecorderAgentSeater) ValidateAgentSeats(seats []AgentSeatConfig) *errcode.Error {
+func (f *fakeRecorderAgentSeater) ValidateAgentSeats(gameKind string, seats []AgentSeatConfig) *errcode.Error {
 	for _, s := range seats {
 		if strings.TrimSpace(s.ModelKey) == "" {
 			return errcode.CodeMsg(errcode.ErrValidationFailed, "agent seat model_key required")

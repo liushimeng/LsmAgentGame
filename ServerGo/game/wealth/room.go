@@ -16,7 +16,9 @@ import (
 
 	"LsmAgentGame/agent/wealthplayer"
 	"LsmAgentGame/errcode"
+	"LsmAgentGame/game/wealth/city"
 	"LsmAgentGame/game/wealth/profession"
+	"LsmAgentGame/llm"
 	"LsmAgentGame/logger"
 	"LsmAgentGame/service"
 
@@ -119,6 +121,21 @@ type WealthRoom struct {
 	// 或前端显式请求 full_agent=true 置位。
 	FullAgentMode bool
 
+	// 2026-09-21 §虚拟城市(契约 03 §6)— 城市背景层。
+	// ResidentCount 建房参数(>0 时 Start 建城);City 背景居民世界。
+	// 持久化说明:房间级 wealth 选项(含本字段)仅存内存 pendingOpts,
+	// 重启不恢复(与 month_ms/pool/seed 同现状),详见 room_city.go 头注。
+	ResidentCount int
+	City          *city.Backdrop
+	// cityRng 城市演化专用 rng(房间 seed ^ citySeedSalt 派生;与引擎 rng 流分离)。
+	cityRng *rand.Rand
+	// linePoolSource LLM 线路池来源(Manager 注入;池驱动座位 + 城市之声共用)。
+	linePoolSource func() *llm.LinePool
+	// cityVoice / 城市之声配置(Start 时构造调度器)。
+	cityVoice         *city.VoiceScheduler
+	cityVoiceEnabled  bool
+	cityVoicePerMonth int
+
 	done     chan struct{}
 	settleCh chan struct{}
 	closed   bool
@@ -162,6 +179,10 @@ func NewWealthRoom(roomID string, monthMs int, pool string, seed int64, llmConcu
 		economyEnabled:   true,
 		surveyEnabled:    true,
 		insuranceEnabled: true,
+		// 2026-09-21 §虚拟城市:城市之声默认开(契约 03 §7;Manager.CreateRoom
+		// 按 cfg 覆盖;无线路池时调度器自动空转,零开销)。
+		cityVoiceEnabled:  true,
+		cityVoicePerMonth: 4,
 	}
 }
 
@@ -231,6 +252,13 @@ func (r *WealthRoom) applyOpts(opts *service.WealthRoomOptions) {
 	}
 	if opts.Seed != 0 {
 		r.seed = opts.Seed
+	}
+	// 2026-09-21 §虚拟城市:resident_count(service 层已 clamp MaxResidents;
+	// 此处再防御负数)。仅 Start 前生效(城市在 Start 一次性合成)。
+	if opts.ResidentCount > 0 {
+		r.ResidentCount = opts.ResidentCount
+	} else if opts.ResidentCount < 0 {
+		r.ResidentCount = 0
 	}
 }
 
@@ -343,7 +371,9 @@ func (r *WealthRoom) RegisterBotSeats(seatUsers map[int]string, seatModels map[i
 			if mk := seatModels[seat]; mk != "" {
 				r.Nicknames[seat] = "AI·" + mk
 			} else {
-				r.Nicknames[seat] = "AI 玩家"
+				// 2026-09-21 §虚拟城市(契约 04 §1.4):池驱动座位注册时先占位
+				// 「AI·居民<seat>号」(1-based 展示);Start 抽卡后升级为 AI·<Card.Name>。
+				r.Nicknames[seat] = fmt.Sprintf("AI·居民%d号", seat+1)
 			}
 		}
 	}
@@ -414,6 +444,21 @@ func (r *WealthRoom) Start(loader *profession.Loader) *errcode.Error {
 		cards[seat] = r.drawCardLocked()
 	}
 
+	// 2026-09-21 §虚拟城市(契约 04 §1.4):池驱动座位(model_key=="")抽卡后
+	// 昵称升级为 AI·<Card.Name>(文档池真实职业卡人名);无卡名(curated 精选卡
+	// 不带化名)回退 AI·居民<seat>号。显式 model_key 座位保持 AI·<model_key> 不变。
+	// 此处先于 hooks.OnState 下发(玩家昵称经 game.state 全房可见)。
+	for seat := 0; seat < MaxSeats; seat++ {
+		if !r.BotSeats[seat] || r.SeatModelKeys[seat] != "" {
+			continue
+		}
+		if name := cards[seat].Name; name != "" {
+			r.Nicknames[seat] = "AI·" + name
+		} else {
+			r.Nicknames[seat] = fmt.Sprintf("AI·居民%d号", seat+1)
+		}
+	}
+
 	seed := r.seed
 	r.World = NewWorld(seed, cards)
 	// P1(§6.5):NewWorld 恒置 EconomyEnabled=true,此处按房间级开关回写。
@@ -421,6 +466,10 @@ func (r *WealthRoom) Start(loader *profession.Loader) *errcode.Error {
 	// P1-4(§财商流P1-4 §11):NewWorld 恒置 InsuranceEnabled=true,此处按开关回写。
 	r.World.InsuranceEnabled = r.insuranceEnabled
 	r.World.StartGame()
+	// 2026-09-21 §虚拟城市(契约 03 §6):resident_count>0 时建城(确定性:
+	// 房间 seed 派生独立 rng);B5:线路池可用时房间信号量容量 = 总线路数。
+	r.startCityLocked()
+	r.resizeAgentSemLocked()
 	r.Status = StatusPlaying
 	r.Phase = PhaseActing
 	r.gameStartedAt = time.Now().Unix()
@@ -646,6 +695,12 @@ func (r *WealthRoom) trySettle(onFinish func(roomID string)) bool {
 	prevEvents := len(r.World.Events)
 	finished, res := r.World.SettleMonth()
 	newEvents := append([]EventRecord(nil), r.World.Events[prevEvents:]...)
+	// 2026-09-21 §虚拟城市(契约 03 §6):月结顺序 SettleMonth() → City.TickMonth
+	// → 广播。城市 tick 在锁内(与引擎结算同互斥域),cpi 取引擎月环比通胀。
+	voiceMonth := r.World.Month
+	if !finished {
+		r.tickCityLocked()
+	}
 	hooks := r.hooks
 	r.eventsSent = len(r.World.Events)
 
@@ -690,6 +745,9 @@ func (r *WealthRoom) trySettle(onFinish func(roomID string)) bool {
 	if hooks.OnState != nil {
 		hooks.OnState(roomID)
 	}
+	// 2026-09-21 §虚拟城市(契约 03 §5):月结后异步触发城市之声(goroutine,
+	// 绝不阻塞月结;终局房不发声)。
+	r.launchCityVoices(voiceMonth)
 	r.wakeBots()
 	return true
 }

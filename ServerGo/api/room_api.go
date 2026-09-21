@@ -44,6 +44,12 @@ type createRoomRequest struct {
 	// 2026-09-14 §财商流P0 — wealth 房间配置(仅 wealth 生效)。
 	// month_ms clamp [3000,30000] 由 service 层校验。
 	Wealth *service.WealthRoomOptions `json:"wealth,omitempty"`
+	// ResidentCount 2026-09-21 §虚拟城市(契约 04 §1.1)— 城市背景居民数
+	// (仅 wealth 生效,其他 kind 静默忽略;与 reveal_role_on_death 同策略)。
+	// 缺省 0 = 不启用城市背景层(纯 12 座旧形态,向后兼容);负数 400;
+	// (0, max_residents] 超上限由 service 层 clamp(默认 100000)。
+	// 并入 Wealth.ResidentCount 透传(wealth 子对象亦可显式携带,顶层优先)。
+	ResidentCount int `json:"resident_count,omitempty"`
 	// FullAgent 2026-09-19 §全Agent模式 — 是否全 Agent 模式(仅 wealth 生效)。
 	// 缺省 / true = 全 Agent 模式;false = 允许人类加入(不推荐)。
 	// 当 agent_seats >= MinSeats(10) 时自动置位,无需前端显式传递。
@@ -131,7 +137,23 @@ func (a *RoomAPI) Create(c *gin.Context) {
 	if req.BigBlind != 0 || req.StartStack != 0 {
 		texasCfg = &service.TexasTableConfig{BigBlind: req.BigBlind, StartStack: req.StartStack}
 	}
-	detail, e := a.svc.CreateRoomWithAgents(c.Request.Context(), kind, userID, req.Name, req.AgentSeats, req.Judge, req.AgentDifficulty, req.Commentary, req.CreatorRole, texasCfg, req.RevealRoleOnDeath, req.Wealth)
+	// 2026-09-21 §虚拟城市(契约 04 §1.1):顶层 resident_count 并入 wealth
+	// 房间配置(仅 wealth 生效;负数 400 —— 显式拒绝而非静默取绝对值)。
+	wealthCfg := req.Wealth
+	if kind == "wealth" && req.ResidentCount != 0 {
+		if req.ResidentCount < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    errcode.ErrValidationFailed,
+				"message": "resident_count must be >= 0",
+			})
+			return
+		}
+		if wealthCfg == nil {
+			wealthCfg = &service.WealthRoomOptions{}
+		}
+		wealthCfg.ResidentCount = req.ResidentCount
+	}
+	detail, e := a.svc.CreateRoomWithAgents(c.Request.Context(), kind, userID, req.Name, req.AgentSeats, req.Judge, req.AgentDifficulty, req.Commentary, req.CreatorRole, texasCfg, req.RevealRoleOnDeath, wealthCfg)
 	if e != nil {
 		c.JSON(http.StatusOK, gin.H{"code": e.Code, "message": e.Message})
 		return

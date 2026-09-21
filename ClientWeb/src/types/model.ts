@@ -60,10 +60,14 @@ export interface LlmProvider {
   remark: string;
   created_at: string;
   updated_at: string;
+  /** §20260921-02 线路池 — 该模型可并行占用的 LLM 线路数 [1,64]，默认 1。
+   *  Σ enabled 行的 concurrency_lines = Agent 调用大模型的全局并发上限。
+   *  旧后端未下发时按 1 兜底展示。*/
+  concurrency_lines: number;
 }
 
 export interface LlmProviderCreate {
-  agent_name: string;
+  /** §20260921-02 — agent_name 已废弃（后端自动派生），前端不再提交。 */
   model: string;
   provider_type: string;
   /** Plaintext API key — used only by create/update endpoints; never echoed back. */
@@ -75,6 +79,8 @@ export interface LlmProviderCreate {
   thinking_budget_tokens?: number;
   enabled?: boolean;
   remark?: string;
+  /** §20260921-02 线路池 — 可选，默认 1，范围 [1,64]，越界后端 400。 */
+  concurrency_lines?: number;
 }
 
 export interface ModelGameLog {

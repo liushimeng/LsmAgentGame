@@ -27,7 +27,7 @@ func TestClientState_NoNullArrays(t *testing.T) {
 		"ledger_recent", "events_recent", "bot_contexts", "detail", "summaries", "history",
 		"surveys", "goods", "options"}
 	for _, viewer := range []int{0, -1} {
-		cs := BuildClientState("room-null", viewer, r.Engine(), r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(), r.SnapshotModelKeys(), r.SnapshotTranscripts(), r.GameStartedAtUnix(), r.NextMonthAtUnix())
+		cs := BuildClientState("room-null", viewer, r.Engine(), r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(), r.SnapshotModelKeys(), r.SnapshotTranscripts(), r.GameStartedAtUnix(), r.NextMonthAtUnix(), nil)
 		raw, err := json.Marshal(cs)
 		if err != nil {
 			t.Fatal(err)

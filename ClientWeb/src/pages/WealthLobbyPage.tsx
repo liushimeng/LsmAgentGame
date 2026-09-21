@@ -88,6 +88,8 @@ export function WealthLobbyPage() {
         const detail = await roomService.create('wealth', {
           name: req.name,
           agent_seats: req.agent_seats,
+          // §20260921 建房解耦 — 城市背景层居民数（顶层字段，仅 wealth 生效）。
+          resident_count: req.resident_count,
           wealth: { month_ms: req.month_ms, pool: req.pool, ...(req.seed ? { seed: req.seed } : {}) },
           ...(req.full_agent !== undefined ? { full_agent: req.full_agent } : {}),
         });

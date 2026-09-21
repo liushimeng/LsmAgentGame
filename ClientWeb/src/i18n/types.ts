@@ -1249,7 +1249,8 @@ export interface Dict extends WealthDict {
   'modelAdmin.reloadSuccess': string;
   'modelAdmin.apiKeyPlaceholder': string;
   'modelAdmin.empty': string;
-  'modelAdmin.colAgentName': string;
+  // §20260921-02 线路池 — colAgentName/fieldAgentName 已删除（agent_name 废弃）。
+  'modelAdmin.colConcurrencyLines': string;
   'modelAdmin.colModel': string;
   'modelAdmin.colBalance': string;
   'modelAdmin.colProviderType': string;
@@ -1259,7 +1260,10 @@ export interface Dict extends WealthDict {
   'modelAdmin.colEnabled': string;
   'modelAdmin.colUpdatedAt': string;
   'modelAdmin.colAction': string;
-  'modelAdmin.fieldAgentName': string;
+  'modelAdmin.fieldConcurrencyLines': string;
+  /** §20260921-02 — {n} = 总线路数（Σ启用行 concurrency_lines）。 */
+  'modelAdmin.totalLinesHint': string;
+  'modelAdmin.linesRangeError': string;
   'modelAdmin.fieldModel': string;
   'modelAdmin.fieldProviderType': string;
   'modelAdmin.protocolAnthropicMessages': string;

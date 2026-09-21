@@ -1,26 +1,30 @@
 /**
  * WealthCreateRoomModal — 虚拟城市建房弹窗：
  *   - 房间名（可选）
- *   - Agent 座位（2026-09-16 §财商流10–12座位：档位 0–12，Agent 依次占座位号
- *     0..N-1，创建者由后端从剩余空位中随机入座；N = 12（= 房间容量）时后端
- *     freeSeats 为空 → 创建者自动降级为观战者，即「全 Agent 房」。
- *     默认 10 个 Agent（+ 创建者 = 11 座 ≥ MinSeats=10 → 后端自动开局）。
- *     每个 Agent 座位独立选模型，模型来自 /api/llm/models；模型按「随机均匀
- *     分配」（Fisher-Yates 多轮洗牌 + 相邻去重，各模型次数差 ≤ 1），支持一键
- *     重摇，详见 lag_docs/虚拟城市/已实现/08-UI优化/05-产品设计-创建房间Agent模型随机分配与均匀去重-v1.md。
+ *   - Agent 座位（档位 0–12，Agent 依次占座位号 0..N-1，创建者由后端从剩余空位
+ *     中随机入座；N = 12（= 房间容量）时创建者自动降级为观战者，即「全 Agent 房」。
+ *     §20260921 建房解耦：每座位模型选择器整体退役 —— agent_seats[].model_key
+ *     一律送空串 = 座位走 LLM 线路池驱动（后端 wealth 校验放行空 key；
+ *     werewolf 建房不受影响，仍强制合法 key）。
+ *   - 城市居民数量（§20260921 城市背景层）：数字输入 + 预设档 12 / 1千 / 1万 /
+ *     10万，clamp 1..100000，默认 10000。居民由 10 万职业卡生成、逐月模拟。
+ *   - LLM 线路池信息行：listModels() → Σ concurrency_lines →
+ *     「LLM 线路池：N 条线路（Agent 并发数）」；N=0 黄色警示。
  *   - 月节拍速度（3000 / 8000 / 15000ms 预设 + 3000–30000 滑杆）
  *   - 职业卡池（curated 精选 10 卡 / docs 文档池）+ 职业卡一览
  *     （GET /api/games/wealth/professions，失败回落静态镜像，不阻塞建房）
  *   - 随机种子（可选，确定性复现）
  *
  * §7.1：提交失败 / 校验不通过内联红条（formError）、弹窗不关闭
- * （onSubmit 返回 false 或本地校验拦截）。
+ * （onSubmit 返回 false 或本地校验拦截）；listModels 失败内联提示 +
+ * reportGlobalError 双通道上报。
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppModal } from '@/components/ui/AppModal';
 import { listModels, type ModelInfo } from '@/api/llm';
 import { fetchProfessions, type WealthProfessionCard } from '@/api/wealth';
+import { reportGlobalError } from '@/services/globalError';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import type { AgentSeatRequest } from '@/types/api';
@@ -35,6 +39,8 @@ import {
 export interface WealthCreateRequest {
   name?: string;
   agent_seats: AgentSeatRequest[];
+  /** §20260921 城市背景层居民数（1..100000；后端 clamp）。 */
+  resident_count: number;
   month_ms: number;
   pool: 'curated' | 'docs';
   seed?: number;
@@ -63,62 +69,30 @@ const MONTH_MS_PRESETS = [
  */
 const SEAT_COUNT_OPTIONS = Array.from({ length: WEALTH_MAX_SEATS + 1 }, (_, i) => i);
 
+/** 城市居民数预设档（§20260921 建房解耦契约 §2.1）。 */
+const RESIDENT_PRESETS: { value: number; label: string }[] = [
+  { value: 12, label: '12' },
+  { value: 1000, label: '1千' },
+  { value: 10000, label: '1万' },
+  { value: 100000, label: '10万' },
+];
+
+const RESIDENT_MIN = 1;
+const RESIDENT_MAX = 100000;
+const RESIDENT_DEFAULT = 10000;
+
+/** clamp 居民数到 [1, 100000]（非法输入回落默认值）。 */
+function clampResidents(v: number): number {
+  if (!Number.isFinite(v)) return RESIDENT_DEFAULT;
+  return Math.min(RESIDENT_MAX, Math.max(RESIDENT_MIN, Math.round(v)));
+}
+
 /** API 卡片 → 展示行（补齐静态色 / emoji）。 */
 function toDisplayCards(cards: WealthProfessionCard[]): WealthProfessionCard[] {
   return cards.map((c) => ({
     ...c,
     avatar: c.avatar || c.id.toLowerCase(),
   }));
-}
-
-/**
- * Fisher-Yates 洗牌，返回新数组（不改动入参）。
- * 每次调用独立随机 —— 多次「重新分配」得到不同排列（R1 随机性）。
- */
-function shuffle<T>(arr: readonly T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-/**
- * 均匀随机分配座位模型（方案文档 §3.1）：
- * ceil(slots / models.length) 轮独立洗牌拼接 → 截断前 slots 个。
- * - models.length ≥ slots：等价于随机排列取前 slots 个 → 座位间零重复（R2）；
- * - models.length < slots：多轮洗牌拼接保证任意前缀中每个模型出现
- *   floor(slots/len) 或 ceil(slots/len) 次，次数差 ≤ 1（R3 均匀）；
- * - 相邻同模型修复：拼接边界可能出现「…A | A…」，从 i+1 起找最近的异值
- *   元素与 out[i] 交换消除相邻重复；交换只挪位置不改各模型总次数，
- *   均匀性保持。len == 1 时无模型可换（物理上限），保持原样；
- * - 与后端 alternateModelsLocked（Fisher-Yates 去重兜底，CLAUDE.md §14.2）
- *   对齐：即便客户端被绕过直发重复 key，服务端仍会随机改写重复项。
- */
-function shuffledRoundRobinModels(models: ModelInfo[], slots: number): string[] {
-  if (models.length === 0 || slots <= 0) return [];
-  // ceil 轮洗牌拼接成候选池：任何前缀内各模型出现次数差 ≤ 1（均匀性来源）。
-  const rounds = Math.ceil(slots / models.length);
-  const pool: string[] = [];
-  for (let r = 0; r < rounds; r++) {
-    pool.push(...shuffle(models.map((m) => m.model)));
-  }
-  const out = pool.slice(0, slots);
-  // 相邻同模型修复（len >= 2 才有交换空间）：向后找第一个异值元素交换，
-  // 找不到（如尾部只剩同一模型）保持原样，交给后端 alternateModelsLocked 兜底。
-  if (models.length >= 2) {
-    for (let i = 1; i < out.length; i++) {
-      if (out[i] !== out[i - 1]) continue;
-      for (let j = i + 1; j < out.length; j++) {
-        if (out[j] !== out[i]) {
-          [out[i], out[j]] = [out[j], out[i]];
-          break;
-        }
-      }
-    }
-  }
-  return out;
 }
 
 export const WealthCreateRoomModal: React.FC<Props> = ({
@@ -130,7 +104,8 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
   const [modelsError, setModelsError] = useState<string | null>(null);
   // 2026-09-16 §财商流10–12座位：默认 10 个 Agent（+ 创建者 = 11 座 ≥ MinSeats）。
   const [agentCount, setAgentCount] = useState(WEALTH_MAX_SEATS); // 2026-09-19 §全Agent模式: 默认全 Agent
-  const [seatModels, setSeatModels] = useState<string[]>([]);
+  // §20260921 城市背景层 — 居民数（默认 1 万，clamp 1..100000）。
+  const [residentCount, setResidentCount] = useState(RESIDENT_DEFAULT);
   const [monthMs, setMonthMs] = useState(8000);
   const [pool, setPool] = useState<'curated' | 'docs'>('curated');
   const [seed, setSeed] = useState('');
@@ -151,24 +126,25 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
   /** 本房间总座位（Agent + 创建者；全 Agent 房创建者不占座）→ MinSeats 校验用。 */
   const totalSeats = Math.min(agentCount + (allAgentRoom ? 0 : 1), WEALTH_MAX_SEATS);
 
+  /** §20260921 线路池 — Σ concurrency_lines（/api/llm/models 只列可用模型）。 */
+  const linePoolTotal = models.reduce((sum, m) => sum + (m.concurrency_lines ?? 1), 0);
+
   // 打开时拉模型列表 + 职业卡（各自 best-effort，失败不阻塞建房）。
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setFormError(null);
+    // §7.1 — listModels 失败：弹窗内联提示 + reportGlobalError 双通道
+    //（线路池信息行就地渲染 modelsError，不吞进 console）。
     listModels()
       .then((ms) => {
         if (cancelled) return;
         setModels(ms ?? []);
-        if (ms && ms.length > 0) {
-          // 每次弹窗打开、模型加载成功都整体重新随机均匀分配 12 槽位
-          // （方案文档 W1：R1 随机 —— 去掉「仅首次初始化」守卫，关闭重开
-          // 组合大概率不同；用户上次的手动改选随默认值一并重置）。
-          setSeatModels(shuffledRoundRobinModels(ms, WEALTH_MAX_SEATS));
-        }
       })
       .catch((e: Error) => {
-        if (!cancelled) setModelsError(e.message);
+        if (cancelled) return;
+        setModelsError(e.message);
+        reportGlobalError({ message: e.message, severity: 'error' });
       });
     fetchProfessions()
       .then((r) => {
@@ -186,24 +162,13 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
 
   const busy = submitting || localSubmitting;
 
-  // 座位模型槽位固定 12 个（= 房间容量）。模型列表仅由 listModels() 写入，
-  // 与上面 W1 的随机分配同源同步，确定性轮询补齐不再需要 —— 这里只做纯
-  // 长度对齐（截断到 12）；prev 长度已对齐时返回原引用，避免无效重渲染。
-  useEffect(() => {
-    setSeatModels((prev) =>
-      prev.length === WEALTH_MAX_SEATS ? prev : prev.slice(0, WEALTH_MAX_SEATS),
-    );
-  }, [models]);
-
-  const agentSeats: AgentSeatRequest[] = useMemo(
-    () =>
-      Array.from({ length: agentCount }, (_, i) => ({
-        // Agent 占座位号 0..N-1；创建者由后端从剩余空位随机入座（全 Agent 房无空位）。
-        seat: i,
-        model_key: seatModels[i] || models[i % Math.max(1, models.length)]?.model || '',
-      })).filter((s) => s.model_key !== ''),
-    [agentCount, seatModels, models],
-  );
+  // §20260921 建房解耦 — 座位不绑定模型：model_key 空串 = 线路池驱动
+  //（后端 ValidateAgentSeats 对 kind=wealth 放行空 key；洗牌分配方案 R1-R3 退役）。
+  const agentSeats: AgentSeatRequest[] = Array.from({ length: agentCount }, (_, i) => ({
+    // Agent 占座位号 0..N-1；创建者由后端从剩余空位随机入座（全 Agent 房无空位）。
+    seat: i,
+    model_key: '',
+  }));
 
   const handleSubmit = async () => {
     setFormError(null);
@@ -226,6 +191,7 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
       const ok = await onSubmit({
         name: name.trim() || undefined,
         agent_seats: agentSeats,
+        resident_count: clampResidents(residentCount),
         month_ms: monthMs,
         pool,
         ...(seedNum > 0 ? { seed: seedNum } : {}),
@@ -282,7 +248,7 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
           />
         </label>
 
-        {/* Agent 座位：数量档位（0..12）+ 每座位模型 */}
+        {/* Agent 座位：数量档位（0..12）；座位模型由 LLM 线路池统一驱动 */}
         <div className="wealth-create-form__row">
           <span>
             {allAgentRoom
@@ -335,61 +301,59 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
           </p>
         )}
 
-        {agentCount > 0 && (
-          <>
-            {/* 座位区标题行（方案文档 W3）：座位数文案 + 一键「🎲 重新分配」
-                整体重摇。内联 flex 两端对齐 + 复用 wealth-tier-btn 系列，
-                不新增 CSS 规则（规避 §26.3 JSX 拼接零 CSS 命中缺陷）；
-                结构参考狼人杀 seatblock-head，但零 import（跨游戏 import 硬禁令）。 */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>
-                {t('wealth.agentSeats' as TKey)} × {agentCount}
-              </span>
+        {/* §20260921 城市背景层 — 城市居民数量：数字输入 + 预设档 12/1千/1万/10万 */}
+        <div className="wealth-create-form__row">
+          <span>{t('wealth.residentCount' as TKey)}</span>
+          <div className="wealth-create-form__seatcount" data-testid="wealth-create-resident-tiers">
+            {RESIDENT_PRESETS.map((p) => (
               <button
+                key={p.value}
                 type="button"
-                className="wealth-tier-btn wealth-tier-btn--sm"
-                data-testid="wealth-create-reshuffle"
-                onClick={() => setSeatModels(shuffledRoundRobinModels(models, WEALTH_MAX_SEATS))}
-                disabled={busy || models.length === 0}
+                className={
+                  'wealth-tier-btn wealth-tier-btn--sm' +
+                  (residentCount === p.value ? ' wealth-tier-btn--active' : '')
+                }
+                onClick={() => setResidentCount(p.value)}
+                disabled={busy}
+                aria-pressed={residentCount === p.value}
+                data-testid={`wealth-create-resident-tier-${p.value}`}
               >
-                {t('wealth.create.reshuffle' as TKey)}
+                {p.label}
               </button>
-            </div>
-            <div className="wealth-create-form__seats">
-              {Array.from({ length: agentCount }, (_, i) => (
-                <label key={i} className="wealth-create-form__seatrow">
-                  <span className="wealth-create-form__seatno">
-                    {t('wealth.create.seatNo' as TKey, { n: i + 1 })}
-                  </span>
-                  <select
-                    value={seatModels[i] ?? ''}
-                    onChange={(e) => {
-                      const next = [...seatModels];
-                      next[i] = e.target.value;
-                      setSeatModels(next);
-                    }}
-                    disabled={busy}
-                    data-testid={`wealth-create-seat-model-${i}`}
-                  >
-                    {models.length === 0 && <option value="">{t('wealth.create.noModels' as TKey)}</option>}
-                    {models.map((m) => (
-                      <option key={m.model} value={m.model}>
-                        {m.agent_name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
-            </div>
-            {/* 模型数 < Agent 座位数（方案文档附带 W4）：重复是物理约束而非
-                bug —— 前端已按均匀原则复用（次数差 ≤ 1 + 相邻去重），后端
-                alternateModelsLocked 仍会随机改写重复项兜底。 */}
-            {models.length > 0 && models.length < agentCount && (
-              <p className="wealth-create-form__hint">
-                ⚠️ {t('wealth.create.modelReuseHint' as TKey, { n: models.length, m: agentCount })}
-              </p>
-            )}
-          </>
+            ))}
+          </div>
+        </div>
+        <label className="wealth-create-form__row">
+          <span>
+            {t('wealth.residentCount' as TKey)} · {residentCount.toLocaleString()}
+          </span>
+          <input
+            type="number"
+            min={RESIDENT_MIN}
+            max={RESIDENT_MAX}
+            step={1}
+            value={residentCount}
+            onChange={(e) => setResidentCount(clampResidents(Number(e.target.value)))}
+            disabled={busy}
+            data-testid="wealth-create-resident-count"
+          />
+        </label>
+        <p className="wealth-create-form__hint">🏙 {t('wealth.residentCountHint' as TKey)}</p>
+
+        {/* §20260921 线路池信息行 — N=0 黄色警示（无可调模型，先去模型管理配置）。
+            listModels 失败：内联红条展示错误原文（reportGlobalError 已在 catch 上报）。 */}
+        {modelsError ? (
+          <p className="wealth-create-form__hint" role="alert" data-testid="wealth-create-linepool-error">
+            ⚠️ {modelsError}
+          </p>
+        ) : models.length === 0 ? (
+          <p className="wealth-create-form__hint" data-testid="wealth-create-linepool-empty">
+            ⚠️ {t('wealth.linePoolEmpty' as TKey)}
+          </p>
+        ) : (
+          <p className="wealth-create-form__hint wealth-create-form__hint--ok" data-testid="wealth-create-linepool-info">
+            🔌 {t('wealth.linePoolInfo' as TKey, { n: linePoolTotal })}
+          </p>
         )}
 
         {/* 月节拍速度 */}

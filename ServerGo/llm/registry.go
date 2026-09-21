@@ -80,6 +80,10 @@ type registeredProvider struct {
 	// agent.callProvider 通过 Registry.GetThinkingEnabled(modelKey) 查询。
 	thinkingEnabled bool
 	thinkingBudget  int
+	// lines(虚拟城市 LLM 线路池,2026-09-21)是该模型可并行发起 LLM 调用的
+	// 线路数,来自 DB 行 concurrency_lines(cfg 路径缺省 1),加载时已 clamp
+	// 到 [1,64]。Σ enabled 行的 lines = LinePool 总并发上限 M。
+	lines int
 }
 
 // Registry holds the set of configured models. Safe for concurrent use.
@@ -136,6 +140,11 @@ type Registry struct {
 	// provider. The default is a no-op so the registry is test-friendly;
 	// main.go wires the real service.BotUserService.
 	botUsers BotUserProvisioner
+	// linePool(虚拟城市 LLM 线路池,2026-09-21)缓存当前行表对应的 LinePool。
+	// 每次 providers map 变更(构造 / Reload / seed)后由 rebuildLinePoolLocked
+	// 整体换新;LinePool() 原子读,在途租约持旧池令牌 Release 归旧池,不 panic。
+	// 零值(nil)时 LinePool() 返回共享空池,消费方拿到 Total()==0 走回退。
+	linePool atomic.Pointer[LinePool]
 }
 
 // HealthStatus reports the last known health-check result for the upstream
@@ -194,6 +203,7 @@ func NewRegistry(cfg config.LLMConfig) *Registry {
 	r := newRegistryShared(cfg)
 	r.source = "config-only"
 	r.loadFromConfigLocked(cfg)
+	r.rebuildLinePoolLocked()
 	return r
 }
 
@@ -217,6 +227,7 @@ func NewRegistryWithDB(cfg config.LLMConfig, gormDB *gorm.DB, botUsers BotUserPr
 		// Test / standalone path — preserve old behavior exactly.
 		r.source = "config-only"
 		r.loadFromConfigLocked(cfg)
+		r.rebuildLinePoolLocked()
 		logger.L().Info("llm registry loaded from config (no DB)",
 			zap.Int("providers", len(r.providers)))
 		return r
@@ -236,6 +247,7 @@ func NewRegistryWithDB(cfg config.LLMConfig, gormDB *gorm.DB, botUsers BotUserPr
 			zap.Error(err))
 		r.source = "config-only"
 		r.loadFromConfigLocked(cfg)
+		r.rebuildLinePoolLocked()
 		return r
 	}
 
@@ -249,6 +261,7 @@ func NewRegistryWithDB(cfg config.LLMConfig, gormDB *gorm.DB, botUsers BotUserPr
 				zap.Error(err))
 		}
 		r.source = "db"
+		r.rebuildLinePoolLocked()
 		// 2026-08-12 §清理: cfg.LLM.Providers is DEPRECATED and ignored at
 		// runtime — the DB row wins. The field is retained in config.LLMConfig
 		// only for backward-compatible JSON parsing of pre-refactor conf
@@ -273,6 +286,7 @@ func NewRegistryWithDB(cfg config.LLMConfig, gormDB *gorm.DB, botUsers BotUserPr
 		// Nothing on either side. Return an empty registry so /api/llm/models
 		// returns [] and the rest of the app runs without LLM deps.
 		r.source = "empty"
+		r.rebuildLinePoolLocked() // 空池(Total=0),保证 linePool 非 nil
 		logger.L().Info("llm registry: DB empty + defaults empty — no providers")
 		return r
 	}
@@ -351,9 +365,13 @@ func (r *Registry) loadFromConfigLocked(cfg config.LLMConfig) {
 		// 报 messages.content.thinking missing)。
 		r.providers[model] = registeredProvider{
 			info: types.ModelInfo{
-				AgentName:    strings.TrimSpace(p.AgentName),
-				Model:        model,
+				AgentName: strings.TrimSpace(p.AgentName),
+				Model:     model,
+				// ProviderType 为归一化后的协议标识。
 				ProviderType: protocol,
+				// cfg 路径无 concurrency_lines 概念,缺省 1 —— 纯 cfg 模式
+				// (单测)下 M = 行数,与旧行为等价。
+				ConcurrencyLines: minConcurrencyLines,
 			},
 			key:             key,
 			provider:        r.sharedProviderForProtocol(protocol),
@@ -362,6 +380,7 @@ func (r *Registry) loadFromConfigLocked(cfg config.LLMConfig) {
 			protocol:        protocol,
 			thinkingEnabled: p.ThinkingRequired,
 			thinkingBudget:  p.ThinkingBudget,
+			lines:           minConcurrencyLines,
 		}
 	}
 }
@@ -404,6 +423,8 @@ func (r *Registry) seedFromConfigLocked(ctx context.Context, gormDB *gorm.DB, cf
 			APIKey:           p.APIKey,
 			ThinkingRequired: p.ThinkingRequired,
 			ThinkingBudget:   p.ThinkingBudget,
+			// cfg 路径无 concurrency_lines,走缺省 1。
+			ConcurrencyLines: minConcurrencyLines,
 		})
 	}
 	return r.seedFromSeedsLocked(ctx, gormDB, seeds, "seeded from LsmAgentGame.conf on first boot (legacy path)")
@@ -446,18 +467,20 @@ func (r *Registry) seedFromSeedsLocked(ctx context.Context, gormDB *gorm.DB, see
 			providerType = "anthropic"
 		}
 		row := models.TLsmGameLlmProvider{
-			ID:               util.NewUUID(),
-			AgentName:        strings.TrimSpace(p.AgentName),
-			Model:            model,
-			ProviderType:     providerType,
-			APIKeyEnc:  enc,
-			APIKeyHint: apiKeyHint(plain),
-			Endpoint:   "",
+			ID:          util.NewUUID(),
+			AgentName:   strings.TrimSpace(p.AgentName),
+			Model:       model,
+			ProviderType: providerType,
+			APIKeyEnc:   enc,
+			APIKeyHint:  apiKeyHint(plain),
+			Endpoint:    "",
 			// §R224 (2026-08-01) — 重新引入 thinking 配置字段。
 			// §128 误删后,旧 DB 行的两列均为零值(false / 0);admin 可通过
 			// PUT /api/admin/llm/providers/:id 在线开启。
 			ThinkingEnabled:      p.ThinkingRequired,
 			ThinkingBudgetTokens: p.ThinkingBudget,
+			// 线路池(2026-09-21):seed 行落库时 clamp,缺省 1。
+			ConcurrencyLines: clampConcurrencyLines(p.ConcurrencyLines),
 			Enabled:          true,
 			Remark:           remark,
 		}
@@ -482,6 +505,7 @@ func (r *Registry) seedFromSeedsLocked(ctx context.Context, gormDB *gorm.DB, see
 	// allocated on first use), whereas a missing provider would 401 every
 	// LLM call instantly.
 	r.populateLocked(ctx, encrypted, r.providers)
+	r.rebuildLinePoolLocked()
 	if r.botUsers != nil {
 		for i := range encrypted {
 			if _, err := r.botUsers.EnsureBotUserForProvider(ctx, &encrypted[i]); err != nil {
@@ -932,9 +956,80 @@ func (r *Registry) Reload(ctx context.Context) error {
 	}
 	r.providers = newMap
 	r.source = "db"
+	// 线路池(2026-09-21):整体换新池 —— 在途租约仍持旧池令牌,Release 归还
+	// 旧池(容量不变,必有余位),不阻塞不 panic;旧池随引用归零被 GC。
+	r.rebuildLinePoolLocked()
 	logger.L().Info("llm registry reloaded from DB",
-		zap.Int("providers", len(newMap)))
+		zap.Int("providers", len(newMap)),
+		zap.Int("total_lines", r.TotalLines()))
 	return nil
+}
+
+// rebuildLinePoolLocked 按当前 r.providers(enabled 行)重建 LinePool 并原子
+// 替换 r.linePool。Caller MUST hold r.mu for writing(或在构造器返回前调用,
+// 同 populateLocked 的锁约定)。
+//
+// provider 构造复用 Registry.Get 的同一路径:endpoint 为空/等于全局的行走
+// sharedProviderForProtocol(共享实例);带 per-row endpoint 覆盖且尚未懒建的
+// 行在此处调用 newEndpointProviderLocked 建好并写回 r.providers —— 之后 Get
+// 命中快路径,两套构造永不漂移。
+func (r *Registry) rebuildLinePoolLocked() {
+	keys := make([]string, 0, len(r.providers))
+	for k := range r.providers {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys) // 确定性:Stats 输出顺序与构建顺序稳定
+
+	specs := make([]LineSpec, 0, len(keys))
+	for _, k := range keys {
+		rp := r.providers[k]
+		// M = Σ enabled 行 lines;disabled 行不占线路(可用性 available 不影响
+		// 线路占用 —— 占位 key 行的调用失败由消费方按 LLM 失败兜底,契约 §1)。
+		if !rp.enabled {
+			continue
+		}
+		prov := rp.provider
+		if prov == nil {
+			if rp.endpoint != "" {
+				// 与 Get 慢路径同一 helper:per-endpoint 覆盖,按行协议构建。
+				prov = r.newEndpointProviderLocked(rp.endpoint, rp.protocol)
+			} else {
+				// 防御:populateLocked 正常都会填共享实例;仅手工构造的
+				// registeredProvider 会走到这里。
+				prov = r.sharedProviderForProtocol(rp.protocol)
+			}
+			rp.provider = prov
+			r.providers[k] = rp // 写回让后续 Get 命中快路径
+		}
+		specs = append(specs, LineSpec{
+			ModelKey: k,
+			Info:     rp.info,
+			Provider: prov,
+			APIKey:   rp.key,
+			Lines:    rp.lines,
+		})
+	}
+	r.linePool.Store(NewLinePool(specs))
+}
+
+// LinePool 返回当前行表对应的线路池(原子读;Reload 后自动指向新池)。
+// 永不返回 nil —— 池尚未构建(零值 Registry)时返回共享空池,消费方以
+// Total()==0 判定「池不可用」并回退 cfg.Wealth.AgentConcurrency。
+// Get(modelKey) 的固定模型语义与此正交,狼人杀/德州路径不受影响。
+func (r *Registry) LinePool() *LinePool {
+	if r == nil {
+		return emptyLinePool
+	}
+	if p := r.linePool.Load(); p != nil {
+		return p
+	}
+	return emptyLinePool
+}
+
+// TotalLines 返回总线路数 M = Σ enabled 行 concurrency_lines。
+// 等价于 LinePool().Total();无可用行返回 0。
+func (r *Registry) TotalLines() int {
+	return r.LinePool().Total()
 }
 
 // SyncFromConfig re-seeds the DB from cfg.LLM.Providers. Only intended for the
@@ -1015,6 +1110,9 @@ func MigrateConfigProvidersToDB(ctx context.Context, gormDB *gorm.DB, cfg config
 
 		if row, ok := byModel[model]; ok {
 			// Existing row → metadata-only update. Never overwrite api_key.
+			// 线路池(2026-09-21):concurrency_lines 有意不在 updates 里 ——
+			// cfg 无该字段,写 1 会重置管理员在后台调好的线路数;新插入行走
+			// DB 列 default 1。
 			updates := map[string]any{
 				"agent_name":             strings.TrimSpace(p.AgentName),
 				"provider_type":          nonEmptyOr(p.ProviderType, "anthropic"),
@@ -1151,11 +1249,16 @@ func (r *Registry) populateLocked(ctx context.Context, rows []models.TLsmGameLlm
 			thinkingEnabled = false
 			thinkingBudget = 0
 		}
+		// 线路池(2026-09-21):DB 行 concurrency_lines clamp [1,64]。
+		// 旧行 AutoMigrate 补列默认 1,存量部署行为零变化。
+		lines := clampConcurrencyLines(row.ConcurrencyLines)
 		dst[model] = registeredProvider{
 			info: types.ModelInfo{
-				AgentName:    strings.TrimSpace(row.AgentName),
-				Model:        model,
+				AgentName: strings.TrimSpace(row.AgentName),
+				Model:     model,
+				// ProviderType 为归一化后的协议标识。
 				ProviderType: providerType,
+				ConcurrencyLines: lines,
 			},
 			key:       plain,
 			provider:  provider,
@@ -1168,6 +1271,7 @@ func (r *Registry) populateLocked(ctx context.Context, rows []models.TLsmGameLlm
 			// 块;true 时用 thinking_budget_tokens(默认 4096)作 budget。
 			thinkingEnabled: thinkingEnabled,
 			thinkingBudget:  thinkingBudget,
+			lines:           lines,
 		}
 	}
 	return nil

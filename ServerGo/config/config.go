@@ -376,6 +376,18 @@ type WealthConfig struct {
 	// 固定种子存量对局回归一致),view 不下发 insurance 段。零值强制 true
 	// (与 economy_enabled 同款取舍)。
 	InsuranceEnabled bool `json:"insurance_enabled"`
+	// MaxResidents 城市背景居民数上限(2026-09-21 §虚拟城市-城市Agent规模化)。
+	// 建房 resident_count 超过此值时 clamp;负数由 API 层 400。默认 100000。
+	MaxResidents int `json:"max_residents"`
+	// CityVoiceEnabled 城市之声开关(每月抽样背景居民经 LLM 线路池发一次极短
+	// 对话,契约 03 §5)。默认 true;零值强制 true(与 economy_enabled 同款取舍),
+	// 关闭请显式置 false。
+	CityVoiceEnabled bool `json:"city_voice_enabled"`
+	// CityVoicePerMonth 每月城市之声抽样条数(使用点 clamp [0,32];默认 4)。
+	// 注意:缺省归一为 4,想关闭请用 city_voice_enabled=false(0 语义不可达)。
+	CityVoicePerMonth int `json:"city_voice_per_month"`
+	// CityCalibSampleSize 城市校准表抽样职业卡张数(契约 03 §3;默认 512)。
+	CityCalibSampleSize int `json:"city_calib_sample_size"`
 }
 
 // RootDisabledSentinel 是 conf 中 root_account / root_password 的「禁用」哨兵值。
@@ -1073,6 +1085,19 @@ func applyDefaults(c *Config) {
 	// P1-4(2026-09-19 §财商流P1-4 §11):商业保险默认开启;零值强制 true。
 	if !c.Wealth.InsuranceEnabled {
 		c.Wealth.InsuranceEnabled = true
+	}
+	// 2026-09-21 §虚拟城市-城市Agent规模化 — 城市背景层配置默认值(契约 03 §7)。
+	if c.Wealth.MaxResidents <= 0 {
+		c.Wealth.MaxResidents = 100000
+	}
+	if !c.Wealth.CityVoiceEnabled {
+		c.Wealth.CityVoiceEnabled = true
+	}
+	if c.Wealth.CityVoicePerMonth == 0 {
+		c.Wealth.CityVoicePerMonth = 4
+	}
+	if c.Wealth.CityCalibSampleSize == 0 {
+		c.Wealth.CityCalibSampleSize = 512
 	}
 	// §128 对话即思考重构:AgentParallel 默认值已删除(原 §122)。
 

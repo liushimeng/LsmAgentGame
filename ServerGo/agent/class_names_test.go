@@ -53,6 +53,32 @@ func TestAgentClassWealthPlayer_Wired(t *testing.T) {
 	}
 }
 
+// TestAgentClassWealthCityVoice_Wired 校验虚拟城市「城市之声」的
+// AgentClassName 已按 §24 两步登记(常量 + AllAgentClassNames +
+// IsValidAgentClassName)—— 防止 voice.go 散写字面量(2026-09-21
+// §虚拟城市-城市Agent规模化,契约 03 §5)。
+func TestAgentClassWealthCityVoice_Wired(t *testing.T) {
+	if AgentClassWealthCityVoice == "" {
+		t.Fatal("AgentClassWealthCityVoice must be non-empty (§24)")
+	}
+	if string(AgentClassWealthCityVoice) != "LsmAgentGame-Wealth-CityVoice" {
+		t.Errorf("unexpected AgentClassName: %q", AgentClassWealthCityVoice)
+	}
+	found := false
+	for _, c := range AllAgentClassNames() {
+		if c == AgentClassWealthCityVoice {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("AgentClassWealthCityVoice must be registered in AllAgentClassNames()")
+	}
+	if !IsValidAgentClassName(string(AgentClassWealthCityVoice)) {
+		t.Error("AgentClassWealthCityVoice must pass IsValidAgentClassName")
+	}
+}
+
 // TestAllAgentClassNames_NonEmptyAndUnique 是 §24 的通用不变量:所有登记进
 // AllAgentClassNames 的常量必须非空且互不重复(防将来复制粘贴出同名/空常量)。
 func TestAllAgentClassNames_NonEmptyAndUnique(t *testing.T) {

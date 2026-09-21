@@ -127,9 +127,14 @@ func (h *LlmAPI) WinTrends(c *gin.Context) {
 	})
 }
 
-// List handles GET /api/llm/models. Returns {agent_name, model, provider_type}
-// for every configured model (including placeholder ones — callers decide how
-// to surface those). API keys are NEVER returned.
+// List handles GET /api/llm/models. Returns
+// {agent_name, model, provider_type, concurrency_lines} for every configured
+// model (including placeholder ones — callers decide how to surface those).
+// API keys are NEVER returned.
+//
+// 2026-09-21 线路池改造:条目新增 concurrency_lines(omitempty)—— 前端
+// 「总线路数」= Σ 该值(本接口只列 registry 已加载行)。agent_name 保留为
+// 兼容展示(Deprecated,狼人杀 / 雷达 / 排行榜等存量面仍读)。
 func (h *LlmAPI) List(c *gin.Context) {
 	if h.registry == nil {
 		c.JSON(http.StatusOK, gin.H{

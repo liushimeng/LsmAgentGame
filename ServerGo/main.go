@@ -901,7 +901,16 @@ func main() {
 		SurveyEnabled:  cfg.Wealth.SurveyEnabled,
 		// P1-4(2026-09-19 §财商流P1-4 §11):商业保险与风险转移引擎开关。
 		InsuranceEnabled: cfg.Wealth.InsuranceEnabled,
+		// 2026-09-21 §虚拟城市(契约 03 §7)— 城市背景层配置。
+		MaxResidents:        cfg.Wealth.MaxResidents,
+		CityVoiceEnabled:    cfg.Wealth.CityVoiceEnabled,
+		CityVoicePerMonth:   cfg.Wealth.CityVoicePerMonth,
+		CityCalibSampleSize: cfg.Wealth.CityCalibSampleSize,
 	}, llmRegistry)
+	// 2026-09-21 §虚拟城市 G6:注入 LLM 线路池来源(Registry.Reload 换池后
+	// 经函数现取自动生效)+ 城市校准表后台预热(sync.Once goroutine,不阻塞启动)。
+	wealthMgr.SetLinePoolSource(llmRegistry.LinePool)
+	wealthMgr.WarmCityCalibration()
 	// 2026-09-14 §财商流P0-bugfix: 服务重启后内存房间 Seats/BotSeats 全空,必须从
 	// t_lsm_game_player 恢复人类 + bot 座位,否则 Start() 永远 ErrWealthNotEnoughPlayers。
 	wealthMgr.SetSeatHydrator(func(roomID string) ([]wealth.SeatRestoreInfo, error) {
@@ -925,6 +934,14 @@ func main() {
 	gameSvcWs.SetWealthLoader(wealthLoader)
 	gameSvcWs.SetWealthChatSender(&wsChatSenderAdapter{chat: chatSvc})
 	roomSvc.SetWealthRoomConfigurer(wealthMgr.ApplyRoomOptions)
+	// 2026-09-21 §虚拟城市(契约 04 §1.3):大厅列表/详情下发 wealth 房间
+	// resident_count(🏙 徽标;in-memory 只读探针,不落 DB)。
+	roomSvc.SetWealthResidentCounter(func(roomID string) int {
+		if r := wealthMgr.Get(roomID); r != nil {
+			return r.ResidentCountView()
+		}
+		return 0
+	})
 	professionAPI := api.NewProfessionAPI(wealthLoader)
 	// 2026-09-16 §财商流P1-2 — 社会调研 HTTP 入口(房间源 = wealthMgr)。
 	wealthSurveyAPI := api.NewWealthSurveyAPI(wealthMgr)

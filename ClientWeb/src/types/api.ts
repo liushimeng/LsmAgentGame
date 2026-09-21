@@ -242,6 +242,11 @@ export interface RoomInfo {
    * 全 Agent 房间人类不能加入对局,仅可以观战者身份观看。
    */
   full_agent?: boolean;
+  /**
+   * 2026-09-21 §建房解耦 — 城市背景层居民数(仅 wealth 下发)。
+   * >0 时房间列表行显示 🏙 徽标;0/缺省 = 旧形态房间。
+   */
+  resident_count?: number;
 }
 
 export interface RoomPlayerInfo {
@@ -450,6 +455,10 @@ export interface CreateRoomOptions {
   // 严格校验)。month_ms clamp 3000–30000;agent_seats 复用 CreateRoomWithAgents
   // 流程(§14.2 model_key 去重自动生效)。
   wealth?: WealthRoomOptions;
+  // 2026-09-21 §建房解耦 — wealth only。城市背景层居民数：0/缺省 = 不启用
+  // （纯 12 座旧形态）；(0, 100000] 生效，超上限后端 clamp。agent_seats[].model_key
+  // 为空串时该座位走 LLM 线路池驱动（仅 wealth 放行，werewolf 仍强制合法 key）。
+  resident_count?: number;
 }
 
 /** One bot seat requested at room-creation time (werewolf only). */

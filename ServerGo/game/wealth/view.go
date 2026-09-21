@@ -14,6 +14,8 @@ package wealth
 
 import (
 	"math/rand"
+
+	"LsmAgentGame/game/wealth/city"
 )
 
 // ClientGameState 是面向客户端的单座位视图(完整 game.state 载荷)。
@@ -45,6 +47,9 @@ type ClientGameState struct {
 	Surveys        []SurveyJSON       `json:"surveys"` // 调研契约 §5.1
 	// P2 v2(2026-09-19 §P2-可视化):本月资金流向;omitempty 保证空月份不下发。
 	FlowStat *FlowStatJSON `json:"flow_stat,omitempty"`
+	// 2026-09-21 §虚拟城市(契约 04 §1.3):城市背景层快照(resident_count>0
+	// 时非 nil;旧房/未建城 omit)。无座位隐私,观战/玩家全量可见。
+	City *city.Snapshot `json:"city,omitempty"`
 }
 
 // ConsumerMarketJSON 是 consumer_market 子结构(P1 §6.1)。
@@ -403,7 +408,8 @@ type EventJSON struct {
 // BuildClientState 构造座位 viewer 可见快照(viewer < 0 = 观战者)。
 //
 // worldSnapshot / ages 来自房间;此函数无锁;调用方应持房间锁构造 World 快照。
-func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]string, nicknames [MaxSeats]string, botSeats [MaxSeats]bool, modelKeys [MaxSeats]string, transcripts [MaxSeats]BotTranscript, gameStartedAt, nextMonthAtUnixMs int64) *ClientGameState {
+// citySnap(2026-09-21 §虚拟城市):城市背景层快照,nil = 未建城(omitempty)。
+func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]string, nicknames [MaxSeats]string, botSeats [MaxSeats]bool, modelKeys [MaxSeats]string, transcripts [MaxSeats]BotTranscript, gameStartedAt, nextMonthAtUnixMs int64, citySnap *city.Snapshot) *ClientGameState {
 	cs := &ClientGameState{
 		RoomID: roomID, GameKind: "wealth",
 		Status: StatusOpen, MaxSeat: MaxSeats,
@@ -419,6 +425,9 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 	}
 	if world == nil {
 		cs.Phase = PhaseActing
+		// 城市快照独立于引擎 World(未开局也可有城;当前实现建城在 Start,
+		// 此分支恒 nil,防御性赋值)。
+		cs.City = citySnap
 		// status/age/month 由 caller（game_service_xiangqi.go handleWealthJoin /
 		// game.state 分支）从 room 快照覆盖 —— 这里给一个安全的兜底值让
 		// 前端 gameState?.status === 'open' 检查能匹配大厅态。
@@ -430,6 +439,8 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		}
 		return cs
 	}
+	// 2026-09-21 §虚拟城市:城市背景层快照(未建城 nil → omitempty)。
+	cs.City = citySnap
 	cs.Status = world.Status
 	cs.Month = world.Month
 	cs.Age = world.Age()
@@ -507,9 +518,12 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		}
 		pj := PlayerJSON{
 			Seat: s, Account: pp.Card.ID, Nickname: nicknames[s],
-			IsBot: botSeats[s], ModelDisplay: ModelDisplayName(modelKeys[s]),
-			Profession: ProfJSON{ID: pp.Card.ID, Title: pp.Card.Title, Avatar: avatarID(pp.Card.ID)},
-			District:   pp.District, HomeDistrict: pp.HomeDistrict,
+			IsBot: botSeats[s],
+			// 2026-09-21 §虚拟城市(契约 04 §1.3):池驱动座位(bot 且 model_key
+			// 为空)model_display = "LLM线路池";显式 model_key / 人类座位不变。
+			ModelDisplay: seatModelDisplay(botSeats[s], modelKeys[s]),
+			Profession:   ProfJSON{ID: pp.Card.ID, Title: pp.Card.Title, Avatar: avatarID(pp.Card.ID)},
+			District:     pp.District, HomeDistrict: pp.HomeDistrict,
 			Alive: pp.Alive, Retired: false, Age: pp.Age,
 			Resources:        ResourceJSON{Energy: pp.Energy, Network: pp.Network, Cognition: pp.Cognition},
 			NetWorth:         pp.NetWorth(world.Market),
@@ -709,6 +723,15 @@ func buildMinskyOverview(world *World) MinskyOverview {
 
 // avatarID 职业卡头像文件名主干(前端 avatar)。
 func avatarID(id string) string { return id }
+
+// seatModelDisplay 座位模型展示名:池驱动 bot 座位(model_key 空)= "LLM线路池";
+// 其余走 ModelDisplayName(显式 model_key;人类座位历史行为不变)。
+func seatModelDisplay(isBot bool, modelKey string) string {
+	if isBot && modelKey == "" {
+		return PoolModelDisplay
+	}
+	return ModelDisplayName(modelKey)
+}
 
 // myJSONFor 单座位 my.* 镜像。
 func myJSONFor(p *Player) *MyJSON {

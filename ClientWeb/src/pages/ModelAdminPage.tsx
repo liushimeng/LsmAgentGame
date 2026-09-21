@@ -29,9 +29,8 @@
 //   3. **新增「备注」列** — 之前只在弹窗内部可见,现在表格独立列
 //      `min-width:160px; white-space:pre-wrap`,完整保留多行内容。
 //   4. **编辑弹窗加宽 + 双列** — maxWidth 620 → 760,FormField 引入
-//      `half` / `full` 宽度变体;长字段(agent_name / endpoint / remark)
-//      升级为 textarea;确定按钮依然支持只修改单字段(后端 PUT 接受
-//      Partial<LlmProviderCreate>,未提供的字段保持不变)。
+//      `half` / `full` 宽度变体;长字段升级为 textarea;确定按钮依然支持只修改
+//      单字段(后端 PUT 接受 Partial,未提供的字段保持不变)。
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -82,7 +81,6 @@ function formatDate(iso: string): string {
 }
 
 interface FormState {
-  agent_name: string;
   model: string;
   provider_type: string;
   api_key: string;
@@ -93,10 +91,11 @@ interface FormState {
   thinking_budget_tokens: number;
   enabled: boolean;
   remark: string;
+  // §20260921-02 线路池 — 该模型可并行占用的 LLM 线路数 [1,64]。
+  concurrency_lines: number;
 }
 
 const EMPTY_FORM: FormState = {
-  agent_name: '',
   model: '',
   provider_type: 'anthropic',
   api_key: '',
@@ -106,11 +105,12 @@ const EMPTY_FORM: FormState = {
   thinking_budget_tokens: 4096,
   enabled: true,
   remark: '',
+  // §20260921-02 — 线路数默认 1（单模型单并发）。
+  concurrency_lines: 1,
 };
 
 function toForm(p: LlmProvider): FormState {
   return {
-    agent_name: p.agent_name,
     model: p.model,
     provider_type: p.provider_type,
     api_key: '', // never echo back
@@ -121,6 +121,8 @@ function toForm(p: LlmProvider): FormState {
     thinking_budget_tokens: p.thinking_budget_tokens ?? 4096,
     enabled: p.enabled,
     remark: p.remark ?? '',
+    // §20260921-02 — 旧后端未下发时按 1 兜底。
+    concurrency_lines: p.concurrency_lines ?? 1,
   };
 }
 
@@ -258,19 +260,12 @@ export function ModelAdminPage() {
 
   /**
    * 把「用户改过的字段」挑出来,构造 Partial<LlmProviderCreate>。
-   *
-   * 编辑时,原始值由 toForm(p) 捕获(进入弹窗时的快照)。提交时逐字段对比:
-   *   - 字符串字段:trim 后与原值相同 → 不传(后端保持不变);
-   *   - api_key:空串 = 不修改(后端保留旧 key),非空 = 整体覆盖;
-   *   - enabled:boolean 直接对比。
-   * 这样管理员只改「Agent 名称」一个字段时,body 里只有 agent_name,其余字段
-   * 后端一律保持原值(见 model_admin_api.go UpdateProviderRequest 指针语义)。
+   * 编辑时逐字段对比(trim/数值/布尔),相同 → 不传(后端保持不变);
+   * api_key 空 = 保留旧 key。§20260921-02 — agent_name 已废弃(后端自动
+   * 派生)不再提交;concurrency_lines 数值 diff 纳入(后端 nil = 未改)。
    */
   function buildUpdateBody(f: FormState, original: LlmProvider): Partial<LlmProviderCreate> {
     const body: Partial<LlmProviderCreate> = {};
-    if (f.agent_name.trim() !== original.agent_name) {
-      body.agent_name = f.agent_name.trim();
-    }
     if (f.model.trim() !== original.model) {
       body.model = f.model.trim();
     }
@@ -300,6 +295,10 @@ export function ModelAdminPage() {
     if (f.thinking_budget_tokens !== (original.thinking_budget_tokens ?? 0)) {
       body.thinking_budget_tokens = f.thinking_budget_tokens;
     }
+    // §20260921-02 线路池 — 数值 diff 纳入 update body。
+    if (f.concurrency_lines !== (original.concurrency_lines ?? 1)) {
+      body.concurrency_lines = f.concurrency_lines;
+    }
     return body;
   }
 
@@ -308,13 +307,14 @@ export function ModelAdminPage() {
     const f = editing.form;
     setFormError(null);
 
-    // 校验:agent_name / model 必填。错误直接显示在弹窗内,不关闭弹窗。
-    if (!f.agent_name.trim()) {
-      setFormError('Agent 名称不能为空');
-      return;
-    }
+    // 校验:model 必填;线路数 1-64。错误直接显示在弹窗内,不关闭弹窗。
     if (!f.model.trim()) {
       setFormError('Model 不能为空');
+      return;
+    }
+    const lines = Number(f.concurrency_lines);
+    if (!Number.isInteger(lines) || lines < 1 || lines > 64) {
+      setFormError(t('modelAdmin.linesRangeError'));
       return;
     }
 
@@ -337,7 +337,6 @@ export function ModelAdminPage() {
           return;
         }
         const body: LlmProviderCreate = {
-          agent_name: f.agent_name.trim(),
           model: f.model.trim(),
           provider_type: f.provider_type,
           api_key: f.api_key,
@@ -348,6 +347,8 @@ export function ModelAdminPage() {
           remark: f.remark.trim() || undefined,
           thinking_enabled: f.thinking_enabled,
           thinking_budget_tokens: f.thinking_budget_tokens,
+          // §20260921-02 线路池 — agent_name 后端自动派生,不再提交。
+          concurrency_lines: f.concurrency_lines,
         };
         const ok = await createProvider(body);
         if (ok) {
@@ -377,7 +378,7 @@ export function ModelAdminPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [editing, providers, createProvider, updateProvider]);
+  }, [editing, providers, createProvider, updateProvider, t]);
 
   // §重构 — 测试按钮:立即弹出「测试中」模态,API 返回后切到「完成」状态。
   // 用户在 15s LLM 调用期间可清楚看到 spinner + 「正在调用...」反馈。
@@ -574,6 +575,15 @@ export function ModelAdminPage() {
         </div>
       </div>
 
+      {/* §20260921-02 线路池摘要条 — Σ启用行 concurrency_lines = Agent 调用大模型
+          的全局并发上限;「显示已停用」打开时也只统计 enabled 行。 */}
+      <div className="model-admin-totallines" data-testid="model-admin-total-lines">
+        🔌{' '}
+        {t('modelAdmin.totalLinesHint', {
+          n: providers.reduce((sum, p) => (p.enabled ? sum + (p.concurrency_lines ?? 1) : sum), 0),
+        })}
+      </div>
+
       {/* §20260816-04 — 模型能力雷达图（三态:loading/ready/error/empty） */}
       {showRadar && (
         <div className="model-admin-radar-section">
@@ -611,8 +621,9 @@ export function ModelAdminPage() {
         <table className="admin-users-table admin-users-table--wide">
           <thead>
             <tr>
-              <th>{t('modelAdmin.colAgentName')}</th>
               <th>{t('modelAdmin.colModel')}</th>
+              {/* §20260921-02 线路池 — agent_name 列已删除,新增线路数列。 */}
+              <th>{t('modelAdmin.colConcurrencyLines')}</th>
               <th>{t('modelAdmin.colBalance')}</th>
               <th>{t('modelAdmin.colProviderType')}</th>
               <th>{t('modelAdmin.colApiKeyHint')}</th>
@@ -629,6 +640,7 @@ export function ModelAdminPage() {
           <tbody>
             {providers.map((p) => (
               <tr key={p.id}>
+                {/* §20260921-02 — Agent 名称列删除后,模型列升级为详情链接。 */}
                 <td className="admin-users-table__nick">
                   <button
                     type="button"
@@ -636,10 +648,11 @@ export function ModelAdminPage() {
                     onClick={() => navigate(`/admin/models/${encodeURIComponent(p.id)}`)}
                     data-testid={`row-detail-${p.id}`}
                   >
-                    {p.agent_name}
+                    {p.model}
                   </button>
                 </td>
-                <td><code className="cell-wrap">{p.model}</code></td>
+                {/* §20260921-02 线路池 — 该模型可并行占用的 LLM 线路数。 */}
+                <td><code className="cell-wrap cell-wrap--code">{p.concurrency_lines ?? 1}</code></td>
                 <td className="cell-wrap">
                   {p.balance === undefined ? '—' : formatBalance(p.balance, lang)}
                 </td>
@@ -712,7 +725,7 @@ export function ModelAdminPage() {
                       type="button"
                       className="btn btn-danger btn-sm"
                       onClick={() =>
-                        setPendingDelete({ id: p.id, name: p.agent_name, enabled: p.enabled })
+                        setPendingDelete({ id: p.id, name: p.model, enabled: p.enabled })
                       }
                       data-testid={`row-delete-${p.id}`}
                     >
@@ -789,21 +802,9 @@ export function ModelAdminPage() {
             </div>
           )}
           <div className="model-admin-form">
-            {/* R133 — 双列布局:核心身份字段 (agent_name/model) 同行,
-                长文本字段 (endpoint/remark) 跨整行 textarea,
-                api_key + provider_type + enabled 单独一行。 */}
+            {/* R133 — 双列布局:核心字段 (model/线路数) 同行,长文本跨整行。
+                §20260921-02 — agent_name 输入已删除(后端自动派生)。 */}
             <div className="model-admin-form__row">
-              <FormField label={t('modelAdmin.fieldAgentName')} required>
-                <textarea
-                  className="form-input form-textarea"
-                  value={editing.form.agent_name}
-                  onChange={(e) => updateForm('agent_name', e.target.value)}
-                  placeholder="例如:美团 LongCat-2.0"
-                  rows={1}
-                  data-testid="form-agent-name"
-                  autoFocus
-                />
-              </FormField>
               <FormField label={t('modelAdmin.fieldModel')} required>
                 <textarea
                   className="form-input form-textarea"
@@ -812,6 +813,20 @@ export function ModelAdminPage() {
                   placeholder="例如:MeiTuan-model"
                   rows={1}
                   data-testid="form-model"
+                  autoFocus
+                />
+              </FormField>
+              {/* §20260921-02 线路池 — 并发线路数 1-64,默认 1。 */}
+              <FormField label={t('modelAdmin.fieldConcurrencyLines')} required>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={editing.form.concurrency_lines}
+                  onChange={(e) => updateForm('concurrency_lines', Number(e.target.value) || 0)}
+                  min={1}
+                  max={64}
+                  step={1}
+                  data-testid="form-concurrency-lines"
                 />
               </FormField>
             </div>
@@ -1056,6 +1071,13 @@ export function ModelAdminPage() {
           margin-left: auto;
           color: var(--muted);
           font-size: 12px;
+        }
+        /* §20260921-02 线路池 — 头部总线路数摘要条 */
+        .model-admin-totallines {
+          margin: 0 0 14px; padding: 8px 14px;
+          border: 1px solid rgba(10,132,255,0.35); border-radius: 8px;
+          background: rgba(10,132,255,0.12);
+          color: var(--text, #eee); font-size: 13px; font-weight: 600;
         }
         .model-admin-btn-new {
           display: inline-flex;
@@ -1612,7 +1634,8 @@ function GrantDialog({
             <table className="admin-users-table">
               <thead>
                 <tr>
-                  <th>{t('modelAdmin.colAgentName')}</th>
+                  {/* §20260921-02 — colAgentName 键已删除,改用模型列头。 */}
+                  <th>{t('modelAdmin.colModel')}</th>
                   <th style={{ textAlign: 'right' }}>{t('modelAdmin.detail.grantAmount')}</th>
                   <th style={{ textAlign: 'right' }}>{t('modelAdmin.detail.balance')}</th>
                 </tr>

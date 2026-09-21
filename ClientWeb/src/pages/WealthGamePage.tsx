@@ -41,6 +41,7 @@ import { LoanPanel } from '@/components/wealth/LoanPanel';
 import { InfoMarketPanel } from '@/components/wealth/InfoMarketPanel';
 import { InsurancePanel } from '@/components/wealth/InsurancePanel';
 import { GameOverModal } from '@/components/wealth/GameOverModal';
+import { CityStatsPanel } from '@/components/wealth/CityStatsPanel';
 import { WealthBotPanel } from '@/components/wealth/WealthBotPanel';
 import { WealthGameChatPanel } from '@/components/wealth/WealthGameChatPanel';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -358,6 +359,8 @@ export function WealthGamePage() {
           {gameState && !spectator && gameState.my_seat < 0 && (
             <div className="wealth-join-hint">{t('wealth.joinHint' as TKey)}</div>
           )}
+          {/* §20260921 城市背景层 — city 缺省（旧房）时整面板不渲染 */}
+          <CityStatsPanel city={gameState?.city} />
           <WealthBotPanel
             botContexts={gameState?.bot_contexts ?? []}
             players={gameState?.players ?? []}

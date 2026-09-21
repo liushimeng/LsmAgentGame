@@ -13,7 +13,9 @@ import (
 
 	"LsmAgentGame/agent/wealthplayer"
 	"LsmAgentGame/errcode"
+	"LsmAgentGame/game/wealth/city"
 	"LsmAgentGame/game/wealth/profession"
+	"LsmAgentGame/llm"
 	"LsmAgentGame/llm/types"
 	"LsmAgentGame/logger"
 	"LsmAgentGame/service"
@@ -53,6 +55,15 @@ type Config struct {
 	// NewManager 归一:零值 → true(false 时投保/退保返回 35041、月结不扣缴、
 	// 意外事件不掷骰)。
 	InsuranceEnabled bool
+	// 2026-09-21 §虚拟城市(契约 03 §7)— 城市背景层配置。
+	// MaxResidents resident_count 上限(service 层 clamp 用);零值 → 100000。
+	MaxResidents int
+	// CityVoiceEnabled 城市之声开关;零值 → true。
+	CityVoiceEnabled bool
+	// CityVoicePerMonth 每月抽样条数;零值 → 4(房间层 clamp [0,32])。
+	CityVoicePerMonth int
+	// CityCalibSampleSize 校准表抽样卡数;零值 → 512。
+	CityCalibSampleSize int
 }
 
 // LLMRegistry 窄接口(llm.Registry 满足;避免 manager 包 import llm)。
@@ -94,6 +105,19 @@ func NewManager(cfg Config, reg LLMRegistry) *Manager {
 	if !cfg.InsuranceEnabled {
 		cfg.InsuranceEnabled = true
 	}
+	// 2026-09-21 §虚拟城市:城市背景层默认值(契约 03 §7)。
+	if cfg.MaxResidents <= 0 {
+		cfg.MaxResidents = 100000
+	}
+	if !cfg.CityVoiceEnabled {
+		cfg.CityVoiceEnabled = true
+	}
+	if cfg.CityVoicePerMonth == 0 {
+		cfg.CityVoicePerMonth = 4
+	}
+	if cfg.CityCalibSampleSize == 0 {
+		cfg.CityCalibSampleSize = 512
+	}
 	return &Manager{
 		cfg:      cfg,
 		registry: reg,
@@ -130,6 +154,28 @@ type Manager struct {
 	// seatHydrator 服务重启后从 DB 恢复 in-memory 房间的座位信息(对齐德扑
 	// BUG-WEREWOLF-P0-7 修复方案)。nil-safe,未设置时 Get/CreateRoom 跳过恢复。
 	seatHydrator func(roomID string) ([]SeatRestoreInfo, error)
+	// linePoolSource(2026-09-21 §虚拟城市 B3)LLM 线路池来源,由 main 经
+	// SetLinePoolSource 注入(llmRegistry.LinePool)。池驱动座位(ModelKey=="")
+	// 与城市之声共用;nil = 无池,EnsureAgents 只为显式 model_key 座位建 Agent。
+	linePoolSource func() *llm.LinePool
+}
+
+// SetLinePoolSource 注入 LLM 线路池来源(Registry.Reload 换池后经函数现取
+// 自动生效)。新房间在 CreateRoom 时继承;存量房间不回填(建 Agent 的时机
+// 已过,由 EnsureAgents 幂等覆盖)。
+func (m *Manager) SetLinePoolSource(fn func() *llm.LinePool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.linePoolSource = fn
+}
+
+// WarmCityCalibration 启动城市校准表后台预热(manager 初始化后调用一次;
+// sync.Once + goroutine,不阻塞启动;契约 03 §3.2)。
+func (m *Manager) WarmCityCalibration() {
+	m.mu.RLock()
+	loader, size := m.loader, m.cfg.CityCalibSampleSize
+	m.mu.RUnlock()
+	city.WarmUpCalibration(loader, size)
 }
 
 // ApplyRoomOptions 是 roomSvc.SetWealthRoomConfigurer 的回调:
@@ -184,6 +230,10 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 	r.SetEconomyFlags(m.cfg.EconomyEnabled, m.cfg.SurveyEnabled)
 	// P1-4(§财商流P1-4 §11):保险引擎开关接线(Start 前回写)。
 	r.SetInsuranceEnabled(m.cfg.InsuranceEnabled)
+	// 2026-09-21 §虚拟城市:线路池来源 + 城市之声配置接线(Start 前回写;
+	// m.mu 写锁内调房间锁,锁序 m.mu → r.mu 全库一致,无反向路径)。
+	r.SetLinePoolSource(m.linePoolSource)
+	r.SetCityVoiceConfig(m.cfg.CityVoiceEnabled, m.cfg.CityVoicePerMonth)
 	if m.loader != nil {
 		r.mu.Lock()
 		r.docLoader = m.loader
@@ -195,7 +245,7 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 		seats, err := m.seatHydrator(roomID)
 		if err == nil && len(seats) > 0 {
 			r.mu.Lock()
-			hydratedBots := 0
+			restoredBots := 0
 			for _, s := range seats {
 				if s.Seat < 0 || s.Seat >= MaxSeats || s.UserID == "" {
 					continue
@@ -205,10 +255,13 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 				}
 				if s.IsBot {
 					r.BotSeats[s.Seat] = true
+					restoredBots++
 					if s.ModelKey != "" {
 						r.SeatModelKeys[s.Seat] = s.ModelKey
-						hydratedBots++
 					}
+					// 2026-09-21 §虚拟城市(契约 01 §4):空 model_key =
+					// 池驱动座位,SeatModelKeys 存空串;EnsureAgents 按
+					// 「非空 key 或池可用」建 Agent,两态幂等。
 				} else if s.ModelKey != "" {
 					// 允许人类玩家保留 ModelKey 字段(暂不影响 EnsureAgents)。
 					r.SeatModelKeys[s.Seat] = s.ModelKey
@@ -218,7 +271,7 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 			// 重启恢复的 10/11 bot 房同样具有全 Agent 语义。必须在房间锁
 			// 释放后、房间登记可见前恢复标记,剩余 1-2 物理空位不得重新
 			// 接受人类创建者/加入者。
-			if hydratedBots >= MinSeats {
+			if restoredBots >= MinSeats {
 				r.SetFullAgentMode(true)
 			}
 			logger.L().Info("wealth room seats hydrated from DB",
@@ -228,7 +281,7 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 			// 先把座位与 SeatModelKeys/BotSeats 还原回内存房;此处立刻装配 bot
 			// agent,即便后续 startWealthRoom 路径再次 EnsureAgents,也是幂等的
 			// (agents map 在 EnsureAgents 内整体覆盖)。
-			if hydratedBots > 0 {
+			if restoredBots > 0 {
 				m.EnsureAgents(r)
 			}
 		}
@@ -282,9 +335,21 @@ func (m *Manager) RoomIDs() []string {
 }
 
 // EnsureAgents 给房间的 bot 座位装配 wealthplayer.Agent(由 ws 层在开局后调用)。
+// 2026-09-21 §虚拟城市 B3:ModelKey==""(池驱动)且线路池可用(Total>0)的座位
+// 同样建 Agent —— 调用时先 Acquire 线路,Acquire 失败走既有 submit_month 兜底;
+// 池不可用时跳过(行为与旧版一致,防无 LLM 空转)。
 func (m *Manager) EnsureAgents(r *WealthRoom) {
 	if !m.cfg.AgentEnabled || m.registry == nil {
 		return
+	}
+	m.mu.RLock()
+	poolSource := m.linePoolSource
+	m.mu.RUnlock()
+	poolAvailable := false
+	if poolSource != nil {
+		if pool := poolSource(); pool != nil && pool.Total() > 0 {
+			poolAvailable = true
+		}
 	}
 	r.mu.Lock()
 	seats := make([]int, 0)
@@ -296,14 +361,21 @@ func (m *Manager) EnsureAgents(r *WealthRoom) {
 	r.mu.Unlock()
 	for _, seat := range seats {
 		modelKey := r.SeatModelKeys[seat]
-		if modelKey == "" {
+		if modelKey == "" && !poolAvailable {
 			continue
 		}
+		display := ModelDisplayName(modelKey)
+		if modelKey == "" {
+			display = PoolModelDisplay
+		}
 		agent := wealthplayer.NewAgent(r.RoomID, r.Seats[seat], modelKey,
-			ModelDisplayName(modelKey), seat,
+			display, seat,
 			m.cfg.BotMaxActionsPerMonth,
 			time.Duration(m.cfg.AgentDecisionTimeoutSec)*time.Second)
 		agent.BindRegistry(m.registry)
+		if modelKey == "" {
+			agent.BindLinePoolSource(poolSource)
+		}
 		runner := NewAgentRunner(r, seat)
 		agent.BindRunner(runner)
 		r.mu.Lock()

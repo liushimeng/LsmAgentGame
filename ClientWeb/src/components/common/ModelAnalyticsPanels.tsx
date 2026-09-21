@@ -74,7 +74,8 @@ export function ModelWinTrendPanel({ data }: { data: Record<string, ModelWinTren
       <table className="admin-users-table admin-users-table--wide model-analytics-table">
         <thead>
           <tr>
-            <th>{t('modelAdmin.colAgentName')}</th>
+            {/* §20260921-02 — colAgentName 键已删除,改用模型列头。 */}
+            <th>{t('modelAdmin.colModel')}</th>
             <th>{t('modelAdmin.analytics.last30d')}</th>
             <th>{t('modelAdmin.analytics.winRate')}</th>
             <th>{t('modelAdmin.analytics.games')}</th>

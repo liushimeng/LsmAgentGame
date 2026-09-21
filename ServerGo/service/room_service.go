@@ -62,6 +62,10 @@ type WealthRoomOptions struct {
 	MonthMs int    `json:"month_ms,omitempty"`
 	Pool    string `json:"pool,omitempty"` // "curated"|"docs"
 	Seed    int64  `json:"seed,omitempty"`
+	// ResidentCount 2026-09-21 §虚拟城市 — 城市背景居民数(0=不启用城市层,
+	// 向后兼容旧形态)。建房 body 顶层 resident_count 由 API 层并入本字段;
+	// service 层 clamp [0, cfg.Wealth.MaxResidents](负数在 API 层 400)。
+	ResidentCount int `json:"resident_count,omitempty"`
 }
 
 // GameJoiner is the callback RoomService invokes after a successful CreateRoom
@@ -108,7 +112,11 @@ type AgentSeater interface {
 	// LLM registry (must be registered, enabled, and carry a non-placeholder
 	// api_key). Returns nil on success; a non-nil error fails the entire
 	// room-create request with a clear validation message listing bad keys.
-	ValidateAgentSeats(seats []AgentSeatConfig) *errcode.Error
+	//
+	// 2026-09-21 §虚拟城市(契约 04 §1.2):按 kind 分流 —— wealth 的空串
+	// model_key 直接放行(= 线路池驱动,不查 registry);非空 key 与其他游戏
+	// (werewolf 等)行为零变化(空串/未知/禁用/占位 → 400)。
+	ValidateAgentSeats(gameKind string, seats []AgentSeatConfig) *errcode.Error
 	// 2026-07-16 主持人重构 — SetJudgeConfig 把房间级法官设置落到 in-memory
 	// WerewolfRoom 上(JudgeDesired / JudgeMode / JudgeModelKey)。由
 	// CreateRoomWithAgents 在 RegisterAgentSeats 之前调用(RegisterAgentSeats
@@ -258,6 +266,10 @@ type RoomService struct {
 	// wealthRoomConfigurer 2026-09-14 §财商流P0 — 房间级配置透传(月份节奏 + 卡池 + seed)。
 	// 由 main.go 通过 SetWealthRoomConfigurer 注入。
 	wealthRoomConfigurer func(roomID string, opts *WealthRoomOptions)
+	// wealthResidentCounter 2026-09-21 §虚拟城市 — wealth 房间 resident_count
+	// 只读探针(大厅列表/详情下发)。由 main.go 通过 SetWealthResidentCounter
+	// 注入;nil 时省略(单元测试/旧装配)。
+	wealthResidentCounter func(roomID string) int
 	// roomActivityChecker 2026-08-22 §BUG-TEXAS-JANITOR-SPLITBRAIN — 强删前
 	// 探测 in-memory 游戏管理器(狼人杀 + 德州扑克)的权威状态。若管理器认为
 	// 该房间仍有玩家(活跃对局或未开局但已入座),janitor 必须跳过,避免
@@ -310,6 +322,12 @@ func (s *RoomService) SetTexasHoldemRoomConfigurer(fn func(roomID string, bigBli
 // SetWealthRoomConfigurer 2026-09-14 §财商流P0 — 注册房间级配置回调。
 func (s *RoomService) SetWealthRoomConfigurer(fn func(roomID string, opts *WealthRoomOptions)) {
 	s.wealthRoomConfigurer = fn
+}
+
+// SetWealthResidentCounter 2026-09-21 §虚拟城市 — 注册 wealth 房间
+// resident_count 只读探针(大厅列表/详情的 🏙 徽标数据源)。
+func (s *RoomService) SetWealthResidentCounter(fn func(roomID string) int) {
+	s.wealthResidentCounter = fn
 }
 
 // SetRoomActivityChecker 2026-08-22 §BUG-TEXAS-JANITOR-SPLITBRAIN — 注册
@@ -651,6 +669,10 @@ type RoomInfo struct {
 	// FullAgent 2026-09-19 §全Agent模式 — 是否为全 Agent 房间(仅 wealth 生效)。
 	// 全 Agent 房间人类不能加入对局,仅可以观战者身份观看。
 	FullAgent bool `json:"full_agent,omitempty"`
+	// ResidentCount 2026-09-21 §虚拟城市(契约 04 §1.3)— 城市背景居民数
+	// (仅 wealth 生效;0/未建城 omit)。来源:in-memory WealthRoom(经
+	// SetWealthResidentCounter 注入的只读回调),不落 DB。
+	ResidentCount int `json:"resident_count,omitempty"`
 }
 
 // gameKindCN maps a game-kind code to its Chinese display name, used to

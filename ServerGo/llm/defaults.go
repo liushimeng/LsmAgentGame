@@ -50,6 +50,10 @@ type DefaultProviderSeed struct {
 	// thinking_enabled=true for the models that historically had the flag.
 	ThinkingRequired bool
 	ThinkingBudget   int
+	// ConcurrencyLines(虚拟城市 LLM 线路池,2026-09-21)是该模型可并行发起
+	// LLM 调用的线路数。默认 seed 每行 1 —— 8 行启用即 8 条线路,恰好等于
+	// 旧 cfg.Wealth.AgentConcurrency=8,行为零变化;运营在管理页按需调大。
+	ConcurrencyLines int
 }
 
 // DefaultProviders is the historical 8-model roster, byte-for-byte identical
@@ -64,14 +68,14 @@ type DefaultProviderSeed struct {
 // existing rows are NOT overwritten by an updated DefaultProviders).
 func DefaultProviders() []DefaultProviderSeed {
 	return []DefaultProviderSeed{
-		{AgentName: "美团 LongCat-2.0", Model: "MeiTuan-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey},
-		{AgentName: "豆包 2.0", Model: "DouBao-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey},
-		{AgentName: "DeepSeek V4-Pro", Model: "DeepSeek-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey, ThinkingRequired: true, ThinkingBudget: 4096},
-		{AgentName: "智谱 GLM-5.2", Model: "GLM-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey, ThinkingRequired: true, ThinkingBudget: 4096},
-		{AgentName: "Kimi 2.7", Model: "Kimi-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey},
-		{AgentName: "MiniMax M3", Model: "MinMax-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey},
-		{AgentName: "Qwen 3.7-Plus-and-Max", Model: "Qwen-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey},
-		{AgentName: "Xiaomi mimo-v2.5-pro", Model: "Xiaomi-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey},
+		{AgentName: "美团 LongCat-2.0", Model: "MeiTuan-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey, ConcurrencyLines: 1},
+		{AgentName: "豆包 2.0", Model: "DouBao-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey, ConcurrencyLines: 1},
+		{AgentName: "DeepSeek V4-Pro", Model: "DeepSeek-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey, ThinkingRequired: true, ThinkingBudget: 4096, ConcurrencyLines: 1},
+		{AgentName: "智谱 GLM-5.2", Model: "GLM-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey, ThinkingRequired: true, ThinkingBudget: 4096, ConcurrencyLines: 1},
+		{AgentName: "Kimi 2.7", Model: "Kimi-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey, ConcurrencyLines: 1},
+		{AgentName: "MiniMax M3", Model: "MinMax-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey, ConcurrencyLines: 1},
+		{AgentName: "Qwen 3.7-Plus-and-Max", Model: "Qwen-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey, ConcurrencyLines: 1},
+		{AgentName: "Xiaomi mimo-v2.5-pro", Model: "Xiaomi-model", ProviderType: "anthropic", APIKey: types.PlaceholderKey, ConcurrencyLines: 1},
 	}
 }
 

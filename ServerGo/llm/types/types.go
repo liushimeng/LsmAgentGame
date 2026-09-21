@@ -430,9 +430,17 @@ func IsSupportedProviderType(s string) bool {
 
 // ModelInfo is the safe, key-free projection exposed via GET /api/llm/models.
 type ModelInfo struct {
-	AgentName    string `json:"agent_name"`
-	Model        string `json:"model"`
+	// AgentName — Deprecated: 管理语义已废弃（虚拟城市 LLM 线路池改造，
+	// 2026-09-21），仅作兼容展示；狼人杀 / 雷达 / 排行榜等存量 UI 仍读该值。
+	AgentName string `json:"agent_name"`
+	Model     string `json:"model"`
+	// ProviderType is the normalized protocol tag
+	// (ProviderTypeAnthropicMessages / ProviderTypeOpenAICompletions).
 	ProviderType string `json:"provider_type"`
+	// ConcurrencyLines（虚拟城市 LLM 线路池，2026-09-21）是该模型可并行
+	// 发起 LLM 调用的线路数。Σ enabled 行的该值 = LinePool 总并发上限 M。
+	// 加载点保证 clamp 到 [1,64]，缺省 1；omitempty 使旧行为零值不污染 wire。
+	ConcurrencyLines int `json:"concurrency_lines,omitempty"`
 }
 
 // Registry stays in package llm (ServerGo/llm/registry.go) — it imports this

@@ -210,9 +210,10 @@ export function ModelDetailPage() {
           <div className="model-card">
             <h2 className="model-card__title">{t('modelAdmin.detail.basicInfo')}</h2>
             <div className="info-grid">
+              {/* §20260921-02 线路池 — agent_name 行替换为「线路数」行。 */}
               <div className="info-row">
-                <span className="info-row__k">{t('modelAdmin.fieldAgentName')}</span>
-                <span className="info-row__v">{provider.agent_name}</span>
+                <span className="info-row__k">{t('modelAdmin.fieldConcurrencyLines')}</span>
+                <span className="info-row__v">{provider.concurrency_lines ?? 1}</span>
               </div>
               <div className="info-row">
                 <span className="info-row__k">{t('modelAdmin.fieldModel')}</span>

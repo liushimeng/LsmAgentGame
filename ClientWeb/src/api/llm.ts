@@ -8,6 +8,10 @@ export interface ModelInfo {
   agent_name: string;
   model: string;
   provider_type: string;
+  /** §20260921-02 线路池 — 该模型可并行占用的 LLM 线路数（默认 1）。
+   *  财商流建房弹窗用 Σ concurrency_lines 展示「LLM 线路池」容量；
+   *  旧后端未下发时按 1 兜底。 */
+  concurrency_lines: number;
 }
 
 export async function listModels(): Promise<ModelInfo[]> {

@@ -23,6 +23,12 @@
 //   - JSON bodies use json.Decoder with DisallowUnknownFields so the front-
 //     end / test harness gets a clear 400 on typos instead of silent data
 //     loss.
+//
+// 2026-09-21 LLM 线路池改造(虚拟城市):
+//   - `agent_name` 管理语义废弃 —— Create 变可选,空值按 model 派生唯一值
+//     (model / model-2 / model-3…);Update 保留兼容。列与 uniqueIndex 不动。
+//   - 新增 `concurrency_lines`(1..64,默认 1): 该模型可并行发起 LLM 调用的
+//     线路数;Σ enabled 行 = 全进程 Agent 并发上限(见 llm/linepool.go)。
 package api
 
 import (
@@ -31,6 +37,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -151,7 +158,11 @@ func (h *ModelAdminAPI) requireSuper(c *gin.Context) (string, bool) {
 // row leaking into the in-memory providers map). ProviderType must be one of
 // the LLM protocol names currently wired — today only "anthropic" / "openai".
 type CreateProviderRequest struct {
-	AgentName    string `json:"agent_name" binding:"required,min=1,max=64"`
+	// AgentName — Deprecated(虚拟城市 LLM 线路池改造,2026-09-21): 管理语义
+	// 已废弃,**可选**。空串/缺省时服务端按 model 派生(model / model-2 /
+	// model-3…,查 DB 保证 uniqueIndex 满足)。列物理保留,狼人杀等存量展示
+	// 面继续读派生值;前端表单不再提交该字段。
+	AgentName    string `json:"agent_name,omitempty" binding:"max=64"`
 	Model        string `json:"model"      binding:"required,min=1,max=64"`
 	// §20260814-01 — 规范值 anthropic-messages / openai-completions;旧值
 	// "anthropic"/"openai" 由服务端归一化(binding 放宽为 required + 自定义校验)。
@@ -161,14 +172,17 @@ type CreateProviderRequest struct {
 	// §135 修复 — 新增模型表单会带 `enabled` checkbox,与 UpdateProviderRequest 对齐。
 	// 使用 *bool 是因为前端编辑表单在「未改动」时也常把 enabled=false 写出来(默认值),
 	// 想要「保留 DB 原值」必须靠 nil 判定;新建场景下 nil 视作 true。
-	Enabled  *bool  `json:"enabled,omitempty"`
-	Remark   string `json:"remark,omitempty"`
+	Enabled *bool `json:"enabled,omitempty"`
+	Remark  string `json:"remark,omitempty"`
 	// §R224 (2026-08-01) — 重新引入 thinking 配置字段。
 	// *bool + *int 是为了 Update 路径能用 nil 区分"未设置" / "显式 false" /
 	// "显式 0 budget"。Create 路径用 nil 兜底为 false / 0(LLM API 实际
 	// 不发请求时由 operator 在 admin UI 自行打开)。
 	ThinkingEnabled      *bool `json:"thinking_enabled,omitempty"`
 	ThinkingBudgetTokens *int  `json:"thinking_budget_tokens,omitempty"`
+	// ConcurrencyLines(2026-09-21 线路池)是该模型可并行发起 LLM 调用的
+	// 线路数。可选,nil 视作默认 1;范围 [1,64],越界返回 invalid-param 400。
+	ConcurrencyLines *int `json:"concurrency_lines,omitempty"`
 }
 
 // UpdateProviderRequest is the JSON body for PUT /api/admin/llm/providers/:id.
@@ -181,6 +195,8 @@ type CreateProviderRequest struct {
 // §R224 (2026-08-01) — 重新引入 ThinkingEnabled / ThinkingBudgetTokens 字段;
 // §128 误删后,这里把对应 *bool / *int 字段加回。
 type UpdateProviderRequest struct {
+	// AgentName — Deprecated(2026-09-21): 保留可改以兼容存量调用方,
+	// 前端表单已不再提交。
 	AgentName    *string `json:"agent_name,omitempty"`
 	Model        *string `json:"model,omitempty"`
 	ProviderType *string `json:"provider_type,omitempty"`
@@ -193,6 +209,89 @@ type UpdateProviderRequest struct {
 	// 同时用 nil 区分"未改"(保留 DB 原值)。
 	ThinkingEnabled      *bool `json:"thinking_enabled,omitempty"`
 	ThinkingBudgetTokens *int  `json:"thinking_budget_tokens,omitempty"`
+	// ConcurrencyLines(2026-09-21 线路池): nil=不改;非 nil 时校验 [1,64],
+	// 越界 invalid-param 400。
+	ConcurrencyLines *int `json:"concurrency_lines,omitempty"`
+}
+
+// concurrency_lines 的合法区间(闭区间)。与 llm 包的 clamp 区间
+// (llm/linepool.go minConcurrencyLines/maxConcurrencyLines)保持一致;
+// API 层拒绝越界值,registry 加载层再做 clamp 兜底(防脏行)。
+const (
+	providerConcurrencyLinesMin = 1
+	providerConcurrencyLinesMax = 64
+)
+
+// validateConcurrencyLines 返回非空字符串表示越界错误描述;空串表示合法或 nil。
+// 抽出为纯函数便于单测覆盖 Create/Update 共用校验。
+func validateConcurrencyLines(p *int) string {
+	if p == nil {
+		return ""
+	}
+	if *p < providerConcurrencyLinesMin || *p > providerConcurrencyLinesMax {
+		return "concurrency_lines 必须在 1-64 之间"
+	}
+	return ""
+}
+
+// agentNameVarcharMax 是 t_lsm_game_llm_provider.agent_name 的列宽。
+const agentNameVarcharMax = 64
+
+// truncateToLen 把 s 截到至多 n 字节(超长截断,不补齐)。
+func truncateToLen(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
+
+// uniqueAgentName 从 desired 出发派生不冲突的 agent_name(2026-09-21
+// agent_name 废弃路径): desired 本身可用则原样返回;否则 desired-2、
+// desired-3… 直到 exists 报告未占用。后缀追加前先截断 base 保证总长
+// <= agentNameVarcharMax,避免 varchar(64) Error 1406。
+//
+// exists 由调用方注入(handler 用 DB COUNT;单测用 map 回调),返回错误时
+// 立即中止派生并向上传播 —— 绝不把「查询故障」静默当成「已占用」空转。
+// 循环次数受 DB 行数约束(每个 candidate 至多撞一行),上限 100000 纯属防御。
+func uniqueAgentName(desired string, exists func(string) (bool, error)) (string, error) {
+	base := truncateToLen(desired, agentNameVarcharMax)
+	taken, err := exists(base)
+	if err != nil {
+		return "", err
+	}
+	if !taken {
+		return base, nil
+	}
+	for n := 2; n < 100000; n++ {
+		suffix := "-" + strconv.Itoa(n)
+		cand := truncateToLen(desired, agentNameVarcharMax-len(suffix)) + suffix
+		taken, err = exists(cand)
+		if err != nil {
+			return "", err
+		}
+		if !taken {
+			return cand, nil
+		}
+	}
+	// 不可达防御:放弃派生,交由 DB 唯一索引在 Create 时兜底报 duplicate。
+	return base, nil
+}
+
+// deriveAgentNameForModel 在 Create 请求未携带 agent_name 时,按 model key
+// 派生唯一 agent_name。查 DB(含 enabled=false 的软删行 —— uniqueIndex 不分
+// 软删)直到不冲突。返回错误表示 DB 查询故障,调用方应 500。
+func (h *ModelAdminAPI) deriveAgentNameForModel(ctx context.Context, modelKey string) (string, error) {
+	exists := func(name string) (bool, error) {
+		var cnt int64
+		if err := h.gormDB.WithContext(ctx).
+			Model(&models.TLsmGameLlmProvider{}).
+			Where("agent_name = ?", name).
+			Count(&cnt).Error; err != nil {
+			return false, fmt.Errorf("count agent_name %q: %w", name, err)
+		}
+		return cnt > 0, nil
+	}
+	return uniqueAgentName(modelKey, exists)
 }
 
 // apiKeyHint builds the human-readable fingerprint stored in
@@ -217,6 +316,10 @@ func apiKeyHintLocal(plain string) string {
 //
 // The derived fields are NOT persisted into t_lsm_game_llm_provider — they
 // are computed on the fly from the row + registry default endpoint.
+//
+// 2026-09-21 线路池改造:embed 后 `concurrency_lines` 自动下发(模型 json
+// tag,无 omitempty,始终出现);`agent_name` 继续下发兼容存量 UI(标注
+// Deprecated,值可能为服务端派生的 model / model-2)。
 type providerView struct {
 	models.TLsmGameLlmProvider
 	EffectiveEndpoint string `json:"effective_endpoint"`
@@ -398,6 +501,16 @@ func (h *ModelAdminAPI) CreateProvider(c *gin.Context) {
 		return
 	}
 
+	// concurrency_lines 校验先于 gormDB 检查 —— 纯请求体校验不依赖 DB,
+	// 无 DB 部署(测试/降级)同样能拿到标准 400 而不是被 500 遮蔽。
+	if msg := validateConcurrencyLines(req.ConcurrencyLines); msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    errcode.ErrValidationFailed,
+			"message": msg,
+		})
+		return
+	}
+
 	if h.gormDB == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": errcode.ErrInternal, "message": "db not wired",
@@ -411,12 +524,26 @@ func (h *ModelAdminAPI) CreateProvider(c *gin.Context) {
 	// if the sanitized key collides with an existing row, the DB unique
 	// constraint on `model` triggers the isMySQLDuplicateErr 400 below.
 	modelKey := util.SanitizeModelKey(req.Model)
-	agentName := strings.TrimSpace(req.AgentName)
-	if modelKey == "" || agentName == "" {
+	if modelKey == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"code": errcode.ErrValidationFailed, "message": "model / agent_name required",
+			"code": errcode.ErrValidationFailed, "message": "model required",
 		})
 		return
+	}
+	// agent_name — Deprecated(2026-09-21 线路池改造): 变可选。显式传入则
+	// trim 后照用(兼容存量调用方);空/缺省按 model 派生唯一值保 uniqueIndex。
+	agentName := strings.TrimSpace(req.AgentName)
+	if agentName == "" {
+		derived, derr := h.deriveAgentNameForModel(c.Request.Context(), modelKey)
+		if derr != nil {
+			logger.L().Error("admin create provider: derive agent_name failed",
+				zap.String("model", modelKey), zap.Error(derr))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"code": errcode.ErrInternal, "message": "derive agent_name failed",
+			})
+			return
+		}
+		agentName = derived
 	}
 
 	// §20260814-01 — 归一化 + 白名单校验协议标识。兼容旧值 anthropic/openai。
@@ -452,6 +579,12 @@ func (h *ModelAdminAPI) CreateProvider(c *gin.Context) {
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
+	// 线路数(2026-09-21): nil 视作默认 1;校验已在最前面完成,这里必在
+	// [1,64] 区间内。
+	lines := providerConcurrencyLinesMin
+	if req.ConcurrencyLines != nil {
+		lines = *req.ConcurrencyLines
+	}
 
 	row := models.TLsmGameLlmProvider{
 		ID:           util.NewUUID(),
@@ -467,6 +600,7 @@ func (h *ModelAdminAPI) CreateProvider(c *gin.Context) {
 		// nil 视作 false / 0,operator 可在 admin UI 后续打开。
 		ThinkingEnabled:      req.ThinkingEnabled != nil && *req.ThinkingEnabled,
 		ThinkingBudgetTokens: budgetFromPtr(req.ThinkingBudgetTokens),
+		ConcurrencyLines:     lines,
 	}
 
 	if err := h.gormDB.WithContext(c.Request.Context()).
@@ -501,7 +635,9 @@ func (h *ModelAdminAPI) CreateProvider(c *gin.Context) {
 		zap.String("admin_id", uid),
 		zap.String("model", modelKey),
 		zap.String("agent_name", agentName),
-		zap.String("provider_type", row.ProviderType))
+		zap.Bool("agent_name_derived", strings.TrimSpace(req.AgentName) == ""),
+		zap.String("provider_type", row.ProviderType),
+		zap.Int("concurrency_lines", row.ConcurrencyLines))
 
 	// §135 修复 — 创建成功后回查 bot_user_id,前端「模型详情」页要用它查钱包。
 	// 这里调用纯读不写入的 GetBotUserForProvider,失败时 bot_user_id 留空。
@@ -568,6 +704,23 @@ func (h *ModelAdminAPI) UpdateProvider(c *gin.Context) {
 	if !ok {
 		return
 	}
+
+	// 解析与纯请求体校验先于依赖检查(与 CreateProvider 同一原则):
+	// typo 字段 / 越界 concurrency_lines 拿到标准 400,而不是被
+	// "db not wired" 500 遮蔽。
+	var req UpdateProviderRequest
+	if !decodeJSONStrict(c, &req) {
+		return
+	}
+	// concurrency_lines 校验(nil=不改):越界 invalid-param 400。
+	if msg := validateConcurrencyLines(req.ConcurrencyLines); msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    errcode.ErrValidationFailed,
+			"message": msg,
+		})
+		return
+	}
+
 	if h.gormDB == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"code": errcode.ErrInternal, "message": "db not wired",
@@ -580,11 +733,6 @@ func (h *ModelAdminAPI) UpdateProvider(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": errcode.ErrValidationFailed, "message": "id required",
 		})
-		return
-	}
-
-	var req UpdateProviderRequest
-	if !decodeJSONStrict(c, &req) {
 		return
 	}
 
@@ -662,6 +810,11 @@ func (h *ModelAdminAPI) UpdateProvider(c *gin.Context) {
 	if req.ThinkingBudgetTokens != nil {
 		budget := budgetFromPtr(req.ThinkingBudgetTokens)
 		updates["thinking_budget_tokens"] = budget
+	}
+	// 线路池(2026-09-21): nil=不改;非 nil 时已通过 [1,64] 校验。
+	// 生效需管理员随后 POST /reload(与既有 endpoint/api_key 变更语义一致)。
+	if req.ConcurrencyLines != nil {
+		updates["concurrency_lines"] = *req.ConcurrencyLines
 	}
 
 	if len(updates) == 0 {

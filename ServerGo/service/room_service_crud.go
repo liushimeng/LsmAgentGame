@@ -114,6 +114,10 @@ func (s *RoomService) ListRoomsForUser(ctx context.Context, gameKind, userID str
 				info.FullAgent = true
 			}
 		}
+		// 2026-09-21 §虚拟城市(契约 04 §1.3): wealth 房间居民数下发(🏙 徽标)。
+		if r.GameKind == "wealth" && s.wealthResidentCounter != nil {
+			info.ResidentCount = s.wealthResidentCounter(r.ID)
+		}
 		out = append(out, info)
 	}
 	return out
@@ -247,18 +251,36 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	if int64(len(agentSeats)) > 0 && int64(len(agentSeats)) > int64(maxAgentSeats) {
 		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "too many agent seats")
 	}
-	for _, a := range agentSeats {
+	for i := range agentSeats {
+		a := &agentSeats[i]
 		if a.Seat < 0 || a.Seat >= maxAgentSeats {
 			return nil, errcode.CodeMsg(errcode.ErrValidationFailed, fmt.Sprintf("agent seat out of range [0,%d]", maxAgentSeats-1))
 		}
 		if strings.TrimSpace(a.ModelKey) == "" {
-			return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "agent seat model_key required")
+			// 2026-09-21 §虚拟城市(契约 04 §1.1): wealth 允许空串 model_key =
+			// 线路池驱动(座位不绑定模型);其他游戏(werewolf 等)仍强制非空。
+			// 纯空白 key 归一为空串,防 "AI· " 之类脏昵称。
+			if gameKind != "wealth" {
+				return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "agent seat model_key required")
+			}
+			a.ModelKey = ""
 		}
 		// 2026-08-06 §20260806-03: 角色名白名单校验(service 层不 import
 		// werewolf 包避免反向依赖,白名单与 ParseRoleName 保持同步)。
 		if !isSelectableRoleName(a.Role) {
 			return nil, errcode.CodeMsg(errcode.ErrValidationFailed, fmt.Sprintf("agent seat %d: invalid role %q", a.Seat, a.Role))
 		}
+	}
+
+	// 2026-09-21 §虚拟城市(契约 04 §1.1): resident_count 仅 wealth 生效;
+	// 负数在 API 层 400(此处防御夹 0);超上限 clamp 到 cfg.Wealth.MaxResidents
+	// (默认 100000)。
+	if gameKind == "wealth" && wealthCfg != nil {
+		maxResidents := 100000
+		if s.cfg != nil && s.cfg.Wealth.MaxResidents > 0 {
+			maxResidents = s.cfg.Wealth.MaxResidents
+		}
+		wealthCfg.ResidentCount = clampWealthResidentCount(wealthCfg.ResidentCount, maxResidents)
 	}
 	if !isSelectableRoleName(creatorRolePref) {
 		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, fmt.Sprintf("invalid creator_role %q", creatorRolePref))
@@ -294,7 +316,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	// hook is nil (legacy callers / tests) we degrade gracefully: skip
 	// validation but keep warning loudly so missing wiring is visible.
 	if len(agentSeats) > 0 && s.agentSeater != nil {
-		if e := s.agentSeater.ValidateAgentSeats(agentSeats); e != nil {
+		if e := s.agentSeater.ValidateAgentSeats(gameKind, agentSeats); e != nil {
 			logger.L().Warn("CreateRoomWithAgents: agent seat model_key validation failed",
 				zap.String("user_id", userID),
 				zap.Int("requested_agent_seats", len(agentSeats)),
@@ -812,6 +834,22 @@ func creatorShouldBeSpectator(gameKind string, freeSeatCount, agentSeatCount int
 	return freeSeatCount == 0 || (gameKind == "wealth" && agentSeatCount >= wealthMinAgentSeats)
 }
 
+// clampWealthResidentCount 2026-09-21 §虚拟城市(契约 04 §1.1):
+// resident_count 收敛到 [0, maxResidents](负数防御夹 0 —— API 层已 400,
+// 此处纵深防御;maxResidents<=0 时用默认 100000)。
+func clampWealthResidentCount(v, maxResidents int) int {
+	if maxResidents <= 0 {
+		maxResidents = 100000
+	}
+	if v < 0 {
+		return 0
+	}
+	if v > maxResidents {
+		return maxResidents
+	}
+	return v
+}
+
 // prepareWealthAgentRoom 是 wealth 专用的内存镜像顺序:先设置 FullAgentMode,
 // 再注册 bot seats。RegisterAgentSeats 到达 MinSeats 后可能立即自动开局,
 // 顺序反置会出现短暂人类可加入窗口。
@@ -1148,6 +1186,11 @@ func (s *RoomService) GetRoomDetailForUser(ctx context.Context, roomID, userID s
 			fullAgent = true
 		}
 	}
+	// 2026-09-21 §虚拟城市(契约 04 §1.3): wealth 房间居民数下发。
+	residentCount := 0
+	if room.GameKind == "wealth" && s.wealthResidentCounter != nil {
+		residentCount = s.wealthResidentCounter(roomID)
+	}
 
 	return &RoomDetail{
 		RoomInfo: RoomInfo{
@@ -1163,6 +1206,7 @@ func (s *RoomService) GetRoomDetailForUser(ctx context.Context, roomID, userID s
 			RoundNumber:    roundNumber,
 			Winner:         winner,
 			FullAgent:      fullAgent,
+			ResidentCount:  residentCount,
 		},
 		Players:    pis,
 		Spectators: sis,

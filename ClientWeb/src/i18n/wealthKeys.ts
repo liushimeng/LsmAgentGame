@@ -217,6 +217,23 @@ export interface WealthDict {
   // 2026-09-19 建房模型随机均匀分配 — 一键重摇 + 模型不足复用提示。
   'wealth.create.reshuffle': string;
   'wealth.create.modelReuseHint': string; // {n} 模型数 {m} Agent 座位数
+  // ── §20260921 建房解耦 + 城市背景层（契约 04 §3 键表）──
+  // 建房弹窗：城市居民数量 + LLM 线路池信息行。
+  'wealth.residentCount': string;
+  'wealth.residentCountHint': string;
+  /** {n} = Σ concurrency_lines（线路池容量）。 */
+  'wealth.linePoolInfo': string;
+  'wealth.linePoolEmpty': string;
+  // CityStatsPanel（右侧栏城市面板）。
+  'wealth.cityTitle': string;
+  'wealth.cityPopulation': string;
+  'wealth.cityEmployment': string;
+  'wealth.cityMedianIncome': string;
+  'wealth.citySavings': string;
+  'wealth.cityStress': string;
+  'wealth.cityVoices': string;
+  /** {month} = 声音所属游戏月。 */
+  'wealth.cityVoiceOfMonth': string;
   'wealth.seatsCount': string; // {n} {max}
   'wealth.seatsWaiting': string; // {n} {min}
   'wealth.botPanel.seat': string;

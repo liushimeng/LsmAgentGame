@@ -644,7 +644,7 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 			cs := wealth.BuildClientState(req.RoomID, -1, r.Engine(),
 				r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
 				r.SnapshotModelKeys(), r.SnapshotTranscripts(),
-				r.GameStartedAtUnix(), r.NextMonthAtUnix())
+				r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CitySnapshotView())
 			s.sendOK(c, env.Seq, "game.state", cs)
 			return
 		}
@@ -766,7 +766,7 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 		cs := wealth.BuildClientState(req.RoomID, seat, eng,
 			r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
 			r.SnapshotModelKeys(), r.SnapshotTranscripts(),
-			r.GameStartedAtUnix(), r.NextMonthAtUnix())
+			r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CitySnapshotView())
 		s.sendOK(c, env.Seq, "game.state", cs)
 	}
 }

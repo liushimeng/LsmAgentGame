@@ -496,7 +496,11 @@ func (s *GameService) botUserIDForSeat(roomID string, seat int) (string, error) 
 // room is already understood to be placeholder-only. Callers that pass agent
 // seats without wiring a registry get a loud startup log from
 // service.CreateRoomWithAgents.
-func (s *GameService) ValidateAgentSeats(seats []service.AgentSeatConfig) *errcode.Error {
+//
+// 2026-09-21 §虚拟城市(契约 04 §1.2):gameKind 分流 —— wealth 的空串
+// model_key 直接放行(= 线路池驱动,座位不绑定模型,不查 registry;
+// 纯空白 key 归一为空串);非空 key 与其他游戏(werewolf 等)行为零变化。
+func (s *GameService) ValidateAgentSeats(gameKind string, seats []service.AgentSeatConfig) *errcode.Error {
 	if len(seats) == 0 {
 		return nil
 	}
@@ -514,6 +518,9 @@ func (s *GameService) ValidateAgentSeats(seats []service.AgentSeatConfig) *errco
 		// match the registry's clean key. Sanitize in place so downstream
 		// consumers (agent seat allocation, error message) see the clean key.
 		seats[i].ModelKey = util.SanitizeModelKey(seats[i].ModelKey)
+		if gameKind == "wealth" && seats[i].ModelKey == "" {
+			continue // 池驱动座位:不查 registry,放行(SeatModelKeys 存空串)
+		}
 		if !reg.IsAvailable(seats[i].ModelKey) {
 			invalid = append(invalid, seats[i].ModelKey)
 		}

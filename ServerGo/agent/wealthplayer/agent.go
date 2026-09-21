@@ -13,6 +13,7 @@ import (
 	"time"
 
 	agentroot "LsmAgentGame/agent"
+	"LsmAgentGame/llm"
 	llmtypes "LsmAgentGame/llm/types"
 )
 
@@ -36,6 +37,11 @@ type Agent struct {
 	// LLM 依赖(构造期经 BindRegistry 注入;Provider 每次 wake 现取,
 	// registry reload 后自动生效)。
 	registry LLMRegistry
+	// linePoolSource 是池模式(ModelKey=="")的线路来源(2026-09-21
+	// §虚拟城市-城市Agent规模化 B3)。每次调 LLM 现取 —— Registry.Reload
+	// 换池后自动生效。nil 且 ModelKey=="" 时 callProvider 立即按 LLM 失败
+	// 处理(不得干等 ctx 超时),走既有 submit_month 兜底。
+	linePoolSource func() *llm.LinePool
 
 	// runner:引擎桥(game/wealth/agent_runner.go 注入)。
 	runner ToolRunner
@@ -121,6 +127,15 @@ func (a *Agent) AgentClass() agentroot.AgentClassName {
 func (a *Agent) BindRegistry(r LLMRegistry) {
 	a.registry = r
 }
+
+// BindLinePoolSource 注入 LLM 线路池来源(池模式;Manager.EnsureAgents 在
+// ModelKey=="" 座位上调用,2026-09-21 §虚拟城市 B3)。
+func (a *Agent) BindLinePoolSource(fn func() *llm.LinePool) {
+	a.linePoolSource = fn
+}
+
+// IsPoolMode 报告该 Agent 是否线路池驱动(ModelKey=="")。
+func (a *Agent) IsPoolMode() bool { return a.ModelKey == "" }
 
 // BindRunner 注入引擎桥(ToolRunner)。
 func (a *Agent) BindRunner(runner ToolRunner) {
