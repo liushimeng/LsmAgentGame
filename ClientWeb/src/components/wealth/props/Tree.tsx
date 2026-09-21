@@ -17,7 +17,7 @@ interface Props {
   x: number;
   z: number;
   variant?: TreeVariant;
-  /** 树高（世界单位），默认 0.8。 */
+  /** 树高 scale（世界单位），默认 0.7；范围 0.5~1.0 ≈ 真实 5~10m 行道树（见 cityScale.ts）。 */
   scale?: number;
 }
 
@@ -29,7 +29,7 @@ const CANOPY_COLORS: Record<TreeVariant, string> = {
 };
 const TRUNK_COLOR = '#6b4f32';
 
-export function Tree({ x, z, variant = 'oak', scale = 0.8 }: Props) {
+export function Tree({ x, z, variant = 'oak', scale = 0.7 }: Props) {
   const url = propUrl('tree', variant);
   const [tex, setTex] = useState<THREE.Texture | null>(null);
 

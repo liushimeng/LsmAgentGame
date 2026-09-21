@@ -22,6 +22,7 @@ import {
   districtCenter,
   type WealthDistrictDef,
 } from '@/types/wealth';
+import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
 import { Tree } from './props/Tree';
 import { Vehicle } from './props/Vehicle';
 import { Pedestrian } from './props/Pedestrian';
@@ -52,7 +53,7 @@ function mulberry32(seed: number): () => number {
 interface DistrictProps {
   districtId: string;
   trees: Array<{ x: number; z: number; variant: 'oak' | 'pine' | 'palm'; scale: number }>;
-  /** 楼顶杂物（接 DistrictBlock 楼栋高度；y 在父层估算）。 */
+  /** 楼顶杂物（yOffset = 城区中位楼高 ×0.9，见 cityScale.ts）。 */
   rooftop: Array<{ x: number; z: number; variant: 'ac' | 'tank' | 'antenna'; rotation: number; yOffset: number }>;
   /** 城区内行人。 */
   pedestrian: { x: number; z: number; variant: 'warm' | 'cool'; seed: number };
@@ -94,13 +95,16 @@ function propsForDistrict(def: WealthDistrictDef, idx: number): DistrictProps {
       x: c.x + Math.cos(angle) * radius,
       z: c.z + Math.sin(angle) * radius,
       variant: TREE_VARIANTS[Math.floor(rnd() * TREE_VARIANTS.length)],
-      scale: 0.7 + rnd() * 0.4,
+      // 行道树 5~10m → scale 0.5~1.0（2026-09-21 高度系统，见 cityScale.ts）
+      scale: 0.5 + rnd() * 0.5,
     };
   });
 
   // 1-2 个楼顶杂物：放在城区中心附近的虚拟楼栋上
-  // 简化：把楼顶杂物的位置用 y 偏移代替（实际楼栋高度由 DistrictBlock 控制；
-  // 这里用 RooftopAcc 的 y=3 估算楼顶位置，足够让杂物出现在"楼上方"）
+  // 楼顶高度：按城区中位楼高 ×0.9（2026-09-21 高度系统，去掉硬编码 2.8+rnd*1.4，
+  // 杂物不再悬空 / 埋楼，郊区低层也贴合）。
+  const [minF, maxF] = DISTRICT_FLOORS[def.id];
+  const roofY = buildingHeight((minF + maxF) / 2) * 0.9;
   const rooftop = [0, 1].slice(0, 1 + (rnd() < 0.5 ? 1 : 0)).map(() => {
     const angle = rnd() * Math.PI * 2;
     const radius = 0.8 + rnd() * 1.6;
@@ -109,8 +113,7 @@ function propsForDistrict(def: WealthDistrictDef, idx: number): DistrictProps {
       z: c.z + Math.sin(angle) * radius,
       variant: ROOFTOP_VARIANTS[Math.floor(rnd() * ROOFTOP_VARIANTS.length)],
       rotation: rnd() * Math.PI * 2,
-      // 楼顶高度估算：基高 1 + prosperity*4 + jitter，范围 ~3-5
-      yOffset: 2.8 + rnd() * 1.4,
+      yOffset: roofY,
     };
   });
 

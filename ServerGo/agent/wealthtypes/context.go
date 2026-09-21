@@ -1,8 +1,10 @@
 // Package wealthtypes — 虚拟城市玩家 Agent 的 GameContext 契约类型
 // (2026-09-14 §财商流P0)。
 //
-// 本包与 agent/thptypes/ 同源设计,是 **leaf 包**:仅依赖基本类型,
-// 不 import game/wealth、agent/wealthplayer、llm/ws(避免循环 import)。
+// 本包与 agent/thptypes/ 同源设计,是 **leaf 包**:不 import game/wealth、
+// agent/wealthplayer、llm/ws(避免循环 import);唯一例外是 import
+// agentroot(LsmAgentGame/agent,自身零依赖)以引用 AgentClassCityPlayer
+// 常量(2026-09-21 §虚拟城市-Agent命名City化,§130 防散写字面量)。
 //
 // 生命周期约定(与 thptypes 一致):引擎侧(game/wealth/agent_runner.go)在
 // **持锁态**构造 GameContext 快照;Agent 侧(wealthplayer)锁外只读消费。
@@ -10,6 +12,8 @@
 //
 // 详见 lag_docs/虚拟城市/已实现/03-Agent设计/虚拟城市-WealthPlayer-Agent设计-v1.md §3。
 package wealthtypes
+
+import agentroot "LsmAgentGame/agent"
 
 // GameContext 是虚拟城市 Bot 单月决策所需的全部上下文快照。
 type GameContext struct {
@@ -207,7 +211,7 @@ type BotIdentityBrief struct {
 	UserID     string
 	ModelKey   string
 	ModelName  string
-	AgentClass string // "LsmAgentGame-Wealth-Player"
+	AgentClass string // 恒 string(agentroot.AgentClassCityPlayer) = "LsmAgentGame-City-Player"
 }
 
 // CardBrief 是职业卡的 Agent 侧投影(System prompt 渲染所需字段)。
@@ -257,7 +261,7 @@ func BuildEmptyContext(roomID, userID, modelKey string, seat int) *GameContext {
 		BotIdentity: BotIdentityBrief{
 			UserID:     userID,
 			ModelKey:   modelKey,
-			AgentClass: "LsmAgentGame-Wealth-Player",
+			AgentClass: string(agentroot.AgentClassCityPlayer),
 		},
 	}
 }

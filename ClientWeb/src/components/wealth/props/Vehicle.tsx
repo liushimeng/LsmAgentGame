@@ -5,7 +5,7 @@
  * 加载 props/vehicle/<variant>_vehicle.png 后：Billboard 朝相机 sprite。
  *
  * 沿 from→to 路径循环移动：useFrame 内 lerp t += speed * dt，过 t ≥ 1 → 重置。
- * y=0.05（高于地面、低于路灯）；rotation 始终朝向运动方向（与 Billboard 不冲突，
+ * y=0.02（贴路面之上）；rotation 始终朝向运动方向（与 Billboard 不冲突，
  * sprite 始终朝相机，几何盒子朝向运动方向）。
  */
 
@@ -36,6 +36,17 @@ const VEHICLE_COLORS: Record<VehicleVariant, string> = {
   taxi: '#e8b930',
 };
 
+/**
+ * 车身尺寸 长×高×宽（世界单位，1 单位 = 10m；2026-09-21 高度系统）：
+ * 轿车 4.5×1.5×1.8 m；bus/truck 略高（×1.5 高）并加长。
+ */
+const VEHICLE_DIMS: Record<VehicleVariant, { l: number; h: number; w: number }> = {
+  sedan: { l: 0.45, h: 0.15, w: 0.18 },
+  taxi:  { l: 0.45, h: 0.15, w: 0.18 },
+  truck: { l: 0.60, h: 0.23, w: 0.20 },
+  bus:   { l: 0.75, h: 0.23, w: 0.20 },
+};
+
 const REDUCED_MOTION =
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&
@@ -51,6 +62,7 @@ export function Vehicle({
   const url = propUrl('vehicle', variant);
   const [tex, setTex] = useState<THREE.Texture | null>(null);
   const groupRef = useRef<THREE.Group>(null);
+  const dims = VEHICLE_DIMS[variant];
 
   // 路径向量
   const { dx, dz, angle } = useMemo(() => {
@@ -102,22 +114,23 @@ export function Vehicle({
     const t = tRef.current;
     g.position.x = from[0] + dx * t;
     g.position.z = from[1] + dz * t;
-    g.position.y = 0.05;
+    g.position.y = 0.02;
   });
 
   return (
-    <group ref={groupRef} position={[from[0], 0.05, from[1]]} rotation={[0, angle, 0]}>
+    <group ref={groupRef} position={[from[0], 0.02, from[1]]} rotation={[0, angle, 0]}>
       {tex ? (
-        <Billboard>
+        <Billboard position={[0, dims.h / 2 + 0.03, 0]}>
           <mesh>
-            <planeGeometry args={[0.45, 0.3]} />
+            {/* 贴图平面与车身尺寸同步（含车底轮子余量） */}
+            <planeGeometry args={[dims.l, dims.h + 0.06]} />
             <meshBasicMaterial map={tex} transparent alphaTest={0.05} />
           </mesh>
         </Billboard>
       ) : (
-        // 缺失贴图：低矮盒子 + 主色
-        <mesh castShadow={false}>
-          <boxGeometry args={[0.3, 0.12, 0.18]} />
+        // 缺失贴图：低矮盒子 + 主色（盒子底部贴地）
+        <mesh castShadow={false} position={[0, dims.h / 2, 0]}>
+          <boxGeometry args={[dims.l, dims.h, dims.w]} />
           <meshStandardMaterial color={VEHICLE_COLORS[variant]} roughness={0.6} metalness={0.3} />
         </mesh>
       )}

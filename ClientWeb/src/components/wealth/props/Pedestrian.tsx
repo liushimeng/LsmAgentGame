@@ -6,6 +6,9 @@
  *
  * 微抖动（useFrame 内 sin 时间偏移）让行人看起来在原地等待（不是真正走动，
  * 但避免视觉静止的"贴纸感"）。prefers-reduced-motion 下静止。
+ *
+ * 2026-09-21 高度系统：行人总高 0.36 → 0.17（真实 1.7m，见 cityScale.ts），
+ * Billboard 平面与圆形兜底同步缩放。
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -85,17 +88,17 @@ export function Pedestrian({ x, z, variant = 'warm', seed = 0 }: Props) {
   return (
     <group ref={groupRef} position={[x, 0, z]}>
       {tex ? (
-        <Billboard position={[0, 0.18, 0]}>
+        <Billboard position={[0, 0.085, 0]}>
           <mesh>
-            <planeGeometry args={[0.18, 0.36]} />
+            <planeGeometry args={[0.085, 0.17]} />
             <meshBasicMaterial map={tex} transparent alphaTest={0.05} />
           </mesh>
         </Billboard>
       ) : (
         // 缺失贴图：圆片兜底
-        <Billboard position={[0, 0.18, 0]}>
+        <Billboard position={[0, 0.085, 0]}>
           <mesh>
-            <circleGeometry args={[0.08, 12]} />
+            <circleGeometry args={[0.04, 12]} />
             <meshBasicMaterial color={COLORS[variant]} />
           </mesh>
         </Billboard>

@@ -28,54 +28,56 @@ func TestAgentClassWerewolfMemoryCompact_Wired(t *testing.T) {
 	}
 }
 
-// TestAgentClassWealthPlayer_Wired 校验虚拟城市玩家 Bot 的 AgentClassName 已按
+// TestAgentClassCityPlayer_Wired 校验虚拟城市玩家 Bot 的 AgentClassName 已按
 // §24 登记(常量 + AllAgentClassNames + IsValidAgentClassName)——防 §130
-// 「声明了却从不接线」复发(2026-09-14 §财商流P0,G3 门禁)。
-func TestAgentClassWealthPlayer_Wired(t *testing.T) {
-	if AgentClassWealthPlayer == "" {
-		t.Fatal("AgentClassWealthPlayer must be non-empty (§24)")
+// 「声明了却从不接线」复发(2026-09-14 §财商流P0,G3 门禁;
+// 2026-09-21 §虚拟城市-Agent命名City化: Wealth→City)。
+func TestAgentClassCityPlayer_Wired(t *testing.T) {
+	if AgentClassCityPlayer == "" {
+		t.Fatal("AgentClassCityPlayer must be non-empty (§24)")
 	}
-	if string(AgentClassWealthPlayer) != "LsmAgentGame-Wealth-Player" {
-		t.Errorf("unexpected AgentClassName: %q", AgentClassWealthPlayer)
+	if string(AgentClassCityPlayer) != "LsmAgentGame-City-Player" {
+		t.Errorf("unexpected AgentClassName: %q", AgentClassCityPlayer)
 	}
 	found := false
 	for _, c := range AllAgentClassNames() {
-		if c == AgentClassWealthPlayer {
+		if c == AgentClassCityPlayer {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("AgentClassWealthPlayer must be registered in AllAgentClassNames()")
+		t.Error("AgentClassCityPlayer must be registered in AllAgentClassNames()")
 	}
-	if !IsValidAgentClassName(string(AgentClassWealthPlayer)) {
-		t.Error("AgentClassWealthPlayer must pass IsValidAgentClassName")
+	if !IsValidAgentClassName(string(AgentClassCityPlayer)) {
+		t.Error("AgentClassCityPlayer must pass IsValidAgentClassName")
 	}
 }
 
-// TestAgentClassWealthCityVoice_Wired 校验虚拟城市「城市之声」的
+// TestAgentClassCityVoice_Wired 校验虚拟城市「城市之声」的
 // AgentClassName 已按 §24 两步登记(常量 + AllAgentClassNames +
 // IsValidAgentClassName)—— 防止 voice.go 散写字面量(2026-09-21
-// §虚拟城市-城市Agent规模化,契约 03 §5)。
-func TestAgentClassWealthCityVoice_Wired(t *testing.T) {
-	if AgentClassWealthCityVoice == "" {
-		t.Fatal("AgentClassWealthCityVoice must be non-empty (§24)")
+// §虚拟城市-城市Agent规模化,契约 03 §5;同日 §虚拟城市-Agent命名City化:
+// Wealth→City)。
+func TestAgentClassCityVoice_Wired(t *testing.T) {
+	if AgentClassCityVoice == "" {
+		t.Fatal("AgentClassCityVoice must be non-empty (§24)")
 	}
-	if string(AgentClassWealthCityVoice) != "LsmAgentGame-Wealth-CityVoice" {
-		t.Errorf("unexpected AgentClassName: %q", AgentClassWealthCityVoice)
+	if string(AgentClassCityVoice) != "LsmAgentGame-City-Voice" {
+		t.Errorf("unexpected AgentClassName: %q", AgentClassCityVoice)
 	}
 	found := false
 	for _, c := range AllAgentClassNames() {
-		if c == AgentClassWealthCityVoice {
+		if c == AgentClassCityVoice {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("AgentClassWealthCityVoice must be registered in AllAgentClassNames()")
+		t.Error("AgentClassCityVoice must be registered in AllAgentClassNames()")
 	}
-	if !IsValidAgentClassName(string(AgentClassWealthCityVoice)) {
-		t.Error("AgentClassWealthCityVoice must pass IsValidAgentClassName")
+	if !IsValidAgentClassName(string(AgentClassCityVoice)) {
+		t.Error("AgentClassCityVoice must pass IsValidAgentClassName")
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	agentroot "LsmAgentGame/agent"
 	"LsmAgentGame/agent/wealthplayer"
 	"LsmAgentGame/agent/wealthtypes"
 	"LsmAgentGame/errcode"
@@ -1011,7 +1012,7 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 	// BotIdentity。
 	botIdent := wealthtypes.BotIdentityBrief{
 		UserID: p.Card.ID, ModelKey: r.SeatModelKeys[seat], ModelName: ModelDisplayName(r.SeatModelKeys[seat]),
-		AgentClass: "LsmAgentGame-Wealth-Player",
+		AgentClass: string(agentroot.AgentClassCityPlayer),
 	}
 
 	// P1: 央行快照 + 信贷约束参数。

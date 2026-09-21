@@ -4,7 +4,8 @@
 // 设计原则(对齐 thpagent,§15/§128):
 //  1. 一个 bot 座位 = 一个 Agent struct;月度事件驱动(每月 acting 一次决策)。
 //  2. Agent 经 ToolRunner 接口调用引擎(in-process,不走 WS,与人类同一路径)。
-//  3. AgentClassName = "LsmAgentGame-Wealth-Player"(class_names.go 登记)。
+//  3. AgentClassName = "LsmAgentGame-City-Player"(class_names.go 登记;
+//     2026-09-21 §虚拟城市-Agent命名City化: Wealth→City)。
 //  4. 每月 ≤ BotMaxActionsPerMonth(3)个动作工具 + ≤1 次 speak + submit_month。
 package wealthplayer
 
@@ -120,7 +121,7 @@ func NewAgent(roomID, userID, modelKey, modelName string, seat int, maxActions i
 
 // AgentClass 返回 AgentClassName(class_names.go 常量;§130 防散写字面量)。
 func (a *Agent) AgentClass() agentroot.AgentClassName {
-	return agentroot.AgentClassWealthPlayer
+	return agentroot.AgentClassCityPlayer
 }
 
 // BindRegistry 注入 LLM 注册表(Manager 构造后调用)。

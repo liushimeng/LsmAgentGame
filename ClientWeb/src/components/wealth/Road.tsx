@@ -198,6 +198,7 @@ export function Road({ from, to, kind }: Props) {
           z={lp.z}
           rotation={lp.rot}
           variant={lp.variant}
+          kind={kind}
         />
       ))}
     </group>

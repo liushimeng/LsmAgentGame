@@ -15,6 +15,11 @@
  *   我们用 6 个独立 <mesh> 子节点更直观：4 个侧面共享同 facade 贴图，1 顶面 roof，1 底面。
  *
  * prosperity（繁荣度）→ emissiveIntensity 仍保留（繁荣期楼顶暖光）。
+ *
+ * 2026-09-21 高度系统 + 贴图修复：
+ *   - 楼高改按 cityScale.DISTRICT_FLOORS 分城区楼层区间（层高 3m）；
+ *   - 材质 color/emissive 不再用城区主色乘贴图 —— 有贴图纯白 / 中性暖光，
+ *     无贴图才回退主色（与 Ground / Road 既有正确模式逐字段对齐）。
  */
 
 import { useEffect, useState } from 'react';
@@ -24,6 +29,7 @@ import {
   districtRoofUrl,
 } from '@/assets/images/wealth';
 import type { WealthDistrictDef } from '@/types/wealth';
+import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
 
 export interface BuildingSpec {
   /** 相对区中心偏移（x, z）。 */
@@ -88,10 +94,18 @@ export function BuildingMesh({ spec, def, prosperity }: Props) {
   const facadeMid = useTexture(facadeMidUrl);
   const roof = useTexture(roofUrl);
 
-  // 楼高（与 DistrictBlock.tsx 一致：1 + prosperity*4 范围 × factor）
-  const h = (1 + prosperity * 4) * spec.factor;
+  // 楼高：分城区楼层区间 [minF, maxF] × 繁荣度插值 × factor 抖动（0.85~1.0，
+  // 保留确定性伪随机但避免 0.6 倍把楼压扁）。层高 3m，见 cityScale.ts。
+  const [minF, maxF] = DISTRICT_FLOORS[def.id];
+  const h = buildingHeight(minF + (maxF - minF) * prosperity) * (0.85 + spec.factor * 0.15);
   // emissive 强度（v1 一致：prosperity * 0.25）
   const emissive = prosperity * 0.25;
+
+  // 每面独立取贴图（横向 base / 纵向 mid，避免完全镜像接缝）；
+  // 有贴图 → 纯白不乘主色 + 中性暖光；无贴图 → 回退城区主色（§1.2 贴图修复）。
+  const sideMapA = facadeBase ?? facadeMid ?? undefined;
+  const sideMapB = facadeMid ?? facadeBase ?? undefined;
+  const roofMap = roof ?? undefined;
 
   return (
     <group position={[spec.x, 0, spec.z]}>
@@ -102,9 +116,9 @@ export function BuildingMesh({ spec, def, prosperity }: Props) {
       <mesh castShadow position={[spec.w / 2, h / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[spec.d, h]} />
         <meshStandardMaterial
-          map={facadeBase ?? facadeMid ?? undefined}
-          color={def.color}
-          emissive={def.color}
+          map={sideMapA}
+          color={sideMapA ? '#ffffff' : def.color}
+          emissive={sideMapA ? '#ffcf99' : def.color}
           emissiveIntensity={emissive}
           roughness={0.7}
           metalness={0.1}
@@ -115,9 +129,9 @@ export function BuildingMesh({ spec, def, prosperity }: Props) {
       <mesh castShadow position={[-spec.w / 2, h / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
         <planeGeometry args={[spec.d, h]} />
         <meshStandardMaterial
-          map={facadeMid ?? facadeBase ?? undefined}
-          color={def.color}
-          emissive={def.color}
+          map={sideMapB}
+          color={sideMapB ? '#ffffff' : def.color}
+          emissive={sideMapB ? '#ffcf99' : def.color}
           emissiveIntensity={emissive}
           roughness={0.7}
           metalness={0.1}
@@ -128,9 +142,9 @@ export function BuildingMesh({ spec, def, prosperity }: Props) {
       <mesh castShadow position={[0, h / 2, spec.d / 2]}>
         <planeGeometry args={[spec.w, h]} />
         <meshStandardMaterial
-          map={facadeMid ?? facadeBase ?? undefined}
-          color={def.color}
-          emissive={def.color}
+          map={sideMapB}
+          color={sideMapB ? '#ffffff' : def.color}
+          emissive={sideMapB ? '#ffcf99' : def.color}
           emissiveIntensity={emissive}
           roughness={0.7}
           metalness={0.1}
@@ -141,9 +155,9 @@ export function BuildingMesh({ spec, def, prosperity }: Props) {
       <mesh castShadow position={[0, h / 2, -spec.d / 2]} rotation={[0, Math.PI, 0]}>
         <planeGeometry args={[spec.w, h]} />
         <meshStandardMaterial
-          map={facadeBase ?? facadeMid ?? undefined}
-          color={def.color}
-          emissive={def.color}
+          map={sideMapA}
+          color={sideMapA ? '#ffffff' : def.color}
+          emissive={sideMapA ? '#ffcf99' : def.color}
           emissiveIntensity={emissive}
           roughness={0.7}
           metalness={0.1}
@@ -155,9 +169,9 @@ export function BuildingMesh({ spec, def, prosperity }: Props) {
       <mesh position={[0, h + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[spec.w, spec.d]} />
         <meshStandardMaterial
-          map={roof ?? undefined}
-          color={def.color}
-          emissive={def.color}
+          map={roofMap}
+          color={roofMap ? '#ffffff' : def.color}
+          emissive={roofMap ? '#ffcf99' : def.color}
           emissiveIntensity={emissive * 0.6}
           roughness={0.8}
         />

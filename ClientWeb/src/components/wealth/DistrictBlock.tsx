@@ -5,7 +5,8 @@
  * P1-B 改造：楼群渲染段由 inline boxGeometry 改为 <BuildingMesh />。
  * BuildingMesh 内部按 4 侧面 + 顶面分别贴 facade / roof 纹理，缺失 → 退色。
  *
- * 楼群高度映射 price_index（0.8–1.6 → 1–5 单位）：繁荣期楼变高、萧条期变矮
+ * 楼群高度映射 price_index（0.8–1.6 → 繁荣度 0–1，在城区楼层区间内插值，
+ * 见 cityScale.ts DISTRICT_FLOORS）：繁荣期楼变高、萧条期变矮
  * = 可视化市场周期（前端架构文档 §3）。伪随机 **不用 Math.random**——seed 由
  * district id hash，重渲染布局稳定。
  */
@@ -17,6 +18,7 @@ import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import { districtTexture } from '@/assets/images/wealth';
 import { BuildingMesh, type BuildingSpec } from './BuildingMesh';
+import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
 import {
   WEALTH_DISTRICTS,
   formatCny,
@@ -108,9 +110,11 @@ export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect
     };
   }, [texUrl]);
 
-  // 繁荣度 → 楼高（price_index 0.8–1.6 → 1–5 单位）。
+  // 繁荣度 → 楼高（price_index 0.8–1.6 → 0–1；实际楼高公式在 BuildingMesh，
+  // 按 cityScale.DISTRICT_FLOORS 分城区楼层区间插值）。
   const prosperity = Math.min(1, Math.max(0, (priceIndex - 0.8) / 0.8));
-  const heightBase = 1 + prosperity * 4;
+  // hover 卡定位基准：本城区最高楼层对应的世界单位楼高（2026-09-21 高度系统）。
+  const heightBase = buildingHeight(DISTRICT_FLOORS[def.id][1]);
 
   // hover 信息卡数据：当前房价（万元）= 基准 × beta × 指数（《后端架构》§4 公式）。
   const housePriceWan = Math.round(def.basePriceWan * def.houseBeta * priceIndex);
@@ -163,7 +167,7 @@ export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect
       ))}
       {/* hover 信息卡 */}
       {hovered && (
-        <Html position={[0, heightBase + 1.6, 0]} center distanceFactor={16}>
+        <Html position={[0, heightBase + 1.0, 0]} center distanceFactor={16}>
           <div className="wealth-district-card">
             <div className="wealth-district-card__name">
               {t(`wealth.district.${def.id}` as TKey)} · #{idx + 1}

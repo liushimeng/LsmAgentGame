@@ -1,8 +1,11 @@
 /**
- * AgentToken — 玩家 token：圆柱（r=0.35 h=0.7，职业色）+ drei Billboard 头像
+ * AgentToken — 玩家 token：圆柱（r=0.12 h=0.25，职业色）+ drei Billboard 头像
  * sprite（512 PNG，加载失败降级职业色圆环 + emoji）+ Html 名牌（座位号 + 昵称 +
  * 职业 emoji + 净资产档）。useFrame lerp 平滑迁移（district 变化约 1s 到位；
  * prefers-reduced-motion 下直接吸附）。
+ *
+ * 2026-09-21 高度系统：整体按 ~0.36× 缩放（标记物 ~2.5m 真实高度，
+ * 见 cityScale.ts）——圆柱 / 光环 / Billboard / Html 标签全部联动缩放。
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -28,9 +31,9 @@ const REDUCED_MOTION =
  * 同城区多 token 的环形落位（地图 / 小地图共用，保证点位一致）。
  *
  * 2026-09-16 §财商流10–12座位：房间容量 8 → 12，单城区最坏情况可挤进 12 个
- * token。原「>3 一律 2.4」下 12 个 token 的圆周间距仅 ≈1.26 单位（≈ token 直径
- * 0.7 的 1.8 倍，名牌必然互相压盖）→ 按人数分档扩环，最大 3.3 仍落在 8×8
- * 城区底板内（3.3 + token 半径 0.35 = 3.65 < 4）。
+ * token。原「>3 一律 2.4」下 12 个 token 的圆周间距仅 ≈1.26 单位（名牌互相压盖）
+ * → 按人数分档扩环，最大 3.3 仍落在 8×8 城区底板内（3.3 + token 半径 0.12 < 4，
+ * 2026-09-21 高度系统后 token 更矮更窄，环半径不变）。
  */
 export function districtSeatOffset(index: number, total: number): { dx: number; dz: number } {
   if (total <= 1) return { dx: 0, dz: 0.9 };
@@ -118,9 +121,9 @@ export function AgentToken({ player, cx, cz, index, total, isMe }: Props) {
 
   return (
     <group ref={groupRef} position={[targetX, 0, targetZ]}>
-      {/* 圆柱 token（职业色；观战/他人浅色描边区分） */}
-      <mesh castShadow position={[0, 0.35, 0]}>
-        <cylinderGeometry args={[0.35, 0.35, 0.7, 24]} />
+      {/* 圆柱 token（职业色；观战/他人浅色描边区分）。高 0.25 / 半径 0.12 ≈ 2.5m 标记物 */}
+      <mesh castShadow position={[0, 0.125, 0]}>
+        <cylinderGeometry args={[0.12, 0.12, 0.25, 24]} />
         <meshStandardMaterial
           color={color}
           roughness={0.5}
@@ -131,33 +134,34 @@ export function AgentToken({ player, cx, cz, index, total, isMe }: Props) {
       </mesh>
       {/* 我 = 金环高亮（对比 §26.2 反模式 4：明度差 + 光晕双通道） */}
       {isMe && (
-        <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[0.5, 0.68, 32]} />
+        <mesh position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.18, 0.24, 32]} />
           <meshBasicMaterial color="#d4a017" transparent opacity={0.95} side={THREE.DoubleSide} />
         </mesh>
       )}
-      {/* 头像 sprite（Billboard 始终面向相机；缺失降级 emoji 圆片） */}
-      <Billboard position={[0, 1.25, 0]}>
+      {/* 头像 sprite（Billboard 始终面向相机；缺失降级 emoji 圆片）。
+          底缘 0.29 > 圆柱顶 0.25，不与几何体重叠。 */}
+      <Billboard position={[0, 0.45, 0]}>
         {tex ? (
           <mesh>
-            <planeGeometry args={[0.9, 0.9]} />
+            <planeGeometry args={[0.32, 0.32]} />
             <meshBasicMaterial map={tex} transparent alphaTest={0.05} />
           </mesh>
         ) : (
           <mesh>
-            <circleGeometry args={[0.45, 24]} />
+            <circleGeometry args={[0.16, 24]} />
             <meshBasicMaterial color={color} transparent opacity={0.92} />
           </mesh>
         )}
       </Billboard>
       {/* 头像缺失时的 emoji 兜底（永远叠一层 Html 太贵 → 仅降级时渲染） */}
       {!tex && (
-        <Html position={[0, 1.25, 0]} center distanceFactor={14} zIndexRange={[8, 0]}>
+        <Html position={[0, 0.45, 0]} center distanceFactor={14} zIndexRange={[8, 0]}>
           <div className="wealth-token-emoji" aria-hidden="true">{emoji}</div>
         </Html>
       )}
-      {/* 名牌：座位号 + 昵称 + 职业图标 + 状态图标 */}
-      <Html position={[0, 1.85, 0]} center distanceFactor={12} zIndexRange={[9, 0]}>
+      {/* 名牌：座位号 + 昵称 + 职业图标 + 状态图标（0.67 > 头像顶 0.61，不压盖） */}
+      <Html position={[0, 0.67, 0]} center distanceFactor={12} zIndexRange={[9, 0]}>
         <div
           className={
             'wealth-token-tag' +
