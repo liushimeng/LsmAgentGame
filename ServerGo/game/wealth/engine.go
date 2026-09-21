@@ -46,6 +46,70 @@ const MinSeats = 10
 //   - NewWealthRoom 的 llmConcurrency 参数=0 时回落此默认;管理器可按需覆盖。
 const DefaultAgentConcurrency = 8
 
+// DefaultAgentConcurrencyFor 根据 maxSeats + 线路池容量返回动态并发数
+// (2026-09-21 §城市扩张v2.12)。
+//
+// 输入:
+//   - maxSeats 房容量(12 默认);≤0 或 >MaxSeats 时回落 MaxSeats。
+//   - poolTotal llm.LinePool 总线路数;≤0 时回落 DefaultAgentConcurrency。
+//
+// 输出: ∈ [4, 64];目标值 = maxSeats/2+1,再 cap 到 poolTotal 与 64。
+//
+// 设计动机:12 焦点玩家 × 时 LinePool 容量动态调整,避免 Provider 429。
+// 典型值:12 焦点玩家 + 8 线路 → 7;200 背景居民 + 64 线路 → 64。
+// 向后兼容:老客户端 poolTotal 传入 0 时回落 DefaultAgentConcurrency,
+// 与 NewWealthRoom 既有行为一致,客户无感。
+func DefaultAgentConcurrencyFor(maxSeats, poolTotal int) int {
+	if maxSeats <= 0 || maxSeats > MaxSeats {
+		maxSeats = MaxSeats
+	}
+	if poolTotal <= 0 {
+		poolTotal = DefaultAgentConcurrency
+	}
+	target := maxSeats/2 + 1
+	if target > poolTotal {
+		target = poolTotal
+	}
+	if target > 64 {
+		target = 64
+	}
+	if target < 4 {
+		target = 4
+	}
+	return target
+}
+
+// MonthWindowFor 根据 maxSeats + LLM 并发返回月窗毫秒数
+// (2026-09-21 §城市扩张v2.12)。
+//
+// 输入:
+//   - maxSeats 房容量;≤0 回落 MaxSeats。
+//   - llmConcurrency 信号量;≤0 回落 DefaultAgentConcurrency。
+//
+// 输出: ∈ [3000ms, 60000ms]。
+// 公式: totalMs = batches*4000ms + 20000ms(决策超时) + 4000ms(余量),
+// batches = ceil(maxSeats / llmConcurrency),clamp [3s, 60s]。
+//
+// 设计动机:月窗必须 ≥ 所有 Agent 完成一轮决策的总耗时,否则末批 Agent
+// 会被强制 submit。向后兼容:llmConcurrency=0 时回落默认公式,老房间行为不变。
+func MonthWindowFor(maxSeats, llmConcurrency int) int {
+	if llmConcurrency <= 0 {
+		llmConcurrency = DefaultAgentConcurrency
+	}
+	if maxSeats <= 0 {
+		maxSeats = MaxSeats
+	}
+	batches := (maxSeats + llmConcurrency - 1) / llmConcurrency
+	totalMs := batches*4000 + 20000 + 4000
+	if totalMs < 3000 {
+		totalMs = 3000
+	}
+	if totalMs > 60000 {
+		totalMs = 60000
+	}
+	return totalMs
+}
+
 // MasterStartAge 主时钟开局基准年龄(精选手卡恒 25;文档池混龄卡仅展示个人
 // age,主时钟统一 25 起 — 验收清单 B1 设计取舍)。
 const MasterStartAge = 25

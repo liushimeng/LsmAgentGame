@@ -157,6 +157,11 @@ func AllAgentClassNames() []AgentClassName {
 		AgentClassCityPlayer,
 		// 2026-09-21 §虚拟城市-城市Agent规模化 — 虚拟城市「城市之声」
 		AgentClassCityVoice,
+		// 2026-09-21 §城市扩张v2.12 — 虚拟城市政府/央行/企业三类解说 Bot
+		// (阶段 3-5 陆续接线,当前仅登记 AgentClassName)
+		AgentClassCityGovernment,
+		AgentClassCityBanker,
+		AgentClassCityFirm,
 	}
 }
 
@@ -222,4 +227,22 @@ const (
 	// 详见 lag_docs/财商流游戏/已实现/03-城市背景模拟/
 	// 虚拟城市-大规模城市居民背景模拟设计-v1.md §5。
 	AgentClassCityVoice AgentClassName = "LsmAgentGame-City-Voice"
+
+	// AgentClassCityGovernment 是虚拟城市"政府发言人"Bot 的 AgentClassName
+	// (2026-09-21 §城市扩张v2.12)。后续阶段 4 财政子系统会用到:每季度末由
+	// game/wealth 的 treasury.go 调用 LLM 生成"政府公告"(200-400 字),作为
+	// city_voice 事件全城广播,内容包括财政赤字/国债余额/转移支付覆盖人口等。
+	AgentClassCityGovernment AgentClassName = "LsmAgentGame-City-Government"
+
+	// AgentClassCityBanker 是虚拟城市"央行行长"Bot 的 AgentClassName
+	// (2026-09-21 §城市扩张v2.12)。后续阶段 3 央行深化会用到:每季度末由
+	// game/wealth/central_bank.go 调用 LLM 生成"央行公告"(150-300 字),内容
+	// 包括利率决议/货币政策倾向/经济展望。仅供解说,玩家决策不受影响。
+	AgentClassCityBanker AgentClassName = "LsmAgentGame-City-Banker"
+
+	// AgentClassCityFirm 是虚拟城市"企业高管"Bot 的 AgentClassName
+	// (2026-09-21 §城市扩张v2.12)。后续阶段 5 企业产业链会用到:每月末对营收
+	// 前 5 的企业调用 LLM 生成"季度业绩公告"(150-300 字),作为 city_firm 事件
+	// 全城广播。仅用于增强沉浸感,不参与玩家决策。
+	AgentClassCityFirm AgentClassName = "LsmAgentGame-City-Firm"
 )
