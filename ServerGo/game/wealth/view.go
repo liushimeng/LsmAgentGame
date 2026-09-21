@@ -104,6 +104,28 @@ type SocietyJSON struct {
 	Percentiles   map[string]int64  `json:"percentiles,omitempty"` // {"p10":..,"p25":..,"p50":..,"p75":..,"p90":..}
 	LorenzPoints  [][2]float64      `json:"lorenz_points,omitempty"`
 	PyramidLayers []WealthLayerJSON `json:"pyramid_layers,omitempty"`
+
+	// 阶段7 新增(2026-09-21 §城市扩张v2.12):社会结构指标体系(快照 +
+	// 12 月趋势)。economy_enabled=false 时零值下发(与 Gini/Quintiles 同款,
+	// 数组字段 Trend 以 omitempty 保持空帧不携带)。
+	GiniIncome      float64            `json:"gini_income"`
+	Top1Pct         float64            `json:"top1_pct"`
+	Top10Pct        float64            `json:"top10_pct"`
+	Bottom50Pct     float64            `json:"bottom50_pct"`
+	WealthQuintiles [5]float64         `json:"wealth_quintiles"` // 财富五等分(区别于 Quintiles 收入五等分)
+	Pyramid         [4]int             `json:"pyramid"`          // 4 层绝对门槛金字塔人数(自下而上)
+	MobilityYoung   float64            `json:"mobility_young"`   // <30 岁月度流动性
+	Trend           []SocietyTrendJSON `json:"trend,omitempty"`  // 最近 12 月趋势(时间升序)
+}
+
+// SocietyTrendJSON 是 society.trend 单月趋势点(阶段7,2026-09-21 §城市扩张v2.12;
+// 只携带走线图必要字段,完整快照在引擎 SocietyHistory 中)。
+type SocietyTrendJSON struct {
+	Month         int     `json:"month"`
+	GiniWealth    float64 `json:"gini_wealth"`
+	GiniIncome    float64 `json:"gini_income"`
+	Top10Pct      float64 `json:"top10_pct"`
+	MobilityYoung float64 `json:"mobility_young"`
 }
 
 // WealthLayerJSON 是金字塔单层视图(P2 v2 §13.2.4)。
@@ -873,6 +895,30 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 				cs.Society.PyramidLayers[i] = WealthLayerJSON{
 					Name: l.Name, Count: l.Count,
 					TotalWealth: l.TotalWealth, AvgWealth: l.AvgWealth, WealthPct: l.WealthPct,
+				}
+			}
+		}
+	}
+	// 阶段7(2026-09-21 §城市扩张v2.12):社会结构指标体系 —— 最近一次月结的
+	// SocietySnapshot(当前值)+ 最近 12 月趋势。快照在 ④.6B(步骤⑤ w.Month++
+	// 之前)生成,故 Latest().Month = 当前已结算月;首月未月结时历史为空,
+	// 仅零值下发(Trend omitempty 不携带)。
+	if world.EconomyEnabled && world.SocietyHist != nil {
+		if snap := world.SocietyHist.Latest(); snap != nil {
+			cs.Society.GiniIncome = snap.GiniIncome
+			cs.Society.Top1Pct = snap.Top1Pct
+			cs.Society.Top10Pct = snap.Top10Pct
+			cs.Society.Bottom50Pct = snap.Bottom50Pct
+			cs.Society.WealthQuintiles = snap.Quintiles
+			cs.Society.Pyramid = snap.Pyramid
+			cs.Society.MobilityYoung = snap.MobilityYoung
+			if trend := world.SocietyHist.Last(12); len(trend) > 0 {
+				cs.Society.Trend = make([]SocietyTrendJSON, len(trend))
+				for i, t := range trend {
+					cs.Society.Trend[i] = SocietyTrendJSON{
+						Month: t.Month, GiniWealth: t.GiniWealth, GiniIncome: t.GiniIncome,
+						Top10Pct: t.Top10Pct, MobilityYoung: t.MobilityYoung,
+					}
 				}
 			}
 		}

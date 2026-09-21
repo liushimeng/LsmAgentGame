@@ -145,6 +145,19 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		w.Society = ComputeSociety(w)
 	}
 
+	// ④.6B 社会结构快照(阶段7,2026-09-21 §城市扩张v2.12): 财富/收入基尼
+	// (R7-1 剔除 top/bottom 0.1%,12 人不足 1 人 → 全量)、Top1/Top10/Bottom50
+	// 占比、财富五等分、4 层绝对门槛金字塔、<30 岁月度流动性;入 24 月环形
+	// 历史(World.SocietyHist,view 下发当前快照 + 最近 12 月趋势)。
+	// 零 rand(纯排序+算术),固定种子存量对局回归零偏移;
+	// economy_enabled=false 完整跳过;nil 惰性初始化(防直接构造的 World 解引用)。
+	if w.EconomyEnabled {
+		if w.SocietyHist == nil {
+			w.SocietyHist = &SocietyHistory{}
+		}
+		w.SocietyHist.Push(ComputeSocietySnapshot(w))
+	}
+
 	// ⑥B 金融市场月度引擎(阶段6,2026-09-21 §城市扩张v2.12):量化基金
 	// (情绪源,首位 —— F05 评级联动消费本月量化收益)→ 同业存单(利率锚
 	// SHIBOR + 到期兑付)→ 可转债(估值 + 强赎/回售)→ 融券(利息 + 强平)→
