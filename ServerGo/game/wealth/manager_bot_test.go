@@ -140,3 +140,84 @@ func TestManager_CreateRoom_HydratedTenOrElevenBotsRestoreFullAgentMode(t *testi
 		t.Fatal("9 bot restored room should not be full-agent")
 	}
 }
+
+// TestManager_EnsureAgentsLockedVariant_ReentrantUnderWriteLock 回归(§92a 复发,
+// 2026-09-21 线上 P0):§虚拟城市 B3 给 EnsureAgents 新增 m.mu.RLock(读
+// linePoolSource),而 CreateRoom hydrate 段持 m.mu 写锁调用它 —— Go RWMutex
+// 不可重入 → 自死锁,所有带 agent 座位的 wealth 建房请求挂死(CPU 0%)。
+// 既有 hydrate 测试因 registry==nil 在 RLock 之前短路,未覆盖该路径。
+// 修复:拆出 ensureAgentsWithPool 锁内变体。本测试直接钉死重入性质 ——
+// Manager 写锁持有时调用锁内变体必须 3s 内返回。
+func TestManager_EnsureAgentsLockedVariant_ReentrantUnderWriteLock(t *testing.T) {
+	m := NewManager(Config{
+		MonthMs: 3000, PoolDefault: "curated",
+		AgentEnabled: true, AgentConcurrency: DefaultAgentConcurrency,
+	}, fakeBuyRegistry{})
+	r := NewWealthRoom("room-92a-reentrant", 3000, "curated", 7, 4)
+	r.RegisterBotSeats(
+		map[int]string{1: "bot-uid-92a"},
+		map[int]string{1: "Model92a"},
+		nil,
+	)
+
+	m.mu.Lock() // 模拟 CreateRoom 持写锁现场
+	done := make(chan struct{})
+	go func() {
+		m.ensureAgentsWithPool(m.linePoolSource, r)
+		close(done)
+	}()
+	select {
+	case <-done: // ok — 锁内变体在写锁内可重入
+	case <-time.After(3 * time.Second):
+		t.Fatal("EnsureAgents 在 Manager 写锁内死锁(§92a)")
+	}
+	m.mu.Unlock()
+
+	// 行为不变性:锁内变体同样为显式 model_key 座位装配 Agent。
+	r.mu.Lock()
+	_, ok := r.agents[1]
+	r.mu.Unlock()
+	if !ok {
+		t.Fatal("ensureAgentsWithPool 未给显式 model_key bot 座位建 Agent(行为回归)")
+	}
+}
+
+// TestManager_CreateRoom_HydratePath_EnsureAgents_NoDeadlock 全链路回归:
+// 生产死锁现场 = 服务重启后首次访问,room_service 已把 agent 座位写入 DB,
+// CreateRoom 经 seatHydrator 读回(restoredBots>0)并在 m.mu 写锁内装配 bot
+// agent。与上一测试的差异:本测试走公开 CreateRoom 入口(带非 nil registry,
+// 与生产装配一致),钉死「每笔带 agent 座位的建房请求」不再挂死,且 agent
+// 确实装配(行为不变)。旧代码在本测试上稳定复现挂死。
+func TestManager_CreateRoom_HydratePath_EnsureAgents_NoDeadlock(t *testing.T) {
+	const botCount = 3
+	seats := make([]SeatRestoreInfo, botCount)
+	for i := 0; i < botCount; i++ {
+		seats[i] = SeatRestoreInfo{
+			Seat:     i,
+			UserID:   fmt.Sprintf("bot-92a-%d", i),
+			IsBot:    true,
+			ModelKey: fmt.Sprintf("Model92a-%d", i),
+		}
+	}
+	m := NewManager(Config{
+		MonthMs: 3000, PoolDefault: "curated",
+		AgentEnabled: true, AgentConcurrency: DefaultAgentConcurrency,
+	}, fakeBuyRegistry{})
+	m.SetSeatHydrator(func(roomID string) ([]SeatRestoreInfo, error) {
+		return seats, nil
+	})
+
+	done := make(chan *WealthRoom, 1)
+	go func() { done <- m.CreateRoom("room-92a-hydrate") }()
+	select {
+	case r := <-done:
+		r.mu.Lock()
+		got := len(r.agents)
+		r.mu.Unlock()
+		if got != botCount {
+			t.Fatalf("hydrated bots 装配 agents = %d, want %d(行为回归)", got, botCount)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("CreateRoom→hydrate→EnsureAgents 全链路死锁(§92a,3s 超时)")
+	}
+}

@@ -282,7 +282,11 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 			// agent,即便后续 startWealthRoom 路径再次 EnsureAgents,也是幂等的
 			// (agents map 在 EnsureAgents 内整体覆盖)。
 			if restoredBots > 0 {
-				m.EnsureAgents(r)
+				// §92a(2026-09-21 线上 P0):此处仍持 m.mu 写锁,EnsureAgents
+				// 内部再取 m.mu.RLock 会自死锁(Go RWMutex 不可重入,导致所有
+				// 带 agent 座位的建房请求挂死)。改走锁内变体,poolSource 在
+				// 写锁现场直读,装配时序与日志不变。
+				m.ensureAgentsWithPool(m.linePoolSource, r)
 			}
 		}
 	}
@@ -338,6 +342,10 @@ func (m *Manager) RoomIDs() []string {
 // 2026-09-21 §虚拟城市 B3:ModelKey==""(池驱动)且线路池可用(Total>0)的座位
 // 同样建 Agent —— 调用时先 Acquire 线路,Acquire 失败走既有 submit_month 兜底;
 // 池不可用时跳过(行为与旧版一致,防无 LLM 空转)。
+//
+// §92a(2026-09-21 线上 P0 复发):本方法取 m.mu.RLock,禁止在任何已持 m.mu
+// (读/写)的调用路径内使用 —— CreateRoom hydrate 段持写锁,必须改走
+// ensureAgentsWithPool(m.linePoolSource, r) 锁内变体。
 func (m *Manager) EnsureAgents(r *WealthRoom) {
 	if !m.cfg.AgentEnabled || m.registry == nil {
 		return
@@ -345,6 +353,16 @@ func (m *Manager) EnsureAgents(r *WealthRoom) {
 	m.mu.RLock()
 	poolSource := m.linePoolSource
 	m.mu.RUnlock()
+	m.ensureAgentsWithPool(poolSource, r)
+}
+
+// ensureAgentsWithPool 是 EnsureAgents 的锁内变体(§92a:自身不取 m.mu,可在
+// Manager 写锁内安全调用;poolSource 由调用方在其持锁现场直读)。池驱动座位
+// 语义(§虚拟城市 B3)在此实现,两个入口共用同一份逻辑。
+func (m *Manager) ensureAgentsWithPool(poolSource func() *llm.LinePool, r *WealthRoom) {
+	if !m.cfg.AgentEnabled || m.registry == nil {
+		return
+	}
 	poolAvailable := false
 	if poolSource != nil {
 		if pool := poolSource(); pool != nil && pool.Total() > 0 {
