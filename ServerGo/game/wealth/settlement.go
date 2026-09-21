@@ -66,6 +66,14 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 	// 个体失业概率消费最新 Unemployment。economy_enabled=false 跳过。
 	w.LaborMonthStep()
 
+	// ②B 产业链月度调度(阶段5,2026-09-21 §城市扩张v2.12):需求自下而上
+	// 传导 → 生产/利用率/库存(R5-1 断供防护)→ 价格逐层传导 → 消费品价格
+	// 联动(在 ④.5 GoodsMonthStep 之前调整 PriceIdx,链条冲击进当月环比)。
+	// 零 rand;economy_enabled=false 完整跳过。
+	if w.EconomyEnabled && w.SupplyChain != nil {
+		w.SupplyChain.MonthlyTick(w)
+	}
+
 	// ② 月度事件(失业判定)。
 	w.MonthlyEvents()
 
@@ -146,6 +154,12 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 	if w.EconomyEnabled && w.Treasury != nil {
 		w.Treasury.SettleTreasuryMonth(w)
 	}
+
+	// ⑨F 产业集群月度调度(阶段5,2026-09-21 §城市扩张v2.12):位于财政月结
+	// **之后** —— 增值税减免从本月 VatTotal 负向扣除(R5-3 月/年/总额三重
+	// 上限),不直接动 Treasury.Cash。零 rand;economy_enabled=false 跳过
+	// (ClusterMonthStep 内部守卫)。
+	w.ClusterMonthStep()
 
 	// ④.65 资金流向统计(P2 v2 §13.2.5,2026-09-19 §P2-可视化):
 	// 在 ④.6 之后立即聚合本月 Ledger,刷新 World.LastFlowStat 供 view 下发。

@@ -50,6 +50,10 @@ type ClientGameState struct {
 	// 阶段4(2026-09-21 §城市扩张v2.12):政府财政国库快照(nil → 不下发;
 	// 阶段4 前对局/未开 economy_enabled 兼容)。
 	Treasury *TreasuryJSON `json:"treasury,omitempty"`
+	// 阶段5(2026-09-21 §城市扩张v2.12):产业链快照(利用率 top5 节点 +
+	// 4 层价格指数 + 瓶颈警告)与产业集群快照(nil/空 → omitempty)。
+	SupplyChain *SupplyChainJSON `json:"supply_chain,omitempty"`
+	Clusters    []ClusterJSON    `json:"industrial_clusters,omitempty"`
 	// 2026-09-21 §虚拟城市(契约 04 §1.3):城市背景层快照(resident_count>0
 	// 时非 nil;旧房/未建城 omit)。无座位隐私,观战/玩家全量可见。
 	City *city.Snapshot `json:"city,omitempty"`
@@ -115,6 +119,49 @@ type TreasuryJSON struct {
 	LastMonthExpenseCNY int64   `json:"last_month_expense_cny"`
 	DeficitRun          int     `json:"deficit_run"`
 	PublicServiceIdx    float64 `json:"public_service_idx"`
+}
+
+// SupplyChainJSON 是 supply_chain 子结构(阶段5 2026-09-21 §城市扩张v2.12;
+// 政府/观战者全量可见,无座位隐私)。
+type SupplyChainJSON struct {
+	TopNodes    []SupplyNodeJSON `json:"top_nodes"`   // 利用率 top5 节点
+	PriceIdx    [4]float64       `json:"price_idx"`   // Tier 0-3 价格指数(基 1.0)
+	Bottlenecks []BottleneckJSON `json:"bottlenecks"` // 瓶颈警告(≤5 条)
+}
+
+// SupplyNodeJSON 是 supply_chain.top_nodes 单项。
+type SupplyNodeJSON struct {
+	ID            string  `json:"id"`
+	Industry      string  `json:"industry"`
+	NameCN        string  `json:"name_cn"`
+	Tier          int     `json:"tier"`
+	Utilization   float64 `json:"utilization"`      // 0..1
+	InventoryMons float64 `json:"inventory_months"` // 库存可用月数
+}
+
+// BottleneckJSON 是 supply_chain.bottlenecks 单项(Reason:
+// supply_gap 供货缺口 / below_safety_stock 低于安全库存 / full_capacity 满负荷)。
+type BottleneckJSON struct {
+	NodeID   string `json:"node_id"`
+	Industry string `json:"industry"`
+	NameCN   string `json:"name_cn"`
+	Reason   string `json:"reason"`
+	Severity int    `json:"severity"` // 1-2(2 = 已实际缺货)
+}
+
+// ClusterJSON 是 industrial_clusters 单项(阶段5;DistrictName 由后端
+// DistrictCN 展开,前端免查表)。
+type ClusterJSON struct {
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	DistrictID      string   `json:"district_id"`
+	DistrictName    string   `json:"district_name"`
+	Industries      []string `json:"industries"`
+	Firms           int      `json:"firms"`
+	TaxBreakMonths  int      `json:"tax_break_months"`
+	TaxBreakUsedWan float64  `json:"tax_break_used_wan"` // 累计已减免(万元)
+	TaxBreakCapWan  float64  `json:"tax_break_cap_wan"`  // 年度减免上限(万元)
+	LastBreakCNY    int64    `json:"last_break_cny"`     // 上月实际减免(元)
 }
 
 // FlowStatJSON 是 cs.FlowStat 视图(P2 v2 §13.2.4)。
@@ -513,6 +560,16 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 			DeficitRun:          world.Treasury.DeficitRun,
 			PublicServiceIdx:    world.Treasury.PublicServiceIndex(),
 		}
+	}
+
+	// 阶段5(2026-09-21 §城市扩张v2.12):产业链 + 产业集群快照
+	// (economy_enabled=false 或 nil/空 → omitempty 不下发)。
+	if world.EconomyEnabled && world.SupplyChain != nil {
+		snap := world.SupplyChain.Snapshot()
+		cs.SupplyChain = &snap
+	}
+	if world.EconomyEnabled && len(world.Clusters) > 0 {
+		cs.Clusters = ClustersJSONFrom(world.Clusters)
 	}
 
 	// Players(全公开)。

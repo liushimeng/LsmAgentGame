@@ -157,6 +157,12 @@ type World struct {
 	Labor          *FirmSector   // 企业部门/劳动力市场(nil 惰性初始化)
 	Society        *SocietyStats // 社会结构统计(月度缓存,view 直读)
 
+	// 阶段5(2026-09-21 §城市扩张v2.12):企业产业链 + 产业集群(15 虚拟
+	// 节点 + 6 集群;nil/空时 SettleMonth ②B/⑨F 跳过)。见 supply_chain.go /
+	// industrial_cluster.go。零 rand —— 固定种子存量对局回归零偏移。
+	SupplyChain *SupplyChain         // 三条产业链网络(月度 ②B 调度)
+	Clusters    []*IndustrialCluster // 6 产业集群(月度 ⑨F 调度)
+
 	// P1: 社会调研系统(§财商流P1-2 调研契约 §2)。
 	Surveys   []*Survey // 全房调研(≤20,按发起序)
 	SurveySeq int       // id 自增序列
@@ -212,6 +218,9 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		InsuranceEnabled: true,
 		Goods:            NewGoodsMarket(),
 		Labor:            NewFirmSector(),
+		// 阶段5: 产业链 15 节点 + 产业集群 6 集群(2026-09-21 §城市扩张v2.12)。
+		SupplyChain: NewSupplyChain(),
+		Clusters:    NewIndustrialClusters(),
 		// P2: 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
 		ListingBook:  NewListingBook(),
 		AuctionHouse: NewAuctionHouse(),
