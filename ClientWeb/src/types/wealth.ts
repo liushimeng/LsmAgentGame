@@ -8,10 +8,13 @@ import type { TKey } from '@/i18n';
 // 静态表（城区 / 职业色 / 动作元数据）出处：协议 §4 + 后端架构文档 §4 DistrictDefs
 // + 前端架构文档 §3 职业色（P0 新定）。
 
-/** 8 城区 id（顺序 = DistrictDefs 静态表 / market.districts 数组顺序）。 */
+/** 16 城区 id（顺序 = DistrictDefs 静态表 / market.districts 数组顺序；
+ *  前 8 为 P0 原有城区，后 8 为 v2.12 阶段 2 扩展城区）。 */
 export type WealthDistrictId =
   | 'finance' | 'tech' | 'industry' | 'oldtown'
-  | 'commerce' | 'residential' | 'suburb' | 'riverside';
+  | 'commerce' | 'residential' | 'suburb' | 'riverside'
+  | 'logistics_port' | 'hightech_park' | 'edu_district' | 'medical_city'
+  | 'industrial_park' | 'central_park' | 'transport_hub' | 'cultural_creative';
 
 /** 市场周期四阶段（《规则》§7.1）。 */
 export type WealthCyclePhase = 'recovery' | 'boom' | 'recession' | 'depression';
@@ -78,7 +81,7 @@ export interface WealthMarket {
   gold_price: number;
   /** 当期新购债券年化，小数（如 0.032）。 */
   bond_yield: number;
-  /** 8 项，顺序 = DistrictDefs 静态表。 */
+  /** 16 项，顺序 = DistrictDefs 静态表。 */
   districts: WealthDistrictMarket[];
 }
 
@@ -1040,7 +1043,7 @@ export interface WealthDistrictDef {
   nameZh: string;
   /** 主色（后端 DistrictDefs）。 */
   color: string;
-  /** 40×40 地图平面坐标（前端 DistrictBlock / 小地图共用）。 */
+  /** 80×80 地图平面坐标（前端 DistrictBlock / 小地图共用）。 */
   x: number;
   z: number;
   /** 房价 beta。 */
@@ -1049,7 +1052,9 @@ export interface WealthDistrictDef {
   basePriceWan: number;
 }
 
-/** 8 城区静态表（后端架构文档 §4 DistrictDefs，顺序即数组下标）。 */
+/** 16 城区静态表（后端架构文档 §4 DistrictDefs，顺序即数组下标）。
+ *  前 8 区为 P0 原有城区（id/顺序不可修改）；后 8 区为 v2.12 阶段 2 扩展
+ *  （地图 40×40 → 80×80，位置均在 ±30 单位内）。 */
 export const WEALTH_DISTRICTS: WealthDistrictDef[] = [
   { id: 'finance',     nameZh: '金融CBD', color: '#1d4ed8', x: 0,   z: 0,   houseBeta: 1.3,  basePriceWan: 800 },
   { id: 'tech',        nameZh: '科技园',  color: '#0e7490', x: -10, z: 4,   houseBeta: 1.15, basePriceWan: 500 },
@@ -1059,6 +1064,15 @@ export const WEALTH_DISTRICTS: WealthDistrictDef[] = [
   { id: 'residential', nameZh: '居住区',  color: '#15803d', x: 0,   z: 12,  houseBeta: 1.0,  basePriceWan: 300 },
   { id: 'suburb',      nameZh: '郊区',    color: '#65a30d', x: -14, z: 14,  houseBeta: 0.7,  basePriceWan: 120 },
   { id: 'riverside',   nameZh: '滨河新区', color: '#7c3aed', x: 14,  z: 10,  houseBeta: 1.25, basePriceWan: 450 },
+  // ── v2.12 阶段 2 扩展城区（80×80 地图外圈；顺序与后端 DistrictDefs 一致）──
+  { id: 'logistics_port',    nameZh: '物流港',   color: '#475569', x: -22, z: -4,  houseBeta: 0.9,  basePriceWan: 250 },
+  { id: 'hightech_park',     nameZh: '高新园区', color: '#0891b2', x: -22, z: 12,  houseBeta: 1.2,  basePriceWan: 600 },
+  { id: 'edu_district',      nameZh: '教育园区', color: '#7c3aed', x: -8,  z: 22,  houseBeta: 0.95, basePriceWan: 350 },
+  { id: 'medical_city',      nameZh: '医疗城',   color: '#db2777', x: 8,   z: 22,  houseBeta: 1.05, basePriceWan: 450 },
+  { id: 'industrial_park',   nameZh: '产业基地', color: '#78716c', x: -24, z: -20, houseBeta: 0.7,  basePriceWan: 150 },
+  { id: 'central_park',      nameZh: '中央公园', color: '#16a34a', x: 0,   z: -22, houseBeta: 1.0,  basePriceWan: 500 },
+  { id: 'transport_hub',     nameZh: '交通枢纽', color: '#ea580c', x: 22,  z: -14, houseBeta: 0.85, basePriceWan: 280 },
+  { id: 'cultural_creative', nameZh: '文创区',   color: '#e11d48', x: 24,  z: 8,   houseBeta: 1.1,  basePriceWan: 380 },
 ];
 
 export const WEALTH_DISTRICT_IDS: WealthDistrictId[] =
@@ -1069,7 +1083,7 @@ export function wealthDistrict(id: string): WealthDistrictDef | undefined {
   return WEALTH_DISTRICTS.find((d) => d.id === id);
 }
 
-/** 城区中心（40×40 世界坐标）；未知 id 回落原点。 */
+/** 城区中心（80×80 世界坐标）；未知 id 回落原点。 */
 export function districtCenter(id: string): { x: number; z: number } {
   const d = wealthDistrict(id);
   return d ? { x: d.x, z: d.z } : { x: 0, z: 0 };

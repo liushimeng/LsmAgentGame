@@ -68,10 +68,13 @@ func (c *Card) Validate() error {
 	return nil
 }
 
-// districtIDs 8 区 id 集中定义(与 game/wealth/districts.go 静态表对齐;
+// districtIDs 16 区 id 集中定义(与 game/wealth/districts.go 静态表对齐;
 // profession 不得反向 import wealth,此处独立维护——两处同步由 loader_test 覆盖)。
+// 2026-09-21 §城市扩张v2.12 阶段2:8 → 16(前 8 P0 区顺序冻结,追加 8 新区)。
 var districtIDs = []string{
 	"finance", "tech", "industry", "oldtown", "commerce", "residential", "suburb", "riverside",
+	"logistics_port", "hightech_park", "edu_district", "medical_city",
+	"industrial_park", "central_park", "transport_hub", "cultural_creative",
 }
 
 func validDistrict(id string) bool {

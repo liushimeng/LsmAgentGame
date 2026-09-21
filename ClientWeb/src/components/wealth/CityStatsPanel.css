@@ -137,52 +137,65 @@
   color: var(--wealth-text, #e5e7eb);
 }
 
-/* 城区人口迷你条形：名称 + 槽道 + 数值 三段。条形为主色实底（§26：≥45% 不透明），
- * 数值显式 color 在条形外，颜色仅作装饰通道。 */
+/* 城区人口迷你条形（v2.12 阶段 2：8→16 城区自适应）：auto-fill 网格 + 底对齐竖条，
+ * 单元 = 数值 / 条形 / 区名 自上而下。条形为主色实底（§26：≥45% 不透明），
+ * 数值显式 color 在条形外，颜色仅作装饰通道。minmax(40px,1fr) 保证窄面板自动换行。 */
 .wealth-citypanel__districts {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 6px 4px;
+  align-items: end;
 }
 
 .wealth-citypanel__district {
-  display: grid;
-  grid-template-columns: 56px 1fr 52px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* 紧凑模式「其他 N 个」聚合行：中性灰，与实体城区区分（§26 disabled 反模式：
+ * 不用 opacity 污染，改独立灰底 + 正常对比度文字）。 */
+.wealth-citypanel__district--other .wealth-citypanel__district-fill {
+  background: #64748b;
 }
 
 .wealth-citypanel__district-name {
-  font-size: 11.5px;
+  font-size: 10px;
+  line-height: 1.2;
   color: var(--wealth-text-dim, #b7bfcc);
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .wealth-citypanel__district-bar {
-  display: block;
-  height: 8px;
-  border-radius: 4px;
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  height: 32px;
+  border-radius: 3px;
   background: rgba(44, 54, 68, 0.6);
   overflow: hidden;
 }
 
 .wealth-citypanel__district-fill {
   display: block;
-  height: 100%;
-  border-radius: 4px;
+  width: 100%;
+  border-radius: 3px 3px 0 0;
   /* 城市主题琥珀主色实底（与 --wealth-accent 同源；白字场景 ≈ 6.7:1，
-   * 此处条形为纯装饰通道，数值走右侧显式文字）。 */
+   * 此处条形为纯装饰通道，数值走顶部显式文字）。 */
   background: var(--wealth-accent, #c9a227);
   opacity: 0.92;
 }
 
 .wealth-citypanel__district-pop {
-  font-size: 11px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
   color: var(--wealth-text, #e5e7eb);
-  text-align: right;
+  text-align: center;
   white-space: nowrap;
 }
 

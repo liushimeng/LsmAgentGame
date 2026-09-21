@@ -1,8 +1,8 @@
 /**
  * WealthMinimap — 左上角 Canvas2D 小地图（**不开第二个 r3f Canvas**，性能考虑）。
  *
- * 绘制：40×40 世界 → 132px（scale 3.3）；
- *   - 8 城区色块（透明度 0.35）+ 区名首字；
+ * 绘制：80×80 世界 → 132px（v2.12 阶段 2：地图 40×40 → 80×80）；
+ *   - 16 城区色块（透明度 0.35）+ 区名首字；
  *   - agent 点（职业色 4px 圆，与主地图 districtSeatOffset 同一落位公式）；
  *   - 相机视野框（主 Canvas viewRef 回传 target/distance 推算白框）；
  *   - rAF 与主 Canvas 同频重绘。
@@ -11,7 +11,7 @@
 
 import { useEffect, useRef } from 'react';
 import { districtSeatOffset } from './AgentToken';
-import type { WealthCameraView } from './WealthCityMap';
+import { WORLD_SIZE, type WealthCameraView } from './WealthCityMap';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import {
@@ -22,9 +22,13 @@ import {
   type WealthGameState,
 } from '@/types/wealth';
 
-const SIZE = 132;           // CSS 像素（触控目标 ≥44px 满足）
-const WORLD = 40;           // 世界 40×40
-const SCALE = SIZE / WORLD; // 3.3 px / 世界单位
+const SIZE = 132;                      // CSS 像素（触控目标 ≥44px 满足）
+const WORLD = WORLD_SIZE;              // 世界 80×80（与主场景同源常量）
+const SCALE = SIZE / WORLD;            // 1.65 px / 世界单位
+/** 城区底板边长（世界单位；与 DistrictBlock 8×8 底板一致）。 */
+const DISTRICT_SIZE = 8;
+/** 城区命中半径（点击容差）。 */
+const DISTRICT_HIT_RADIUS = DISTRICT_SIZE / 2;
 
 function worldToPx(x: number, z: number): { px: number; py: number } {
   return { px: (x + WORLD / 2) * SCALE, py: (z + WORLD / 2) * SCALE };
@@ -62,10 +66,10 @@ export function WealthMinimap({ gameState, viewRef, selectedDistrict, onSelectDi
       ctx.fillStyle = '#0b0f16';
       ctx.fillRect(0, 0, SIZE, SIZE);
 
-      // 城区色块（8×8 世界 → 26.4px）+ 区名首字。
+      // 城区色块（DISTRICT_SIZE 8×8 世界 → 8×SCALE px）+ 区名首字。
       for (const d of WEALTH_DISTRICTS) {
-        const { px, py } = worldToPx(d.x - 4, d.z - 4);
-        const size = 8 * SCALE;
+        const { px, py } = worldToPx(d.x - DISTRICT_HIT_RADIUS, d.z - DISTRICT_HIT_RADIUS);
+        const size = DISTRICT_SIZE * SCALE;
         ctx.globalAlpha = 0.35;
         ctx.fillStyle = d.color;
         ctx.fillRect(px, py, size, size);
@@ -132,7 +136,9 @@ export function WealthMinimap({ gameState, viewRef, selectedDistrict, onSelectDi
     const wx = px / SCALE - WORLD / 2;
     const wz = py / SCALE - WORLD / 2;
     const hit = WEALTH_DISTRICTS.find(
-      (d) => Math.abs(wx - d.x) <= 4 && Math.abs(wz - d.z) <= 4,
+      (d) =>
+        Math.abs(wx - d.x) <= DISTRICT_HIT_RADIUS &&
+        Math.abs(wz - d.z) <= DISTRICT_HIT_RADIUS,
     );
     if (hit) onSelectDistrict(hit.id);
   };

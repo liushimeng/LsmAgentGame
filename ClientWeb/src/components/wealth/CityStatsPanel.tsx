@@ -10,9 +10,9 @@
  *      ready=✓ 已锚定 N 份真实档案；failed/idle=灰字说明 —— 档案锚定设计 §8.3）
  *   ② 指标网格（就业率 / 收入中位数 / 居民储蓄合计 /
  *      压力率；金额千分位、率百分比 —— formatCny / formatPct 复用）
- *   ③ 8 城区人口迷你条形（纯 CSS div 宽度百分比，相对最大区人口；
- *      条形用城区主色实底 ≥45% 不透明度，数值以文本显式 color 标注在条外，
- *      色盲不依赖颜色单独判读 —— CLAUDE.md §26）
+ *   ③ 城区人口迷你条形（v2.12 阶段 2：自适应 8→16 城区；auto-fill 网格 +
+ *      底对齐竖条，相对最大区人口；城区数 >12 时紧凑模式仅显示 top 10 +
+ *      「其他 N 个」；数值以文本显式标注在条外，色盲不依赖颜色判读 —— CLAUDE.md §26）
  *   ④ 「居民之声」最近列表（月份 + 姓名 + 一句话 + 服务模型小徽标；
  *      锚定后 resident_id 非空 → 显示「姓名·职业」并可点击打开档案抽屉定位该卡）
  *
@@ -35,6 +35,42 @@ interface Props {
   roomId: string;
 }
 
+/** 城区人口竖条单元（v2.12 阶段 2）：人口数 / 底对齐条形 / 区名（自上而下）。
+ *  条形高度 = population / maxPop 百分比；条形为纯装饰通道（aria-hidden），
+ *  数值走顶部显式文字（§26 色盲可判读）。dimmed = 紧凑模式「其他」聚合行。 */
+function DistrictBarCell({
+  id,
+  name,
+  population,
+  maxPop,
+  dimmed = false,
+}: {
+  id: number;
+  name: string;
+  population: number;
+  maxPop: number;
+  dimmed?: boolean;
+}) {
+  const pct = Math.max(4, Math.round((population / maxPop) * 100));
+  return (
+    <div
+      className={`wealth-citypanel__district${dimmed ? ' wealth-citypanel__district--other' : ''}`}
+      data-testid={`wealth-city-district-${id}`}
+      title={`${name} · ${population.toLocaleString()}`}
+    >
+      <span className="wealth-citypanel__district-pop">{population.toLocaleString()}</span>
+      <span className="wealth-citypanel__district-bar">
+        <span
+          className="wealth-citypanel__district-fill"
+          style={{ height: `${pct}%` }}
+          aria-hidden="true"
+        />
+      </span>
+      <span className="wealth-citypanel__district-name">{name}</span>
+    </div>
+  );
+}
+
 export function CityStatsPanel({ city, roomId }: Props) {
   const t = useT();
   // 档案抽屉开关 + 定位卡号（城市之声 resident_id 点击进入）。
@@ -50,6 +86,16 @@ export function CityStatsPanel({ city, roomId }: Props) {
 
   const districts = city.districts ?? [];
   const maxPop = districts.reduce((m, d) => Math.max(m, d.population || 0), 0) || 1;
+  // v2.12 阶段 2：16 城区自适应 —— >12 区切换紧凑模式（top 10 + 「其他 N 个」），
+  // 其余区人口合计展示，避免面板无限增高。行序 = 人口降序（紧凑）/ 服务端序（≤12）。
+  const COMPACT_THRESHOLD = 12;
+  const COMPACT_TOP = 10;
+  const compact = districts.length > COMPACT_THRESHOLD;
+  const ranked = compact
+    ? [...districts].sort((a, b) => (b.population || 0) - (a.population || 0))
+    : districts;
+  const restRows = compact ? ranked.slice(COMPACT_TOP) : [];
+  const districtRows = compact ? ranked.slice(0, COMPACT_TOP) : ranked;
   const voices = (city.voices ?? []).slice(-8).reverse();
   const prof = city.profiles ?? null;
   const hydratePct =
@@ -140,31 +186,28 @@ export function CityStatsPanel({ city, roomId }: Props) {
         </div>
       </div>
 
-      {/* ② 8 城区人口迷你条形（div 宽度百分比，§26 对比度：实底条形 + 显式文字） */}
+      {/* ② 城区人口迷你条形（v2.12 阶段 2：auto-fill 网格 + 底对齐竖条，§26 对比度：
+          实底条形 + 显式文字；>12 区紧凑模式 top 10 + 「其他 N 个」） */}
       {districts.length > 0 && (
         <div className="wealth-citypanel__districts">
-          {districts.map((d, i) => {
-            const pct = Math.max(2, Math.round(((d.population || 0) / maxPop) * 100));
-            return (
-              <div
-                key={d.id ?? i}
-                className="wealth-citypanel__district"
-                data-testid={`wealth-city-district-${d.id ?? i}`}
-              >
-                <span className="wealth-citypanel__district-name">{d.name}</span>
-                <span className="wealth-citypanel__district-bar">
-                  <span
-                    className="wealth-citypanel__district-fill"
-                    style={{ width: `${pct}%` }}
-                    aria-hidden="true"
-                  />
-                </span>
-                <span className="wealth-citypanel__district-pop">
-                  {(d.population || 0).toLocaleString()}
-                </span>
-              </div>
-            );
-          })}
+          {districtRows.map((d, i) => (
+            <DistrictBarCell
+              key={d.id >= 0 ? d.id : `row-${i}`}
+              id={d.id}
+              name={d.name}
+              population={d.population || 0}
+              maxPop={maxPop}
+            />
+          ))}
+          {restRows.length > 0 && (
+            <DistrictBarCell
+              id={-1}
+              name={t('wealth.cityOtherDistricts' as TKey, { n: restRows.length })}
+              population={restRows.reduce((s, d) => s + (d.population || 0), 0)}
+              maxPop={maxPop}
+              dimmed
+            />
+          )}
         </div>
       )}
 

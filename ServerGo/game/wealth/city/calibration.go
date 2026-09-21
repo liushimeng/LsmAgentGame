@@ -25,7 +25,7 @@ import (
 // 契约常量(03 §3)。
 const (
 	domainCount   = 26 // L1 行业域 A..Z
-	districtCount = 8  // 城区
+	districtCount = 16 // 城区(2026-09-21 §城市扩张v2.12 阶段2:8 → 16)
 	// defaultEmployment 基线就业率(契约默认 0.94)。
 	defaultEmployment = 0.94
 	// defaultCalibSampleSize 校准抽样卡数默认值(契约 512)。

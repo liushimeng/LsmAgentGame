@@ -77,6 +77,15 @@ export interface WealthDict {
   'wealth.district.residential': string;
   'wealth.district.suburb': string;
   'wealth.district.riverside': string;
+  // v2.12 阶段 2 扩展城区（8→16；与 types/wealth.ts WEALTH_DISTRICTS 同步）。
+  'wealth.district.logistics_port': string;
+  'wealth.district.hightech_park': string;
+  'wealth.district.edu_district': string;
+  'wealth.district.medical_city': string;
+  'wealth.district.industrial_park': string;
+  'wealth.district.central_park': string;
+  'wealth.district.transport_hub': string;
+  'wealth.district.cultural_creative': string;
   'wealth.cash': string;
   'wealth.netWorth': string;
   'wealth.fiIndex': string;
@@ -234,6 +243,8 @@ export interface WealthDict {
   'wealth.cityVoices': string;
   /** {month} = 声音所属游戏月。 */
   'wealth.cityVoiceOfMonth': string;
+  /** 城区人口条形紧凑模式聚合行：{n} = 未展示城区数（v2.12 阶段 2，>12 区时）。 */
+  'wealth.cityOtherDistricts': string;
   'wealth.seatsCount': string; // {n} {max}
   'wealth.seatsWaiting': string; // {n} {min}
   'wealth.botPanel.seat': string;

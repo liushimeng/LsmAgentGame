@@ -90,6 +90,12 @@ type CentralBankState struct {
 	RealGDPGrowth float64 // 实际 GDP 增速(内生于市场阶段)
 	M2GrowthYoY   float64 // M2 同比增速
 
+	// ── v2.12 阶段3:货币政策工具箱扩展字段(policy_toolbox.go /
+	// interest_transmission.go 消费;2026-09-21 §城市扩张v2.12)──
+	SLFRate            float64 // 利率走廊上限(常备借贷便利)= PolicyRate + 0.5%
+	NIM                float64 // 商业银行净息差(行业均值 1.5%)
+	CreditWindowFactor float64 // 信贷窗口指导乘数 [0.5,1.5],1.0 中性
+
 	// ── 历史(每月快照,用于 view 展示与复盘) ──
 	History []CBMonthlySnapshot
 }
@@ -140,6 +146,10 @@ func NewCentralBank() *CentralBankState {
 	cb.CreditTightness = 0
 	cb.LoanQuotaFactor = 1.0
 	cb.CreditSpread = 0
+	// v2.12 阶段3:工具箱扩展字段(policy_toolbox.go / interest_transmission.go)。
+	cb.SLFRate = InitialPolicyRate + SLFCorridorWidth
+	cb.NIM = DefaultNIM
+	cb.CreditWindowFactor = CreditWindowNeutral
 	return cb
 }
 
@@ -330,6 +340,12 @@ func (cb *CentralBankState) MonthlyDecision(w *World, rng *rand.Rand) {
 		w.emitEvent("policy", -1, fmt.Sprintf("央行%s 25bp,PolicyRate %.2f%%→%.2f%%",
 			direction, oldRate*100, cb.PolicyRate*100))
 	}
+
+	// l. 季度央行公告(v2.12 阶段3):每 3 月生成一次文本公告追加到事件流。
+	// 本阶段为文本拼接占位;完整 LLM 接入在阶段 4 政府财政子系统完成(§197)。
+	if w.Month%3 == 0 {
+		w.emitEvent("policy", -1, "央行公告: "+GenerateCentralBankStatement(w, w.Month))
+	}
 }
 
 // LPR5Y 返回 5Y LPR(房贷用)。
@@ -408,4 +424,17 @@ func (cb *CentralBankState) BankingSystem() *CommercialBankState {
 		LoansOutstanding: loans,
 		BondHoldings:     0, // P1 简化:银行持有国债 = 央行卖出部分
 	}
+}
+
+// GenerateCentralBankStatement 生成央行公告(季度)(2026-09-21 §城市扩张v2.12)。
+// 本函数仅声明 + 占位实现(文本拼接),完整 LLM 接入(AgentClassCityBanker
+// 央行行长 Bot)在阶段 4 政府财政子系统时完成。
+// 注意:LPR1Y/LPR5Y 是方法(非字段),格式化时必须调用。
+func GenerateCentralBankStatement(w *World, month int) string {
+	if w == nil || w.CB == nil {
+		return ""
+	}
+	return fmt.Sprintf("央行%d月: LPR %.2f%%/%.2f%% CPI %.1f%% 准备金率 %.1f%% 货币乘数 %.1f",
+		month, w.CB.LPR1Y()*100, w.CB.LPR5Y()*100, w.CB.CPI*100,
+		w.CB.ReserveRatio*100, w.CB.MoneyMultiplier)
 }

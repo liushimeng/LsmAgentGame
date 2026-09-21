@@ -159,14 +159,26 @@ func TestSeats12_TenBotFullAgentRoom_RunsOneMonth(t *testing.T) {
 	}
 }
 
-// TestSeats12_DistrictsEightUnchanged 12 座扩容不得破坏 8 城区静态表
-// (districts.go DistrictCount=8 是独立常量,与座位数无关)。
+// TestSeats12_DistrictsContractGuard 城区静态表契约守卫
+// (v2.11 12 座扩容: 城区数与座位数无关;v2.12 阶段 2: 8 城区 → 16 城区,
+// 前 8 个 P0 城区的 id/顺序不可修改 —— 与前端 types/wealth.ts
+// WEALTH_DISTRICTS 顺序完全一致,§130 契约对齐)。
 func TestSeats12_DistrictsEightUnchanged(t *testing.T) {
-	if DistrictCount != 8 {
-		t.Fatalf("DistrictCount = %d, want 8 (must not change with seat count)", DistrictCount)
+	if DistrictCount != 16 {
+		t.Fatalf("DistrictCount = %d, want 16 (v2.12 phase-2 expansion)", DistrictCount)
 	}
-	if len(DistrictDefs) != 8 {
-		t.Fatalf("len(DistrictDefs) = %d, want 8", len(DistrictDefs))
+	if len(DistrictDefs) != 16 {
+		t.Fatalf("len(DistrictDefs) = %d, want 16", len(DistrictDefs))
+	}
+	// 前 8 区 P0 契约:id 与顺序冻结(扩展只允许追加,不允许改写)。
+	wantFirst8 := [8]string{
+		"finance", "tech", "industry", "oldtown",
+		"commerce", "residential", "suburb", "riverside",
+	}
+	for i, want := range wantFirst8 {
+		if got := DistrictDefs[i].ID; got != want {
+			t.Fatalf("DistrictDefs[%d].ID = %q, want %q (P0 前 8 区顺序冻结)", i, got, want)
+		}
 	}
 }
 

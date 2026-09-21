@@ -2,13 +2,17 @@
  * StreetPropsLayer — 街景道具布点协调器（P1-C）：
  *
  * 总览：
- *   - 每个城区：2 棵树 + 1 根路灯 + 1-2 件屋顶杂物
- *   - 每条主干道沿线：1 辆移动车辆 + 1 个行人
+ *   - 每个城区：2 棵树 + 1 根路灯 + 1-2 件屋顶杂物 + 1 行人 + 1 标识牌
+ *   - 每条主干道沿线：1 辆移动车辆
  *
  * 布点策略：确定性伪随机（mulberry32 + hashStr），重渲染布局稳定（CLAUDE.md §3 风格一致）。
  * 与 DistrictBlock.tsx 的随机算法保持同源（DistrictDefs.id hashStr）。
  *
- * 预算：mesh 总数 ≤ 80（每城区 ~5 × 8 + 主干道 ~3 × 7 ≈ 60）。
+ * v2.12 阶段 2：**props 化** —— 城区清单由父层 `districts` 注入（不再 import
+ * WEALTH_DISTRICTS 静态表），数量随城区表自适应（8 区或 16 区同一代码路径）。
+ *
+ * 预算：mesh 总数 ≤ 2500（v2.12 阶段 2 上限；16 城区实际 ≈ 每城区 ~5 × 16
+ * + 主干道车辆 ~12 ≈ 92，远低于护栏）。
  *
  * 限制：
  *   - props 默认 castShadow=false（仅 Tree 保留）
@@ -18,7 +22,6 @@
 
 import { useMemo } from 'react';
 import {
-  WEALTH_DISTRICTS,
   districtCenter,
   type WealthDistrictDef,
 } from '@/types/wealth';
@@ -146,10 +149,10 @@ function propsForDistrict(def: WealthDistrictDef, idx: number): DistrictProps {
   };
 }
 
-/** 为每条主干道生成 1 辆移动车辆。 */
-function vehiclesForRoads(): RoadVehicle[] {
+/** 为每条主干道生成 1 辆移动车辆（districts 由 props 注入，v2.12 阶段 2）。 */
+function vehiclesForRoads(districts: WealthDistrictDef[]): RoadVehicle[] {
   const roads: RoadVehicle[] = [];
-  WEALTH_DISTRICTS
+  districts
     .filter((d) => d.id !== 'finance')
     .forEach((d, i) => {
       const c = districtCenter(d.id);
@@ -172,14 +175,19 @@ function vehiclesForRoads(): RoadVehicle[] {
   return roads;
 }
 
-export function StreetPropsLayer() {
+interface StreetPropsLayerProps {
+  /** 城区静态表（v2.12 阶段 2 props 化；由 WealthCityMap 注入 WEALTH_DISTRICTS）。 */
+  districts: WealthDistrictDef[];
+}
+
+export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
   const layout = useMemo<Layout>(() => {
-    const districtProps = WEALTH_DISTRICTS.map((d, idx) => propsForDistrict(d, idx));
-    const roadVehicles = vehiclesForRoads();
+    const districtProps = districts.map((d, idx) => propsForDistrict(d, idx));
+    const roadVehicles = vehiclesForRoads(districts);
     // 主干道路口（finance 与最长道路交叉点）
     const intersectionSigns: Layout['intersectionSigns'] = [];
     return { districtProps, roadVehicles, intersectionSigns };
-  }, []);
+  }, [districts]);
 
   return (
     <>

@@ -9,6 +9,10 @@
  * P1-C 追加：
  *   - <StreetPropsLayer /> 在 Token 之前注入，绘制路灯、树、车辆、行人、屋顶杂物。
  *
+ * v2.12 阶段 2（16 城区扩展）：
+ *   - 地图 40×40 → 80×80（WORLD_SIZE 常量，地面贴图 / 雾化 / 相机 / 光照等比派生）。
+ *   - <StreetPropsLayer districts={...} /> props 化（内部不再 import 城区静态表）。
+ *
  * 相机 / OrbitControls / CameraReporter / FocusController 行为不变（与 v1 完全兼容）。
  */
 
@@ -36,6 +40,22 @@ export interface WealthCameraView {
   dist: number;
 }
 
+// ── v2.12 阶段 2 世界尺寸常量（地图 40×40 → 80×80，面积 ×4）──────────
+// 所有 40 相关魔法数收敛于此；地面贴图 / 雾化 / 相机 / 光照按比例派生。
+
+/** 世界边长（世界单位；1 单位 = 10 米，见 cityScale.ts）。 */
+export const WORLD_SIZE = 80;
+/** 地面贴图每 8 单位平铺一次（与城区底板 8×8 同标尺）。 */
+export const GROUND_TILE = 8;
+/** 地面贴图重复次数 = WORLD_SIZE / GROUND_TILE。 */
+export const GROUND_REPEAT = WORLD_SIZE / GROUND_TILE;
+/** 远景雾化近/远平面（随世界边长等比 ×2，与背景色一致自然消失）。 */
+export const FOG_NEAR = WORLD_SIZE * 0.7;
+export const FOG_FAR = WORLD_SIZE * 1.5;
+/** 相机初始位置与 OrbitControls maxDistance（随世界边长等比缩放）。 */
+export const CAMERA_START: [number, number, number] = [WORLD_SIZE * 0.35, WORLD_SIZE * 0.3, WORLD_SIZE * 0.35];
+export const ORBIT_MAX_DISTANCE = WORLD_SIZE;
+
 /** 小地图 / 面板 → 主场景的聚焦目标（null = 无聚焦请求）。 */
 export interface WealthFocusTarget {
   x: number;
@@ -53,8 +73,8 @@ interface Props {
 }
 
 /**
- * 地面：40×40 plane + RepeatWrapping 沥青贴图（缺失 → 纯色 #141a24）。
- * 旧 gridHelper 已删除（消除黑线）。
+ * 地面：80×80 plane + RepeatWrapping 沥青贴图（缺失 → 纯色 #141a24）。
+ * 旧 gridHelper 已删除（消除黑线）。v2.12 阶段 2：40×40 → 80×80（面积 ×4）。
  */
 function Ground() {
   const [tex, setTex] = useState<THREE.Texture | null>(null);
@@ -75,7 +95,7 @@ function Ground() {
         }
         loaded.colorSpace = THREE.SRGBColorSpace;
         loaded.wrapS = loaded.wrapT = THREE.RepeatWrapping;
-        loaded.repeat.set(5, 5); // 40 / 8
+        loaded.repeat.set(GROUND_REPEAT, GROUND_REPEAT); // 80 / 8 = 10
         loaded.magFilter = THREE.LinearFilter;
         loaded.minFilter = THREE.LinearMipmapLinearFilter;
         setTex(prev => {
@@ -93,7 +113,7 @@ function Ground() {
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-      <planeGeometry args={[40, 40]} />
+      <planeGeometry args={[WORLD_SIZE, WORLD_SIZE]} />
       <meshStandardMaterial
         map={tex ?? undefined}
         color={tex ? '#ffffff' : '#141a24'}
@@ -224,17 +244,18 @@ export function WealthCityMap({
       <Canvas
         shadows
         dpr={[1, 2]}
-        camera={{ position: [14, 12, 14], fov: 45 }}
+        camera={{ position: CAMERA_START, fov: 45 }}
       >
         <color attach="background" args={['#0b0f16']} />
-        {/* P1-A 新增：远景雾化（与背景色一致自然消失） */}
-        <fog attach="fog" args={['#0b0f16', 28, 60]} />
+        {/* P1-A 新增：远景雾化（与背景色一致自然消失；v2.12 随 80×80 地图等比 ×2） */}
+        <fog attach="fog" args={['#0b0f16', FOG_NEAR, FOG_FAR]} />
         <ambientLight intensity={0.7} />
         {/* P1-A 新增：天/地反弹 */}
         <hemisphereLight args={['#7a93b8', '#1a1f2a', 0.35]} />
+        {/* v2.12 阶段 2：光位随世界边长等比 ×2（方向向量不变，阴影形态不变） */}
         <directionalLight
           castShadow
-          position={[10, 16, 8]}
+          position={[20, 32, 16]}
           intensity={1.15}
           shadow-mapSize-width={1024}
           shadow-mapSize-height={1024}
@@ -252,8 +273,9 @@ export function WealthCityMap({
         ))}
         {/* P1-A：单 plane → 分层 <Road /> 道路（含路灯阵列） */}
         <RoadsLayer />
-        {/* P1-C：街道道具层（树 / 车辆 / 行人 / 标识 / 屋顶杂物） */}
-        <StreetPropsLayer />
+        {/* P1-C：街道道具层（树 / 车辆 / 行人 / 标识 / 屋顶杂物）；
+            v2.12 阶段 2：districts 由父层注入（props 化，适配 16 城区） */}
+        <StreetPropsLayer districts={WEALTH_DISTRICTS} />
         {players.map((p, i) => {
           const inDistrict = byDistrict.get(p.district) ?? [];
           const index = inDistrict.indexOf(i);
@@ -277,7 +299,7 @@ export function WealthCityMap({
           enableRotate
           maxPolarAngle={1.2}
           minDistance={8}
-          maxDistance={40}
+          maxDistance={ORBIT_MAX_DISTANCE}
           target={[0, 0, 0]}
         />
         <CameraReporter controlsRef={controlsRef} viewRef={viewRef} />
