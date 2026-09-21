@@ -145,6 +145,30 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		w.Society = ComputeSociety(w)
 	}
 
+	// ⑥B 金融市场月度引擎(阶段6,2026-09-21 §城市扩张v2.12):量化基金
+	// (情绪源,首位 —— F05 评级联动消费本月量化收益)→ 同业存单(利率锚
+	// SHIBOR + 到期兑付)→ 可转债(估值 + 强赎/回售)→ 融券(利息 + 强平)→
+	// 基金评级(末位)。零 rand 消费(确定性公式),固定种子存量对局回归
+	// 零偏移(treasury/供应链同款纪律);economy_enabled=false 完整跳过;
+	// nil 惰性初始化(防旧档/异常路径 nil 解引用)。
+	if w.EconomyEnabled {
+		if w.QuantEngine == nil {
+			w.QuantEngine = NewQuantFundEngine()
+		}
+		if w.CDMarket == nil {
+			w.CDMarket = NewCDMarket()
+			w.CDMarket.refreshRates(w)
+		}
+		if w.ShortBook == nil {
+			w.ShortBook = NewShortBook()
+		}
+		w.QuantEngine.MonthlyStep(w)
+		w.CDMarket.CDMonthlyStep(w)
+		stepConvertibleBonds(w)
+		w.ShortBook.ShortMonthlyStep(w)
+		rateFundsMonthly(w)
+	}
+
 	// ⑨ 阶段4 政府财政月结(2026-09-21 §城市扩张v2.12;在 RecordFlowStat
 	// 之前执行,使转移支付进入本月资金流向)。内部顺序锁定(treasury.go):
 	//   ⑨A CollectMonthTax 税收汇总 → ⑨B PayTransferPayments 转移支付 →

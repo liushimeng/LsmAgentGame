@@ -163,6 +163,16 @@ type World struct {
 	SupplyChain *SupplyChain         // 三条产业链网络(月度 ②B 调度)
 	Clusters    []*IndustrialCluster // 6 产业集群(月度 ⑨F 调度)
 
+	// 阶段6(2026-09-21 §城市扩张v2.12):金融市场扩展(基金评级 + 同业存单
+	// + 可转债 + 融券做空 + 量化引擎;nil/空时 SettleMonth ⑥B 惰性初始化)。
+	// 见 fund_rating.go / interbank_cd.go / convertible_bond.go /
+	// short_selling.go / quant_fund.go。零 rand —— 固定种子存量对局回归零偏移。
+	FundRatings []FundRating        // 5 只虚拟基金评级(月度 ⑥B 末位刷新)
+	CDMarket    *CDMarket           // 同业存单市场(3 行 × 4 档期限)
+	CBonds      []*ConvertibleBond  // 可转债池(恒 5 只,退出滚动补发)
+	ShortBook   *ShortBook          // 融券台账(R6-1 双护栏)
+	QuantEngine *QuantFundEngine    // 量化基金引擎(R6-2 自适应权重)
+
 	// P1: 社会调研系统(§财商流P1-2 调研契约 §2)。
 	Surveys   []*Survey // 全房调研(≤20,按发起序)
 	SurveySeq int       // id 自增序列
@@ -221,6 +231,12 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		// 阶段5: 产业链 15 节点 + 产业集群 6 集群(2026-09-21 §城市扩张v2.12)。
 		SupplyChain: NewSupplyChain(),
 		Clusters:    NewIndustrialClusters(),
+		// 阶段6: 金融市场扩展(2026-09-21 §城市扩张v2.12;评级首月在 ⑥B 播种)。
+		FundRatings: nil, // rateFundsMonthly 空表惰性初始化(锚当期股指)。
+		CDMarket:    NewCDMarket(),
+		CBonds:      nil, // stepConvertibleBonds 空池惰性初始化(锚当期股指)。
+		ShortBook:   NewShortBook(),
+		QuantEngine: NewQuantFundEngine(),
 		// P2: 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
 		ListingBook:  NewListingBook(),
 		AuctionHouse: NewAuctionHouse(),
@@ -231,6 +247,8 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		}
 		w.Players[seat] = newPlayerFromCard(seat, cards[seat])
 	}
+	// 阶段6: CD 票面基准锚当前 SHIBOR(首次 ⑥B 之前 view/申购即可用)。
+	w.CDMarket.refreshRates(w)
 	return w
 }
 

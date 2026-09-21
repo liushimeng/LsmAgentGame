@@ -13,7 +13,9 @@
 package wealth
 
 import (
+	"fmt"
 	"math/rand"
+	"sort"
 
 	"LsmAgentGame/game/wealth/city"
 )
@@ -54,6 +56,9 @@ type ClientGameState struct {
 	// 4 层价格指数 + 瓶颈警告)与产业集群快照(nil/空 → omitempty)。
 	SupplyChain *SupplyChainJSON `json:"supply_chain,omitempty"`
 	Clusters    []ClusterJSON    `json:"industrial_clusters,omitempty"`
+	// 阶段6(2026-09-21 §城市扩张v2.12):金融市场快照(量化指数 / CD 利率 /
+	// 可转债 top3 / 融券余额 / 基金评级 top5;economy_enabled=false → omitempty)。
+	FinMarket *FinMarketJSON `json:"fin_market,omitempty"`
 	// 2026-09-21 §虚拟城市(契约 04 §1.3):城市背景层快照(resident_count>0
 	// 时非 nil;旧房/未建城 omit)。无座位隐私,观战/玩家全量可见。
 	City *city.Snapshot `json:"city,omitempty"`
@@ -162,6 +167,137 @@ type ClusterJSON struct {
 	TaxBreakUsedWan float64  `json:"tax_break_used_wan"` // 累计已减免(万元)
 	TaxBreakCapWan  float64  `json:"tax_break_cap_wan"`  // 年度减免上限(万元)
 	LastBreakCNY    int64    `json:"last_break_cny"`     // 上月实际减免(元)
+}
+
+// FinMarketJSON 是 fin_market 子结构(阶段6 2026-09-21 §城市扩张v2.12;
+// 政府/观战者全量可见,无座位隐私)。
+type FinMarketJSON struct {
+	QuantIndex      float64              `json:"quant_index"`       // 量化基金指数(基 100)
+	QuantLastReturn float64              `json:"quant_last_return"` // 上月组合收益(小数)
+	QuantStrategies []QuantStrategyJSON  `json:"quant_strategies"`  // 5 策略权重
+	CD              CDSnapshotJSON       `json:"cd"`                // 同业存单快照
+	Convertibles    []CBondJSON          `json:"convertibles"`     // 可转债 top3(按市价)
+	Short           ShortSnapshotJSON    `json:"short"`             // 融券快照
+	FundRatings     []FundRatingJSON     `json:"fund_ratings"`      // 基金评级 top5(按星数)
+}
+
+// QuantStrategyJSON 是 fin_market.quant_strategies 单项。
+type QuantStrategyJSON struct {
+	Name       string  `json:"name"`
+	Weight     float64 `json:"weight"`
+	LastReturn float64 `json:"last_return"`
+}
+
+// CDSnapshotJSON 是 fin_market.cd 子结构(Rates 键为期限月数)。
+type CDSnapshotJSON struct {
+	AvgRate        float64           `json:"avg_rate"`          // 存量加权平均票面
+	OutstandingWan float64           `json:"outstanding_wan"`   // 挂牌存量(万元)
+	Rates          map[string]float64 `json:"rates"`            // 期限 → 票面("1"/"3"/"6"/"12")
+}
+
+// CBondJSON 是 fin_market.convertibles 单项。
+type CBondJSON struct {
+	ID         string  `json:"id"`
+	Issuer     string  `json:"issuer"`
+	IssuerNode string  `json:"issuer_node"` // supply_chain.go 节点 id
+	Price      float64 `json:"price"`       // 市价(元/张)
+	ConvValue  float64 `json:"conv_value"`  // 转股价值
+	BondFloor  float64 `json:"bond_floor"`  // 债底
+	CouponRate float64 `json:"coupon_rate"`
+	Status     string  `json:"status"` // active|redeemed|put|matured
+	MonthsLeft int     `json:"months_left"`
+}
+
+// ShortSnapshotJSON 是 fin_market.short 子结构(R6-1 护栏监测面)。
+type ShortSnapshotJSON struct {
+	BalanceCNY     int64 `json:"balance_cny"`      // 融券余额(元)
+	MarginCNY      int64 `json:"margin_cny"`       // 保证金冻结(元)
+	OpenCount      int   `json:"open_count"`       // 未平仓笔数
+	MarginCallsMon int   `json:"margin_calls_mon"` // 上月强平笔数
+}
+
+// FundRatingJSON 是 fin_market.fund_ratings 单项。
+type FundRatingJSON struct {
+	FundID      string  `json:"fund_id"`
+	Name        string  `json:"name"`
+	Stars       int     `json:"stars"`
+	Sharpe      float64 `json:"sharpe"`
+	MaxDrawdown float64 `json:"max_drawdown"`
+	AUMWan      float64 `json:"aum_wan"`
+}
+
+// buildFinMarketJSON 金融市场快照(阶段6;确定性:排序 tie-break 用稳定序)。
+// 可转债 top3 按市价降序;基金评级 top5 按星数降序、AUM 降序 tie-break。
+func buildFinMarketJSON(world *World) *FinMarketJSON {
+	if world == nil {
+		return nil
+	}
+	fm := &FinMarketJSON{
+		QuantIndex:      world.QuantEngine.Index,
+		QuantLastReturn: world.QuantEngine.LastMonthReturn,
+		CD:              CDSnapshotJSON{Rates: map[string]float64{}},
+		Convertibles:    make([]CBondJSON, 0, 3),
+		FundRatings:     make([]FundRatingJSON, 0, 5),
+		Short:           ShortSnapshotJSON{},
+	}
+	for _, s := range world.QuantEngine.Strategies {
+		fm.QuantStrategies = append(fm.QuantStrategies, QuantStrategyJSON{
+			Name: s.Name, Weight: s.Weight, LastReturn: s.LastReturn,
+		})
+	}
+	if world.CDMarket != nil {
+		fm.CD.AvgRate = world.CDMarket.LastAvgRate
+		fm.CD.OutstandingWan = world.CDMarket.TotalOutstandingWan
+		for _, t := range CDTenures { // CDTenures 固定序(1/3/6/12)。
+			if r, ok := world.CDMarket.CurRate[t]; ok {
+				fm.CD.Rates[fmt.Sprint(t)] = r
+			}
+		}
+	}
+	// 可转债 top3(按市价降序;FundID 稳定 tie-break)。
+	cbs := append([]*ConvertibleBond{}, world.CBonds...)
+	sort.SliceStable(cbs, func(i, j int) bool {
+		if cbs[i].Price != cbs[j].Price {
+			return cbs[i].Price > cbs[j].Price
+		}
+		return cbs[i].ID < cbs[j].ID
+	})
+	for i, b := range cbs {
+		if i >= 3 {
+			break
+		}
+		fm.Convertibles = append(fm.Convertibles, CBondJSON{
+			ID: b.ID, Issuer: b.Issuer, IssuerNode: b.IssuerNode,
+			Price: b.Price, ConvValue: b.ConvValue, BondFloor: b.BondFloor,
+			CouponRate: b.CouponRate, Status: b.Status, MonthsLeft: b.MonthsLeft,
+		})
+	}
+	// 融券快照(R6-1 护栏监测面)。
+	fm.Short.BalanceCNY = world.ShortBalanceCNY()
+	fm.Short.MarginCNY = world.ShortMarginFrozenCNY()
+	if world.ShortBook != nil {
+		for _, pos := range world.ShortBook.Positions {
+			if pos.Status == ShortStatusOpen {
+				fm.Short.OpenCount++
+			}
+		}
+		fm.Short.MarginCallsMon = world.ShortBook.MarginCallsLastMonth
+	}
+	// 基金评级 top5(星数降序、AUM 降序 tie-break)。
+	funds := append([]FundRating{}, world.FundRatings...)
+	sort.SliceStable(funds, func(i, j int) bool {
+		if funds[i].Stars != funds[j].Stars {
+			return funds[i].Stars > funds[j].Stars
+		}
+		return funds[i].AUM > funds[j].AUM
+	})
+	for _, f := range funds {
+		fm.FundRatings = append(fm.FundRatings, FundRatingJSON{
+			FundID: f.FundID, Name: f.Name, Stars: f.Stars,
+			Sharpe: f.Sharpe, MaxDrawdown: f.MaxDrawdown, AUMWan: f.AUM,
+		})
+	}
+	return fm
 }
 
 // FlowStatJSON 是 cs.FlowStat 视图(P2 v2 §13.2.4)。
@@ -570,6 +706,12 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 	}
 	if world.EconomyEnabled && len(world.Clusters) > 0 {
 		cs.Clusters = ClustersJSONFrom(world.Clusters)
+	}
+
+	// 阶段6(2026-09-21 §城市扩张v2.12):金融市场快照(economy_enabled=false
+	// 或量化引擎 nil → omitempty 不下发)。
+	if world.EconomyEnabled && world.QuantEngine != nil {
+		cs.FinMarket = buildFinMarketJSON(world)
 	}
 
 	// Players(全公开)。
