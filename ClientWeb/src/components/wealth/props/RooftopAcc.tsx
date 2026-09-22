@@ -10,10 +10,10 @@
  * 见 cityScale.ts。
  */
 
-import { useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/wealth';
+import { useSharedTexture } from '../textureCache';
 
 type RooftopVariant = 'ac' | 'tank' | 'antenna';
 
@@ -39,38 +39,8 @@ export function RooftopAcc({
   variant = 'ac',
   rotation = 0,
 }: Props) {
-  const url = propUrl('rooftop', variant);
-  const [tex, setTex] = useState<THREE.Texture | null>(null);
-
-  useEffect(() => {
-    if (!url) {
-      setTex(null);
-      return;
-    }
-    let disposed = false;
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      url,
-      (loaded) => {
-        if (disposed) {
-          loaded.dispose();
-          return;
-        }
-        loaded.colorSpace = THREE.SRGBColorSpace;
-        loaded.magFilter = THREE.LinearFilter;
-        loaded.minFilter = THREE.LinearMipmapLinearFilter;
-        setTex(prev => {
-          if (prev) prev.dispose();
-          return loaded;
-        });
-      },
-      undefined,
-      () => setTex(null),
-    );
-    return () => {
-      disposed = true;
-    };
-  }, [url]);
+  // 14-3D渲染深化：共享贴图缓存
+  const tex = useSharedTexture(propUrl('rooftop', variant));
 
   // 简化几何按 variant 切换
   return (

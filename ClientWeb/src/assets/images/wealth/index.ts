@@ -18,6 +18,7 @@
  *   roofs/<districtId>.png                               512×512  透明
  *   streets/{asphalt_main,asphalt_side,sidewalk_main,sidewalk_side,crosswalk,centerline}.png
  *     街道铺装贴图（P1-A 道路重做）
+ *   ground/{grass_tile,plaza_tile,water_tile}.png           512×512 可平铺（14-3D渲染深化地表环境）
  *   props/{streetlamp,tree,vehicle,pedestrian,sign,rooftop}/<variant>_<category>.png
  *     街景道具贴图（P1-C 街道道具层）
  */
@@ -29,6 +30,7 @@ const bannerImgs = import.meta.glob<string>('./banner.png', { eager: true, impor
 const facadeImgs = import.meta.glob<string>('./facades/*.png', { eager: true, import: 'default' });
 const roofImgs = import.meta.glob<string>('./roofs/*.png', { eager: true, import: 'default' });
 const streetImgs = import.meta.glob<string>('./streets/*.png', { eager: true, import: 'default' });
+const groundImgs = import.meta.glob<string>('./ground/*.png', { eager: true, import: 'default' });
 const propImgs = import.meta.glob<string>('./props/**/*.png', { eager: true, import: 'default' });
 
 /** 大厅 banner（缺失 = ''，WealthLobbyPage 回落 CSS 渐变）。 */
@@ -87,6 +89,17 @@ export type StreetTileName =
  */
 export function streetTileUrl(name: StreetTileName): string {
   return streetImgs[`./streets/${name}.png`] ?? '';
+}
+
+/** 地表环境贴图字面量（与 3d_script/procedural_city_textures.py::ground 对齐，14-3D渲染深化）。 */
+export type GroundTileName = 'grass_tile' | 'plaza_tile' | 'water_tile';
+
+/**
+ * 地表环境贴图 URL（缺失 = ''，组件回退纯色：grass #3f7a3a / plaza #9aa1ab / water #1a3a52）。
+ * 草地/广场/水面均 RepeatWrapping 可平铺；水面沿 v 方向滚动。
+ */
+export function groundTileUrl(name: GroundTileName): string {
+  return groundImgs[`./ground/${name}.png`] ?? '';
 }
 
 /** 街景道具类别字面量（与 generate_wealth_city_assets.py::PROPS 对齐）。 */

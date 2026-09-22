@@ -16,8 +16,6 @@
  * 有贴图时 emissiveMap 复用立面贴图（夜景窗灯近似），无贴图回退城区主色。
  */
 
-import { useEffect, useState } from 'react';
-import * as THREE from 'three';
 import {
   districtFacadeUrl,
   districtRoofUrl,
@@ -25,6 +23,7 @@ import {
 import type { WealthDistrictDef } from '@/types/wealth';
 import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
 import { BuildingShape, DISTRICT_ARCHETYPE } from './building_shapes';
+import { useSharedTexture } from './textureCache';
 
 export interface BuildingSpec {
   /** 相对区中心偏移（x, z）。 */
@@ -37,42 +36,6 @@ export interface BuildingSpec {
   factor: number;
 }
 
-/** 加载单张贴图（缺失 → null）。带 dispose 清理。 */
-function useTexture(url: string): THREE.Texture | null {
-  const [tex, setTex] = useState<THREE.Texture | null>(null);
-  useEffect(() => {
-    if (!url) {
-      setTex(null);
-      return;
-    }
-    let disposed = false;
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      url,
-      (loaded) => {
-        if (disposed) {
-          loaded.dispose();
-          return;
-        }
-        loaded.colorSpace = THREE.SRGBColorSpace;
-        loaded.magFilter = THREE.LinearFilter;
-        loaded.minFilter = THREE.LinearMipmapLinearFilter;
-        // 立面/屋顶不需要 tile（每楼独立贴图）
-        setTex(prev => {
-          if (prev) prev.dispose();
-          return loaded;
-        });
-      },
-      undefined,
-      () => setTex(null),
-    );
-    return () => {
-      disposed = true;
-    };
-  }, [url]);
-  return tex;
-}
-
 interface Props {
   spec: BuildingSpec;
   def: WealthDistrictDef;
@@ -81,9 +44,10 @@ interface Props {
 }
 
 export function BuildingMesh({ spec, def, prosperity }: Props) {
-  const facadeBase = useTexture(districtFacadeUrl(def.id, 'base'));
-  const facadeMid = useTexture(districtFacadeUrl(def.id, 'mid'));
-  const roof = useTexture(districtRoofUrl(def.id));
+  // 14-3D渲染深化：共享贴图缓存（16 区 × 5 楼同源贴图只上传一次 GPU）
+  const facadeBase = useSharedTexture(districtFacadeUrl(def.id, 'base'));
+  const facadeMid = useSharedTexture(districtFacadeUrl(def.id, 'mid'));
+  const roof = useSharedTexture(districtRoofUrl(def.id));
 
   // 楼高：分城区楼层区间 [minF, maxF] × 繁荣度插值 × factor 抖动（0.85~1.0，
   // 保留确定性伪随机但避免 0.6 倍把楼压扁）。层高 3m，见 cityScale.ts。

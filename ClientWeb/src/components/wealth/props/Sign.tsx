@@ -10,10 +10,9 @@
  * 总高 ~0.28（见 cityScale.ts）。
  */
 
-import { useEffect, useState } from 'react';
-import * as THREE from 'three';
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/wealth';
+import { useSharedTexture } from '../textureCache';
 
 type SignVariant = 'traffic' | 'info';
 
@@ -30,38 +29,8 @@ const PLATE_COLORS: Record<SignVariant, string> = {
 };
 
 export function Sign({ x, z, rotation = 0, variant = 'traffic' }: Props) {
-  const url = propUrl('sign', variant);
-  const [tex, setTex] = useState<THREE.Texture | null>(null);
-
-  useEffect(() => {
-    if (!url) {
-      setTex(null);
-      return;
-    }
-    let disposed = false;
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      url,
-      (loaded) => {
-        if (disposed) {
-          loaded.dispose();
-          return;
-        }
-        loaded.colorSpace = THREE.SRGBColorSpace;
-        loaded.magFilter = THREE.LinearFilter;
-        loaded.minFilter = THREE.LinearMipmapLinearFilter;
-        setTex(prev => {
-          if (prev) prev.dispose();
-          return loaded;
-        });
-      },
-      undefined,
-      () => setTex(null),
-    );
-    return () => {
-      disposed = true;
-    };
-  }, [url]);
+  // 14-3D渲染深化：共享贴图缓存
+  const tex = useSharedTexture(propUrl('sign', variant));
 
   return (
     <group position={[x, 0, z]} rotation={[0, rotation, 0]}>

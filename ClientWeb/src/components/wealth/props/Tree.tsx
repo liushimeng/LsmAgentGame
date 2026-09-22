@@ -6,10 +6,9 @@
  * 唯一保留 castShadow 的 prop（树影是城市感关键）。
  */
 
-import { useEffect, useState } from 'react';
-import * as THREE from 'three';
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/wealth';
+import { useSharedTexture } from '../textureCache';
 
 type TreeVariant = 'oak' | 'pine' | 'palm';
 
@@ -30,38 +29,8 @@ const CANOPY_COLORS: Record<TreeVariant, string> = {
 const TRUNK_COLOR = '#6b4f32';
 
 export function Tree({ x, z, variant = 'oak', scale = 0.7 }: Props) {
-  const url = propUrl('tree', variant);
-  const [tex, setTex] = useState<THREE.Texture | null>(null);
-
-  useEffect(() => {
-    if (!url) {
-      setTex(null);
-      return;
-    }
-    let disposed = false;
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      url,
-      (loaded) => {
-        if (disposed) {
-          loaded.dispose();
-          return;
-        }
-        loaded.colorSpace = THREE.SRGBColorSpace;
-        loaded.magFilter = THREE.LinearFilter;
-        loaded.minFilter = THREE.LinearMipmapLinearFilter;
-        setTex(prev => {
-          if (prev) prev.dispose();
-          return loaded;
-        });
-      },
-      undefined,
-      () => setTex(null),
-    );
-    return () => {
-      disposed = true;
-    };
-  }, [url]);
+  // 14-3D渲染深化：共享贴图缓存（全部 oak/pine/palm 各只上传一次）
+  const tex = useSharedTexture(propUrl('tree', variant));
 
   return (
     <group position={[x, 0, z]} scale={[scale, scale, scale]}>

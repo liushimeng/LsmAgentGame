@@ -8,13 +8,14 @@
  * 见 cityScale.ts）——圆柱 / 光环 / Billboard / Html 标签全部联动缩放。
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Billboard, Html } from '@react-three/drei';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import { professionAvatar } from '@/assets/images/wealth';
+import { useSharedTexture } from './textureCache';
 import {
   formatCny,
   professionColor,
@@ -67,35 +68,12 @@ interface Props {
 export function AgentToken({ player, cx, cz, index, total, isMe }: Props) {
   const t = useT();
   const groupRef = useRef<THREE.Group>(null);
-  const [tex, setTex] = useState<THREE.Texture | null>(null);
   const color = professionColor(player.profession.id);
   const emoji = professionEmoji(player.profession.id);
   const avatarUrl = professionAvatar(player.profession.avatar || player.profession.id);
 
-  // 头像纹理（失败 → null → 圆环 + emoji 兜底）。
-  useEffect(() => {
-    if (!avatarUrl) return;
-    let disposed = false;
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      avatarUrl,
-      (loaded) => {
-        if (disposed) {
-          loaded.dispose();
-          return;
-        }
-        loaded.colorSpace = THREE.SRGBColorSpace;
-        setTex(loaded);
-      },
-      undefined,
-      () => {
-        // onError：保持 null。
-      },
-    );
-    return () => {
-      disposed = true;
-    };
-  }, [avatarUrl]);
+  // 14-3D渲染深化：头像纹理走共享缓存（失败 → null → 圆环 + emoji 兜底链不变）。
+  const tex = useSharedTexture(avatarUrl);
 
   const { dx, dz } = districtSeatOffset(index, total);
   const targetX = cx + dx;

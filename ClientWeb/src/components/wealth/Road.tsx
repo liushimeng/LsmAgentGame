@@ -15,10 +15,11 @@
  *     入口侧）t=0.08 处铺设，主/次干道均有。
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import * as THREE from 'three';
+import { useMemo } from 'react';
+import type { Texture } from 'three';
 import { streetTileUrl, type StreetTileName } from '@/assets/images/wealth';
 import { StreetLight } from './props/StreetLight';
+import { useSharedTexture } from './textureCache';
 
 interface Props {
   /** 道路起点世界坐标（城区中心）。 */
@@ -29,47 +30,16 @@ interface Props {
   kind: 'main' | 'side';
 }
 
-/** 加载单张贴图 → 设置 wrap/repeat/colorSpace（缺失返回 null）。 */
+/** 加载单张贴图（14-3D渲染深化：走共享缓存；缺失返回 null）。 */
 function useStreetTile(
   name: StreetTileName,
   repeatX: number,
   repeatY: number,
-): THREE.Texture | null {
-  const url = streetTileUrl(name);
-  const [tex, setTex] = useState<THREE.Texture | null>(null);
-  useEffect(() => {
-    if (!url) {
-      setTex(null);
-      return;
-    }
-    let disposed = false;
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      url,
-      (loaded) => {
-        if (disposed) {
-          loaded.dispose();
-          return;
-        }
-        loaded.colorSpace = THREE.SRGBColorSpace;
-        loaded.wrapS = loaded.wrapT = THREE.RepeatWrapping;
-        loaded.repeat.set(repeatX, repeatY);
-        setTex(tex_ => {
-          if (tex_) tex_.dispose();
-          return loaded;
-        });
-      },
-      undefined,
-      () => {
-        setTex(null);
-      },
-    );
-    return () => {
-      disposed = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, repeatX, repeatY]);
-  return tex;
+): Texture | null {
+  return useSharedTexture(streetTileUrl(name), {
+    wrap: 'repeat',
+    repeat: [repeatX, repeatY],
+  });
 }
 
 /** 主干道路面宽度（世界坐标）。 */

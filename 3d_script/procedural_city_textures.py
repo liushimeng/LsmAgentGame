@@ -12,11 +12,16 @@
   城区 id：logistics_port / hightech_park / edu_district / medical_city /
            industrial_park / central_park / transport_hub / cultural_creative
 
+  v2.14 地表环境 × 3 张（14-3D城市渲染深化 · 阶段 G）：
+    ground/grass_tile.png       512×512  可平铺草地（中央公园 / 河岸草皮）
+    ground/plaza_tile.png       512×512  可平铺广场石板（交通枢纽 / 金融 CBD 小广场）
+    ground/water_tile.png       512×512  可平铺水面（城市运河 / 物流港港池，纵向滚动）
+
 约定：
   - 纯 Pillow，不依赖 python-generate-image-tool 子模块、不访问网络。
   - 确定性 seed = FNV-1a(文件名)，重跑产物字节一致。
   - 幂等 skip-if-exists（AI 轨道已生成的文件绝不覆盖）；--force 强制覆盖。
-  - --only districts,facades,roofs 生成子集。
+  - --only districts,facades,roofs,ground 生成子集。
 
 用法：
   python3 3d_script/procedural_city_textures.py            # 补齐缺失
@@ -32,7 +37,7 @@ import sys
 from pathlib import Path
 
 try:
-    from PIL import Image, ImageDraw, ImageFilter
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter
 except ImportError:  # pragma: no cover
     sys.exit("需要 Pillow：pip install 'Pillow>=10'")
 
@@ -41,10 +46,12 @@ WEALTH_DIR = BASE_DIR.parent / "ClientWeb" / "src" / "assets" / "images" / "weal
 DISTRICTS_DIR = WEALTH_DIR / "districts"
 FACADES_DIR = WEALTH_DIR / "facades"
 ROOFS_DIR = WEALTH_DIR / "roofs"
+GROUND_DIR = WEALTH_DIR / "ground"
 
 DISTRICT_SIZE = (1024, 1024)
 FACADE_SIZE = (512, 1024)
 ROOF_SIZE = (512, 512)
+GROUND_SIZE = (512, 512)
 
 NEW_DISTRICTS = [
     "logistics_port",
@@ -240,6 +247,114 @@ def gen_roof(did: str) -> Image.Image:
     return img.filter(ImageFilter.GaussianBlur(0.4))
 
 
+def _tileable_noise(img: Image.Image, rng: random.Random, strength: int = 12) -> Image.Image:
+    """wrap-safe 亮度噪声：32×32 噪声块 BICUBIC 放大（像素块自带连续性）后叠加。"""
+    w, h = img.size
+    noise = Image.new("RGB", (32, 32))
+    px = noise.load()
+    for y in range(32):
+        for x in range(32):
+            v = 128 + rng.randint(-strength, strength)
+            px[x, y] = (v, v, v)
+    noise = noise.resize((w, h), Image.Resampling.BICUBIC)
+    return ImageChops.add(img, noise, scale=1.0, offset=-128)
+
+
+def gen_grass_tile() -> Image.Image:
+    """可平铺草地：底色 + wrap-safe 斑块噪声 + 草叶 speckle。"""
+    w, h = GROUND_SIZE
+    rng = rng_for("ground:grass_tile")
+    img = Image.new("RGB", (w, h), (63, 122, 58))  # #3f7a3a
+    d = ImageDraw.Draw(img)
+    # 低频斑块（wrap：用 5×5 平铺坐标采样中心，出界部分映射回图内）
+    for _ in range(46):
+        x, y = rng.randint(0, w), rng.randint(0, h)
+        r = rng.randint(18, 64)
+        shade = (47, 95, 44) if rng.random() < 0.5 else (92, 154, 79)
+        for ox in (-w, 0, w):
+            for oy in (-h, 0, h):
+                d.ellipse([x + ox - r, y + oy - r, x + ox + r, y + oy + r], fill=shade)
+    img = img.filter(ImageFilter.GaussianBlur(6))
+    d = ImageDraw.Draw(img)
+    # 草叶短线（wrap-safe：起止点越界时补画对侧）
+    for _ in range(800):
+        x, y = rng.randint(0, w), rng.randint(0, h)
+        ln = rng.randint(2, 5)
+        ang = rng.uniform(-0.5, 0.5)  # ±30°
+        x2 = x + ln * math.cos(ang)
+        y2 = y + ln * math.sin(ang)
+        col = (120, 175, 95) if rng.random() < 0.5 else (52, 100, 48)
+        for ox in (-w, 0, w):
+            for oy in (-h, 0, h):
+                d.line([(x + ox, y + oy), (x2 + ox, y2 + oy)], fill=col, width=1)
+    return _tileable_noise(img, rng, strength=10)
+
+
+def gen_plaza_tile() -> Image.Image:
+    """可平铺广场石板：4×4 网格缝（128px/格整除 512）+ 单石板亮度抖动。"""
+    w, h = GROUND_SIZE
+    rng = rng_for("ground:plaza_tile")
+    cell = 128  # 512 / 4 —— 整除保证平铺
+    img = Image.new("RGB", (w, h), (154, 161, 171))  # #9aa1ab
+    d = ImageDraw.Draw(img)
+    for gy in range(4):
+        for gx in range(4):
+            jitter = rng.randint(-12, 12)
+            tone = (
+                max(0, min(255, 154 + jitter)),
+                max(0, min(255, 161 + jitter)),
+                max(0, min(255, 171 + jitter)),
+            )
+            d.rectangle([gx * cell + 2, gy * cell + 2, (gx + 1) * cell - 3, (gy + 1) * cell - 3], fill=tone)
+    # 对角拼花（中心 2 格）
+    for gx, gy in ((1, 1), (2, 2)):
+        d.line(
+            [(gx * cell + 8, gy * cell + 8), ((gx + 1) * cell - 8, (gy + 1) * cell - 8)],
+            fill=(124, 131, 141), width=4,
+        )
+    # 网格缝
+    seam = (124, 131, 141)  # #7c838d
+    for i in range(4):
+        d.line([(0, i * cell), (w, i * cell)], fill=seam, width=2)
+        d.line([(i * cell, 0), (i * cell, h)], fill=seam, width=2)
+    return _tileable_noise(img, rng, strength=6)
+
+
+def gen_water_tile() -> Image.Image:
+    """可平铺水面：低频渐变 + 正弦波纹（相位 wrap-safe）+ 高光 speckle。"""
+    w, h = GROUND_SIZE
+    rng = rng_for("ground:water_tile")
+    img = Image.new("RGB", (w, h), (28, 74, 102))  # #1c4a66
+    d = ImageDraw.Draw(img)
+    # 低频色带（竖向两条偏亮水色，wrap-safe 椭圆铺 3×3）
+    for _ in range(24):
+        x, y = rng.randint(0, w), rng.randint(0, h)
+        rx, ry = rng.randint(40, 120), rng.randint(24, 70)
+        shade = (42, 106, 138) if rng.random() < 0.6 else (34, 88, 118)
+        for ox in (-w, 0, w):
+            for oy in (-h, 0, h):
+                d.ellipse([x + ox - rx, y + oy - ry, x + ox + rx, y + oy + ry], fill=shade)
+    img = img.filter(ImageFilter.GaussianBlur(8))
+    d = ImageDraw.Draw(img)
+    # 波纹：60 条正弦横纹，波长 64px（512/8 整周期 → 纵横双向 wrap-safe）
+    for i in range(60):
+        y0 = rng.randint(0, h)
+        amp = rng.uniform(3, 6)
+        phase = rng.uniform(0, math.tau)
+        col = (255, 255, 255) if rng.random() < 0.5 else (180, 220, 235)
+        alpha_hint = rng.randint(20, 46)  # 仅亮度控制近似透明度
+        pts = []
+        for x in range(0, w + 1, 4):
+            yy = y0 + amp * math.sin(phase + x / 64 * math.tau)
+            yy = ((yy % h) + h) % h
+            pts.append((x, yy))
+        # 亮度近似：混白低 alpha → 直接画淡色
+        faint = tuple(int(c * alpha_hint / 255 + img.getpixel((pts[0][0], int(pts[0][1]) % h))[k] * (1 - alpha_hint / 255)) for k, c in enumerate(col))
+        d.line(pts, fill=faint, width=rng.randint(1, 2), joint="curve")
+    _noise_speckle(d, rng, w, h, (220, 240, 250), 50, r_max=1)
+    return _tileable_noise(img, rng, strength=5)
+
+
 def _save(img: Image.Image, path: Path, force: bool) -> str:
     if path.exists() and not force:
         return f"skip  {path.name}"
@@ -251,11 +366,24 @@ def _save(img: Image.Image, path: Path, force: bool) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--force", action="store_true", help="覆盖已存在文件")
-    ap.add_argument("--only", default="", help="逗号分隔子集：districts,facades,roofs")
+    ap.add_argument("--only", default="", help="逗号分隔子集：districts,facades,roofs,ground")
     args = ap.parse_args()
     only = {s.strip() for s in args.only.split(",") if s.strip()}
 
     total = written = 0
+    # 地表环境贴图（14-3D城市渲染深化 · 阶段 G）：与城区表解耦，只生成一次
+    if not only or "ground" in only:
+        ground_jobs = [
+            (gen_grass_tile(), GROUND_DIR / "grass_tile.png"),
+            (gen_plaza_tile(), GROUND_DIR / "plaza_tile.png"),
+            (gen_water_tile(), GROUND_DIR / "water_tile.png"),
+        ]
+        for img, path in ground_jobs:
+            total += 1
+            msg = _save(img, path, args.force)
+            if msg.startswith("write"):
+                written += 1
+            print(f"[ground] {msg}")
     for did in NEW_DISTRICTS:
         jobs = []
         if not only or "districts" in only:

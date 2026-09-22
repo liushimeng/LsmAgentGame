@@ -12,10 +12,9 @@
  * 次干道 ~0.70（真实 7m），基座 / 灯杆 / 灯头尺寸按比例参数化（见 cityScale.ts）。
  */
 
-import { useEffect, useState } from 'react';
-import * as THREE from 'three';
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/wealth';
+import { useSharedTexture } from '../textureCache';
 
 interface Props {
   x: number;
@@ -44,43 +43,11 @@ const KIND_DIMS = {
 } as const;
 
 export function StreetLight({ x, z, rotation = 0, variant = 'a', kind = 'main' }: Props) {
-  const url = propUrl('streetlamp', variant);
-  const [tex, setTex] = useState<THREE.Texture | null>(null);
+  // 14-3D渲染深化：共享贴图缓存（路灯阵列同 variant 贴图只上传一次）
+  const tex = useSharedTexture(propUrl('streetlamp', variant));
   const d = KIND_DIMS[kind];
   const poleY = d.baseH + d.poleH / 2;
   const headY = d.baseH + d.poleH + d.headH / 2;
-
-  useEffect(() => {
-    if (!url) {
-      setTex(null);
-      return;
-    }
-    let disposed = false;
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      url,
-      (loaded) => {
-        if (disposed) {
-          loaded.dispose();
-          return;
-        }
-        loaded.colorSpace = THREE.SRGBColorSpace;
-        loaded.magFilter = THREE.LinearFilter;
-        loaded.minFilter = THREE.LinearMipmapLinearFilter;
-        setTex(prev => {
-          if (prev) prev.dispose();
-          return loaded;
-        });
-      },
-      undefined,
-      () => {
-        setTex(null);
-      },
-    );
-    return () => {
-      disposed = true;
-    };
-  }, [url]);
 
   return (
     <group position={[x, 0, z]} rotation={[0, rotation, 0]}>

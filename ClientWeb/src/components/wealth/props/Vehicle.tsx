@@ -14,12 +14,13 @@
  *   - 车头 2 个暖白前灯 + 车尾 2 个红色尾灯（emissive 小方块，沿车长 x 轴 ±端）。
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/wealth';
 import { u } from '../cityScale';
+import { useSharedTexture } from '../textureCache';
 
 type VehicleVariant = 'sedan' | 'truck' | 'bus' | 'taxi';
 
@@ -83,7 +84,8 @@ export function Vehicle({
   phase = 0,
 }: Props) {
   const url = propUrl('vehicle', variant);
-  const [tex, setTex] = useState<THREE.Texture | null>(null);
+  // 14-3D渲染深化：共享贴图缓存（多车共用同 variant 贴图只上传一次）
+  const tex = useSharedTexture(url);
   const groupRef = useRef<THREE.Group>(null);
   const dims = VEHICLE_DIMS[variant];
 
@@ -97,36 +99,6 @@ export function Vehicle({
 
   // 起始位置
   const tRef = useRef(phase);
-
-  useEffect(() => {
-    if (!url) {
-      setTex(null);
-      return;
-    }
-    let disposed = false;
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      url,
-      (loaded) => {
-        if (disposed) {
-          loaded.dispose();
-          return;
-        }
-        loaded.colorSpace = THREE.SRGBColorSpace;
-        loaded.magFilter = THREE.LinearFilter;
-        loaded.minFilter = THREE.LinearMipmapLinearFilter;
-        setTex(prev => {
-          if (prev) prev.dispose();
-          return loaded;
-        });
-      },
-      undefined,
-      () => setTex(null),
-    );
-    return () => {
-      disposed = true;
-    };
-  }, [url]);
 
   useFrame((_state, delta) => {
     const g = groupRef.current;
