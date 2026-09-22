@@ -42,7 +42,13 @@ interface CloudSpec {
   puffs: Array<{ dx: number; dy: number; dz: number; w: number; h: number }>;
 }
 
-/** 6 团云确定性布点：|x|,|z| ∈ [10, 38]（避开中心正上），y 14-20。 */
+/** 6 团云确定性布点：|x|,|z| ∈ [10, 38]（避开中心正上），y 60-80。
+ *  2026-09-22 视觉验收三轮修正（16/05 验收清单 §3.4 回归项）：
+ *  (1) 俯瞰时 0.85 大板把城市盖白 → opacity 降档；
+ *  (2) 相机轨道高度随缩放在 13~45 之间，云必须全程保持在相机**上方**——
+ *      最终抬到 y=60-80（OrbitControls maxDistance=80、maxPolar=1.2 的
+ *      相机最高点 ≈45），任何视角下云都不会插进"相机↔城市"视线，
+ *      仅在地平线/仰角视野中作为天空云朵出现。 */
 function cloudsFor(seedStr: string): CloudSpec[] {
   let h = 2166136261;
   for (let i = 0; i < seedStr.length; i++) {
@@ -56,15 +62,15 @@ function cloudsFor(seedStr: string): CloudSpec[] {
     const rad = 12 + rnd() * 26;
     const puffCount = 3 + Math.floor(rnd() * 2);
     const puffs = Array.from({ length: puffCount }, (_, p) => ({
-      dx: (p - (puffCount - 1) / 2) * (1.6 + rnd() * 0.8),
-      dy: (rnd() - 0.5) * 0.5,
-      dz: (rnd() - 0.5) * 0.8,
-      w: 3 + rnd() * 2,
-      h: 1.6 + rnd(),
+      dx: (p - (puffCount - 1) / 2) * (1.2 + rnd() * 0.6),
+      dy: (rnd() - 0.5) * 0.4,
+      dz: (rnd() - 0.5) * 0.6,
+      w: 2.2 + rnd() * 1.2,
+      h: 1.2 + rnd() * 0.7,
     }));
     out.push({
       x: Math.cos(ang) * rad,
-      y: 14 + rnd() * 6,
+      y: 60 + rnd() * 20,
       z: Math.sin(ang) * rad,
       speed: 0.15 + rnd() * 0.15,
       puffs,
@@ -92,7 +98,7 @@ function Cloud({ spec, tex }: { spec: CloudSpec; tex: THREE.Texture | null }) {
               <meshBasicMaterial
                 map={tex}
                 transparent
-                opacity={0.85}
+                opacity={0.35}
                 depthWrite={false}
                 fog={false}
                 alphaTest={0.01}
@@ -102,7 +108,7 @@ function Cloud({ spec, tex }: { spec: CloudSpec; tex: THREE.Texture | null }) {
         ) : (
           <mesh key={`puff-${i}`} position={[p.dx, p.dy, p.dz]} scale={[p.w * 0.4, p.h * 0.4, p.w * 0.4]}>
             <sphereGeometry args={[1, 8, 6]} />
-            <meshBasicMaterial color="#f4f6f9" transparent opacity={0.3} depthWrite={false} fog={false} />
+            <meshBasicMaterial color="#f4f6f9" transparent opacity={0.12} depthWrite={false} fog={false} />
           </mesh>
         ),
       )}

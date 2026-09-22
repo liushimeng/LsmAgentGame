@@ -1,8 +1,0 @@
-2026-09-22T14:04:25.696+08:00 [INFO] GoWebDebugTool 0.1.0 starting (instance=gwdt-webgl pid=574898 port=29099)
-2026-09-22T14:04:25.698+08:00 [INFO] listening on http://localhost:29099
-2026-09-22T14:04:27.631+08:00 [INFO] => GET /ListChromePages page_id="" action=""
-2026-09-22T14:04:27.631+08:00 [INFO] <= GET /ListChromePages page_id="" action="list" latency_ms=0 code=0
-2026-09-22T14:04:39.494+08:00 [INFO] => POST /NewChromePage page_id="" action=""
-2026-09-22T14:04:42.651+08:00 [INFO] <= POST /NewChromePage page_id="" action="new_page" latency_ms=3157 code=0
-2026-09-22T14:04:44.689+08:00 [INFO] => POST /ControlChromePage page_id="" action=""
-2026-09-22T14:04:44.910+08:00 [INFO] <= POST /ControlChromePage page_id="p_655d95bc" action="eval_js" latency_ms=220 code=0

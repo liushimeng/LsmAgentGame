@@ -70,9 +70,12 @@ export const WORLD_SIZE = 80;
 export const GROUND_TILE = 8;
 /** 地面贴图重复次数 = WORLD_SIZE / GROUND_TILE。 */
 export const GROUND_REPEAT = WORLD_SIZE / GROUND_TILE;
-/** 远景雾化近/远平面（随世界边长等比 ×2，与背景色一致自然消失）。 */
-export const FOG_NEAR = WORLD_SIZE * 0.7;
-export const FOG_FAR = WORLD_SIZE * 1.5;
+/** 远景雾化近/远平面。16 · 视觉验收两轮回归：
+ *  0.7/1.5 与 0.85/1.9 在最大缩放（相机距离=ORBIT_MAX_DISTANCE=80）下把
+ *  城市大半泡进雾色 → 近端抬到 1.25×（=100，超过最大缩放下城市最远角
+ *  ≈120 的雾感收敛到 20% 以内），远端 2.5×（=200）保天际线剪影柔和消隐。 */
+export const FOG_NEAR = WORLD_SIZE * 1.25;
+export const FOG_FAR = WORLD_SIZE * 2.5;
 /** 相机初始位置与 OrbitControls maxDistance（随世界边长等比缩放）。 */
 export const CAMERA_START: [number, number, number] = [WORLD_SIZE * 0.35, WORLD_SIZE * 0.3, WORLD_SIZE * 0.35];
 export const ORBIT_MAX_DISTANCE = WORLD_SIZE;
@@ -342,7 +345,8 @@ export function WealthCityMap({
         <WaterLayer />
         {/* 15-3D渲染深化：氛围层（远景剪影 + 公园落叶 Sparkles） */}
         <AtmosphereLayer />
-        {/* 16 · 阶段 U：天空云层（6 团 Billboard 云，慢速漂移） */}
+        {/* 16 · 阶段 U：天空云层（6 团 Billboard 云，慢速漂移；y=60-80 在相机
+            轨道最高点之上，任何缩放都不会遮盖城市——视觉验收三轮回归结论） */}
         <CloudLayer />
         {/* 16 · 阶段 T：功能地标（喷泉 / 园路花坛 / 塔吊工地 / 停车场） */}
         <LandmarksLayer />
