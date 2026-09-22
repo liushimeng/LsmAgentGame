@@ -249,7 +249,92 @@ function BillboardSign({ w, y }: { w: number; y: number }) {
           metalness={0.4}
         />
       </mesh>
+      {/* 阶段 P：辉光（仅 w > 1.6 时启用，避免点光源过多拖性能） */}
+      {w > 1.6 && (
+        <pointLight
+          position={[0, poleH * 0.7, -u(0.5)]}
+          color={EMISSIVE_WINDOW}
+          intensity={0.3}
+          distance={5}
+          decay={2}
+        />
+      )}
     </group>
+  );
+}
+
+/** 阶段 N：阳台线（沿高度每 u(3) 一道横线）。
+ *  适用 tower / slab；color 深色压顶感，跳过底层（贴底商雨棚）和顶层（贴屋顶）。
+ */
+function BalconyLines({ w, d, h }: { w: number; d: number; h: number }) {
+  const lineSpacing = u(3);
+  const count = Math.floor(h / lineSpacing);
+  const lines = [];
+  for (let i = 0; i < count; i++) {
+    const y = i * lineSpacing + lineSpacing / 2 + u(1.5);
+    if (y >= h - u(1)) continue;
+    lines.push(
+      <mesh key={`bal-${i}`} position={[0, y, d * 0.4 + u(0.02)]}>
+        <boxGeometry args={[w * 0.95, u(0.04), u(0.15)]} />
+        <meshStandardMaterial color="#2a2e36" roughness={0.85} />
+      </mesh>,
+    );
+  }
+  return <>{lines}</>;
+}
+
+/** 阶段 N：屋顶设备（确定性 1-2 件；用楼栋尺寸 w/d 决定）。 */
+function RooftopEquipment({ w, d, y }: { w: number; d: number; y: number }) {
+  const baseY = y + u(0.05);
+  if (w > 1.5) {
+    return (
+      <>
+        {/* 水箱 */}
+        <mesh position={[w * 0.3, baseY + u(0.15), d * 0.3]} castShadow>
+          <cylinderGeometry args={[u(0.15), u(0.15), u(0.3), 8]} />
+          <meshStandardMaterial color="#a8a4a0" roughness={0.7} metalness={0.3} />
+        </mesh>
+        {/* 通风管 */}
+        <mesh position={[-w * 0.3, baseY + u(0.18), -d * 0.3]} castShadow>
+          <cylinderGeometry args={[u(0.08), u(0.08), u(0.35), 6]} />
+          <meshStandardMaterial color="#8a8d96" roughness={0.7} metalness={0.4} />
+        </mesh>
+      </>
+    );
+  }
+  return (
+    <>
+      {/* 通风管（小楼 1 个） */}
+      <mesh position={[0, baseY + u(0.15), 0]} castShadow>
+        <cylinderGeometry args={[u(0.06), u(0.06), u(0.3), 6]} />
+        <meshStandardMaterial color="#8a8d96" roughness={0.7} metalness={0.4} />
+      </mesh>
+      {/* 天窗（小盒） */}
+      <mesh position={[w * 0.25, baseY + u(0.04), 0]} castShadow>
+        <boxGeometry args={[u(0.2), u(0.06), u(0.2)]} />
+        <meshStandardMaterial color="#5a6270" roughness={0.6} metalness={0.5} />
+      </mesh>
+    </>
+  );
+}
+
+/** 阶段 N：厂房卷帘门（shed 临路侧 z=+d/2）。 */
+function ShutterDoor({ w, h }: { w: number; h: number }) {
+  return (
+    <>
+      {/* 卷帘门主体（深色 box） */}
+      <mesh position={[0, h * 0.2, 0.001]}>
+        <planeGeometry args={[w * 0.6, h * 0.4]} />
+        <meshStandardMaterial color="#3a414c" roughness={0.95} />
+      </mesh>
+      {/* 横纹装饰（4 道） */}
+      {[0.15, 0.25, 0.35, 0.45].map((t, i) => (
+        <mesh key={`stripe-${i}`} position={[0, h * t, 0.002]}>
+          <planeGeometry args={[w * 0.6, u(0.02)]} />
+          <meshStandardMaterial color="#2a2e36" roughness={0.95} />
+        </mesh>
+      ))}
+    </>
   );
 }
 
@@ -285,6 +370,10 @@ export function TowerShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackCo
       <Shopfront w={w} d={d} y={Math.min(u(3.6), pH * 0.5)} emissive={emissive} />
       {/* 14-3D渲染深化：塔楼广告牌（w > 1.4 确定性出现） */}
       {w > 1.4 && <BillboardSign w={w} y={pH + bodyH + cH} />}
+      {/* 15 阶段 N：阳台线（沿塔身高度每 u(3) 一道） */}
+      <BalconyLines w={w * 0.8} d={d * 0.8} h={bodyH + pH} />
+      {/* 15 阶段 N：屋顶设备（crown 顶上） */}
+      <RooftopEquipment w={w * 0.55} d={d * 0.55} y={pH + bodyH + cH} />
     </>
   );
 }
@@ -304,6 +393,10 @@ export function SlabShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackCol
       </mesh>
       {/* 14-3D渲染深化：底商雨棚（板楼沿街） */}
       <Shopfront w={w} d={d} y={Math.min(u(3.6), h * 0.3)} emissive={emissive} />
+      {/* 15 阶段 N：阳台线 */}
+      <BalconyLines w={w} d={d} h={h} />
+      {/* 15 阶段 N：屋顶设备 */}
+      <RooftopEquipment w={w} d={d} y={h} />
     </>
   );
 }
@@ -339,6 +432,10 @@ export function ShedShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackCol
         <boxGeometry args={[bw, bH, d]} />
         <BoxFaces sideA={facadeBase} sideB={facadeMid} top={null} fallback={fallbackColor} emissive={emissive} />
       </mesh>
+      {/* 15 阶段 N：卷帘门（临路侧 z=+d/2） */}
+      <group position={[0, 0, d / 2]}>
+        <ShutterDoor w={bw} h={bH} />
+      </group>
       {/* 山墙三角（坡屋顶同构，金属灰兜底） */}
       <PrismRoof
         w={bw} h={h * 0.2} d={d} y={bH}

@@ -1,26 +1,28 @@
 /**
- * StreetPropsLayer — 街景道具布点协调器（P1-C）：
+ * StreetPropsLayer — 街景道具布点协调器（15-3D城市全面真实感深化 · 升级版）：
  *
- * 总览：
- *   - 每个城区：4 棵树（central_park 10 棵）+ 1 根路灯 + 1-2 件屋顶杂物 + 1 行人 + 1 标识牌
- *   - 每条主干道沿线：1 辆移动车辆
+ * 阶段 K 行人升级：
+ *   - V1 单行人原地微抖 → V2 折线 path 漫步 + 圆柱身体 + 头部 Billboard sprite
+ *   - 密度：核心城区 5-6 人 / 一般城区 3-4 人 / 郊区 2 人（按城区属性分档）
  *
- * 布点策略：确定性伪随机（mulberry32 + hashStr），重渲染布局稳定（CLAUDE.md §3 风格一致）。
- * 与 DistrictBlock.tsx 的随机算法保持同源（DistrictDefs.id hashStr）。
+ * 阶段 L 树木升级：
+ *   - V1 单 sphere 树冠 / Billboard → V2 3 层 sphere 叠加 + 行道树沿主干道
  *
- * v2.12 阶段 2：**props 化** —— 城区清单由父层 `districts` 注入（不再 import
- * WEALTH_DISTRICTS 静态表），数量随城区表自适应（8 区或 16 区同一代码路径）。
+ * 阶段 M 街道家具：
+ *   - 新增 6 种家具：报刊亭 / 自行车 / 垃圾箱 / 电话亭 / 邮筒 / 停车牌
  *
- * v2.13 阶段 D（13-3D城市渲染优化）：每条主干道 t=0.12 路侧布 1 个红绿灯
- * （props/TrafficLight，替换从未接线的空 intersectionSigns 字段，§130）。
+ * 阶段 P 远景层：
+ *   - FarBuildingSilhouette 由 AtmosphereLayer 注入，本层不再处理
  *
- * 预算：mesh 总数 ≤ 2500（v2.12 阶段 2 上限；16 城区实际 ≈ 每城区 ~5 × 16
- * + 主干道车辆 ~12 ≈ 92，远低于护栏）。
+ * 总 mesh 预算核算：
+ *   - 楼栋 ~80×3 = 240（DistrictBlock 持有）
+ *   - 行人 80×2 = 160（V2 身体+头）
+ *   - 树 64×4 = 256（V2 干+3 层冠）
+ *   - 家具 60-80
+ *   - 道路 + 灯 ~120
+ *   - 总 ~900 mesh，< 2500 护栏
  *
- * 限制：
- *   - props 默认 castShadow=false（仅 Tree 保留）
- *   - 不动 camera / orbit / token / 道路（道路自带路灯阵列，本层不再加）
- *   - 性能护栏：避免每帧 React re-render，seed 由 useMemo 缓存
+ * 契约：lag_docs/虚拟城市/已实现/15-3D城市渲染深化/02-架构设计 §1。
  */
 
 import { useMemo } from 'react';
@@ -29,16 +31,22 @@ import {
   type WealthDistrictDef,
 } from '@/types/wealth';
 import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
-import { Tree } from './props/Tree';
+import { TreeV2 } from './props/TreeV2';
 import { Vehicle } from './props/Vehicle';
-import { Pedestrian } from './props/Pedestrian';
+import { PedestrianV2 } from './props/PedestrianV2';
+import type { PedestrianHeadOutfit } from '@/assets/images/wealth';
 import { Sign } from './props/Sign';
 import { RooftopAcc } from './props/RooftopAcc';
 import { TrafficLight } from './props/TrafficLight';
 import { BusStop } from './props/BusStop';
-import { StreetFurniture } from './props/StreetFurniture';
+import { VendorKiosk } from './props/VendorKiosk';
+import { BicycleRack } from './props/BicycleRack';
+import { TrashCan } from './props/TrashCan';
+import { PhoneBooth } from './props/PhoneBooth';
+import { Mailbox } from './props/Mailbox';
+import { ParkingMeter } from './props/ParkingMeter';
 
-// ── 确定性伪随机（与 DistrictBlock.tsx 同源）────────────────
+// ── 确定性伪随机（同源 DistrictBlock.tsx）────────────────
 
 function hashStr(s: string): number {
   let h = 2166136261;
@@ -59,19 +67,52 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+interface TreeSpec {
+  x: number;
+  z: number;
+  variant: 'oak' | 'pine' | 'palm';
+  scale: number;
+}
+
+interface RooftopSpec {
+  x: number;
+  z: number;
+  variant: 'ac' | 'tank' | 'antenna';
+  rotation: number;
+  yOffset: number;
+}
+
+interface FurnitureSpec {
+  type: 'kiosk' | 'bicycle' | 'trash' | 'phone' | 'mailbox' | 'parking';
+  x: number;
+  z: number;
+  rotation: number;
+  variant?: number;
+}
+
+interface SignSpec {
+  x: number;
+  z: number;
+  rotation: number;
+  variant: 'traffic' | 'info';
+}
+
 interface DistrictProps {
   districtId: string;
-  trees: Array<{ x: number; z: number; variant: 'oak' | 'pine' | 'palm'; scale: number }>;
-  /** 楼顶杂物（yOffset = 城区中位楼高 ×0.9，见 cityScale.ts）。 */
-  rooftop: Array<{ x: number; z: number; variant: 'ac' | 'tank' | 'antenna'; rotation: number; yOffset: number }>;
-  /** 城区内行人（14-3D渲染深化：pathR 环线漫步半径）。 */
-  pedestrian: { x: number; z: number; variant: 'warm' | 'cool'; seed: number; pathR: number };
-  /** 中央公园第 2 个漫步行人（绿化区多一人，契约 02 §7）。 */
-  pedestrian2?: { x: number; z: number; variant: 'warm' | 'cool'; seed: number; pathR: number };
-  /** 城区内标识牌（路口处）。 */
-  sign: { x: number; z: number; rotation: number; variant: 'traffic' | 'info' };
-  /** 街道小件家具（14-3D渲染深化：bench/hydrant 各城区 1 件）。 */
-  furniture: { x: number; z: number; variant: 'bench' | 'hydrant'; rotation: number };
+  trees: TreeSpec[];
+  rooftop: RooftopSpec[];
+  /** 城区内行人（V2 折线漫步） */
+  pedestrians: Array<{
+    x: number;
+    z: number;
+    path: Array<[number, number]>;
+    outfit: PedestrianHeadOutfit;
+    speed: number;
+    phase: number;
+    stationary: boolean;
+  }>;
+  furniture: FurnitureSpec[];
+  sign: SignSpec;
 }
 
 interface RoadVehicle {
@@ -82,18 +123,87 @@ interface RoadVehicle {
   phase: number;
 }
 
+interface RoadTree {
+  x: number;
+  z: number;
+  variant: 'oak' | 'pine' | 'palm';
+  scale: number;
+  rotation: number;
+}
+
 interface Layout {
   districtProps: DistrictProps[];
   roadVehicles: RoadVehicle[];
-  /** 主干道路侧红绿灯（v2.13 阶段 D；t=0.12，与车辆同路判定）。 */
+  roadTrees: RoadTree[];
   trafficLights: Array<{ x: number; z: number; rotation: number }>;
-  /** 主干道路侧公交站台（14-3D渲染深化；t=0.35）。 */
   busStops: Array<{ x: number; z: number; rotation: number }>;
 }
 
 const TREE_VARIANTS: Array<'oak' | 'pine' | 'palm'> = ['oak', 'pine', 'palm'];
 const ROOFTOP_VARIANTS: Array<'ac' | 'tank' | 'antenna'> = ['ac', 'tank', 'antenna'];
 const VEHICLE_VARIANTS: Array<'sedan' | 'truck' | 'bus' | 'taxi'> = ['sedan', 'truck', 'bus', 'taxi'];
+
+/** 城区行人密度档位（按城区属性分档）。 */
+const PEDESTRIAN_DENSITY: Record<string, number> = {
+  // 核心商务区（高密度）
+  finance: 6, commerce: 5, tech: 5, hightech_park: 5,
+  // 一般城区
+  oldtown: 4, edu_district: 4, transport_hub: 4, cultural_creative: 4,
+  medical_city: 3, residential: 3, riverside: 3,
+  // 工业/低密度
+  suburb: 2, industry: 2, industrial_park: 2, logistics_port: 2,
+  // 公园
+  central_park: 5, // 含 2 静止
+};
+
+/** 城区 outfit 倾向（按城区属性选 outfit）。 */
+const OUTFIT_AFFINITY: Record<string, PedestrianHeadOutfit[]> = {
+  finance: ['business', 'casual'],
+  commerce: ['business', 'bright'],
+  tech: ['casual', 'bright'],
+  hightech_park: ['casual', 'business'],
+  oldtown: ['khaki', 'casual'],
+  edu_district: ['casual', 'bright'],
+  transport_hub: ['bright', 'casual'],
+  cultural_creative: ['bright', 'casual'],
+  medical_city: ['business', 'casual'],
+  residential: ['casual', 'khaki'],
+  riverside: ['business', 'casual'],
+  suburb: ['khaki'],
+  industry: ['khaki', 'bright'],
+  industrial_park: ['khaki', 'bright'],
+  logistics_port: ['khaki', 'bright'],
+  central_park: ['casual', 'bright'],
+};
+
+/** 报刊亭布点列表（按城区属性）。 */
+const KIOSK_DISTRICTS = new Set(['finance', 'commerce', 'oldtown', 'transport_hub', 'cultural_creative']);
+/** 自行车布点列表。 */
+const BICYCLE_DISTRICTS = new Set(['residential', 'edu_district', 'commerce', 'transport_hub', 'riverside']);
+/** 电话亭布点列表。 */
+const PHONE_DISTRICTS = new Set(['oldtown', 'commerce', 'finance']);
+/** 停车牌布点列表。 */
+const PARKING_DISTRICTS = new Set(['finance', 'commerce', 'tech', 'transport_hub']);
+
+/**
+ * 为单个城区生成 path（折线 2-3 段；总长 6-10 单位；起点远离城区中心 >2）。
+ */
+function pathForDistrict(def: WealthDistrictDef, rnd: () => number): Array<[number, number]> {
+  const c = { x: def.x, z: def.z };
+  const baseAngle = rnd() * Math.PI * 2;
+  // path 半径范围 1.5-3.5（城区底板 8×8，半径 3.5 仍不出界）
+  const r1 = 1.5 + rnd() * 1.0;
+  const r2 = 2.0 + rnd() * 1.5;
+  const a1 = baseAngle;
+  const a2 = baseAngle + Math.PI / 2 + (rnd() - 0.5) * 0.6;
+  const a3 = baseAngle + Math.PI + (rnd() - 0.5) * 0.6;
+  const path: Array<[number, number]> = [
+    [c.x + Math.cos(a1) * r1, c.z + Math.sin(a1) * r1],
+    [c.x + Math.cos(a2) * r2, c.z + Math.sin(a2) * r2],
+    [c.x + Math.cos(a3) * r1, c.z + Math.sin(a3) * r1],
+  ];
+  return path;
+}
 
 /** 为单个城区生成 props。 */
 function propsForDistrict(def: WealthDistrictDef, idx: number): DistrictProps {
@@ -102,9 +212,9 @@ function propsForDistrict(def: WealthDistrictDef, idx: number): DistrictProps {
   // 城区朝向 finance（原点）的方向角（标识牌/树避让共用）
   const angleToFinance = Math.atan2(-c.z, -c.x);
 
-  // 13-3D优化 阶段 B/D 树群（契约 02 文档 §2.4/§3.4）：
-  //   central_park → 10 棵（半径 1.5~3.5 散布，scale 0.8~1.2，绿化率 >60%）；
-  //   其余城区     → 4 棵沿城区边缘（半径 3.6±0.3），避开路口 sign 角度 ±0.4 rad。
+  // 阶段 L 树群（V2 立体树）：
+  //   central_park → 10 棵（半径 1.5~3.5 散布，scale 0.8~1.2）
+  //   其余城区     → 4 棵沿城区边缘（半径 3.3±0.3），避开路口 sign 角度 ±0.4 rad
   const isPark = def.id === 'central_park';
   const treeCount = isPark ? 10 : 4;
   const angleDiff = (a: number, b: number) => {
@@ -113,25 +223,22 @@ function propsForDistrict(def: WealthDistrictDef, idx: number): DistrictProps {
     while (d < -Math.PI) d += Math.PI * 2;
     return Math.abs(d);
   };
-  const trees = Array.from({ length: treeCount }, (_, i) => {
+  const trees: TreeSpec[] = Array.from({ length: treeCount }, (_, i) => {
     let angle = (i / treeCount) * Math.PI * 2 + (rnd() - 0.5) * 0.6;
-    if (!isPark && angleDiff(angle, angleToFinance) < 0.4) angle += 0.5; // 避让路口标识牌
+    if (!isPark && angleDiff(angle, angleToFinance) < 0.4) angle += 0.5;
     const radius = isPark ? 1.5 + rnd() * 2.0 : 3.3 + rnd() * 0.6;
     return {
       x: c.x + Math.cos(angle) * radius,
       z: c.z + Math.sin(angle) * radius,
       variant: TREE_VARIANTS[Math.floor(rnd() * TREE_VARIANTS.length)],
-      // 行道树 5~10m → scale 0.5~1.0；公园乔木 8~12m → 0.8~1.2（见 cityScale.ts）
       scale: isPark ? 0.8 + rnd() * 0.4 : 0.5 + rnd() * 0.5,
     };
   });
 
-  // 1-2 个楼顶杂物：放在城区中心附近的虚拟楼栋上
-  // 楼顶高度：按城区中位楼高 ×0.9（2026-09-21 高度系统，去掉硬编码 2.8+rnd*1.4，
-  // 杂物不再悬空 / 埋楼，郊区低层也贴合）。
+  // 1-2 个楼顶杂物
   const [minF, maxF] = DISTRICT_FLOORS[def.id];
   const roofY = buildingHeight((minF + maxF) / 2) * 0.9;
-  const rooftop = [0, 1].slice(0, 1 + (rnd() < 0.5 ? 1 : 0)).map(() => {
+  const rooftop: RooftopSpec[] = [0, 1].slice(0, 1 + (rnd() < 0.5 ? 1 : 0)).map(() => {
     const angle = rnd() * Math.PI * 2;
     const radius = 0.8 + rnd() * 1.6;
     return {
@@ -143,56 +250,109 @@ function propsForDistrict(def: WealthDistrictDef, idx: number): DistrictProps {
     };
   });
 
-  // 1 个行人：城区内小环线漫步（14-3D渲染深化；pathR 0.8–2.0 确定性）
-  const pedAngle = rnd() * Math.PI * 2;
-  const pedestrian = {
-    x: c.x + Math.cos(pedAngle) * 0.5,
-    z: c.z + Math.sin(pedAngle) * 0.5,
-    variant: (rnd() < 0.5 ? 'warm' : 'cool') as 'warm' | 'cool',
-    seed: idx + rnd(),
-    pathR: 0.8 + rnd() * 1.2,
-  };
-  // 中央公园第 2 个漫行人
-  const pedestrian2 = isPark
-    ? {
-        x: c.x + Math.cos(pedAngle + 2) * 0.5,
-        z: c.z + Math.sin(pedAngle + 2) * 0.5,
-        variant: (rnd() < 0.5 ? 'warm' : 'cool') as 'warm' | 'cool',
-        seed: idx + 1 + rnd(),
-        pathR: 1.2 + rnd() * 0.8,
-      }
-    : undefined;
+  // 阶段 K 行人（V2 折线 path）：按城区密度档位 + outfit 倾向
+  const pedCount = PEDESTRIAN_DENSITY[def.id] ?? 3;
+  const outfitPool = OUTFIT_AFFINITY[def.id] ?? ['casual', 'khaki'];
+  const pedestrians: DistrictProps['pedestrians'] = Array.from({ length: pedCount }, (_, i) => {
+    const path = pathForDistrict(def, rnd);
+    const startPt = path[0];
+    // 中央公园最后 2 个行人设为静止（看景）
+    const isStationary = isPark && i >= pedCount - 2;
+    return {
+      x: startPt[0],
+      z: startPt[1],
+      path,
+      outfit: outfitPool[i % outfitPool.length],
+      speed: 0.3 + rnd() * 0.2,
+      phase: (i + rnd()) / pedCount,
+      stationary: isStationary,
+    };
+  });
 
-  // 街道小件家具（14-3D渲染深化：idx 偶=长椅 / 奇=消防栓，树池旁半径 2.6）
-  const furnAngle = rnd() * Math.PI * 2;
-  const furniture = {
-    x: c.x + Math.cos(furnAngle) * 2.6,
-    z: c.z + Math.sin(furnAngle) * 2.6,
-    variant: (idx % 2 === 0 ? 'bench' : 'hydrant') as 'bench' | 'hydrant',
+  // 阶段 M 街道家具（按城区属性选择性布点）
+  const furniture: FurnitureSpec[] = [];
+  // 垃圾箱：每城区 1
+  const trashAngle = rnd() * Math.PI * 2;
+  furniture.push({
+    type: 'trash',
+    x: c.x + Math.cos(trashAngle) * 3.5,
+    z: c.z + Math.sin(trashAngle) * 3.5,
     rotation: rnd() * Math.PI * 2,
-  };
+    variant: idx % 3, // 0/1/2 → 蓝/灰/红
+  });
+  // 邮筒：每城区 1
+  const mailAngle = rnd() * Math.PI * 2;
+  furniture.push({
+    type: 'mailbox',
+    x: c.x + Math.cos(mailAngle) * 3.2,
+    z: c.z + Math.sin(mailAngle) * 3.2,
+    rotation: rnd() * Math.PI * 2,
+  });
+  // 报刊亭：选择性
+  if (KIOSK_DISTRICTS.has(def.id)) {
+    const kAngle = rnd() * Math.PI * 2;
+    furniture.push({
+      type: 'kiosk',
+      x: c.x + Math.cos(kAngle) * 3.0,
+      z: c.z + Math.sin(kAngle) * 3.0,
+      rotation: rnd() * Math.PI * 2,
+    });
+  }
+  // 自行车：选择性（1-2 辆）
+  if (BICYCLE_DISTRICTS.has(def.id)) {
+    const bikeCount = 1 + Math.floor(rnd() * 2);
+    for (let i = 0; i < bikeCount; i++) {
+      const bAngle = rnd() * Math.PI * 2;
+      const bR = 2.8 + i * 0.6;
+      furniture.push({
+        type: 'bicycle',
+        x: c.x + Math.cos(bAngle) * bR,
+        z: c.z + Math.sin(bAngle) * bR,
+        rotation: rnd() * Math.PI * 2,
+      });
+    }
+  }
+  // 电话亭：选择性
+  if (PHONE_DISTRICTS.has(def.id)) {
+    const pAngle = rnd() * Math.PI * 2;
+    furniture.push({
+      type: 'phone',
+      x: c.x + Math.cos(pAngle) * 3.0,
+      z: c.z + Math.sin(pAngle) * 3.0,
+      rotation: rnd() * Math.PI * 2,
+      variant: rnd() < 0.5 ? 0 : 1, // red / green
+    });
+  }
+  // 停车牌：选择性
+  if (PARKING_DISTRICTS.has(def.id)) {
+    const pkAngle = rnd() * Math.PI * 2;
+    furniture.push({
+      type: 'parking',
+      x: c.x + Math.cos(pkAngle) * 3.5,
+      z: c.z + Math.sin(pkAngle) * 3.5,
+      rotation: rnd() * Math.PI * 2,
+    });
+  }
 
-  // 路口标识牌：放在城区靠近 finance 一侧（angleToFinance 已在树群段计算）
-  const signR = 3.5;
-  const sign = {
-    x: c.x + Math.cos(angleToFinance) * signR,
-    z: c.z + Math.sin(angleToFinance) * signR,
+  // 路口标识牌
+  const sign: SignSpec = {
+    x: c.x + Math.cos(angleToFinance) * 3.5,
+    z: c.z + Math.sin(angleToFinance) * 3.5,
     rotation: angleToFinance + Math.PI / 2,
-    variant: (idx % 2 === 0 ? 'traffic' : 'info') as 'traffic' | 'info',
+    variant: idx % 2 === 0 ? 'traffic' : 'info',
   };
 
   return {
     districtId: def.id,
     trees,
     rooftop,
-    pedestrian,
-    pedestrian2,
-    sign,
+    pedestrians,
     furniture,
+    sign,
   };
 }
 
-/** 为每条主干道生成 1 辆移动车辆（districts 由 props 注入，v2.12 阶段 2）。 */
+/** 为每条主干道生成 1 辆移动车辆。 */
 function vehiclesForRoads(districts: WealthDistrictDef[]): RoadVehicle[] {
   const roads: RoadVehicle[] = [];
   districts
@@ -202,16 +362,14 @@ function vehiclesForRoads(districts: WealthDistrictDef[]): RoadVehicle[] {
       const dx = -c.x;
       const dz = -c.z;
       const len = Math.sqrt(dx * dx + dz * dz);
-      if (len < 12) return; // 只在主干道放车
+      if (len < 12) return;
       const variant = VEHICLE_VARIANTS[i % VEHICLE_VARIANTS.length];
-      // 不同车不同速度
       const speedMap = { sedan: 0.07, truck: 0.04, bus: 0.05, taxi: 0.08 };
       roads.push({
         from: [c.x, c.z],
         to: [0, 0],
         variant,
         speed: speedMap[variant],
-        // 不同车不同起始相位
         phase: (i * 0.37) % 1,
       });
     });
@@ -219,11 +377,50 @@ function vehiclesForRoads(districts: WealthDistrictDef[]): RoadVehicle[] {
 }
 
 /**
- * 为每条主干道布 1 个路侧红绿灯（v2.13 阶段 D，02-架构 §3.2）：
- * t=0.12（靠近城区入口，与斑马线 t=0.08 相邻成组），路侧偏移方向与
- * Road.tsx 路灯阵列一致（垂直向量 (-dz/len, dx/len) × (roadWidth/2 + 0.35)，
- * 主干道 ROAD_WIDTH_MAIN=1.4 → 偏移 1.05）；rotation = angle + π（面向来车）。
+ * 阶段 L 行道树：沿主干道等距布点（与路灯错相位 π/2 避免冲突）。
+ * 每 2.5 单位 1 棵；道路两侧交替（t 错开 0.5 间距）。
  */
+function roadTreesForRoads(districts: WealthDistrictDef[]): RoadTree[] {
+  const trees: RoadTree[] = [];
+  let a = hashStr('road-trees-v2') >>> 0;
+  const rnd = () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  districts
+    .filter((d) => d.id !== 'finance')
+    .forEach((d) => {
+      const c = districtCenter(d.id);
+      const dx = -c.x;
+      const dz = -c.z;
+      const len = Math.sqrt(dx * dx + dz * dz);
+      if (len < 12) return; // 仅主干道
+      const count = Math.max(2, Math.floor(len / 2.5));
+      const nx = -dz / len;
+      const nz = dx / len;
+      const sideOffset = 1.4 / 2 + 0.35 + 0.3; // 道路外 + 路灯偏移 + 树位
+      for (let i = 1; i <= count; i++) {
+        const t = i / (count + 1) + 0.25; // 错相位 π/2（路灯在 0.25 t 起步）
+        if (t >= 1) continue;
+        const side = i % 2 === 0 ? 1 : -1; // 两侧交替
+        const x = c.x + dx * t + nx * sideOffset * side;
+        const z = c.z + dz * t + nz * sideOffset * side;
+        trees.push({
+          x,
+          z,
+          variant: TREE_VARIANTS[Math.floor(rnd() * TREE_VARIANTS.length)],
+          scale: 0.6 + rnd() * 0.3,
+          rotation: rnd() * Math.PI * 2,
+        });
+      }
+    });
+  return trees;
+}
+
+/** 主干道路侧红绿灯。 */
 function trafficLightsForRoads(districts: WealthDistrictDef[]): Layout['trafficLights'] {
   const out: Layout['trafficLights'] = [];
   districts
@@ -233,24 +430,21 @@ function trafficLightsForRoads(districts: WealthDistrictDef[]): Layout['trafficL
       const dx = -c.x;
       const dz = -c.z;
       const len = Math.sqrt(dx * dx + dz * dz);
-      if (len < 12) return; // 仅主干道（与 vehiclesForRoads 同判定）
+      if (len < 12) return;
       const t = 0.12;
       const nx = -dz / len;
       const nz = dx / len;
-      const sideOffset = 1.4 / 2 + 0.35; // ROAD_WIDTH_MAIN/2 + 路肩
+      const sideOffset = 1.4 / 2 + 0.35;
       out.push({
         x: c.x + dx * t + nx * sideOffset,
         z: c.z + dz * t + nz * sideOffset,
-        rotation: Math.atan2(dx, dz) + Math.PI, // 面向来车（from → to 方向的反方向来车）
+        rotation: Math.atan2(dx, dz) + Math.PI,
       });
     });
   return out;
 }
 
-/**
- * 为每条主干道布 1 个路侧公交站台（14-3D渲染深化，02-架构 §3.2/§7）：
- * t=0.35，路侧偏移与红绿灯同公式（面向路侧）。
- */
+/** 主干道路侧公交站台。 */
 function busStopsForRoads(districts: WealthDistrictDef[]): Layout['busStops'] {
   const out: Layout['busStops'] = [];
   districts
@@ -260,11 +454,11 @@ function busStopsForRoads(districts: WealthDistrictDef[]): Layout['busStops'] {
       const dx = -c.x;
       const dz = -c.z;
       const len = Math.sqrt(dx * dx + dz * dz);
-      if (len < 12) return; // 仅主干道（与 vehiclesForRoads 同判定）
+      if (len < 12) return;
       const t = 0.35;
       const nx = -dz / len;
       const nz = dx / len;
-      const sideOffset = 1.4 / 2 + 0.35; // ROAD_WIDTH_MAIN/2 + 路肩
+      const sideOffset = 1.4 / 2 + 0.35;
       out.push({
         x: c.x + dx * t + nx * sideOffset,
         z: c.z + dz * t + nz * sideOffset,
@@ -283,19 +477,22 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
   const layout = useMemo<Layout>(() => {
     const districtProps = districts.map((d, idx) => propsForDistrict(d, idx));
     const roadVehicles = vehiclesForRoads(districts);
+    const roadTrees = roadTreesForRoads(districts);
     const trafficLights = trafficLightsForRoads(districts);
     const busStops = busStopsForRoads(districts);
-    return { districtProps, roadVehicles, trafficLights, busStops };
+    return { districtProps, roadVehicles, roadTrees, trafficLights, busStops };
   }, [districts]);
 
   return (
     <>
-      {/* 城区树 + 楼顶杂物 + 行人 + 标识 */}
+      {/* 城区树 + 楼顶杂物 + 行人 + 家具 + 标识 */}
       {layout.districtProps.map((dp) => (
         <group key={dp.districtId}>
+          {/* 阶段 L V2 立体树 */}
           {dp.trees.map((t, i) => (
-            <Tree key={`tree-${i}`} x={t.x} z={t.z} variant={t.variant} scale={t.scale} />
+            <TreeV2 key={`tree-${i}`} x={t.x} z={t.z} variant={t.variant} scale={t.scale} />
           ))}
+          {/* 楼顶杂物 */}
           {dp.rooftop.map((r, i) => (
             <RooftopAcc
               key={`roof-${i}`}
@@ -306,28 +503,40 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
               rotation={r.rotation}
             />
           ))}
-          <Pedestrian
-            x={dp.pedestrian.x}
-            z={dp.pedestrian.z}
-            variant={dp.pedestrian.variant}
-            seed={dp.pedestrian.seed}
-            pathR={dp.pedestrian.pathR}
-          />
-          {dp.pedestrian2 && (
-            <Pedestrian
-              x={dp.pedestrian2.x}
-              z={dp.pedestrian2.z}
-              variant={dp.pedestrian2.variant}
-              seed={dp.pedestrian2.seed}
-              pathR={dp.pedestrian2.pathR}
+          {/* 阶段 K V2 折线漫步行人 */}
+          {dp.pedestrians.map((p, i) => (
+            <PedestrianV2
+              key={`ped-${i}`}
+              x={p.x}
+              z={p.z}
+              path={p.path}
+              outfit={p.outfit}
+              speed={p.speed}
+              phase={p.phase}
+              stationary={p.stationary}
             />
-          )}
-          <StreetFurniture
-            x={dp.furniture.x}
-            z={dp.furniture.z}
-            variant={dp.furniture.variant}
-            rotation={dp.furniture.rotation}
-          />
+          ))}
+          {/* 阶段 M 街道家具（按 type 分派渲染器） */}
+          {dp.furniture.map((f, i) => {
+            const key = `fur-${f.type}-${i}`;
+            switch (f.type) {
+              case 'kiosk':
+                return <VendorKiosk key={key} x={f.x} z={f.z} rotation={f.rotation} />;
+              case 'bicycle':
+                return <BicycleRack key={key} x={f.x} z={f.z} rotation={f.rotation} />;
+              case 'trash':
+                return <TrashCan key={key} x={f.x} z={f.z} rotation={f.rotation} variant={(f.variant ?? 0) as 0 | 1 | 2} />;
+              case 'phone':
+                return <PhoneBooth key={key} x={f.x} z={f.z} rotation={f.rotation} variant={(f.variant ?? 0) === 0 ? 'red' : 'green'} />;
+              case 'mailbox':
+                return <Mailbox key={key} x={f.x} z={f.z} rotation={f.rotation} />;
+              case 'parking':
+                return <ParkingMeter key={key} x={f.x} z={f.z} rotation={f.rotation} />;
+              default:
+                return null;
+            }
+          })}
+          {/* 路口标识牌 */}
           <Sign
             x={dp.sign.x}
             z={dp.sign.z}
@@ -335,6 +544,11 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
             variant={dp.sign.variant}
           />
         </group>
+      ))}
+
+      {/* 阶段 L 行道树（沿主干道布点） */}
+      {layout.roadTrees.map((t, i) => (
+        <TreeV2 key={`roadtree-${i}`} x={t.x} z={t.z} variant={t.variant} scale={t.scale} />
       ))}
 
       {/* 主干道车辆 */}
@@ -349,15 +563,19 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
         />
       ))}
 
-      {/* 主干道红绿灯（v2.13 阶段 D） */}
+      {/* 主干道红绿灯 */}
       {layout.trafficLights.map((tl, i) => (
         <TrafficLight key={`tl-${i}`} x={tl.x} z={tl.z} rotation={tl.rotation} />
       ))}
 
-      {/* 主干道公交站台（14-3D渲染深化） */}
+      {/* 主干道公交站台 */}
       {layout.busStops.map((bs, i) => (
         <BusStop key={`busstop-${i}`} x={bs.x} z={bs.z} rotation={bs.rotation} />
       ))}
     </>
   );
 }
+
+// 注：V1 Pedestrian / Tree 仍保留在 props/ 目录，未来如需回退可 import。
+// 新版 StreetPropsLayer 完全使用 V2（PedestrianV2 / TreeV2）。
+// V1 Pedestrian 仍由原 props/Pedestrian.tsx 导出，本层不再引用。

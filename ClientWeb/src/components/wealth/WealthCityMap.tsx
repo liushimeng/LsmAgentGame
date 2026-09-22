@@ -32,6 +32,8 @@ import { AgentToken } from './AgentToken';
 import { Road } from './Road';
 import { StreetPropsLayer } from './StreetPropsLayer';
 import { WaterPlane } from './props/WaterPlane';
+import { WaterMist } from './props/WaterMist';
+import { AtmosphereLayer } from './AtmosphereLayer';
 import { useSharedTexture } from './textureCache';
 import { streetTileUrl } from '@/assets/images/wealth';
 import {
@@ -151,7 +153,9 @@ function RoadsLayer() {
 }
 
 /**
- * 水系层（14-3D城市渲染深化 · 阶段 I）：城市运河 + 物流港港池 + 两岸草皮收边。
+ * 水系层（14-3D城市渲染深化 · 阶段 I + 15-3D城市全面真实感深化 · 阶段 P）：
+ *   - 城市运河 + 物流港港池 + 两岸草皮收边（14 阶段 I）
+ *   - 水面岸雾 WaterMist（15 阶段 P）：沿运河/港池两岸各加半透明雾 plane
  * 位置契约 01 文档 §3.1：运河 z=+17（滨河新区 riverside(14,10) 与教育/医疗城 z=22 之间），
  * 港池 (-30,-4) 物流港西侧。贴图缺失降级纯色水面（WaterPlane 内处理）。
  */
@@ -182,6 +186,14 @@ function WaterLayer() {
           />
         </mesh>
       ))}
+      {/* 阶段 P：运河两岸薄雾（覆盖水体外缘各 1.5 单位的过渡带） */}
+      <WaterMist x={0} z={17 + 2.35} w={64} d={1.5} opacity={0.18} />
+      <WaterMist x={0} z={17 - 2.35} w={64} d={1.5} opacity={0.18} />
+      {/* 港池四周薄雾 */}
+      <WaterMist x={-30 + 3.85} z={-4} w={1.5} d={8} opacity={0.15} />
+      <WaterMist x={-30 - 3.85} z={-4} w={1.5} d={8} opacity={0.15} />
+      <WaterMist x={-30} z={-4 + 4.85} w={6} d={1.5} opacity={0.15} />
+      <WaterMist x={-30} z={-4 - 4.85} w={6} d={1.5} opacity={0.15} />
     </>
   );
 }
@@ -306,6 +318,8 @@ export function WealthCityMap({
         <Ground />
         {/* 14-3D渲染深化：城市水系（运河 + 港池 + 岸草皮） */}
         <WaterLayer />
+        {/* 15-3D渲染深化：氛围层（远景剪影 + 公园落叶 Sparkles） */}
+        <AtmosphereLayer />
         {WEALTH_DISTRICTS.map((d) => (
           <DistrictBlock
             key={d.id}

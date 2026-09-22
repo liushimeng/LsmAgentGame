@@ -36,9 +36,7 @@ import { EconomyPanel } from '@/components/wealth/EconomyPanel';
 import { SurveyPanel } from '@/components/wealth/SurveyPanel';
 import { ActionPanel } from '@/components/wealth/ActionPanel';
 import { MonthTicker } from '@/components/wealth/MonthTicker';
-import { ListingPanel } from '@/components/wealth/ListingPanel';
-import { LoanPanel } from '@/components/wealth/LoanPanel';
-import { InfoMarketPanel } from '@/components/wealth/InfoMarketPanel';
+import { MarketTradePanel } from '@/components/wealth/MarketTradePanel';
 import { InsurancePanel } from '@/components/wealth/InsurancePanel';
 import { GameOverModal } from '@/components/wealth/GameOverModal';
 import { CityStatsPanel } from '@/components/wealth/CityStatsPanel';
@@ -61,6 +59,61 @@ function fmtElapsed(startedAtSec: number, nowMs: number): string {
   const sec = s % 60;
   const p = (n: number) => String(n).padStart(2, '0');
   return h > 0 ? `${h}:${p(m)}:${p(sec)}` : `${p(m)}:${p(sec)}`;
+}
+
+/**
+ * 阶段 Q：经济 Tab 内含调研入口 —— EconomyPanel + 顶部「📋 调研」小按钮，
+ * 点击触发 SurveyPanel 模态。避免占独立 Tab。
+ */
+function EconomyPanelWithSurvey({
+  gameState,
+  roomId,
+}: {
+  gameState: import('@/types/wealth').WealthGameState | null;
+  roomId: string;
+}) {
+  const [surveyOpen, setSurveyOpen] = useState(false);
+  return (
+    <div className="wealth-economy-wrap">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 4 }}>
+        <button
+          type="button"
+          className="wealth-tab-extra-btn"
+          onClick={() => setSurveyOpen(true)}
+          aria-label="打开调研"
+        >
+          📋 调研
+        </button>
+      </div>
+      <EconomyPanel gameState={gameState} />
+      {surveyOpen && (
+        <div
+          className="wealth-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setSurveyOpen(false)}
+        >
+          <div
+            className="wealth-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 640, width: '92%', maxHeight: '80vh', overflow: 'auto' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <strong>📋 调研</strong>
+              <button
+                type="button"
+                className="wealth-tab-extra-btn"
+                onClick={() => setSurveyOpen(false)}
+              >
+                ✕ 关闭
+              </button>
+            </div>
+            <SurveyPanel roomId={roomId} gameState={gameState} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function WealthGamePage() {
@@ -169,19 +222,17 @@ export function WealthGamePage() {
     gameState?.status === 'open' && !seatsReady;
 
   // 13-3D城市渲染优化 · 阶段 E：9 Tab 按语义分两组（数据/交易），组内 wrap 防溢出。
+  // 15-3D城市全面真实感深化 · 阶段 Q：合并 Tab 9 → 6（economy + survey → economy 含调研入口；
+  // listing + loan + infomarket → market-trade 含子导航）。
   type TabGroup = 'data' | 'trade';
-  const tabs: { key: typeof panelTab; label: string; group: TabGroup }[] = [
+  type PanelTab = 'finance' | 'market' | 'ledger' | 'economy' | 'market-trade' | 'insurance';
+  // 同步 store 类型（局部重新声明避免扩大 store.ts 类型）
+  const tabs: { key: PanelTab; label: string; group: TabGroup }[] = [
     { key: 'finance', label: t('wealth.tab.finance' as TKey), group: 'data' },
     { key: 'market', label: t('wealth.tab.market' as TKey), group: 'data' },
     { key: 'ledger', label: t('wealth.tab.ledger' as TKey), group: 'data' },
-    // P1 第二期：真实经济循环引擎（economy）+ 社会调研（survey）。
     { key: 'economy', label: `📊 ${t('wealth.tab.economy' as TKey)}`, group: 'data' },
-    { key: 'survey', label: `📋 ${t('wealth.tab.survey' as TKey)}`, group: 'data' },
-    // P2 第三期：玩家间交易（挂单簿 / 借贷 / 信息市场）。
-    { key: 'listing', label: `📋 ${t('wealth.tab.listing' as TKey)}`, group: 'trade' },
-    { key: 'loan', label: `🏦 ${t('wealth.tab.loan' as TKey)}`, group: 'trade' },
-    { key: 'infomarket', label: `🔍 ${t('wealth.tab.infomarket' as TKey)}`, group: 'trade' },
-    // P1 第四期：商业保险（观战视图空态只读，按钮对观战者隐藏）。
+    { key: 'market-trade', label: `💼 市场`, group: 'trade' },
     { key: 'insurance', label: `🛡 ${t('wealth.tab.insurance' as TKey)}`, group: 'trade' },
   ];
   const tabGroups: { key: TabGroup; labelKey: TKey }[] = [
@@ -327,38 +378,21 @@ export function WealthGamePage() {
               />
             )}
             {panelTab === 'ledger' && <LedgerPanel gameState={gameState} />}
-            {/* P1 第二期：经济循环仪表盘 + 社会调研（观战视图同样可用；SurveyPanel
-                发起按钮对观战者开放——调研与座位无关） */}
-            {panelTab === 'economy' && <EconomyPanel gameState={gameState} />}
-            {panelTab === 'survey' && (
-              <SurveyPanel roomId={roomId} gameState={gameState} />
+            {/* 阶段 Q：经济 Tab 内含调研入口（EconomyPanel 顶部小按钮触发模态） */}
+            {panelTab === 'economy' && (
+              <EconomyPanelWithSurvey
+                gameState={gameState}
+                roomId={roomId}
+              />
             )}
-            {/* P2 第三期：挂单簿 + 借贷市场 + 信息市场（观战视图可用，刷新只读） */}
-            {panelTab === 'listing' && (
-              <ListingPanel
+            {/* 阶段 Q：市场 Tab 聚合 listing / loan / infomarket 三个子面板 */}
+            {panelTab === 'market-trade' && (
+              <MarketTradePanel
                 roomId={roomId}
                 gameState={gameState}
                 mySeat={effectiveSeat}
                 my={gameState?.my ?? null}
                 sendTrade={sendTrade}
-                onRefresh={() => sendTrade({ type: 'listing_view' })}
-              />
-            )}
-            {panelTab === 'loan' && (
-              <LoanPanel
-                gameState={gameState}
-                mySeat={effectiveSeat}
-                my={gameState?.my ?? null}
-                sendTrade={sendTrade}
-                onRefresh={() => sendTrade({ type: 'listing_view' })}
-              />
-            )}
-            {panelTab === 'infomarket' && (
-              <InfoMarketPanel
-                gameState={gameState}
-                mySeat={effectiveSeat}
-                sendTrade={sendTrade}
-                onRefresh={() => sendTrade({ type: 'listing_view' })}
               />
             )}
             {/* P1 第四期：商业保险（my.insurance 驱动；观战 / 全 Agent 模式只读）。 */}

@@ -181,3 +181,68 @@
   text-align: center;
   color: var(--wealth-text-dim, #b8bfca);
 }
+
+/* ── 阶段 Q · 界面密度提升（15-3D城市全面真实感深化 · 04 文档 §4）──────── */
+/* Tab 按钮紧凑化（padding/font-size 收紧） */
+.wealth-tabs__btn {
+  padding: 4px 8px;
+  font-size: 12.5px;
+  border-radius: 4px;
+}
+.wealth-tabs__group-label {
+  font-size: 11px;
+}
+/* 侧栏面板内边距与间距收紧 */
+.wealth-sidebar__panels > * {
+  padding: 8px 10px;
+  gap: 8px;
+}
+/* 折叠 header 行高收紧 */
+.wealth-collapse__header {
+  min-height: 28px;
+}
+/* 面板 loading 态（统一最小高度，避免大留白） */
+.wealth-panel__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  gap: 8px;
+  color: var(--wealth-text-dim, #b8bfca);
+}
+/* 行内子导航（市场 Tab 内 listing/loan/info 三按钮） */
+.wealth-subtabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 8px;
+}
+.wealth-subtabs__btn {
+  background: none;
+  border: none;
+  color: var(--wealth-text-dim, #b8bfca);
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  min-height: 26px;
+}
+.wealth-subtabs__btn--active {
+  color: #fff;
+  border-bottom-color: #d4a017;
+}
+/* 经济 Tab 内调研入口按钮（小图标按钮） */
+.wealth-tab-extra-btn {
+  margin-left: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--wealth-text-dim, #b8bfca);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.wealth-tab-extra-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}

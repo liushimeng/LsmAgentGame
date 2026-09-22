@@ -18,6 +18,7 @@
 import { useMemo } from 'react';
 import type { Texture } from 'three';
 import { streetTileUrl, type StreetTileName } from '@/assets/images/wealth';
+import { u } from './cityScale';
 import { StreetLight } from './props/StreetLight';
 import { useSharedTexture } from './textureCache';
 
@@ -135,6 +136,33 @@ export function Road({ from, to, kind }: Props) {
             transparent
             opacity={0.85}
           />
+        </mesh>
+      )}
+
+      {/* 15 阶段 O：车道直行箭头（主干道 t=0.5，local +z = to 方向） */}
+      {kind === 'main' && (
+        <group position={[0, ROAD_Y + 0.003, 0.5 * len]}>
+          {/* 箭头杆（朝向 to 方向 = local +z） */}
+          <mesh position={[0, 0, -0.2]}>
+            <boxGeometry args={[0.08, 0.005, 0.4]} />
+            <meshStandardMaterial color="#ffffff" roughness={0.85} />
+          </mesh>
+          {/* 箭头三角头（cone 3 段近三角） */}
+          <mesh position={[0, 0, 0.12]} rotation={[-Math.PI / 2, 0, 0]}>
+            <coneGeometry args={[0.18, 0.2, 3]} />
+            <meshStandardMaterial color="#ffffff" roughness={0.85} />
+          </mesh>
+        </group>
+      )}
+
+      {/* 15 阶段 O：停止线（主干道 t=0.95，路口前） */}
+      {kind === 'main' && (
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, ROAD_Y + 0.003, 0.95 * len]}
+        >
+          <planeGeometry args={[roadWidth, u(0.4)]} />
+          <meshStandardMaterial color="#ffffff" roughness={0.85} />
         </mesh>
       )}
 

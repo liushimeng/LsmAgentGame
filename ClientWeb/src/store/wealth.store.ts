@@ -25,9 +25,14 @@ import { WEALTH_MIN_SEATS, wealthOccupiedSeats, wealthSeatCapacity } from '@/typ
  * P2 第三期扩展：listing（挂单簿）/ loan（借贷）/ infomarket（信息市场）。
  * P1-4 扩展：insurance（商业保险，§财商流P1-4 §10.1）。
  */
+/**
+ * 15-3D城市全面真实感深化 · 阶段 Q：合并 Tab 9 → 6
+ *  - survey → economy（含调研模态入口，见 WealthGamePage::EconomyPanelWithSurvey）
+ *  - listing / loan / infomarket → market-trade（子导航聚合，见 MarketTradePanel）
+ */
 export type WealthPanelTab =
-  | 'finance' | 'market' | 'ledger' | 'economy' | 'survey'
-  | 'listing' | 'loan' | 'infomarket' | 'insurance';
+  | 'finance' | 'market' | 'ledger' | 'economy'
+  | 'market-trade' | 'insurance';
 
 /** 市场快照（走势迷你图 + 相对上月箭头用）。 */
 export interface WealthMarketPoint {

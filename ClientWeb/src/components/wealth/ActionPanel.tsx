@@ -621,7 +621,7 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
             className="wealth-action-btn wealth-action-btn--trade"
             disabled={!playing || !acting || stopped}
             title="挂单簿 · 自由议价 · 英式拍卖 · 密封暗标"
-            onClick={() => onTradeTab('listing')}
+            onClick={() => onTradeTab('market-trade')}
           >
             <span className="wealth-action-btn__icon">📋</span>
             <span className="wealth-action-btn__label">挂单簿</span>
@@ -631,7 +631,7 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
             className="wealth-action-btn wealth-action-btn--trade"
             disabled={!playing || !acting || stopped}
             title="居民间借贷 · 利率协商 · 担保机制"
-            onClick={() => onTradeTab('loan')}
+            onClick={() => onTradeTab('market-trade')}
           >
             <span className="wealth-action-btn__icon">🏦</span>
             <span className="wealth-action-btn__label">借贷</span>
@@ -641,7 +641,7 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
             className="wealth-action-btn wealth-action-btn--trade"
             disabled={!playing || !acting || stopped}
             title="信息出售 · 密封暗标 · 情报交易"
-            onClick={() => onTradeTab('infomarket')}
+            onClick={() => onTradeTab('market-trade')}
           >
             <span className="wealth-action-btn__icon">🔍</span>
             <span className="wealth-action-btn__label">信息</span>
@@ -652,8 +652,8 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
             disabled={!playing || !acting || stopped}
             title="发布资产出售 / 收购 / 信息 / 借贷挂单"
             onClick={() => {
-              // 快捷发布：弹出信息出售（最常见交易入口）。
-              onTradeTab('listing');
+              // 快捷发布：跳到市场 Tab（市场聚合 listing/loan/infomarket 子导航）。
+              onTradeTab('market-trade');
             }}
           >
             <span className="wealth-action-btn__icon">➕</span>

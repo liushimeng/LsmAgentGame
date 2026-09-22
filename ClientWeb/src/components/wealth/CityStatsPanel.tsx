@@ -112,6 +112,7 @@ export function CityStatsPanel({ city, roomId }: Props) {
       <CollapsibleSection
         className="wealth-citypanel"
         storageKey="wealth.ui.collapsed.city_stats"
+        defaultCollapsed
         testId="wealth-city-panel"
         title={
           <>

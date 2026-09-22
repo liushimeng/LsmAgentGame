@@ -114,3 +114,32 @@ export type PropCategory = 'streetlamp' | 'tree' | 'vehicle' | 'pedestrian' | 's
 export function propUrl(category: PropCategory, variant: string): string {
   return propImgs[`./props/${category}/${variant}_${category}.png`] ?? '';
 }
+
+// ── 15-3D城市全面真实感深化 · 阶段 K/M 新增（V2 道具贴图）─────────
+
+/** V2 行人头部 outfit（与 PedestrianV2.tsx outfit prop 对齐）。 */
+export type PedestrianHeadOutfit = 'business' | 'casual' | 'bright' | 'khaki';
+
+/**
+ * V2 行人头部 sprite URL（缺失 = ''，PedestrianV2 降级到圆片兜底）。
+ * 文件命名约定：props/pedestrian/head_<outfit>.png（与 generate_wealth_v2_props.py 对齐）。
+ */
+export function pedestrianHeadUrl(outfit: PedestrianHeadOutfit): string {
+  return propImgs[`./props/pedestrian/head_${outfit}.png`] ?? '';
+}
+
+/** V2 商铺/报刊亭类（与 VendorKiosk.tsx 对齐）。 */
+export type VendorName = 'vendor_kiosk';
+
+/** V2 商铺 sprite URL（缺失 = ''，VendorKiosk 降级到纯几何）。 */
+export function vendorUrl(name: VendorName): string {
+  return propImgs[`./props/vendor/${name}.png`] ?? '';
+}
+
+/** V2 扩展标识牌（与 ParkingMeter.tsx 对齐；traffic / info 仍走 propUrl）。 */
+export type SignNameExt = 'parking_sign';
+
+/** V2 扩展标识牌 sprite URL（缺失 = ''，ParkingMeter 降级到纯色 box）。 */
+export function signUrlExt(name: SignNameExt): string {
+  return propImgs[`./props/sign/${name}.png`] ?? '';
+}
