@@ -48,6 +48,10 @@ export const DISTRICT_ARCHETYPE: Record<WealthDistrictId, BuildingArchetype> = {
 /** 暖窗光（契约 §2.3；ACES 下强度由调用方 ≤0.35 控制）。 */
 export const EMISSIVE_WINDOW = '#ffd9a0';
 
+// ── 14-3D城市渲染深化 · 阶段 I：临街底商 + 广告牌（契约 02 §4）──────
+const AWNING_COLOR = '#8a5a44';   // 雨棚暖木色
+const BILLBOARD_POLE = '#5a6270'; // 广告牌支架
+
 const CROWN_COLOR = '#3a4250';   // 塔楼收分金属
 const CORNICE_COLOR = '#242a35'; // 板楼檐口
 const ROOF_TILE_COLOR = '#8a4b3a'; // 坡屋顶红瓦兜底
@@ -193,6 +197,62 @@ function PrismRoof({
 
 // ── 五种体块渲染器 ─────────────────────────────────────────────
 
+/**
+ * 底商雨棚 + 灯带（tower 裙楼 / slab 沿街，面向 -Z，契约 02 §4.1）：
+ * 雨棚挑檐 u(1.2) 深 / u(0.35) 高；灯带贴雨棚下沿 emissive #ffd9a0（上限 0.45）。
+ */
+function Shopfront({ w, d, y, emissive }: { w: number; d: number; y: number; emissive: number }) {
+  const awningD = u(1.2);
+  return (
+    <>
+      {/* 雨棚 */}
+      <mesh castShadow position={[0, y, -(d / 2 + awningD * 0.5)]}>
+        <boxGeometry args={[w * 0.9, u(0.35), awningD]} />
+        <meshStandardMaterial color={AWNING_COLOR} roughness={0.8} metalness={0.05} />
+      </mesh>
+      {/* 暖光灯带 */}
+      <mesh position={[0, y - u(0.25), -(d / 2 + awningD * 0.95)]}>
+        <boxGeometry args={[w * 0.85, u(0.18), u(0.06)]} />
+        <meshStandardMaterial
+          color={EMISSIVE_WINDOW}
+          emissive={EMISSIVE_WINDOW}
+          emissiveIntensity={Math.min(0.45, emissive * 1.2)}
+          roughness={0.3}
+        />
+      </mesh>
+    </>
+  );
+}
+
+/**
+ * 广告牌（tower 且 w>1.4 时，契约 02 §4.2）：crown 顶双杆 + 发光面板，面向 -Z。
+ * 出现与否由 w 决定（同楼同形，不引 Math.random）。
+ */
+function BillboardSign({ w, y }: { w: number; y: number }) {
+  const panelW = w * 0.5;
+  const poleH = u(2.0);
+  return (
+    <group position={[0, y, 0]}>
+      {[-1, 1].map((side) => (
+        <mesh key={`bp-${side}`} castShadow position={[side * panelW * 0.35, poleH / 2, 0]}>
+          <cylinderGeometry args={[u(0.06), u(0.06), poleH, 8]} />
+          <meshStandardMaterial color={BILLBOARD_POLE} roughness={0.6} metalness={0.4} />
+        </mesh>
+      ))}
+      <mesh castShadow position={[0, poleH * 0.7, -u(0.1)]}>
+        <boxGeometry args={[panelW, u(1.4), u(0.08)]} />
+        <meshStandardMaterial
+          color={EMISSIVE_WINDOW}
+          emissive={EMISSIVE_WINDOW}
+          emissiveIntensity={0.5}
+          roughness={0.4}
+          metalness={0.4}
+        />
+      </mesh>
+    </group>
+  );
+}
+
 /** tower：裙楼(u(10) 高满铺) + 塔身(0.8× 占地) + 顶部收分(0.55× 占地, u(6) 高)。 */
 export function TowerShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackColor, emissive }: ShapeProps) {
   const pH = Math.min(u(10), h * 0.35);
@@ -221,6 +281,10 @@ export function TowerShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackCo
           metalness={0.6}
         />
       </mesh>
+      {/* 14-3D渲染深化：底商雨棚（裙楼沿街） */}
+      <Shopfront w={w} d={d} y={Math.min(u(3.6), pH * 0.5)} emissive={emissive} />
+      {/* 14-3D渲染深化：塔楼广告牌（w > 1.4 确定性出现） */}
+      {w > 1.4 && <BillboardSign w={w} y={pH + bodyH + cH} />}
     </>
   );
 }
@@ -238,6 +302,8 @@ export function SlabShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackCol
         <boxGeometry args={[w + 0.08, 0.05, d + 0.08]} />
         <meshStandardMaterial color={CORNICE_COLOR} roughness={0.8} metalness={0.2} />
       </mesh>
+      {/* 14-3D渲染深化：底商雨棚（板楼沿街） */}
+      <Shopfront w={w} d={d} y={Math.min(u(3.6), h * 0.3)} emissive={emissive} />
     </>
   );
 }

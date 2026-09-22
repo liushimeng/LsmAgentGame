@@ -22,7 +22,7 @@
  * 相机 / OrbitControls / CameraReporter / FocusController 行为不变（与 v1 完全兼容）。
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Sky } from '@react-three/drei';
@@ -31,6 +31,8 @@ import { DistrictBlock } from './DistrictBlock';
 import { AgentToken } from './AgentToken';
 import { Road } from './Road';
 import { StreetPropsLayer } from './StreetPropsLayer';
+import { WaterPlane } from './props/WaterPlane';
+import { useSharedTexture } from './textureCache';
 import { streetTileUrl } from '@/assets/images/wealth';
 import {
   WEALTH_DISTRICTS,
@@ -93,39 +95,11 @@ interface Props {
  * 旧 gridHelper 已删除（消除黑线）。v2.12 阶段 2：40×40 → 80×80（面积 ×4）。
  */
 function Ground() {
-  const [tex, setTex] = useState<THREE.Texture | null>(null);
-  useEffect(() => {
-    const url = streetTileUrl('asphalt_main');
-    if (!url) {
-      setTex(null);
-      return;
-    }
-    let disposed = false;
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      url,
-      (loaded) => {
-        if (disposed) {
-          loaded.dispose();
-          return;
-        }
-        loaded.colorSpace = THREE.SRGBColorSpace;
-        loaded.wrapS = loaded.wrapT = THREE.RepeatWrapping;
-        loaded.repeat.set(GROUND_REPEAT, GROUND_REPEAT); // 80 / 8 = 10
-        loaded.magFilter = THREE.LinearFilter;
-        loaded.minFilter = THREE.LinearMipmapLinearFilter;
-        setTex(prev => {
-          if (prev) prev.dispose();
-          return loaded;
-        });
-      },
-      undefined,
-      () => setTex(null),
-    );
-    return () => {
-      disposed = true;
-    };
-  }, []);
+  // 14-3D渲染深化：共享贴图缓存（缺失 → 纯色 #141a24 降级链不变）
+  const tex = useSharedTexture(streetTileUrl('asphalt_main'), {
+    wrap: 'repeat',
+    repeat: [GROUND_REPEAT, GROUND_REPEAT], // 80 / 8 = 10
+  });
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
@@ -171,6 +145,42 @@ function RoadsLayer() {
           to={r.to}
           kind={r.len > 12 ? 'main' : 'side'}
         />
+      ))}
+    </>
+  );
+}
+
+/**
+ * 水系层（14-3D城市渲染深化 · 阶段 I）：城市运河 + 物流港港池 + 两岸草皮收边。
+ * 位置契约 01 文档 §3.1：运河 z=+17（滨河新区 riverside(14,10) 与教育/医疗城 z=22 之间），
+ * 港池 (-30,-4) 物流港西侧。贴图缺失降级纯色水面（WaterPlane 内处理）。
+ */
+function WaterLayer() {
+  const bankTex = useSharedTexture(streetTileUrl('sidewalk_side'), {
+    wrap: 'repeat',
+    repeat: [16, 1],
+  });
+  return (
+    <>
+      {/* 城市运河（64×3，横贯 x ∈ [-32, 32]） */}
+      <WaterPlane x={0} z={17} w={64} d={3} />
+      {/* 物流港港池（6×8） */}
+      <WaterPlane x={-30} z={-4} w={6} d={8} />
+      {/* 两岸草皮收边（窄条，色 #3f7a3a 与中央公园草地呼应） */}
+      {[-1, 1].map((side) => (
+        <mesh
+          key={`bank-${side}`}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, 0.024, 17 + side * 1.85]}
+          receiveShadow
+        >
+          <planeGeometry args={[64, 0.7]} />
+          <meshStandardMaterial
+            map={bankTex ?? undefined}
+            color={bankTex ? '#ffffff' : '#3f7a3a'}
+            roughness={0.95}
+          />
+        </mesh>
       ))}
     </>
   );
@@ -259,9 +269,9 @@ export function WealthCityMap({
     <div className="wealth-map-host">
       <Canvas
         shadows
-        dpr={[1, 2]}
+        dpr={[1, 1.75]}
         camera={{ position: CAMERA_START, fov: 45 }}
-        gl={{ antialias: true }}
+        gl={{ antialias: true, powerPreference: 'high-performance' }}
         onCreated={({ gl }) => {
           // v2.13 阶段 C：胶片色调映射（高光不过曝）+ 柔和阴影边缘
           gl.toneMapping = THREE.ACESFilmicToneMapping;
@@ -294,6 +304,8 @@ export function WealthCityMap({
           shadow-camera-far={WORLD_SIZE * 2}
         />
         <Ground />
+        {/* 14-3D渲染深化：城市水系（运河 + 港池 + 岸草皮） */}
+        <WaterLayer />
         {WEALTH_DISTRICTS.map((d) => (
           <DistrictBlock
             key={d.id}
@@ -330,6 +342,8 @@ export function WealthCityMap({
           enablePan
           enableZoom
           enableRotate
+          enableDamping
+          dampingFactor={0.08}
           maxPolarAngle={1.2}
           minDistance={8}
           maxDistance={ORBIT_MAX_DISTANCE}

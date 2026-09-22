@@ -12,14 +12,15 @@
  * district id hash，重渲染布局稳定。
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { Html } from '@react-three/drei';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
-import { districtTexture } from '@/assets/images/wealth';
+import { districtTexture, groundTileUrl } from '@/assets/images/wealth';
 import { BuildingMesh, type BuildingSpec } from './BuildingMesh';
-import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
+import { DISTRICT_FLOORS, buildingHeight, u } from './cityScale';
+import { useSharedTexture } from './textureCache';
 import {
   WEALTH_DISTRICTS,
   formatCny,
@@ -84,35 +85,21 @@ interface Props {
 
 export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect }: Props) {
   const t = useT();
-  const [texture, setTexture] = useState<THREE.Texture | null>(null);
   const [hovered, setHovered] = useState(false);
   const texUrl = districtTexture(def.id);
   const buildings = useMemo(() => buildingsFor(def), [def]);
 
-  // 纹理加载（失败静默降级主色底板 —— 降级策略 §9）。
-  useEffect(() => {
-    if (!texUrl) return;
-    let disposed = false;
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      texUrl,
-      (tex) => {
-        if (disposed) {
-          tex.dispose();
-          return;
-        }
-        tex.colorSpace = THREE.SRGBColorSpace;
-        setTexture(tex);
-      },
-      undefined,
-      () => {
-        // onError：保持 null → 纯色底板。
-      },
-    );
-    return () => {
-      disposed = true;
-    };
-  }, [texUrl]);
+  // 14-3D渲染深化：共享贴图缓存（失败静默降级主色底板 —— 降级策略 §9）。
+  const texture = useSharedTexture(texUrl);
+  // 地表覆盖层：中央公园草地 / 交通枢纽+金融广场（缺失降级纯色）
+  const isPark = def.id === 'central_park';
+  const isPlaza = def.id === 'transport_hub' || def.id === 'finance';
+  const grassTex = useSharedTexture(isPark ? groundTileUrl('grass_tile') : '', {
+    wrap: 'repeat', repeat: [4, 4],
+  });
+  const plazaTex = useSharedTexture(isPlaza ? groundTileUrl('plaza_tile') : '', {
+    wrap: 'repeat', repeat: [3, 3],
+  });
 
   // 繁荣度 → 楼高（price_index 0.8–1.6 → 0–1；实际楼高公式在 BuildingMesh，
   // 按 cityScale.DISTRICT_FLOORS 分城区楼层区间插值）。
@@ -148,6 +135,44 @@ export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect
           <meshStandardMaterial color={def.color} roughness={0.9} />
         )}
       </mesh>
+      {/* 14-3D渲染深化：中央公园草地覆盖层（y=0.026 防 z-fighting） */}
+      {isPark && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.026, 0]} receiveShadow>
+          <planeGeometry args={[7.8, 7.8]} />
+          <meshStandardMaterial
+            map={grassTex ?? undefined}
+            color={grassTex ? '#ffffff' : '#3f7a3a'}
+            roughness={0.95}
+          />
+        </mesh>
+      )}
+      {/* 14-3D渲染深化：广场铺装（交通枢纽南半 6×4 / 金融 CBD 中心 3×3） */}
+      {isPlaza && (
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, 0.025, def.id === 'transport_hub' ? 2.0 : 0]}
+          receiveShadow
+        >
+          <planeGeometry args={def.id === 'transport_hub' ? [6, 4] : [3, 3]} />
+          <meshStandardMaterial
+            map={plazaTex ?? undefined}
+            color={plazaTex ? '#ffffff' : '#9aa1ab'}
+            roughness={0.85}
+          />
+        </mesh>
+      )}
+      {/* 14-3D渲染深化：马路牙子 curb（底板四边窄条，模拟真实城区路缘） */}
+      {([
+        [0, -3.95, 8.1, 0.18],
+        [0, 3.95, 8.1, 0.18],
+        [-3.95, 0, 0.18, 8.1],
+        [3.95, 0, 0.18, 8.1],
+      ] as Array<[number, number, number, number]>).map(([cx, cz, cw, cd], i) => (
+        <mesh key={`curb-${i}`} position={[cx, 0.03, cz]}>
+          <boxGeometry args={[cw, u(0.5), cd]} />
+          <meshStandardMaterial color="#3a414c" roughness={0.9} />
+        </mesh>
+      ))}
       {/* 选中 / 悬停描边 */}
       {(selected || hovered) && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
