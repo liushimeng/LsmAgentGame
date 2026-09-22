@@ -11,6 +11,7 @@ import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import type { WealthBotContext, WealthPlayer, WealthSenseResult } from '@/types/wealth';
 import { professionColor, professionEmoji } from '@/types/wealth';
+import { CollapsibleSection } from '@/components/wealth/CollapsibleSection';
 
 interface Props {
   botContexts: WealthBotContext[];
@@ -126,18 +127,28 @@ export function WealthBotPanel({ botContexts, players }: Props) {
     );
   }
 
+  // 10–12 座位房：观战者最多同时看到 12 张卡 → 标题带计数，卡片列表可滚动。
+  // 阶段 E（13-3D城市渲染优化）：融合式折叠（CollapsibleSection 接管标题行，
+  // 折叠态 localStorage 持久化 wealth.ui.collapsed.bot_panel）。
+  const titleNode = (
+    <>
+      🤖{' '}
+      {visibleRows.length === contexts.length
+        ? t('wealth.botPanel.titleCount' as TKey, { n: contexts.length })
+        : t('wealth.botPanel.titleFiltered' as TKey, {
+            visible: visibleRows.length,
+            total: contexts.length,
+          })}
+    </>
+  );
+
   return (
-    <div className="wealth-botpanel">
-      {/* 10–12 座位房：观战者最多同时看到 12 张卡 → 标题带计数，卡片列表可滚动 */}
-      <div className="wealth-botpanel__title">
-        🤖{' '}
-        {visibleRows.length === contexts.length
-          ? t('wealth.botPanel.titleCount' as TKey, { n: contexts.length })
-          : t('wealth.botPanel.titleFiltered' as TKey, {
-              visible: visibleRows.length,
-              total: contexts.length,
-            })}
-      </div>
+    <CollapsibleSection
+      className="wealth-botpanel"
+      storageKey="wealth.ui.collapsed.bot_panel"
+      title={titleNode}
+      bodyClassName="wealth-botpanel__collapse-body"
+    >
       <div
         className="wealth-botpanel__filters"
         role="group"
@@ -230,6 +241,6 @@ export function WealthBotPanel({ botContexts, players }: Props) {
           </details>
         );
       })}
-    </div>
+    </CollapsibleSection>
   );
 }

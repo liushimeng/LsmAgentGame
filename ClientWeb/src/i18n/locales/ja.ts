@@ -1502,6 +1502,8 @@ const ja: Dict = {
   'wealth.tab.finance': '財務',
   'wealth.tab.market': '相場',
   'wealth.tab.ledger': '流水',
+  'wealth.tabgroup.data': 'データ',
+  'wealth.tabgroup.trade': '取引',
   'wealth.panel.waiting': 'シミュレーションデータ待ち…',
   'wealth.panel.spectatorEmpty': '観察者に住民の非公開財務はありません（公開データは地図と月次集計へ）',
   'wealth.panel.empty': 'データなし',

@@ -127,3 +127,8 @@
  * 1800 行上限）；选择器全部为新增 .wealth-resident-drawer-* 前缀，与既有规则
  * 零级联冲突。只追加在链尾，不调整既有 @import 链顺序（§2.1 约束 4）。 */
 @import './wealth-residents.css';
+/* 虚拟城市 13-3D城市渲染优化 · 阶段 E（Tab 分组 / 面板折叠 / 叠层秩序）。
+ * 2026-09-22：独立成文件（wealth.css 1738 行逼近 §4 上限 1800）；
+ * 覆盖 CityStatsPanel.css 的规则一律用 .wealth-sidebar > 前缀提升特异度。
+ * 只追加在链尾，不调整既有 @import 链顺序（§2.1 约束 4）。 */
+@import './wealth-city3d.css';

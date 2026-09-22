@@ -168,19 +168,25 @@ export function WealthGamePage() {
   const waitingForSeats =
     gameState?.status === 'open' && !seatsReady;
 
-  const tabs: { key: typeof panelTab; label: string }[] = [
-    { key: 'finance', label: t('wealth.tab.finance' as TKey) },
-    { key: 'market', label: t('wealth.tab.market' as TKey) },
-    { key: 'ledger', label: t('wealth.tab.ledger' as TKey) },
+  // 13-3D城市渲染优化 · 阶段 E：9 Tab 按语义分两组（数据/交易），组内 wrap 防溢出。
+  type TabGroup = 'data' | 'trade';
+  const tabs: { key: typeof panelTab; label: string; group: TabGroup }[] = [
+    { key: 'finance', label: t('wealth.tab.finance' as TKey), group: 'data' },
+    { key: 'market', label: t('wealth.tab.market' as TKey), group: 'data' },
+    { key: 'ledger', label: t('wealth.tab.ledger' as TKey), group: 'data' },
     // P1 第二期：真实经济循环引擎（economy）+ 社会调研（survey）。
-    { key: 'economy', label: `📊 ${t('wealth.tab.economy' as TKey)}` },
-    { key: 'survey', label: `📋 ${t('wealth.tab.survey' as TKey)}` },
+    { key: 'economy', label: `📊 ${t('wealth.tab.economy' as TKey)}`, group: 'data' },
+    { key: 'survey', label: `📋 ${t('wealth.tab.survey' as TKey)}`, group: 'data' },
     // P2 第三期：玩家间交易（挂单簿 / 借贷 / 信息市场）。
-    { key: 'listing', label: `📋 ${t('wealth.tab.listing' as TKey)}` },
-    { key: 'loan', label: `🏦 ${t('wealth.tab.loan' as TKey)}` },
-    { key: 'infomarket', label: `🔍 ${t('wealth.tab.infomarket' as TKey)}` },
+    { key: 'listing', label: `📋 ${t('wealth.tab.listing' as TKey)}`, group: 'trade' },
+    { key: 'loan', label: `🏦 ${t('wealth.tab.loan' as TKey)}`, group: 'trade' },
+    { key: 'infomarket', label: `🔍 ${t('wealth.tab.infomarket' as TKey)}`, group: 'trade' },
     // P1 第四期：商业保险（观战视图空态只读，按钮对观战者隐藏）。
-    { key: 'insurance', label: `🛡 ${t('wealth.tab.insurance' as TKey)}` },
+    { key: 'insurance', label: `🛡 ${t('wealth.tab.insurance' as TKey)}`, group: 'trade' },
+  ];
+  const tabGroups: { key: TabGroup; labelKey: TKey }[] = [
+    { key: 'data', labelKey: 'wealth.tabgroup.data' as TKey },
+    { key: 'trade', labelKey: 'wealth.tabgroup.trade' as TKey },
   ];
 
   return (
@@ -291,15 +297,24 @@ export function WealthGamePage() {
 
         <aside className="wealth-sidebar">
           <div className="wealth-tabs wealth-tabs--panel">
-            {tabs.map((x) => (
-              <button
-                key={x.key}
-                type="button"
-                className={'wealth-tabs__btn' + (panelTab === x.key ? ' wealth-tabs__btn--active' : '')}
-                onClick={() => setPanelTab(x.key)}
-              >
-                {x.label}
-              </button>
+            {tabGroups.map((g) => (
+              <div className="wealth-tabs__group" key={g.key}>
+                <span className="wealth-tabs__group-label">{t(g.labelKey)}</span>
+                <div className="wealth-tabs__group-btns">
+                  {tabs
+                    .filter((x) => x.group === g.key)
+                    .map((x) => (
+                      <button
+                        key={x.key}
+                        type="button"
+                        className={'wealth-tabs__btn' + (panelTab === x.key ? ' wealth-tabs__btn--active' : '')}
+                        onClick={() => setPanelTab(x.key)}
+                      >
+                        {x.label}
+                      </button>
+                    ))}
+                </div>
+              </div>
             ))}
           </div>
           <div className="wealth-sidebar__panels">

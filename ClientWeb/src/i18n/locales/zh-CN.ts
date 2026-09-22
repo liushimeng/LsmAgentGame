@@ -1503,6 +1503,8 @@ const zhCN: Dict = {
   'wealth.tab.finance': '财务',
   'wealth.tab.market': '行情',
   'wealth.tab.ledger': '流水',
+  'wealth.tabgroup.data': '数据',
+  'wealth.tabgroup.trade': '交易',
   'wealth.panel.waiting': '等待模拟数据…',
   'wealth.panel.spectatorEmpty': '观察者不查看居民私有财务（公开数据见地图与月度汇总）',
   'wealth.panel.empty': '暂无数据',

@@ -1503,6 +1503,8 @@ const en: Dict = {
   'wealth.tab.finance': 'Finance',
   'wealth.tab.market': 'Market',
   'wealth.tab.ledger': 'Ledger',
+  'wealth.tabgroup.data': 'Data',
+  'wealth.tabgroup.trade': 'Trading',
   'wealth.panel.waiting': 'Waiting for simulation data…',
   'wealth.panel.spectatorEmpty': 'Observers have no private resident finance view (public data lives on the map & monthly summary)',
   'wealth.panel.empty': 'No data',

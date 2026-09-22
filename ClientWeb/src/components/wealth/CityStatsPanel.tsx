@@ -26,6 +26,7 @@ import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import { formatCny, formatPct, type WealthCitySnapshot } from '@/types/wealth';
 import { ResidentProfileDrawer } from '@/components/wealth/ResidentProfileDrawer';
+import { CollapsibleSection } from '@/components/wealth/CollapsibleSection';
 import './CityStatsPanel.css';
 
 interface Props {
@@ -104,23 +105,32 @@ export function CityStatsPanel({ city, roomId }: Props) {
       : 0;
 
   return (
-    <div className="wealth-citypanel" data-testid="wealth-city-panel">
-      {/* ① 头部：城市 · N 人 + 居民档案入口 */}
-      <div className="wealth-citypanel__title">
-        <span>
-          🏙 {t('wealth.cityTitle' as TKey)} · {(city.resident_count || 0).toLocaleString()}{' '}
-          {t('wealth.cityPopulation' as TKey)}
-        </span>
-        <button
-          type="button"
-          className="wealth-citypanel__open"
-          onClick={() => openDrawer(null)}
-          aria-label={t('wealth.cityProfiles.openDrawer' as TKey)}
-          data-testid="wealth-city-open-profiles"
-        >
-          👥 {t('wealth.cityProfiles.openDrawer' as TKey)}
-        </button>
-      </div>
+    <>
+      {/* 阶段 E（13-3D城市渲染优化）：融合式折叠 —— 原 ① 标题头改为
+          CollapsibleSection 标题行（title + headerExtra），不叠加第二层标题；
+          折叠态 localStorage 持久化（wealth.ui.collapsed.city_stats）。 */}
+      <CollapsibleSection
+        className="wealth-citypanel"
+        storageKey="wealth.ui.collapsed.city_stats"
+        testId="wealth-city-panel"
+        title={
+          <>
+            🏙 {t('wealth.cityTitle' as TKey)} · {(city.resident_count || 0).toLocaleString()}{' '}
+            {t('wealth.cityPopulation' as TKey)}
+          </>
+        }
+        headerExtra={
+          <button
+            type="button"
+            className="wealth-citypanel__open"
+            onClick={() => openDrawer(null)}
+            aria-label={t('wealth.cityProfiles.openDrawer' as TKey)}
+            data-testid="wealth-city-open-profiles"
+          >
+            👥 {t('wealth.cityProfiles.openDrawer' as TKey)}
+          </button>
+        }
+      >
 
       {/* ①+ 锚定进度条（档案锚定设计 §8.3；city.profiles 缺省=旧房不渲染） */}
       {prof && (
@@ -255,8 +265,9 @@ export function CityStatsPanel({ city, roomId }: Props) {
         </div>
       )}
 
-      {/* 居民档案抽屉（fixed 覆盖层，挂载点不影响布局；观战/玩家同可见）。
-          key=定位卡号：切换定位卡 / 重新打开时整体重挂载，state 归零。 */}
+      {/* 居民档案抽屉（fixed 覆盖层，挂在折叠体之外：折叠不卸载抽屉；
+          key=定位卡号：切换定位卡 / 重新打开时整体重挂载，state 归零）。 */}
+      </CollapsibleSection>
       <ResidentProfileDrawer
         key={drawerCardId ?? 'all'}
         open={drawerOpen}
@@ -267,7 +278,7 @@ export function CityStatsPanel({ city, roomId }: Props) {
           setDrawerCardId(null);
         }}
       />
-    </div>
+    </>
   );
 }
 

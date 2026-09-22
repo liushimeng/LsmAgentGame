@@ -1,0 +1,133 @@
+/**
+ * wealth-city3d.css — 13-3D城市渲染优化 · 阶段 E 全部新样式（2026-09-22）。
+ *
+ * 契约：lag_docs/虚拟城市/已实现/13-3D城市渲染优化/04-UI布局规范-面板折叠与防溢出-v1.md。
+ * 落点规约：wealth.css 已 1738 行逼近 §4 上限（1800），本批次新样式集中于此；
+ * globals.css 链尾追加 @import（只追加不改序，§2.1 约束 4）。
+ *
+ * 覆盖策略：
+ *   - 对 globals.css 链内既有规则（wealth.css）：同特异度靠源码顺序胜出（本文件在链尾）。
+ *   - 对组件内 import 的 CityStatsPanel.css（JS 模块序晚于 globals 链）：
+ *     用 `.wealth-sidebar > .wealth-citypanel` 提升特异度（0-2-0 > 0-1-0）。
+ *
+ * 对比度（§26.1）：组标题 #b8bfca 对 --wealth-panel(#161d28) ≈ 8.6:1；
+ * toggle 按钮文字继承面板正文色 ≥ 4.5:1。
+ */
+
+/* ── Tab 分组（契约 §2）────────────────────────────── */
+.wealth-tabs {
+  flex-wrap: wrap;
+  max-height: 96px;
+  overflow-y: auto;
+  row-gap: 2px;
+}
+.wealth-tabs__group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  min-width: 0;
+}
+.wealth-tabs__group-label {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #b8bfca; /* 对深底 ≈ 8.6:1（§26.1 正文 ≥4.5:1） */
+  padding: 0 4px 0 2px;
+  user-select: none;
+}
+.wealth-tabs__group-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  min-width: 0;
+}
+
+/* ── 侧栏纵向空间协约（契约 §3）────────────────────── */
+.wealth-sidebar__panels {
+  min-height: 160px;
+}
+/* CityStatsPanel：弹性收缩 + 30% 上限（特异度压过组件内 CityStatsPanel.css 的
+   `flex: 0 0 auto; max-height: 260px`）。 */
+.wealth-sidebar > .wealth-citypanel {
+  flex: 0 1 auto;
+  max-height: 30%;
+}
+
+/* ── 折叠容器（CollapsibleSection）─────────────────── */
+.wealth-collapse__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.wealth-collapse__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--wealth-touch-target, 28px);
+  padding: 2px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: #fff; /* 对 --wealth-panel 深底 ≥ 12:1 */
+  text-align: left;
+}
+.wealth-collapse__toggle:hover .wealth-collapse__arrow {
+  color: #fff;
+}
+.wealth-collapse__arrow {
+  flex: 0 0 auto;
+  width: 14px;
+  color: #b8bfca;
+  font-size: 12px;
+}
+.wealth-collapse__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wealth-collapse__extra {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* grid 1fr→0fr 折叠动画：无需魔法 max-height；inner 承担 overflow 裁剪。 */
+.wealth-collapse__body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.25s ease;
+}
+.wealth-collapse__body--collapsed {
+  grid-template-rows: 0fr;
+}
+.wealth-collapse__inner {
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* BotPanel 的 inner 不需要额外 gap（卡片自带间距）。 */
+.wealth-botpanel .wealth-collapse__inner {
+  gap: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wealth-collapse__body {
+    transition: none;
+  }
+}
+
+/* ── 叠层秩序（契约 §4）────────────────────────────── */
+/* 小地图抬到 40：城区 hover 卡 zIndexRange [30,0] 封顶，error banner 50 / modal 200 不变。 */
+.wealth-minimap {
+  z-index: 40;
+}

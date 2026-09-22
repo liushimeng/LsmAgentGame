@@ -135,6 +135,9 @@ export interface WealthDict {
   'wealth.tab.finance': string;
   'wealth.tab.market': string;
   'wealth.tab.ledger': string;
+  // ── 13-3D城市渲染优化 · 阶段 E（2026-09-22）：侧栏 Tab 分组标题 ──
+  'wealth.tabgroup.data': string;
+  'wealth.tabgroup.trade': string;
   'wealth.panel.waiting': string;
   'wealth.panel.spectatorEmpty': string;
   'wealth.panel.empty': string;
