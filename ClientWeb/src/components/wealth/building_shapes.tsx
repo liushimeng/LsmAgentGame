@@ -73,17 +73,33 @@ export interface ShapeProps {
   emissive: number;
 }
 
+// ── 16 · 阶段 R：楼宇色相分化（确定性，不引随机源）────────────────
+
+/**
+ * 按占地 (w,d) hash → 0.92~1.08 灰度乘子 hex。
+ * 同楼同色（确定性）；贴图路径 color 由 #ffffff 改乘此值，打破
+ * 「同贴图 = 同色」的复制粘贴感。贴图缺失路径不走分化（避免双重变色）。
+ */
+export function buildingTint(w: number, d: number): string {
+  let h = Math.imul((w * 4096) | 0, 2654435761) ^ Math.imul((d * 4096) | 0, 2246822519);
+  h = (h ^ (h >>> 13)) >>> 0;
+  const k = 0.92 + ((h % 1000) / 1000) * 0.16;
+  const c = Math.round(255 * k);
+  return `rgb(${c},${c},${c})`;
+}
+
 // ── 6 面材质声明（boxGeometry 面序 [+X,-X,+Y,-Y,+Z,-Z]）─────────────
 
-function sideMatProps(tex: THREE.Texture | null, fallback: string, emissive: number) {
+function sideMatProps(tex: THREE.Texture | null, fallback: string, emissive: number, tint: string) {
   return {
     map: tex ?? undefined,
-    color: tex ? '#ffffff' : fallback,
+    color: tex ? tint : fallback,
     emissive: tex ? EMISSIVE_WINDOW : fallback,
     emissiveMap: tex ?? undefined,
     emissiveIntensity: emissive,
     roughness: 0.7,
     metalness: 0.1,
+    envMapIntensity: 0.5, // 16 · 阶段 R：天空环境反射（幕墙/立面）
   };
 }
 
@@ -96,6 +112,7 @@ function topMatProps(tex: THREE.Texture | null, fallback: string, emissive: numb
     emissiveIntensity: emissive * 0.6,
     roughness: 0.8,
     metalness: 0.05,
+    envMapIntensity: 0.5,
   };
 }
 
@@ -109,21 +126,24 @@ function BoxFaces({
   top,
   fallback,
   emissive,
+  tint,
 }: {
   sideA: THREE.Texture | null;
   sideB: THREE.Texture | null;
   top: THREE.Texture | null;
   fallback: string;
   emissive: number;
+  /** 16 · 阶段 R：楼宇色相分化乘子（buildingTint 产出）。 */
+  tint: string;
 }) {
   return (
     <>
-      <meshStandardMaterial attach="material-0" {...sideMatProps(sideA, fallback, emissive)} />
-      <meshStandardMaterial attach="material-1" {...sideMatProps(sideA, fallback, emissive)} />
+      <meshStandardMaterial attach="material-0" {...sideMatProps(sideA, fallback, emissive, tint)} />
+      <meshStandardMaterial attach="material-1" {...sideMatProps(sideA, fallback, emissive, tint)} />
       <meshStandardMaterial attach="material-2" {...topMatProps(top, fallback, emissive)} />
       <meshStandardMaterial attach="material-3" color={fallback} roughness={0.9} />
-      <meshStandardMaterial attach="material-4" {...sideMatProps(sideB, fallback, emissive)} />
-      <meshStandardMaterial attach="material-5" {...sideMatProps(sideB, fallback, emissive)} />
+      <meshStandardMaterial attach="material-4" {...sideMatProps(sideB, fallback, emissive, tint)} />
+      <meshStandardMaterial attach="material-5" {...sideMatProps(sideB, fallback, emissive, tint)} />
     </>
   );
 }
@@ -189,6 +209,7 @@ function PrismRoof({
         emissiveIntensity={emissive * 0.5}
         roughness={0.85}
         metalness={0.05}
+        envMapIntensity={0.35}
         side={THREE.DoubleSide}
       />
     </mesh>
@@ -247,6 +268,7 @@ function BillboardSign({ w, y }: { w: number; y: number }) {
           emissiveIntensity={0.5}
           roughness={0.4}
           metalness={0.4}
+          envMapIntensity={0.9}
         />
       </mesh>
       {/* 阶段 P：辉光（仅 w > 1.6 时启用，避免点光源过多拖性能） */}
@@ -340,6 +362,7 @@ function ShutterDoor({ w, h }: { w: number; h: number }) {
 
 /** tower：裙楼(u(10) 高满铺) + 塔身(0.8× 占地) + 顶部收分(0.55× 占地, u(6) 高)。 */
 export function TowerShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackColor, emissive }: ShapeProps) {
+  const tint = buildingTint(w, d);
   const pH = Math.min(u(10), h * 0.35);
   const cH = Math.min(u(6), h * 0.22);
   const bodyH = Math.max(h - pH - cH, u(3)); // 塔身至少 1 层
@@ -348,12 +371,12 @@ export function TowerShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackCo
       {/* 裙楼（商业基座，facadeBase 四面） */}
       <mesh castShadow position={[0, pH / 2, 0]}>
         <boxGeometry args={[w, pH, d]} />
-        <BoxFaces sideA={facadeBase} sideB={facadeBase} top={null} fallback={fallbackColor} emissive={emissive} />
+        <BoxFaces sideA={facadeBase} sideB={facadeBase} top={null} fallback={fallbackColor} emissive={emissive} tint={tint} />
       </mesh>
       {/* 塔身（facadeMid 四面 + roof 顶面） */}
       <mesh castShadow position={[0, pH + bodyH / 2, 0]}>
         <boxGeometry args={[w * 0.8, bodyH, d * 0.8]} />
-        <BoxFaces sideA={facadeMid} sideB={facadeMid} top={roofMap} fallback={fallbackColor} emissive={emissive} />
+        <BoxFaces sideA={facadeMid} sideB={facadeMid} top={roofMap} fallback={fallbackColor} emissive={emissive} tint={tint} />
       </mesh>
       {/* 顶部收分（纯色金属，无贴图） */}
       <mesh castShadow position={[0, pH + bodyH + cH / 2, 0]}>
@@ -364,6 +387,7 @@ export function TowerShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackCo
           emissiveIntensity={emissive * 0.8}
           roughness={0.4}
           metalness={0.6}
+          envMapIntensity={0.9}
         />
       </mesh>
       {/* 14-3D渲染深化：底商雨棚（裙楼沿街） */}
@@ -380,11 +404,12 @@ export function TowerShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackCo
 
 /** slab：单 box + 顶部深色檐口条（现状 8 城区贴图逻辑原样保留）。 */
 export function SlabShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackColor, emissive }: ShapeProps) {
+  const tint = buildingTint(w, d);
   return (
     <>
       <mesh castShadow position={[0, h / 2, 0]}>
         <boxGeometry args={[w, h, d]} />
-        <BoxFaces sideA={facadeBase} sideB={facadeMid} top={roofMap} fallback={fallbackColor} emissive={emissive} />
+        <BoxFaces sideA={facadeBase} sideB={facadeMid} top={roofMap} fallback={fallbackColor} emissive={emissive} tint={tint} />
       </mesh>
       {/* 檐口条（0.05 高深色压顶线，契约 §2.2） */}
       <mesh position={[0, h + 0.025, 0]}>
@@ -403,13 +428,14 @@ export function SlabShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackCol
 
 /** house：box 主体（h×0.7）+ 三棱柱坡屋顶（h×0.3，roof 贴图/红瓦兜底）。 */
 export function HouseShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackColor, emissive }: ShapeProps) {
+  const tint = buildingTint(w, d);
   const bodyH = h * 0.7;
   const roofH = h * 0.3;
   return (
     <>
       <mesh castShadow position={[0, bodyH / 2, 0]}>
         <boxGeometry args={[w, bodyH, d]} />
-        <BoxFaces sideA={facadeBase} sideB={facadeMid} top={null} fallback={fallbackColor} emissive={emissive} />
+        <BoxFaces sideA={facadeBase} sideB={facadeMid} top={null} fallback={fallbackColor} emissive={emissive} tint={tint} />
       </mesh>
       <PrismRoof
         w={w + 0.12} h={roofH} d={d + 0.12} y={bodyH}
@@ -421,6 +447,7 @@ export function HouseShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackCo
 
 /** shed：大跨 box（h×0.8，w×1.2）+ 山墙三角 + 1-2 根烟囱（顶到 h×1.3）。 */
 export function ShedShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackColor, emissive }: ShapeProps) {
+  const tint = buildingTint(w, d);
   const bw = w * 1.2;
   const bH = h * 0.8;
   const chimneyH = h * 0.5;
@@ -430,7 +457,7 @@ export function ShedShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackCol
     <>
       <mesh castShadow position={[0, bH / 2, 0]}>
         <boxGeometry args={[bw, bH, d]} />
-        <BoxFaces sideA={facadeBase} sideB={facadeMid} top={null} fallback={fallbackColor} emissive={emissive} />
+        <BoxFaces sideA={facadeBase} sideB={facadeMid} top={null} fallback={fallbackColor} emissive={emissive} tint={tint} />
       </mesh>
       {/* 15 阶段 N：卷帘门（临路侧 z=+d/2） */}
       <group position={[0, 0, d / 2]}>
@@ -454,12 +481,13 @@ export function ShedShape({ w, d, h, facadeBase, facadeMid, roofMap, fallbackCol
 
 /** pavilion：低矮平顶 box（h ≤ u(9)）+ 大挑檐（顶面外扩 0.15）。 */
 export function PavilionShape({ w, d, h, facadeBase, roofMap, fallbackColor, emissive }: ShapeProps) {
+  const tint = buildingTint(w, d);
   const bH = Math.min(h, u(9));
   return (
     <>
       <mesh castShadow position={[0, bH / 2, 0]}>
         <boxGeometry args={[w, bH, d]} />
-        <BoxFaces sideA={facadeBase} sideB={facadeBase} top={roofMap} fallback={fallbackColor} emissive={emissive} />
+        <BoxFaces sideA={facadeBase} sideB={facadeBase} top={roofMap} fallback={fallbackColor} emissive={emissive} tint={tint} />
       </mesh>
       {/* 大挑檐（外扩 0.15，木色） */}
       <mesh castShadow position={[0, bH + 0.02, 0]}>

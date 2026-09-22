@@ -9,7 +9,7 @@
  * 交互：点击城区 → onSelectDistrict（主地图平滑聚焦 + 面板联动）。
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { districtSeatOffset } from './AgentToken';
 import { WORLD_SIZE, type WealthCameraView } from './WealthCityMap';
 import { useT } from '@/hooks/useT';
@@ -48,6 +48,27 @@ export function WealthMinimap({ gameState, viewRef, selectedDistrict, onSelectDi
   stateRef.current = gameState;
   const selectedRef = useRef(selectedDistrict);
   selectedRef.current = selectedDistrict;
+
+  // 16 · 阶段 V：折叠态（localStorage 持久化；默认展开）。rAF 循环在折叠时
+  // 自然停摆（canvasRef 为 null → effect 早退）。
+  const [expanded, setExpanded] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('wealth.ui.minimap') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const toggleExpanded = () => {
+    setExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('wealth.ui.minimap', next ? '1' : '0');
+      } catch {
+        // 隐私模式等存储失败：仅内存态生效
+      }
+      return next;
+    });
+  };
 
   // rAF 重绘循环（读 ref，避免 React 渲染节流）。
   useEffect(() => {
@@ -143,14 +164,40 @@ export function WealthMinimap({ gameState, viewRef, selectedDistrict, onSelectDi
     if (hit) onSelectDistrict(hit.id);
   };
 
+  // 16 · 阶段 V：折叠态渲染 pill 按钮（占位同位，点击展开）
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        className="wealth-minimap__pill"
+        onClick={toggleExpanded}
+        aria-label={t('wealth.minimap.aria' as TKey)}
+        title={t('wealth.minimap.aria' as TKey)}
+      >
+        🗺 地图
+      </button>
+    );
+  }
+
   return (
-    <canvas
-      ref={canvasRef}
-      className="wealth-minimap"
-      width={SIZE}
-      height={SIZE}
-      onClick={handleClick}
-      aria-label={t('wealth.minimap.aria' as TKey)}
-    />
+    <div className="wealth-minimap__wrap">
+      <canvas
+        ref={canvasRef}
+        className="wealth-minimap"
+        width={SIZE}
+        height={SIZE}
+        onClick={handleClick}
+        aria-label={t('wealth.minimap.aria' as TKey)}
+      />
+      <button
+        type="button"
+        className="wealth-minimap__close"
+        onClick={toggleExpanded}
+        aria-label="收起小地图"
+        title="收起小地图"
+      >
+        ⤫
+      </button>
+    </div>
   );
 }

@@ -20,6 +20,12 @@
  *   - 雾色随天际线改 #aeb8c6；ambient 0.45 / hemisphere 0.5 / 日光暖白 #fff2e0。
  *
  * 相机 / OrbitControls / CameraReporter / FocusController 行为不变（与 v1 完全兼容）。
+ *
+ * 16-3D城市WebGL质感与城市补全（阶段 R/S/T/U）：
+ *   - EnvBinder：PMREM 烘焙 Sky → scene.environment（幕墙反射）+ 冷色填充光。
+ *   - Ground：urban_base 城市底色优先（替代满城沥青）。
+ *   - RingRoad（CBD 环路）+ CanalBridges（运河 2 桥）+ LandmarksLayer
+ *     （喷泉/园路/塔吊/停车场）+ CloudLayer（天空云层）。
  */
 
 import { useMemo, useRef } from 'react';
@@ -34,8 +40,13 @@ import { StreetPropsLayer } from './StreetPropsLayer';
 import { WaterPlane } from './props/WaterPlane';
 import { WaterMist } from './props/WaterMist';
 import { AtmosphereLayer } from './AtmosphereLayer';
+import { EnvBinder } from './EnvBinder';
+import { RingRoad } from './RingRoad';
+import { CanalBridges } from './CanalBridge';
+import { LandmarksLayer } from './LandmarksLayer';
+import { CloudLayer } from './props/CloudLayer';
 import { useSharedTexture } from './textureCache';
-import { streetTileUrl } from '@/assets/images/wealth';
+import { groundTileUrl, streetTileUrl } from '@/assets/images/wealth';
 import {
   WEALTH_DISTRICTS,
   districtCenter,
@@ -93,15 +104,22 @@ interface Props {
 }
 
 /**
- * 地面：80×80 plane + RepeatWrapping 沥青贴图（缺失 → 纯色 #141a24）。
+ * 地面：80×80 plane + RepeatWrapping 城市底色贴图（16 · 阶段 R：urban_base
+ * 优先，替代满城沥青；缺失 → asphalt_main → 纯色 #141a24）。
  * 旧 gridHelper 已删除（消除黑线）。v2.12 阶段 2：40×40 → 80×80（面积 ×4）。
  */
 function Ground() {
+  // 16 · 阶段 R：城市建成区底色（缺失回退沥青，降级链 §11）
+  const urbanTex = useSharedTexture(groundTileUrl('urban_base'), {
+    wrap: 'repeat',
+    repeat: [GROUND_REPEAT, GROUND_REPEAT],
+  });
   // 14-3D渲染深化：共享贴图缓存（缺失 → 纯色 #141a24 降级链不变）
-  const tex = useSharedTexture(streetTileUrl('asphalt_main'), {
+  const asphaltTex = useSharedTexture(streetTileUrl('asphalt_main'), {
     wrap: 'repeat',
     repeat: [GROUND_REPEAT, GROUND_REPEAT], // 80 / 8 = 10
   });
+  const tex = urbanTex ?? asphaltTex;
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
@@ -298,6 +316,10 @@ export function WealthCityMap({
         <ambientLight intensity={0.45} />
         {/* P1-A 新增：天/地反弹 */}
         <hemisphereLight args={['#7a93b8', '#1a1f2a', 0.5]} />
+        {/* 16 · 阶段 R：环境反射（PMREM 烘焙 Sky → scene.environment，一次性） */}
+        <EnvBinder />
+        {/* 16 · 阶段 R：冷色填充光（背光面抬亮，不投影） */}
+        <directionalLight position={[-24, 20, -18]} color="#b8cce8" intensity={0.3} />
         {/* v2.12 阶段 2：光位随世界边长等比 ×2（方向向量不变，阴影形态不变）；
             v2.13 阶段 C：2048 shadow map + bias/normalBias + 显式阴影相机覆盖全城 + 暖白日光 */}
         <directionalLight
@@ -320,6 +342,10 @@ export function WealthCityMap({
         <WaterLayer />
         {/* 15-3D渲染深化：氛围层（远景剪影 + 公园落叶 Sparkles） */}
         <AtmosphereLayer />
+        {/* 16 · 阶段 U：天空云层（6 团 Billboard 云，慢速漂移） */}
+        <CloudLayer />
+        {/* 16 · 阶段 T：功能地标（喷泉 / 园路花坛 / 塔吊工地 / 停车场） */}
+        <LandmarksLayer />
         {WEALTH_DISTRICTS.map((d) => (
           <DistrictBlock
             key={d.id}
@@ -332,6 +358,9 @@ export function WealthCityMap({
         ))}
         {/* P1-A：单 plane → 分层 <Road /> 道路（含路灯阵列） */}
         <RoadsLayer />
+        {/* 16 · 阶段 S：CBD 环形路 + 运河跨河桥 */}
+        <RingRoad />
+        <CanalBridges />
         {/* P1-C：街道道具层（树 / 车辆 / 行人 / 标识 / 屋顶杂物）；
             v2.12 阶段 2：districts 由父层注入（props 化，适配 16 城区） */}
         <StreetPropsLayer districts={WEALTH_DISTRICTS} />

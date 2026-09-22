@@ -39,6 +39,7 @@ import { Sign } from './props/Sign';
 import { RooftopAcc } from './props/RooftopAcc';
 import { TrafficLight } from './props/TrafficLight';
 import { BusStop } from './props/BusStop';
+import { SolarPanel } from './props/SolarPanel';
 import { VendorKiosk } from './props/VendorKiosk';
 import { BicycleRack } from './props/BicycleRack';
 import { TrashCan } from './props/TrashCan';
@@ -90,6 +91,14 @@ interface FurnitureSpec {
   variant?: number;
 }
 
+/** 16 · 阶段 T：屋顶太阳能板布点规格。 */
+interface SolarSpec {
+  x: number;
+  z: number;
+  y: number;
+  rotation: number;
+}
+
 interface SignSpec {
   x: number;
   z: number;
@@ -101,6 +110,8 @@ interface DistrictProps {
   districtId: string;
   trees: TreeSpec[];
   rooftop: RooftopSpec[];
+  /** 16 · 阶段 T：屋顶太阳能板（suburb / oldtown）。 */
+  solar: SolarSpec[];
   /** 城区内行人（V2 折线漫步） */
   pedestrians: Array<{
     x: number;
@@ -121,6 +132,8 @@ interface RoadVehicle {
   variant: 'sedan' | 'truck' | 'bus' | 'taxi';
   speed: number;
   phase: number;
+  /** 16 · 阶段 S：车道偏移（>0 右行 / <0 对向）。 */
+  laneOffset: number;
 }
 
 interface RoadTree {
@@ -250,6 +263,22 @@ function propsForDistrict(def: WealthDistrictDef, idx: number): DistrictProps {
     };
   });
 
+  // 16 · 阶段 T：太阳能板（suburb / oldtown 屋顶确定性 1-2 块）
+  const solar: SolarSpec[] = [];
+  if (def.id === 'suburb' || def.id === 'oldtown') {
+    const panelCount = 1 + (rnd() < 0.5 ? 1 : 0);
+    for (let i = 0; i < panelCount; i++) {
+      const angle = rnd() * Math.PI * 2;
+      const radius = 1.2 + i * 1.1;
+      solar.push({
+        x: c.x + Math.cos(angle) * radius,
+        z: c.z + Math.sin(angle) * radius,
+        y: roofY * 0.72, // house 主体高 = 总高 ×0.7（坡顶下方贴合）
+        rotation: rnd() * Math.PI * 2,
+      });
+    }
+  }
+
   // 阶段 K 行人（V2 折线 path）：按城区密度档位 + outfit 倾向
   const pedCount = PEDESTRIAN_DENSITY[def.id] ?? 3;
   const outfitPool = OUTFIT_AFFINITY[def.id] ?? ['casual', 'khaki'];
@@ -346,13 +375,18 @@ function propsForDistrict(def: WealthDistrictDef, idx: number): DistrictProps {
     districtId: def.id,
     trees,
     rooftop,
+    solar,
     pedestrians,
     furniture,
     sign,
   };
 }
 
-/** 为每条主干道生成 1 辆移动车辆。 */
+/**
+ * 16 · 阶段 S：双向车流编排。
+ * 每条主干道正向 1 辆（district→origin，右行 +0.32/+0.36）；
+ * len > 15 的再追加反向 1 辆（origin→district，laneOffset 取负，variant 错开）。
+ */
 function vehiclesForRoads(districts: WealthDistrictDef[]): RoadVehicle[] {
   const roads: RoadVehicle[] = [];
   districts
@@ -365,13 +399,31 @@ function vehiclesForRoads(districts: WealthDistrictDef[]): RoadVehicle[] {
       if (len < 12) return;
       const variant = VEHICLE_VARIANTS[i % VEHICLE_VARIANTS.length];
       const speedMap = { sedan: 0.07, truck: 0.04, bus: 0.05, taxi: 0.08 };
+      // 右行偏移：bus/truck 更宽，偏移略大
+      const fwdOffset = variant === 'bus' || variant === 'truck' ? 0.36 : 0.32;
       roads.push({
         from: [c.x, c.z],
         to: [0, 0],
         variant,
         speed: speedMap[variant],
         phase: (i * 0.37) % 1,
+        laneOffset: fwdOffset,
       });
+      // 对向车流（较长主干道才有，控制总量 ~20 辆）。
+      // 注意：laneOffset 取「行进方向右侧」语义，方向反转后世界侧自动翻转，
+      // 因此对向车传同样的正值（取负会落到同侧 → 对撞）。
+      if (len > 15) {
+        const backVariant = VEHICLE_VARIANTS[(i + 2) % VEHICLE_VARIANTS.length];
+        const backOffset = backVariant === 'bus' || backVariant === 'truck' ? 0.36 : 0.32;
+        roads.push({
+          from: [0, 0],
+          to: [c.x, c.z],
+          variant: backVariant,
+          speed: speedMap[backVariant],
+          phase: ((i * 0.37) + 0.5) % 1,
+          laneOffset: backOffset,
+        });
+      }
     });
   return roads;
 }
@@ -503,6 +555,10 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
               rotation={r.rotation}
             />
           ))}
+          {/* 16 · 阶段 T：屋顶太阳能板（suburb / oldtown） */}
+          {dp.solar.map((sp, i) => (
+            <SolarPanel key={`solar-${i}`} x={sp.x} y={sp.y} z={sp.z} rotation={sp.rotation} />
+          ))}
           {/* 阶段 K V2 折线漫步行人 */}
           {dp.pedestrians.map((p, i) => (
             <PedestrianV2
@@ -551,7 +607,7 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
         <TreeV2 key={`roadtree-${i}`} x={t.x} z={t.z} variant={t.variant} scale={t.scale} />
       ))}
 
-      {/* 主干道车辆 */}
+      {/* 主干道车辆（16 · 阶段 S：双向车道，右行偏移） */}
       {layout.roadVehicles.map((v, i) => (
         <Vehicle
           key={`vehicle-${i}`}
@@ -560,6 +616,7 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
           variant={v.variant}
           speed={v.speed}
           phase={v.phase}
+          laneOffset={v.laneOffset}
         />
       ))}
 

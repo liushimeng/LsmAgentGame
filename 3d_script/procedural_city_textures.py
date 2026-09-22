@@ -17,6 +17,10 @@
     ground/plaza_tile.png       512×512  可平铺广场石板（交通枢纽 / 金融 CBD 小广场）
     ground/water_tile.png       512×512  可平铺水面（城市运河 / 物流港港池，纵向滚动）
 
+  v2.15 天空与城市底色 × 2 张（16-3D城市WebGL质感与城市补全 · 阶段 U/R）：
+    sky/cloud_puff.png          256×128  RGBA 云朵 soft puff（CloudLayer Billboard）
+    ground/urban_base.png       512×512  可平铺城市底色（Ground 基底，替代满城沥青）
+
 约定：
   - 纯 Pillow，不依赖 python-generate-image-tool 子模块、不访问网络。
   - 确定性 seed = FNV-1a(文件名)，重跑产物字节一致。
@@ -47,6 +51,7 @@ DISTRICTS_DIR = WEALTH_DIR / "districts"
 FACADES_DIR = WEALTH_DIR / "facades"
 ROOFS_DIR = WEALTH_DIR / "roofs"
 GROUND_DIR = WEALTH_DIR / "ground"
+SKY_DIR = WEALTH_DIR / "sky"
 
 DISTRICT_SIZE = (1024, 1024)
 FACADE_SIZE = (512, 1024)
@@ -355,6 +360,81 @@ def gen_water_tile() -> Image.Image:
     return _tileable_noise(img, rng, strength=5)
 
 
+def gen_urban_base() -> Image.Image:
+    """可平铺城市底色（16 · 阶段 R）：中性混凝土/土色 + 修补补丁 + wrap-safe 噪点。
+
+    语义：全城「建成区底色」，城区底板 / 道路 / 广场压在其上——替代 v1 的满城沥青。
+    """
+    w, h = GROUND_SIZE
+    rng = rng_for("ground:urban_base")
+    img = Image.new("RGB", (w, h), (58, 63, 71))  # #3a3f47
+    d = ImageDraw.Draw(img)
+    # 低频色斑（更亮的水泥面 / 更暗的泥土面，wrap：3×3 平铺坐标补画）
+    for _ in range(30):
+        x, y = rng.randint(0, w), rng.randint(0, h)
+        rx, ry = rng.randint(50, 150), rng.randint(40, 110)
+        shade = (66, 72, 80) if rng.random() < 0.55 else (50, 54, 61)
+        for ox in (-w, 0, w):
+            for oy in (-h, 0, h):
+                d.ellipse([x + ox - rx, y + oy - ry, x + ox + rx, y + oy + ry], fill=shade)
+    img = img.filter(ImageFilter.GaussianBlur(10))
+    d = ImageDraw.Draw(img)
+    # 修补路面补丁（12 处近矩形淡色块，低对比）
+    for _ in range(12):
+        x, y = rng.randint(0, w), rng.randint(0, h)
+        bw, bh = rng.randint(30, 90), rng.randint(24, 60)
+        patch = (70, 75, 83)
+        for ox in (-w, 0, w):
+            for oy in (-h, 0, h):
+                d.rectangle([x + ox, y + oy, x + ox + bw, y + oy + bh], fill=patch)
+    # 细砾 speckle
+    _noise_speckle(d, rng, w, h, (78, 84, 92), 220, r_max=1)
+    _noise_speckle(d, rng, w, h, (44, 48, 55), 160, r_max=1)
+    return _tileable_noise(img, rng, strength=7)
+
+
+def gen_cloud_puff() -> Image.Image:
+    """云朵 soft puff（16 · 阶段 U）：RGBA 透明底 + 多团白椭圆 + 高斯模糊 + 底部渐隐。
+
+    消费端 CloudLayer 以 Billboard 叠 3-4 层；缺图时组件走白色扁球兜底。
+    """
+    w, h = (256, 128)
+    rng = rng_for("sky:cloud_puff")
+    img = Image.new("RGBA", (w, h), (255, 255, 255, 0))
+    d = ImageDraw.Draw(img)
+    # 主团：中心密集 6-9 团椭圆，边缘 2-3 团稀疏
+    blobs = []
+    for i in range(rng.randint(6, 9)):
+        cx = w * 0.5 + rng.uniform(-0.22, 0.22) * w
+        cy = h * 0.48 + rng.uniform(-0.18, 0.12) * h
+        rx = rng.uniform(0.10, 0.16) * w
+        ry = rx * rng.uniform(0.55, 0.75)
+        alpha = rng.randint(110, 165)
+        blobs.append((cx, cy, rx, ry, alpha))
+    for i in range(3):
+        cx = w * (0.14 + 0.72 * rng.random())
+        cy = h * (0.38 + 0.2 * rng.random())
+        rx = rng.uniform(0.06, 0.10) * w
+        ry = rx * 0.6
+        blobs.append((cx, cy, rx, ry, rng.randint(70, 110)))
+    for cx, cy, rx, ry, alpha in blobs:
+        d.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], fill=(252, 253, 255, alpha))
+    img = img.filter(ImageFilter.GaussianBlur(7))
+    # 底部 15% alpha 渐隐（云底平感）+ 顶部 8% 轻微渐隐
+    px = img.load()
+    for y in range(h):
+        if y > h * 0.85:
+            k = 1.0 - (y - h * 0.85) / (h * 0.15)
+        elif y < h * 0.08:
+            k = y / (h * 0.08) * 0.85 + 0.15
+        else:
+            continue
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            px[x, y] = (r, g, b, int(a * k))
+    return img
+
+
 def _save(img: Image.Image, path: Path, force: bool) -> str:
     if path.exists() and not force:
         return f"skip  {path.name}"
@@ -366,17 +446,25 @@ def _save(img: Image.Image, path: Path, force: bool) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--force", action="store_true", help="覆盖已存在文件")
-    ap.add_argument("--only", default="", help="逗号分隔子集：districts,facades,roofs,ground")
+    ap.add_argument("--only", default="", help="逗号分隔子集：districts,facades,roofs,ground,sky")
     args = ap.parse_args()
     only = {s.strip() for s in args.only.split(",") if s.strip()}
 
     total = written = 0
-    # 地表环境贴图（14-3D城市渲染深化 · 阶段 G）：与城区表解耦，只生成一次
+    # 天空贴图（16-3D城市WebGL质感与城市补全 · 阶段 U）
+    if not only or "sky" in only:
+        total += 1
+        msg = _save(gen_cloud_puff(), SKY_DIR / "cloud_puff.png", args.force)
+        if msg.startswith("write"):
+            written += 1
+        print(f"[sky] {msg}")
+    # 地表环境贴图（14-3D城市渲染深化 · 阶段 G；16 阶段 R 追加 urban_base）
     if not only or "ground" in only:
         ground_jobs = [
             (gen_grass_tile(), GROUND_DIR / "grass_tile.png"),
             (gen_plaza_tile(), GROUND_DIR / "plaza_tile.png"),
             (gen_water_tile(), GROUND_DIR / "water_tile.png"),
+            (gen_urban_base(), GROUND_DIR / "urban_base.png"),
         ]
         for img, path in ground_jobs:
             total += 1

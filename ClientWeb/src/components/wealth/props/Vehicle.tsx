@@ -34,6 +34,13 @@ interface Props {
   speed?: number;
   /** 起始相位偏移 [0, 1)，避免多辆车完全同步。 */
   phase?: number;
+  /**
+   * 16 · 阶段 S：车道偏移（世界单位）。>0 = 行进方向右侧通行；
+   * 0（默认）= 沿路中线（现行为）。双向车道两方向都传**同样的正值**——
+   * 行进向量反转后世界侧自动翻转，两车自然各占一侧（传负会落到同侧对撞）。
+   * bus/truck 建议 0.36，sedan/taxi 0.32。
+   */
+  laneOffset?: number;
 }
 
 const VEHICLE_COLORS: Record<VehicleVariant, string> = {
@@ -82,6 +89,7 @@ export function Vehicle({
   variant = 'sedan',
   speed = 0.06,
   phase = 0,
+  laneOffset = 0,
 }: Props) {
   const url = propUrl('vehicle', variant);
   // 14-3D渲染深化：共享贴图缓存（多车共用同 variant 贴图只上传一次）
@@ -97,6 +105,13 @@ export function Vehicle({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from[0], from[1], to[0], to[1]]);
 
+  // 16 · 阶段 S：右行偏移向量（行进方向右侧 = 左法线取反）
+  const lane = useMemo(() => {
+    const len = Math.sqrt(dx * dx + dz * dz) || 1;
+    // 左法线 = (-dz, dx) / len；右行取其负
+    return { ox: (dz / len) * laneOffset, oz: (-dx / len) * laneOffset };
+  }, [dx, dz, laneOffset]);
+
   // 起始位置
   const tRef = useRef(phase);
 
@@ -107,13 +122,13 @@ export function Vehicle({
     tRef.current += delta * speed;
     if (tRef.current >= 1) tRef.current -= 1;
     const t = tRef.current;
-    g.position.x = from[0] + dx * t;
-    g.position.z = from[1] + dz * t;
+    g.position.x = from[0] + dx * t + lane.ox;
+    g.position.z = from[1] + dz * t + lane.oz;
     g.position.y = 0.02;
   });
 
   return (
-    <group ref={groupRef} position={[from[0], 0.02, from[1]]} rotation={[0, angle, 0]}>
+    <group ref={groupRef} position={[from[0] + lane.ox, 0.02, from[1] + lane.oz]} rotation={[0, angle, 0]}>
       {tex ? (
         <Billboard position={[0, dims.h / 2 + 0.03, 0]}>
           <mesh>

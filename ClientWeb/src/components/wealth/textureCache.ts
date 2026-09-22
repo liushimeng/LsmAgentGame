@@ -23,6 +23,11 @@ export interface SharedTextureOpts {
   repeat?: [number, number];
   /** 默认 true（颜色贴图走 sRGB）。 */
   srgb?: boolean;
+  /**
+   * 16 · 阶段 R：各向异性过滤等级。repeat 模式默认 8（路面/地面掠射角清晰），
+   * clamp 模式默认 1。three 上传时自动 clamp 到 GPU 上限，无需读 renderer。
+   */
+  anisotropy?: number;
 }
 
 interface CacheEntry {
@@ -38,7 +43,8 @@ function cacheKey(url: string, opts: SharedTextureOpts): string {
   const wrap = opts.wrap ?? 'clamp';
   const [rx, ry] = opts.repeat ?? [1, 1];
   const srgb = opts.srgb !== false;
-  return `${url}|${wrap}|${rx}|${ry}|${srgb}`;
+  const aniso = opts.anisotropy ?? (opts.wrap === 'repeat' ? 8 : 1);
+  return `${url}|${wrap}|${rx}|${ry}|${srgb}|${aniso}`;
 }
 
 function startLoad(url: string, key: string, opts: SharedTextureOpts): CacheEntry {
@@ -50,6 +56,8 @@ function startLoad(url: string, key: string, opts: SharedTextureOpts): CacheEntr
       loaded.colorSpace = (opts.srgb !== false) ? THREE.SRGBColorSpace : THREE.NoColorSpace;
       loaded.magFilter = THREE.LinearFilter;
       loaded.minFilter = THREE.LinearMipmapLinearFilter;
+      // 16 · 阶段 R：各向异性过滤（GPU 上限由 three 内部 clamp，设置值过大安全）
+      loaded.anisotropy = opts.anisotropy ?? (opts.wrap === 'repeat' ? 8 : 1);
       if (opts.wrap === 'repeat') {
         loaded.wrapS = loaded.wrapT = THREE.RepeatWrapping;
         const [rx, ry] = opts.repeat ?? [1, 1];
@@ -85,7 +93,8 @@ export function useSharedTexture(
   const rx = opts?.repeat?.[0] ?? 1;
   const ry = opts?.repeat?.[1] ?? 1;
   const srgb = opts?.srgb !== false;
-  const key = url ? cacheKey(url, { wrap, repeat: [rx, ry], srgb }) : '';
+  const aniso = opts?.anisotropy;
+  const key = url ? cacheKey(url, { wrap, repeat: [rx, ry], srgb, anisotropy: aniso }) : '';
 
   const [tex, setTex] = useState<THREE.Texture | null>(() => {
     if (!key) return null;
@@ -99,7 +108,7 @@ export function useSharedTexture(
       return;
     }
     let entry = CACHE.get(key);
-    if (!entry) entry = startLoad(url, key, { wrap, repeat: [rx, ry], srgb });
+    if (!entry) entry = startLoad(url, key, { wrap, repeat: [rx, ry], srgb, anisotropy: aniso });
     if (entry.done) {
       setTex(entry.tex);
       return;

@@ -92,7 +92,7 @@ export function streetTileUrl(name: StreetTileName): string {
 }
 
 /** 地表环境贴图字面量（与 3d_script/procedural_city_textures.py::ground 对齐，14-3D渲染深化）。 */
-export type GroundTileName = 'grass_tile' | 'plaza_tile' | 'water_tile';
+export type GroundTileName = 'grass_tile' | 'plaza_tile' | 'water_tile' | 'urban_base';
 
 /**
  * 地表环境贴图 URL（缺失 = ''，组件回退纯色：grass #3f7a3a / plaza #9aa1ab / water #1a3a52）。
@@ -142,4 +142,18 @@ export type SignNameExt = 'parking_sign';
 /** V2 扩展标识牌 sprite URL（缺失 = ''，ParkingMeter 降级到纯色 box）。 */
 export function signUrlExt(name: SignNameExt): string {
   return propImgs[`./props/sign/${name}.png`] ?? '';
+}
+
+// ── 16-3D城市WebGL质感与城市补全 · 阶段 U 新增（天空贴图）─────────
+
+const skyImgs = import.meta.glob<string>('./sky/*.png', { eager: true, import: 'default' });
+
+/** 天空贴图字面量（与 3d_script/procedural_city_textures.py::gen_cloud_puff 对齐）。 */
+export type SkyName = 'cloud_puff';
+
+/**
+ * 天空贴图 URL（缺失 = ''，CloudLayer 降级白色扁球兜底）。
+ */
+export function skyUrl(name: SkyName): string {
+  return skyImgs[`./sky/${name}.png`] ?? '';
 }
