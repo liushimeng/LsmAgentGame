@@ -53,6 +53,25 @@ func (s *GameService) registerWealthAgentSeats(roomID string, seats []service.Ag
 		// 全 Agent 模式判定(len(seatUsers) ≥ MinSeats)不受空 key 影响。
 		seatModels[seatCfg.Seat] = seatCfg.ModelKey
 	}
+	// 2026-09-22 §CityHuman重构(前端联调): 城市房恒为全 Agent 模式,
+	// 焦点居民档位放开到 1–12;若注册进来的座位仍不足 MinSeats(例如
+	// 旧链路/重启恢复绕过了 service 层 padWealthAgentSeats 落库填充),
+	// 用池驱动 bot(ModelKey="")防御性补填空闲座位至 MinSeats。
+	// 正常路径下 service 层已在落库前填充,本循环零命中;roomSvc 不可用
+	// (纯内存测试夹具)时跳过补填,不 panic。
+	if len(seatUsers) > 0 && len(seatUsers) < wealth.MinSeats && s.roomSvc != nil {
+		for seat := 0; seat < wealth.MaxSeats && len(seatUsers) < wealth.MinSeats; seat++ {
+			if _, taken := seatUsers[seat]; taken {
+				continue
+			}
+			botUserID, err := s.botUserIDForSeat(roomID, seat)
+			if err != nil {
+				continue // 无 DB 行(非全 Agent 路径):跳过该座位
+			}
+			seatUsers[seat] = botUserID
+			seatModels[seat] = ""
+		}
+	}
 	if len(seatUsers) == 0 {
 		return nil
 	}

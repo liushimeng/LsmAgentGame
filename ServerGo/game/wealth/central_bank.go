@@ -427,7 +427,7 @@ func (cb *CentralBankState) BankingSystem() *CommercialBankState {
 }
 
 // GenerateCentralBankStatement 生成央行公告(季度)(2026-09-21 §城市扩张v2.12)。
-// 本函数仅声明 + 占位实现(文本拼接),完整 LLM 接入(AgentClassCityBanker
+// 本函数仅声明 + 占位实现(文本拼接),完整 LLM 接入(AgentClassCityHuman(央行行长角色提示词)
 // 央行行长 Bot)在阶段 4 政府财政子系统时完成。
 // 注意:LPR1Y/LPR5Y 是方法(非字段),格式化时必须调用。
 func GenerateCentralBankStatement(w *World, month int) string {

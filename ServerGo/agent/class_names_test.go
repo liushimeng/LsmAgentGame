@@ -28,59 +28,31 @@ func TestAgentClassWerewolfMemoryCompact_Wired(t *testing.T) {
 	}
 }
 
-// TestAgentClassCityPlayer_Wired 校验虚拟城市玩家 Bot 的 AgentClassName 已按
-// §24 登记(常量 + AllAgentClassNames + IsValidAgentClassName)——防 §130
-// 「声明了却从不接线」复发(2026-09-14 §财商流P0,G3 门禁;
-// 2026-09-21 §虚拟城市-Agent命名City化: Wealth→City)。
-func TestAgentClassCityPlayer_Wired(t *testing.T) {
-	if AgentClassCityPlayer == "" {
-		t.Fatal("AgentClassCityPlayer must be non-empty (§24)")
+// TestAgentClassCityHuman_Wired 校验虚拟城市「城市居民」唯一 AgentClassName
+// 已按 §24 登记(常量 + AllAgentClassNames + IsValidAgentClassName)——防 §130
+// 「声明了却从不接线」复发。2026-09-22 §CityHuman重构: 原 City-Player /
+// City-Voice / City-Government / City-Banker / City-Firm 五类合一。
+func TestAgentClassCityHuman_Wired(t *testing.T) {
+	if AgentClassCityHuman == "" {
+		t.Fatal("AgentClassCityHuman must be non-empty (§24)")
 	}
-	if string(AgentClassCityPlayer) != "LsmAgentGame-City-Player" {
-		t.Errorf("unexpected AgentClassName: %q", AgentClassCityPlayer)
+	if string(AgentClassCityHuman) != "LsmAgentGame-City-Human" {
+		t.Errorf("unexpected AgentClassName: %q", AgentClassCityHuman)
 	}
 	found := false
 	for _, c := range AllAgentClassNames() {
-		if c == AgentClassCityPlayer {
+		if c == AgentClassCityHuman {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("AgentClassCityPlayer must be registered in AllAgentClassNames()")
+		t.Error("AgentClassCityHuman must be registered in AllAgentClassNames()")
 	}
-	if !IsValidAgentClassName(string(AgentClassCityPlayer)) {
-		t.Error("AgentClassCityPlayer must pass IsValidAgentClassName")
-	}
-}
-
-// TestAgentClassCityVoice_Wired 校验虚拟城市「城市之声」的
-// AgentClassName 已按 §24 两步登记(常量 + AllAgentClassNames +
-// IsValidAgentClassName)—— 防止 voice.go 散写字面量(2026-09-21
-// §虚拟城市-城市Agent规模化,契约 03 §5;同日 §虚拟城市-Agent命名City化:
-// Wealth→City)。
-func TestAgentClassCityVoice_Wired(t *testing.T) {
-	if AgentClassCityVoice == "" {
-		t.Fatal("AgentClassCityVoice must be non-empty (§24)")
-	}
-	if string(AgentClassCityVoice) != "LsmAgentGame-City-Voice" {
-		t.Errorf("unexpected AgentClassName: %q", AgentClassCityVoice)
-	}
-	found := false
-	for _, c := range AllAgentClassNames() {
-		if c == AgentClassCityVoice {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("AgentClassCityVoice must be registered in AllAgentClassNames()")
-	}
-	if !IsValidAgentClassName(string(AgentClassCityVoice)) {
-		t.Error("AgentClassCityVoice must pass IsValidAgentClassName")
+	if !IsValidAgentClassName(string(AgentClassCityHuman)) {
+		t.Error("AgentClassCityHuman must pass IsValidAgentClassName")
 	}
 }
-
 // TestAllAgentClassNames_NonEmptyAndUnique 是 §24 的通用不变量:所有登记进
 // AllAgentClassNames 的常量必须非空且互不重复(防将来复制粘贴出同名/空常量)。
 func TestAllAgentClassNames_NonEmptyAndUnique(t *testing.T) {

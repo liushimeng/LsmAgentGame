@@ -4,8 +4,8 @@
 // 设计原则(对齐 thpagent,§15/§128):
 //  1. 一个 bot 座位 = 一个 Agent struct;月度事件驱动(每月 acting 一次决策)。
 //  2. Agent 经 ToolRunner 接口调用引擎(in-process,不走 WS,与人类同一路径)。
-//  3. AgentClassName = "LsmAgentGame-City-Player"(class_names.go 登记;
-//     2026-09-21 §虚拟城市-Agent命名City化: Wealth→City)。
+//  3. AgentClassName = "LsmAgentGame-City-Human"(class_names.go 登记;
+//     2026-09-22 §CityHuman重构: 五类 AgentClass 合一,City-Human 即城市居民)。
 //  4. 每月 ≤ BotMaxActionsPerMonth(3)个动作工具 + ≤1 次 speak + submit_month。
 package wealthplayer
 
@@ -55,8 +55,12 @@ type Agent struct {
 	memory *Memory
 
 	// speak 限流:每月 ≤1 次 + 相邻 ≥30s(§9;仅决策 goroutine 访问)。
-	spokenThisMonth bool
-	lastSpeakAt     time.Time
+	lastSpeakAt time.Time
+	// speakCount 本月 speak 次数(area+private 合计 ≤2;2026-09-22
+	// §CityHuman重构 由 spokenThisMonth bool 升级;仅决策 goroutine 访问)。
+	speakCount int
+	// senseUsed 感知工具本月已用次数(see/hear/smell 各 ≤2;§CityHuman重构)。
+	senseUsed map[string]int
 
 	maxActions      int
 	decisionTimeout time.Duration
@@ -116,12 +120,13 @@ func NewAgent(roomID, userID, modelKey, modelName string, seat int, maxActions i
 		memory:          NewMemory(),
 		maxActions:      maxActions,
 		decisionTimeout: decisionTimeout,
+		senseUsed:       map[string]int{},
 	}
 }
 
 // AgentClass 返回 AgentClassName(class_names.go 常量;§130 防散写字面量)。
 func (a *Agent) AgentClass() agentroot.AgentClassName {
-	return agentroot.AgentClassCityPlayer
+	return agentroot.AgentClassCityHuman
 }
 
 // BindRegistry 注入 LLM 注册表(Manager 构造后调用)。
@@ -163,18 +168,16 @@ func (a *Agent) IsCancelled() bool {
 	return a.cancelled
 }
 
-// allowSpeak 每月 ≤1 次 speak + 30s 令牌桶节流(§9)。
+// allowSpeak 每月 ≤2 次 speak(area+private 合计)+ 30s 令牌桶节流
+// (§9;2026-09-22 §CityHuman重构 1→2)。
 func (a *Agent) allowSpeak() bool {
-	if !a.spokenThisMonth {
-		// 月度配额仍可用;再检查 30s 节流(跨月边界自然满足)。
-		if time.Since(a.lastSpeakAt) >= 30*time.Second {
-			return true
-		}
+	if a.speakCount >= 2 {
+		return false
 	}
-	return false
+	return time.Since(a.lastSpeakAt) >= 30*time.Second
 }
 
 func (a *Agent) markSpoken() {
-	a.spokenThisMonth = true
+	a.speakCount++
 	a.lastSpeakAt = time.Now()
 }

@@ -43,7 +43,7 @@ func cyclePhaseCN(p string) string {
 // SystemPromptBlocks 渲染 System prompt(5 段;返回 SystemBlock 数组)。
 func SystemPromptBlocks(card wealthtypes.CardBrief) []llmtypes.SystemBlock {
 	seg1 := fmt.Sprintf(
-		"【第 1 段 · 身份】\n你是「%s」,今年 %d 岁,职业是%s(职业卡 %s),生活在%s。\n"+
+		"【第 1 段 · 身份】\n你是这座虚拟城市的一名普通居民「%s」,今年 %d 岁,职业是%s(职业卡 %s),生活在%s。\n"+
 			"财务起跑线:月薪 %d 元/月,月支出基数 %d 元,储蓄 %d 元,\n"+
 			"精力 %d/10,人脉 %d/10,认知 %d/10,信用分 %d。",
 		orDefault(card.Name, card.Title), card.StartAge, card.Title, card.ID,
@@ -77,10 +77,15 @@ func SystemPromptBlocks(card wealthtypes.CardBrief) []llmtypes.SystemBlock {
 - 市场周期四阶段:复苏(股+15%/房+5%/金-5%/LPR3.5%)、繁荣(+30%/+15%/-10%/4.5%)、
   衰退(-25%/-5%/+10%/5.8%)、萧条(-40%/-15%/+25%/2.8%)。每月有小幅随机漂移。
 - 每月月初你最多执行 3 个动作工具(buy_asset / sell_asset / buy_house / take_loan / repay_loan /
-  start_side_business / stop_side_business / study / socialize / rest / work_overtime / move_district /
-  consume / donate),外加最多 1 次 speak。动作要付真实成本:
+  start_side_business / stop_side_business / study / socialize / rest / work_overtime / move /
+  consume / donate),外加最多 2 次 speak(公开放话 + 私聊合计)。动作要付真实成本:
   study=2000元/精力-1/认知+1;socialize=1000元/人脉+1;rest=精力+2;work_overtime=精力-2/当月工资×0.3 奖金;
-  move_district=3000元/精力-1;副业月入约 2000–6000 元但耗精力 2/月;
+  move 跨城区:公交500元/精力-2、地铁1500元/精力-1、出租车3000元/精力-1(随 CPI 浮动);
+  区内步行/跑步免费(精力-1/-2);副业月入约 2000–6000 元但耗精力 2/月;
+- 感官工具(不耗动作预算,每月各最多 2 次):
+  see=看见同城区的人/物/事(视觉约500米);hear=听见附近的公开发言/城市之声/环境声(听觉约100米);
+  smell=闻到所在城区的气味画像(嗅觉约50米,城区基底+当月事件叠加)。
+  决策前先感知周边,像真人一样对世界有直接感受,再动手。
   买房首付 ≥30%,房贷 30 年等额本息(LPR+0.5%);消费贷 10% 年化 3 年;
   信用贷 5/10/20 万三档会压低你未来的工资增长与副业收入(杠杆的隐性成本)。
 - 月结顺序:工资→被动收入→固定支出→税+社保→生活支出→债务。个税 7 级累进(起征 5000),
@@ -111,20 +116,20 @@ func SystemPromptBlocks(card wealthtypes.CardBrief) []llmtypes.SystemBlock {
 
 	seg6 := `【第 6 段 · 输出纪律】
 1. 每月先在内部想清楚:本月现金流是否健康?市场处于周期哪个位置?明斯基占比多高?我的目标推进到哪了?
-2. 每月最多 3 个动作工具 + 1 次 speak,然后必须调用 submit_month 结束本月;不调用也会被系统强制结束。
-3. speak 的内容 ≤100 字,像真人在群里聊天:可以聊行情、吐槽生活、分享买卖心得;不要复述工具参数。
+2. 每月最多 3 个动作工具 + 2 次 speak(scope=area 公开放话 / scope=private 私聊某位邻居),然后必须调用 submit_month 结束本月;不调用也会被系统强制结束。
+3. speak 的内容 ≤100 字,像真人在群里聊天:可以聊行情、吐槽生活、分享买卖心得;不要复述工具参数。私聊(scope=private + target_seat)只有对方能听到。
 4. 不要每 3 个动作都全用满——没有好机会时,攒钱、休息、学习也是决策。
 5. 一切金额单位是人民币元。你的决策会被记录在财富流水账中,终局会生成你的人生报告。
 6. 回答调研时按你的人设与真实财务处境作答,理由说人话(≤50 字),不要中立和稀泥。`
 
 	// P2(2026-09-16 §财商流P2):玩家间交易与财富流动系统。
-	seg7 := `【第 7 段 · 玩家间交易与财富流动(P2)】
-你现在可以直接与其他玩家交易,这是真实财富循环的核心:
-- 资产挂牌(list_asset):出售房产/商铺/副业/金融资产,设要价与底价(保密);其他玩家可见并可议价。
+	seg7 := `【第 7 段 · 居民间交易与财富流动(P2)】
+你现在可以直接与其他居民交易,这是真实财富循环的核心:
+- 资产挂牌(list_asset):出售房产/商铺/副业/金融资产,设要价与底价(保密);其他居民可见并可议价。
 - 议价(start_negotiate / respond_negotiate):自由议价,一轮或多轮;达成一致即成交(资金+资产过户)。
-- 玩家间借贷(create_loan_listing / accept_loan):直接借贷,利率双方约定(0.3%-3.6%/月);可请第三方担保(add_guarantor,降 0.3%/月)。
+- 居民间借贷(create_loan_listing / accept_loan):直接借贷,利率双方约定(0.3%-3.6%/月);可请第三方担保(add_guarantor,降 0.3%/月)。
 - 拍卖(bid_auction):英式公开叫价,连续无人加价时最高价者得;赢家诅咒——不要为情绪溢价。
-- 信息交易(sell_info / bid_info):密封暗标出售/竞购情报(市场内幕/玩家情报/个人概况);信息不对称是利润来源,也是风险。
+- 信息交易(sell_info / bid_info):密封暗标出售/竞购情报(市场内幕/居民情报/个人概况);信息不对称是利润来源,也是风险。
 - 交易纪律:每座位最多 3 笔 open 挂单;不可自交易;挂单 3 月未成交自动过期;利率超限(>3.6%%/月)违法。
 - 决策启发:现金充裕(>2×月支出)时主动寻找低估资产或放贷吃息;现金紧张(<0.5×月支出)时挂牌变现或发起借款;认知≥5可出售情报;人脉≥5可担保赚利差。`
 
@@ -227,8 +232,30 @@ func UserPrompt(ctx *wealthtypes.GameContext, memText string) string {
 		}
 		b.WriteString("\n")
 	}
+	// §CityHuman重构(2026-09-22): 感官上下文段(同区邻居 + 城区氛围)。
+	if len(ctx.Surroundings) > 0 || len(ctx.Ambiance.Smells) > 0 {
+		b.WriteString("■ 周边环境与氛围\n")
+		if len(ctx.Surroundings) > 0 {
+			b.WriteString("附近的人:")
+			for _, n := range ctx.Surroundings {
+				fmt.Fprintf(&b, " %s(%s", n.Name, n.Occupation)
+				if n.MoodHint != "" {
+					fmt.Fprintf(&b, ",%s", n.MoodHint)
+				}
+				b.WriteString(")")
+			}
+			b.WriteString("\n")
+		}
+		if len(ctx.Ambiance.Smells) > 0 {
+			fmt.Fprintf(&b, "空气中:%s;\n", strings.Join(ctx.Ambiance.Smells, "、"))
+		}
+		if len(ctx.Ambiance.Sounds) > 0 {
+			fmt.Fprintf(&b, "耳边:%s;\n", strings.Join(ctx.Ambiance.Sounds, "、"))
+		}
+		b.WriteString("可用 see/hear/smell 进一步感知周边(每月各限 2 次,不耗动作预算)。\n\n")
+	}
 	if len(ctx.Peers) > 0 {
-		b.WriteString("■ 同场玩家\n")
+		b.WriteString("■ 同场居民\n")
 		for _, p := range ctx.Peers {
 			fmt.Fprintf(&b, "- %d 号位 %s(%s,净资产 %d,FI %.2f)\n",
 				p.Seat, p.Nickname, p.ProfessionTitle, p.NetWorth, p.FIIndex)
@@ -245,7 +272,7 @@ func UserPrompt(ctx *wealthtypes.GameContext, memText string) string {
 		b.WriteString(hint)
 		b.WriteString("\n")
 	}
-	b.WriteString("请决定本月怎么做(≤3 个动作 + 可选 1 次 speak),然后调用 submit_month。")
+	b.WriteString("请决定本月怎么做(≤3 个动作 + 可选 ≤2 次 speak;可先用 see/hear/smell 感知周边),然后调用 submit_month。")
 	return b.String()
 }
 

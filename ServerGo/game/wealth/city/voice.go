@@ -3,8 +3,9 @@
 // 让背景居民「活着」:每月少量真实 LLM 发声,全城可见,且严格受 LLM 线路池
 // (llm.LinePool)约束 —— 每名居民一次极短对话(无工具、无 Memory、小
 // max_tokens),经 LinePool.Acquire(ctx 15s);失败/超时丢弃本条(下月再抽),
-// 绝不阻塞月结。AgentClassName = LsmAgentGame-City-Voice(§24 两步注册;
-// 2026-09-21 §虚拟城市-Agent命名City化: Wealth→City)。
+// 绝不阻塞月结。AgentClassName = LsmAgentGame-City-Human(§24 两步注册;
+// 2026-09-22 §CityHuman重构: 五类 AgentClass 合一,背景层发声与焦点层
+// 决策共用同一「城市居民」身份,仅调用深度不同)。
 package city
 
 import (
@@ -148,7 +149,7 @@ func (s *VoiceScheduler) speakOne(b *Backdrop, pool *llm.LinePool, month, idx in
 			{Role: "user", Content: []llmtypes.ContentBlock{{Type: "text", Text: "用一句话说出你本月的感受或打算(不超过 60 字)。"}}},
 		},
 		MaxTokens:      voiceMaxTokens,
-		AgentClassName: string(agentroot.AgentClassCityVoice),
+		AgentClassName: string(agentroot.AgentClassCityHuman),
 	}
 	resp, err := chatViaLease(ctx, lease, req)
 	if err != nil {

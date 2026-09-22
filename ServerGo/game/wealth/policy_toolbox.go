@@ -5,7 +5,7 @@
 // OMO(公开市场操作)/ CreditWindow(信贷窗口指导)。
 // 纯引擎层:无锁、无 goroutine、无 IO(§92a);ApplyInstrument 直接改写
 // World.CB 状态并经 w.emitEvent 追加事件流,由房间层持锁调用。
-// 完整的央行行长 Bot(AgentClassCityBanker)决策接入在阶段 4 完成 ——
+// 完整的央行行长 Bot(AgentClassCityHuman(央行行长角色提示词))决策接入在阶段 4 完成 ——
 // 本阶段工具箱仅供引擎层调用与单测验证(§130 接线:单测 + MonthlyDecision 公告链)。
 package wealth
 

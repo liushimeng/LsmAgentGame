@@ -152,16 +152,8 @@ func AllAgentClassNames() []AgentClassName {
 		AgentClassDebateMemoryCompact,
 		// 2026-08-31 §20260831-03 — 辩论比赛解说 Agent
 		AgentClassDebateCommentator,
-		// 2026-09-14 §财商流P0 — 虚拟城市玩家 Bot
-		// (2026-09-21 §虚拟城市-Agent命名City化: Wealth→City)
-		AgentClassCityPlayer,
-		// 2026-09-21 §虚拟城市-城市Agent规模化 — 虚拟城市「城市之声」
-		AgentClassCityVoice,
-		// 2026-09-21 §城市扩张v2.12 — 虚拟城市政府/央行/企业三类解说 Bot
-		// (阶段 3-5 陆续接线,当前仅登记 AgentClassName)
-		AgentClassCityGovernment,
-		AgentClassCityBanker,
-		AgentClassCityFirm,
+		// 2026-09-22 §CityHuman重构 — 虚拟城市居民 Agent(五类合一)
+		AgentClassCityHuman,
 	}
 }
 
@@ -207,42 +199,17 @@ const (
 	// 详见 lag_docs/辩论比赛/辩论比赛总体的流程设计.md §20260831-03。
 	AgentClassDebateCommentator AgentClassName = "LsmAgentGame-Debate-Commentator"
 
-	// AgentClassCityPlayer 是虚拟城市玩家 Bot 的 AgentClassName(2026-09-14 §财商流P0;
-	// 2026-09-21 §虚拟城市-Agent命名City化: 常量名与值统一去 Wealth 化改 City,
-	// 游戏已更名「虚拟城市」)。
-	// 由 ServerGo/agent/wealthplayer/ 的 Agent struct 实现;驱动 game/wealth 引擎
-	// 按月度节拍参与人生沙盘(每月 ≤3 个动作工具 + ≤1 次 speak + submit_month)。
-	// 与狼人杀玩家的核心差异: 无阵营/隐藏身份博弈,决策对象是个人三表与市场周期;
-	// 与德扑的差异: 每月多次动作(德扑每轮仅 1 次 tool_use)。
-	// 详见 lag_docs/虚拟城市/已实现/03-Agent设计/虚拟城市-WealthPlayer-Agent设计-v1.md。
-	AgentClassCityPlayer AgentClassName = "LsmAgentGame-City-Player"
-
-	// AgentClassCityVoice 是虚拟城市「城市之声」的 AgentClassName
-	// (2026-09-21 §虚拟城市-城市Agent规模化;同日 §虚拟城市-Agent命名City化:
-	// 常量名与值统一去 Wealth 化改 City)。由 game/wealth/city 的
-	// VoiceScheduler.speakOne 调用:每月从背景居民(数值脑,非 goroutine)抽样
-	// 若干名,经 LLM 线路池(LinePool)发起一次极短对话(无工具、无 Memory、
-	// 小 max_tokens),产物作为 city_voice 事件全城广播。与 City-Player 的
-	// 核心差异: 单轮极短对话、无工具循环、失败即丢弃(无 submit 兜底语义)。
-	// 详见 lag_docs/财商流游戏/已实现/03-城市背景模拟/
-	// 虚拟城市-大规模城市居民背景模拟设计-v1.md §5。
-	AgentClassCityVoice AgentClassName = "LsmAgentGame-City-Voice"
-
-	// AgentClassCityGovernment 是虚拟城市"政府发言人"Bot 的 AgentClassName
-	// (2026-09-21 §城市扩张v2.12)。后续阶段 4 财政子系统会用到:每季度末由
-	// game/wealth 的 treasury.go 调用 LLM 生成"政府公告"(200-400 字),作为
-	// city_voice 事件全城广播,内容包括财政赤字/国债余额/转移支付覆盖人口等。
-	AgentClassCityGovernment AgentClassName = "LsmAgentGame-City-Government"
-
-	// AgentClassCityBanker 是虚拟城市"央行行长"Bot 的 AgentClassName
-	// (2026-09-21 §城市扩张v2.12)。后续阶段 3 央行深化会用到:每季度末由
-	// game/wealth/central_bank.go 调用 LLM 生成"央行公告"(150-300 字),内容
-	// 包括利率决议/货币政策倾向/经济展望。仅供解说,玩家决策不受影响。
-	AgentClassCityBanker AgentClassName = "LsmAgentGame-City-Banker"
-
-	// AgentClassCityFirm 是虚拟城市"企业高管"Bot 的 AgentClassName
-	// (2026-09-21 §城市扩张v2.12)。后续阶段 5 企业产业链会用到:每月末对营收
-	// 前 5 的企业调用 LLM 生成"季度业绩公告"(150-300 字),作为 city_firm 事件
-	// 全城广播。仅用于增强沉浸感,不参与玩家决策。
-	AgentClassCityFirm AgentClassName = "LsmAgentGame-City-Firm"
+	// AgentClassCityHuman 是虚拟城市「城市居民」的**唯一** AgentClassName
+	// (2026-09-22 §CityHuman重构: 原 City-Player/City-Voice/City-Government/
+	// City-Banker/City-Firm 五类合并为一 —— 虚拟城市是全 Agent 真实城市模拟器,
+	// 没有玩家 Agent,City-Human 即城市居民)。
+	// 两个调用方共用本 AgentClass,仅调用深度不同:
+	//   1. 焦点层(座位 1~12): ServerGo/agent/wealthplayer/ 的 Agent struct,
+	//      LLM 每月决策(经济工具 + 感知行动工具 see/hear/smell/move/speak)。
+	//   2. 背景层(抽样发声): game/wealth/city 的 VoiceScheduler.speakOne,
+	//      无工具、无 Memory 的极短对话,产物作为 city_voice 事件全城广播。
+	// 政府/央行/企业公告若未来接入 LLM,一律复用本 AgentClass + 角色提示词,
+	// 不再新增 AgentClass(§130: 零消费方常量已删除)。
+	// 详见 lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md。
+	AgentClassCityHuman AgentClassName = "LsmAgentGame-City-Human"
 )

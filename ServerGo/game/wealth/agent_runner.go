@@ -490,9 +490,9 @@ func (a *AgentRunner) Speak(seat int, text, internalThought string) error {
 		return err
 	}
 	p := a.room.World.Players[seat]
-	if p == nil || !p.Alive || p.SpokenThisMonth {
+	if p == nil || !p.Alive || p.SpeakCountThisMonth >= speakMonthlyLimit {
 		a.room.mu.Unlock()
-		return errcode.CodeMsg(errcode.ErrWealthWrongPhase, "speech already used this month or player inactive")
+		return errcode.CodeMsg(errcode.ErrWealthSenseLimit, "speak monthly limit reached (2 per month)")
 	}
 	chat := a.room.chatSender
 	roomID := a.room.RoomID
@@ -506,7 +506,11 @@ func (a *AgentRunner) Speak(seat int, text, internalThought string) error {
 	t.Active = p.Alive
 	t.HeartThought = clip(internalThought, 200)
 	a.room.Transcripts[seat] = t
-	p.SpokenThisMonth = true
+	p.SpeakCountThisMonth++
+	// hear 感知数据源:记录同区公开发言(2026-09-22 §CityHuman重构)。
+	a.appendUtteranceLocked(UtteranceRecord{
+		Month: a.room.World.Month, Seat: seat, District: p.District, Text: clip(text, 100),
+	})
 	a.room.mu.Unlock()
 
 	if chat != nil && text != "" {
@@ -871,7 +875,7 @@ func (a *AgentRunner) apply(seat int, toolName, toolID string, fn func() (string
 	a.room.mu.Unlock()
 	if hooks.OnEvent != nil {
 		eventType := "action"
-		if toolName == wealthplayer.ToolMoveDistrict {
+		if toolName == wealthplayer.ToolMoveDistrict || toolName == wealthplayer.ToolMove {
 			eventType = "move"
 		}
 		hooks.OnEvent(roomID, EventRecord{
@@ -1012,7 +1016,7 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 	// BotIdentity。
 	botIdent := wealthtypes.BotIdentityBrief{
 		UserID: p.Card.ID, ModelKey: r.SeatModelKeys[seat], ModelName: ModelDisplayName(r.SeatModelKeys[seat]),
-		AgentClass: string(agentroot.AgentClassCityPlayer),
+		AgentClass: string(agentroot.AgentClassCityHuman),
 	}
 
 	// P1: 央行快照 + 信贷约束参数。
@@ -1082,6 +1086,9 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 		RecentEvents: evRecent, RecentLedger: ledgerRecent,
 		BotIdentity: botIdent, MyCard: cardBrief,
 		CentralBank: cbSnapshot, CreditTightness: creditTightness, LoanQuotaFactor: loanQuotaFactor,
+		// §CityHuman重构(2026-09-22): 感官上下文(同区邻居 + 城区当月氛围)。
+		Surroundings: surroundingsForLocked(r, p),
+		Ambiance:     (&AgentRunner{room: r}).ambianceForLocked(p.District),
 		// P1: 经济环境 + 待答调研。
 		CPIYoY:             ecoCPIYoY,
 		UnemploymentRate:   ecoUnemployment,
@@ -1091,6 +1098,37 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 		OpenSurveyOptions:  openSurveyOpts,
 		EconomyBrief:       ecoBrief,
 	}, true
+}
+
+// surroundingsForLocked 构造同城区邻居摘要(锁内;座位居民优先 +
+// Backdrop 抽样真实档案补齐,≤8 条;2026-09-22 §CityHuman重构)。
+func surroundingsForLocked(r *WealthRoom, p *Player) []wealthtypes.NeighborBrief {
+	out := []wealthtypes.NeighborBrief{}
+	for s, pp := range r.World.Players {
+		if len(out) >= 8 {
+			break
+		}
+		if pp == nil || s == p.Seat || pp.District != p.District {
+			continue
+		}
+		name := r.Nicknames[s]
+		if name == "" {
+			name = pp.Card.Name
+		}
+		out = append(out, wealthtypes.NeighborBrief{
+			Kind: "seat", Seat: s, Name: name, Occupation: pp.Card.Title,
+			District: p.District, MoodHint: moodOfPlayer(pp),
+		})
+	}
+	if r.City != nil && len(out) < 8 {
+		for _, n := range r.City.SampleDistrictNeighbors(p.District, 8-len(out)) {
+			out = append(out, wealthtypes.NeighborBrief{
+				Kind: "resident", CardID: n.CardID, Name: n.Name, Occupation: n.Occupation,
+				District: n.DistrictName, MoodHint: moodOfNeighbor(n),
+			})
+		}
+	}
+	return out
 }
 
 // fiIndexFor 包装 p.FIIndex(锁内)。

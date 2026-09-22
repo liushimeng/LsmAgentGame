@@ -188,7 +188,7 @@ export function WealthGamePage() {
       {/* 顶部信息栏 */}
       <header className="wealth-topbar">
         <div className="wealth-topbar__title">
-          💰 {t('wealth.title' as TKey)}
+          🏙 {t('wealth.title' as TKey)}
           <small className="wealth-topbar__room">#{roomId.slice(0, 8)}</small>
           {spectator && <span className="wealth-badge wealth-badge--spectator">👁 {t('wealth.spectate' as TKey)}</span>}
         </div>

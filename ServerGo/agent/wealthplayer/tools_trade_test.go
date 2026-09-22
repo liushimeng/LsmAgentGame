@@ -20,6 +20,11 @@ import (
 type fakeTradeRunner struct {
 	lastTool string
 	lastSeat int
+	// §CityHuman重构: move / speak-private 记录。
+	moveDestination string
+	moveMode        string
+	whisperTarget   int
+	whisperText     string
 	// 各工具调用参数(按需断言)。
 	listAssetCalled bool
 	listAssetArgs   struct{ assetIndex int; ask, min int64 }
@@ -62,6 +67,30 @@ func (f *fakeTradeRunner) AnswerSurvey(seat int, surveyID string, optionIdx int,
 	return nil
 }
 func (f *fakeTradeRunner) QueryEconomy(seat int) (string, error) { return "", nil }
+
+// §CityHuman重构(2026-09-22): 感知与行动五件套 fake 实现。
+func (f *fakeTradeRunner) See(seat int) (*wealthtypes.SenseResult, error) {
+	f.lastTool, f.lastSeat = ToolSee, seat
+	return &wealthtypes.SenseResult{District: "finance"}, nil
+}
+func (f *fakeTradeRunner) Hear(seat int) (*wealthtypes.SenseResult, error) {
+	f.lastTool, f.lastSeat = ToolHear, seat
+	return &wealthtypes.SenseResult{District: "finance"}, nil
+}
+func (f *fakeTradeRunner) Smell(seat int) (*wealthtypes.SenseResult, error) {
+	f.lastTool, f.lastSeat = ToolSmell, seat
+	return &wealthtypes.SenseResult{District: "finance"}, nil
+}
+func (f *fakeTradeRunner) Move(seat int, destination string, mode string) error {
+	f.lastTool, f.lastSeat = ToolMove, seat
+	f.moveDestination, f.moveMode = destination, mode
+	return nil
+}
+func (f *fakeTradeRunner) SpeakTo(seat int, targetSeat int, text string) error {
+	f.lastTool, f.lastSeat = ToolSpeak, seat
+	f.whisperTarget, f.whisperText = targetSeat, text
+	return nil
+}
 
 // P1-4 商业保险实现。
 func (f *fakeTradeRunner) BuyInsurance(seat int, kind string) error {
@@ -153,11 +182,11 @@ func TestTradeTools_InputSchema(t *testing.T) {
 	}
 }
 
-// TestToolNames_IncludesTrade P2 交易工具已并入 ToolNames()(总计 42)。
+// TestToolNames_IncludesTrade P2 交易工具已并入 ToolNames()(总计 46,含 §CityHuman重构 4)。
 func TestToolNames_IncludesTrade(t *testing.T) {
 	names := ToolNames()
-	if len(names) != 42 {
-		t.Errorf("names count: got %d, want 42 (17 P0 + 5 P1 央行/银行 + 2 明斯基 + 3 P1-2 + 3 P1-4 保险 + 12 P2)", len(names))
+	if len(names) != 46 {
+		t.Errorf("names count: got %d, want 46 (17 P0 + 5 P1 央行/银行 + 2 明斯基 + 3 P1-2 + 3 P1-4 保险 + 12 P2 + 4 感知行动)", len(names))
 	}
 	for _, tn := range TradeToolNames() {
 		found := false

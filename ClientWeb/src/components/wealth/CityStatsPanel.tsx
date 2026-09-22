@@ -108,7 +108,8 @@ export function CityStatsPanel({ city, roomId }: Props) {
       {/* ① 头部：城市 · N 人 + 居民档案入口 */}
       <div className="wealth-citypanel__title">
         <span>
-          🏙 {t('wealth.cityTitle' as TKey)} · {(city.resident_count || 0).toLocaleString()}
+          🏙 {t('wealth.cityTitle' as TKey)} · {(city.resident_count || 0).toLocaleString()}{' '}
+          {t('wealth.cityPopulation' as TKey)}
         </span>
         <button
           type="button"

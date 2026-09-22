@@ -131,7 +131,8 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *wealthtypes.GameContex
 		Active:              true,
 		LastDecisionSummary: "等待模型月度决策",
 	}
-	a.spokenThisMonth = false
+	a.speakCount = 0
+	a.senseUsed = map[string]int{}
 	a.mu.Unlock()
 	a.publishTranscript()
 

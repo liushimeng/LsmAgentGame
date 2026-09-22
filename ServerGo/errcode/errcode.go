@@ -157,6 +157,12 @@ const (
 	// ErrLoanNotFound(提前还款)占用,顺延取本段首个空闲码 35042 ——
 	// 前端契约以 errcode 常量为准。
 	ErrWealthResidentNotFound = 35042
+	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
+	// 契约: lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md §4.4。
+	ErrWealthSenseInvalid   = 35100 // 感知/移动工具参数非法(未知城区、未知 mode、目标不存在)
+	ErrWealthSenseLimit     = 35101 // 当月感知/发言次数超限(see/hear/smell 各 ≤2,speak 合计 ≤2)
+	ErrWealthMoveForbidden  = 35102 // 当前状态不允许移动(破产清算/停赛中等)
+	ErrWealthWhisperTarget  = 35103 // 私聊目标不可达(目标出局/非座位居民/跨房)
 	// ErrAlreadyWolfVoted: 狼人在 night_wolves 阶段已投过票(含弃权),
 	// 再次调用 wolf_kill 一律拒绝。R196 报告 P1:Bot 8 (GLM-5.2) 反复投票
 	// 15+ 次服务端仅覆盖不报错,LLM 看不到反馈陷入循环。
@@ -267,6 +273,11 @@ var DefaultMessages = map[int]string{
 	ErrWealthInsuranceDisabled:    "wealth insurance engine disabled by config",
 	// 35042 — 虚拟城市居民人物卡档案(2026-09-21 §档案锚定契约 §7)。
 	ErrWealthResidentNotFound: "居民档案不存在",
+	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
+	ErrWealthSenseInvalid:   "wealth sense/move params invalid (unknown district/mode/target)",
+	ErrWealthSenseLimit:     "wealth sense/speak monthly limit reached",
+	ErrWealthMoveForbidden:  "wealth move forbidden in current state",
+	ErrWealthWhisperTarget:  "wealth whisper target unreachable",
 }
 
 // Code constructs a Coded error.

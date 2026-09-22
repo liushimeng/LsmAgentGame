@@ -197,11 +197,17 @@ type Player struct {
 
 	OvertimeThisMonth bool // work_overtime 置位,月结发放工资×0.3
 
-	ActionBudget    int
-	SpokenThisMonth bool
-	Submitted       bool
-	Alive           bool
-	StoppedMonths   int // 破产停赛剩余月
+	ActionBudget int
+	// SpeakCountThisMonth 本月发言次数(2026-09-22 §CityHuman重构:
+	// bool → int,speak area+private 合计 ≤2,原 SpokenThisMonth bool 升级)。
+	SpeakCountThisMonth int
+	Submitted           bool
+	Alive               bool
+	StoppedMonths       int // 破产停赛剩余月
+
+	// LocalPos 区内归一化坐标 [0,1]²(2026-09-22 §CityHuman重构:
+	// see/hear/smell 感知排序 + walk/run 区内移动用,不上 2.5D 地图逐人渲染)。
+	LocalPos [2]float64
 
 	DonationTotalCNY int64
 	DonationCount    int

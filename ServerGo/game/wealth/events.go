@@ -7,6 +7,7 @@ package wealth
 
 import (
 	"fmt"
+	"strings"
 )
 
 // 城市背景层事件类型(EventRecord.Type;2026-09-21 §虚拟城市)。
@@ -177,4 +178,61 @@ func (w *World) BellEvents() {
 		}
 		p.HadIllnessYear = false // 年度标记滚动
 	}
+}
+
+// ── 事件 → 感官标签映射(2026-09-22 §CityHuman重构,设计文档 1 §3.2 动态叠加) ──
+//
+// ambianceOverlay 把本月事件流水映射为气味/声响标签,叠加到城区感官基底上,
+// 供 smell/hear 感知工具与 city.ambiance 下发使用。规则式确定性映射,不调 LLM。
+
+// ambianceOverlay 从本月事件提取动态气味/声响标签(去重,各 ≤4 条)。
+func ambianceOverlay(events []EventRecord) (smells, sounds []string) {
+	seenS, seenH := map[string]bool{}, map[string]bool{}
+	add := func(dst *[]string, seen map[string]bool, tags ...string) {
+		for _, t := range tags {
+			if len(*dst) >= 4 {
+				return
+			}
+			if !seen[t] {
+				seen[t] = true
+				*dst = append(*dst, t)
+			}
+		}
+	}
+	for _, ev := range events {
+		text := ev.Text
+		switch {
+		case containsAny(text, "裁员", "失业", "破产"):
+			add(&smells, seenS, "焦虑汗味")
+			add(&sounds, seenH, "叹息声")
+		case containsAny(text, "重疾", "医疗", "健康亮红灯", "身故"):
+			add(&smells, seenS, "消毒水味")
+			add(&sounds, seenH, "救护车笛")
+		case containsAny(text, "结婚", "婚礼"):
+			add(&smells, seenS, "喜糖甜香", "酒宴香气")
+			add(&sounds, seenH, "婚礼鞭炮", "喜乐声")
+		case containsAny(text, "孩子", "生育"):
+			add(&sounds, seenH, "婴儿啼哭")
+		case containsAny(text, "迁居", "搬家"):
+			add(&sounds, seenH, "搬家货车", "家具搬运声")
+		case containsAny(text, "调研", "集市"):
+			add(&smells, seenS, "烟火与食物香气")
+			add(&sounds, seenH, "集市叫卖")
+		}
+		// 城市之声本身也是一种环境声。
+		if ev.Type == EventCityVoice {
+			add(&sounds, seenH, "街头议论")
+		}
+	}
+	return smells, sounds
+}
+
+// containsAny 报告 s 是否包含任一子串。
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
 }

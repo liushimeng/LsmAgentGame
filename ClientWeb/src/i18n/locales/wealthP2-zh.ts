@@ -58,7 +58,7 @@ const wealthP2 = {
   'wealth.negotiate.firstOffer': '输入你的报价',
   // 借贷面板
   'wealth.loan.title': '借贷市场',
-  'wealth.loan.subtitle': '玩家间自由借贷',
+  'wealth.loan.subtitle': '居民间自由借贷',
   'wealth.loan.lend': '出借',
   'wealth.loan.borrow': '借款',
   'wealth.loan.guarantee': '担保',
@@ -131,7 +131,7 @@ const wealthP2 = {
   'wealth.info.col.status': '状态',
   'wealth.info.col.actions': '操作',
   'wealth.info.category.market': '市场内幕',
-  'wealth.info.category.intel': '玩家情报',
+  'wealth.info.category.intel': '居民情报',
   'wealth.info.category.personal': '个人概况',
   'wealth.info.createTitle': '出售信息',
   'wealth.info.selCategory': '选择类别',

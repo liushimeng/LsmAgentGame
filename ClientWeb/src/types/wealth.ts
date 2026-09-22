@@ -258,6 +258,39 @@ export interface WealthBotContext {
   last_tool_result: string;
   /** 内心独白（speak 的 internal_thought）。 */
   heart_thought: string;
+  /** 本月感知记录（2026-09-22 §CityHuman重构：see/hear/smell 结果，本人+观察者可见）。 */
+  last_senses?: WealthSenseResult[];
+}
+
+// ── City-Human 感知契约（2026-09-22 §CityHuman重构，文档 1 §4.3/§6）──
+
+/** 感知结果中的邻居摘要（来自已锚定的真实人物卡档案）。 */
+export interface WealthNeighborBrief {
+  name: string;
+  occupation?: string;
+  /** 焦点层座位号（背景居民省略）。 */
+  seat?: number;
+  /** 人物卡号；档案未就绪时省略。 */
+  card_id?: string;
+}
+
+/** see/hear/smell 工具的统一返回（确定性构造，JSON 键与后端 SenseResult 逐字对齐）。 */
+export interface WealthSenseResult {
+  /** 感知类型：see | hear | smell。 */
+  kind?: 'see' | 'hear' | 'smell';
+  district: string;
+  /** see 专用：同区居民。 */
+  people?: WealthNeighborBrief[];
+  /** see：挂牌/店铺/建筑。 */
+  things?: string[];
+  /** see/hear：本区本月事件。 */
+  events?: string[];
+  /** hear：近期公开发言摘录。 */
+  utterances?: string[];
+  /** smell：气味标签。 */
+  smells?: string[];
+  /** hear/smell 共用：环境声。 */
+  sounds?: string[];
 }
 
 export interface WealthLedgerEntry {
@@ -347,6 +380,12 @@ export interface WealthCityResidentProfile {
   source_file: string;
 }
 
+/** 城区当月氛围标签（city.ambiance，2026-09-22 §CityHuman重构；全员可见，地图氛围渲染）。 */
+export interface WealthDistrictAmbiance {
+  smells: string[];
+  sounds: string[];
+}
+
 /** 城市背景层快照（game.state.city）。 */
 export interface WealthCitySnapshot {
   resident_count: number;
@@ -364,6 +403,8 @@ export interface WealthCitySnapshot {
   voices: WealthCityVoice[];
   /** 人物卡档案锚定进度（档案锚定设计 §8.1；锚定未启用的旧房 omit）。 */
   profiles?: WealthCityProfileProgress;
+  /** 每城区当月气味/声响标签（§CityHuman重构；键 = 城区 id）。 */
+  ambiance?: Record<string, WealthDistrictAmbiance>;
 }
 
 /** game.state 全量快照（按座位脱敏，BroadcastTo 单发）。 */
@@ -388,6 +429,8 @@ export interface WealthGameState {
   players: WealthPlayer[];
   /** -1 = 观战。 */
   my_seat: number;
+  /** 本人区内坐标 [0,1]²（§CityHuman重构；仅本人/观察者下发，旧回放 omit）。 */
+  my_local_pos?: { x: number; y: number };
   my: WealthMyState | null;
   bot_contexts: WealthBotContext[];
   /** 最近 50 条：本人相关 + 公共。 */

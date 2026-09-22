@@ -630,7 +630,7 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
             type="button"
             className="wealth-action-btn wealth-action-btn--trade"
             disabled={!playing || !acting || stopped}
-            title="玩家间借贷 · 利率协商 · 担保机制"
+            title="居民间借贷 · 利率协商 · 担保机制"
             onClick={() => onTradeTab('loan')}
           >
             <span className="wealth-action-btn__icon">🏦</span>

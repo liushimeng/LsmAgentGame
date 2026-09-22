@@ -5,7 +5,7 @@
 // hawkish)与利率调整建议 RateBias(±5% clamp)。输入取自 World.CB(内生 CPI)
 // 与 World.Labor(内生失业率/工资增速),nil 安全(回落自然率/目标值)。
 // 纯函数(§92a 无锁):只读 World,不改任何状态。
-// 阶段 4 央行行长 Bot(AgentClassCityBanker)消费本输出驱动 PolicyToolbox。
+// 阶段 4 央行行长 Bot(AgentClassCityHuman(央行行长角色提示词))消费本输出驱动 PolicyToolbox。
 package wealth
 
 import "fmt"

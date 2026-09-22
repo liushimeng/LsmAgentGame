@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"LsmAgentGame/agent/wealthtypes"
 	"LsmAgentGame/errcode"
 	llmtypes "LsmAgentGame/llm/types"
 )
@@ -64,6 +65,14 @@ type ToolRunner interface {
 	BidAuction(seat int, auctionID string, amountCNY int64) error
 	SellInfo(seat int, category string, title string, detail string, minBid int64) error
 	BidInfo(seat int, listingID string, bidCNY int64) error
+	// §CityHuman重构(2026-09-22): 感知与行动五件套。感知三件套不耗动作预算
+	// (每月各限 2 次,Agent 侧计数);move 耗 1 次动作预算;speak private
+	// 与 area 合计每月 ≤2。
+	See(seat int) (*wealthtypes.SenseResult, error)
+	Hear(seat int) (*wealthtypes.SenseResult, error)
+	Smell(seat int) (*wealthtypes.SenseResult, error)
+	Move(seat int, destination string, mode string) error
+	SpeakTo(seat int, targetSeat int, text string) error
 }
 
 // 工具名常量。
@@ -102,6 +111,11 @@ const (
 	ToolBuyInsurance       = "buy_insurance"        // 动作类,耗 1 点月预算
 	ToolCancelInsurance    = "cancel_insurance"     // 动作类,耗 1 点月预算
 	ToolGetInsuranceStatus = "get_insurance_status" // 查询类,不耗月预算
+	// §CityHuman重构(2026-09-22): 感知与行动工具(tools_sense.go 定义 wire)。
+	ToolSee   = "see"   // 感知类,不耗预算,每月 ≤2
+	ToolHear  = "hear"  // 感知类,不耗预算,每月 ≤2
+	ToolSmell = "smell" // 感知类,不耗预算,每月 ≤2
+	ToolMove  = "move"  // 动作类,耗 1 点月预算
 )
 
 // schema helpers。
@@ -257,12 +271,14 @@ func BuildTools() []llmtypes.ToolDef {
 		},
 		{
 			Name:        ToolSpeak,
-			Description: "公屏发言(每月最多 1 次):像真人聊天,谈行情/吐槽生活/分享买卖心得;不要复述工具参数。",
+			Description: "说话(每月 area+private 合计最多 2 次):像真人聊天,谈行情/吐槽生活/分享买卖心得;不要复述工具参数。scope=area(默认) 同城区公开放话;scope=private 对 target_seat 指定居民耳语(仅对方可见)。",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
+					"scope":            strSchema(`"area"(默认)|"private"`),
+					"target_seat":      intSchema(0, "private 时必填:目标座位号"),
 					"text":             map[string]any{"type": "string", "minLength": 1, "maxLength": 100, "description": "发言(≤100字)"},
-					"internal_thought": map[string]any{"type": "string", "maxLength": 200, "description": "内心独白(仅本人/观战者可见)"},
+					"internal_thought": map[string]any{"type": "string", "maxLength": 200, "description": "内心独白(仅本人/观战者可见,仅 area 生效)"},
 				},
 				"required": []string{"text"},
 			},
@@ -402,6 +418,8 @@ func BuildTools() []llmtypes.ToolDef {
 	}...)
 	// 追加 P2 交易工具(挂牌/议价/借贷/拍卖/信息)。
 	base = append(base, TradeToolDefinitions()...)
+	// 追加 §CityHuman重构 感知与行动工具(see/hear/smell/move)。
+	base = append(base, SenseToolDefinitions()...)
 	return base
 }
 
@@ -419,6 +437,7 @@ func ToolNames() []string {
 		ToolQueryMinsky, ToolEarlyRepay,
 		ToolSetConsumption, ToolAnswerSurvey, ToolQueryEconomy,
 		ToolBuyInsurance, ToolCancelInsurance, ToolGetInsuranceStatus,
+		ToolSee, ToolHear, ToolSmell, ToolMove,
 	}
 	out = append(out, TradeToolNames()...)
 	return out
@@ -512,12 +531,17 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 	case ToolWorkOvertime:
 		return failOr(a.runner.WorkOvertime(seat), "本月已加班", res)
 	case ToolMoveDistrict:
-		return failOr(a.runner.MoveDistrict(seat, getStr("district")), "迁居完成", res)
+		// §CityHuman重构:move_district 保留为 move 跨城区模式的兼容别名
+		// (设计文档 1 §4.2;下个大版本删除)。
+		return failOr(a.runner.Move(seat, getStr("district"), "bus"), "迁居完成", res)
 	case ToolConsume:
 		return failOr(a.runner.Consume(seat, getInt("amount_cny"), getStr("reason")), "消费完成", res)
 	case ToolDonate:
 		return failOr(a.runner.Donate(seat, getInt("amount_cny")), "捐赠完成", res)
 	case ToolSpeak:
+		if getStr("scope") == "private" {
+			return failOr(a.runner.SpeakTo(seat, int(getInt("target_seat")), getStr("text")), "已私聊", res)
+		}
 		return failOr(a.runner.Speak(seat, getStr("text"), getStr("internal_thought")), "已发言", res)
 	case ToolSubmitMonth:
 		return failOr(a.runner.SubmitMonth(seat), "本月已提交", res)
@@ -572,6 +596,12 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 		}
 		return ok(s)
 	default:
+		// §CityHuman重构 感知与行动工具路由(tools_sense.go)。
+		for _, tn := range senseToolNames {
+			if tn == name {
+				return a.dispatchSenseTool(name, inputJSON, getStr, getInt)
+			}
+		}
 		// P2 交易工具路由到 DispatchTradeTool(独立文件,避免本文件过长)。
 		for _, tn := range tradeToolNames {
 			if tn == name {

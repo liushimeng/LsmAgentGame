@@ -372,6 +372,16 @@ func (s *wealthChatSender) SendFromBot(roomID, botUserID, botAccount, modelKey, 
 	return err
 }
 
+// WhisperFromBot 调 chat.WhisperFromBot(2026-09-22 §CityHuman重构:
+// speak scope=private 定向耳语,仅目标座位与观战者可见)。
+func (s *wealthChatSender) WhisperFromBot(roomID, botUserID, botAccount, modelKey, toUserID, toAccount, text string) error {
+	if s.chat == nil {
+		return nil
+	}
+	_, err := s.chat.WhisperFromBot(roomID, botUserID, botAccount, modelKey, toUserID, toAccount, text)
+	return err
+}
+
 // wsEnvelope 是发送工具(短名)。
 func wsEnvelope(frameType string, seq int64, payload any) Envelope {
 	return Envelope{Type: frameType, Seq: seq, Payload: mustMarshal(payload)}

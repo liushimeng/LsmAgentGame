@@ -131,7 +131,7 @@ const wealthP2 = {
   'wealth.info.col.status': 'Status',
   'wealth.info.col.actions': 'Actions',
   'wealth.info.category.market': 'Market Insider',
-  'wealth.info.category.intel': 'Player Intel',
+  'wealth.info.category.intel': 'Resident Intel',
   'wealth.info.category.personal': 'Personal Profile',
   'wealth.info.createTitle': 'Sell Info',
   'wealth.info.selCategory': 'Select category',

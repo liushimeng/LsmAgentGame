@@ -282,6 +282,9 @@ func (r *WealthRoom) emitCityVoiceEvent(vr city.VoiceRecord) {
 	inGame := !r.closed && r.Status == StatusPlaying && r.World != nil
 	if inGame {
 		r.World.Events = append(r.World.Events, ev)
+		// hear 感知数据源:城市之声全城可闻(District 空 = 全城,2026-09-22 §CityHuman重构)。
+		ar := &AgentRunner{room: r}
+		ar.appendUtteranceLocked(UtteranceRecord{Month: vr.Month, Seat: -1, District: "", Text: ev.Text})
 	}
 	hooks := r.hooks
 	r.mu.Unlock()
@@ -298,6 +301,11 @@ func (r *WealthRoom) CitySnapshotView() *city.Snapshot {
 		return nil
 	}
 	s := r.City.Snapshot()
+	// 2026-09-22 §CityHuman重构:随快照下发各城区当月气味/声响标签(§6 city.ambiance)。
+	amb := r.cityAmbianceLocked()
+	if amb != nil {
+		s.Ambiance = amb
+	}
 	return &s
 }
 

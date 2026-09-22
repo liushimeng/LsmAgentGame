@@ -272,6 +272,16 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		}
 	}
 
+	// 2026-09-22 §CityHuman重构(前端联调): 虚拟城市是全 Agent 城市模拟器,
+	// 前端建房已放开「焦点居民数」1–12 档;agent_seats < MinSeats(10) 时用
+	// 池驱动居民(ModelKey="" = 线路池分配)自动填充空闲座位至 MinSeats,
+	// 保证 1–9 档也能落库、注册并自动开局。agent_seats=0(人类可入座房)
+	// 旧语义不变 —— 不填充。必须在 DB 落库与 creatorShouldBeSpectator 判定
+	// 之前完成,使 bot 用户行、FullAgentMode、自动开局链路看到同一座位集。
+	if gameKind == "wealth" {
+		agentSeats = padWealthAgentSeats(agentSeats, agentSeatSet)
+	}
+
 	// 2026-09-21 §虚拟城市(契约 04 §1.1): resident_count 仅 wealth 生效;
 	// 负数在 API 层 400(此处防御夹 0);超上限 clamp 到 cfg.Wealth.MaxResidents
 	// (默认 100000)。

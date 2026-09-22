@@ -8,12 +8,12 @@ import (
 	"LsmAgentGame/errcode"
 )
 
-// TestBuildTools_AllToolsPresent 42 工具齐备(P0 17 + P1 央行/银行 5 + 明斯基/提前还款 2 +
+// TestBuildTools_AllToolsPresent 46 工具齐备(原 42 + §CityHuman重构 感知行动 4:
 // P1-2 经济循环 3 + P1-4 商业保险 3 + P2 交易系统 12)。
 func TestBuildTools_AllToolsPresent(t *testing.T) {
 	tools := BuildTools()
-	if len(tools) != 42 {
-		t.Errorf("tools count: got %d, want 42", len(tools))
+	if len(tools) != 46 {
+		t.Errorf("tools count: got %d, want 46", len(tools))
 	}
 	want := map[string]bool{
 		ToolCheckState: false, ToolBuyAsset: false, ToolSellAsset: false,
@@ -37,6 +37,8 @@ func TestBuildTools_AllToolsPresent(t *testing.T) {
 		ToolCreateLoanListing: false, ToolAcceptLoan: false,
 		ToolRepayLoanP2P: false, ToolAddGuarantor: false,
 		ToolBidAuction: false, ToolSellInfo: false, ToolBidInfo: false,
+		// §CityHuman重构(2026-09-22): 感知与行动工具。
+		ToolSee: false, ToolHear: false, ToolSmell: false, ToolMove: false,
 	}
 	for _, t1 := range tools {
 		if _, ok := want[t1.Name]; !ok {
@@ -64,11 +66,11 @@ func TestBuildTools_RequiredFields(t *testing.T) {
 	}
 }
 
-// TestToolNames_Returns39Names 工具名列表 = 42(P0 17 + P1 10 + P1-2 3 + P1-4 保险 3 + P2 交易 12 - 3重复)。
+// TestToolNames_Returns39Names 工具名列表 = 46(原 42 + §CityHuman重构 4)。
 func TestToolNames_Returns39Names(t *testing.T) {
 	names := ToolNames()
-	if len(names) != 42 {
-		t.Errorf("names count: got %d, want 42", len(names))
+	if len(names) != 46 {
+		t.Errorf("names count: got %d, want 46", len(names))
 	}
 	for _, n := range names {
 		if !strings.HasPrefix(n, "check_state") &&
@@ -111,7 +113,12 @@ func TestToolNames_Returns39Names(t *testing.T) {
 			!strings.HasPrefix(n, "add_guarantor") &&
 			!strings.HasPrefix(n, "bid_auction") &&
 			!strings.HasPrefix(n, "sell_info") &&
-			!strings.HasPrefix(n, "bid_info") {
+			!strings.HasPrefix(n, "bid_info") &&
+			// §CityHuman重构: 感知与行动工具。
+			!strings.HasPrefix(n, "see") &&
+			!strings.HasPrefix(n, "hear") &&
+			!strings.HasPrefix(n, "smell") &&
+			n != "move" {
 			t.Errorf("unexpected name: %s", n)
 		}
 	}

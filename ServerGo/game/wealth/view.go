@@ -606,6 +606,9 @@ type MyJSON struct {
 	ConsumptionByGoods map[string]float64 `json:"consumption_by_goods"`
 	// P1-4(§财商流P1-4 §8.2):商业保险段(仅本人;insurance_enabled=false 时 omit)。
 	Insurance *InsuranceJSON `json:"insurance,omitempty"`
+	// LocalPos 区内归一化坐标(2026-09-22 §CityHuman重构 my_local_pos;
+	// 仅本人可见;观战者经 bot_contexts[].local_pos 获取 bot 座位)。
+	LocalPos []float64 `json:"local_pos,omitempty"`
 }
 
 // MyMonthlyJSON 是 my.monthly 子结构。
@@ -663,6 +666,10 @@ type BotCtxJSON struct {
 	LastToolInput       string `json:"last_tool_input"`
 	LastToolResult      string `json:"last_tool_result"`
 	HeartThought        string `json:"heart_thought"`
+	// LastSenses 最近感知记录(2026-09-22 §CityHuman重构;空 → omitempty)。
+	LastSenses []SenseEntry `json:"last_senses,omitempty"`
+	// LocalPos 该座位区内坐标(仅本人/观战者可见,与 bot_contexts 可见性一致)。
+	LocalPos []float64 `json:"local_pos,omitempty"`
 }
 
 // LedgerJSON 是 ledger_recent 单条。
@@ -875,7 +882,7 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		if !canSee {
 			continue
 		}
-		cs.BotContexts = append(cs.BotContexts, BotCtxJSON{
+		bc := BotCtxJSON{
 			Month:               t.Month,
 			LastDecisionMonth:   t.LastDecisionMonth,
 			UpdatedAt:           t.UpdatedAt,
@@ -885,7 +892,12 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 			LastToolInput:       t.LastToolInput,
 			LastToolResult:      t.LastToolResult,
 			HeartThought:        t.HeartThought,
-		})
+			LastSenses:          t.LastSenses,
+		}
+		if bp := world.Players[s]; bp != nil {
+			bc.LocalPos = []float64{bp.LocalPos[0], bp.LocalPos[1]}
+		}
+		cs.BotContexts = append(cs.BotContexts, bc)
 	}
 
 	// LedgerRecent:本人相关 + 公共(全房可见);每人 max 50;这里取本人最近 50。
@@ -1088,6 +1100,8 @@ func myJSONFor(p *Player) *MyJSON {
 		Goals:  append([]string{}, p.Card.Goals...),
 		Assets: make([]MyAssetJSON, 0, len(p.Assets)),
 		Loans:  make([]MyLoanJSON, 0, len(p.Loans)),
+		// §CityHuman重构:区内坐标(walk/run 区内移动更新)。
+		LocalPos: []float64{p.LocalPos[0], p.LocalPos[1]},
 	}
 	for i := range p.Assets {
 		my.Assets = append(my.Assets, MyAssetJSON{
@@ -1134,6 +1148,8 @@ type MyMy struct {
 	Goals         []string
 	// P1: 上月消费结构(nil→{})。
 	ConsumptionByGoods map[string]float64
+	// LocalPos 区内归一化坐标(§CityHuman重构)。
+	LocalPos []float64
 }
 
 // jsonMy 把 MyMy 转成 *MyJSON(避免在 MyMy 上重复 JSON 标签)。
@@ -1150,6 +1166,7 @@ func jsonMy(m *MyMy) *MyJSON {
 		Family:  m.Family,
 		FIIndex: m.FIIndex, NetWorth: m.NetWorth, Goals: m.Goals,
 		ConsumptionByGoods: m.ConsumptionByGoods,
+		LocalPos:           m.LocalPos,
 	}
 }
 

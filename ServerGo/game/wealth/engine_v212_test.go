@@ -98,6 +98,6 @@ func TestMonthWindowFor(t *testing.T) {
 // 注: 这是 wealth 包内单测;class_names.go 在 agent 包。
 // 仅校验引用能解析(编译期会失败);完整注册验证见 agent 包测试。
 func TestAgentClassNamesRegistered(t *testing.T) {
-	// 编译期校验:class_names.go 中 AgentClassCityVoice 常量可解析 (§130 接线验证)
-	_ = agentroot.AgentClassCityVoice
+	// 编译期校验:class_names.go 中 AgentClassCityHuman 常量可解析 (§130 接线验证)
+	_ = agentroot.AgentClassCityHuman
 }

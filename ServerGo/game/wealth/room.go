@@ -35,11 +35,36 @@ type BotTranscript struct {
 	LastToolInput       string
 	LastToolResult      string
 	HeartThought        string
+	// LastSenses 最近感知记录(bot_contexts[].last_senses;2026-09-22
+	// §CityHuman重构,see/hear/smell 工具结果摘要,最多保留 3 条)。
+	LastSenses []SenseEntry
+}
+
+// SenseEntry 单条感知记录(bot_contexts[].last_senses 元素)。
+type SenseEntry struct {
+	Month int    `json:"month"`
+	Kind  string `json:"kind"` // see|hear|smell
+	Text  string `json:"text"` // 人读摘要(≤160 字)
+}
+
+// UtteranceRecord 单条公开发言记录(hear 感知数据源;房间内 ring, cap 50)。
+type UtteranceRecord struct {
+	Month    int
+	Seat     int // -1 = 背景居民(城市之声)
+	District string
+	Text     string
 }
 
 // ChatSender bot 公屏发言通道(ws.ChatService 适配器注入;nil-safe)。
 type ChatSender interface {
 	SendFromBot(roomID, botUserID, botAccount, modelKey, text string) error
+}
+
+// ChatWhisperer bot 私聊(耳语)通道(2026-09-22 §CityHuman重构;
+// 可选接口 —— chatSender 实现了才开放 speak scope=private,否则 35103)。
+// 参考狼人杀 ws.ChatService.WhisperFromBot 路径:仅目标座位与观战者可见。
+type ChatWhisperer interface {
+	WhisperFromBot(roomID, botUserID, botAccount, modelKey, toUserID, toAccount, text string) error
 }
 
 // BroadcastHooks ws 层广播钩子(全部在锁外调用)。
@@ -135,6 +160,9 @@ type WealthRoom struct {
 	cityVoice         *city.VoiceScheduler
 	cityVoiceEnabled  bool
 	cityVoicePerMonth int
+
+	// 2026-09-22 §CityHuman重构:感知与发言支撑。
+	utterances []UtteranceRecord // 公开发言环形缓冲(cap 50,hear 数据源)
 
 	done     chan struct{}
 	settleCh chan struct{}
@@ -518,7 +546,7 @@ func (r *WealthRoom) resetMonthFlagsLocked() {
 			continue
 		}
 		p.ActionBudget = monthlyActionBudget
-		p.SpokenThisMonth = false
+		p.SpeakCountThisMonth = 0
 		p.Submitted = false
 		p.LastActionText = ""
 		p.StatusIcon = "idle"

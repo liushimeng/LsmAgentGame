@@ -1,17 +1,14 @@
 /**
- * WealthCreateRoomModal — 虚拟城市建房弹窗：
- *   - 房间名（可选）
- *   - Agent 座位（档位 0–12，Agent 依次占座位号 0..N-1，创建者由后端从剩余空位
- *     中随机入座；N = 12（= 房间容量）时创建者自动降级为观战者，即「全 Agent 房」。
- *     §20260921 建房解耦：每座位模型选择器整体退役 —— agent_seats[].model_key
- *     一律送空串 = 座位走 LLM 线路池驱动（后端 wealth 校验放行空 key；
- *     werewolf 建房不受影响，仍强制合法 key）。
- *   - 城市居民数量（§20260921 城市背景层）：数字输入 + 预设档 12 / 1千 / 1万 /
- *     10万，clamp 1..100000，默认 10000。每位居民从 10 万人物卡知识库自动加载
- *     专属档案（档案锚定设计 §8.4），开局后台异步锚定、逐月模拟。
- *   - LLM 线路池信息行：listModels() → Σ concurrency_lines →
- *     「LLM 线路池：N 条线路（Agent 并发数）」；N=0 黄色警示。
- *   - 月节拍速度（3000 / 8000 / 15000ms 预设 + 3000–30000 滑杆）
+ * WealthCreateRoomModal — 虚拟城市「创建城市」弹窗（2026-09-22 §CityHuman重构）：
+ *   - 城市名（可选）
+ *   - 焦点居民数（档位 1–12，默认 12）：由 LLM 线路池全工具深度驱动的居民
+ *     （agent_seats[].model_key 一律空串 = 线路池驱动）。虚拟城市是全 Agent
+ *     城市模拟器 —— 没有玩家座位，创建者一律为观察者。
+ *   - 背景居民规模（§20260921 城市背景层）：数字输入 + 预设档 12 / 1千 / 1万 /
+ *     10万，clamp 1..100000，默认 10000。数据模拟驱动，从 10 万人物卡知识库
+ *     加载专属档案（档案锚定设计 §8.4），逐月演化、抽样发声。
+ *   - LLM 线路池信息行：listModels() → Σ concurrency_lines；N=0 黄色警示。
+ *   - 模拟月节拍（3000 / 8000 / 15000ms 预设 + 3000–30000 滑杆）
  *   - 职业卡池（curated 精选 10 卡 / docs 文档池）+ 职业卡一览
  *     （GET /api/games/wealth/professions，失败回落静态镜像，不阻塞建房）
  *   - 随机种子（可选，确定性复现）
@@ -64,11 +61,11 @@ const MONTH_MS_PRESETS = [
 ] as const;
 
 /**
- * Agent 数档位 0..12（= 房间容量）。11 = 「1 人类 + 11 Agent」满员；
- * 12 = 全 Agent 房（创建者降级观战者）。0..9 允许创建「等人类加入」的房间，
- * 但会被 MinSeats 校验拦住提交（见 handleSubmit）。
+ * 焦点居民数档位 1..12（= 房间容量）。2026-09-22 §CityHuman重构：
+ * 全 Agent 城市没有玩家座位、不允许 0 档（焦点层不能为空）；
+ * 后端 MinSeats(10) 校验仍生效（< 10 无法自动启动模拟，见 handleSubmit）。
  */
-const SEAT_COUNT_OPTIONS = Array.from({ length: WEALTH_MAX_SEATS + 1 }, (_, i) => i);
+const SEAT_COUNT_OPTIONS = Array.from({ length: WEALTH_MAX_SEATS }, (_, i) => i + 1);
 
 /** 城市居民数预设档（§20260921 建房解耦契约 §2.1）。 */
 const RESIDENT_PRESETS: { value: number; label: string }[] = [
@@ -103,8 +100,8 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
   const [name, setName] = useState('');
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
-  // 2026-09-16 §财商流10–12座位：默认 10 个 Agent（+ 创建者 = 11 座 ≥ MinSeats）。
-  const [agentCount, setAgentCount] = useState(WEALTH_MAX_SEATS); // 2026-09-19 §全Agent模式: 默认全 Agent
+  // 2026-09-22 §CityHuman重构：焦点居民数默认 12（全城深度驱动）。
+  const [agentCount, setAgentCount] = useState(WEALTH_MAX_SEATS);
   // §20260921 城市背景层 — 居民数（默认 1 万，clamp 1..100000）。
   const [residentCount, setResidentCount] = useState(RESIDENT_DEFAULT);
   const [monthMs, setMonthMs] = useState(8000);
@@ -118,14 +115,10 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
   const [localSubmitting, setLocalSubmitting] = useState(false);
 
   /**
-   * 全 Agent 房：Agent 数 == 房间容量(12) → 后端 freeSeats 为空 → 创建者自动降级
-   * 为观战者（service/room_service_crud.go creatorAsSpectator）。此状态**只能**由
-   * agentCount 推导，不做成独立开关：否则会出现「勾了观战者却只配 10 个 Agent」
-   * 这种与后端矛盾的请求（后端照样把创建者塞进空位当玩家）。
+   * 2026-09-22 §CityHuman重构：虚拟城市是全 Agent 城市 —— full_agent 恒 true，
+   * 创建者一律为观察者，不存在「创建者入座」；焦点居民数即 bot 座位数。
    */
-  const allAgentRoom = agentCount >= WEALTH_MAX_SEATS;
-  /** 本房间总座位（Agent + 创建者；全 Agent 房创建者不占座）→ MinSeats 校验用。 */
-  const totalSeats = Math.min(agentCount + (allAgentRoom ? 0 : 1), WEALTH_MAX_SEATS);
+  const totalSeats = agentCount;
 
   /** §20260921 线路池 — Σ concurrency_lines（/api/llm/models 只列可用模型）。 */
   const linePoolTotal = models.reduce((sum, m) => sum + (m.concurrency_lines ?? 1), 0);
@@ -163,10 +156,9 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
 
   const busy = submitting || localSubmitting;
 
-  // §20260921 建房解耦 — 座位不绑定模型：model_key 空串 = 线路池驱动
-  //（后端 ValidateAgentSeats 对 kind=wealth 放行空 key；洗牌分配方案 R1-R3 退役）。
+  // §20260921 建房解耦 — 居民座位不绑定模型：model_key 空串 = 线路池驱动
+  //（后端 ValidateAgentSeats 对 kind=wealth 放行空 key）。
   const agentSeats: AgentSeatRequest[] = Array.from({ length: agentCount }, (_, i) => ({
-    // Agent 占座位号 0..N-1；创建者由后端从剩余空位随机入座（全 Agent 房无空位）。
     seat: i,
     model_key: '',
   }));
@@ -178,8 +170,7 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
       return;
     }
     // MinSeats 门控（§7.1 优先级 1：就地内联红条，弹窗不关闭）。
-    // 后端 room.Start 在 occupied < MinSeats 时返回 35003，前端提前拦截并给出
-    // 可操作文案（增加 Agent 座位或改勾「以观战者身份建房」）。
+    // 后端 room.Start 在 occupied < MinSeats 时返回 35003，前端提前拦截。
     if (totalSeats < WEALTH_MIN_SEATS) {
       setFormError(
         t('wealth.create.needMinSeats' as TKey, { n: totalSeats, min: WEALTH_MIN_SEATS }),
@@ -209,8 +200,8 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
 
   return (
     <AppModal
-      title={`💰 ${t('wealth.createRoom' as TKey)}`}
-      icon="💰"
+      title={`🏙 ${t('wealth.createRoom' as TKey)}`}
+      icon="🏙"
       kind="info"
       maxWidth={560}
       dismissible={!busy}
@@ -249,12 +240,10 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
           />
         </label>
 
-        {/* Agent 座位：数量档位（0..12）；座位模型由 LLM 线路池统一驱动 */}
+        {/* 焦点居民数：1..12 档位；由 LLM 线路池统一驱动（全 Agent 城市，无玩家座位） */}
         <div className="wealth-create-form__row">
           <span>
-            {allAgentRoom
-              ? `${t('wealth.agentSeats' as TKey)} = ${totalSeats}/${WEALTH_MAX_SEATS}`
-              : `${t('wealth.agentSeats' as TKey)}（+${t('wealth.create.meSeat' as TKey)} = ${totalSeats}/${WEALTH_MAX_SEATS}）`}
+            {`${t('wealth.agentSeats' as TKey)} = ${totalSeats}/${WEALTH_MAX_SEATS}`}
           </span>
           <div className="wealth-create-form__seatcount" data-testid="wealth-create-agent-tiers">
             {SEAT_COUNT_OPTIONS.map((n) => (
@@ -276,22 +265,7 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* 创建者身份（由 Agent 数推导，不可独立勾选）：
-            Agent < 12 → 入座玩家（后端随机空位）；Agent == 12 → 观战者（全 Agent 房） */}
-        <div className="wealth-create-form__row">
-          <span>{t('wealth.create.creatorRole' as TKey)}</span>
-          <span
-            className="wealth-create-form__creatorrole"
-            data-testid="wealth-create-creator-role"
-            aria-live="polite"
-          >
-            {allAgentRoom
-              ? `👁 ${t('wealth.create.watchOnly' as TKey, { max: WEALTH_MAX_SEATS })}`
-              : `🧑 ${t('wealth.create.creatorPlayer' as TKey)}`}
-          </span>
-        </div>
-
-        {/* 座位数校验：MinSeats(10) 以下无法开局 —— 就地黄条提示 + 提交时红条拦截 */}
+        {/* 座位数校验：MinSeats(10) 以下无法启动模拟 —— 就地黄条提示 + 提交时红条拦截 */}
         {totalSeats < WEALTH_MIN_SEATS ? (
           <p className="wealth-create-form__hint" data-testid="wealth-create-seats-warning">
             ⚠️ {t('wealth.create.needMinSeats' as TKey, { n: totalSeats, min: WEALTH_MIN_SEATS })}
@@ -302,7 +276,7 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
           </p>
         )}
 
-        {/* §20260921 城市背景层 — 城市居民数量：数字输入 + 预设档 12/1千/1万/10万 */}
+        {/* 背景居民规模（§20260921 城市背景层 + §CityHuman重构改名）：数字输入 + 预设档 12/1千/1万/10万 */}
         <div className="wealth-create-form__row">
           <span>{t('wealth.residentCount' as TKey)}</span>
           <div className="wealth-create-form__seatcount" data-testid="wealth-create-resident-tiers">
@@ -359,7 +333,7 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
           </p>
         )}
 
-        {/* 月节拍速度 */}
+        {/* 模拟月节拍 */}
         <div className="wealth-create-form__row">
           <span>{t('wealth.monthMs' as TKey)}</span>
           <div className="wealth-create-form__seatcount">

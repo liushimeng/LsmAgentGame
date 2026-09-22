@@ -318,7 +318,7 @@ func (w *World) StartGame() {
 		}
 		p.ActionBudget = monthlyActionBudget
 		p.Submitted = false
-		p.SpokenThisMonth = false
+		p.SpeakCountThisMonth = 0
 		if p.Card.Savings > 0 {
 			// 直接 Record(不走 Pay:注入即初始现金,不产生增量)。
 			w.Ledger.Record(0, EntityWorld, SeatEntity(seat), p.Card.Savings, CatInject,

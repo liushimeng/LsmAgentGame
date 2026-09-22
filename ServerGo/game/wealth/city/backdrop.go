@@ -248,6 +248,9 @@ type Snapshot struct {
 	// Profiles 档案锚定进度(2026-09-21 §档案锚定契约 §4;从未启动锚定的
 	// 房间(nil/纯合成)恒 nil → omitempty 不下发,前端向后兼容)。
 	Profiles *ProfileProgress `json:"profiles,omitempty"`
+	// Ambiance 各城区当月气味/声响标签(2026-09-22 §CityHuman重构;
+	// 由 wealth 层在广播前填充(基底表 + 当月事件叠加),nil → omitempty)。
+	Ambiance map[string]AmbianceTags `json:"ambiance,omitempty"`
 }
 
 // Snapshot 聚合快照(契约 03 §4.4;锁内计算,纯函数视图)。

@@ -1,13 +1,15 @@
 /**
- * WealthBotPanel — Agent 思维展示（bot_contexts：本人座位 + 观战者可见）。
+ * WealthBotPanel — 居民思维展示（bot_contexts：本人座位 + 观察者可见）。
  * 仿 texasholdem/BotThoughtPanel 的折叠风格：每座位一张卡，
- * 决策摘要 / 工具入参 / 工具结果 / 内心独白 四段。
+ * 决策摘要 / 工具入参 / 工具结果 / 内心独白 四段；
+ * 2026-09-22 §CityHuman重构：追加「感知」小节（看见/听见/闻到三段式，
+ * 数据源 bot_contexts[].last_senses，契约见设计文档 1 §4.3/§6）。
  */
 
 import { useMemo, useState } from 'react';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
-import type { WealthBotContext, WealthPlayer } from '@/types/wealth';
+import type { WealthBotContext, WealthPlayer, WealthSenseResult } from '@/types/wealth';
 import { professionColor, professionEmoji } from '@/types/wealth';
 
 interface Props {
@@ -24,6 +26,56 @@ function prettyJson(raw: string): string {
 }
 
 type BotFilter = 'all' | 'active' | 'decision';
+
+/** 感知三段式渲染辅助：把一条 SenseResult 拍平成人读文本行。 */
+function senseLines(sense: WealthSenseResult): string[] {
+  const lines: string[] = [];
+  if (sense.people?.length) {
+    lines.push(
+      sense.people
+        .map((p) => (p.occupation ? `${p.name}(${p.occupation})` : p.name))
+        .join('、'),
+    );
+  }
+  if (sense.things?.length) lines.push(sense.things.join('、'));
+  if (sense.events?.length) lines.push(sense.events.join('；'));
+  if (sense.utterances?.length) lines.push(sense.utterances.join('；'));
+  if (sense.smells?.length) lines.push(sense.smells.join('、'));
+  if (sense.sounds?.length) lines.push(sense.sounds.join('、'));
+  return lines;
+}
+
+/** 感知条目 → 三段式标签键（缺 kind 时按字段内容推断，兼容旧帧）。 */
+function senseLabelKey(sense: WealthSenseResult): TKey {
+  if (sense.kind === 'see' || sense.kind === 'hear' || sense.kind === 'smell') {
+    return `wealth.botPanel.sense.${sense.kind}` as TKey;
+  }
+  if (sense.smells?.length) return 'wealth.botPanel.sense.smell' as TKey;
+  if (sense.utterances?.length || sense.sounds?.length) return 'wealth.botPanel.sense.hear' as TKey;
+  return 'wealth.botPanel.sense.see' as TKey;
+}
+
+/** 「感知」小节：看见/听见/闻到三段式（last_senses 缺省时不渲染）。 */
+function SenseSection({ senses, t }: { senses?: WealthSenseResult[]; t: ReturnType<typeof useT> }) {
+  if (!senses || senses.length === 0) return null;
+  return (
+    <div className="wealth-botpanel__senses">
+      <b>👁 {t('wealth.botPanel.sense.title' as TKey)}</b>
+      {senses.map((sense, i) => {
+        const lines = senseLines(sense);
+        if (lines.length === 0) return null;
+        return (
+          <p key={i} className="wealth-botpanel__row wealth-botpanel__sense">
+            <b>{t(senseLabelKey(sense))}</b>
+            <span>
+              [{sense.district}] {lines.join(' · ')}
+            </span>
+          </p>
+        );
+      })}
+    </div>
+  );
+}
 
 function hasCompletedDecision(ctx: WealthBotContext): boolean {
   const decisionMonth = ctx.last_decision_month || 0;
@@ -152,6 +204,7 @@ export function WealthBotPanel({ botContexts, players }: Props) {
               )}
             </summary>
             <div className="wealth-botpanel__body">
+              <SenseSection senses={ctx.last_senses} t={t} />
               {ctx.last_decision_summary && (
                 <p className="wealth-botpanel__row">
                   <b>🎯 {t('wealth.botPanel.decision' as TKey)}</b>

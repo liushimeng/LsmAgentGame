@@ -73,3 +73,39 @@ func DistrictCN(id string) string {
 	}
 	return id
 }
+
+// ── 城区感官基底表(2026-09-22 §CityHuman重构,设计文档 1 §3.2) ──
+//
+// 每个城区定义 2~4 个气味标签 + 1~2 个环境声标签,作为 smell/hear 感知工具的
+// 确定性基底;当月动态事件气味/声响由 events.go ambianceOverlay 叠加。
+
+// AmbianceBase 单城区感官基底。
+type AmbianceBase struct {
+	Smells []string // 气味基底(嗅觉 ≈50m)
+	Sounds []string // 环境声基底(听觉 ≈100m)
+}
+
+// districtAmbianceBase 16 城区感官基底(键 = DistrictDefs ID)。
+var districtAmbianceBase = map[string]AmbianceBase{
+	"finance":            {Smells: []string{"咖啡", "打印机墨粉", "空调新风"}, Sounds: []string{"键盘声", "电梯提示音"}},
+	"tech":               {Smells: []string{"咖啡", "外卖盒饭", "新机箱塑料味"}, Sounds: []string{"服务器风扇", "讨论声"}},
+	"industry":           {Smells: []string{"油烟", "尾气", "金属切削液"}, Sounds: []string{"机器轰鸣", "货车倒车提示"}},
+	"oldtown":            {Smells: []string{"老汤卤味", "煤炉烟火气", "旧木家具"}, Sounds: []string{"收音机戏曲", "邻里寒暄"}},
+	"commerce":           {Smells: []string{"食物香气", "香水", "爆米花"}, Sounds: []string{"促销广播", "人群嘈杂"}},
+	"residential":        {Smells: []string{"饭菜香", "洗衣液", "绿化泥土"}, Sounds: []string{"广场舞音乐", "儿童嬉闹"}},
+	"suburb":             {Smells: []string{"青草", "农田土腥", "炊烟"}, Sounds: []string{"犬吠", "风声"}},
+	"riverside":          {Smells: []string{"河水湿气", "水草腥", "夜摊烧烤"}, Sounds: []string{"游船汽笛", "水声"}},
+	"logistics_port":     {Smells: []string{"柴油", "海腥", "纸箱"}, Sounds: []string{"吊机作业", "集卡鸣笛"}},
+	"hightech_park":      {Smells: []string{"咖啡", "无尘车间清洗剂", "新打印纸"}, Sounds: []string{"通勤班车", "路演掌声"}},
+	"edu_district":       {Smells: []string{"食堂饭菜", "粉笔灰", "旧书页"}, Sounds: []string{"上下课铃", "操场哨声"}},
+	"medical_city":       {Smells: []string{"消毒水", "药味"}, Sounds: []string{"救护车笛", "叫号广播"}},
+	"industrial_park":    {Smells: []string{"机油", "焊接烟尘", "食堂大锅菜"}, Sounds: []string{"流水线节拍", "叉车提示音"}},
+	"central_park":       {Smells: []string{"青草", "花香", "湖水湿气"}, Sounds: []string{"鸟鸣", "风声"}},
+	"transport_hub":      {Smells: []string{"尾气", "快餐油烟", "行李箱橡胶轮"}, Sounds: []string{"列车广播", "人流脚步声"}},
+	"cultural_creative":  {Smells: []string{"咖啡", "油墨", "旧书页"}, Sounds: []string{"街头艺人", "轻声交谈"}},
+}
+
+// DistrictAmbiance 返回城区感官基底(未命中返回空)。
+func DistrictAmbiance(id string) AmbianceBase {
+	return districtAmbianceBase[id]
+}

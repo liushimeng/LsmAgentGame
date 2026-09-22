@@ -3,8 +3,8 @@
 //
 // 本包与 agent/thptypes/ 同源设计,是 **leaf 包**:不 import game/wealth、
 // agent/wealthplayer、llm/ws(避免循环 import);唯一例外是 import
-// agentroot(LsmAgentGame/agent,自身零依赖)以引用 AgentClassCityPlayer
-// 常量(2026-09-21 §虚拟城市-Agent命名City化,§130 防散写字面量)。
+// agentroot(LsmAgentGame/agent,自身零依赖)以引用 AgentClassCityHuman
+// 常量(2026-09-22 §CityHuman重构: 五类 AgentClass 合一,§130 防散写字面量)。
 //
 // 生命周期约定(与 thptypes 一致):引擎侧(game/wealth/agent_runner.go)在
 // **持锁态**构造 GameContext 快照;Agent 侧(wealthplayer)锁外只读消费。
@@ -63,6 +63,40 @@ type GameContext struct {
 	OpenSurveyQuestion string   // 问题文本
 	OpenSurveyOptions  []string // 选项列表
 	EconomyBrief       string   // 一行价格涨跌摘要,如 "CPI同比2.3% 失业5.1% 涨幅前二:食品+1.2% 交通+0.8%"
+
+	// §CityHuman重构(2026-09-22): 感官上下文(引擎持锁构造、Agent 锁外只读)。
+	Surroundings []NeighborBrief // 同城区邻居摘要(座位居民优先 + 抽样背景居民,≤8 条)
+	Ambiance     AmbianceBrief   // 当月所在城区感官画像(气味/声响标签)
+}
+
+// NeighborBrief 是 see/hear 感知结果中「人」的摘要(全部来自已锚定真实档案;
+// 档案未就绪时降级为合成姓名并省略 CardID)。
+type NeighborBrief struct {
+	Kind       string `json:"kind"` // "seat" | "resident"
+	Seat       int    `json:"seat,omitempty"`
+	CardID     string `json:"card_id,omitempty"`
+	Name       string `json:"name"`
+	Occupation string `json:"occupation"`
+	District   string `json:"district"`
+	MoodHint   string `json:"mood_hint,omitempty"` // 由压力/情绪字段映射的一词状态
+}
+
+// AmbianceBrief 是单城区当月感官画像(基底表 + 动态事件叠加)。
+type AmbianceBrief struct {
+	District string   `json:"district"`
+	Smells   []string `json:"smells"` // 基底 + 动态事件气味
+	Sounds   []string `json:"sounds"` // 基底 + 动态事件声响
+}
+
+// SenseResult 是 see/hear/smell 三个感知工具的统一返回(确定性构造,不调 LLM)。
+type SenseResult struct {
+	District   string          `json:"district"`
+	People     []NeighborBrief `json:"people,omitempty"`     // see 专用
+	Things     []string        `json:"things,omitempty"`     // see: 挂牌/店铺/建筑
+	Events     []string        `json:"events,omitempty"`     // see/hear: 本区本月事件
+	Utterances []string        `json:"utterances,omitempty"` // hear: 近期公开发言摘录
+	Smells     []string        `json:"smells,omitempty"`     // smell
+	Sounds     []string        `json:"sounds,omitempty"`     // hear/smell 共用环境声
 }
 
 // CentralBankSnapshot 央行只读快照(AltAgent 可见)。
@@ -211,7 +245,7 @@ type BotIdentityBrief struct {
 	UserID     string
 	ModelKey   string
 	ModelName  string
-	AgentClass string // 恒 string(agentroot.AgentClassCityPlayer) = "LsmAgentGame-City-Player"
+	AgentClass string // 恒 string(agentroot.AgentClassCityHuman) = "LsmAgentGame-City-Human"
 }
 
 // CardBrief 是职业卡的 Agent 侧投影(System prompt 渲染所需字段)。
@@ -261,7 +295,7 @@ func BuildEmptyContext(roomID, userID, modelKey string, seat int) *GameContext {
 		BotIdentity: BotIdentityBrief{
 			UserID:     userID,
 			ModelKey:   modelKey,
-			AgentClass: string(agentroot.AgentClassCityPlayer),
+			AgentClass: string(agentroot.AgentClassCityHuman),
 		},
 	}
 }

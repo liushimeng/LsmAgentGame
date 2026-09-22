@@ -258,6 +258,12 @@ export interface WealthDict {
   'wealth.botPanel.filterEmpty': string;
   'wealth.botPanel.statusActive': string;
   'wealth.botPanel.statusOut': string;
+  // 2026-09-22 §CityHuman重构 — 居民感知三段式（看见/听见/闻到）。
+  'wealth.botPanel.sense.title': string;
+  'wealth.botPanel.sense.see': string;
+  'wealth.botPanel.sense.hear': string;
+  'wealth.botPanel.sense.smell': string;
+  'wealth.botPanel.sense.empty': string;
   'wealth.chat.playerFallback': string;
   'wealth.minimap.aria': string;
   'wealth.pool.cardsTitle': string;

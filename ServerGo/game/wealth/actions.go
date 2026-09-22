@@ -35,6 +35,8 @@ type Action struct {
 	Reason string `json:"reason,omitempty"`
 	// set_consumption(P1 §3.5):0 节俭/1 标准/2 精致/3 奢侈
 	Level int `json:"level,omitempty"`
+	// move(§CityHuman重构): walk|run(区内) / bus|metro|taxi(跨城区)
+	Mode string `json:"mode,omitempty"`
 }
 
 // 动作类型常量(协议 §4)。
@@ -51,6 +53,9 @@ const (
 	ActRest         = "rest"
 	ActWorkOvertime = "work_overtime"
 	ActMoveDistrict = "move_district"
+	// ActMove 统一移动(2026-09-22 §CityHuman重构):区内 walk/run 或跨城区
+	// bus/metro/taxi;跨城区语义替代 move_district(后者保留兼容)。
+	ActMove = "move"
 	ActConsume      = "consume"
 	ActDonate       = "donate"
 	ActSubmitMonth  = "submit_month"
@@ -122,6 +127,8 @@ func (w *World) ApplyAction(seat int, a Action) (string, *errcode.Error) {
 		return w.actWorkOvertime(p)
 	case ActMoveDistrict:
 		return w.actMoveDistrict(p, a)
+	case ActMove:
+		return w.actMove(p, a)
 	case ActConsume:
 		return w.actConsume(p, a)
 	case ActDonate:
@@ -956,6 +963,94 @@ func (w *World) actMoveDistrict(p *Player, a Action) (string, *errcode.Error) {
 	w.spendBudget(p, "moved", text)
 	return text, nil
 }
+
+// moveModeDef 移动方式定价(2026-09-22 §CityHuman重构,设计文档 1 §4.1 move):
+// 跨城区三档(bus 最便宜 / metro 居中 / taxi 最贵最快),价格随 CPI 浮动。
+type moveModeDef struct {
+	CostCNY   int64 // 基准费用(元)
+	EnergyCost int  // 精力消耗
+	Label     string
+}
+
+var moveModeDefs = map[string]moveModeDef{
+	"walk":  {CostCNY: 0, EnergyCost: 1, Label: "步行"},
+	"run":   {CostCNY: 0, EnergyCost: 2, Label: "跑步"},
+	"bus":   {CostCNY: 500, EnergyCost: 2, Label: "公交"},
+	"metro": {CostCNY: 1500, EnergyCost: 1, Label: "地铁"},
+	"taxi":  {CostCNY: 3000, EnergyCost: 1, Label: "出租车"},
+}
+
+// moveCPIFactor 移动费用 CPI 浮动系数(economy_enabled=false → 恒 1;
+// clamp [0.5, 3.0] 防极端通胀/通缩失真)。
+func (w *World) moveCPIFactor() float64 {
+	if !w.EconomyEnabled || w.Goods == nil {
+		return 1.0
+	}
+	return clampF(1+w.Goods.CPIYoY, 0.5, 3.0)
+}
+
+// actMove 统一移动:walk/run = 区内移动(仅改 LocalPos,不进 Ledger);
+// bus/metro/taxi = 跨城区(语义替代 move_district,按方式计费/耗精力)。
+func (w *World) actMove(p *Player, a Action) (string, *errcode.Error) {
+	if p.ActionBudget <= 0 {
+		return "", errcode.Code(errcode.ErrWealthActionBudgetExhausted)
+	}
+	def, ok := moveModeDefs[a.Mode]
+	if !ok {
+		return "", errcode.CodeMsg(errcode.ErrWealthSenseInvalid, "unknown move mode (walk|run|bus|metro|taxi)")
+	}
+	if p.StoppedMonths > 0 {
+		return "", errcode.Code(errcode.ErrWealthMoveForbidden)
+	}
+	if p.Energy < def.EnergyCost {
+		return "", errcode.Code(errcode.ErrWealthGateFailed)
+	}
+
+	// 区内移动:destination 为空或与当前区相同。
+	if a.District == "" || a.District == p.District {
+		if a.Mode != "walk" && a.Mode != "run" {
+			return "", errcode.CodeMsg(errcode.ErrWealthSenseInvalid, "in-district move only supports walk|run")
+		}
+		p.Energy -= def.EnergyCost
+		// 区内位置随机游走(确定性 rng,不耗经济流)。
+		p.LocalPos[0] = w.Rand.Float64()
+		p.LocalPos[1] = w.Rand.Float64()
+		text := def.Label + "在" + DistrictCN(p.District) + "内移动(精力 −" + itoaInt(def.EnergyCost) + ")"
+		w.spendBudget(p, "moving", text)
+		return text, nil
+	}
+
+	// 跨城区移动。
+	if !ValidDistrict(a.District) {
+		return "", errcode.CodeMsg(errcode.ErrWealthSenseInvalid, "unknown district")
+	}
+	cost := int64(float64(def.CostCNY)*w.moveCPIFactor() + 0.5)
+	if p.Cash < cost {
+		return "", errcode.Code(errcode.ErrWealthInsufficientCash)
+	}
+	if cost > 0 {
+		w.Pay(p.Seat, SeatEntity(p.Seat), w.consumerPayTo(), cost, CatMoving, def.Label+"出行")
+	}
+	p.Energy -= def.EnergyCost
+	p.District = a.District
+	p.LocalPos = [2]float64{w.Rand.Float64(), w.Rand.Float64()}
+	// 目标区有自住房 → 自动改自住(与 actMoveDistrict 同语义)。
+	if p.selfOccupiedHouse() == nil {
+		p.HomeDistrict = a.District
+	} else if p.selfOccupiedHouse().AssetDistrict() == a.District {
+		// 已在该区自住,无事。
+	} else {
+		w.switchSelfOccupy(p, a.District)
+	}
+	text := def.Label + "前往" + DistrictCN(a.District) + "(¥" + itoaInt64(cost) + ")"
+	w.emitEvent("move", p.Seat, fmt.Sprintf("%d 号位乘%s前往%s", p.Seat, def.Label, DistrictCN(a.District)))
+	w.spendBudget(p, "moved", text)
+	return text, nil
+}
+
+// itoaInt / itoaInt64 小整数转字符串(避免新增 strconv import 漂移)。
+func itoaInt(v int) string { return fmt.Sprintf("%d", v) }
+func itoaInt64(v int64) string { return fmt.Sprintf("%d", v) }
 
 // switchSelfOccupy 把自住标记迁到目标区的自有住宅(无则保持现状)。
 func (w *World) switchSelfOccupy(p *Player, district string) {
