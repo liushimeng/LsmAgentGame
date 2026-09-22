@@ -1,9 +1,10 @@
 /**
- * DistrictBlock — 单城区：8×8 底板（纹理缺失降级主色）+ 4–6 栋确定性伪随机楼群
- * + hover 信息卡（区名 / 房价 / 租金 / beta / 在区玩家数）。
+ * DistrictBlock — 单城区：8×8 底板（纹理缺失降级主色）+ 确定性伪随机楼群
+ * （central_park 1-2 栋 pavilion，其余城区 4–6 栋）+ hover 信息卡（区名 / 房价 / 租金 / beta / 在区玩家数）。
  *
- * P1-B 改造：楼群渲染段由 inline boxGeometry 改为 <BuildingMesh />。
- * BuildingMesh 内部按 4 侧面 + 顶面分别贴 facade / roof 纹理，缺失 → 退色。
+ * P1-B 改造：楼群渲染段由 inline boxGeometry 改为 <BuildingMesh />；
+ * 13-3D优化 阶段 B：BuildingMesh 内部按 DISTRICT_ARCHETYPE 分发体块组合
+ * （tower/slab/house/shed/pavilion，见 building_shapes.tsx），缺失 → 退色。
  *
  * 楼群高度映射 price_index（0.8–1.6 → 繁荣度 0–1，在城区楼层区间内插值，
  * 见 cityScale.ts DISTRICT_FLOORS）：繁荣期楼变高、萧条期变矮
@@ -49,10 +50,13 @@ function mulberry32(seed: number): () => number {
 
 // BuildingSpec 由 ./BuildingMesh 统一导出，此处不再重复定义
 
-/** 楼群布局（seed = district id；与 price_index 无关，仅高度随行情缩放）。 */
+/** 楼群布局（seed = district id；与 price_index 无关，仅高度随行情缩放）。
+ *  13-3D优化 阶段 B：central_park 楼数 1-2 栋（pavilion 景观建筑，
+ *  绿化交给 StreetPropsLayer 树群），其余城区不变 4-6 栋。 */
 function buildingsFor(def: WealthDistrictDef): BuildingSpec[] {
   const rnd = mulberry32(hashStr(def.id));
-  const count = 4 + Math.floor(rnd() * 3); // 4–6 栋
+  const isPark = def.id === 'central_park';
+  const count = isPark ? 1 + (rnd() < 0.5 ? 1 : 0) : 4 + Math.floor(rnd() * 3);
   const out: BuildingSpec[] = [];
   for (let i = 0; i < count; i++) {
     // 3×2 网格 + 抖动，保证楼间留缝不重叠。
@@ -165,9 +169,10 @@ export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect
           prosperity={prosperity}
         />
       ))}
-      {/* hover 信息卡 */}
+      {/* hover 信息卡（阶段 E：zIndexRange [30,0] 封顶 —— 不盖小地图 z40 /
+          error banner z50；默认 16777271 会压住一切，契约 04 文档 §4） */}
       {hovered && (
-        <Html position={[0, heightBase + 1.0, 0]} center distanceFactor={16}>
+        <Html position={[0, heightBase + 1.0, 0]} center distanceFactor={16} zIndexRange={[30, 0]}>
           <div className="wealth-district-card">
             <div className="wealth-district-card__name">
               {t(`wealth.district.${def.id}` as TKey)} · #{idx + 1}

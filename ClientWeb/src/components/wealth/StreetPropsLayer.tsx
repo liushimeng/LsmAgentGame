@@ -2,7 +2,7 @@
  * StreetPropsLayer — 街景道具布点协调器（P1-C）：
  *
  * 总览：
- *   - 每个城区：2 棵树 + 1 根路灯 + 1-2 件屋顶杂物 + 1 行人 + 1 标识牌
+ *   - 每个城区：4 棵树（central_park 10 棵）+ 1 根路灯 + 1-2 件屋顶杂物 + 1 行人 + 1 标识牌
  *   - 每条主干道沿线：1 辆移动车辆
  *
  * 布点策略：确定性伪随机（mulberry32 + hashStr），重渲染布局稳定（CLAUDE.md §3 风格一致）。
@@ -10,6 +10,9 @@
  *
  * v2.12 阶段 2：**props 化** —— 城区清单由父层 `districts` 注入（不再 import
  * WEALTH_DISTRICTS 静态表），数量随城区表自适应（8 区或 16 区同一代码路径）。
+ *
+ * v2.13 阶段 D（13-3D城市渲染优化）：每条主干道 t=0.12 路侧布 1 个红绿灯
+ * （props/TrafficLight，替换从未接线的空 intersectionSigns 字段，§130）。
  *
  * 预算：mesh 总数 ≤ 2500（v2.12 阶段 2 上限；16 城区实际 ≈ 每城区 ~5 × 16
  * + 主干道车辆 ~12 ≈ 92，远低于护栏）。
@@ -31,6 +34,7 @@ import { Vehicle } from './props/Vehicle';
 import { Pedestrian } from './props/Pedestrian';
 import { Sign } from './props/Sign';
 import { RooftopAcc } from './props/RooftopAcc';
+import { TrafficLight } from './props/TrafficLight';
 
 // ── 确定性伪随机（与 DistrictBlock.tsx 同源）────────────────
 
@@ -75,8 +79,8 @@ interface RoadVehicle {
 interface Layout {
   districtProps: DistrictProps[];
   roadVehicles: RoadVehicle[];
-  /** 主干道路口的标识牌（额外补充，区别于 Road.tsx 自带路灯）。 */
-  intersectionSigns: Array<{ x: number; z: number; rotation: number; variant: 'traffic' | 'info' }>;
+  /** 主干道路侧红绿灯（v2.13 阶段 D；t=0.12，与车辆同路判定）。 */
+  trafficLights: Array<{ x: number; z: number; rotation: number }>;
 }
 
 const TREE_VARIANTS: Array<'oak' | 'pine' | 'palm'> = ['oak', 'pine', 'palm'];
@@ -87,19 +91,30 @@ const VEHICLE_VARIANTS: Array<'sedan' | 'truck' | 'bus' | 'taxi'> = ['sedan', 't
 function propsForDistrict(def: WealthDistrictDef, idx: number): DistrictProps {
   const rnd = mulberry32(hashStr(def.id));
   const c = { x: def.x, z: def.z };
+  // 城区朝向 finance（原点）的方向角（标识牌/树避让共用）
+  const angleToFinance = Math.atan2(-c.z, -c.x);
 
-  // 2 棵树：分别放在城区四角（角度均匀偏移 + 抖动）
-  const trees = [0, 1].map((i) => {
-    const baseAngle = (i / 2) * Math.PI * 2 + Math.PI / 4;
-    const jitterA = (rnd() - 0.5) * 0.6;
-    const angle = baseAngle + jitterA;
-    const radius = 3.4 + rnd() * 0.4;
+  // 13-3D优化 阶段 B/D 树群（契约 02 文档 §2.4/§3.4）：
+  //   central_park → 10 棵（半径 1.5~3.5 散布，scale 0.8~1.2，绿化率 >60%）；
+  //   其余城区     → 4 棵沿城区边缘（半径 3.6±0.3），避开路口 sign 角度 ±0.4 rad。
+  const isPark = def.id === 'central_park';
+  const treeCount = isPark ? 10 : 4;
+  const angleDiff = (a: number, b: number) => {
+    let d = a - b;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return Math.abs(d);
+  };
+  const trees = Array.from({ length: treeCount }, (_, i) => {
+    let angle = (i / treeCount) * Math.PI * 2 + (rnd() - 0.5) * 0.6;
+    if (!isPark && angleDiff(angle, angleToFinance) < 0.4) angle += 0.5; // 避让路口标识牌
+    const radius = isPark ? 1.5 + rnd() * 2.0 : 3.3 + rnd() * 0.6;
     return {
       x: c.x + Math.cos(angle) * radius,
       z: c.z + Math.sin(angle) * radius,
       variant: TREE_VARIANTS[Math.floor(rnd() * TREE_VARIANTS.length)],
-      // 行道树 5~10m → scale 0.5~1.0（2026-09-21 高度系统，见 cityScale.ts）
-      scale: 0.5 + rnd() * 0.5,
+      // 行道树 5~10m → scale 0.5~1.0；公园乔木 8~12m → 0.8~1.2（见 cityScale.ts）
+      scale: isPark ? 0.8 + rnd() * 0.4 : 0.5 + rnd() * 0.5,
     };
   });
 
@@ -130,8 +145,7 @@ function propsForDistrict(def: WealthDistrictDef, idx: number): DistrictProps {
     seed: idx + rnd(),
   };
 
-  // 路口标识牌：放在城区靠近 finance 一侧（沿 → (0,0) 方向）
-  const angleToFinance = Math.atan2(-c.z, -c.x);
+  // 路口标识牌：放在城区靠近 finance 一侧（angleToFinance 已在树群段计算）
   const signR = 3.5;
   const sign = {
     x: c.x + Math.cos(angleToFinance) * signR,
@@ -175,6 +189,35 @@ function vehiclesForRoads(districts: WealthDistrictDef[]): RoadVehicle[] {
   return roads;
 }
 
+/**
+ * 为每条主干道布 1 个路侧红绿灯（v2.13 阶段 D，02-架构 §3.2）：
+ * t=0.12（靠近城区入口，与斑马线 t=0.08 相邻成组），路侧偏移方向与
+ * Road.tsx 路灯阵列一致（垂直向量 (-dz/len, dx/len) × (roadWidth/2 + 0.35)，
+ * 主干道 ROAD_WIDTH_MAIN=1.4 → 偏移 1.05）；rotation = angle + π（面向来车）。
+ */
+function trafficLightsForRoads(districts: WealthDistrictDef[]): Layout['trafficLights'] {
+  const out: Layout['trafficLights'] = [];
+  districts
+    .filter((d) => d.id !== 'finance')
+    .forEach((d) => {
+      const c = districtCenter(d.id);
+      const dx = -c.x;
+      const dz = -c.z;
+      const len = Math.sqrt(dx * dx + dz * dz);
+      if (len < 12) return; // 仅主干道（与 vehiclesForRoads 同判定）
+      const t = 0.12;
+      const nx = -dz / len;
+      const nz = dx / len;
+      const sideOffset = 1.4 / 2 + 0.35; // ROAD_WIDTH_MAIN/2 + 路肩
+      out.push({
+        x: c.x + dx * t + nx * sideOffset,
+        z: c.z + dz * t + nz * sideOffset,
+        rotation: Math.atan2(dx, dz) + Math.PI, // 面向来车（from → to 方向的反方向来车）
+      });
+    });
+  return out;
+}
+
 interface StreetPropsLayerProps {
   /** 城区静态表（v2.12 阶段 2 props 化；由 WealthCityMap 注入 WEALTH_DISTRICTS）。 */
   districts: WealthDistrictDef[];
@@ -184,9 +227,8 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
   const layout = useMemo<Layout>(() => {
     const districtProps = districts.map((d, idx) => propsForDistrict(d, idx));
     const roadVehicles = vehiclesForRoads(districts);
-    // 主干道路口（finance 与最长道路交叉点）
-    const intersectionSigns: Layout['intersectionSigns'] = [];
-    return { districtProps, roadVehicles, intersectionSigns };
+    const trafficLights = trafficLightsForRoads(districts);
+    return { districtProps, roadVehicles, trafficLights };
   }, [districts]);
 
   return (
@@ -232,6 +274,11 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
           speed={v.speed}
           phase={v.phase}
         />
+      ))}
+
+      {/* 主干道红绿灯（v2.13 阶段 D） */}
+      {layout.trafficLights.map((tl, i) => (
+        <TrafficLight key={`tl-${i}`} x={tl.x} z={tl.z} rotation={tl.rotation} />
       ))}
     </>
   );

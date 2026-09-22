@@ -7,6 +7,11 @@
  * 沿 from→to 路径循环移动：useFrame 内 lerp t += speed * dt，过 t ≥ 1 → 重置。
  * y=0.02（贴路面之上）；rotation 始终朝向运动方向（与 Billboard 不冲突，
  * sprite 始终朝相机，几何盒子朝向运动方向）。
+ *
+ * v2.13 阶段 D（13-3D城市渲染优化 02-架构 §3.3）：
+ *   - 车身下 4 个车轮（黑色扁圆柱 r=u(0.35)，轴沿车宽 z 向），
+ *     贴图/几何两分支都渲染（贴图 sprite 是侧视 Billboard，车轮在地面层补体积感）。
+ *   - 车头 2 个暖白前灯 + 车尾 2 个红色尾灯（emissive 小方块，沿车长 x 轴 ±端）。
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -14,6 +19,7 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/wealth';
+import { u } from '../cityScale';
 
 type VehicleVariant = 'sedan' | 'truck' | 'bus' | 'taxi';
 
@@ -51,6 +57,23 @@ const REDUCED_MOTION =
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ── v2.13 阶段 D：车轮 / 车灯常量（米制经 cityScale.u() 换算）──────────
+/** 车轮半径 u(0.35) ≈ 0.35m，胎宽 u(0.2)。 */
+const WHEEL_R = u(0.35);
+const WHEEL_W = u(0.2);
+const WHEEL_COLOR = '#17191d';
+/** 车灯边长 u(0.15) ≈ 0.15m 方块。 */
+const LIGHT_SIZE = u(0.15);
+/** 车轮落位（相对车身中心）：车长 ±0.32×、车宽 ±0.5×。 */
+function wheelPositions(l: number, w: number): Array<[number, number, number]> {
+  return [
+    [+l * 0.32, WHEEL_R, +w / 2],
+    [+l * 0.32, WHEEL_R, -w / 2],
+    [-l * 0.32, WHEEL_R, +w / 2],
+    [-l * 0.32, WHEEL_R, -w / 2],
+  ];
+}
 
 export function Vehicle({
   from,
@@ -134,6 +157,42 @@ export function Vehicle({
           <meshStandardMaterial color={VEHICLE_COLORS[variant]} roughness={0.6} metalness={0.3} />
         </mesh>
       )}
+      {/* v2.13 阶段 D：4 车轮（轴沿车宽 z 向；贴图/几何两分支共用，地面层补体积感） */}
+      {wheelPositions(dims.l, dims.w).map((pos, i) => (
+        <mesh key={`wheel-${i}`} position={pos} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[WHEEL_R, WHEEL_R, WHEEL_W, 12]} />
+          <meshStandardMaterial color={WHEEL_COLOR} roughness={0.9} metalness={0.1} />
+        </mesh>
+      ))}
+      {/* v2.13 阶段 D：前灯（车长 +x 端，暖白）+ 尾灯（-x 端，红） */}
+      {[+1, -1].map((side) => (
+        <mesh
+          key={`headlight-${side}`}
+          position={[dims.l / 2, dims.h * 0.55, side * dims.w * 0.3]}
+        >
+          <boxGeometry args={[LIGHT_SIZE, LIGHT_SIZE, LIGHT_SIZE]} />
+          <meshStandardMaterial
+            color="#fff6d8"
+            emissive="#fff6d8"
+            emissiveIntensity={1.0}
+            roughness={0.3}
+          />
+        </mesh>
+      ))}
+      {[+1, -1].map((side) => (
+        <mesh
+          key={`taillight-${side}`}
+          position={[-dims.l / 2, dims.h * 0.55, side * dims.w * 0.3]}
+        >
+          <boxGeometry args={[LIGHT_SIZE, LIGHT_SIZE, LIGHT_SIZE]} />
+          <meshStandardMaterial
+            color="#e5484d"
+            emissive="#e5484d"
+            emissiveIntensity={0.8}
+            roughness={0.3}
+          />
+        </mesh>
+      ))}
     </group>
   );
 }

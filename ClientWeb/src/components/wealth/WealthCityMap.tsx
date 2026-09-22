@@ -13,13 +13,19 @@
  *   - 地图 40×40 → 80×80（WORLD_SIZE 常量，地面贴图 / 雾化 / 相机 / 光照等比派生）。
  *   - <StreetPropsLayer districts={...} /> props 化（内部不再 import 城区静态表）。
  *
+ * v2.13 阶段 C（13-3D城市渲染优化 · 环境氛围，02-架构设计 §1）：
+ *   - drei <Sky /> 天空穹顶接管背景（删除纯色 <color>），sunPosition 与主方向光同向。
+ *   - ACESFilmicToneMapping + exposure 1.05；阴影 PCFSoft + 2048 + bias/normalBias，
+ *     显式阴影相机 ±WORLD_SIZE*0.6 覆盖全城（默认 ±5 曾导致大部分楼无阴影）。
+ *   - 雾色随天际线改 #aeb8c6；ambient 0.45 / hemisphere 0.5 / 日光暖白 #fff2e0。
+ *
  * 相机 / OrbitControls / CameraReporter / FocusController 行为不变（与 v1 完全兼容）。
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { OrbitControls, Sky } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { DistrictBlock } from './DistrictBlock';
 import { AgentToken } from './AgentToken';
@@ -55,6 +61,16 @@ export const FOG_FAR = WORLD_SIZE * 1.5;
 /** 相机初始位置与 OrbitControls maxDistance（随世界边长等比缩放）。 */
 export const CAMERA_START: [number, number, number] = [WORLD_SIZE * 0.35, WORLD_SIZE * 0.3, WORLD_SIZE * 0.35];
 export const ORBIT_MAX_DISTANCE = WORLD_SIZE;
+
+// ── v2.13 阶段 C 光照/天空常量 ────────────────────────────────
+/** 主方向光位置（世界坐标）。 */
+const SUN_POSITION: [number, number, number] = [20, 32, 16];
+/** Sky 太阳方向：与主方向光同向归一化 ×100（[20,32,16] / |[20,32,16]| ≈ [0.516,0.826,0.413]）。 */
+const SKY_SUN_POSITION: [number, number, number] = [51.6, 82.6, 41.3];
+/** 方向光阴影相机半宽：覆盖全城（±WORLD_SIZE*0.6；默认 ±5 只能罩住原点一小块）。 */
+const SHADOW_CAMERA_HALF = WORLD_SIZE * 0.6;
+/** 雾色（与 Sky 地平线色接近，远景自然消隐）。 */
+const FOG_COLOR = '#aeb8c6';
 
 /** 小地图 / 面板 → 主场景的聚焦目标（null = 无聚焦请求）。 */
 export interface WealthFocusTarget {
@@ -245,20 +261,37 @@ export function WealthCityMap({
         shadows
         dpr={[1, 2]}
         camera={{ position: CAMERA_START, fov: 45 }}
+        gl={{ antialias: true }}
+        onCreated={({ gl }) => {
+          // v2.13 阶段 C：胶片色调映射（高光不过曝）+ 柔和阴影边缘
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 1.05;
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
+        }}
       >
-        <color attach="background" args={['#0b0f16']} />
-        {/* P1-A 新增：远景雾化（与背景色一致自然消失；v2.12 随 80×80 地图等比 ×2） */}
-        <fog attach="fog" args={['#0b0f16', FOG_NEAR, FOG_FAR]} />
-        <ambientLight intensity={0.7} />
+        {/* v2.13 阶段 C：Sky 天空穹顶接管背景（删除纯色 <color>），太阳方向与主方向光一致 */}
+        <Sky sunPosition={SKY_SUN_POSITION} turbidity={6} rayleigh={1.2} />
+        {/* P1-A 新增：远景雾化（v2.12 随 80×80 地图等比 ×2；v2.13 雾色随天际线） */}
+        <fog attach="fog" args={[FOG_COLOR, FOG_NEAR, FOG_FAR]} />
+        <ambientLight intensity={0.45} />
         {/* P1-A 新增：天/地反弹 */}
-        <hemisphereLight args={['#7a93b8', '#1a1f2a', 0.35]} />
-        {/* v2.12 阶段 2：光位随世界边长等比 ×2（方向向量不变，阴影形态不变） */}
+        <hemisphereLight args={['#7a93b8', '#1a1f2a', 0.5]} />
+        {/* v2.12 阶段 2：光位随世界边长等比 ×2（方向向量不变，阴影形态不变）；
+            v2.13 阶段 C：2048 shadow map + bias/normalBias + 显式阴影相机覆盖全城 + 暖白日光 */}
         <directionalLight
           castShadow
-          position={[20, 32, 16]}
+          position={SUN_POSITION}
+          color="#fff2e0"
           intensity={1.15}
-          shadow-mapSize-width={1024}
-          shadow-mapSize-height={1024}
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+          shadow-bias={-0.0002}
+          shadow-normalBias={0.02}
+          shadow-camera-left={-SHADOW_CAMERA_HALF}
+          shadow-camera-right={SHADOW_CAMERA_HALF}
+          shadow-camera-top={SHADOW_CAMERA_HALF}
+          shadow-camera-bottom={-SHADOW_CAMERA_HALF}
+          shadow-camera-far={WORLD_SIZE * 2}
         />
         <Ground />
         {WEALTH_DISTRICTS.map((d) => (

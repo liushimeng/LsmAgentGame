@@ -9,6 +9,10 @@
  *
  * 道路方向：用 from→to 向量旋转 group，每段独立渲染（不强制连到原点中心）。
  * 主干道 vs 次干道：根据 kind 决定纹理细节 + 路灯密度。
+ *
+ * v2.13 阶段 D（13-3D城市渲染优化）：
+ *   - crosswalk.png 斑马线接线（修复「生成却从不接线」§130）——from 端（城区
+ *     入口侧）t=0.08 处铺设，主/次干道均有。
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -104,6 +108,8 @@ export function Road({ from, to, kind }: Props) {
     1,
   );
   const centerlineTex = useStreetTile('centerline', repeatX, 1);
+  // v2.13 阶段 D：斑马线贴图（城区入口 t=0.08 处；不随路长平铺，repeat 1:1）
+  const crosswalkTex = useStreetTile('crosswalk', 1, 1);
 
   // 路灯阵列点位（沿 from→to 等距，置于道路右侧）
   const lampPositions = useMemo(() => {
@@ -158,6 +164,24 @@ export function Road({ from, to, kind }: Props) {
             roughness={0.9}
             transparent
             opacity={0.85}
+          />
+        </mesh>
+      )}
+
+      {/* v2.13 阶段 D：斑马线（城区入口侧 t=0.08；local +z 指向 to，
+          贴图缺失时静默跳过，路面本身仍有降级色） */}
+      {crosswalkTex && (
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, ROAD_Y + 0.002, 0.08 * len]}
+        >
+          <planeGeometry args={[roadWidth, 0.5]} />
+          <meshStandardMaterial
+            map={crosswalkTex}
+            color="#ffffff"
+            roughness={0.9}
+            transparent
+            opacity={0.9}
           />
         </mesh>
       )}

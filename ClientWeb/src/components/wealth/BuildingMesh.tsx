@@ -1,25 +1,19 @@
 /**
- * BuildingMesh — 单栋楼（P1-B）：
+ * BuildingMesh — 单栋楼（13-3D城市渲染优化 · 阶段 B 重构）：
  *
- * 把 v1 DistrictBlock 中的 boxGeometry + 单色 meshStandardMaterial 升级为：
- *   - 4 个侧面：facade 贴图（按 box 面材质索引 [0,1,2,3]）
- *   - 顶面：roof 贴图（box 面索引 5）
- *   - 底面：DistrictDefs 主色（box 面索引 4，玩家看不到但材质完整）
+ * 历史演进：
+ *   v1   boxGeometry + 单色 meshStandardMaterial（贴图被城区主色覆盖，已修复）。
+ *   P1-B 5 个独立 plane 拼盒子 + facade/roof 贴图（§1.2 贴图修复）。
+ *   阶段 B（本版） 按 DISTRICT_ARCHETYPE 分发到 building_shapes.tsx 的
+ *        体块组合渲染器（tower/slab/house/shed/pavilion），贴图加载、
+ *        高度公式、prosperity 语义不变。
  *
- * 贴图加载：复用 DistrictBlock 的 useEffect + TextureLoader + dispose 模式；
- * 单组件缓存 2 张 facade（base + mid，避免接缝）与 1 张 roof。
+ * 职责边界：本文件只负责「贴图加载 + 高度/繁荣度计算 + archetype 分发」，
+ * 体块几何与材质细节全部在 ./building_shapes.tsx（契约：
+ * lag_docs/虚拟城市/已实现/13-3D城市渲染优化/02-架构设计-WebGL渲染管线优化-v1.md §2）。
  *
- * 材质数组顺序（boxGeometry 默认 6 面顺序）：
- *   [0] +X, [1] -X, [2] +Y, [3] -Y, [4] +Z, [5] -Z
- *   —— 但 R3F 中 boxGeometry 的实际顺序取决于 THREE 版本；
- *   我们用 6 个独立 <mesh> 子节点更直观：4 个侧面共享同 facade 贴图，1 顶面 roof，1 底面。
- *
- * prosperity（繁荣度）→ emissiveIntensity 仍保留（繁荣期楼顶暖光）。
- *
- * 2026-09-21 高度系统 + 贴图修复：
- *   - 楼高改按 cityScale.DISTRICT_FLOORS 分城区楼层区间（层高 3m）；
- *   - 材质 color/emissive 不再用城区主色乘贴图 —— 有贴图纯白 / 中性暖光，
- *     无贴图才回退主色（与 Ground / Road 既有正确模式逐字段对齐）。
+ * emissive：统一暖窗光 EMISSIVE_WINDOW(#ffd9a0)，强度 prosperity × 0.35 上限，
+ * 有贴图时 emissiveMap 复用立面贴图（夜景窗灯近似），无贴图回退城区主色。
  */
 
 import { useEffect, useState } from 'react';
@@ -30,6 +24,7 @@ import {
 } from '@/assets/images/wealth';
 import type { WealthDistrictDef } from '@/types/wealth';
 import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
+import { BuildingShape, DISTRICT_ARCHETYPE } from './building_shapes';
 
 export interface BuildingSpec {
   /** 相对区中心偏移（x, z）。 */
@@ -40,13 +35,6 @@ export interface BuildingSpec {
   d: number;
   /** 楼高系数 0.6–1.0。 */
   factor: number;
-}
-
-interface Props {
-  spec: BuildingSpec;
-  def: WealthDistrictDef;
-  /** 当前房价指数（0.8–1.6 → prosperity 0–1）。 */
-  prosperity: number;
 }
 
 /** 加载单张贴图（缺失 → null）。带 dispose 清理。 */
@@ -85,97 +73,40 @@ function useTexture(url: string): THREE.Texture | null {
   return tex;
 }
 
-export function BuildingMesh({ spec, def, prosperity }: Props) {
-  const facadeBaseUrl = districtFacadeUrl(def.id, 'base');
-  const facadeMidUrl = districtFacadeUrl(def.id, 'mid');
-  const roofUrl = districtRoofUrl(def.id);
+interface Props {
+  spec: BuildingSpec;
+  def: WealthDistrictDef;
+  /** 当前房价指数（0.8–1.6 → prosperity 0–1）。 */
+  prosperity: number;
+}
 
-  const facadeBase = useTexture(facadeBaseUrl);
-  const facadeMid = useTexture(facadeMidUrl);
-  const roof = useTexture(roofUrl);
+export function BuildingMesh({ spec, def, prosperity }: Props) {
+  const facadeBase = useTexture(districtFacadeUrl(def.id, 'base'));
+  const facadeMid = useTexture(districtFacadeUrl(def.id, 'mid'));
+  const roof = useTexture(districtRoofUrl(def.id));
 
   // 楼高：分城区楼层区间 [minF, maxF] × 繁荣度插值 × factor 抖动（0.85~1.0，
   // 保留确定性伪随机但避免 0.6 倍把楼压扁）。层高 3m，见 cityScale.ts。
   const [minF, maxF] = DISTRICT_FLOORS[def.id];
   const h = buildingHeight(minF + (maxF - minF) * prosperity) * (0.85 + spec.factor * 0.15);
-  // emissive 强度（v1 一致：prosperity * 0.25）
-  const emissive = prosperity * 0.25;
+  // 暖窗光强度（契约 §2.3：prosperity × 0.35，上限 0.35 防 ACES 过曝）
+  const emissive = Math.min(0.35, prosperity * 0.35);
 
-  // 每面独立取贴图（横向 base / 纵向 mid，避免完全镜像接缝）；
-  // 有贴图 → 纯白不乘主色 + 中性暖光；无贴图 → 回退城区主色（§1.2 贴图修复）。
-  const sideMapA = facadeBase ?? facadeMid ?? undefined;
-  const sideMapB = facadeMid ?? facadeBase ?? undefined;
-  const roofMap = roof ?? undefined;
+  const archetype = DISTRICT_ARCHETYPE[def.id] ?? 'slab';
 
   return (
     <group position={[spec.x, 0, spec.z]}>
-      {/* 4 个侧面：横向用 facadeBase，纵向用 facadeMid（避免完全镜像接缝）。
-          实际实现：每面单独 mesh，材质用 4 张独立的 facade 贴图 variant（base 横向, mid 纵向）。
-          因为楼是轴对齐的 box，我们让 +X / -X 共享 base，+Z / -Z 共享 mid（不同方向不同贴图）。 */}
-      {/* +X（右面） */}
-      <mesh castShadow position={[spec.w / 2, h / 2, 0]} rotation={[0, Math.PI / 2, 0]}>
-        <planeGeometry args={[spec.d, h]} />
-        <meshStandardMaterial
-          map={sideMapA}
-          color={sideMapA ? '#ffffff' : def.color}
-          emissive={sideMapA ? '#ffcf99' : def.color}
-          emissiveIntensity={emissive}
-          roughness={0.7}
-          metalness={0.1}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-      {/* -X（左面） */}
-      <mesh castShadow position={[-spec.w / 2, h / 2, 0]} rotation={[0, -Math.PI / 2, 0]}>
-        <planeGeometry args={[spec.d, h]} />
-        <meshStandardMaterial
-          map={sideMapB}
-          color={sideMapB ? '#ffffff' : def.color}
-          emissive={sideMapB ? '#ffcf99' : def.color}
-          emissiveIntensity={emissive}
-          roughness={0.7}
-          metalness={0.1}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-      {/* +Z（前面） */}
-      <mesh castShadow position={[0, h / 2, spec.d / 2]}>
-        <planeGeometry args={[spec.w, h]} />
-        <meshStandardMaterial
-          map={sideMapB}
-          color={sideMapB ? '#ffffff' : def.color}
-          emissive={sideMapB ? '#ffcf99' : def.color}
-          emissiveIntensity={emissive}
-          roughness={0.7}
-          metalness={0.1}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-      {/* -Z（后面） */}
-      <mesh castShadow position={[0, h / 2, -spec.d / 2]} rotation={[0, Math.PI, 0]}>
-        <planeGeometry args={[spec.w, h]} />
-        <meshStandardMaterial
-          map={sideMapA}
-          color={sideMapA ? '#ffffff' : def.color}
-          emissive={sideMapA ? '#ffcf99' : def.color}
-          emissiveIntensity={emissive}
-          roughness={0.7}
-          metalness={0.1}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-
-      {/* 顶面：roof 贴图（缺失回退主色） */}
-      <mesh position={[0, h + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[spec.w, spec.d]} />
-        <meshStandardMaterial
-          map={roofMap}
-          color={roofMap ? '#ffffff' : def.color}
-          emissive={roofMap ? '#ffcf99' : def.color}
-          emissiveIntensity={emissive * 0.6}
-          roughness={0.8}
-        />
-      </mesh>
+      <BuildingShape
+        archetype={archetype}
+        w={spec.w}
+        d={spec.d}
+        h={h}
+        facadeBase={facadeBase}
+        facadeMid={facadeMid}
+        roofMap={roof}
+        fallbackColor={def.color}
+        emissive={emissive}
+      />
     </group>
   );
 }
