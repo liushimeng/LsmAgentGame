@@ -1,14 +1,36 @@
 /**
  * 通讯塔（18-AA · §5.2 CommTower）
  *   格构塔（4 柱 + 6 层横撑）+ 微波板 3 面 + 航空障碍灯。布点 (-6, 10)。
+ *
+ * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
  */
 import { u } from '../cityScale';
+import { Model } from '../Model';
+import { modelUrl } from '@/assets/models';
 
 const TOWER_DARK = '#5a6270';
 const PANEL_WHITE = '#e8e8e8';
 const LIGHT_RED = '#ff3b30';
 
+function blenderEnabled(): boolean {
+  return typeof window === 'undefined' ||
+    window.localStorage.getItem('disable-blender-models') !== '1';
+}
+
 export function CommTower() {
+  const url = modelUrl('civic', 'comm_tower');
+  if (!url || !blenderEnabled()) {
+    return <CommTowerFallback />;
+  }
+  return (
+    <Model url={url} position={[-6, 0, 10]} castShadow>
+      <CommTowerFallback />
+    </Model>
+  );
+}
+
+/** 程序化几何 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。 */
+function CommTowerFallback() {
   return (
     <group position={[-6, 0, 10]}>
       {/* 4 角立柱 */}

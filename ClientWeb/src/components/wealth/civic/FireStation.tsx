@@ -1,14 +1,36 @@
 /**
  * 消防站（18-AA · §5.2 FireStation）
  *   红白条外墙 + 2 个车库门 + 滑杆塔 + 红色消防车 1 辆。布点 (8, -12)。
+ *
+ * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
  */
 import { u } from '../cityScale';
+import { Model } from '../Model';
+import { modelUrl } from '@/assets/models';
 
 const RED = '#c0392b';
 const WHITE = '#e8e3dc';
 const DOOR_DARK = '#3a4250';
 
+function blenderEnabled(): boolean {
+  return typeof window === 'undefined' ||
+    window.localStorage.getItem('disable-blender-models') !== '1';
+}
+
 export function FireStation() {
+  const url = modelUrl('civic', 'fire_station');
+  if (!url || !blenderEnabled()) {
+    return <FireStationFallback />;
+  }
+  return (
+    <Model url={url} position={[8, 0, -12]} castShadow receiveShadow>
+      <FireStationFallback />
+    </Model>
+  );
+}
+
+/** 程序化几何 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。 */
+function FireStationFallback() {
   return (
     <group position={[8, 0, -12]}>
       {/* 主屋：u(18) × u(7) × u(8) */}

@@ -1,14 +1,36 @@
 /**
  * 警局（18-AA · §5.2 PoliceStation）
  *   蓝白外墙 + 门厅雨棚 + 警灯柱 + 巡逻车 1 辆。布点 (-5.8, -8.5)。
+ *
+ * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
  */
 import { u } from '../cityScale';
+import { Model } from '../Model';
+import { modelUrl } from '@/assets/models';
 
 const BLUE = '#2a4e7a';
 const WHITE = '#e8e3dc';
 const CAR_BLACK = '#2a2e36';
 
+function blenderEnabled(): boolean {
+  return typeof window === 'undefined' ||
+    window.localStorage.getItem('disable-blender-models') !== '1';
+}
+
 export function PoliceStation() {
+  const url = modelUrl('civic', 'police_station');
+  if (!url || !blenderEnabled()) {
+    return <PoliceStationFallback />;
+  }
+  return (
+    <Model url={url} position={[-5.8, 0, -8.5]} castShadow receiveShadow>
+      <PoliceStationFallback />
+    </Model>
+  );
+}
+
+/** 程序化几何 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。 */
+function PoliceStationFallback() {
   return (
     <group position={[-5.8, 0, -8.5]}>
       {/* 主屋：u(12) × u(6) × u(7) */}

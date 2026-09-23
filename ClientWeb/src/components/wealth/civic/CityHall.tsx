@@ -1,15 +1,42 @@
 /**
  * 市政厅（18-AA · §5.2 CityHall）
  *   3 层石材体量 + 门廊 4 柱 + 钟楼（4 面钟）+ 旗杆。布点 (-9.0, -1.7)。
+ *
+ * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
+ *   - modelUrl 返回 '' → 走 fallback（程序化几何，与原行为像素一致）
+ *   - .glb 加载成功 → 渲染真实模型，children 不渲染
+ *   - 切换开关：localStorage.getItem('disable-blender-models') === '1' 强制 fallback
  */
 import { u } from '../cityScale';
+import { Model } from '../Model';
+import { modelUrl } from '@/assets/models';
 
 const STONE = '#a8a4a0';
 const STONE_DARK = '#7a7a76';
 const ROOF_DARK = '#3a3f4a';
 const GOLD = '#d4a017';
 
+/** 全局开关：测试/回滚用，缺省 false = 用 .glb */
+function blenderEnabled(): boolean {
+  return typeof window === 'undefined' ||
+    window.localStorage.getItem('disable-blender-models') !== '1';
+}
+
 export function CityHall() {
+  const url = modelUrl('civic', 'city_hall');
+  // url 缺失或全局开关关闭 → 直接渲染原程序化几何
+  if (!url || !blenderEnabled()) {
+    return <CityHallFallback />;
+  }
+  return (
+    <Model url={url} position={[-9.0, 0, -1.7]} castShadow receiveShadow>
+      <CityHallFallback />
+    </Model>
+  );
+}
+
+/** 保留原程序化几何作为 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。 */
+function CityHallFallback() {
   return (
     <group position={[-9.0, 0, -1.7]}>
       {/* 主楼：u(14) × u(9) × u(8) */}

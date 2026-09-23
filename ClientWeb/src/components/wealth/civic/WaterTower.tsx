@@ -1,14 +1,36 @@
 /**
  * 水塔（18-AA · §5.2 WaterTower）
  *   锥形支架 + 罐体 + 检修梯 + 字样带。布点 (-22, 2)。
+ *
+ * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
  */
 import { u } from '../cityScale';
+import { Model } from '../Model';
+import { modelUrl } from '@/assets/models';
 
 const TANK_GREEN = '#5a7a4e';
 const TANK_LIGHT = '#7a9a6e';
 const TANK_DARK = '#3a5240';
 
+function blenderEnabled(): boolean {
+  return typeof window === 'undefined' ||
+    window.localStorage.getItem('disable-blender-models') !== '1';
+}
+
 export function WaterTower() {
+  const url = modelUrl('civic', 'water_tower');
+  if (!url || !blenderEnabled()) {
+    return <WaterTowerFallback />;
+  }
+  return (
+    <Model url={url} position={[-22, 0, 2]} castShadow>
+      <WaterTowerFallback />
+    </Model>
+  );
+}
+
+/** 程序化几何 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。 */
+function WaterTowerFallback() {
   return (
     <group position={[-22, 0, 2]}>
       {/* 锥形支架：4 斜腿 + 顶部圈梁 */}
