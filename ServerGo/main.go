@@ -45,6 +45,7 @@ import (
 	"LsmAgentGame/game/wealth"
 	"LsmAgentGame/game/werewolf"
 	"LsmAgentGame/llm"
+	"LsmAgentGame/llm/sysprompt"
 	"LsmAgentGame/logger"
 	"LsmAgentGame/models"
 	"LsmAgentGame/router"
@@ -214,11 +215,13 @@ func main() {
 		// server instance. Format: "LsmAgentGame/<version> <build_time>".
 		llmRegistry.SetUserAgent(fmt.Sprintf("LsmAgentGame/%s %s", AppVersion, buildDateTime))
 		// Inject the `x-anthropic-billing-header` value so Anthropic-side
-		// proxies / Datadog attribute traffic to this call site. Mirrors the
-		// ClaudeCode reference (`cc_version=2.1.195.58c; cc_entrypoint=cli;`)
-		// — see CluadeCode请求RequestBody的Anthropic协议定义数据用例.json.
-		llmRegistry.SetBillingHeader(fmt.Sprintf("LsmAgentGame/%s %s; entrypoint=server;",
-			AppVersion, buildDateTime))
+		// proxies / Datadog attribute traffic to this call site. §14.3: 该头与
+		// system[] 第 ① 段(计费元数据头)**同源同格式** —— 同一条
+		// sysprompt.BillingHeaderText,避免 HTTP 头与请求体两处口径漂移。
+		// 非 Agent 语境(服务端自身健康探针)⇒ cc_is_subagent=false 且不带
+		// cc_agent_name。构建版本走 User-Agent(LsmAgentGame/<ver> <build>)。
+		llmRegistry.SetBillingHeader(sysprompt.BillingHeaderText(
+			sysprompt.EntrypointServer, false, ""))
 		logger.L().Info("llm registry loaded",
 			zap.String("source", llmRegistry.Source()),
 			zap.Int("total", len(llmRegistry.List())),

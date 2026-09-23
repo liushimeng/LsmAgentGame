@@ -237,6 +237,7 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 > 通过统一 `LLMProvider` 接口调用大模型。详见 [`lag_docs/LLM与Agent/LLM供应商设计.md`](lag_docs/LLM与Agent/LLM供应商设计.md)。
 
 - **`ServerGo/llm/types/`** —— leaf 包：Anthropic wire 类型 + `LLMProvider` 接口 + `PlaceholderKey` + `ModelInfo`。
+- **`ServerGo/llm/sysprompt/`** —— leaf 包：Anthropic 三段式 system 提示词头（计费头 / 身份 / 核心规则）权威文本 + `EnsureHead`（§14.3）。
 - **`ServerGo/llm/anthropic/`** —— 真实 provider 实现：`Authorization: Bearer <key>` + `anthropic-version: 2023-06-01`，5xx/429 重试。
 - **`ServerGo/llm/registry.go`** —— `NewRegistry` / `Get` / `List`（key-free）/ `SetUserAgent` / `SetBillingHeader`。
 - **`config.LLMConfig`** —— 顶级 `llm{}` 段：`endpoint/timeout_ms/max_retries/providers[]`。**真实 key 仅入 `LsmAgentGame.conf`；`LsmAgentGame.conf.example` 用 `API-KEY-PLACEHOLDER` 占位**。
@@ -264,7 +265,7 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 >   - 修复：`llm/types/types.go` 的 `ContentBlock.MarshalJSON()` 按 `Type` 分支产出。
 > - **messages 数组 user/assistant 严格交替**——禁止连续 2 条及以上 `role=user` 的消息。修复：`SanitizeMessagesForAnthropic` 末尾合并相邻 user 消息为一条（拼接 content blocks）。
 > - `content`（user/assistant 的每条 message）必须是 **content-block 数组**，不允许纯 string。
-> - `system` 必须是 **SystemBlock 数组**（`[{"type","text"}]`），不允许纯 string。
+> - `system` 必须是 **SystemBlock 数组**（`[{"type","text"}]`），不允许纯 string；数组最前面三段为标准头，见 §14.3。
 
 - **顶层字段**：`model` / `system[]` / `messages[]` / `tools[]` / `metadata` / `output_config` / `max_tokens` + 可选 `tool_choice` / `stream` / `temperature` / `thinking`。
 - **`metadata.user_id`**：stringified JSON，由 `buildMetadataUserID` 构造。
@@ -280,6 +281,25 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 
 - 触发条件：`len(agent_seats) > 1` 且 `len(cfg.LLM.Providers) > 1`
 - 保留用户挑选的不同 model；仅改写重复项；占位 key 过滤；候选池不足时降级为随机轮询。
+
+### 14.3 Anthropic 三段式 system 提示词（全部 Agent 统一升级）
+
+> 每个出站请求的 `system[]` 最前面固定三段，与 Claude Code 一致：
+> **① 计费元数据头**（`x-anthropic-billing-header: cc_version / cc_entrypoint / cc_is_subagent`，
+> 承载 SDK 版本 + 调用入口 + 子代理标识，仅供上游计费与追踪，不影响模型行为）→
+> **② 基础身份声明**（`You are a Claude agent, built on Anthropic's Claude Agent SDK.`）→
+> **③ 核心行为规则**（Claude Code CLI Agent 完整指令集：工具使用边界 / 任务执行准则 / 输出规范 / 权限约束）。
+> 完整规范与权威文本见 [`lag_docs/LLM与Agent/AgentAnthropic系统提示词三段式规范.md`](lag_docs/LLM与Agent/AgentAnthropic系统提示词三段式规范.md)。
+
+- **唯一事实来源**：`ServerGo/llm/sysprompt/`（leaf 包，只依赖 `llm/types`）。`texts.go` 持有三段权威文本；`Head(agentClass)` / `EnsureHead(body, agentClass)` 产出与合并。
+- **单一注入点（禁止 Agent 侧拼接）**：`llm/anthropic`（`Chat` + `ChatStream`）与 `llm/openai/convert.go` 在**序列化前**调用 `sysprompt.EnsureHead` ⇒ 狼人杀玩家/法官/解说、辩论玩家/裁判/解说、德扑玩家、财商居民、记忆迭代器、压缩器**以及未来新增 Agent** 全部自动带上三段，零配置。
+- **`cc_is_subagent` 判定**：`req.AgentClassName != ""` ⇒ `true` 并追加 `cc_agent_name=<AgentClassName>`（`ServerGo/agent/class_names.go`）；健康探针等无 AgentClassName 的调用 ⇒ `false`。
+- **缓存策略**：②③ 段带 `cache_control: {type:"ephemeral"}`，① 段不带（其 `cc_agent_name` 逐 Agent 变化，作前缀会击穿命中）。Agent 自有块的 `cache_control` 语义不变。
+- **字节预算**：三段约 2.5KB，属 Provider 侧注入的"隐形开销"，Agent 字节预算须计入（`sysprompt.HeadBytes()`，见 `agent/wwplayer/memory.go` 的 `approxSystemToolsBytes`）。
+- **HTTP 头同源**：`x-anthropic-billing-header` 请求头与 ① 段共用 `sysprompt.BillingHeaderText`，避免两处口径漂移。
+- **幂等**：`EnsureHead` 检测首位块前缀即跳过（调用方若已自带头不会重复注入）。
+
+**改动纪律**：三段文本逐字节稳定（全体 Agent 的共享 prompt cache 前缀）；改动前须读上述规范文档并同步更新 `sysprompt` 测试锚点。
 
 ## 15. 狼人杀 13 人局 Agent（in-process 驱动）
 

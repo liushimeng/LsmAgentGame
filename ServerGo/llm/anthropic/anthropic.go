@@ -9,6 +9,14 @@
 // The provider never sees the key at construction time — it is passed in per
 // Chat(ctx, key, req) call by the registry, so a single shared Provider
 // instance serves every configured model over the same endpoint.
+//
+// # 三段式 system 提示词头(§14.3)
+//
+// 每次出站请求的 system[] 最前面由 sysprompt.EnsureHead 统一注入三段式头
+// (① x-anthropic-billing-header 计费元数据 / ② Claude Agent SDK 身份声明 /
+// ③ Claude Code 核心行为规则),后接调用方(Agent)自有块。这是**全部 Agent
+// 自动覆盖的唯一收口** —— Agent 侧不再各自拼头,新增 Agent 零配置即生效。
+// 详见 lag_docs/LLM与Agent/AgentAnthropic系统提示词三段式规范.md。
 package anthropic
 
 import (
@@ -24,8 +32,9 @@ import (
 	"sync"
 	"time"
 
-	"LsmAgentGame/logger"
+	"LsmAgentGame/llm/sysprompt"
 	types "LsmAgentGame/llm/types"
+	"LsmAgentGame/logger"
 
 	"go.uber.org/zap"
 )
@@ -730,7 +739,9 @@ func (p *Provider) Endpoints() []string {
 func (p *Provider) Chat(ctx context.Context, key string, req types.LLMRequest) (types.LLMResponse, error) {
 	body := anthropicRequest{
 		Model:        req.Model,
-		System:       req.System,
+		// §14.3 — 三段式头在序列化前统一注入(幂等),见包注释与本文件顶部的
+		// sysprompt.EnsureHead 说明。Agent 侧传入的自有块原样保留在其后。
+		System:       sysprompt.EnsureHead(req.System, req.AgentClassName),
 		Messages:     req.Messages,
 		Tools:        req.Tools,
 		MaxTokens:    req.MaxTokens,
@@ -870,7 +881,8 @@ func (p *Provider) Chat(ctx context.Context, key string, req types.LLMRequest) (
 func (p *Provider) ChatStream(ctx context.Context, key string, req types.LLMRequest) (io.ReadCloser, error) {
 	bodyReq := anthropicRequest{
 		Model:        req.Model,
-		System:       req.System,
+		// §14.3 — 与 Chat() 对称:三段式头在序列化前统一注入(幂等)。
+		System:       sysprompt.EnsureHead(req.System, req.AgentClassName),
 		Messages:     req.Messages,
 		Tools:        req.Tools,
 		MaxTokens:    req.MaxTokens,
@@ -1573,4 +1585,3 @@ func ensureAssistantMessageHasText(msgs []types.Message) {
 		msgs[i].Content = append([]types.ContentBlock{{Type: "text", Text: " "}}, msgs[i].Content...)
 	}
 }
-

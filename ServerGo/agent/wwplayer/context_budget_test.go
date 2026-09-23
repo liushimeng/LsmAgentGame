@@ -3,12 +3,17 @@ package wwplayer
 import (
 	"testing"
 
+	agentroot "LsmAgentGame/agent"
 	"LsmAgentGame/llm"
+	"LsmAgentGame/llm/sysprompt"
 	llmtypes "LsmAgentGame/llm/types"
 )
 
 // TestApproxSystemToolsBytes 验证 system + tools 字节估算的准确性。
 // 2026-08-10 §20260810-14 新增。
+//
+// §14.3 — 估算里包含 Provider 注入的三段式头(约 2.5KB),因此下限必须扣掉
+// 头字节再比,否则会把"头已计入"误判为"估算膨胀"。
 func TestApproxSystemToolsBytes(t *testing.T) {
 	system := []llmtypes.SystemBlock{
 		{Type: "text", Text: "You are a werewolf game player."},
@@ -31,15 +36,17 @@ func TestApproxSystemToolsBytes(t *testing.T) {
 	}
 
 	bytes := approxSystemToolsBytes(system, tools)
-	// 验证:system 文本 ~60 bytes + tools ~100 bytes ≈ 160 bytes
-	// 估算值应该大于 0 且在合理范围内
-	if bytes <= 0 {
-		t.Errorf("approxSystemToolsBytes returned %d, expected > 0", bytes)
+	head := sysprompt.HeadBytes(string(agentroot.AgentClassWerewolfPlayer))
+	// 验证:三段式头 + system 文本 ~60 bytes + tools ~100 bytes
+	// 估算值应该大于头字节数(证明头已计入)且在合理范围内。
+	if bytes <= head {
+		t.Errorf("approxSystemToolsBytes returned %d, expected > head bytes %d (三段式头必须计入预算)",
+			bytes, head)
 	}
-	if bytes > 1000 {
+	if bytes > head+1000 {
 		t.Errorf("approxSystemToolsBytes returned %d, seems too large", bytes)
 	}
-	t.Logf("approxSystemToolsBytes: %d bytes", bytes)
+	t.Logf("approxSystemToolsBytes: %d bytes (含三段式头 %d bytes)", bytes, head)
 }
 
 // TestMemory_SetSystemTools 验证 SetSystemTools 正确设置字节数。

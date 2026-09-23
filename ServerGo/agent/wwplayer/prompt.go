@@ -293,6 +293,11 @@ func BuildSystemPrompt(selfPortrait string, personality PersonalityVector, perso
 	//
 	// 只打**一个** breakpoint:Anthropic 对每个 cache breakpoint 单独计费,
 	// 多打反而更贵(参考 TencentDB-Agent-Memory 的同类克制)。
+	//
+	// §14.3 注记(2026-09):Provider 现在会在本块之前注入三段式头,其中
+	// ②身份 / ③核心规则 各带一个 ephemeral 断点 ⇒ 本请求共 3 个断点
+	// (≤ Anthropic 上限 4)。三段头是全局常量,本块是逐 Agent 段,
+	// 断点分层与原有"缓存友好"设计一致,本函数无需改动。
 	return []llm.SystemBlock{{
 		Type:         "text",
 		Text:         rules + "\n\n" + roleAbilities + "\n\n" + gameMindset + "\n\n" + hardBans + "\n\n" + outcome + PropSystemPrompt() + portrait + personalityBlock + difficultyBlock,

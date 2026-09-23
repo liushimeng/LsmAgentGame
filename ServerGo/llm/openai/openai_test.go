@@ -5,7 +5,15 @@ import (
 	"strings"
 	"testing"
 
+	"LsmAgentGame/llm/sysprompt"
 	types "LsmAgentGame/llm/types"
+)
+
+// syspromptHeadBodyFirst / syspromptHeadBodySecond 是 baseReq() 的两段自有
+// system 块文本(供断言复用,避免裸字面量漂移)。
+const (
+	syspromptHeadBodyFirst  = "be kind"
+	syspromptHeadBodySecond = "be terse"
 )
 
 // TestChatCompletionsURL verifies the §3 URL auto-append rules.
@@ -30,7 +38,10 @@ func baseReq() types.LLMRequest {
 	return types.LLMRequest{
 		Model:     "gpt-test",
 		MaxTokens: 100,
-		System:    []types.SystemBlock{{Type: "text", Text: "be kind"}, {Type: "text", Text: "be terse"}},
+		System: []types.SystemBlock{
+			{Type: "text", Text: syspromptHeadBodyFirst},
+			{Type: "text", Text: syspromptHeadBodySecond},
+		},
 		Messages: []types.Message{
 			{Role: "user", Content: []types.ContentBlock{{Type: "text", Text: "hi"}}},
 			{Role: "assistant", Content: []types.ContentBlock{{Type: "text", Text: "hello"}}},
@@ -56,8 +67,16 @@ func baseReq() types.LLMRequest {
 // thinking dropped, tool input JSON-stringified.
 func TestBuildRequest_Conversion(t *testing.T) {
 	r := buildRequest(baseReq(), false)
-	// system → leading system message with \n\n join.
-	if r.Messages[0].Role != "system" || r.Messages[0].Content != "be kind\n\nbe terse" {
+	// system → leading system message: §14.3 三段式头(Provider 注入)+ 调用方
+	// 自有块,按 \n\n 拼接成 OpenAI 的单条 system message。
+	wantSys := strings.Join([]string{
+		sysprompt.BillingHeaderText(sysprompt.EntrypointServer, false, ""),
+		sysprompt.IdentityText,
+		sysprompt.CoreRulesText,
+		syspromptHeadBodyFirst,
+		syspromptHeadBodySecond,
+	}, "\n\n")
+	if r.Messages[0].Role != "system" || r.Messages[0].Content != wantSys {
 		t.Fatalf("system message wrong: %+v", r.Messages[0])
 	}
 	// assistant tool_use → tool_calls with arguments as JSON STRING.

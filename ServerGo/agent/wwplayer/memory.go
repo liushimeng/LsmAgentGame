@@ -11,7 +11,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	agentroot "LsmAgentGame/agent"
 	"LsmAgentGame/llm"
+	"LsmAgentGame/llm/sysprompt"
 	llmtypes "LsmAgentGame/llm/types"
 )
 
@@ -409,11 +411,15 @@ func approxPayloadBytes(msgs []llm.Message) int {
 // 估算策略:
 //   - system: 累加所有 SystemBlock.Text + Type + cache_control JSON
 //   - tools: 累加所有 ToolDef.Name + Description + InputSchema JSON 近似
+//   - 三段式头(§14.3): Provider 在序列化前注入的 ①计费头/②身份/③核心规则
+//     约 2.5KB,**必须计入** —— 否则这套"隐形开销"正是 §20260810-14 记录的
+//     小窗口模型(DouBao 128K-256K)实际超限而预算未触发的根因。
 //
 // 该函数返回值会注入 Memory.totalSystemToolsBytes,供 enforceByteBudgetLocked
 // 使用"totalPayload = messages + system + tools"作为剪枝基准。
 func approxSystemToolsBytes(system []llmtypes.SystemBlock, tools []llmtypes.ToolDef) int {
-	bytes := 0
+	// §14.3 — 三段式头字节(与 Provider 注入的头同源估算)。
+	bytes := sysprompt.HeadBytes(string(agentroot.AgentClassWerewolfPlayer))
 	// system blocks
 	for _, s := range system {
 		bytes += len(s.Type) + len(s.Text)

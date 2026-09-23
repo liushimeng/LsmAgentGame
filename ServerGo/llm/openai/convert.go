@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"LsmAgentGame/llm/sysprompt"
 	types "LsmAgentGame/llm/types"
 )
 
@@ -162,8 +163,11 @@ func buildRequest(req types.LLMRequest, stream bool) chatRequest {
 	}
 
 	// system[] → a single leading system message (texts joined with \n\n).
+	// §14.3 — 三段式 system 提示词头先经 sysprompt.EnsureHead 注入(幂等),
+	// 保证走 openai-completions 协议的 Agent 与 anthropic 路径拿到同一份头。
+	// 头的 cache_control 在 OpenAI 协议下无对应字段,转换时自然丢弃。
 	var sysParts []string
-	for _, sb := range req.System {
+	for _, sb := range sysprompt.EnsureHead(req.System, req.AgentClassName) {
 		if t := strings.TrimSpace(sb.Text); t != "" {
 			sysParts = append(sysParts, sb.Text)
 		}
