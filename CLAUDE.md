@@ -218,7 +218,7 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 | 1 | `ClientWeb/` 前端游戏设计 | `frontend-dev` | 仅修改 `ClientWeb/` | React、UI、组件、路由、样式、3D |
 | 2 | `ServerGo/` 后端游戏设计 | `backend-dev` | 仅修改 `ServerGo/` | Go、API、数据库、WebSocket、GORM |
 | 3 | 游戏规则与产品设计 | `game-designer` | 仅产出 markdown 文档与契约 | 规则、玩法、需求、产品规划 |
-| 4 | 界面设计与图像生成 | `art-designer` | `python-generate-image-tool` + `ClientWeb/src/assets/` | 美术素材、图片生成、配色 |
+| 4 | 界面设计与图像生成 | `art-designer` | `python-generate-image-tool` + `ClientWeb/src/assets/` + `3d_script/` + `ClientWeb/src/assets/models/` | 美术素材、图片生成、配色、Blender 3D 模型（v19 §27 起）|
 | 5 | 跨端联调 / 复杂规则 | `integration-tester` | 同时涉及 `ClientWeb/` 与 `ServerGo/` | 跨端联调、全栈、Game QA |
 | 6 | 游戏策划视觉设计 | `game-visual-designer` | 仅产出 `lag_docs/design/**` 设计文档 | 视觉稿、布局、design tokens |
 | 7 | **LLM Provider 模块** | `llm-provider` | `ServerGo/llm/`, `api/llm_api.go`, `config.LLMConfig` | LLM、Anthropic、OpenAI、Provider |
@@ -500,3 +500,86 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,可使用
 任何后端下发枚举值拼接为 className 的样式,**必须**同提交完成:JSX 拼接 + CSS 类规则 + `@keyframes + prefers-reduced-motion` 兜底。写完 JSX 后**立即** `grep -rn "<新class前缀>" ClientWeb/src/styles/`,零命中即 P1 缺陷(2026-08-08 §20260808-02 已踩坑:`econ-tier-${econTier}` 三档零 CSS 规则)。
 
 > 8 行状态徽章色相库 + 5 项验收 checklist + 实战 diff，详见规范文档 §2.4/§6 + [审计报告 20260808-02](lag_docs/狼人杀-前端UI/狼人杀13人局-前端UI颜色对比度审计报告-20260808-02.md)。
+
+## 27. Blender 真实 3D 模型工作流（v19 引入）
+
+> 2026-09-23 §20260923-01：把虚拟城市 12 个高视觉冲击组件（5 建筑 + 4 车 + 1 树 + 1 行人 + 1 路面）
+> 从"程序化几何 + PNG sprite"升级为 Blender headless 导出的真实 `.glb` 模型。
+> 完整规约见 [`lag_docs/虚拟城市/已实现/19-Blender3D模型集成/02-架构设计.md`](lag_docs/虚拟城市/已实现/19-Blender3D模型集成/02-架构设计.md)。
+
+### 27.1 三层架构（数据流）
+
+```
+.blend (不入库,本地美术)
+    ↓ 导出脚本（headless）
+3d_script/build_<X>.py (入 git,Python)
+    blender --background --python build_<X>.py -- ClientWeb/src/assets/models/<cat>/<name>.glb
+    ↓ 输出
+ClientWeb/src/assets/models/{civic|vehicles|nature|characters|road}/<name>.glb (入 git,二进制)
+    ↓ import.meta.glob ?url, eager:true
+ClientWeb/src/assets/models/index.ts → modelUrl(category, name)
+ClientWeb/src/components/wealth/modelCache.ts → useSharedGLTF(url)
+ClientWeb/src/components/wealth/Model.tsx → <primitive object={scene.clone(true)}>
+    ↓ vite build (contenthash)
+ClientWeb/dist/assets/<name>-<hash8>.glb
+    ↓ rsync (rebuild_restart_app.sh)
+ServerGo/static/assets/<name>-<hash8>.glb (Go embed.FS)
+    ↓ GET /static/...
+浏览器: GLTFLoader.parse → cache.scene → per-instance .clone(true) → <primitive/>
+```
+
+### 27.2 12 个模型清单（v19 首期交付）
+
+| 类别 | 模型名 | 导出脚本 | 单文件体积 |
+|------|--------|---------|-----------|
+| civic | city_hall / comm_tower / water_tower / fire_station / police_station | `3d_script/build_<name>.py` | 15-64 KB |
+| vehicles | sedan / truck / bus / taxi | `3d_script/build_vehicle_<name>.py` | 27-48 KB |
+| nature | oak_tree | `3d_script/build_oak_tree.py` | 32 KB |
+| characters | pedestrian_walk (含 walk 动画 clip) | `3d_script/build_pedestrian.py` | 38 KB |
+| road | road_props (StreetLight_A/B/C 合并) | `3d_script/build_road_props.py` | 42 KB |
+
+### 27.3 三条硬约束
+
+1. **`.blend` 源文件不入库** —— `.gitignore` 已加 `*.blend` / `*.blend1`；本地美术保留 `.blend`，git 只入 `.py` + `.glb`
+2. **单 .glb ≤ 500 KB** —— 验收硬约束（CI 跑 `find ClientWeb/src/assets/models -name "*.glb" -size +500k`）
+3. **保留原程序化几何为 fallback** —— 每个接入组件必须包一层 `<Model url={...}>{原程序化几何}</Model>`，
+   `.glb` 缺失/加载失败自动降级，零代码分支
+
+### 27.4 命令模板（art-designer 工作流）
+
+```bash
+# 在 3d_script/ 目录下执行
+cd 3d_script
+blender --background --python build_city_hall.py -- \
+  /usr/local/LsmAgentGame/LsmAgentGame/ClientWeb/src/assets/models/civic/city_hall.glb
+
+# 或者用 find 批量重新导出（前提：依赖本地 .blend 美术资产）
+for s in build_*.py; do
+  name="${s%.py}"
+  blender --background --python "$s" -- "/tmp/${name}.glb"
+done
+```
+
+### 27.5 缓存与降级契约
+
+- **缓存 key = url**（与 `textureCache.ts` 不同：GLB 不像贴图有 wrap/repeat 参数）
+- **每实例 `.clone(true)`** —— 56 个行人 / N 车 / N 建筑 共享同 URL 但 transform 独立
+- **降级链**：`url===''` / `onError` / `加载中` 三态都直接渲染 children fallback
+- **feature flag**：`localStorage.getItem('disable-blender-models') === '1'` 强制全 fallback（测试/回滚用）
+
+### 27.6 Blender 版本与依赖
+
+- 本仓库用 **Blender 5.2.1 LTS**（已安装 `/usr/local/bin/blender`，version 5.2.1）
+- **DRACO / Meshopt 不启用**（v19 简化，单 .glb 控制在 15-64 KB 已远低于 500 KB 上限；
+  生产 nginx gzip 压缩比 3-8x 等效 4-20 KB/文件）
+- v19.5 候选：DRACO 压缩（目标 .glb 减 60-80%）
+
+### 27.7 §13.1 职责线扩展
+
+`art-designer`（职责线 4）新增工作面：`3d_script/build_*.py` + `ClientWeb/src/assets/models/**/*.glb`。
+原 `python-generate-image-tool/`（Pillow 2D 贴图）继续保留，与 Blender 3D 流水线并列。
+
+| 关键词 | 触发子代理 | 工作面 |
+|--------|-----------|--------|
+| Blender / .glb / 3D 模型 / 几何 | art-designer | 3d_script/build_*.py + ClientWeb/src/assets/models/ |
+| GLTFLoader / useSharedGLTF / modelUrl | frontend-dev | ClientWeb/src/components/wealth/{modelCache,Model}.tsx + 12 个接入组件 |
