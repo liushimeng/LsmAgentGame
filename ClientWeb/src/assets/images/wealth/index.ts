@@ -157,3 +157,25 @@ export type SkyName = 'cloud_puff';
 export function skyUrl(name: SkyName): string {
   return skyImgs[`./sky/${name}.png`] ?? '';
 }
+
+// ── 18-3D城市PBR材质与真实城市冲刺 · 阶段 X 新增（PBR 贴图）─────────
+
+const pbrImgs = import.meta.glob<string>('./pbr/**/*.png', { eager: true, import: 'default' });
+
+/** 派生 PBR 贴图类别（与 3d_script/procedural_pbr_maps.py::DERIVED_JOBS 对齐）。 */
+export type PbrCategory = 'facades' | 'roofs' | 'streets' | 'ground' | 'districts' | 'synth';
+
+/**
+ * 法线贴图 URL（缺失 = ''，调用方保持现状材质）。
+ * @param category 派生类别；name 为颜色贴图的 stem
+ *   例：pbrNormalUrl('facades', 'finance_mid') → ./pbr/facades/finance_mid_n.png
+ *       pbrNormalUrl('synth', 'water')         → ./pbr/synth/water_n.png
+ */
+export function pbrNormalUrl(category: PbrCategory, name: string): string {
+  return pbrImgs[`./pbr/${category}/${name}_n.png`] ?? '';
+}
+
+/** 粗糙度贴图 URL（缺失 = ''）。synth/water 无 _r（水面粗糙度是材质常量）。 */
+export function pbrRoughUrl(category: PbrCategory, name: string): string {
+  return pbrImgs[`./pbr/${category}/${name}_r.png`] ?? '';
+}

@@ -127,7 +127,9 @@ export function GameOverModal({ over, gameState, monthFrames, mySeat, onViewLedg
         </>
       }
     >
-      <div className="wealth-gameover">
+      {/* 18/04 AB-2：挂 wealth-modal__body 标记 —— 收缩链（min-height:0）与
+          86vh 上限由 wealth-city3d.css 按此标记对 .app-modal 外壳统一补齐。 */}
+      <div className="wealth-gameover wealth-modal__body">
         {mine && (
           <div className="wealth-gameover__head">
             <div className="wealth-gameover__total">

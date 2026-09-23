@@ -17,10 +17,10 @@
 
 import { useMemo } from 'react';
 import type { Texture } from 'three';
-import { streetTileUrl, type StreetTileName } from '@/assets/images/wealth';
+import { streetTileUrl, pbrNormalUrl, pbrRoughUrl, type StreetTileName } from '@/assets/images/wealth';
 import { u } from './cityScale';
 import { StreetLight } from './props/StreetLight';
-import { useSharedTexture } from './textureCache';
+import { useSharedPBR, useSharedTexture, withPBR } from './textureCache';
 
 interface Props {
   /** 道路起点世界坐标（城区中心）。 */
@@ -73,10 +73,25 @@ export function Road({ from, to, kind }: Props) {
   // 路面 repeat = (len / 2, 1)；人行道 repeat = (len / 2, 1) ；中线 repeat = (len / 4, 1)
   const repeatX = Math.max(1, Math.round(len / 2));
   const asphaltTex = useStreetTile('asphalt_main', repeatX, 1);
+  // 18-X：路面 PBR（02 §2.3 行 8：streets/asphalt_main，normalScale [0.5,0.5]）。
+  const asphaltPbr = useSharedPBR(
+    streetTileUrl('asphalt_main'),
+    pbrNormalUrl('streets', 'asphalt_main'),
+    pbrRoughUrl('streets', 'asphalt_main'),
+    { wrap: 'repeat', repeat: [repeatX, 1], normalScale: [0.5, 0.5] },
+  );
   const sidewalkTex = useStreetTile(
     kind === 'main' ? 'sidewalk_main' : 'sidewalk_side',
     repeatX,
     1,
+  );
+  // 18-X：人行道 PBR（02 §2.3 行 9：sidewalk_main/sidewalk_side，normalScale [0.8,0.8]）。
+  const sidewalkName = kind === 'main' ? 'sidewalk_main' : 'sidewalk_side';
+  const sidewalkPbr = useSharedPBR(
+    streetTileUrl(sidewalkName),
+    pbrNormalUrl('streets', sidewalkName),
+    pbrRoughUrl('streets', sidewalkName),
+    { wrap: 'repeat', repeat: [repeatX, 1], normalScale: [0.8, 0.8] },
   );
   const centerlineTex = useStreetTile('centerline', repeatX, 1);
   // v2.13 阶段 D：斑马线贴图（城区入口 t=0.08 处；不随路长平铺，repeat 1:1）
@@ -115,10 +130,15 @@ export function Road({ from, to, kind }: Props) {
       >
         <planeGeometry args={[roadWidth, len]} />
         <meshStandardMaterial
-          map={asphaltTex ?? undefined}
-          color={asphaltTex ? '#ffffff' : '#1f2733'}
-          roughness={0.92}
-          metalness={0.05}
+          {...withPBR(
+            {
+              map: asphaltTex ?? undefined,
+              color: asphaltTex ? '#ffffff' : '#1f2733',
+              roughness: 0.92,
+              metalness: 0.05,
+            },
+            asphaltPbr,
+          )}
         />
       </mesh>
 
@@ -193,9 +213,14 @@ export function Road({ from, to, kind }: Props) {
       >
         <planeGeometry args={[SIDEWALK_WIDTH, len]} />
         <meshStandardMaterial
-          map={sidewalkTex ?? undefined}
-          color={sidewalkTex ? '#ffffff' : '#2a3340'}
-          roughness={0.85}
+          {...withPBR(
+            {
+              map: sidewalkTex ?? undefined,
+              color: sidewalkTex ? '#ffffff' : '#2a3340',
+              roughness: 0.85,
+            },
+            sidewalkPbr,
+          )}
         />
       </mesh>
       {/* 右侧 */}
@@ -206,9 +231,14 @@ export function Road({ from, to, kind }: Props) {
       >
         <planeGeometry args={[SIDEWALK_WIDTH, len]} />
         <meshStandardMaterial
-          map={sidewalkTex ?? undefined}
-          color={sidewalkTex ? '#ffffff' : '#2a3340'}
-          roughness={0.85}
+          {...withPBR(
+            {
+              map: sidewalkTex ?? undefined,
+              color: sidewalkTex ? '#ffffff' : '#2a3340',
+              roughness: 0.85,
+            },
+            sidewalkPbr,
+          )}
         />
       </mesh>
 

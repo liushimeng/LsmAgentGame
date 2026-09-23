@@ -206,6 +206,9 @@ export function FundFlowSankeyPanel({ flowStat }: Props) {
           </span>
         </span>
       </div>
+      {/* 18/04 AB-3：外层横向滚动容器 + SVG width:100%/height:auto —— 380/300px
+          侧栏下既不横向溢出也不压扁不可读（viewBox 已有，收缩交给 CSS）。 */}
+      <div className="wealth-sankey-scroll">
       <svg
         className="wealth-flow__svg"
         viewBox={`0 0 ${W} ${H}`}
@@ -270,6 +273,7 @@ export function FundFlowSankeyPanel({ flowStat }: Props) {
           side="center"
         />
       </svg>
+      </div>
     </div>
   );
 }

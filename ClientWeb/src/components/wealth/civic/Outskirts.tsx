@@ -1,0 +1,191 @@
+/**
+ * 外围腹地（18-AA · §5.2 Outskirts）
+ *   农田 8 块 + 丘陵 4 个 + 环城高速 + 风机 2 座。r∈[38,58]。
+ *   半径约束（02 §5.5）：
+ *     农田 6×4.5 @ r∈[42,55]（内缘 38.25 ✓ / 外缘 58.75 ✓）
+ *     丘陵 r=50，sphereGeometry r=u(80) + scale[1,0.3,1] + position.y=u(-9)（顶高约 u(15)）
+ *     环城高速 r=44（43.2–44.8 ✓）
+ *     风机 @ r=48
+ */
+import React, { useMemo } from 'react';
+import * as THREE from 'three';
+import { useFrame } from '@react-three/fiber';
+import { u } from '../cityScale';
+import { hashStr, mulberry32 } from './rand';
+
+const FIELD_COLORS = ['#6b8e23', '#c4a945', '#8b7355', '#556b2f'];
+const HILL_COLOR = '#3f5a3a';
+const ROAD_COLOR = '#1f2733';
+const WHITE = '#e8e3dc';
+
+export function Outskirts() {
+  // 农田 8 块：8 个等角槽（每个弧长 2π/8），中心角 0..7 × 45° → 起始角加 22.5°
+  const fields = useMemo(() => {
+    const out: Array<{ cx: number; cz: number; rot: number; color: string; idx: number }> = [];
+    for (let i = 0; i < 8; i++) {
+      const baseAngle = (i * Math.PI * 2) / 8 + Math.PI / 8; // 22.5° 偏移避开正交
+      const r = 42 + ((i * 7) % 14); // 42..55 等间距扰动
+      out.push({
+        cx: Math.cos(baseAngle) * r,
+        cz: Math.sin(baseAngle) * r,
+        rot: baseAngle,
+        color: FIELD_COLORS[i % FIELD_COLORS.length],
+        idx: i,
+      });
+    }
+    return out;
+  }, []);
+
+  // 丘陵 4 个：4 个等角槽
+  const hills = useMemo(() => {
+    const out: Array<{ cx: number; cz: number; rot: number }> = [];
+    for (let i = 0; i < 4; i++) {
+      const a = (i * Math.PI * 2) / 4 + Math.PI / 4;
+      out.push({ cx: Math.cos(a) * 50, cz: Math.sin(a) * 50, rot: a });
+    }
+    return out;
+  }, []);
+
+  // 风机 2 座
+  const turbines = useMemo(() => {
+    const rnd = mulberry32(hashStr('outskirts:turbines'));
+    return [
+      { cx: Math.cos(Math.PI / 4) * 48, cz: Math.sin(Math.PI / 4) * 48, phase: rnd() * Math.PI * 2 },
+      { cx: Math.cos((Math.PI * 5) / 4) * 48, cz: Math.sin((Math.PI * 5) / 4) * 48, phase: rnd() * Math.PI * 2 },
+    ];
+  }, []);
+
+  // 环城高速：24 段 `plane` 拼圆环，半径 44，宽 1.6
+  const segments = 24;
+  const highway = useMemo(() => {
+    const out: Array<{ cx: number; cz: number; rot: number }> = [];
+    for (let i = 0; i < segments; i++) {
+      const a = (i * Math.PI * 2) / segments;
+      out.push({ cx: 0, cz: 0, rot: a });
+    }
+    return out;
+  }, []);
+  // s 参数保留兼容（高速段元组展开时用）
+  void highway;
+  const segmentWidth = 1.6;
+  const segmentLen = ((44 * Math.PI * 2) / segments) * 1.06; // 6% 搭接
+  return (
+    <group>
+      {/* 农田（6×4.5 世界单位） */}
+      {fields.map((f) => (
+        <mesh
+          key={`field-${f.idx}`}
+          position={[f.cx, 0.018, f.cz]}
+          rotation={[-Math.PI / 2, 0, -f.rot]}
+          receiveShadow
+        >
+          <planeGeometry args={[6, 4.5]} />
+          <meshStandardMaterial color={f.color} roughness={0.95} />
+        </mesh>
+      ))}
+      {/* 丘陵：sphereGeometry r=u(80) + scale[1,0.3,1] + position.y=u(-9) */}
+      {hills.map((h, i) => (
+        <mesh
+          key={`hill-${i}`}
+          position={[h.cx, u(-9), h.cz]}
+          rotation={[0, -h.rot, 0]}
+          scale={[1, 0.3, 1]}
+          castShadow
+          receiveShadow
+        >
+          <sphereGeometry args={[u(80), 24, 16]} />
+          <meshStandardMaterial color={HILL_COLOR} roughness={0.9} />
+        </mesh>
+      ))}
+      {/* 环城高速（24 段） */}
+      {highway.map((_s, i) => {
+        const a = (i * Math.PI * 2) / segments;
+        const cx = Math.cos(a) * 44;
+        const cz = Math.sin(a) * 44;
+        return (
+          <mesh
+            key={`hw-${i}`}
+            position={[cx, 0.018, cz]}
+            rotation={[0, -a + Math.PI / 2, 0]}
+            receiveShadow
+          >
+            <planeGeometry args={[segmentWidth, segmentLen]} />
+            <meshStandardMaterial color={ROAD_COLOR} roughness={0.85} />
+          </mesh>
+        );
+      })}
+      {/* 高速护栏（外侧 24 短柱 + 顶部连梁 太密，省略 mesh 计数控制；用 plane 标线替代） */}
+      {highway.map((_s, i) => {
+        const a = (i * Math.PI * 2) / segments;
+        const cx = Math.cos(a) * 44;
+        const cz = Math.sin(a) * 44;
+        return (
+          <mesh
+            key={`hwl-${i}`}
+            position={[cx, 0.02, cz]}
+            rotation={[0, -a + Math.PI / 2, 0]}
+          >
+            <planeGeometry args={[0.08, segmentLen * 0.95]} />
+            <meshBasicMaterial color={WHITE} transparent opacity={0.7} />
+          </mesh>
+        );
+      })}
+      {/* 长途车 ×2（环城高速上随机位置） */}
+      {turbines.slice(0, 2).map((t, i) => (
+        <mesh
+          key={`bus-${i}`}
+          position={[t.cx * 0.92, u(0.5), t.cz * 0.92]}
+          rotation={[0, Math.atan2(-t.cz, -t.cx), 0]}
+          castShadow
+        >
+          <boxGeometry args={[u(2.5), u(1.6), u(1)]} />
+          <meshStandardMaterial color="#c0392b" roughness={0.5} metalness={0.3} />
+        </mesh>
+      ))}
+      {/* 风机 ×2：塔 + 机舱 + 3 叶（叶轮旋转） */}
+      {turbines.map((t, i) => (
+        <WindTurbine key={`turb-${i}`} cx={t.cx} cz={t.cz} phase={t.phase} />
+      ))}
+    </group>
+  );
+}
+
+function WindTurbine({ cx, cz, phase }: { cx: number; cz: number; phase: number }) {
+  return (
+    <group position={[cx, 0, cz]}>
+      {/* 塔 */}
+      <mesh position={[0, u(15), 0]} castShadow>
+        <cylinderGeometry args={[u(0.3), u(0.5), u(30), 8]} />
+        <meshStandardMaterial color="#e8e8e8" roughness={0.5} metalness={0.4} />
+      </mesh>
+      {/* 机舱 */}
+      <mesh position={[0, u(30.5), 0]} castShadow>
+        <boxGeometry args={[u(2), u(1), u(1.2)]} />
+        <meshStandardMaterial color="#e8e8e8" roughness={0.5} metalness={0.4} />
+      </mesh>
+      {/* 轮毂（旋转头）在机舱前端 */}
+      <RotatingBlades phase={phase} />
+    </group>
+  );
+}
+
+function RotatingBlades({ phase }: { phase: number }) {
+  const ref = React.useRef<THREE.Group>(null);
+  useFrame((_, delta) => {
+    if (ref.current) ref.current.rotation.z += delta * 0.4;
+  });
+  return (
+    <group ref={ref} position={[u(1.2), u(30.5), 0]} rotation={[0, 0, phase]}>
+      <mesh>
+        <sphereGeometry args={[u(0.35), 12, 12]} />
+        <meshStandardMaterial color="#7a8290" metalness={0.6} />
+      </mesh>
+      {[0, (2 * Math.PI) / 3, (4 * Math.PI) / 3].map((a, i) => (
+        <mesh key={`blade-${i}`} rotation={[0, 0, a]} position={[u(4), 0, 0]}>
+          <boxGeometry args={[u(8), u(0.3), u(0.05)]} />
+          <meshStandardMaterial color="#e8e8e8" roughness={0.5} />
+        </mesh>
+      ))}
+    </group>
+  );
+}

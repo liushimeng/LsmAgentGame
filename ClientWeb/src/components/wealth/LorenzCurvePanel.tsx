@@ -80,6 +80,8 @@ export function LorenzCurvePanel({ society, my }: Props) {
           })}
         </span>
       </div>
+      {/* 18/04 AB-3：与桑基图同款收缩链 —— 外层可横向滚动，SVG width:100%/height:auto。 */}
+      <div className="wealth-sankey-scroll">
       <svg
         className="wealth-lorenz__svg"
         viewBox={`0 0 ${W} ${H}`}
@@ -126,6 +128,7 @@ export function LorenzCurvePanel({ society, my }: Props) {
           />
         )}
       </svg>
+      </div>
       <div className="wealth-lorenz__legend">
         <span>
           <i className="wealth-lorenz__legend-dot wealth-lorenz__legend-dot--equal" />

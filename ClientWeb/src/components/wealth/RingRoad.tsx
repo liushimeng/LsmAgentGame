@@ -11,9 +11,9 @@
  */
 
 import { useMemo } from 'react';
-import { streetTileUrl } from '@/assets/images/wealth';
+import { streetTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/wealth';
 import { districtCenter, WEALTH_DISTRICTS } from '@/types/wealth';
-import { useSharedTexture } from './textureCache';
+import { useSharedTexture, useSharedPBR, withPBR } from './textureCache';
 
 /** 环路半径（世界单位；CBD 8×8 底板半宽 4.05 + curb，环内缘 5.1 不压底板）。 */
 const RING_RADIUS = 5.6;
@@ -36,6 +36,13 @@ export function RingRoad({ fallbackColor = '#232b38' }: Props) {
     wrap: 'repeat',
     repeat: [2, 1],
   });
+  // 18-X：路面 PBR（02 §2.3 行 8：asphalt_main，normalScale [0.5,0.5]）。
+  const asphaltPbr = useSharedPBR(
+    streetTileUrl('asphalt_main'),
+    pbrNormalUrl('streets', 'asphalt_main'),
+    pbrRoughUrl('streets', 'asphalt_main'),
+    { wrap: 'repeat', repeat: [2, 1], normalScale: [0.5, 0.5] },
+  );
 
 
   // 段参数：θ 取段中心角；segLen 加 8% 搭接
@@ -64,10 +71,15 @@ export function RingRoad({ fallbackColor = '#232b38' }: Props) {
 
   const roadMat = (
     <meshStandardMaterial
-      map={asphalt ?? undefined}
-      color={asphalt ? '#ffffff' : fallbackColor}
-      roughness={0.92}
-      metalness={0.05}
+      {...withPBR(
+        {
+          map: asphalt ?? undefined,
+          color: asphalt ? '#ffffff' : fallbackColor,
+          roughness: 0.92,
+          metalness: 0.05,
+        },
+        asphaltPbr,
+      )}
     />
   );
 

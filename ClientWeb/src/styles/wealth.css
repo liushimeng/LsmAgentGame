@@ -231,7 +231,8 @@
   padding: 10px 12px;
 }
 .wealth-sidebar > .wealth-botpanel { flex: 0 0 auto; max-height: 220px; overflow-y: auto; }
-.wealth-sidebar > :global(.chat-panel) { flex: 0 0 240px; }
+/* 18/04 AB-4：原 chat-panel 伪类写法是死选择器（普通 CSS 不识别该函数式伪类），
+   真实类名 .game-chat 的弹性收缩规则在 wealth-city3d.css:310-313 生效，此处不再保留。 */
 .wealth-join-hint {
   padding: 8px 12px;
   font-size: 13px;
@@ -308,7 +309,7 @@
 
 .wealth-res-bar {
   display: grid;
-  grid-template-columns: 42px 1fr 46px;
+  grid-template-columns: 42px minmax(0, 1fr) 46px;
   align-items: center;
   gap: 8px;
   margin: 4px 0;
@@ -424,7 +425,7 @@
 .wealth-marketpanel__districts-title { color: var(--wealth-text-dim); font-size: 12px; margin-bottom: 4px; }
 .wealth-hp-bar {
   display: grid;
-  grid-template-columns: 64px 1fr 92px;
+  grid-template-columns: 64px minmax(0, 1fr) 92px;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -456,7 +457,7 @@
 }
 .wealth-ledger-list__row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   padding: 5px 4px;
   border-bottom: 1px dashed #26303e;
@@ -466,7 +467,7 @@
 .wealth-ledger-list__arrow { color: var(--wealth-accent-strong); margin: 0 2px; }
 .wealth-ledger-list__cat { color: var(--wealth-text-dim); }
 .wealth-ledger-list__amount { font-weight: 600; }
-.wealth-ledger-list__row--empty { grid-template-columns: 1fr; color: var(--wealth-text-dim); text-align: center; }
+.wealth-ledger-list__row--empty { grid-template-columns: minmax(0, 1fr); color: var(--wealth-text-dim); text-align: center; }
 
 /* ── 动作条 ───────────────────────────────────────── */
 .wealth-actionbar {
@@ -522,7 +523,7 @@
 .wealth-action-form { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
 .wealth-action-form__row {
   display: grid;
-  grid-template-columns: 130px 1fr;
+  grid-template-columns: 130px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   color: var(--wealth-text);
@@ -745,7 +746,7 @@
 .wealth-create-form { display: flex; flex-direction: column; gap: 10px; font-size: 14px; color-scheme: dark; }
 .wealth-create-form__row {
   display: grid;
-  grid-template-columns: 150px 1fr;
+  grid-template-columns: 150px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
 }
@@ -811,7 +812,7 @@
 .wealth-gameover__seat { color: var(--wealth-text-dim); }
 .wealth-score-row {
   display: grid;
-  grid-template-columns: 130px 1fr 44px;
+  grid-template-columns: 130px minmax(0, 1fr) 44px;
   align-items: center;
   gap: 10px;
   margin: 6px 0;
@@ -1124,7 +1125,7 @@
 .wealth-earlyrepay__trigger-icon { font-size: 18px; }
 .wealth-earlyrepay__row {
   display: grid;
-  grid-template-columns: 130px 1fr;
+  grid-template-columns: 130px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   color: var(--wealth-text);
@@ -1327,7 +1328,7 @@
 /* 八大类行：图标 | 名称 | 发散条 | 环比值 */
 .wealth-economy__goods-row {
   display: grid;
-  grid-template-columns: 20px 92px 1fr 56px;
+  grid-template-columns: 20px 92px minmax(0, 1fr) 56px;
   align-items: center;
   gap: 6px;
   min-height: 26px;
@@ -1393,7 +1394,7 @@
 }
 
 /* 劳动力三指标格 */
-.wealth-economy__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.wealth-economy__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .wealth-economy__stat { display: flex; flex-direction: column; gap: 2px; }
 .wealth-economy__stat-label { color: var(--wealth-text-dim); font-size: 11.5px; }
 .wealth-economy__stat-value { color: #fff; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -1402,7 +1403,7 @@
 .wealth-economy__quintiles-title { color: var(--wealth-text-dim); font-size: 11.5px; }
 .wealth-economy__quintile-row {
   display: grid;
-  grid-template-columns: 22px 1fr 44px;
+  grid-template-columns: 22px minmax(0, 1fr) 44px;
   align-items: center;
   gap: 6px;
 }
@@ -1474,7 +1475,7 @@
   font-size: 13px;
 }
 .wealth-survey__options { display: flex; flex-direction: column; gap: 6px; }
-.wealth-survey__option-row { display: grid; grid-template-columns: 20px 1fr 34px; align-items: center; gap: 6px; }
+.wealth-survey__option-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) 34px; align-items: center; gap: 6px; }
 .wealth-survey__option-row input {
   min-height: 34px;
   border-radius: 6px;
@@ -1563,7 +1564,7 @@
 
 /* 结果条形图（单色 + 直接标注百分比；文本走文本 token 不穿系列色） */
 .wealth-survey__result { display: flex; flex-direction: column; gap: 5px; }
-.wealth-survey__result-row { display: grid; grid-template-columns: minmax(72px, 40%) 1fr 64px; align-items: center; gap: 6px; }
+.wealth-survey__result-row { display: grid; grid-template-columns: minmax(72px, 40%) minmax(0, 1fr) 64px; align-items: center; gap: 6px; }
 .wealth-survey__result-label {
   display: flex;
   align-items: center;

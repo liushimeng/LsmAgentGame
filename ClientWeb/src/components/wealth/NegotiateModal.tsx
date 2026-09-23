@@ -144,7 +144,8 @@ export function NegotiateModal({ open, gameState, mySeat, listingId, sendTrade, 
         )
       }
     >
-      <div className="wealth-negotiate">
+      {/* 18/04 AB-2：wealth-modal__body 标记驱动统一高度/收缩链（见 wealth-city3d.css）。 */}
+      <div className="wealth-negotiate wealth-modal__body">
         {session && session.turns.length > 0 && (
           <ul className="wealth-negotiate__history">
             {session.turns.map((turn, i) => (

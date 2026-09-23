@@ -61,7 +61,7 @@ export function AuctionModal({ open, gameState, mySeat, auctionId, sendTrade, on
     return (
       <AppModal title={t('wealth.auction.title' as TKey)} icon="🔨" maxWidth={460} onClose={onClose}
         footer={<button type="button" className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>}>
-        <div className="wealth-auction"><p className="wealth-table__empty">{t('wealth.listing.empty' as TKey)}</p></div>
+        <div className="wealth-auction wealth-modal__body"><p className="wealth-table__empty">{t('wealth.listing.empty' as TKey)}</p></div>
       </AppModal>
     );
   }
@@ -102,7 +102,8 @@ export function AuctionModal({ open, gameState, mySeat, auctionId, sendTrade, on
         </>
       }
     >
-      <div className="wealth-auction">
+      {/* 18/04 AB-2：wealth-modal__body 标记驱动统一高度/收缩链（见 wealth-city3d.css）。 */}
+      <div className="wealth-auction wealth-modal__body">
         <div className="wealth-auction__head">
           <span className={`wealth-badge wealth-badge--auction-${auction.kind}`}>
             {t(`wealth.auction.${auction.kind}` as TKey)}

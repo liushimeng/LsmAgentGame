@@ -17,8 +17,10 @@
 /* ── Tab 分组（契约 §2）────────────────────────────── */
 .wealth-tabs {
   flex-wrap: wrap;
-  max-height: 96px;
+  /* 18/04 AB-4：96→112px —— 300px 侧栏下两组 6 按钮换到 3–4 行不再被裁切。 */
+  max-height: 112px;
   overflow-y: auto;
+  scrollbar-width: thin;
   row-gap: 2px;
 }
 .wealth-tabs__group {
@@ -155,7 +157,8 @@
     flex-basis: 300px;
   }
 }
-/* waiting 占位：收紧上下留白，内容区居中不空半屏 */
+/* waiting 占位：收紧上下留白，内容区居中不空半屏
+   18/04 AB-4：12vh→6vh + max-height:60vh —— 高屏下不再制造 >30vh 连续空白。 */
 .waiting-board {
   display: flex;
   flex-direction: column;
@@ -163,7 +166,8 @@
   justify-content: center;
   gap: 10px;
   min-height: 160px;
-  padding: 12vh 16px;
+  padding: 6vh 16px;
+  max-height: 60vh;
   max-width: 360px;
   margin: 0 auto;
 }
@@ -301,13 +305,184 @@
 
 /* ── 16 · 阶段 V：侧栏溢出兜底（契约 16/04 §3）────────────────── */
 /* 内容总高 > 视口时侧栏整体内滚（stats/bot/chat 三段折叠上限叠加的极端场景），
-   不再压住下方事件流。tabs 常显由 panels 区独立滚动保证。 */
+   不再压住下方事件流。tabs 常显由 panels 区独立滚动保证。
+   18/04 AB-4：补 scrollbar-gutter: stable —— 滚动条出现/消失时布局不再横移。 */
 .wealth-sidebar {
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 /* 聊天面板允许收缩（wealth.css 的 :global(.chat-panel) 规则从未命中真实类名，
    这里按真实类名 game-chat 给出弹性收缩 + 最小可用高度）。 */
 .wealth-sidebar > .game-chat {
   flex: 0 1 240px;
   min-height: 140px;
+}
+
+/* ── 18 · 阶段 AB：控件防溢出与空间利用收口（契约 18/04 §2–§5）──────── */
+/* 本段只在链尾追加，不改 globals.css @import 顺序（§2.1 约束 4）。
+   对比度（§26.1）：pill/toggle 文字 #dfe5ec 对 rgba(10,14,20,.85) 合成底 ≈ 12:1。 */
+
+/* AB-1 底部动作条折叠 —— 1280×800 下常驻整条与 MonthTicker 叠吃 200px+ 纵向空间 */
+.wealth-actionbar {
+  position: relative;
+}
+.wealth-actionbar--collapsed {
+  padding: 0;
+  min-height: 0;
+  border: none;
+  background: none;
+  flex-direction: row;
+  align-items: center;
+}
+.wealth-actionbar__toggle {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 42; /* 在动作条内层之上，不与小地图 z40 抢层 */
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(10, 14, 20, 0.72);
+  color: #dfe5ec; /* 对合成底 ≈ 12:1（§26.1 ≥4.5:1） */
+  border: 1px solid #3a414c;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.wealth-actionbar__toggle:hover {
+  background: rgba(10, 14, 20, 0.9);
+}
+.wealth-actionbar__pill {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  background: rgba(10, 14, 20, 0.85);
+  color: #dfe5ec;
+  border: 1px solid #3a414c;
+  font-size: 12.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.wealth-actionbar__pill:hover {
+  background: rgba(10, 14, 20, 0.95);
+}
+
+/* AB-2 弹层高度统一 —— 六类弹层 max-height: 86vh + 三段收缩链（head/body/foot）。
+   AppModal 系（终局/拍卖/议价/提前还款）沿用 app-modal__header/body/footer 既有类名，
+   以内容根挂 .wealth-modal__body 为标记，仅对财商流弹层补 min-height:0 与 86vh 上限，
+   不动共享 appmodal.css（工作面越界 + 避免波及其它游戏弹层）。 */
+.wealth-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200; /* 与 app-modal-overlay 同层约定：modal=200，GlobalToast=1000 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.65);
+}
+.wealth-modal {
+  max-height: 86vh;
+  max-width: 640px;
+  width: 92%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--wealth-panel, #161d28);
+  border: 1px solid var(--wealth-border, #2c3644);
+  border-radius: 12px;
+  color: var(--wealth-text, #e5e7eb);
+}
+.wealth-modal > .wealth-modal__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--wealth-panel, #161d28); /* sticky 需不透明底，不能 inherit 渐变 */
+  border-bottom: 1px solid var(--wealth-border, #2c3644);
+}
+.wealth-modal > .wealth-modal__body {
+  flex: 1 1 auto;
+  min-height: 0; /* 缺此一层 flex 子项 min-height:auto 拒绝收缩 → 长内容撑破视口 */
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+.wealth-modal > .wealth-modal__foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  background: var(--wealth-panel, #161d28);
+  border-top: 1px solid var(--wealth-border, #2c3644);
+}
+/* AppModal 承载的 4 类财富弹层（内容根挂 .wealth-modal__body 仅作标记，
+   三段结构沿用 app-modal__header/body/footer）：外壳补 86vh 上限，
+   body 补 min-height:0 收缩链 —— 16/04 §3.1 同一教训，缺一层即溢出。
+   建房弹窗（.wealth-create-form，08/06 已修对比度）同契约仅补 86vh 上限。 */
+.app-modal:has(> .app-modal__body > .wealth-modal__body),
+.app-modal:has(> .app-modal__body > .wealth-create-form) {
+  max-height: 86vh;
+}
+.app-modal:has(> .app-modal__body > .wealth-modal__body) > .app-modal__body,
+.app-modal:has(> .app-modal__body > .wealth-create-form) > .app-modal__body {
+  min-height: 0;
+}
+
+/* AB-3 图表与横向溢出 —— 380px / 300px 侧栏下桑基图与洛伦兹曲线不横向溢出 */
+.wealth-sankey-scroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+.wealth-flow__svg,
+.wealth-lorenz__svg {
+  width: 100%;
+  height: auto; /* 原固定 height:200/160 会在窄侧栏压扁不可读；viewBox 等比缩放 */
+  max-width: 100%;
+}
+/* MonthTicker 收缩链补全：flex 行内每个子项都要 min-width:0，__month 原缺 */
+.wealth-ticker__month {
+  min-width: 0;
+}
+.wealth-ticker__events {
+  min-width: 0; /* 保险：与 wealth.css 同值覆盖，防止链尾被覆盖回 auto */
+}
+
+/* AB-2 居民档案抽屉：body 内滚收缩链 + 关闭按钮固定右上（18/04 §3.2） */
+.wealth-resident-drawer__panel {
+  overflow: hidden;
+}
+.wealth-resident-drawer__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.wealth-resident-drawer__close {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex: 0 0 auto;
+  min-width: var(--wealth-touch-target, 44px);
+  min-height: var(--wealth-touch-target, 44px);
+}
+
+/* 视口高度兜底（18/04 §3.3）：纵向紧张时收字号 + 弹层上限放宽到 92vh */
+@media (max-height: 720px) {
+  .wealth-modal,
+  .app-modal:has(> .app-modal__body > .wealth-modal__body) {
+    max-height: 92vh;
+  }
+  .wealth-actionbar {
+    font-size: 13px;
+  }
 }

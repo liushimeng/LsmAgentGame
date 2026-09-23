@@ -93,12 +93,13 @@ function EconomyPanelWithSurvey({
           aria-modal="true"
           onClick={() => setSurveyOpen(false)}
         >
+          {/* 18/04 AB-2：改统一 wealth-modal 三段结构（head sticky / body 内滚），
+              去掉内联 maxWidth/maxHeight —— 尺寸契约收口到 wealth-city3d.css。 */}
           <div
             className="wealth-modal"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 640, width: '92%', maxHeight: '80vh', overflow: 'auto' }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div className="wealth-modal__head">
               <strong>📋 调研</strong>
               <button
                 type="button"
@@ -108,7 +109,9 @@ function EconomyPanelWithSurvey({
                 ✕ 关闭
               </button>
             </div>
-            <SurveyPanel roomId={roomId} gameState={gameState} />
+            <div className="wealth-modal__body">
+              <SurveyPanel roomId={roomId} gameState={gameState} />
+            </div>
           </div>
         </div>
       )}

@@ -147,7 +147,8 @@
   background: var(--wealth-panel);
   border: 1px solid var(--wealth-border);
   border-radius: 8px;
-  max-height: 180px;
+  /* 18/04 AB-2：180px → 40vh（与拍卖出价列表同契约），留言记录长时独立内滚 */
+  max-height: 40vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -262,6 +263,9 @@
   background: var(--wealth-panel);
   border: 1px solid var(--wealth-border);
   border-radius: 8px;
+  /* 18/04 AB-2：出价列表独立内滚，不把弹层 body 撑破 */
+  max-height: 40vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 2px;

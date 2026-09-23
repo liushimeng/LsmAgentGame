@@ -17,10 +17,10 @@ import * as THREE from 'three';
 import { Html } from '@react-three/drei';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
-import { districtTexture, groundTileUrl } from '@/assets/images/wealth';
+import { districtTexture, groundTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/wealth';
 import { BuildingMesh, type BuildingSpec } from './BuildingMesh';
 import { DISTRICT_FLOORS, buildingHeight, u } from './cityScale';
-import { useSharedTexture } from './textureCache';
+import { useSharedPBR, useSharedTexture, withPBR } from './textureCache';
 import {
   WEALTH_DISTRICTS,
   formatCny,
@@ -91,15 +91,36 @@ export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect
 
   // 14-3D渲染深化：共享贴图缓存（失败静默降级主色底板 —— 降级策略 §9）。
   const texture = useSharedTexture(texUrl);
+  // 18-X：底板 PBR（02 §2.3 行 4：districts/<id>，normalScale [0.5,0.5]）。
+  const boardPbr = useSharedPBR(
+    texUrl,
+    pbrNormalUrl('districts', def.id),
+    pbrRoughUrl('districts', def.id),
+    { normalScale: [0.5, 0.5] },
+  );
   // 地表覆盖层：中央公园草地 / 交通枢纽+金融广场（缺失降级纯色）
   const isPark = def.id === 'central_park';
   const isPlaza = def.id === 'transport_hub' || def.id === 'finance';
   const grassTex = useSharedTexture(isPark ? groundTileUrl('grass_tile') : '', {
     wrap: 'repeat', repeat: [4, 4],
   });
+  // 18-X：草地 PBR（02 §2.3 行 5：ground/grass_tile，normalScale [0.7,0.7]）。
+  const grassPbr = useSharedPBR(
+    isPark ? groundTileUrl('grass_tile') : '',
+    pbrNormalUrl('ground', 'grass_tile'),
+    pbrRoughUrl('ground', 'grass_tile'),
+    { wrap: 'repeat', repeat: [4, 4], normalScale: [0.7, 0.7] },
+  );
   const plazaTex = useSharedTexture(isPlaza ? groundTileUrl('plaza_tile') : '', {
     wrap: 'repeat', repeat: [3, 3],
   });
+  // 18-X：广场 PBR（02 §2.3 行 6：ground/plaza_tile，normalScale [0.8,0.8]）。
+  const plazaPbr = useSharedPBR(
+    isPlaza ? groundTileUrl('plaza_tile') : '',
+    pbrNormalUrl('ground', 'plaza_tile'),
+    pbrRoughUrl('ground', 'plaza_tile'),
+    { wrap: 'repeat', repeat: [3, 3], normalScale: [0.8, 0.8] },
+  );
 
   // 繁荣度 → 楼高（price_index 0.8–1.6 → 0–1；实际楼高公式在 BuildingMesh，
   // 按 cityScale.DISTRICT_FLOORS 分城区楼层区间插值）。
@@ -130,7 +151,7 @@ export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} receiveShadow>
         <planeGeometry args={[8, 8]} />
         {texture ? (
-          <meshStandardMaterial map={texture} />
+          <meshStandardMaterial {...withPBR({ map: texture, roughness: 0.9 }, boardPbr)} />
         ) : (
           <meshStandardMaterial color={def.color} roughness={0.9} />
         )}
@@ -140,9 +161,10 @@ export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.026, 0]} receiveShadow>
           <planeGeometry args={[7.8, 7.8]} />
           <meshStandardMaterial
-            map={grassTex ?? undefined}
-            color={grassTex ? '#ffffff' : '#3f7a3a'}
-            roughness={0.95}
+            {...withPBR(
+              { map: grassTex ?? undefined, color: grassTex ? '#ffffff' : '#3f7a3a', roughness: 0.95 },
+              grassPbr,
+            )}
           />
         </mesh>
       )}
@@ -155,9 +177,10 @@ export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect
         >
           <planeGeometry args={def.id === 'transport_hub' ? [6, 4] : [3, 3]} />
           <meshStandardMaterial
-            map={plazaTex ?? undefined}
-            color={plazaTex ? '#ffffff' : '#9aa1ab'}
-            roughness={0.85}
+            {...withPBR(
+              { map: plazaTex ?? undefined, color: plazaTex ? '#ffffff' : '#9aa1ab', roughness: 0.85 },
+              plazaPbr,
+            )}
           />
         </mesh>
       )}

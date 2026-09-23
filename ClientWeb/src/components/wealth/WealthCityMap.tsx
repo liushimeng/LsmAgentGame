@@ -45,6 +45,7 @@ import { RingRoad } from './RingRoad';
 import { CanalBridges } from './CanalBridge';
 import { LandmarksLayer } from './LandmarksLayer';
 import { CloudLayer } from './props/CloudLayer';
+import { CivicLayer } from './CivicLayer';
 import { useSharedTexture } from './textureCache';
 import { groundTileUrl, streetTileUrl } from '@/assets/images/wealth';
 import {
@@ -66,10 +67,13 @@ export interface WealthCameraView {
 
 /** 世界边长（世界单位；1 单位 = 10 米，见 cityScale.ts）。 */
 export const WORLD_SIZE = 80;
+/** 18 · 阶段 AA：地面 plane 边长（建成区外的腹地）。只影响 Ground 与其贴图 repeat，
+ *  建成区/相机/雾化语义不变。原 WORLD_SIZE=80 仍是「城区半径」语义。 */
+export const WORLD_GROUND_SIZE = 120;
 /** 地面贴图每 8 单位平铺一次（与城区底板 8×8 同标尺）。 */
 export const GROUND_TILE = 8;
-/** 地面贴图重复次数 = WORLD_SIZE / GROUND_TILE。 */
-export const GROUND_REPEAT = WORLD_SIZE / GROUND_TILE;
+/** 地面贴图重复次数 = WORLD_GROUND_SIZE / GROUND_TILE（18-AA: 80/8=10 → 120/8=15）。 */
+export const GROUND_REPEAT = WORLD_GROUND_SIZE / GROUND_TILE;
 /** 远景雾化近/远平面。16 · 视觉验收两轮回归：
  *  0.7/1.5 与 0.85/1.9 在最大缩放（相机距离=ORBIT_MAX_DISTANCE=80）下把
  *  城市大半泡进雾色 → 近端抬到 1.25×（=100，超过最大缩放下城市最远角
@@ -126,7 +130,7 @@ function Ground() {
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-      <planeGeometry args={[WORLD_SIZE, WORLD_SIZE]} />
+      <planeGeometry args={[WORLD_GROUND_SIZE, WORLD_GROUND_SIZE]} />
       <meshStandardMaterial
         map={tex ?? undefined}
         color={tex ? '#ffffff' : '#141a24'}
@@ -350,6 +354,8 @@ export function WealthCityMap({
         <CloudLayer />
         {/* 16 · 阶段 T：功能地标（喷泉 / 园路花坛 / 塔吊工地 / 停车场） */}
         <LandmarksLayer />
+        {/* 18 · 阶段 AA：市政补全（码头 / 操场 / 轻轨 / 停机坪 / 加油站 / 生命线 / 外围腹地 / 路口信号灯） */}
+        <CivicLayer />
         {WEALTH_DISTRICTS.map((d) => (
           <DistrictBlock
             key={d.id}

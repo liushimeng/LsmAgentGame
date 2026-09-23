@@ -149,7 +149,8 @@ export function EarlyRepayModal({ open, mortgageLoans, investYield, onSubmit, on
         </>
       )}
     >
-      <div className="wealth-earlyrepay">
+      {/* 18/04 AB-2：wealth-modal__body 标记驱动统一高度/收缩链（见 wealth-city3d.css）。 */}
+      <div className="wealth-earlyrepay wealth-modal__body">
         {/* 机会成本提示 */}
         {showTriggerHint && (
           <div className="wealth-earlyrepay__trigger">

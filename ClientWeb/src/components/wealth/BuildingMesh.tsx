@@ -7,6 +7,8 @@
  *   阶段 B（本版） 按 DISTRICT_ARCHETYPE 分发到 building_shapes.tsx 的
  *        体块组合渲染器（tower/slab/house/shed/pavilion），贴图加载、
  *        高度公式、prosperity 语义不变。
+ *   18-X  按 def.id 拼 stem（facades/<id>_<v> / roofs/<id>），用 useSharedPBR
+ *        加载 PBR 三件套传给 BuildingShape（02 §3.3 接线契约）。
  *
  * 职责边界：本文件只负责「贴图加载 + 高度/繁荣度计算 + archetype 分发」，
  * 体块几何与材质细节全部在 ./building_shapes.tsx（契约：
@@ -19,11 +21,13 @@
 import {
   districtFacadeUrl,
   districtRoofUrl,
+  pbrNormalUrl,
+  pbrRoughUrl,
 } from '@/assets/images/wealth';
 import type { WealthDistrictDef } from '@/types/wealth';
 import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
 import { BuildingShape, DISTRICT_ARCHETYPE } from './building_shapes';
-import { useSharedTexture } from './textureCache';
+import { useSharedTexture, useSharedPBR } from './textureCache';
 
 export interface BuildingSpec {
   /** 相对区中心偏移（x, z）。 */
@@ -45,9 +49,31 @@ interface Props {
 
 export function BuildingMesh({ spec, def, prosperity }: Props) {
   // 14-3D渲染深化：共享贴图缓存（16 区 × 5 楼同源贴图只上传一次 GPU）
-  const facadeBase = useSharedTexture(districtFacadeUrl(def.id, 'base'));
-  const facadeMid = useSharedTexture(districtFacadeUrl(def.id, 'mid'));
-  const roof = useSharedTexture(districtRoofUrl(def.id));
+  const facadeBaseTex = useSharedTexture(districtFacadeUrl(def.id, 'base'));
+  const facadeMidTex = useSharedTexture(districtFacadeUrl(def.id, 'mid'));
+  const roofTex = useSharedTexture(districtRoofUrl(def.id));
+
+  // 18-X PBR 三件套（02 §2.3 接线表 1/2/3 行）。
+  // stem 拼接仅在此处发生（def.id 由父层注入，符合 02 §3.3「stem 拼接只允许在 BuildingMesh」）；
+  // 法线/粗糙度 useSharedTexture 内部固定 srgb:false → NoColorSpace。
+  const pbrBase = useSharedPBR(
+    districtFacadeUrl(def.id, 'base'),
+    pbrNormalUrl('facades', `${def.id}_base`),
+    pbrRoughUrl('facades', `${def.id}_base`),
+    { normalScale: [0.8, 0.8] },
+  );
+  const pbrMid = useSharedPBR(
+    districtFacadeUrl(def.id, 'mid'),
+    pbrNormalUrl('facades', `${def.id}_mid`),
+    pbrRoughUrl('facades', `${def.id}_mid`),
+    { normalScale: [0.8, 0.8] },
+  );
+  const roofPbr = useSharedPBR(
+    districtRoofUrl(def.id),
+    pbrNormalUrl('roofs', def.id),
+    pbrRoughUrl('roofs', def.id),
+    { normalScale: [0.7, 0.7] },
+  );
 
   // 楼高：分城区楼层区间 [minF, maxF] × 繁荣度插值 × factor 抖动（0.85~1.0，
   // 保留确定性伪随机但避免 0.6 倍把楼压扁）。层高 3m，见 cityScale.ts。
@@ -58,6 +84,8 @@ export function BuildingMesh({ spec, def, prosperity }: Props) {
 
   const archetype = DISTRICT_ARCHETYPE[def.id] ?? 'slab';
 
+  // 注意 facadeBase/Mid/roofTex 与 pbrBase/Mid/roofPbr.map 指向同一缓存纹理（cacheKey 一致），
+  // 这里复用 .map 即可——避免双重 load 与状态不一致。
   return (
     <group position={[spec.x, 0, spec.z]}>
       <BuildingShape
@@ -65,11 +93,14 @@ export function BuildingMesh({ spec, def, prosperity }: Props) {
         w={spec.w}
         d={spec.d}
         h={h}
-        facadeBase={facadeBase}
-        facadeMid={facadeMid}
-        roofMap={roof}
+        facadeBase={facadeBaseTex}
+        facadeMid={facadeMidTex}
+        roofMap={roofTex}
         fallbackColor={def.color}
         emissive={emissive}
+        pbrBase={pbrBase}
+        pbrMid={pbrMid}
+        roofPbr={roofPbr}
       />
     </group>
   );

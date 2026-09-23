@@ -55,6 +55,19 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
   const [formError, setFormError] = useState<string | null>(null);
   const [awaiting, setAwaiting] = useState(false);
 
+  // 18/04 AB-1 底部动作条折叠：1280×800 下常驻整条与 MonthTicker 叠吃 200px+，
+  // 压地图到 min-height 兜底。缺省展开；localStorage '0' = 折叠（刷新保持）。
+  const [expanded, setExpanded] = useState<boolean>(
+    () => localStorage.getItem('wealth.ui.actionbar') !== '0',
+  );
+  const toggleExpanded = useCallback(() => {
+    setExpanded((prev) => {
+      const next = !prev;
+      localStorage.setItem('wealth.ui.actionbar', next ? '1' : '0');
+      return next;
+    });
+  }, []);
+
   // 表单字段（同一时刻只开一个弹窗，共用状态）。
   const [assetKind, setAssetKind] = useState('stock_index');
   const [amount, setAmount] = useState('');
@@ -544,8 +557,37 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
     setEarlyRepayOpen(false);
   };
 
+  // 折叠态只留 32px pill 入口（MonthTicker 进度条本就在下方，不重复渲染状态）。
+  if (!expanded) {
+    return (
+      <div className="wealth-actionbar wealth-actionbar--collapsed">
+        <button
+          type="button"
+          className="wealth-actionbar__pill"
+          onClick={toggleExpanded}
+          aria-expanded={false}
+          title="📋"
+          data-testid="wealth-actionbar-pill"
+        >
+          📋 行动
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="wealth-actionbar">
+      {/* AB-1 右上 24×24 折叠 toggle（配色 #dfe5ec 对深底 ≈ 12:1，§26.1） */}
+      <button
+        type="button"
+        className="wealth-actionbar__toggle"
+        onClick={toggleExpanded}
+        aria-expanded={true}
+        title="⌄"
+        data-testid="wealth-actionbar-toggle"
+      >
+        ⌄
+      </button>
       {/* P1 明斯基风险提示条（颜色编码；庞氏等级红色警告） */}
       <MinskyStatusBar gameState={gameState} mySeat={mySeat} />
 

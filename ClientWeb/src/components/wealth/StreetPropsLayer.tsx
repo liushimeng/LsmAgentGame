@@ -5,6 +5,11 @@
  *   - V1 单行人原地微抖 → V2 折线 path 漫步 + 圆柱身体 + 头部 Billboard sprite
  *   - 密度：核心城区 5-6 人 / 一般城区 3-4 人 / 郊区 2 人（按城区属性分档）
  *
+ * 18 · 阶段 Z 行人升级：
+ *   - V2 圆柱+Billboard「图钉」→ V3 体积行人（头/躯干/双臂双腿 + 摆臂摆腿）
+ *   - 全城行人硬上限 56（密度表原合计 59，按「核心区优先、郊区先减」裁 3，见 PEDESTRIAN_DENSITY）
+ *   - outfit 改 0..3 索引（对应 PEDESTRIAN_OUTFITS 四套服装色），phase 错开步态
+ *
  * 阶段 L 树木升级：
  *   - V1 单 sphere 树冠 / Billboard → V2 3 层 sphere 叠加 + 行道树沿主干道
  *
@@ -16,7 +21,7 @@
  *
  * 总 mesh 预算核算：
  *   - 楼栋 ~80×3 = 240（DistrictBlock 持有）
- *   - 行人 80×2 = 160（V2 身体+头）
+ *   - 行人 56×6 = 336（V3 躯干+头+四肢，18 · 阶段 Z）
  *   - 树 64×4 = 256（V2 干+3 层冠）
  *   - 家具 60-80
  *   - 道路 + 灯 ~120
@@ -31,10 +36,9 @@ import {
   type WealthDistrictDef,
 } from '@/types/wealth';
 import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
-import { TreeV2 } from './props/TreeV2';
+import { TreeV3 } from './props/TreeV3'; // 18-AA：TreeV2 → TreeV3（V2 文件保留不删）
 import { Vehicle } from './props/Vehicle';
-import { PedestrianV2 } from './props/PedestrianV2';
-import type { PedestrianHeadOutfit } from '@/assets/images/wealth';
+import { PedestrianV3, type PedestrianV3Props } from './props/PedestrianV3';
 import { Sign } from './props/Sign';
 import { RooftopAcc } from './props/RooftopAcc';
 import { TrafficLight } from './props/TrafficLight';
@@ -112,14 +116,13 @@ interface DistrictProps {
   rooftop: RooftopSpec[];
   /** 16 · 阶段 T：屋顶太阳能板（suburb / oldtown）。 */
   solar: SolarSpec[];
-  /** 城区内行人（V2 折线漫步） */
+  /** 城区内行人（V3 体积步态；outfit 0..3 对应 PEDESTRIAN_OUTFITS） */
   pedestrians: Array<{
-    x: number;
-    z: number;
     path: Array<[number, number]>;
-    outfit: PedestrianHeadOutfit;
+    outfit: NonNullable<PedestrianV3Props['outfit']>;
     speed: number;
     phase: number;
+    /** 中央公园看景行人：V3 契约无 stationary prop → speed=0 + phase=0 站定 path 起点。 */
     stationary: boolean;
   }>;
   furniture: FurnitureSpec[];
@@ -156,37 +159,44 @@ const TREE_VARIANTS: Array<'oak' | 'pine' | 'palm'> = ['oak', 'pine', 'palm'];
 const ROOFTOP_VARIANTS: Array<'ac' | 'tank' | 'antenna'> = ['ac', 'tank', 'antenna'];
 const VEHICLE_VARIANTS: Array<'sedan' | 'truck' | 'bus' | 'taxi'> = ['sedan', 'truck', 'bus', 'taxi'];
 
-/** 城区行人密度档位（按城区属性分档）。 */
+/**
+ * 城区行人密度档位（按城区属性分档：核心 5-6 / 一般 3-4 / 郊区 2）。
+ *
+ * 18 · 阶段 Z：全城行人硬上限 56（01 §3.3）。密度表原值合计 59 > 56，
+ * 按「核心区优先、郊区先减」裁 3 人：industry / industrial_park / logistics_port
+ * 各 2→1（-3 → 56）；核心区（finance/commerce/tech/hightech_park）与中央公园保满编。
+ * 合计核对：核心 21 + 一般 16 + 医疗居住滨河 9 + 郊区工业 5 + 公园 5 = 56。
+ */
 const PEDESTRIAN_DENSITY: Record<string, number> = {
   // 核心商务区（高密度）
   finance: 6, commerce: 5, tech: 5, hightech_park: 5,
   // 一般城区
   oldtown: 4, edu_district: 4, transport_hub: 4, cultural_creative: 4,
   medical_city: 3, residential: 3, riverside: 3,
-  // 工业/低密度
-  suburb: 2, industry: 2, industrial_park: 2, logistics_port: 2,
+  // 工业/低密度（18-Z 裁剪后 5 人）
+  suburb: 2, industry: 1, industrial_park: 1, logistics_port: 1,
   // 公园
   central_park: 5, // 含 2 静止
 };
 
-/** 城区 outfit 倾向（按城区属性选 outfit）。 */
-const OUTFIT_AFFINITY: Record<string, PedestrianHeadOutfit[]> = {
-  finance: ['business', 'casual'],
-  commerce: ['business', 'bright'],
-  tech: ['casual', 'bright'],
-  hightech_park: ['casual', 'business'],
-  oldtown: ['khaki', 'casual'],
-  edu_district: ['casual', 'bright'],
-  transport_hub: ['bright', 'casual'],
-  cultural_creative: ['bright', 'casual'],
-  medical_city: ['business', 'casual'],
-  residential: ['casual', 'khaki'],
-  riverside: ['business', 'casual'],
-  suburb: ['khaki'],
-  industry: ['khaki', 'bright'],
-  industrial_park: ['khaki', 'bright'],
-  logistics_port: ['khaki', 'bright'],
-  central_park: ['casual', 'bright'],
+/** 城区 outfit 倾向（0 商务蓝 / 1 休闲灰 / 2 亮色红 / 3 卡其，对应 PEDESTRIAN_OUTFITS）。 */
+const OUTFIT_AFFINITY: Record<string, Array<NonNullable<PedestrianV3Props['outfit']>>> = {
+  finance: [0, 1],
+  commerce: [0, 2],
+  tech: [1, 2],
+  hightech_park: [1, 0],
+  oldtown: [3, 1],
+  edu_district: [1, 2],
+  transport_hub: [2, 1],
+  cultural_creative: [2, 1],
+  medical_city: [0, 1],
+  residential: [1, 3],
+  riverside: [0, 1],
+  suburb: [3],
+  industry: [3, 2],
+  industrial_park: [3, 2],
+  logistics_port: [3, 2],
+  central_park: [1, 2],
 };
 
 /** 报刊亭布点列表（按城区属性）。 */
@@ -279,17 +289,14 @@ function propsForDistrict(def: WealthDistrictDef, idx: number): DistrictProps {
     }
   }
 
-  // 阶段 K 行人（V2 折线 path）：按城区密度档位 + outfit 倾向
+  // 阶段 K 行人（V3 折线 path）：按城区密度档位 + outfit 倾向（确定性 rnd，禁 Math.random）
   const pedCount = PEDESTRIAN_DENSITY[def.id] ?? 3;
-  const outfitPool = OUTFIT_AFFINITY[def.id] ?? ['casual', 'khaki'];
+  const outfitPool = OUTFIT_AFFINITY[def.id] ?? [1, 3];
   const pedestrians: DistrictProps['pedestrians'] = Array.from({ length: pedCount }, (_, i) => {
     const path = pathForDistrict(def, rnd);
-    const startPt = path[0];
     // 中央公园最后 2 个行人设为静止（看景）
     const isStationary = isPark && i >= pedCount - 2;
     return {
-      x: startPt[0],
-      z: startPt[1],
       path,
       outfit: outfitPool[i % outfitPool.length],
       speed: 0.3 + rnd() * 0.2,
@@ -542,7 +549,7 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
         <group key={dp.districtId}>
           {/* 阶段 L V2 立体树 */}
           {dp.trees.map((t, i) => (
-            <TreeV2 key={`tree-${i}`} x={t.x} z={t.z} variant={t.variant} scale={t.scale} />
+            <TreeV3 key={`tree-${i}`} x={t.x} z={t.z} scale={t.scale} />
           ))}
           {/* 楼顶杂物 */}
           {dp.rooftop.map((r, i) => (
@@ -559,17 +566,14 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
           {dp.solar.map((sp, i) => (
             <SolarPanel key={`solar-${i}`} x={sp.x} y={sp.y} z={sp.z} rotation={sp.rotation} />
           ))}
-          {/* 阶段 K V2 折线漫步行人 */}
+          {/* 阶段 K→18-Z V3 体积漫步行人（站定行人 speed=0 + phase=0，见 DistrictProps） */}
           {dp.pedestrians.map((p, i) => (
-            <PedestrianV2
+            <PedestrianV3
               key={`ped-${i}`}
-              x={p.x}
-              z={p.z}
               path={p.path}
               outfit={p.outfit}
-              speed={p.speed}
-              phase={p.phase}
-              stationary={p.stationary}
+              speed={p.stationary ? 0 : p.speed}
+              phase={p.stationary ? 0 : p.phase}
             />
           ))}
           {/* 阶段 M 街道家具（按 type 分派渲染器） */}
@@ -604,7 +608,7 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
 
       {/* 阶段 L 行道树（沿主干道布点） */}
       {layout.roadTrees.map((t, i) => (
-        <TreeV2 key={`roadtree-${i}`} x={t.x} z={t.z} variant={t.variant} scale={t.scale} />
+        <TreeV3 key={`roadtree-${i}`} x={t.x} z={t.z} scale={t.scale} />
       ))}
 
       {/* 主干道车辆（16 · 阶段 S：双向车道，右行偏移） */}
@@ -633,6 +637,6 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
   );
 }
 
-// 注：V1 Pedestrian / Tree 仍保留在 props/ 目录，未来如需回退可 import。
-// 新版 StreetPropsLayer 完全使用 V2（PedestrianV2 / TreeV2）。
+// 注：V1 Pedestrian / PedestrianV2 / Tree 仍保留在 props/ 目录（契约要求保留，未来如需回退可 import）。
+// 新版 StreetPropsLayer 行人用 V3（PedestrianV3），树仍用 TreeV2（TreeV3 属 18-Z 后续接线）。
 // V1 Pedestrian 仍由原 props/Pedestrian.tsx 导出，本层不再引用。
