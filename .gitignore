@@ -88,3 +88,9 @@ go-web-debug-tool/debug-tool
 
 # go-web-debug-tool 编译产物(本地构建,不入库)
 go-web-debug-tool/GoWebDebugTool
+
+# ============ Blender 3D 工作流（v19 §27）============
+# .blend 源文件不入库（本地美术保留，git 仅入 .py 导出脚本 + .glb 产物）
+*.blend
+*.blend1
+*.blend2
