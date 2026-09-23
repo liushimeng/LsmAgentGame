@@ -59,14 +59,14 @@ employment_type: 全职
 // startAnchoredRoom 建 docs 房(12 bot + resident_count 城市 Sega)并等待锚定 ready。
 func startAnchoredRoom(t *testing.T, roomID string, poolCards, residents int) (*wealth.Manager, *wealth.WealthRoom) {
 	t.Helper()
-	m := wealth.NewManager(wealth.Config{MonthMs: 3000, PoolDefault: "docs", Seed: 555}, nil)
+	m := wealth.NewManager(wealth.Config{MonthMs: 3000, Seed: 555}, nil)
 	m.SetLoader(profession.NewLoader(cityAPIFixtureDir(t, poolCards)))
 	r := m.CreateRoom(roomID)
 	botUsers := make(map[int]string, 12)
 	for seat := 0; seat < 12; seat++ {
 		botUsers[seat] = "b" + fmt.Sprint(seat)
 	}
-	r.RegisterBotSeats(botUsers, nil, nil)
+	r.RegisterBotSeats(botUsers, nil)
 	r.SetResidentCount(residents)
 	if e := r.Start(nil); e != nil {
 		t.Fatalf("start: %v", e)
@@ -187,7 +187,7 @@ func TestWealthCityAPI_ListDetailNotFound(t *testing.T) {
 	}
 
 	// ⑧ 未建城(未 Start / resident_count=0)→ code 0 + idle 空列表(不算错误)。
-	m2 := wealth.NewManager(wealth.Config{MonthMs: 3000, PoolDefault: "docs"}, nil)
+	m2 := wealth.NewManager(wealth.Config{MonthMs: 3000}, nil)
 	m2.SetLoader(profession.NewLoader(cityAPIFixtureDir(t, 4)))
 	m2.CreateRoom("room-nocity")
 	_, body = getCityJSON(t, cityAPIRouter(m2), "/api/games/wealth/rooms/room-nocity/city/residents")

@@ -1,7 +1,8 @@
 // Package profession — card.go: 职业卡结构(P0 v1,2026-09-14 §财商流P0)。
 //
 // 契约: lag_docs/虚拟城市/已实现/03-Agent设计/虚拟城市-职业卡与加载器设计-v1.md §1。
-// 精选 10 卡(curated.go)与文档池卡(loader.go)共用此结构。
+// 文档池卡(loader.go)与合成兜底卡(synthetic.go)共用此结构
+// (2026-09-22 §17-CityHuman:精选卡层退役)。
 package profession
 
 import (
@@ -33,7 +34,7 @@ type Card struct {
 	EldersDependent int      // 需赡养老人数(月支出 +1000/位)
 	OpeningHook     string   // 30–50 字开场白(开局 SendFromBot)
 	Goals           []string // 含 1 条 5 年目标
-	Source          string   // "curated" | "docs"
+	Source          string   // "docs" | "synthetic"(2026-09-22 §17:curated 退役)
 }
 
 // Validate 校验卡面完整性(加载器文档 §1)。
@@ -61,7 +62,7 @@ func (c *Card) Validate() error {
 	if !validDistrict(c.HomeDistrict) {
 		return fmt.Errorf("card %s: home_district invalid: %q", c.ID, c.HomeDistrict)
 	}
-	// OpeningHook 长度 ∈[20,60] rune。文档池超长卡在 loader 截断,curated 恒满足。
+	// OpeningHook 长度 ∈[20,60] rune。文档池超长卡在 loader 截断,合成卡模板恒满足。
 	if n := len([]rune(c.OpeningHook)); n < 20 || n > 60 {
 		return fmt.Errorf("card %s: opening_hook length %d out of [20,60]", c.ID, n)
 	}

@@ -40,7 +40,6 @@ type Config struct {
 	AgentEnabled            bool
 	AgentDecisionTimeoutSec int
 	BotMaxActionsPerMonth   int
-	PoolDefault             string // "curated" | "docs"
 	Seed                    int64
 	// AgentConcurrency 房间级 LLM 并发信号量容量;0 = DefaultAgentConcurrency(8)。
 	// 2026-09-16 §12 座扩容 新增:10+ bot 同月决策时,4 并发会把 12 人压成
@@ -64,6 +63,15 @@ type Config struct {
 	CityVoicePerMonth int
 	// CityCalibSampleSize 校准表抽样卡数;零值 → 512。
 	CityCalibSampleSize int
+	// 2026-09-22 §17-CityHuman(契约 02 §7)— 居民驱动层配置。
+	// CityDriverEnabled 驱动层总开关(false → Start 回退 VoiceScheduler;
+	// 零值 = false,默认 true 由 config 层 CityDriverEnabledResolved 提供)。
+	CityDriverEnabled bool
+	// CityDriverWorkers 线程池 worker 数(使用点 NewResidentDriver clamp
+	// [1,16],0 → 4)。
+	CityDriverWorkers int
+	// CityDriverPerMonth 每月驱动居民数(clamp [0,64];0 = 仅深度层)。
+	CityDriverPerMonth int
 }
 
 // LLMRegistry 窄接口(llm.Registry 满足;避免 manager 包 import llm)。
@@ -225,7 +233,7 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 		m.pendingOptsApply(roomID)
 		return r
 	}
-	r = NewWealthRoom(roomID, m.cfg.MonthMs, m.cfg.PoolDefault, m.cfg.Seed, m.cfg.AgentConcurrency)
+	r = NewWealthRoom(roomID, m.cfg.MonthMs, m.cfg.Seed, m.cfg.AgentConcurrency)
 	// P1(§6.5):economy/survey 房间级开关接线(Start 前回写)。
 	r.SetEconomyFlags(m.cfg.EconomyEnabled, m.cfg.SurveyEnabled)
 	// P1-4(§财商流P1-4 §11):保险引擎开关接线(Start 前回写)。
@@ -234,6 +242,9 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 	// m.mu 写锁内调房间锁,锁序 m.mu → r.mu 全库一致,无反向路径)。
 	r.SetLinePoolSource(m.linePoolSource)
 	r.SetCityVoiceConfig(m.cfg.CityVoiceEnabled, m.cfg.CityVoicePerMonth)
+	// 2026-09-22 §17-CityHuman(契约 02 §5):居民驱动层配置接线(与城市之声
+	// 互斥,Start 时按开关二选一装配)。
+	r.SetCityDriverConfig(m.cfg.CityDriverEnabled, m.cfg.CityDriverWorkers, m.cfg.CityDriverPerMonth)
 	if m.loader != nil {
 		r.mu.Lock()
 		r.docLoader = m.loader
@@ -300,20 +311,21 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 		r.applyOpts(opts)
 	}
 	// 日志必须读取 pending opts 应用后的房间最终配置,不能打印 Manager 默认值;
-	// 否则 3000/curated 房间会被误记为 8000/docs。
-	monthMs, pool := r.roomConfigForLog()
+	// 否则 3000ms 房间会被误记为 8000ms。
+	monthMs, residents := r.roomConfigForLog()
 	logger.L().Info("wealth room created",
 		zap.String("room_id", roomID),
 		zap.Int("month_ms", monthMs),
-		zap.String("pool", pool))
+		zap.Int("resident_count", residents))
 	return r
 }
 
-// roomConfigForLog 返回房间级配置快照,专供创建日志使用。
-func (r *WealthRoom) roomConfigForLog() (monthMs int, pool string) {
+// roomConfigForLog 返回房间级配置快照,专供创建日志使用(pool 字段随精选层
+// 退役删除,2026-09-22 §17-CityHuman;改下发自建居民数)。
+func (r *WealthRoom) roomConfigForLog() (monthMs, residents int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.MonthMs, r.pool
+	return r.MonthMs, r.ResidentCount
 }
 
 // RemoveRoom 移除房间(终局清理时由 ws 层调用)。

@@ -46,8 +46,8 @@ type createRoomRequest struct {
 	Wealth *service.WealthRoomOptions `json:"wealth,omitempty"`
 	// ResidentCount 2026-09-21 §虚拟城市(契约 04 §1.1)— 城市背景居民数
 	// (仅 wealth 生效,其他 kind 静默忽略;与 reveal_role_on_death 同策略)。
-	// 缺省 0 = 不启用城市背景层(纯 12 座旧形态,向后兼容);负数 400;
-	// (0, max_residents] 超上限由 service 层 clamp(默认 100000)。
+	// 2026-09-22 §17-CityHuman(契约 03 §3.1)**必达**新语义:缺省/0 → 10000;
+	// <10 → clamp 10;>上限由 service 层 clamp(默认 100000);负数 400。
 	// 并入 Wealth.ResidentCount 透传(wealth 子对象亦可显式携带,顶层优先)。
 	ResidentCount int `json:"resident_count,omitempty"`
 	// FullAgent 2026-09-19 §全Agent模式 — 是否全 Agent 模式(仅 wealth 生效)。
@@ -161,17 +161,15 @@ func (a *RoomAPI) Create(c *gin.Context) {
 	if a.hub != nil {
 		a.hub.NotifyRoomChanged(detail.ID, "room_created", userID)
 	}
-	// BUG-WEREWOLF-P0-NEW-14: echo agent_seats_count in response so the caller
-	// can verify the server actually registered the expected number of bots.
-	fullAgent := false
-	if kind == "wealth" && len(req.AgentSeats) >= 10 {
-		fullAgent = true
-	}
+	// 2026-09-22 §17-CityHuman(契约 03 §3.2): 响应删 agent_seats_count
+	// (前端无消费方;wealth 的 agent_seats 已被服务端忽略,回显数字只会误导),
+	// full_agent 回显保留 —— wealth 恒为全 Agent 城市(12 深度座位),创建成功
+	// 即 full_agent=true;其他游戏恒 false。
+	fullAgent := kind == "wealth"
 	c.JSON(http.StatusOK, gin.H{
-		"code":    errcode.OK,
-		"message": "ok",
-		"data":    detail,
-		"agent_seats_count": len(req.AgentSeats),
+		"code":       errcode.OK,
+		"message":    "ok",
+		"data":       detail,
 		"full_agent": fullAgent,
 	})
 }

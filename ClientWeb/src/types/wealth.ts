@@ -405,6 +405,17 @@ export interface WealthCitySnapshot {
   profiles?: WealthCityProfileProgress;
   /** 每城区当月气味/声响标签（§CityHuman重构；键 = 城区 id）。 */
   ambiance?: Record<string, WealthDistrictAmbiance>;
+  /** 居民驱动层快照（17-CityHuman §2 §6；驱动层未启用/旧房 omit）。 */
+  driver?: {
+    /** 驱动层是否启用（city_driver_enabled）。 */
+    enabled: boolean;
+    /** 单月并发 worker 数（city_driver_workers）。 */
+    workers: number;
+    /** 每月驱动居民数预算（city_driver_per_month）。 */
+    per_month: number;
+    /** 上月实际驱动居民数。 */
+    driven_last: number;
+  };
 }
 
 /** game.state 全量快照（按座位脱敏，BroadcastTo 单发）。 */
@@ -894,7 +905,6 @@ export interface WealthStartedFrame {
   month: number;
   age: number;
   start_age: number;
-  professions: { seat: number; profession_id: string }[];
 }
 
 export type WealthEventType =
@@ -1072,8 +1082,6 @@ export const INSURANCE_ERR_I18N: Record<number, TKey> = {
 export interface WealthRoomOptions {
   /** 1 游戏月时长 ms，3000–30000，缺省 8000。 */
   month_ms?: number;
-  /** "curated" | "docs"，缺省 curated。 */
-  pool?: 'curated' | 'docs';
   /** 可选随机种子（测试确定性复现）。 */
   seed?: number;
 }
@@ -1147,65 +1155,6 @@ export const PROFESSION_EMOJI: Record<string, string> = {
 
 export const WEALTH_DEFAULT_PROFESSION_COLOR = '#9ca3af';
 export const WEALTH_DEFAULT_PROFESSION_EMOJI = '🧑‍💼';
-
-/** 精选 10 卡静态镜像（职业卡与加载器设计 §1；仅用于 UI 兜底展示，
- *  权威数据走 GET /api/games/wealth/professions）。 */
-export interface CuratedProfession {
-  id: string;
-  title: string;
-  avatar: string;
-  color: string;
-  emoji: string;
-  salary: number;
-  expense: number;
-  savings: number;
-  homeDistrict: WealthDistrictId;
-  openingHook: string;
-  goal: string;
-}
-
-export const CURATED_PROFESSIONS: CuratedProfession[] = [
-  { id: 'P01', title: '外卖骑手',  avatar: 'p01', color: PROFESSION_COLORS.P01, emoji: PROFESSION_EMOJI.P01,
-    salary: 5000,  expense: 3200, savings: 8000,   homeDistrict: 'commerce',
-    openingHook: '风里雨里跑了三年，卡里就八千块。我不想送一辈子外卖，先攒出第一桶金。',
-    goal: '5 年内攒下 15 万启动资金，学会让钱替我干活。' },
-  { id: 'P03', title: '保安/司机', avatar: 'p03', color: PROFESSION_COLORS.P03, emoji: PROFESSION_EMOJI.P03,
-    salary: 5500,  expense: 3500, savings: 10000,  homeDistrict: 'oldtown',
-    openingHook: '站岗十小时，月薪五千五。安稳是安稳，可我不想五十岁还在替别人看大门。',
-    goal: '5 年内建立每月 2000 元被动收入，给自己多一条路。' },
-  { id: 'P05', title: '小学教师',  avatar: 'p05', color: PROFESSION_COLORS.P05, emoji: PROFESSION_EMOJI.P05,
-    salary: 9000,  expense: 6000, savings: 30000,  homeDistrict: 'residential',
-    openingHook: '粉笔灰吃了七年，存款三万。教书育人不慌，我怕的是一眼望到头的工资条。',
-    goal: '5 年内攒够一套郊区房的首付，让家安下来。' },
-  { id: 'P07', title: '公务员',    avatar: 'p07', color: PROFESSION_COLORS.P07, emoji: PROFESSION_EMOJI.P07,
-    salary: 12000, expense: 8000, savings: 50000,  homeDistrict: 'oldtown',
-    openingHook: '体制内第八年，钱不多但稳。同学都下海了，我打算稳中求进慢慢布局。',
-    goal: '5 年内完成两套住宅配置，家庭被动收入覆盖基本开销。' },
-  { id: 'P08', title: '销售代表',  avatar: 'p08', color: PROFESSION_COLORS.P08, emoji: PROFESSION_EMOJI.P08,
-    salary: 12000, expense: 8500, savings: 20000,  homeDistrict: 'commerce',
-    openingHook: '靠嘴皮子吃饭，行情好月月超额。趁年轻胆子大，我要把提成变成资产。',
-    goal: '5 年内净资产突破 100 万，摆脱纯靠提成吃饭。' },
-  { id: 'P09', title: '初级程序员', avatar: 'p09', color: PROFESSION_COLORS.P09, emoji: PROFESSION_EMOJI.P09,
-    salary: 15000, expense: 10000, savings: 40000, homeDistrict: 'tech',
-    openingHook: '写代码第五年，年包二十来万。我信数据不信运气，定投+记账慢慢滚。',
-    goal: '5 年内指数基金持仓 50 万，FI 指数达到 0.5。' },
-  { id: 'P10', title: '医生',      avatar: 'p10', color: PROFESSION_COLORS.P10, emoji: PROFESSION_EMOJI.P10,
-    salary: 25000, expense: 18000, savings: 100000, homeDistrict: 'residential',
-    openingHook: '白大褂下是还不完的房贷。收入高开销也高，我得学会像管理病人一样管理钱。',
-    goal: '5 年内还清一半房贷，建立孩子的教育金。' },
-  { id: 'P11', title: '律师',      avatar: 'p11', color: PROFESSION_COLORS.P11, emoji: PROFESSION_EMOJI.P11,
-    salary: 30000, expense: 20000, savings: 150000, homeDistrict: 'finance',
-    openingHook: '时薪三千，照样月光。见惯了财富易主，这次我要做自己案子的当事人。',
-    goal: '5 年内构建 1.5 万月被动收入，把时间从时薪里赎回来。' },
-  { id: 'P15', title: '早餐店主',  avatar: 'p15', color: PROFESSION_COLORS.P15, emoji: PROFESSION_EMOJI.P15,
-    salary: 12000, expense: 7500, savings: 60000,  homeDistrict: 'oldtown',
-    openingHook: '凌晨三点的豆浆香，是我全部的家当。生意稳但太单一，得想想退路。',
-    goal: '5 年内攒出第二家店的启动金，同时配置一份金融资产。' },
-  { id: 'P16', title: '自媒体博主', avatar: 'p16', color: PROFESSION_COLORS.P16, emoji: PROFESSION_EMOJI.P16,
-    salary: 9000,  expense: 7000, savings: 20000,  homeDistrict: 'tech',
-    openingHook: '三万粉的博主，上个月爆了，这个月凉透。流量是过山车，我要把波动变成台阶。',
-    goal: '5 年内用流量收入攒下 40 万稳健资产，告别收入焦虑。' },
-];
 
 export function professionColor(id: string): string {
   return PROFESSION_COLORS[id] ?? WEALTH_DEFAULT_PROFESSION_COLOR;

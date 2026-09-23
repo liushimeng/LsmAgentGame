@@ -7,11 +7,13 @@
 // 引擎 P1 月环比通胀,缺省 0.002);月结后异步触发城市之声(goroutine,绝不
 // 阻塞月结)。
 //
-// 持久化说明(现状遵循):wealth 房间级选项(month_ms/pool/seed/resident_count)
+// 持久化说明(现状遵循):wealth 房间级选项(month_ms/seed/resident_count)
 // 经 Manager.pendingOpts 仅存内存 —— 服务重启后不恢复,本文件不为
 // resident_count 新建持久化(不新建表,遵循既有机制);重启 hydrate 路径
 // 重建的房间无城市层,契约 03 §6 的「确定性重建」在持久化机制补齐后自动成立
-// (Backdrop 本身由 ResidentCount+seed 确定性可重建)。
+// (Backdrop 本身由 ResidentCount+seed 确定性可重建)。2026-09-22 §17-CityHuman
+// 契约 02 §5:Driver 无持久状态(cursor 重建从 0 起,漏几个月轮转可接受);
+// Backdrop 确定性重建不变。
 package wealth
 
 import (
@@ -59,6 +61,17 @@ func (r *WealthRoom) SetCityVoiceConfig(enabled bool, perMonth int) {
 	r.cityVoicePerMonth = clampInt(perMonth, 0, 32)
 }
 
+// SetCityDriverConfig 居民驱动层开关与线程池/月预算(2026-09-22 §17-CityHuman
+// 契约 02 §5;Manager.CreateRoom 注入,须在 Start 之前)。enabled=false 时
+// Start 装配 VoiceScheduler(回退既有城市之声路径,零回归)。
+func (r *WealthRoom) SetCityDriverConfig(enabled bool, workers, perMonth int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cityDriverEnabled = enabled
+	r.cityDriverWorkers = workers
+	r.cityDriverPerMonth = perMonth
+}
+
 // SetResidentCount 设置城市背景居民数(建房链路;负数防御为 0)。
 // 注意:仅 Start 前生效 —— 城市在 Start 时一次性合成。
 func (r *WealthRoom) SetResidentCount(n int) {
@@ -73,13 +86,27 @@ func (r *WealthRoom) SetResidentCount(n int) {
 // startCityLocked Start 时建城(锁内;ResidentCount>0 时)。
 // 校准表取构建时刻的 CurrentCalibration()(未预热 → 合成默认;进行中房间
 // 持引用不回填,契约 03 §3.2)。
+// 2026-09-22 §17-CityHuman(契约 02 §5):驱动层启用 → 装配 ResidentDriver
+// (与 VoiceScheduler 互斥,speak 产出即城市之声);关闭 → 回退旧调度器。
 func (r *WealthRoom) startCityLocked() {
 	if r.ResidentCount <= 0 {
 		return
 	}
 	r.cityRng = rand.New(rand.NewSource(r.seed ^ citySeedSalt))
 	r.City = city.NewBackdrop(r.ResidentCount, r.cityRng, city.CurrentCalibration())
-	r.cityVoice = city.NewVoiceScheduler(r.cityVoiceEnabled, r.cityVoicePerMonth, r.linePoolSource)
+	if r.cityDriverEnabled {
+		r.cityDriver = city.NewResidentDriver(city.DriverConfig{
+			Enabled:  true,
+			Workers:  r.cityDriverWorkers,
+			PerMonth: r.cityDriverPerMonth,
+		}, r.linePoolSource)
+		r.cityDriver.SetAmbianceSource(r.cityAmbianceSource)
+		r.City.SetDriver(r.cityDriver)
+		r.cityVoice = nil
+	} else {
+		r.cityDriver = nil
+		r.cityVoice = city.NewVoiceScheduler(r.cityVoiceEnabled, r.cityVoicePerMonth, r.linePoolSource)
+	}
 	poolLines := 0
 	if r.linePoolSource != nil {
 		if p := r.linePoolSource(); p != nil {
@@ -90,15 +117,26 @@ func (r *WealthRoom) startCityLocked() {
 		zap.String("room_id", r.RoomID),
 		zap.Int("residents", r.ResidentCount),
 		zap.Int64("seed", r.seed),
-		zap.Int("pool_lines", poolLines))
-	// 2026-09-21 §档案锚定(契约 §5):pool=docs 且文档池注入时,后台异步把
-	// 人物卡档案锚定到居民(不阻塞开局/月结,期间合成数值兜底)。锁纪律:
-	// Start(锁内)在此把全部入参拷贝进 goroutine 参数(§11:goroutine 不读
-	// r.mu 保护的可变字段);goroutine 只拿 Backdrop.mu,绝不触碰 r.mu(§92a)。
-	if r.pool == "docs" && r.docLoader != nil {
+		zap.Int("pool_lines", poolLines),
+		zap.Bool("driver_enabled", r.cityDriverEnabled))
+	// 2026-09-21 §档案锚定(契约 §5):文档池注入时后台异步把人物卡档案锚定
+	// 到居民(不阻塞开局/月结,期间合成数值兜底)。2026-09-22 §17-CityHuman
+	// (契约 03 §2.1):pool=="docs" 条件删除 —— 没有非 docs 模式,锚定流水线
+	// 恒启动。锁纪律:Start(锁内)在此把全部入参拷贝进 goroutine 参数(§11:
+	// goroutine 不读 r.mu 保护的可变字段);goroutine 只拿 Backdrop.mu,绝不
+	// 触碰 r.mu(§92a)。
+	if r.docLoader != nil {
 		loader, n, seed, b := r.docLoader, r.ResidentCount, r.seed, r.City
 		go r.anchorCityProfiles(b, loader, n, seed)
 	}
+}
+
+// cityAmbianceSource 驱动层氛围来源(自取房间锁的薄包装;driver worker 在
+// Backdrop.mu / r.mu 之外调用,无嵌套 —— §92a)。
+func (r *WealthRoom) cityAmbianceSource() map[string]city.AmbianceTags {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cityAmbianceLocked()
 }
 
 // anchorCityProfiles 档案锚定流水线(后台 goroutine 锁外执行;契约 §5)。
@@ -241,16 +279,40 @@ func (r *WealthRoom) tickCityLocked() {
 	r.City.TickMonth(r.currentCPILocked(), r.cityRng)
 }
 
-// launchCityVoices 月结后触发城市之声(锁外;goroutine 异步,绝不阻塞月结)。
-// voiceMonth 为结算后的当前月(供 VoiceRecord.Month)。
-func (r *WealthRoom) launchCityVoices(voiceMonth int) {
+// launchCityDriver 月结后触发居民驱动层(2026-09-22 §17-CityHuman 契约 02
+// §5;原名 launchCityVoices):driver 启用走 ResidentDriver.RunMonth(线程池
+// + 线路池,speak 产出即城市之声);关闭回退旧 VoiceScheduler.Run(零回归)。
+// 锁外 goroutine 异步,绝不阻塞月结;voiceMonth 为结算后的当前月。
+func (r *WealthRoom) launchCityDriver(voiceMonth int) {
 	r.mu.Lock()
 	b := r.City
+	drv := r.cityDriver
 	sched := r.cityVoice
 	closed := r.closed
 	playing := r.Status == StatusPlaying
 	r.mu.Unlock()
-	if closed || !playing || b == nil || sched == nil {
+	if closed || !playing || b == nil {
+		return
+	}
+	onRecord := func(vr city.VoiceRecord) {
+		b.AppendVoice(vr)
+		r.emitCityVoiceEvent(vr)
+	}
+	if drv != nil {
+		go func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logger.L().Error("wealth city driver panic recovered",
+						zap.String("room_id", r.RoomID),
+						zap.Any("panic", rec),
+						zap.String("stack", string(debug.Stack())))
+				}
+			}()
+			drv.RunMonth(b, voiceMonth, onRecord)
+		}()
+		return
+	}
+	if sched == nil {
 		return
 	}
 	go func() {
@@ -262,10 +324,7 @@ func (r *WealthRoom) launchCityVoices(voiceMonth int) {
 					zap.String("stack", string(debug.Stack())))
 			}
 		}()
-		sched.Run(b, voiceMonth, func(vr city.VoiceRecord) {
-			b.AppendVoice(vr)
-			r.emitCityVoiceEvent(vr)
-		})
+		sched.Run(b, voiceMonth, onRecord)
 	}()
 }
 

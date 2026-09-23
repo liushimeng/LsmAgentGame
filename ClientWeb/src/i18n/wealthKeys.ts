@@ -13,18 +13,10 @@ export interface WealthDict {
   'wealth.subtitle': string;
   'wealth.createRoom': string;
   'wealth.roomName': string;
-  'wealth.agentSeats': string;
   'wealth.monthMs': string;
   'wealth.monthMs.fast': string;
   'wealth.monthMs.normal': string;
   'wealth.monthMs.slow': string;
-  'wealth.pool': string;
-  'wealth.pool.curated': string;
-  'wealth.pool.docs': string;
-  'wealth.pool.cards': string;
-  'wealth.pool.stats': string;
-  'wealth.pool.indexing': string;
-  'wealth.pool.unavailable': string;
   'wealth.seed': string;
   'wealth.join': string;
   'wealth.spectate': string;
@@ -219,20 +211,16 @@ export interface WealthDict {
   'wealth.create.meSeat': string;
   'wealth.create.noModels': string;
   'wealth.create.failed': string;
-  // 2026-09-16 §财商流10–12座位改造 — 建房弹窗座位档位 / 创建者身份 / MinSeats 校验。
+  // 2026-09-16 §财商流10–12座位改造 — 建房弹窗座位档位 / 创建者身份 残留键。
   'wealth.create.seatNo': string;
   'wealth.create.creatorRole': string;
   'wealth.create.watchOnly': string;
-  'wealth.create.creatorPlayer': string;
-  'wealth.create.needMinSeats': string;
-  'wealth.create.seatsOk': string;
-  // 2026-09-19 建房模型随机均匀分配 — 一键重摇 + 模型不足复用提示。
-  'wealth.create.reshuffle': string;
-  'wealth.create.modelReuseHint': string; // {n} 模型数 {m} Agent 座位数
   // ── §20260921 建房解耦 + 城市背景层（契约 04 §3 键表）──
-  // 建房弹窗：城市居民数量 + LLM 线路池信息行。
+  // 建房弹窗：背景居民规模数值控件 + LLM 线路池信息行。
   'wealth.residentCount': string;
   'wealth.residentCountHint': string;
+  /** 居民规模兜底校验（正常被 clamp 不触发；契约 01 §3.3）。 */
+  'wealth.residentCountRequired': string;
   /** {n} = Σ concurrency_lines（线路池容量）。 */
   'wealth.linePoolInfo': string;
   'wealth.linePoolEmpty': string;
@@ -248,8 +236,10 @@ export interface WealthDict {
   'wealth.cityVoiceOfMonth': string;
   /** 城区人口条形紧凑模式聚合行：{n} = 未展示城区数（v2.12 阶段 2，>12 区时）。 */
   'wealth.cityOtherDistricts': string;
-  'wealth.seatsCount': string; // {n} {max}
-  'wealth.seatsWaiting': string; // {n} {min}
+  /** 驱动层指示（17-CityHuman 02 §6）：{n} = 上月实际驱动居民数。 */
+  'wealth.cityDriven': string;
+  'wealth.seatsCount': string; // {n} {max} — 深度居民
+  'wealth.seatsWaiting': string; // 无占位符
   'wealth.botPanel.seat': string;
   'wealth.botPanel.titleCount': string; // {count}
   // 2026-09-19 §财商流观战 UI — 12 Agent 卡片过滤与出局状态可读性。
@@ -269,9 +259,6 @@ export interface WealthDict {
   'wealth.botPanel.sense.empty': string;
   'wealth.chat.playerFallback': string;
   'wealth.minimap.aria': string;
-  'wealth.pool.cardsTitle': string;
-  'wealth.pool.cardSalary': string;
-  'wealth.pool.cardSavings': string;
 
   // ── P1 第二期：真实经济循环引擎 + 社会调研系统（2026-09-16）──
   // economy = EconomyPanel；survey = SurveyPanel；consumption = ActionPanel 档位组。
@@ -663,6 +650,4 @@ export interface WealthDict {
   'wealth.residentDrawer.cardId': string;
   /** focusCardId 单卡查询未命中（35013）。 */
   'wealth.residentDrawer.notFound': string;
-  /** 建房弹窗 docs 池提示（人物卡库规模 + 自动锚定说明）。 */
-  'wealth.pool.docsProfiles': string;
 }

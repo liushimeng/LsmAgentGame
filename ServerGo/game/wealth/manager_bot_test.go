@@ -13,8 +13,8 @@ import (
 // 永久挂起。修复后(先登记 m.rooms、释放锁后再 applyOpts)本测试在 2s 内必须
 // 完成;死锁复发时超时失败。
 func TestManager_CreateRoom_NoDeadlock(t *testing.T) {
-	m := NewManager(Config{MonthMs: 3000, PoolDefault: "curated"}, nil)
-	m.ApplyRoomOptions("room-x", &WealthRoomOptions{MonthMs: 5000, Pool: "docs", Seed: 42})
+	m := NewManager(Config{MonthMs: 3000}, nil)
+	m.ApplyRoomOptions("room-x", &WealthRoomOptions{MonthMs: 5000, Seed: 42})
 
 	done := make(chan *WealthRoom, 1)
 	go func() { done <- m.CreateRoom("room-x") }()
@@ -23,8 +23,8 @@ func TestManager_CreateRoom_NoDeadlock(t *testing.T) {
 		if r == nil {
 			t.Fatal("CreateRoom returned nil")
 		}
-		if r.MonthMs != 5000 || r.pool != "docs" || r.seed != 42 {
-			t.Fatalf("pending opts not applied: monthMs=%d pool=%s seed=%d", r.MonthMs, r.pool, r.seed)
+		if r.MonthMs != 5000 || r.seed != 42 {
+			t.Fatalf("pending opts not applied: monthMs=%d seed=%d", r.MonthMs, r.seed)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("CreateRoom deadlocked (2s timeout)")
@@ -44,11 +44,10 @@ func TestManager_CreateRoom_NoDeadlock(t *testing.T) {
 // RegisterBotSeats 旧版不写 Seats[seat] 的 bot userID,Start 发卡跳过 bot、
 // EnsureAgents 跳过,bot 永不上场。
 func TestWealthRoom_RegisterBotSeats_SeatsUsers(t *testing.T) {
-	r := NewWealthRoom("room-b", 3000, "curated", 7, 4)
+	r := NewWealthRoom("room-b", 3000, 7, 4)
 	r.RegisterBotSeats(
 		map[int]string{1: "bot-uid-1", 2: "bot-uid-2"},
 		map[int]string{1: "ModelA", 2: "ModelB"},
-		nil,
 	)
 	for _, seat := range []int{1, 2} {
 		if r.Seats[seat] == "" {
@@ -73,7 +72,7 @@ func TestWealthRoom_RegisterBotSeats_SeatsUsers(t *testing.T) {
 		t.Fatalf("human seated on bot seat %d", seat)
 	}
 	// 幂等: 重复注册不覆盖已有人类座位。
-	r.RegisterBotSeats(map[int]string{seat: "bot-uid-x"}, map[int]string{seat: "ModelC"}, nil)
+	r.RegisterBotSeats(map[int]string{seat: "bot-uid-x"}, map[int]string{seat: "ModelC"})
 	if r.Seats[seat] != "human-uid" {
 		t.Fatalf("RegisterBotSeats overwrote human seat %d", seat)
 	}
@@ -99,7 +98,7 @@ func TestManager_CreateRoom_HydratedTenOrElevenBotsRestoreFullAgentMode(t *testi
 				}
 			}
 			m := NewManager(Config{
-				MonthMs: 3000, PoolDefault: "curated",
+				MonthMs: 3000,
 				AgentEnabled: true, AgentConcurrency: DefaultAgentConcurrency,
 			}, nil)
 			m.SetSeatHydrator(func(roomID string) ([]SeatRestoreInfo, error) {
@@ -124,7 +123,7 @@ func TestManager_CreateRoom_HydratedTenOrElevenBotsRestoreFullAgentMode(t *testi
 	}
 
 	// 9 bot 恢复房不触发全 Agent 语义,保留一个可加入物理空位。
-	m := NewManager(Config{MonthMs: 3000, PoolDefault: "curated"}, nil)
+	m := NewManager(Config{MonthMs: 3000}, nil)
 	m.SetSeatHydrator(func(roomID string) ([]SeatRestoreInfo, error) {
 		seats := make([]SeatRestoreInfo, MinSeats-1)
 		for seat := range seats {
@@ -150,14 +149,13 @@ func TestManager_CreateRoom_HydratedTenOrElevenBotsRestoreFullAgentMode(t *testi
 // Manager 写锁持有时调用锁内变体必须 3s 内返回。
 func TestManager_EnsureAgentsLockedVariant_ReentrantUnderWriteLock(t *testing.T) {
 	m := NewManager(Config{
-		MonthMs: 3000, PoolDefault: "curated",
+		MonthMs: 3000,
 		AgentEnabled: true, AgentConcurrency: DefaultAgentConcurrency,
 	}, fakeBuyRegistry{})
-	r := NewWealthRoom("room-92a-reentrant", 3000, "curated", 7, 4)
+	r := NewWealthRoom("room-92a-reentrant", 3000, 7, 4)
 	r.RegisterBotSeats(
 		map[int]string{1: "bot-uid-92a"},
 		map[int]string{1: "Model92a"},
-		nil,
 	)
 
 	m.mu.Lock() // 模拟 CreateRoom 持写锁现场
@@ -200,7 +198,7 @@ func TestManager_CreateRoom_HydratePath_EnsureAgents_NoDeadlock(t *testing.T) {
 		}
 	}
 	m := NewManager(Config{
-		MonthMs: 3000, PoolDefault: "curated",
+		MonthMs: 3000,
 		AgentEnabled: true, AgentConcurrency: DefaultAgentConcurrency,
 	}, fakeBuyRegistry{})
 	m.SetSeatHydrator(func(roomID string) ([]SeatRestoreInfo, error) {

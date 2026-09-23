@@ -50,7 +50,6 @@ func TestStartWealthRoom_EnsureAgentsBeforeStart(t *testing.T) {
 	provider := &firstMonthWealthProvider{called: make(chan struct{}, 1)}
 	manager := wealth.NewManager(wealth.Config{
 		MonthMs:                 3000,
-		PoolDefault:             "curated",
 		AgentEnabled:            true,
 		AgentDecisionTimeoutSec: 5,
 		AgentConcurrency:        wealth.DefaultAgentConcurrency,
@@ -62,7 +61,7 @@ func TestStartWealthRoom_EnsureAgentsBeforeStart(t *testing.T) {
 		botUsers[seat] = "ws-bot-" + string(rune('0'+seat))
 		botModels[seat] = "WSModel"
 	}
-	room.RegisterBotSeats(botUsers, botModels, nil)
+	room.RegisterBotSeats(botUsers, botModels)
 	t.Cleanup(room.Close)
 
 	gameService := &GameService{hub: NewHub(), wealthMgr: manager}

@@ -26,12 +26,12 @@ const BotUserRoleAgent = models.PlayerRoleAgent
 // knight/demon_hunter/villager),空或 "random" = 随机(默认)。服务端在发牌后
 // 做"牌组内座位置换"(多重集守恒),牌组中无此角色时降级为随机。
 type AgentSeatConfig struct {
-	Seat       int    `json:"seat"`
-	ModelKey   string `json:"model_key"`
-	Role       string `json:"role,omitempty"`
-	// Profession 2026-09-14 §财商流P0 — 仅 wealth 生效;其他游戏忽略。
-	// 形如 "P01".."P16"(精选手卡);文档池使用 frontmatter 的 id。
-	Profession string `json:"profession,omitempty"`
+	Seat     int    `json:"seat"`
+	ModelKey string `json:"model_key"`
+	Role     string `json:"role,omitempty"`
+	// 2026-09-22 §17-CityHuman(契约 03 §1.4):原 Profession 字段(座位职业
+	// 偏好,仅 wealth 生效)随精选卡层退役删除 —— 该链路自池驱动改造起恒为
+	// 死路径(§130 死代码清算)。
 }
 
 // JudgeConfig 房间级法官(主持人)设置(创建者可选)。nil = 默认(有 Agent 时启用 Agent 法官)。
@@ -58,10 +58,17 @@ type TexasTableConfig struct {
 
 // WealthRoomOptions 2026-09-14 §财商流P0 — 房间级配置(仅 wealth 生效;
 // month_ms clamp [3000,30000] 由 service 层校验)。
+// 2026-09-22 §17-CityHuman(契约 03 §2.1):Pool 卡池语义随精选卡层退役 ——
+// 发卡恒走文档池 + 合成兜底。**字段保留但 Deprecated 且被忽略**:HTTP 建房
+// 解码用 DisallowUnknownFields(嵌套字段严格),删字段会让旧客户端的
+// wealth.pool 载荷变 400,违反契约 03 §6「静默忽略」;保留空壳字段使旧载荷
+// 继续解码成功,applyOpts 不再消费(已实测 nested unknown field → 400)。
 type WealthRoomOptions struct {
-	MonthMs int    `json:"month_ms,omitempty"`
-	Pool    string `json:"pool,omitempty"` // "curated"|"docs"
-	Seed    int64  `json:"seed,omitempty"`
+	MonthMs int   `json:"month_ms,omitempty"`
+	Seed    int64 `json:"seed,omitempty"`
+	// Pool Deprecated(2026-09-22 §17-CityHuman):原 "curated"|"docs" 卡池
+	// 选择已退役;字段仅为旧客户端载荷兼容保留,**任何值都被忽略**。
+	Pool string `json:"pool,omitempty"`
 	// ResidentCount 2026-09-21 §虚拟城市 — 城市背景居民数(0=不启用城市层,
 	// 向后兼容旧形态)。建房 body 顶层 resident_count 由 API 层并入本字段;
 	// service 层 clamp [0, cfg.Wealth.MaxResidents](负数在 API 层 400)。

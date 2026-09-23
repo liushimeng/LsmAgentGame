@@ -8,7 +8,7 @@ import (
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/game/wealth/profession"
 )
-var _ = profession.CuratedByID
+var _ = profession.Card{} // profession 夹具改内联卡面(2026-09-22 §17-CityHuman)
 
 // TestMonthlyIncomeTax_F12 个税复算:月薪 20000 → 社保 2100、税 1170。
 func TestMonthlyIncomeTax_F12(t *testing.T) {
@@ -133,7 +133,14 @@ func TestSettleMonth_BankruptcyAndExit(t *testing.T) {
 func TestFinalScores_I10(t *testing.T) {
 	w := NewWorld(1, [MaxSeats]profession.Card{{ID: "P11", Savings: 6000000}})
 	w.Players[0] = newPlayerFromCard(0, w.Players[0].Card)
-	w.Players[0].Card = *profession.CuratedByID("P11")
+	// 2026-09-22 §17(契约 03 §4):原精选卡查询夹具 → 内联卡面(高薪激进档)。
+	w.Players[0].Card = profession.Card{
+		ID: "T02", Title: "测试律师", Salary: 30000, Expense: 20000, Savings: 150000,
+		StartAge: 25, Energy: 5, Network: 7, Cognition: 7, CreditScore: 700,
+		HomeDistrict: "finance", RiskPreference: "aggressive",
+		HealthGrade: "B", Marital: "single",
+		OpeningHook: "这是一张内联测试律师卡,用于终局评分断言的固定夹具。",
+	}
 	w.Players[0].Cash = 6000000 // > 500万 → fi_score +=20
 	scores := w.FinalScores()
 	if len(scores) != 1 {

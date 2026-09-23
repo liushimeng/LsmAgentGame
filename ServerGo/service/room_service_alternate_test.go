@@ -341,21 +341,25 @@ func TestCreateRoomWithAgents_NoAgentSeaterSkipsValidationWithWarn(t *testing.T)
 	// reaching this point without panic is the assertion.
 }
 
-// TestClampWealthResidentCount 2026-09-21 §虚拟城市(契约 04 §1.1):
-// resident_count 边界 —— 0/1/100000 原样;100001 → clamp 100000;负数 → 0
-// (API 层 400,service 层纵深防御);maxResidents<=0 回落默认 100000。
+// TestClampWealthResidentCount 2026-09-22 §17-CityHuman(契约 03 §3.1 语义
+// 更新):resident_count **必达** —— 缺省/0 → 10000;<10 → clamp 10;
+// >maxResidents → clamp(默认 100000);负数由 API 层 400(service 层 v<=0
+// 兜底走缺省 10000);maxResidents<=0 回落默认 100000。
 func TestClampWealthResidentCount(t *testing.T) {
 	cases := []struct {
 		in, max, want int
 	}{
-		{0, 100000, 0},
-		{1, 100000, 1},
+		{0, 100000, 10000},   // 缺省 → 10000
+		{1, 100000, 10},      // <10 → clamp 10
+		{9, 100000, 10},      // <10 → clamp 10
+		{10, 100000, 10},     // 边界 10 原样
+		{10000, 100000, 10000},
 		{100000, 100000, 100000},
 		{100001, 100000, 100000},
 		{150000, 100000, 100000},
-		{-5, 100000, 0},
-		{50000, 0, 50000},   // max<=0 → 默认 100000
-		{150000, 0, 100000}, // max<=0 → 默认 100000
+		{-5, 100000, 10000},  // API 层 400;service 兜底 → 缺省
+		{50000, 0, 50000},    // max<=0 → 默认 100000
+		{150000, 0, 100000},  // max<=0 → 默认 100000
 		{20000, 20000, 20000},
 	}
 	for _, c := range cases {

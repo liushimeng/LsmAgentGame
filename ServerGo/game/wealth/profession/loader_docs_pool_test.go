@@ -3,7 +3,7 @@
 //
 // 背景: 旧 docCard 与知识库 Schema v1.1 形状不匹配(work_intensity 是 map、
 // goals_short 是 []map、字段名是 employment/name),75,115 张卡 100% 解析失败,
-// Draw 永远回退 curated —— 「75k 文档池」在运行时形同不存在,而单元测试因为
+// Draw 永远回退兜底 —— 「75k 文档池」在运行时形同不存在,而单元测试因为
 // 只用合成 fixture(纯字符串形状)全绿,事故被完全掩盖。
 //
 // 本测试直接打真实池(root 由 runtime.Caller 定位仓库根,不写死绝对路径),
@@ -166,7 +166,7 @@ func TestDocsPool_ParseSuccessRate(t *testing.T) {
 }
 
 // TestDocsPool_Draw12AllDocs Draw(12) 必须返回 12 张**全部来自文档池**的卡
-// (不许回退 curated),且 id 互不重复 —— 这是 12 座全 Agent 房开局的前提。
+// (不许回退合成兜底),且 id 互不重复 —— 这是 12 座全 Agent 房开局的前提。
 func TestDocsPool_Draw12AllDocs(t *testing.T) {
 	if testing.Short() {
 		t.Skip("-short: 跳过真实池抽卡")
@@ -180,7 +180,7 @@ func TestDocsPool_Draw12AllDocs(t *testing.T) {
 		seen := map[string]struct{}{}
 		for i, c := range cards {
 			if c.Source != "docs" {
-				t.Errorf("seed %d slot %d: source = %q, want docs(不许回退 curated)", seed, i, c.Source)
+				t.Errorf("seed %d slot %d: source = %q, want docs(不许回退合成兜底)", seed, i, c.Source)
 			}
 			if _, dup := seen[c.ID]; dup {
 				t.Errorf("seed %d slot %d: duplicate card id %s", seed, i, c.ID)

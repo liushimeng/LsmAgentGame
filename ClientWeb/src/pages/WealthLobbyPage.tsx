@@ -3,7 +3,7 @@
  *
  * 与既有 6 款 Lobby 页同构：banner 头图（PNG 缺失回落 CSS 渐变）+ 房间列表
  * （RoomListTable 复用 + 5s HTTP 轮询 + useLobbyLiveUpdate room.state WS 实时更新）
- * + 建房弹窗（WealthCreateRoomModal：agent_seats / month_ms / pool / seed）
+ * + 建房弹窗（WealthCreateRoomModal：resident_count / month_ms / seed）
  * + 观战入口。加入 / 观战错误处理对齐 WerewolfLobbyPage（30001/30003/30012）。
  */
 
@@ -87,11 +87,12 @@ export function WealthLobbyPage() {
       try {
         const detail = await roomService.create('wealth', {
           name: req.name,
-          agent_seats: req.agent_seats,
-          // §20260921 建房解耦 — 城市背景层居民数（顶层字段，仅 wealth 生效）。
+          // §20260921 建房解耦 — 背景居民规模（顶层字段，仅 wealth 生效）。
+          // 2026-09-22 §CityHuman全民驱动 — 不再发送 agent_seats/pool
+          // （后端自动合成 12 深度居民座位，档案唯一源 = 人物卡知识库）。
           resident_count: req.resident_count,
-          wealth: { month_ms: req.month_ms, pool: req.pool, ...(req.seed ? { seed: req.seed } : {}) },
-          ...(req.full_agent !== undefined ? { full_agent: req.full_agent } : {}),
+          wealth: { month_ms: req.month_ms, ...(req.seed ? { seed: req.seed } : {}) },
+          full_agent: req.full_agent === true,
         });
         // 先导航，副作用 best-effort（BUG-R229 教训）。
         if (detail.my_role === 'spectator') {

@@ -5,7 +5,10 @@
 //  2. 12 座满员开局(MaxSeats 边界);
 //  3. 9 座拒绝开局返回 ErrWealthNotEnoughPlayers(35003)。
 //
-// 同时断言精选卡池 ≥ MaxSeats(12)(MinCuratedPool 接线,§130)。
+// 2026-09-22 §17-CityHuman(契约 03 §4):原精选池数量门禁随精选卡层退役
+// 删除;新增「wealth 建房恒 12 深度座位」断言(发卡池恒满 MaxSeats、来源
+// 恒 docs-or-synthetic;12 深度座位的服务端合成由
+// service/room_service_wealth_fill_test.go 的 wealthDeepSeats 断言)。
 package wealth
 
 import (
@@ -24,16 +27,32 @@ import (
 	llmtypes "LsmAgentGame/llm/types"
 )
 
-// TestSeats12_MinCuratedPoolCoversMaxSeats 精选卡池必须 ≥ MaxSeats(12),
-// 否则 Draw(12) 会重复发卡 / 返回不足张数(座位空洞)。
-// profession.MinCuratedPool 与 wealth.MaxSeats 跨包同步(§130 接线校验)。
-func TestSeats12_MinCuratedPoolCoversMaxSeats(t *testing.T) {
-	if profession.MinCuratedPool < MaxSeats {
-		t.Fatalf("profession.MinCuratedPool(%d) < wealth.MaxSeats(%d): 精选池兜底时会重复发卡",
-			profession.MinCuratedPool, MaxSeats)
+// TestSeats12_DeepSeatCardPoolAlwaysFull wealth 建房恒 12 深度座位:
+// 无 loader(合成兜底)时发卡池也必须恒满 MaxSeats(12) 张、互不重复、
+// 全部 Validate 通过且 Source=synthetic(精选层退役后的兜底,契约 03 §2.2)。
+func TestSeats12_DeepSeatCardPoolAlwaysFull(t *testing.T) {
+	if MaxSeats != 12 {
+		t.Fatalf("MaxSeats = %d, want 12 (深度层固定 12)", MaxSeats)
 	}
-	if len(profession.CuratedCards()) < MaxSeats {
-		t.Fatalf("CuratedCards() = %d, need ≥ %d", len(profession.CuratedCards()), MaxSeats)
+	r := NewWealthRoom("room-deep12", 3000, 7, 4)
+	r.mu.Lock()
+	cards := r.buildCardPoolLocked()
+	r.mu.Unlock()
+	if len(cards) != MaxSeats {
+		t.Fatalf("card pool = %d, want %d (12 深度座位发卡恒满)", len(cards), MaxSeats)
+	}
+	seen := map[string]struct{}{}
+	for i, c := range cards {
+		if _, dup := seen[c.ID]; dup {
+			t.Fatalf("card %d duplicate id %s", i, c.ID)
+		}
+		seen[c.ID] = struct{}{}
+		if c.Source != "synthetic" {
+			t.Errorf("card %d source = %q, want synthetic (无 loader 时合成兜底)", i, c.Source)
+		}
+		if err := c.Validate(); err != nil {
+			t.Errorf("card %d (%s) invalid: %v", i, c.ID, err)
+		}
 	}
 }
 
@@ -110,7 +129,6 @@ func TestSeats12_TenBotFullAgentRoom_RunsOneMonth(t *testing.T) {
 	var calls int32
 	m := NewManager(Config{
 		MonthMs:                 3000,
-		PoolDefault:             "curated",
 		AgentEnabled:            true,
 		AgentDecisionTimeoutSec: 5,
 		AgentConcurrency:        DefaultAgentConcurrency,
@@ -124,7 +142,7 @@ func TestSeats12_TenBotFullAgentRoom_RunsOneMonth(t *testing.T) {
 		botUsers[seat] = "b" + string(rune('0'+seat))
 		botModels[seat] = "M" + string(rune('A'+seat))
 	}
-	r.RegisterBotSeats(botUsers, botModels, nil)
+	r.RegisterBotSeats(botUsers, botModels)
 	// 与真实 ws startWealthRoom 时序一致:先装配 agents,再 Start。
 	// Start 末尾会自动 wakeBots;若后装配,首月 wake 时 agents map 为空。
 	m.EnsureAgents(r)
@@ -182,20 +200,21 @@ func TestSeats12_DistrictsEightUnchanged(t *testing.T) {
 	}
 }
 
-// newRoomWithSeats 构造一个已入座 n 个 bot 的 curated 房(无 LLM 注册表)。
+// newRoomWithSeats 构造一个已入座 n 个 bot 的房(无 loader/无 LLM 注册表;
+// 发卡走合成兜底)。
 func newRoomWithSeats(t *testing.T, n int) *WealthRoom {
 	t.Helper()
 	if n < 0 || n > MaxSeats {
 		t.Fatalf("n=%d out of [0,%d]", n, MaxSeats)
 	}
-	r := NewWealthRoom("room-seats", 3000, "curated", 7, 4)
+	r := NewWealthRoom("room-seats", 3000, 7, 4)
 	botUsers := make(map[int]string, n)
 	botModels := make(map[int]string, n)
 	for seat := 0; seat < n; seat++ {
 		botUsers[seat] = "b" + string(rune('0'+seat))
 		botModels[seat] = "M" + string(rune('A'+seat))
 	}
-	r.RegisterBotSeats(botUsers, botModels, nil)
+	r.RegisterBotSeats(botUsers, botModels)
 	return r
 }
 
@@ -217,7 +236,7 @@ func docsPoolRootWealth(t *testing.T) string {
 }
 
 // TestSeats12_TwelveSeatRoomDraws12DocsCards 12 座全 Agent 房必须从**文档池**
-// 抽到 12 张真实卡开局(Source == "docs",不许回退 curated)—— 这是任务
+// 抽到 12 张真实卡开局(Source == "docs",不许回退合成兜底)—— 这是任务
 // 「12 座位全 Agent 房必须从文档池抽到 12 张真实卡开局」的 room 级验收。
 func TestSeats12_TwelveSeatRoomDraws12DocsCards(t *testing.T) {
 	if testing.Short() {
@@ -227,7 +246,7 @@ func TestSeats12_TwelveSeatRoomDraws12DocsCards(t *testing.T) {
 	if _, err := os.Stat(root); err != nil {
 		t.Skipf("docs pool not available at %s: %v", root, err)
 	}
-	m := NewManager(Config{MonthMs: 3000, PoolDefault: "docs", Seed: 42}, nil)
+	m := NewManager(Config{MonthMs: 3000, Seed: 42}, nil)
 	m.SetLoader(profession.NewLoader(root))
 	r := m.CreateRoom("room-12docs")
 	// 12 bot 全 Agent 房(创建者观战)。
@@ -237,14 +256,14 @@ func TestSeats12_TwelveSeatRoomDraws12DocsCards(t *testing.T) {
 		botUsers[seat] = "b" + string(rune('0'+seat))
 		botModels[seat] = "M" + string(rune('A'+seat))
 	}
-	r.RegisterBotSeats(botUsers, botModels, nil)
+	r.RegisterBotSeats(botUsers, botModels)
 	if e := r.Start(m.loader); e != nil {
 		t.Fatalf("12-seat docs start: %v", e)
 	}
 	if r.World == nil {
 		t.Fatal("World not initialized")
 	}
-	docsCount, curatedCount := 0, 0
+	docsCount, fallbackCount := 0, 0
 	seen := map[string]struct{}{}
 	for _, p := range r.World.Players {
 		if p == nil {
@@ -253,16 +272,16 @@ func TestSeats12_TwelveSeatRoomDraws12DocsCards(t *testing.T) {
 		if p.Card.Source == "docs" {
 			docsCount++
 		} else {
-			curatedCount++
+			fallbackCount++
 		}
 		if _, dup := seen[p.Card.ID]; dup {
 			t.Fatalf("duplicate card %s", p.Card.ID)
 		}
 		seen[p.Card.ID] = struct{}{}
 	}
-	t.Logf("12-seat room cards: docs=%d curated=%d", docsCount, curatedCount)
+	t.Logf("12-seat room cards: docs=%d fallback=%d", docsCount, fallbackCount)
 	if docsCount != 12 {
-		t.Fatalf("docs cards = %d, want 12(不许回退 curated)", docsCount)
+		t.Fatalf("docs cards = %d, want 12(不许回退合成兜底)", docsCount)
 	}
 }
 

@@ -6,15 +6,16 @@
 // 静态数字,已过时,注释一律不再引用固定值。
 // 三段式:
 //   - 阶段 0(NewLoader):不读盘,仅记录根路径 + sync.Once。
-//   - 阶段 1(buildIndex):首次抽卡 / HTTP professions 触发;walk 收集 *.md 相对
+//   - 阶段 1(buildIndex):首次抽卡 / ForceIndex 触发;walk 收集 *.md 相对
 //     路径清单,**不解析 frontmatter**;结果缓存进程内。
 //   - 阶段 2(Draw):均匀抽 n 张不重复 → 逐张读文件 → 解析 frontmatter
 //     (gopkg.in/yaml.v3,形状容错见 frontmatter.go)→ 映射 Card → LRU 缓存(256)。
 //
-// 失败语义(2026-09-16 §文档池解析修复 修订):
+// 失败语义(2026-09-16 §文档池解析修复 修订;2026-09-22 §17 兜底改 synthetic):
 //   - 单卡解析失败 → 跳过 + logger.Warn + parseFail 计数,并**从池中补抽**
-//     (最多 drawRetryFactor×n 张候选),保证「文档池可用时不回退 curated」;
-//   - 文档池整体不可用(根目录缺失 / 索引为空 / 候选耗尽)→ 回退精选补足;
+//     (最多 drawRetryFactor×n 张候选),保证「文档池可用时不回退合成卡」;
+//   - 文档池整体不可用(根目录缺失 / 索引为空 / 候选耗尽)→ 回退
+//     SyntheticCards 合成卡补足(精选 14 卡层已退役,契约 03 §2.2);
 //   - ForceIndex 后**同步**做一次 200 张采样自检,成功率 < 95% 打
 //     logger.Error(线上可观测:形状漂移导致的批量解析失败第一时间暴露);
 //   - seed 注入的 *rand.Rand 保证同 seed 同索引 → 同卡集(确定性)。
@@ -44,8 +45,8 @@ const lruCapacity = 256
 
 // drawRetryFactor 补抽倍率(2026-09-16 §文档池解析修复):单卡解析失败时最多
 // 再试 (drawRetryFactor-1)×n 张候选。真实池失败率 ≈0.33%(income_monthly 与
-// income_range 双缺的档案 stub),n=12 时 20×12=240 张候选足够把「回退 curated」
-// 的概率压到 0.33%^240 ≈ 0;池本身不足 12 张时才会真正走到 curated 兜底。
+// income_range 双缺的档案 stub),n=12 时 20×12=240 张候选足够把「回退合成卡」
+// 的概率压到 0.33%^240 ≈ 0;池本身不足 12 张时才会真正走到合成卡兜底。
 const drawRetryFactor = 20
 
 // selfCheckSample 是 ForceIndex 后采样自检的张数(可观测性,不影响抽卡路径)。
@@ -74,7 +75,7 @@ type Loader struct {
 }
 
 // PoolSelfCheck 是一次采样自检的结果(可观测性:形状漂移导致的批量解析失败
-// 必须在日志/HTTP 里看得见,不能像旧实现那样静默回退 curated)。
+// 必须在日志/HTTP 里看得见,不能像旧实现那样静默回退)。
 type PoolSelfCheck struct {
 	Sampled     int      // 采样张数
 	Parsed      int      // 解析成功张数
@@ -150,14 +151,14 @@ func (l *Loader) buildIndex() {
 		l.indexPath = paths
 		l.available = err == nil && len(paths) > 0
 		if !l.available {
-			logger.L().Warn("wealth profession docs pool unavailable, will fall back to curated",
+			logger.L().Warn("wealth profession docs pool unavailable, will fall back to synthetic cards",
 				zap.String("root", l.root),
 				zap.Int("entries", len(paths)))
 		}
 	})
 }
 
-// PoolInfo 返回池状态(HTTP /api/games/wealth/professions 用)。
+// PoolInfo 返回池状态(观测/自检用)。
 // total: -1 = 索引未建(available 按根目录存在性判断);≥0 = 索引条目数。
 // indexed: 已解析进 LRU 的张数;parseFail: 累计跳过的解析失败卡数。
 func (l *Loader) PoolInfo() (available bool, total, indexed, parseFail int) {
@@ -181,7 +182,7 @@ func (l *Loader) PoolInfo() (available bool, total, indexed, parseFail int) {
 	return false, total, indexed, parseFail
 }
 
-// ForceIndex 显式触发阶段 1(HTTP professions / 首次抽卡共用)。
+// ForceIndex 显式触发阶段 1(首次抽卡 / 校准预热共用)。
 // 索引完成后**同步**跑一次 200 张采样自检(200 张 + parseFile ≈30–60ms,远
 // 小于 buildIndex walk 全池的 2~6s(以 PoolSize() 实测为准,2026-09-21 实测
 // 100,267 张);同步避免 t.TempDir() 测试清理与 goroutine
@@ -200,7 +201,7 @@ func (l *Loader) runSelfCheckOnce() {
 	l.selfCheckOnce.Do(func() {
 		res := l.SelfCheckPool(selfCheckSample)
 		if res.SuccessRate < selfCheckMinSuccessRate {
-			logger.L().Error("wealth profession docs pool parse rate below threshold — 文档池卡形状可能已漂移,Draw 将大量回退 curated",
+			logger.L().Error("wealth profession docs pool parse rate below threshold — 文档池卡形状可能已漂移,Draw 将大量回退合成卡",
 				zap.String("root", l.root),
 				zap.Int("sampled", res.Sampled),
 				zap.Int("parsed", res.Parsed),
@@ -278,9 +279,9 @@ func (l *Loader) SelfCheckResult() PoolSelfCheck {
 // Draw 从文档池均匀抽 n 张不重复卡。
 //
 // 2026-09-16 §文档池解析修复:旧实现只试前 n 张候选,任一卡解析失败即掉进
-// curated 回退 → 文档池卡与精选卡混发(且 curated 只有 10 张,n=12 时必然重复)。
-// 现改为「失败即补抽」:候选上限 drawRetryFactor×n(不超过池大小),只有池真的
-// 供不出 n 张时才回退精选补足(加载器文档 §3.1 失败语义)。
+// 兜底 → 文档池卡与兜底卡混发。现改为「失败即补抽」:候选上限
+// drawRetryFactor×n(不超过池大小),只有池真的供不出 n 张时才回退合成卡
+// 补足(加载器文档 §3.1 失败语义;2026-09-22 §17:兜底由精选卡改合成卡)。
 // rng 为注入的随机源(同 seed 同索引 → 同卡集,确定性单测)。
 //
 // 2026-09-21 §虚拟城市:核心逻辑抽到 drawPairs(随卡携带 L1 域名),
@@ -295,7 +296,7 @@ func (l *Loader) Draw(n int, rng *rand.Rand) []Card {
 }
 
 // drawPairs 是 Draw / DrawWithDomain 的共用实现:返回带 L1 域名的抽卡结果
-// (curated 回退卡的 Domain 恒为空串)。
+// (合成回退卡的 Domain 恒为空串)。
 func (l *Loader) drawPairs(n int, rng *rand.Rand) []DomainCard {
 	if n <= 0 {
 		return nil
@@ -329,30 +330,19 @@ func (l *Loader) drawPairs(n int, rng *rand.Rand) []DomainCard {
 			out = append(out, DomainCard{Card: card, Domain: domainOfPath(rel)})
 		}
 		if len(out) < n {
-			logger.L().Warn("wealth profession docs pool cannot supply requested card count, falling back to curated",
+			logger.L().Warn("wealth profession docs pool cannot supply requested card count, falling back to synthetic",
 				zap.String("root", l.root),
 				zap.Int("requested", n),
 				zap.Int("from_docs", len(out)),
 				zap.Int("pool_size", len(pool)))
 		}
 	}
-	// 回退精选补足(仅当文档池供不出 n 张:根目录缺失 / 池太小 / 候选全失败)。
+	// 回退合成卡补足(仅当文档池供不出 n 张:根目录缺失 / 池太小 / 候选全
+	// 失败;2026-09-22 §17-CityHuman:精选 14 卡层退役,契约 03 §2.2)。
 	if len(out) < n {
-		curated := CuratedCards()
-		perm := rng.Perm(len(curated))
-		k := 0
-		for len(out) < n && k < len(perm) {
-			out = append(out, DomainCard{Card: curated[perm[k]]})
-			k++
-		}
-		if len(out) < n {
-			// 精选池也不足 n 张(理论上 curated ≥ MaxSeats=12,不该发生):
-			// 允许重复取用,保证返回张数 = n,座位不会因零值卡变成空洞。
-			for i := 0; len(out) < n && len(curated) > 0; i++ {
-				out = append(out, DomainCard{Card: curated[i%len(curated)]})
-			}
-			logger.L().Error("wealth profession curated pool smaller than requested draw",
-				zap.Int("requested", n), zap.Int("curated", len(curated)))
+		synthetic := SyntheticCards(n-len(out), rng)
+		for i := range synthetic {
+			out = append(out, DomainCard{Card: synthetic[i]})
 		}
 	}
 	return out

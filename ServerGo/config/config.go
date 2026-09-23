@@ -349,9 +349,6 @@ type WealthConfig struct {
 	// ProfessionDocsPath 文档池(75k 人物卡)磁盘根,默认
 	// "./lag_docs/虚拟城市/玩家职业设计"。
 	ProfessionDocsPath string `json:"profession_docs_path"`
-	// ProfessionPoolDefault 建房缺省卡池: "docs"(75k 文档池,2026-09-16 起默认) |
-	// "curated"(内嵌 14 精选卡,文档池不可用时的兜底)。
-	ProfessionPoolDefault string `json:"profession_pool_default"`
 	// AgentEnabled 默认 true;false 时 agent_seats 被忽略(座位回退人类占位)。
 	AgentEnabled bool `json:"agent_enabled"`
 	// AgentDecisionTimeoutSec 单 bot 单月决策超时(默认 20s),watchdog 兜底 auto-submit。
@@ -388,6 +385,24 @@ type WealthConfig struct {
 	CityVoicePerMonth int `json:"city_voice_per_month"`
 	// CityCalibSampleSize 城市校准表抽样职业卡张数(契约 03 §3;默认 512)。
 	CityCalibSampleSize int `json:"city_calib_sample_size"`
+	// CityDriverEnabled 居民驱动层总开关(2026-09-22 §17-CityHuman 契约 02 §7;
+	// false 时 Start 回退 VoiceScheduler 城市之声旧路径)。指针三态:nil
+	// (conf 未写该键)= true;显式 false 生效 —— 这是驱动层与 city_voice_enabled
+	// 等既有 bool 开关的关键差异(回退路径必须可达)。
+	CityDriverEnabled *bool `json:"city_driver_enabled,omitempty"`
+	// CityDriverWorkers 驱动层线程池 worker 数(缺省 4,clamp [1,16])。
+	CityDriverWorkers int `json:"city_driver_workers"`
+	// CityDriverPerMonth 每月驱动居民数(缺省 8,clamp [0,64];0=仅深度层,
+	// 该语义仅在运行时经 Manager.Config 直接构造可达 —— conf 显式 0 与缺省
+	// 无法区分,与 city_voice_per_month 同款取舍;需停驱动层请置
+	// city_driver_enabled=false)。
+	CityDriverPerMonth int `json:"city_driver_per_month"`
+}
+
+// CityDriverEnabledResolved 返回驱动层总开关的生效值(nil 缺省 true;
+// 显式 false 生效,契约 02 §7)。
+func (w *WealthConfig) CityDriverEnabledResolved() bool {
+	return w.CityDriverEnabled == nil || *w.CityDriverEnabled
 }
 
 // RootDisabledSentinel 是 conf 中 root_account / root_password 的「禁用」哨兵值。
@@ -1056,12 +1071,6 @@ func applyDefaults(c *Config) {
 	if c.Wealth.ProfessionDocsPath == "" {
 		c.Wealth.ProfessionDocsPath = "./lag_docs/虚拟城市/玩家职业设计"
 	}
-	if c.Wealth.ProfessionPoolDefault == "" {
-		// 2026-09-16 §文档池解析修复:默认切到 "docs"。文档池 75k 卡经形状容错
-		// 后解析成功率 ≥99%(旧实现 0%),不再回退 curated;仅当磁盘池不可用时
-		// loader 自动回退内嵌 14 张精选卡,不影响建房。
-		c.Wealth.ProfessionPoolDefault = "docs"
-	}
 	if !c.Wealth.AgentEnabled {
 		// 默认 true;operator 显式设 false 仍为 false(零值无法区分,与
 		// TexasHoldem.AgentEnabled 同款取舍 — conf 未写该键时零值被强制 true)。
@@ -1098,6 +1107,26 @@ func applyDefaults(c *Config) {
 	}
 	if c.Wealth.CityCalibSampleSize == 0 {
 		c.Wealth.CityCalibSampleSize = 512
+	}
+	// 2026-09-22 §17-CityHuman 全民驱动 — 居民驱动层默认值(契约 02 §7)。
+	// CityDriverEnabled 为 *bool 三态,nil 缺省 true(显式 false 保留回退路径)。
+	if c.Wealth.CityDriverWorkers == 0 {
+		c.Wealth.CityDriverWorkers = 4
+	}
+	if c.Wealth.CityDriverWorkers < 0 {
+		c.Wealth.CityDriverWorkers = 4
+	}
+	if c.Wealth.CityDriverWorkers > 16 {
+		c.Wealth.CityDriverWorkers = 16
+	}
+	if c.Wealth.CityDriverPerMonth == 0 {
+		c.Wealth.CityDriverPerMonth = 8
+	}
+	if c.Wealth.CityDriverPerMonth < 0 {
+		c.Wealth.CityDriverPerMonth = 8
+	}
+	if c.Wealth.CityDriverPerMonth > 64 {
+		c.Wealth.CityDriverPerMonth = 64
 	}
 	// §128 对话即思考重构:AgentParallel 默认值已删除(原 §122)。
 

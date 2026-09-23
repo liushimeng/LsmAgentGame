@@ -81,12 +81,6 @@ type BroadcastHooks struct {
 	OnSurvey func(roomID string, sv *Survey)
 }
 
-// SeatProfession 开局职业公开对(game.started.professions)。
-type SeatProfession struct {
-	Seat         int    `json:"seat"`
-	ProfessionID string `json:"profession_id"`
-}
-
 // WealthRoom 单房间运行时。
 type WealthRoom struct {
 	mu     sync.Mutex
@@ -94,13 +88,12 @@ type WealthRoom struct {
 
 	OwnerID string
 
-	Seats          [MaxSeats]string
-	SeatModelKeys  [MaxSeats]string
-	BotSeats       [MaxSeats]bool
-	SeatProfession [MaxSeats]string // 座位职业偏好(agent_seats[].profession)
-	Nicknames      [MaxSeats]string
-	Spectators     map[string]struct{}
-	IdleSeats      map[int]bool // 人类中途离房 → 自动挂机(P0;bot 接管为 P1)
+	Seats         [MaxSeats]string
+	SeatModelKeys [MaxSeats]string
+	BotSeats      [MaxSeats]bool
+	Nicknames     [MaxSeats]string
+	Spectators    map[string]struct{}
+	IdleSeats     map[int]bool // 人类中途离房 → 自动挂机(P0;bot 接管为 P1)
 
 	World *World
 
@@ -118,10 +111,11 @@ type WealthRoom struct {
 	agentDecisionMonth  [MaxSeats]int
 
 	// 卡池与随机源(房间级;开局抽卡用)。
-	pool      string // curated | docs
+	// 2026-09-22 §17-CityHuman:pool 字段退役 —— 发卡恒走文档池(docLoader),
+	// 不可用时 SyntheticCards 合成兜底(契约 03 §2.1,没有非 docs 模式)。
 	seed      int64
 	rng       *rand.Rand
-	docLoader *profession.Loader // pool="docs" 时由 Manager 注入
+	docLoader *profession.Loader // Manager 注入(可能为 nil → 合成兜底)
 
 	hooks            BroadcastHooks
 	chatSender       ChatSender
@@ -156,10 +150,17 @@ type WealthRoom struct {
 	cityRng *rand.Rand
 	// linePoolSource LLM 线路池来源(Manager 注入;池驱动座位 + 城市之声共用)。
 	linePoolSource func() *llm.LinePool
-	// cityVoice / 城市之声配置(Start 时构造调度器)。
+	// cityVoice / 城市之声配置(Start 时构造调度器;2026-09-22 §17-CityHuman
+	// 起与 cityDriver 互斥 —— 驱动层启用时 cityVoice 恒 nil)。
 	cityVoice         *city.VoiceScheduler
 	cityVoiceEnabled  bool
 	cityVoicePerMonth int
+	// cityDriver 居民驱动层(2026-09-22 §17-CityHuman 契约 02 §5;Start 时
+	// 按 cityDriverEnabled 构造,与 VoiceScheduler 互斥)。
+	cityDriver         *city.ResidentDriver
+	cityDriverEnabled  bool
+	cityDriverWorkers  int
+	cityDriverPerMonth int
 
 	// 2026-09-22 §CityHuman重构:感知与发言支撑。
 	utterances []UtteranceRecord // 公开发言环形缓冲(cap 50,hear 数据源)
@@ -170,15 +171,13 @@ type WealthRoom struct {
 }
 
 // NewWealthRoom 构造空房间(不启动 loop;Start 后进入 playing)。
-func NewWealthRoom(roomID string, monthMs int, pool string, seed int64, llmConcurrency int) *WealthRoom {
+// 2026-09-22 §17-CityHuman(契约 03 §2.1):pool 参数随精选层退役删除。
+func NewWealthRoom(roomID string, monthMs int, seed int64, llmConcurrency int) *WealthRoom {
 	if monthMs < 3000 {
 		monthMs = 3000
 	}
 	if monthMs > 30000 {
 		monthMs = 30000
-	}
-	if pool != "docs" {
-		pool = "curated"
 	}
 	if llmConcurrency <= 0 {
 		// 2026-09-16 §12 座扩容:默认 4 → DefaultAgentConcurrency(8),让 10+ bot
@@ -194,7 +193,6 @@ func NewWealthRoom(roomID string, monthMs int, pool string, seed int64, llmConcu
 		Status:     StatusOpen,
 		Phase:      PhaseActing,
 		MonthMs:    monthMs,
-		pool:       pool,
 		seed:       seedVal,
 		rng:        rand.New(rand.NewSource(seedVal)),
 		Spectators: map[string]struct{}{},
@@ -274,9 +272,6 @@ func (r *WealthRoom) applyOpts(opts *service.WealthRoomOptions) {
 	defer r.mu.Unlock()
 	if opts.MonthMs > 0 {
 		r.MonthMs = clampInt(opts.MonthMs, 3000, 30000)
-	}
-	if opts.Pool == "curated" || opts.Pool == "docs" {
-		r.pool = opts.Pool
 	}
 	if opts.Seed != 0 {
 		r.seed = opts.Seed
@@ -384,7 +379,9 @@ func (r *WealthRoom) JoinGame(userID, nickname string) (int, bool, *errcode.Erro
 // Seats[seat] 的 bot userID,导致 Start 发卡跳过 bot 座位、EnsureAgents 因
 // Seats[seat]=="" 跳过 → bot 永不上场。现扩展为同时入住 bot userID
 // (seatUsers,仅写空位,不覆盖已有人类座位)。
-func (r *WealthRoom) RegisterBotSeats(seatUsers map[int]string, seatModels map[int]string, professions map[int]string) {
+// 2026-09-22 §17-CityHuman(契约 03 §1.4):第三参 professions 座位职业偏好
+// 随精选层退役删除(原恒传 nil 的死路径,§130 死代码清算)。
+func (r *WealthRoom) RegisterBotSeats(seatUsers map[int]string, seatModels map[int]string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for seat, userID := range seatUsers {
@@ -411,9 +408,6 @@ func (r *WealthRoom) RegisterBotSeats(seatUsers map[int]string, seatModels map[i
 		}
 		r.BotSeats[seat] = true
 		r.SeatModelKeys[seat] = modelKey
-		if prof := professions[seat]; prof != "" {
-			r.SeatProfession[seat] = prof
-		}
 	}
 }
 
@@ -428,14 +422,16 @@ func (r *WealthRoom) drawCardLocked() profession.Card {
 	return card
 }
 
-// buildCardPoolLocked 按房间 pool 配置构建洗牌后的卡池。
+// buildCardPoolLocked 构建洗牌后的开局卡池(2026-09-22 §17-CityHuman 契约
+// 03 §2.1:恒走文档池 docLoader.Draw,不可用时 SyntheticCards 合成兜底并
+// 洗牌 —— 精选 14 卡层已退役,没有非 docs 模式)。
 func (r *WealthRoom) buildCardPoolLocked() []profession.Card {
-	if r.pool == "docs" && r.docLoader != nil {
+	if r.docLoader != nil {
 		if cards := r.docLoader.Draw(MaxSeats, r.rng); len(cards) > 0 {
 			return cards
 		}
 	}
-	cards := profession.CuratedCards()
+	cards := profession.SyntheticCards(MaxSeats, r.rng)
 	r.rng.Shuffle(len(cards), func(i, j int) { cards[i], cards[j] = cards[j], cards[i] })
 	return cards
 }
@@ -453,21 +449,12 @@ func (r *WealthRoom) Start(loader *profession.Loader) *errcode.Error {
 		return errcode.Code(errcode.ErrWealthNotEnoughPlayers)
 	}
 
-	// 发卡:座位序抽取;有职业偏好的座位优先匹配卡 id。
+	// 发卡:座位序抽取(2026-09-22 §17-CityHuman:座位职业偏好死路径随精选
+	// 层退役删除,契约 03 §1.4;恒 docs 池 + synthetic 兜底)。
 	var cards [MaxSeats]profession.Card
-	byID := map[string]profession.Card{}
-	for _, c := range profession.CuratedCards() {
-		byID[c.ID] = c
-	}
 	for seat := 0; seat < MaxSeats; seat++ {
 		if r.Seats[seat] == "" {
 			continue
-		}
-		if pref := r.SeatProfession[seat]; pref != "" {
-			if c, ok := byID[pref]; ok && r.pool != "docs" {
-				cards[seat] = c
-				continue
-			}
 		}
 		cards[seat] = r.drawCardLocked()
 	}
@@ -506,18 +493,14 @@ func (r *WealthRoom) Start(loader *profession.Loader) *errcode.Error {
 	r.resetMonthFlagsLocked()
 	openings := r.openingHooksLocked()
 
-	professions := make([]SeatProfession, 0, MaxSeats)
+	// 2026-09-22 §17-CityHuman(契约 03 §1.4):startedPayload["professions"]
+	// 随精选层退役删除 —— 开局职业不再作为独立公开表下发(身份经由每座位
+	// game.state.my 卡面与昵称呈现)。
+	occupied := r.occupiedLocked()
 	age := r.World.Age()
-	for seat, p := range r.World.Players {
-		if p == nil {
-			continue
-		}
-		professions = append(professions, SeatProfession{Seat: seat, ProfessionID: p.Card.ID})
-	}
 	startedPayload := map[string]any{
 		"room_id": r.RoomID, "game_kind": "wealth",
 		"month": 1, "age": age, "start_age": age,
-		"professions": professions,
 	}
 	hooks := r.hooks
 	r.mu.Unlock()
@@ -531,7 +514,7 @@ func (r *WealthRoom) Start(loader *profession.Loader) *errcode.Error {
 	r.sendOpeningHooks(openings)
 	r.wakeBots()
 	logger.L().Info("wealth game started",
-		zap.String("room_id", r.RoomID), zap.Int("seats", len(professions)))
+		zap.String("room_id", r.RoomID), zap.Int("seats", occupied))
 	return nil
 }
 
@@ -773,9 +756,9 @@ func (r *WealthRoom) trySettle(onFinish func(roomID string)) bool {
 	if hooks.OnState != nil {
 		hooks.OnState(roomID)
 	}
-	// 2026-09-21 §虚拟城市(契约 03 §5):月结后异步触发城市之声(goroutine,
-	// 绝不阻塞月结;终局房不发声)。
-	r.launchCityVoices(voiceMonth)
+	// 2026-09-21 §虚拟城市(契约 03 §5):月结后异步触发城市之声/居民驱动层
+	// (goroutine,绝不阻塞月结;终局房不发声)。
+	r.launchCityDriver(voiceMonth)
 	r.wakeBots()
 	return true
 }

@@ -87,8 +87,8 @@ func insE2EPremiumOfMonth(w *World, seat, month int) int64 {
 // EnsureAgents/wakeBots 均为 no-op,月结由测试显式驱动)。
 func insE2ERoom(t *testing.T, roomID string, seed int64) *WealthRoom {
 	t.Helper()
-	m := NewManager(Config{MonthMs: 30000, PoolDefault: "curated"}, nil)
-	m.ApplyRoomOptions(roomID, &WealthRoomOptions{MonthMs: 30000, Pool: "curated", Seed: seed})
+	m := NewManager(Config{MonthMs: 30000}, nil)
+	m.ApplyRoomOptions(roomID, &WealthRoomOptions{MonthMs: 30000, Seed: seed})
 	r := m.CreateRoom(roomID)
 	users := make(map[int]string, MaxSeats)
 	models := make(map[int]string, MaxSeats)
@@ -96,7 +96,7 @@ func insE2ERoom(t *testing.T, roomID string, seed int64) *WealthRoom {
 		users[seat] = fmt.Sprintf("ins-e2e-bot-%d", seat)
 		models[seat] = fmt.Sprintf("FakeModel%d", seat)
 	}
-	r.RegisterBotSeats(users, models, nil)
+	r.RegisterBotSeats(users, models)
 	if e := r.Start(nil); e != nil {
 		t.Fatalf("start room: %v", e)
 	}

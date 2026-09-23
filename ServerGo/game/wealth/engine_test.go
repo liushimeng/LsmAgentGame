@@ -73,7 +73,15 @@ func TestNewWorld_EmptySeats(t *testing.T) {
 
 // TestNewPlayerFromCard_BasicFields Card 字段正确镜像到 Player。
 func TestNewPlayerFromCard_BasicFields(t *testing.T) {
-	card := profession.CuratedByID("P05")
+	// 2026-09-22 §17-CityHuman(契约 03 §4):精选手卡夹具退役,改内联卡面。
+	card := &profession.Card{
+		ID: "T01", Title: "测试职业", Salary: 9000, Expense: 6000, Savings: 30000,
+		StartAge: 25, Energy: 6, Network: 4, Cognition: 5, CreditScore: 650,
+		HomeDistrict: "residential", RiskPreference: "conservative",
+		HealthGrade: "B", Marital: "single",
+		OpeningHook: "这是一张内联测试职业卡,用于镜像字段断言的固定夹具。",
+		Source:      "synthetic",
+	}
 	p := newPlayerFromCard(3, *card)
 	if p.Seat != 3 {
 		t.Errorf("seat: got %d", p.Seat)

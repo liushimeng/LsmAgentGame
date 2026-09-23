@@ -4,19 +4,56 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
 
-// TestCurated_Validation 10 张精选卡必须通过 Validate(§1)。
-func TestCurated_Validation(t *testing.T) {
-	if err := ValidateCurated(); err != nil {
-		t.Errorf("curated validation failed: %v", err)
+// TestSyntheticCards_确定性 合成兜底卡(契约 03 §2.2):同 rng 序 → 同卡集;
+// 恒返回 n 张且全部通过 Validate;Source=="synthetic";StartAge ∈[20,55]。
+func TestSyntheticCards_确定性(t *testing.T) {
+	mk := func() []Card {
+		rng := rand.New(rand.NewSource(20260922))
+		return SyntheticCards(12, rng)
+	}
+	a, b := mk(), mk()
+	if len(a) != 12 || len(b) != 12 {
+		t.Fatalf("SyntheticCards(12) = %d / %d, want 12/12", len(a), len(b))
+	}
+	for i := range a {
+		if !reflect.DeepEqual(a[i], b[i]) {
+			t.Fatalf("card %d not deterministic:\n%+v\nvs\n%+v", i, a[i], b[i])
+		}
+		if a[i].Source != "synthetic" {
+			t.Errorf("card %s source = %q, want synthetic", a[i].ID, a[i].Source)
+		}
+		if a[i].StartAge < 20 || a[i].StartAge > 55 {
+			t.Errorf("card %s start_age = %d, want in [20,55]", a[i].ID, a[i].StartAge)
+		}
+		if err := a[i].Validate(); err != nil {
+			t.Errorf("synthetic card %s invalid: %v", a[i].ID, err)
+		}
+	}
+	// 职业模板多样性:12 张覆盖 12 个不同 Title(模板表逐一轮转)。
+	seen := map[string]struct{}{}
+	for _, c := range a {
+		seen[c.Title] = struct{}{}
+	}
+	if len(seen) != 12 {
+		t.Fatalf("template spread = %d, want 12", len(seen))
+	}
+	// n<=0 → nil;rng nil → 确定性默认源(不 panic)。
+	if got := SyntheticCards(0, nil); got != nil {
+		t.Errorf("SyntheticCards(0) = %v, want nil", got)
+	}
+	if got := SyntheticCards(3, nil); len(got) != 3 {
+		t.Errorf("SyntheticCards(3, nil rng) = %d, want 3", len(got))
 	}
 }
 
-// TestLoader_FallbackToCurated 根目录不存在 → loader 自动回退 curated(Draw 仍返回 10 张)。
-func TestLoader_FallbackToCurated(t *testing.T) {
+// TestLoader_回退合成卡 根目录不存在 → loader 自动回退合成卡
+// (Draw 恒返回 n 张、Source=synthetic、全部 Validate 通过;契约 03 §2.2)。
+func TestLoader_回退合成卡(t *testing.T) {
 	l := NewLoader("/nonexistent/path/that/does/not/exist")
 	l.ForceIndex()
 	cards := l.Draw(8, rand.New(rand.NewSource(1)))
@@ -24,11 +61,11 @@ func TestLoader_FallbackToCurated(t *testing.T) {
 		t.Errorf("fallback draw: got %d, want 8", len(cards))
 	}
 	for _, c := range cards {
-		if c.Source != "curated" {
-			t.Errorf("expected curated source, got %s", c.Source)
+		if c.Source != "synthetic" {
+			t.Errorf("expected synthetic source, got %s", c.Source)
 		}
 		if err := c.Validate(); err != nil {
-			t.Errorf("curated card %s invalid: %v", c.ID, err)
+			t.Errorf("synthetic card %s invalid: %v", c.ID, err)
 		}
 	}
 }
@@ -192,7 +229,7 @@ opening_hook: 这是一段测试开场白,用来满足长度要求的固定文�
 		t.Errorf("draw should yield ≥1 card (good one), got %d", len(drawn))
 	}
 	for _, c := range drawn {
-		if !strings.HasPrefix(c.ID, "GOOD") && !strings.HasPrefix(c.ID, "P") {
+		if !strings.HasPrefix(c.ID, "GOOD") && !strings.HasPrefix(c.ID, "S") {
 			t.Errorf("unexpected card %s in fallback draw", c.ID)
 		}
 	}

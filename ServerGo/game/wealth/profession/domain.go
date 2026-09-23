@@ -13,7 +13,7 @@ import (
 )
 
 // DomainCard 是带 L1 行业域来源的单张抽卡结果。Domain 为空串表示该卡无法
-// 归入 26 个 L1 域(curated 精选卡 / `维度2-…` 等非行业目录来源)。
+// 归入 26 个 L1 域(合成兜底卡 / `维度2-…` 等非行业目录来源)。
 type DomainCard struct {
 	Card
 	// Domain 是 L1 行业域名(路径首段,形如 "A-农林牧渔");非 26 域来源为 ""。

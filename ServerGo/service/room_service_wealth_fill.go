@@ -1,40 +1,29 @@
-// Package service — room_service_wealth_fill.go: 虚拟城市焦点居民自动填充
-// (2026-09-22 §CityHuman重构,前端联调)。
+// Package service — room_service_wealth_fill.go: 虚拟城市深度层座位合成
+// (2026-09-22 §17-CityHuman 全民驱动,契约 03 §3.2)。
 //
-// 背景:前端建房弹窗放开「焦点居民数」1–12 档(默认 12),但引擎
-// MinSeats=10 会拦截 <10 座开局(35003)。城市房恒为全 Agent 模式
-// (FullAgent=true),没有人类入座来凑齐座位 —— 1–9 档必须在建房时由
-// 服务端自动填充池驱动居民(ModelKey="" = LLM 线路池分配)至 MinSeats,
-// 否则房间永远停在 open。
+// 背景:「焦点居民数 1–12 档」建房逻辑随精选卡层整体退役。虚拟城市建房时
+// 服务端**固定合成 12 名池驱动深度居民座位**(ModelKey="" = LLM 线路池
+// 分配),引擎内部深度轨迹层;传入的 agent_seats 一律忽略(城市是全 Agent
+// 城市模拟器,不存在人类可选的 bot 档位)。werewolf 等其他游戏路径零变化。
 //
-// 填充发生在 DB 落库之前(CreateRoomWithAgents 校验段之后),使 bot 用户行、
-// FullAgentMode 判定、ws 层 RegisterBotSeats、自动开局看到同一座位集;
-// ws 层 registerWealthAgentSeats 另有防御性补填(roomSvc 可用时)。
+// 合成发生在 DB 落库之前(CreateRoomWithAgents 校验段之前替换 agentSeats),
+// 使 bot 用户行、FullAgentMode 判定、ws 层 RegisterBotSeats、自动开局看到
+// 同一座位集;ws 层 registerWealthAgentSeats 另有防御性补填(roomSvc 可用时)。
 package service
 
-// wealthMaxAgentSeats wealth 房间座位上限(与 game/wealth.MaxSeats=12 对齐;
-// service 层不 import wealth 包,与 maxAgentSeats=12 同值,独立常量防漂移)。
-const wealthMaxAgentSeats = 12
+// wealthDeepSeatCount wealth 房间深度层座位数(与 game/wealth.MaxSeats=12
+// 对齐;service 层不 import wealth 包,与 maxAgentSeats=12 同值,独立常量
+// 防漂移)。2026-09-22 §17-CityHuman(契约 03 §3.2):原 wealthMinAgentSeats
+// (10)/wealthMaxAgentSeats 语义收敛为本常量 —— 深度层固定 12。
+const wealthDeepSeatCount = 12
 
-// padWealthAgentSeats 把 wealth 房间的 agentSeats 填充到 wealthMinAgentSeats:
-// 仅当显式请求了 agent_seats(0 < len < MinSeats)时,按座位号升序挑空闲座位,
-// 以池驱动居民(ModelKey="")补齐;agentSeatSet 同步更新(调用方后续不再
-// 用旧集合做判定 —— creatorShouldBeSpectator / 落库循环都消费填充后的切片)。
-//
-// 纯函数:不触 DB,不分配新身份;人类可入座房(agentSeats 为空)原样返回。
-func padWealthAgentSeats(agentSeats []AgentSeatConfig, agentSeatSet map[int]struct{}) []AgentSeatConfig {
-	if len(agentSeats) == 0 || len(agentSeats) >= wealthMinAgentSeats {
-		return agentSeats
+// wealthDeepSeats 服务端合成 12 名池驱动深度居民座位
+// ({seat: 0..11, model_key: ""};契约 03 §3.2)。ModelKey 空串 = LLM 线路池
+// 驱动,不绑定具体模型;Role 空 = 不注入角色偏好。
+func wealthDeepSeats() []AgentSeatConfig {
+	seats := make([]AgentSeatConfig, 0, wealthDeepSeatCount)
+	for seat := 0; seat < wealthDeepSeatCount; seat++ {
+		seats = append(seats, AgentSeatConfig{Seat: seat, ModelKey: ""})
 	}
-	out := make([]AgentSeatConfig, len(agentSeats), wealthMinAgentSeats)
-	copy(out, agentSeats)
-	for seat := 0; seat < wealthMaxAgentSeats && len(out) < wealthMinAgentSeats; seat++ {
-		if _, taken := agentSeatSet[seat]; taken {
-			continue
-		}
-		// 池驱动:ModelKey="" 由 LLM 线路池在决策时分配线路(契约 04 §1.1)。
-		out = append(out, AgentSeatConfig{Seat: seat, ModelKey: ""})
-		agentSeatSet[seat] = struct{}{}
-	}
-	return out
+	return seats
 }

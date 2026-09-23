@@ -8,8 +8,16 @@ package wealth
 import (
 	"fmt"
 	"strings"
+)
 
-	"LsmAgentGame/game/wealth/profession"
+// P16 波动带(《规则》§10.1.1):奇数月 U(3000,8000)、偶数月 U(5000,25000)。
+// 2026-09-22 §17-CityHuman 全民驱动:原 profession/curated.go 整文件退役,
+// 四常量迁入本文件就近持有(消费点 :333/:335/:708-709;注释标「原 curated.go」)。
+const (
+	P16BandLowOdd  = 3000 // 原 curated.go
+	P16BandHighOdd = 8000 // 原 curated.go
+	P16BandLowEven = 5000 // 原 curated.go
+	P16BandHighEvt = 25000
 )
 
 // 月结常量(§9.2 P0 新定)。
@@ -330,9 +338,9 @@ func (w *World) settlePlayer(p *Player, age int) {
 	if !stopped {
 		if p.UnemployedMonths <= 0 {
 			if p.SalaryVolatile {
-				lo, hi := profession.P16BandLowOdd, profession.P16BandHighOdd
+				lo, hi := P16BandLowOdd, P16BandHighOdd
 				if w.Month%2 == 0 {
-					lo, hi = profession.P16BandLowEven, profession.P16BandHighEvt
+					lo, hi = P16BandLowEven, P16BandHighEvt
 				}
 				salary = int64(lo + w.Rand.Intn(hi-lo+1))
 			} else {
@@ -705,8 +713,8 @@ func (w *World) AnnualAdjust() {
 		p.SalaryBase = int64(float64(p.SalaryBase)*(1+g) + 0.5)
 		if p.SalaryVolatile {
 			// 年增长作用于带边界。
-			lo := profession.P16BandLowOdd
-			hi := profession.P16BandHighEvt
+			lo := P16BandLowOdd
+			hi := P16BandHighEvt
 			if p.SalaryLow > 0 {
 				lo = int(p.SalaryLow)
 			}

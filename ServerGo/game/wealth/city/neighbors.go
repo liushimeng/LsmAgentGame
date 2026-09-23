@@ -42,12 +42,22 @@ func (b *Backdrop) SampleDistrictNeighbors(districtID string, count int) []Distr
 	if idx < 0 {
 		return nil
 	}
+	return b.sampleNeighborsExcluding(idx, -1, count)
+}
+
+// sampleNeighborsExcluding 抽样指定城区下标的 ≤count 名背景居民摘要
+// (exclude<0 = 不排除;driver.go DriverBrief 用它排除居民本人)。
+// 锚定居民优先;内部使用 voiceRng 洗牌(与经济演化 rng 流分离)。
+func (b *Backdrop) sampleNeighborsExcluding(districtIdx, exclude, count int) []DistrictNeighbor {
+	if count <= 0 || districtIdx < 0 || districtIdx >= districtCount {
+		return nil
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	var anchored, rest []int
 	for i := range b.residents {
 		r := &b.residents[i]
-		if int(r.district) != idx {
+		if int(r.district) != districtIdx || i == exclude {
 			continue
 		}
 		if i < b.profAnchored && i < len(b.profiles) {

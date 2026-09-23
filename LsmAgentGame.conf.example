@@ -180,9 +180,6 @@
     "month_ms": 8000,
     // 文档池(75k 人物卡,Schema v1.1)磁盘根。
     "profession_docs_path": "./lag_docs/虚拟城市/玩家职业设计",
-    // 建房缺省卡池(2026-09-16 起默认 "docs"):文档池 75k 人物卡,形状容错后
-    // 解析成功率 ≥99%;仅当磁盘池不可用时自动回退 "curated"(内嵌 14 精选卡)。
-    "profession_pool_default": "docs",
     // Agent 总开关(默认 true)。
     "agent_enabled": true,
     // 单 bot 单月决策超时(秒),watchdog 兜底强制 submit_month。
@@ -211,6 +208,13 @@
     // 每月城市之声抽样条数(使用点 clamp [0,32];默认 4)。
     "city_voice_per_month": 4,
     // 城市校准表抽样职业卡张数(默认 512;后台预热,不阻塞启动)。
-    "city_calib_sample_size": 512
+    "city_calib_sample_size": 512,
+    // 居民驱动层总开关(2026-09-22 §17-CityHuman,契约 02 §7;缺省 true)。
+    // false = 回退城市之声旧调度器(VoiceScheduler);显式 false 生效。
+    "city_driver_enabled": true,
+    // 驱动层线程池 worker 数(缺省 4,clamp [1,16])。
+    "city_driver_workers": 4,
+    // 每月驱动居民数(缺省 8,clamp [0,64];0 = 仅深度层)。
+    "city_driver_per_month": 8
   }
 }

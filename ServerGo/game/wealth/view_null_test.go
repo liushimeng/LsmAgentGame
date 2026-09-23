@@ -10,7 +10,7 @@ import (
 // game.state 所有数组字段对玩家(viewer=0)与观战者(viewer=-1)都必须序列化
 // 为 [] 而非 null。
 func TestClientState_NoNullArrays(t *testing.T) {
-	r := NewWealthRoom("room-null", 3000, "curated", 7, 4)
+	r := NewWealthRoom("room-null", 3000, 7, 4)
 	// 2026-09-16 §12 座扩容:MinSeats=10,注册 10 个 bot 座位开局(测试只关心
 	// BuildClientState 不输出 null 数组,不关心具体人数)。
 	botUsers := make(map[int]string, 10)
@@ -19,7 +19,7 @@ func TestClientState_NoNullArrays(t *testing.T) {
 		botUsers[seat] = "b" + string(rune('0'+seat))
 		botModels[seat] = "M" + string(rune('A'+seat))
 	}
-	r.RegisterBotSeats(botUsers, botModels, nil)
+	r.RegisterBotSeats(botUsers, botModels)
 	if e := r.Start(nil); e != nil {
 		t.Fatalf("start: %v", e)
 	}

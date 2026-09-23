@@ -361,31 +361,25 @@ func TestCalibration_SyntheticFallback(t *testing.T) {
 	}
 }
 
-func TestCalibration_CuratedFallback(t *testing.T) {
-	// 根目录不存在 → docs 不可用 → curated(14 张精选卡聚合)。
+// TestCalibration_SyntheticFallbackOnMissingDocs 2026-09-22 §17-CityHuman
+// (契约 03 §4,原 TestCalibration_CuratedFallback 重写):根目录不存在 →
+// docs 不可用 → synthetic(精选卡中间层已删除,Source=="synthetic")。
+func TestCalibration_SyntheticFallbackOnMissingDocs(t *testing.T) {
 	l := profession.NewLoader(filepath.Join(t.TempDir(), "no-such-dir"))
 	tbl := BuildCalibTable(l, 32)
-	if tbl.Source != "curated" || !tbl.Ready {
-		t.Fatalf("missing docs root must yield curated, got source=%s ready=%v", tbl.Source, tbl.Ready)
+	if tbl.Source != "synthetic" {
+		t.Fatalf("missing docs root must yield synthetic, got source=%s", tbl.Source)
 	}
-	// 精选卡月薪 4500..?(P16 波动带)——聚合均值应在合理区间,域数恒 26。
 	if len(tbl.Domains) != domainCount {
 		t.Fatalf("domains = %d, want 26", len(tbl.Domains))
 	}
-	// 城区权重来自精选卡 HomeDistrict 频次(非均匀)且和为 1。
+	// 合成默认:域均匀权重、和为 1。
 	sum := 0.0
-	uniform := true
 	for _, w := range tbl.Districts {
 		sum += w
-		if w != tbl.Districts[0] {
-			uniform = false
-		}
 	}
 	if sum < 0.999 || sum > 1.001 {
-		t.Fatalf("curated district weights sum = %f, want 1", sum)
-	}
-	if uniform {
-		t.Fatalf("curated cards carry home_district — weights must not be uniform")
+		t.Fatalf("synthetic district weights sum = %f, want 1", sum)
 	}
 }
 

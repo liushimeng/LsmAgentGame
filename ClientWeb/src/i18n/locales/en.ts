@@ -1381,28 +1381,21 @@ const en: Dict = {
   'wealth.subtitle': 'Fully-agentic real-city simulator · residents live autonomously',
   'wealth.createRoom': 'Create City',
   'wealth.roomName': 'City Name',
-  'wealth.agentSeats': 'Focus Residents',
   'wealth.monthMs': 'Simulated month tick (ms)',
   'wealth.monthMs.fast': '3s fast',
   'wealth.monthMs.normal': '8s normal',
   'wealth.monthMs.slow': '15s slow',
-  'wealth.pool': 'Profession pool',
-  'wealth.pool.curated': 'Curated 10',
-  'wealth.pool.docs': 'Docs pool (100k persona cards)',
-  'wealth.pool.cards': 'Profession cards',
-  'wealth.pool.stats': 'Docs pool: {total} cards, {indexed} indexed',
-  'wealth.pool.indexing': 'Docs pool index pending (built on first docs-pool room)…',
-  'wealth.pool.unavailable': 'Docs pool unavailable — falls back to curated 10',
   'wealth.seed': 'Random seed',
   'wealth.join': 'Join',
   'wealth.spectate': 'Spectate',
   'wealth.full': 'Full',
   'wealth.noRooms': 'No Virtual City rooms yet',
   'wealth.createFirst': 'Click "Create City" to launch your first city simulation',
-  // 2026-09-22 §CityHuman refactor: fully-agentic city, simulation starts on creation.
-  'wealth.lobbyHint': '1–12 focus residents driven by LLM · simulation starts on creation',
+  // 2026-09-22 §CityHuman all-resident driving: every resident is LLM-driven;
+  // simulation starts on creation.
+  'wealth.lobbyHint': 'All residents driven by LLMs · background population 10 ~ 100k · simulation auto-starts on creation',
   'wealth.startEarly': 'Start now',
-  'wealth.startHint': 'Simulation starts automatically once focus residents are ready (instant at 12)',
+  'wealth.startHint': 'Simulation starts automatically once resident Agents are ready',
   'wealth.month': 'Month {m}',
   'wealth.age': 'Age {a}',
   'wealth.runningTime': 'Simulation running time',
@@ -1586,19 +1579,14 @@ const en: Dict = {
   'wealth.create.meSeat': 'me, 1 seat',
   'wealth.create.noModels': 'LLM model list unavailable — cannot add Agents',
   'wealth.create.failed': 'Failed to create room, adjust and retry',
-  // 2026-09-16 wealth 10–12 seats — seat tiers / creator role / MinSeats validation.
+  // 2026-09-22 §CityHuman refactor — creator is always a spectator (seat tiers retired).
   'wealth.create.seatNo': 'Seat #{n}',
   'wealth.create.creatorRole': 'Creator role',
   'wealth.create.watchOnly': 'Spectator creator (all {max} seats are Agents)',
-  'wealth.create.creatorPlayer': 'Focus resident (played by Agent)',
-  'wealth.create.needMinSeats': 'At least {min} focus residents are required to start (currently {n}) — add more focus residents',
-  'wealth.create.seatsOk': '{n}/{max} focus residents · the simulation auto-starts after creation',
-  // 2026-09-19 random & even model assignment — reshuffle + model-reuse hint.
-  'wealth.create.reshuffle': '🎲 Reshuffle',
-  'wealth.create.modelReuseHint': 'Fewer models ({n}) than AI seats ({m}); some models will be reused evenly',
   // ── §20260921 room-create decoupling + city background layer (contract 04 §3) ──
   'wealth.residentCount': 'Background residents',
-  'wealth.residentCountHint': 'Background residents are data-simulated: dedicated profiles from the ~100k persona-card knowledge base, evolving monthly with sampled voices',
+  'wealth.residentCountHint': 'Every resident is a City-Human agent: system prompt and profile auto-load from the ~100k persona-card knowledge base, driven by the LLM line pool',
+  'wealth.residentCountRequired': 'Background population must be between 10 and 100000',
   'wealth.linePoolInfo': 'LLM line pool: {n} lines (Agent concurrency)',
   'wealth.linePoolEmpty': 'No LLM lines available — configure models in Model Management first',
   'wealth.cityTitle': 'City',
@@ -1610,8 +1598,10 @@ const en: Dict = {
   'wealth.cityVoices': 'City voices',
   'wealth.cityVoiceOfMonth': 'Month {month}',
   'wealth.cityOtherDistricts': 'Other ({n})',
-  'wealth.seatsCount': '{n}/{max} seats',
-  'wealth.seatsWaiting': 'Ready {n}/{min} · at least {min} focus residents are required to start — waiting for resident Agents…',
+  // 17-CityHuman all-resident driving — driver-layer indicator ({n} = residents driven last month).
+  'wealth.cityDriven': 'Residents driven this month: {n}',
+  'wealth.seatsCount': 'Deep residents {n}/{max}',
+  'wealth.seatsWaiting': 'Waiting for resident Agents to be ready…',
   'wealth.botPanel.seat': 'Seat {n}',
   'wealth.botPanel.titleCount': 'Resident thoughts ({n})',
   // 2026-09-19 Wealth spectator UI — agent filtering and readable out status.
@@ -1631,9 +1621,6 @@ const en: Dict = {
   'wealth.botPanel.sense.empty': 'No senses recorded this month',
   'wealth.chat.playerFallback': 'Resident {n}',
   'wealth.minimap.aria': 'Virtual City minimap',
-  'wealth.pool.cardsTitle': 'Profession cards ({n})',
-  'wealth.pool.cardSalary': '¥{v}/mo',
-  'wealth.pool.cardSavings': 'Savings (¥10k): {v}',
 
   // ── P1 Wave 2: Real Economy Loop Engine + Social Survey System (2026-09-16) ──
   'wealth.tab.economy': 'Economy',

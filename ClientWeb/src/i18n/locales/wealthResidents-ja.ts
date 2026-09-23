@@ -38,8 +38,6 @@ const wealthResidents = {
   'wealth.residentDrawer.domain': '業種',
   'wealth.residentDrawer.cardId': 'カード番号',
   'wealth.residentDrawer.notFound': '該当する住民プロファイルが見つかりません',
-  // 部屋作成モーダルの docs プールヒント（プロファイル固定設計 §8.3/§8.4）
-  'wealth.pool.docsProfiles': '人物カードプール約 10 万枚 — 開始後に各住民へ専用プロファイルを自動ロード',
 };
 
 export default wealthResidents;

@@ -452,13 +452,16 @@ export interface CreateRoomOptions {
   start_stack?: number;
   // 2026-09-14 §财商流 P0 — wealth only。建房可选段（协议契约 §6:
   // createRoomRequest 新增字段 wealth *WealthRoomOptions,DisallowUnknownFields
-  // 严格校验)。month_ms clamp 3000–30000;agent_seats 复用 CreateRoomWithAgents
-  // 流程(§14.2 model_key 去重自动生效)。
+  // 严格校验)。month_ms clamp 3000–30000。
+  // 2026-09-22 §CityHuman全民驱动 — wealth 建房不再发送 agent_seats/pool
+  // （后端忽略 wealth 请求中的 agent_seats，自动合成 12 深度居民座位）。
   wealth?: WealthRoomOptions;
-  // 2026-09-21 §建房解耦 — wealth only。城市背景层居民数：0/缺省 = 不启用
-  // （纯 12 座旧形态）；(0, 100000] 生效，超上限后端 clamp。agent_seats[].model_key
-  // 为空串时该座位走 LLM 线路池驱动（仅 wealth 放行，werewolf 仍强制合法 key）。
+  // 2026-09-21 §建房解耦 — wealth only。背景居民规模：
+  // 缺省 10000；<10 clamp 10；上限 100000 后端 clamp；负值 400。
   resident_count?: number;
+  // 2026-09-19 §全Agent模式 — 是否全 Agent 模式（虚拟城市恒 true，
+  // 创建者一律为观察者；werewolf 不发送）。现状漏声明但实际在发，一并补齐。
+  full_agent?: boolean;
 }
 
 /** One bot seat requested at room-creation time (werewolf only). */

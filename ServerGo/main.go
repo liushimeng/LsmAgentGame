@@ -886,14 +886,13 @@ func main() {
 	})
 	hub.SetGameManagerCleanupFunc(gameSvcWs.RemoveRoomState)
 
-	// 2026-09-14 §财商流P0 — 构造 wealth 管理器 + 文档池加载器 + 职业卡路由。
+	// 2026-09-14 §财商流P0 — 构造 wealth 管理器 + 文档池加载器。
 	wealthLoader := wealth.NewLoader(cfg.Wealth.ProfessionDocsPath)
 	wealthMgr := wealth.NewManager(wealth.Config{
 		MonthMs:                 cfg.Wealth.MonthMs,
 		AgentEnabled:            cfg.Wealth.AgentEnabled,
 		AgentDecisionTimeoutSec: cfg.Wealth.AgentDecisionTimeoutSec,
 		BotMaxActionsPerMonth:   cfg.Wealth.BotMaxActionsPerMonth,
-		PoolDefault:             cfg.Wealth.ProfessionPoolDefault,
 		Seed:                    cfg.Wealth.RandomSeed,
 		AgentConcurrency:        cfg.Wealth.AgentConcurrency,
 		// P1(2026-09-16 §财商流P1-2 §6.5):真实经济循环 / 社会调研开关。
@@ -906,6 +905,10 @@ func main() {
 		CityVoiceEnabled:    cfg.Wealth.CityVoiceEnabled,
 		CityVoicePerMonth:   cfg.Wealth.CityVoicePerMonth,
 		CityCalibSampleSize: cfg.Wealth.CityCalibSampleSize,
+		// 2026-09-22 §17-CityHuman(契约 02 §7)— 居民驱动层配置。
+		CityDriverEnabled:  cfg.Wealth.CityDriverEnabledResolved(),
+		CityDriverWorkers:  cfg.Wealth.CityDriverWorkers,
+		CityDriverPerMonth: cfg.Wealth.CityDriverPerMonth,
 	}, llmRegistry)
 	// 2026-09-21 §虚拟城市 G6:注入 LLM 线路池来源(Registry.Reload 换池后
 	// 经函数现取自动生效)+ 城市校准表后台预热(sync.Once goroutine,不阻塞启动)。
@@ -942,13 +945,12 @@ func main() {
 		}
 		return 0
 	})
-	professionAPI := api.NewProfessionAPI(wealthLoader)
 	// 2026-09-16 §财商流P1-2 — 社会调研 HTTP 入口(房间源 = wealthMgr)。
 	wealthSurveyAPI := api.NewWealthSurveyAPI(wealthMgr)
 	// 2026-09-21 §档案锚定契约 §7 — 居民人物卡档案两端点(房间源 = wealthMgr)。
 	wealthCityAPI := api.NewWealthCityAPI(wealthMgr)
 
-	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, professionAPI, wealthSurveyAPI, wealthCityAPI)
+	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, wealthSurveyAPI, wealthCityAPI)
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.

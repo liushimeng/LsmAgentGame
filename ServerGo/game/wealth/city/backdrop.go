@@ -1,11 +1,13 @@
 // Package city — backdrop.go: 城市背景居民(紧凑数组 + 月度演化 + 聚合快照)。
 //
-// 契约: 虚拟城市-大规模城市居民背景模拟设计-v1.md §4(2026-09-21)。
+// 契约: 虚拟城市-大规模城市居民背景模拟设计-v1.md §4(2026-09-21);
+// 2026-09-22 §17-CityHuman 全民驱动:resident 增 intent/moveTarget 位
+// (≈22B,仍满足 ≤40B 预算;契约 02 §4)。
 //
-// 背景居民是数据,不是 goroutine:每城 1..100,000+ 名居民以 ≈20B(预算 ≤40B)
-// 的紧凑结构存储,数值规则逐月演化(TickMonth);LLM 深认知只给焦点座位(≤12,
-// 全量引擎不变)与「城市之声」抽样居民(voice.go)。性能预算:100K 初始化
-// <200ms、月度 tick <100ms、常驻内存增量 <32MB。
+// 背景居民是数据,不是 goroutine:每城 1..100,000+ 名居民以紧凑结构存储,
+// 数值规则逐月演化(TickMonth);LLM 深认知只给深度座位(≤12,全量引擎不变)、
+// 「城市之声」抽样居民(voice.go)与**驱动层**轮次居民(driver.go)。
+// 性能预算:100K 初始化 <200ms、月度 tick <100ms、常驻内存增量 <32MB。
 package city
 
 import (
@@ -13,6 +15,9 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
+	"sync/atomic"
+
+	"LsmAgentGame/game/wealth/profession"
 )
 
 // 背景居民演化常量(契约 03 §4.3)。
@@ -33,16 +38,18 @@ const (
 	voicesRingCap = 20
 )
 
-// resident 单个背景居民(紧凑;字段顺序保证对齐后 ≈20B,预算 ≤40B)。
-// 未导出:外部只经 Backdrop 方法 / Snapshot 观测。
+// resident 单个背景居民(紧凑;2026-09-22 §17 增 intent/moveTarget 后
+// ≈22B,预算 ≤40B)。未导出:外部只经 Backdrop 方法 / Snapshot 观测。
 type resident struct {
-	income   float32 // 月收入(元;失业置 0)
-	expense  float32 // 月支出(元)
-	savings  float64 // 累计储蓄
-	domain   uint8   // L1 域索引 0..25(255=未知)
-	district uint8   // 城区 0..7
-	age      uint8   // 岁(每 12 个 tick +1)
-	flags    uint8   // bit0=employed bit1=stressed bit2=voiced(本月已发声)
+	income     float32 // 月收入(元;失业置 0)
+	expense    float32 // 月支出(元)
+	savings    float64 // 累计储蓄
+	domain     uint8   // L1 域索引 0..25(255=未知)
+	district   uint8   // 城区 0..15
+	age        uint8   // 岁(每 12 个 tick +1)
+	flags      uint8   // bit0=employed bit1=stressed bit2=voiced(本月已发声)
+	intent     uint8   // 本月意图(驱动层 set_intent 写入;TickMonth 消费后清除)
+	moveTarget uint8   // 目标城区(仅 move_out;消费后清除)
 }
 
 const (
@@ -50,6 +57,25 @@ const (
 	flagStressed
 	flagVoiced
 	domainUnknown uint8 = 255
+)
+
+// 居民意图编码(契约 02 §4:set_intent 写入 → TickMonth 按位消费 → 清除,
+// 意图只生效一个月)。
+const (
+	intentNone       uint8 = 0
+	intentJobSeeking uint8 = 1 // 失业者本月再就业概率 15% → 30%
+	intentFrugal     uint8 = 2 // 本月 expense ×0.9
+	intentConsume    uint8 = 3 // 本月 expense ×1.25(仅居民侧,消费品市场口径不变)
+	intentSocialize  uint8 = 4 // 本月 stress 解除概率 +20%
+	intentMoveOut    uint8 = 5 // 本月末迁移至 moveTarget 城区
+)
+
+// 意图消费常量(契约 02 §4 表格)。
+const (
+	reemploymentJobSeeking   = 0.30 // job_seeking 加成后再就业概率
+	frugalExpenseFactor      = 0.9  // frugal 本月支出系数
+	consumeExpenseFactor     = 1.25 // consume 本月支出系数
+	socializeStressReliefPr  = 0.20 // socialize 压力位额外解除概率
 )
 
 // Backdrop 是一城的背景居民数组 + 月度演化状态。并发安全(内部互斥);
@@ -73,6 +99,11 @@ type Backdrop struct {
 	profTotal    int // 本轮水合总数
 	profPoolSize int // 文档池索引总数(展示「卡池 10 万」)
 	profAnchored int // 已锚定居民数(前缀长度)
+
+	// ── 2026-09-22 §17-CityHuman 全民驱动(契约 02 §5)──
+	// driver 驱动层(Start 时装配;nil = 关闭 → Snapshot 不下发 driver 块)。
+	// 锁序:Backdrop.mu → driver.mu(driver 侧绝不反向嵌套)。
+	driver *ResidentDriver
 }
 
 // NewBackdrop 确定性合成 n 名背景居民(契约 03 §4.2)。
@@ -175,6 +206,13 @@ func NewBackdrop(n int, rng *rand.Rand, calib *CalibTable) *Backdrop {
 //   - 失业者:每月 15% 再就业,收入 = 域均值 × U(0.8,1.1)
 //   - 压力位:savings < 3×expense → stressed(回升清除)
 //   - 每 12 个 tick 全员 +1 岁;月初清除 voiced 位(城市之声去重)
+//
+// 2026-09-22 §17-CityHuman(契约 02 §4):意图消费 —— resident.intent 由
+// 驱动层 set_intent 写入,本月演化按表加成后**清除**(意图只生效一个月):
+//   - job_seeking:失业者本月再就业概率 15% → 30%
+//   - frugal / consume:本月 expense ×0.9 / ×1.25(基数不变,仅当月口径)
+//   - socialize:本月 stress 解除概率 +20%(stressed 位清退加成)
+//   - move_out:本月末迁移至 moveTarget 城区(无校验失败则忽略)
 func (b *Backdrop) TickMonth(cpi float64, rng *rand.Rand) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -183,22 +221,49 @@ func (b *Backdrop) TickMonth(cpi float64, rng *rand.Rand) {
 	for i := range b.residents {
 		r := &b.residents[i]
 		r.flags &^= flagVoiced
+		// ① 本月支出口径(frugal/consume 只调当月,基数留给 cpi 演化)。
+		effExpense := float64(r.expense)
+		switch r.intent {
+		case intentFrugal:
+			effExpense *= frugalExpenseFactor
+		case intentConsume:
+			effExpense *= consumeExpenseFactor
+		}
+		// ② 就业演化。
 		if r.flags&flagEmployed != 0 {
-			r.savings += float64(r.income) - float64(r.expense)
+			r.savings += float64(r.income) - effExpense
 			r.expense = float32(float64(r.expense) * (1 + cpi))
 			if rng.Float64() < unemploymentMonthly {
 				r.flags &^= flagEmployed
 				r.income = 0
 			}
-		} else if rng.Float64() < reemploymentMonthly {
-			r.flags |= flagEmployed
-			r.income = float32(b.domainIncomeMeanLocked(r.domain) * (0.8 + 0.3*rng.Float64()))
+		} else {
+			p := reemploymentMonthly
+			if r.intent == intentJobSeeking {
+				p = reemploymentJobSeeking
+			}
+			if rng.Float64() < p {
+				r.flags |= flagEmployed
+				r.income = float32(b.domainIncomeMeanLocked(r.domain) * (0.8 + 0.3*rng.Float64()))
+			}
 		}
-		if r.savings < stressExpenseMonths*float64(r.expense) {
+		// ③ 压力位(消费口径用 effExpense —— 本月「实际」生活支出)。
+		stressedNow := r.savings < stressExpenseMonths*effExpense
+		if stressedNow && r.intent == intentSocialize && rng.Float64() < socializeStressReliefPr {
+			stressedNow = false // socialize 清退加成
+		}
+		if stressedNow {
 			r.flags |= flagStressed
 		} else {
 			r.flags &^= flagStressed
 		}
+		// ④ move_out:月末迁移(目标城区越界 → 忽略)。
+		if r.intent == intentMoveOut && int(r.moveTarget) < districtCount {
+			r.district = r.moveTarget
+		}
+		// ⑤ 意图消费完毕清除(只生效一个月)。
+		r.intent = intentNone
+		r.moveTarget = 0
 		if ageTick && r.age < 255 {
 			r.age++
 		}
@@ -251,6 +316,9 @@ type Snapshot struct {
 	// Ambiance 各城区当月气味/声响标签(2026-09-22 §CityHuman重构;
 	// 由 wealth 层在广播前填充(基底表 + 当月事件叠加),nil → omitempty)。
 	Ambiance map[string]AmbianceTags `json:"ambiance,omitempty"`
+	// Driver 居民驱动层快照(2026-09-22 §17-CityHuman 契约 02 §5;omitempty
+	// —— driver 未启用时不下发,前端不渲染「本月驱动」行)。
+	Driver *DriverSnapshot `json:"driver,omitempty"`
 }
 
 // Snapshot 聚合快照(契约 03 §4.4;锁内计算,纯函数视图)。
@@ -311,6 +379,12 @@ func (b *Backdrop) Snapshot() Snapshot {
 	if b.profStatus != ProfIdle || b.profTotal > 0 {
 		pp := b.profileProgressLocked()
 		s.Profiles = &pp
+	}
+	// 2026-09-22 §17(契约 02 §5):驱动层启用时随快照下发 driver 块
+	// (锁序 Backdrop.mu → driver.mu;driver 侧绝不反向嵌套)。
+	if b.driver != nil {
+		ds := b.driver.Snapshot()
+		s.Driver = &ds
 	}
 	return s
 }
@@ -466,6 +540,167 @@ func (b *Backdrop) voiceBrief(idx int) (residentBrief, string, bool) {
 	}
 	return br, b.codenameLocked(idx), true
 }
+
+// ── 2026-09-22 §17-CityHuman 全民驱动(契约 02 §2/§4)──
+
+// SetDriver 登记驱动层(room startCityLocked 装配;nil = 关闭)。Snapshot
+// 经此透出 driver 块;driver 关闭时保持 nil → omitempty 不下发。
+func (b *Backdrop) SetDriver(d *ResidentDriver) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.driver = d
+}
+
+// PickDriverCandidates 返回本月经线路池驱动的居民下标(契约 02 §2.2)。
+//
+// 规则:**cursor 全域轮转**保证跨月公平(N=10万、预算 8/月 → 约 416 个月
+// 覆盖全员一圈)—— 本月窗口 = 从 cursor 起顺时针 count 个下标
+// (count = min(n, len(residents)));窗口内 **stressed/失业居民优先**
+// (与 PickVoiceCandidates 同权重,排前先服务),其余随后。窗口内天然
+// 同月不重复,并置 voiced 位(与城市之声共享月度去重语义)。选完后
+// cursor += count(原子推进;LLM 失败不回退,漏抽者下圈补上)。
+//
+// 立即置 voiced 位 —— LLM 失败的候选本月不再补抽(丢弃本条,下月轮转)。
+func (b *Backdrop) PickDriverCandidates(n int, cursor *uint64) []int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	N := len(b.residents)
+	if n <= 0 || N == 0 || cursor == nil {
+		return nil
+	}
+	count := n
+	if count > N {
+		count = N
+	}
+	start := int(atomic.LoadUint64(cursor) % uint64(N))
+	prio := make([]int, 0, count)
+	rest := make([]int, 0, count)
+	for k := 0; k < count; k++ {
+		idx := (start + k) % N
+		r := &b.residents[idx]
+		if r.flags&flagVoiced != 0 {
+			continue // 同月不重复(含城市之声已发声者)
+		}
+		if r.flags&flagStressed != 0 || r.flags&flagEmployed == 0 {
+			prio = append(prio, idx)
+		} else {
+			rest = append(rest, idx)
+		}
+	}
+	out := append(prio, rest...)
+	for _, idx := range out {
+		b.residents[idx].flags |= flagVoiced
+	}
+	atomic.AddUint64(cursor, uint64(count))
+	return out
+}
+
+// intentCodes set_intent 意图名 → 编码(契约 02 §3.3 枚举)。
+var intentCodes = map[string]uint8{
+	"job_seeking": intentJobSeeking,
+	"frugal":      intentFrugal,
+	"consume":     intentConsume,
+	"socialize":   intentSocialize,
+	"move_out":    intentMoveOut,
+}
+
+// ApplyIntent 写入居民本月意图(驱动层 set_intent 消费;锁内短临界区,
+// 契约 02 §4)。非法意图 / 越界下标静默忽略;move_out 无有效目标城区时
+// 整条忽略(契约 §4「无校验失败则忽略」)。意图在下个 TickMonth 消费后清除。
+func (b *Backdrop) ApplyIntent(idx int, intent, targetDistrict string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if idx < 0 || idx >= len(b.residents) {
+		return
+	}
+	code, ok := intentCodes[intent]
+	if !ok || code == intentNone {
+		return
+	}
+	r := &b.residents[idx]
+	if code == intentMoveOut {
+		di := DistrictIndexOf(targetDistrict)
+		if di < 0 {
+			return
+		}
+		r.moveTarget = uint8(di)
+	}
+	r.intent = code
+}
+
+// DriverBrief 是驱动层单居民月度快照(锁内取;driver.go runOne 消费)。
+type DriverBrief struct {
+	residentBrief // 档案人格 + 基础状态(锚定判定信号 CardID 同 voice)
+
+	Codename    string             // 代号(未锚定时 VoiceRecord.Name 回退)
+	Income      float64            // 月收入(元)
+	Expense     float64            // 月支出(元)
+	Marital     string             // 婚姻(锚定档案;未锚定空)
+	HealthGrade string             // 健康档(锚定档案;未锚定空)
+	DistrictID  string             // 城区 id(氛围查询;未命中空)
+	Neighbors   []DistrictNeighbor // 同城区 ≤3 名(排除本人;锁外补取)
+}
+
+// anchored 已锚定判定(与 voice.go 同信号:CardID 非空)。
+func (d *DriverBrief) anchored() bool { return d.CardID != "" }
+
+// displayName VoiceRecord.Name:已锚定用真实姓名(空名回退代号);未锚定
+// 用代号。
+func (d *DriverBrief) displayName() string {
+	if d.anchored() && d.Name != "" {
+		return d.Name
+	}
+	return d.Codename
+}
+
+// MaritalOr / HealthGradeOr 未锚定缺省(契约 §3.1 模板占位)。
+func (d *DriverBrief) MaritalOr(fallback string) string {
+	if d.Marital == "" {
+		return fallback
+	}
+	return d.Marital
+}
+func (d *DriverBrief) HealthGradeOr(fallback string) string {
+	if d.HealthGrade == "" {
+		return fallback
+	}
+	return d.HealthGrade
+}
+
+// DriverBrief 锁内取驱动层快照:档案人格 + 月度状态 + 婚姻/健康档 +
+// 城区 id;邻居在锁外补取(SampleDistrictNeighbors 自持锁,绝不嵌套)。
+func (b *Backdrop) DriverBrief(idx int) (DriverBrief, bool) {
+	b.mu.Lock()
+	if idx < 0 || idx >= len(b.residents) {
+		b.mu.Unlock()
+		return DriverBrief{}, false
+	}
+	r := &b.residents[idx]
+	br, _ := b.briefLocked(idx)
+	db := DriverBrief{
+		residentBrief: br,
+		Codename:      b.codenameLocked(idx),
+		Income:        float64(r.income),
+		Expense:       float64(r.expense),
+	}
+	distIdx := int(r.district)
+	if idx < b.profAnchored && idx < len(b.profiles) {
+		db.Marital = b.profiles[idx].Marital
+		db.HealthGrade = b.profiles[idx].HealthGrade
+	}
+	b.mu.Unlock()
+	if distIdx >= 0 && distIdx < districtCount {
+		if ids := professionDistrictIDs(); distIdx < len(ids) {
+			db.DistrictID = ids[distIdx]
+		}
+		db.Neighbors = b.sampleNeighborsExcluding(distIdx, idx, driverNeighborCap)
+	}
+	return db, true
+}
+
+// professionDistrictIDs 城区 id 表薄包装(profession.DistrictIDs 每次拷贝,
+// 邻居/氛围查询低频,开销可忽略)。
+func professionDistrictIDs() []string { return profession.DistrictIDs() }
 
 // clampF / pos / itoa 小工具。
 func clampF(v, lo, hi float64) float64 {

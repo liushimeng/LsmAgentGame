@@ -15,9 +15,21 @@ func TestBuildClientState_Desensitization(t *testing.T) {
 	w.Players[1] = newPlayerFromCard(1, w.Players[1].Card)
 	w.Players[1].Cash = 20000
 	w.StartGame()
-	// 给 bot_contexts 注入测试内容。
-	w.Players[0].Card = *profession.CuratedByID("P09")
-	w.Players[1].Card = *profession.CuratedByID("P10")
+	// 给 bot_contexts 注入测试内容(2026-09-22 §17 契约 03 §4:夹具改内联卡面)。
+	w.Players[0].Card = profession.Card{
+		ID: "T03", Title: "测试程序员", Salary: 15000, Expense: 10000, Savings: 40000,
+		StartAge: 25, Energy: 6, Network: 4, Cognition: 6, CreditScore: 650,
+		HomeDistrict: "tech", RiskPreference: "balanced",
+		HealthGrade: "B", Marital: "single",
+		OpeningHook: "这是一张内联测试程序员卡,用于 view 反脱敏断言的固定夹具。",
+	}
+	w.Players[1].Card = profession.Card{
+		ID: "T04", Title: "测试医生", Salary: 25000, Expense: 18000, Savings: 100000,
+		StartAge: 25, Energy: 5, Network: 5, Cognition: 7, CreditScore: 700,
+		HomeDistrict: "residential", RiskPreference: "conservative",
+		HealthGrade: "B", Marital: "single",
+		OpeningHook: "这是一张内联测试医生卡,用于 view 反脱敏断言的固定夹具。",
+	}
 
 	// 模拟座位 0 玩家的 view(只看自己 my;bot_contexts 包含自己 + 观战者视角)。
 	cs := BuildClientState("room-1", 0, w, [MaxSeats]string{"u:0", "u:1", "", "", "", "", "", ""},

@@ -225,6 +225,16 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		}
 	}
 
+	// 2026-09-22 §17-CityHuman 全民驱动(契约 03 §3.1): wealth 建房**忽略**
+	// 传入的 agent_seats(旧客户端携带任意值静默忽略,不 400 —— HTTP 契约
+	// 宽松化,§6),由服务端固定合成 12 名池驱动深度居民座位(ModelKey="")。
+	// 替换必须发生在 agentSeatSet 构建/校验/落库之前,使 bot 用户行、
+	// FullAgentMode 判定、ws 层 RegisterBotSeats、自动开局看到同一座位集;
+	// werewolf 等其他游戏路径零变化。
+	if gameKind == "wealth" {
+		agentSeats = wealthDeepSeats()
+	}
+
 	// Validate agent-seat requests up front, failing fast before any DB writes.
 	agentSeatSet := make(map[int]struct{}, len(agentSeats))
 	for _, a := range agentSeats {
@@ -272,19 +282,9 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		}
 	}
 
-	// 2026-09-22 §CityHuman重构(前端联调): 虚拟城市是全 Agent 城市模拟器,
-	// 前端建房已放开「焦点居民数」1–12 档;agent_seats < MinSeats(10) 时用
-	// 池驱动居民(ModelKey="" = 线路池分配)自动填充空闲座位至 MinSeats,
-	// 保证 1–9 档也能落库、注册并自动开局。agent_seats=0(人类可入座房)
-	// 旧语义不变 —— 不填充。必须在 DB 落库与 creatorShouldBeSpectator 判定
-	// 之前完成,使 bot 用户行、FullAgentMode、自动开局链路看到同一座位集。
-	if gameKind == "wealth" {
-		agentSeats = padWealthAgentSeats(agentSeats, agentSeatSet)
-	}
-
-	// 2026-09-21 §虚拟城市(契约 04 §1.1): resident_count 仅 wealth 生效;
-	// 负数在 API 层 400(此处防御夹 0);超上限 clamp 到 cfg.Wealth.MaxResidents
-	// (默认 100000)。
+	// 2026-09-22 §17-CityHuman(契约 03 §3.1): resident_count **必达**新语义
+	// —— 缺省/0 → 10000;<10 → clamp 10;>上限 → clamp cfg.Wealth.MaxResidents
+	// (默认 100000);负数在 API 层 400(此处 v<=0 兜底走缺省 10000)。
 	if gameKind == "wealth" && wealthCfg != nil {
 		maxResidents := 100000
 		if s.cfg != nil && s.cfg.Wealth.MaxResidents > 0 {
@@ -419,7 +419,11 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	//   - Duplicates and any later occurrence get reassigned from the
 	//     alternate pool in random order; if the pool can't supply enough
 	//     distinct models we wrap around (round-robin on the shuffled pool).
-	if len(agentSeats) > 1 {
+	//
+	// 2026-09-22 §17-CityHuman(契约 03 §3.1): wealth 排除在外 —— 其 12 个
+	// 深度座位全部是池驱动(ModelKey=""),空串是**合法绑定态**(= 线路池
+	// 分配),重写会破坏池驱动语义。
+	if len(agentSeats) > 1 && gameKind != "wealth" {
 		alternates := s.alternateModelsLocked(agentSeats)
 		if len(alternates) > 0 {
 			seen := make(map[string]struct{}, len(agentSeats))
@@ -670,7 +674,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		logger.L().Info("wealth room config set before RegisterAgentSeats",
 			zap.String("room_id", room.ID),
 			zap.Int("month_ms", wealthCfg.MonthMs),
-			zap.String("pool", wealthCfg.Pool))
+			zap.Int("resident_count", wealthCfg.ResidentCount))
 	}
 	if gameKind == "wealth" && len(agentSeats) > 0 {
 		s.prepareWealthAgentRoom(room.ID, agentSeats)
@@ -834,25 +838,28 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	return rd, nil
 }
 
-// wealthMinAgentSeats 是 wealth 全 Agent 房间的社会最小座位数。10-11 个
-// bot 已会在注册阶段自动开局,虽然物理容量仍为 12。
-const wealthMinAgentSeats = 10
-
-// creatorShouldBeSpectator 判定创建者是否必须降级为观战者。wealth 除 12/12
-// 外,10/11 bot 也属于全 Agent 房,不能把剩余物理空位误当成可加入座位。
+// creatorShouldBeSpectator 判定创建者是否必须降级为观战者。wealth 恒为
+// 全 Agent 城市(12 深度座位,wealthDeepSeatCount —— 原 wealthMinAgentSeats
+// 10/11 档概念已随精选层退役,契约 03 §3.2),深度座位全注册即无人类可入
+// 座位,不能把剩余物理空位误当成可加入座位。
 func creatorShouldBeSpectator(gameKind string, freeSeatCount, agentSeatCount int) bool {
-	return freeSeatCount == 0 || (gameKind == "wealth" && agentSeatCount >= wealthMinAgentSeats)
+	return freeSeatCount == 0 || (gameKind == "wealth" && agentSeatCount >= wealthDeepSeatCount)
 }
 
-// clampWealthResidentCount 2026-09-21 §虚拟城市(契约 04 §1.1):
-// resident_count 收敛到 [0, maxResidents](负数防御夹 0 —— API 层已 400,
-// 此处纵深防御;maxResidents<=0 时用默认 100000)。
+// clampWealthResidentCount 2026-09-22 §17-CityHuman(契约 03 §3.1)语义更新:
+// resident_count **必达** —— 缺省/0 → 10000;<10 → clamp 10;>maxResidents
+// → clamp(默认 100000);负数在 API 层已 400,此处 v<=0 兜底走缺省。
 func clampWealthResidentCount(v, maxResidents int) int {
+	const defaultResidents = 10000
+	const minResidents = 10
 	if maxResidents <= 0 {
 		maxResidents = 100000
 	}
-	if v < 0 {
-		return 0
+	if v <= 0 {
+		return defaultResidents
+	}
+	if v < minResidents {
+		return minResidents
 	}
 	if v > maxResidents {
 		return maxResidents
@@ -862,9 +869,10 @@ func clampWealthResidentCount(v, maxResidents int) int {
 
 // prepareWealthAgentRoom 是 wealth 专用的内存镜像顺序:先设置 FullAgentMode,
 // 再注册 bot seats。RegisterAgentSeats 到达 MinSeats 后可能立即自动开局,
-// 顺序反置会出现短暂人类可加入窗口。
+// 顺序反置会出现短暂人类可加入窗口。2026-09-22 §17:wealth 恒为全 Agent
+// 城市(12 深度座位),有任何 agent 座位即置位。
 func (s *RoomService) prepareWealthAgentRoom(roomID string, agentSeats []AgentSeatConfig) {
-	if len(agentSeats) >= wealthMinAgentSeats && s.gameJoiner != nil {
+	if len(agentSeats) > 0 && s.gameJoiner != nil {
 		if e := s.gameJoiner.SetFullAgentMode("wealth", roomID, true); e != nil {
 			logger.L().Warn("set full agent mode failed",
 				zap.String("room_id", roomID),

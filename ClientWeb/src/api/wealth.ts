@@ -9,41 +9,10 @@
 import { http, ApiError, isSessionExpiredError } from '@/services/http';
 import type { WealthCityProfileProgress, WealthCityResidentProfile, WealthSurvey } from '@/types/wealth';
 
-/** GET /api/games/wealth/professions 返回的职业卡公开字段。 */
-export interface WealthProfessionCard {
-  id: string;            // "P01"（文档池 "N9012345"）
-  title: string;         // 中文名
-  avatar: string;        // 头像文件名主干
-  salary: number;        // 月薪（税前，元）
-  expense: number;       // 月支出基数（元）
-  savings: number;       // 初始储蓄（元）
-  opening_hook?: string; // 开场白
-  goals?: string[];      // 人生目标（含 5 年目标）
-}
-
-export interface WealthProfessionPool {
-  /** 文档池是否可用（不可用时建房自动回退精选手卡）。 */
-  available: boolean;
-  /** 池内卡总数（懒加载前可为估算）。 */
-  total: number;
-  /** 已建索引数。 */
-  indexed: number;
-}
-
-export interface WealthProfessionsResponse {
-  curated: WealthProfessionCard[];
-  pool: WealthProfessionPool;
-}
-
-/**
- * GET /api/games/wealth/professions（需登录）。
- *
- * §7.1：调用方需在 catch 块就地展示失败（建房弹窗内联红条或 reportGlobalError），
- * 不允许吞进 console。失败时调用方可回落 CURATED_PROFESSIONS 静态镜像。
- */
-export function fetchProfessions(): Promise<WealthProfessionsResponse> {
-  return http<WealthProfessionsResponse>('/api/games/wealth/professions');
-}
+// 2026-09-22 §CityHuman全民驱动 — GET /api/games/wealth/professions 已随
+// 职业卡精选层退役（03 号契约）：原拉取接口及其三个类型一并删除。
+// 档案唯一源 = 人物卡知识库（城市居民档案两接口 fetchCityResidents /
+// fetchCityResident 保留）。
 
 // ── P1 社会调研系统（lag_docs/虚拟城市/已实现/05-P1扩展/虚拟城市-P1-社会调研系统-v1.md §3.1）──
 

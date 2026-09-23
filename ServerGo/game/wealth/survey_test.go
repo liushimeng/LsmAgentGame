@@ -13,14 +13,14 @@ import (
 // newPlayingSurveyRoom 构造 10 bot 开局中的房间(调研对象 = 全体 Agent)。
 func newPlayingSurveyRoom(t *testing.T) (*WealthRoom, *World) {
 	t.Helper()
-	r := NewWealthRoom("sv-room", 3000, "curated", 11, 4)
+	r := NewWealthRoom("sv-room", 3000, 11, 4)
 	botUsers := map[int]string{}
 	botModels := map[int]string{}
 	for seat := 0; seat < 10; seat++ {
 		botUsers[seat] = fmt.Sprintf("bot-%d", seat)
 		botModels[seat] = "TestModel"
 	}
-	r.RegisterBotSeats(botUsers, botModels, nil)
+	r.RegisterBotSeats(botUsers, botModels)
 	if e := r.Start(nil); e != nil {
 		t.Fatalf("start room: %v", e)
 	}

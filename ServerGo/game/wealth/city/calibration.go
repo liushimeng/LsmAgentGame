@@ -4,10 +4,11 @@
 // 虚拟城市-大规模城市居民背景模拟设计-v1.md §3(2026-09-21)。
 //
 // CalibTable 是背景居民合成(Backdrop)的数值来源:把 10 万级职业卡池抽样
-// 成 26 个 L1 行业域 × 8 城区的紧凑分布参数。构建兜底链 docs → curated →
-// synthetic;后台 goroutine 预热(sync.Once,不阻塞启动),房间创建不等预热
-// —— 未 Ready 时用合成默认即时建城,Ready 后下一房生效(进行中房间不回填,
-// 避免中途分布漂移)。
+// 成 26 个 L1 行业域 × 16 城区的紧凑分布参数。构建兜底链 docs → synthetic
+// (2026-09-22 §17-CityHuman:curated 中间层删除,契约 03 §2.2);后台
+// goroutine 预热(sync.Once,不阻塞启动),房间创建不等预热 —— 未 Ready 时
+// 用合成默认即时建城,Ready 后下一房生效(进行中房间不回填,避免中途分布
+// 漂移)。
 package city
 
 import (
@@ -231,8 +232,9 @@ func calibFromSamples(samples []profession.DomainCard, source string) *CalibTabl
 	return t
 }
 
-// BuildCalibTable 同步构建校准表,兜底链 docs → curated → synthetic
-// (契约 03 §3.2)。导出供测试与预热路径共用。
+// BuildCalibTable 同步构建校准表,兜底链 docs → synthetic 二级(2026-09-22
+// §17-CityHuman 契约 03 §2.2:curated 中间层删除,Source 字段正确)。导出供
+// 测试与预热路径共用。
 func BuildCalibTable(loader *profession.Loader, sampleSize int) *CalibTable {
 	if loader == nil {
 		return SyntheticCalibTable()
@@ -254,16 +256,11 @@ func BuildCalibTable(loader *profession.Loader, sampleSize int) *CalibTable {
 		if n >= minDomainSamples {
 			return calibFromSamples(samples, "docs")
 		}
-		logger.L().Warn("city calibration: docs pool samples lack L1 domains, falling back to curated",
+		logger.L().Warn("city calibration: docs pool samples lack L1 domains, falling back to synthetic",
 			zap.Int("sampled", len(samples)), zap.Int("with_domain", n))
 	}
-	// curated 兜底:14 张精选卡(无域信息 → 均匀权重 + 聚合统计)。
-	curated := profession.CuratedCards()
-	pairs := make([]profession.DomainCard, 0, len(curated))
-	for _, c := range curated {
-		pairs = append(pairs, profession.DomainCard{Card: c})
-	}
-	return calibFromSamples(pairs, "curated")
+	// synthetic 兜底(合成默认分布,Ready=false;城市照常运行)。
+	return SyntheticCalibTable()
 }
 
 // ── 进程级全局校准表(后台预热,契约 03 §3.2)──

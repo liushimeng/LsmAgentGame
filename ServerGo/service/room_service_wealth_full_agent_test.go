@@ -61,6 +61,9 @@ func TestCreateRoomWealth_TenOrElevenBotsAreFullAgentBeforeRegistration(t *testi
 	}
 }
 
+// TestCreatorShouldBeSpectator_WealthTenOrElevenBots 2026-09-22 §17-CityHuman
+// (契约 03 §3.2)语义更新:wealth 深度层固定 12 —— 判定阈值由 10 改 12
+// (10/11 档概念随「焦点居民数」退役);12 深度座位 → 创建者恒观战者。
 func TestCreatorShouldBeSpectator_WealthTenOrElevenBots(t *testing.T) {
 	cases := []struct {
 		name           string
@@ -70,9 +73,9 @@ func TestCreatorShouldBeSpectator_WealthTenOrElevenBots(t *testing.T) {
 		want           bool
 	}{
 		{"wealth 9 bots keeps creator player", "wealth", 3, 9, false},
-		{"wealth 10 bots downgrades creator", "wealth", 2, 10, true},
-		{"wealth 11 bots downgrades creator", "wealth", 1, 11, true},
-		{"wealth 12 bots has no physical seat", "wealth", 0, 12, true},
+		{"wealth 10 bots with free seats keeps creator player", "wealth", 2, 10, false},
+		{"wealth 11 bots with free seat keeps creator player", "wealth", 1, 11, false},
+		{"wealth 12 deep seats has no physical seat", "wealth", 0, 12, true},
 		{"texas 10 agents still has creator player seat", "texasholdem", 2, 10, false},
 	}
 	for _, tc := range cases {

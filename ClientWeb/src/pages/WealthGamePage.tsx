@@ -22,7 +22,7 @@ import { wsClient } from '@/services/ws';
 import { roomService } from '@/services/auth.service';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
-import { WEALTH_MIN_SEATS, districtCenter, formatPct, type WealthDistrictId } from '@/types/wealth';
+import { districtCenter, formatPct, type WealthDistrictId } from '@/types/wealth';
 import {
   WealthCityMap,
   type WealthCameraView,
@@ -273,7 +273,7 @@ export function WealthGamePage() {
               title={t('wealth.seatsCount' as TKey, { n: seatedCount, max: seatCapacity })}
               data-testid="wealth-seats-count"
             >
-              👥 {t('wealth.seatsCount' as TKey, { n: seatedCount, max: seatCapacity })}
+              🤖 {t('wealth.seatsCount' as TKey, { n: seatedCount, max: seatCapacity })}
             </span>
             {effectiveSeat >= 0 && (
               <span className="wealth-topbar__item">
@@ -312,10 +312,10 @@ export function WealthGamePage() {
         </div>
       )}
 
-      {/* 座位不足提示（MinSeats=10）：等待人类加入 / 建房时少配了 Agent */}
+      {/* 座位未就绪提示（MinSeats=10）：等待 12 深度居民 Agent 注册完成 */}
       {waitingForSeats && (
         <div className="wealth-seats-hint" role="status" data-testid="wealth-seats-hint">
-          {t('wealth.seatsWaiting' as TKey, { n: seatedCount, min: WEALTH_MIN_SEATS })}
+          {t('wealth.seatsWaiting' as TKey)}
         </div>
       )}
 

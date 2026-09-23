@@ -91,7 +91,7 @@ func TestParse_RealSchemaV11Shapes(t *testing.T) {
 	}
 	c := cards[0]
 	if c.Source != "docs" {
-		t.Fatalf("source = %q, want docs(v1.1 形状解析失败会回退 curated)", c.Source)
+		t.Fatalf("source = %q, want docs(v1.1 形状解析失败会回退合成卡)", c.Source)
 	}
 	if c.ID != "N2005" {
 		t.Errorf("id = %q, want N2005", c.ID)
@@ -237,7 +237,7 @@ opening_hook: ""
 	l := NewLoader(dir)
 	cards := l.Draw(1, rand.New(rand.NewSource(3)))
 	if len(cards) != 1 || cards[0].Source != "docs" {
-		t.Fatalf("脏形状解析失败(回退 curated): %+v", cards)
+		t.Fatalf("脏形状解析失败(回退合成卡): %+v", cards)
 	}
 	c := cards[0]
 	if c.Salary != 12000 {
@@ -287,7 +287,7 @@ opening_hook: ""
 
 // TestParse_MissingIncomeStillSkippedOnlyThatCard 一张「无收入档案」卡
 // (income_monthly 与 income_range 双 null,真实池占比 ≈0.33%)只跳过自己,
-// 同池其它卡照常发出,且 Draw 会补抽到 n 张(不掉 curated)。
+// 同池其它卡照常发出,且 Draw 会补抽到 n 张(不掉合成卡)。
 func TestParse_MissingIncomeStillSkippedOnlyThatCard(t *testing.T) {
 	dir := t.TempDir()
 	writeCard(t, dir, "BAD-缺收入.md", `---
@@ -324,7 +324,7 @@ employment: 全职
 	}
 	for _, c := range cards {
 		if c.Source != "docs" {
-			t.Errorf("card %s source = %q, want docs(坏卡应被补抽跳过而非回退 curated)", c.ID, c.Source)
+			t.Errorf("card %s source = %q, want docs(坏卡应被补抽跳过而非回退合成卡)", c.ID, c.Source)
 		}
 		if c.ID == "BAD1" {
 			t.Errorf("无收入卡 BAD1 不应入池")

@@ -196,6 +196,15 @@ export function CityStatsPanel({ city, roomId }: Props) {
           <span className="wealth-citypanel__stat-k">{t('wealth.cityStress' as TKey)}</span>
           <span className="wealth-citypanel__stat-v">{formatPct(city.stressed_rate)}</span>
         </div>
+        {/* 17-CityHuman 全民驱动 — 驱动层指示（02 §6：driver 块存在时渲染）。 */}
+        {city.driver && (
+          <div className="wealth-citypanel__stat" data-testid="wealth-city-driver">
+            <span className="wealth-citypanel__stat-k">🤖</span>
+            <span className="wealth-citypanel__stat-v">
+              {t('wealth.cityDriven' as TKey, { n: city.driver.driven_last || 0 })}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ② 城区人口迷你条形（v2.12 阶段 2：auto-fill 网格 + 底对齐竖条，§26 对比度：

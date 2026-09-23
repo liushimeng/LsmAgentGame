@@ -39,8 +39,6 @@ const wealthResidents = {
   'wealth.residentDrawer.domain': '行业',
   'wealth.residentDrawer.cardId': '卡号',
   'wealth.residentDrawer.notFound': '未找到该居民档案',
-  // 建房弹窗 docs 池提示（档案锚定设计 §8.3/§8.4）
-  'wealth.pool.docsProfiles': '居民档案来源：人物卡知识库 ≈10 万张，启动模拟后自动为每位居民加载专属档案',
 };
 
 export default wealthResidents;

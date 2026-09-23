@@ -53,11 +53,10 @@ func (s *GameService) registerWealthAgentSeats(roomID string, seats []service.Ag
 		// 全 Agent 模式判定(len(seatUsers) ≥ MinSeats)不受空 key 影响。
 		seatModels[seatCfg.Seat] = seatCfg.ModelKey
 	}
-	// 2026-09-22 §CityHuman重构(前端联调): 城市房恒为全 Agent 模式,
-	// 焦点居民档位放开到 1–12;若注册进来的座位仍不足 MinSeats(例如
-	// 旧链路/重启恢复绕过了 service 层 padWealthAgentSeats 落库填充),
-	// 用池驱动 bot(ModelKey="")防御性补填空闲座位至 MinSeats。
-	// 正常路径下 service 层已在落库前填充,本循环零命中;roomSvc 不可用
+	// 2026-09-22 §17-CityHuman(契约 03 §3.2): 深度层固定 12 —— 正常路径下
+	// service 层已在落库前合成 wealthDeepSeats()(12 池驱动座位);若注册进来
+	// 的座位仍不足 MinSeats(例如旧链路/重启恢复绕过了 service 层),用池驱动
+	// bot(ModelKey="")防御性补填空闲座位至 MinSeats,幂等无害。roomSvc 不可用
 	// (纯内存测试夹具)时跳过补填,不 panic。
 	if len(seatUsers) > 0 && len(seatUsers) < wealth.MinSeats && s.roomSvc != nil {
 		for seat := 0; seat < wealth.MaxSeats && len(seatUsers) < wealth.MinSeats; seat++ {
@@ -75,12 +74,12 @@ func (s *GameService) registerWealthAgentSeats(roomID string, seats []service.Ag
 	if len(seatUsers) == 0 {
 		return nil
 	}
-	// 必须在 RegisterBotSeats / 自动开局前置位。否则 10-11 bot 房会在
+	// 必须在 RegisterBotSeats / 自动开局前置位。否则全 Agent 房会在
 	// FullAgentMode=false 的窗口内自动开局,创建者或并发人类仍可能尝试入座。
 	if len(seatUsers) >= wealth.MinSeats {
 		r.SetFullAgentMode(true)
 	}
-	r.RegisterBotSeats(seatUsers, seatModels, nil)
+	r.RegisterBotSeats(seatUsers, seatModels)
 	logger.L().Info("wealth bot seats registered",
 		zap.String("room_id", roomID),
 		zap.Int("bot_seats", len(seatUsers)))

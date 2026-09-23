@@ -26,7 +26,7 @@ import (
 )
 
 // New constructs the *gin.Engine.
-func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, professionAPI *api.ProfessionAPI, wealthSurveyAPI *api.WealthSurveyAPI, wealthCityAPI *api.WealthCityAPI) *gin.Engine {
+func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, wealthSurveyAPI *api.WealthSurveyAPI, wealthCityAPI *api.WealthCityAPI) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery(), middleware.RequestID(), middleware.Logging(), middleware.CORS(cfg))
@@ -235,14 +235,13 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		debateGames.GET("/history/:id", debateAPI.HistoryDetail)
 	}
 
-	// 2026-09-14 §财商流P0 — wealth 房间列表/详情复用通用 /api/games/:kind/rooms;
-	// professions 仅暴露精选池 + 池状态,HTTP 列表接口。
+	// 2026-09-14 §财商流P0 — wealth 房间列表/详情复用通用 /api/games/:kind/rooms。
 	// 2026-09-16 §财商流P1-2 — 社会调研两端点(调研契约 §3.1)。
 	// 2026-09-21 §档案锚定 — 居民人物卡档案两端点(锚定契约 §7)。
+	// 2026-09-22 §17-CityHuman — 职业卡一览路由退役(精选层删除,契约 03 §1.2)。
 	wealthGames := r.Group("/api/games/wealth")
 	wealthGames.Use(middleware.AuthRequired(cfg))
 	{
-		wealthGames.GET("/professions", professionAPI.List)
 		wealthGames.POST("/rooms/:id/survey", wealthSurveyAPI.Launch)
 		wealthGames.GET("/rooms/:id/surveys", wealthSurveyAPI.List)
 		wealthGames.GET("/rooms/:id/city/residents", wealthCityAPI.ListResidents)

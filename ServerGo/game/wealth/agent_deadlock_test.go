@@ -47,7 +47,7 @@ func (f fakeBuyRegistry) GetThinkingEnabled(modelKey string) (bool, int) { retur
 // 死锁复发时 3s 超时失败(修复前 apply → Engine() 二次加锁,整房卡死)。
 func TestBotBuyAsset_NoDeadlock(t *testing.T) {
 	var calls int32
-	m := NewManager(Config{MonthMs: 3000, PoolDefault: "curated", AgentEnabled: true, AgentDecisionTimeoutSec: 5},
+	m := NewManager(Config{MonthMs: 3000, AgentEnabled: true, AgentDecisionTimeoutSec: 5},
 		fakeBuyRegistry{p: fakeBuyProvider{calls: &calls}})
 	r := m.CreateRoom("room-buy")
 	// 2026-09-16 §12 座扩容:MinSeats=10,需注册 ≥10 个 bot 座位才能开局
@@ -58,7 +58,7 @@ func TestBotBuyAsset_NoDeadlock(t *testing.T) {
 		botUsers[seat] = "b" + string(rune('0'+seat))
 		botModels[seat] = "M" + string(rune('A'+seat))
 	}
-	r.RegisterBotSeats(botUsers, botModels, nil)
+	r.RegisterBotSeats(botUsers, botModels)
 	if e := r.Start(nil); e != nil {
 		t.Fatalf("start: %v", e)
 	}

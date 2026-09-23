@@ -29,11 +29,10 @@ import (
 // 注册时:池驱动座位(model_key 空)占位 AI·居民<seat>号;显式 model_key 保持
 // AI·<model_key>。
 func TestRegisterBotSeats_PoolSeatPlaceholderNickname(t *testing.T) {
-	r := NewWealthRoom("room-nick", 3000, "curated", 7, 4)
+	r := NewWealthRoom("room-nick", 3000, 7, 4)
 	r.RegisterBotSeats(
 		map[int]string{0: "bot-0", 1: "bot-1"},
 		map[int]string{0: "", 1: "ModelA"},
-		nil,
 	)
 	if got := r.Nicknames[0]; got != "AI·居民1号" {
 		t.Fatalf("pool seat nickname = %q, want %q", got, "AI·居民1号")
@@ -43,9 +42,10 @@ func TestRegisterBotSeats_PoolSeatPlaceholderNickname(t *testing.T) {
 	}
 }
 
-// Start 抽卡后:池驱动座位升级;curated 卡无化名 → 回退 AI·居民N号;
-// 显式 model_key 座位昵称不变。
-func TestStart_UpgradePoolSeatNicknames_CuratedFallback(t *testing.T) {
+// Start 抽卡后:池驱动座位升级;合成兜底卡无化名 → 回退 AI·居民N号
+// (2026-09-22 §17 契约 03 §4:curated 断言改 synthetic);显式 model_key 座位
+// 昵称不变。
+func TestStart_UpgradePoolSeatNicknames_SyntheticFallback(t *testing.T) {
 	r := newRoomWithSeats(t, 12)
 	// 改造:座位 0..1 为池驱动(空 model_key),其余显式模型。
 	r.mu.Lock()
@@ -58,7 +58,7 @@ func TestStart_UpgradePoolSeatNicknames_CuratedFallback(t *testing.T) {
 	for seat := 0; seat < 2; seat++ {
 		want := "AI·居民" + string(rune('1'+seat)) + "号"
 		if got := r.Nicknames[seat]; got != want {
-			t.Fatalf("curated pool seat %d nickname = %q, want %q (curated 无卡名回退)", seat, got, want)
+			t.Fatalf("synthetic pool seat %d nickname = %q, want %q (合成卡无卡名回退)", seat, got, want)
 		}
 	}
 	if got := r.Nicknames[2]; got != "AI·MC" {
@@ -75,14 +75,14 @@ func TestStart_UpgradePoolSeatNicknames_DocsName(t *testing.T) {
 	if _, err := os.Stat(root); err != nil {
 		t.Skipf("docs pool not available: %v", err)
 	}
-	m := NewManager(Config{MonthMs: 3000, PoolDefault: "docs", Seed: 4242}, nil)
+	m := NewManager(Config{MonthMs: 3000, Seed: 4242}, nil)
 	m.SetLoader(profession.NewLoader(root))
 	r := m.CreateRoom("room-nick-docs")
 	botUsers := make(map[int]string, 12)
 	for seat := 0; seat < 12; seat++ {
 		botUsers[seat] = "b" + string(rune('a'+seat))
 	}
-	r.RegisterBotSeats(botUsers, map[int]string{}, nil) // 全池驱动
+	r.RegisterBotSeats(botUsers, map[int]string{}) // 全池驱动
 	if e := r.Start(m.loader); e != nil {
 		t.Fatalf("start: %v", e)
 	}
@@ -142,12 +142,12 @@ func TestStart_CityBackdropCreatedAndViewExposed(t *testing.T) {
 // 同 seed 同城(建城确定性;契约 03 §6「同城同人」)。
 func TestStart_CityDeterministicPerSeed(t *testing.T) {
 	mk := func() *WealthRoom {
-		r := NewWealthRoom("room-det", 3000, "curated", 555, 4)
+		r := NewWealthRoom("room-det", 3000, 555, 4)
 		botUsers := make(map[int]string, 12)
 		for seat := 0; seat < 12; seat++ {
 			botUsers[seat] = "b" + string(rune('a'+seat))
 		}
-		r.RegisterBotSeats(botUsers, nil, nil)
+		r.RegisterBotSeats(botUsers, nil)
 		r.SetResidentCount(2000)
 		if e := r.Start(nil); e != nil {
 			t.Fatalf("start: %v", e)
@@ -236,7 +236,7 @@ func TestEnsureAgents_PoolModeDecisionCompletes(t *testing.T) {
 		Lines:    2,
 	}})
 	m := NewManager(Config{
-		MonthMs: 3000, PoolDefault: "curated", AgentEnabled: true,
+		MonthMs: 3000, AgentEnabled: true,
 		AgentDecisionTimeoutSec: 5, AgentConcurrency: 4,
 	}, fakeSubmitRegistry{p: fakeSubmitProvider{calls: &calls}})
 	m.SetLinePoolSource(func() *llm.LinePool { return pool })
@@ -248,7 +248,7 @@ func TestEnsureAgents_PoolModeDecisionCompletes(t *testing.T) {
 		botUsers[seat] = "b" + string(rune('a'+seat))
 		botModels[seat] = "" // 全池驱动
 	}
-	r.RegisterBotSeats(botUsers, botModels, nil)
+	r.RegisterBotSeats(botUsers, botModels)
 	m.EnsureAgents(r)
 	r.mu.Lock()
 	installed := 0
@@ -292,14 +292,14 @@ func TestEnsureAgents_PoolModeDecisionCompletes(t *testing.T) {
 // 池不可用(Total==0)→ 空 model_key 座位跳过(与旧行为一致,不空转)。
 func TestEnsureAgents_NoPoolSkipsEmptyModelSeats(t *testing.T) {
 	m := NewManager(Config{
-		MonthMs: 3000, PoolDefault: "curated", AgentEnabled: true,
+		MonthMs: 3000, AgentEnabled: true,
 		AgentDecisionTimeoutSec: 5, AgentConcurrency: 4,
 	}, fakeSubmitRegistry{p: fakeSubmitProvider{calls: new(int32)}})
 	// 不注入 linePoolSource。
 	r := m.CreateRoom("room-nopool")
 	botUsers := map[int]string{0: "b0"}
 	botModels := map[int]string{0: ""}
-	r.RegisterBotSeats(botUsers, botModels, nil)
+	r.RegisterBotSeats(botUsers, botModels)
 	m.EnsureAgents(r)
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -316,7 +316,7 @@ func TestEnsureAgents_MixedSeats(t *testing.T) {
 		Provider: fakeCityProvider{calls: &calls}, APIKey: "k", Lines: 1,
 	}})
 	m := NewManager(Config{
-		MonthMs: 3000, PoolDefault: "curated", AgentEnabled: true,
+		MonthMs: 3000, AgentEnabled: true,
 		AgentDecisionTimeoutSec: 5, AgentConcurrency: 4,
 	}, fakeSubmitRegistry{p: fakeSubmitProvider{calls: &calls}})
 	m.SetLinePoolSource(func() *llm.LinePool { return pool })
@@ -324,7 +324,6 @@ func TestEnsureAgents_MixedSeats(t *testing.T) {
 	r.RegisterBotSeats(
 		map[int]string{0: "b0", 1: "b1"},
 		map[int]string{0: "", 1: "FixedModel"},
-		nil,
 	)
 	m.EnsureAgents(r)
 	r.mu.Lock()
@@ -421,7 +420,7 @@ func TestCityVoice_EventEmittedAfterSettle(t *testing.T) {
 
 // cpi 缺省路径:economy 关闭时 tick 用 defaultCityCPI。
 func TestCurrentCPI_Default(t *testing.T) {
-	r := NewWealthRoom("room-cpi", 3000, "curated", 1, 4)
+	r := NewWealthRoom("room-cpi", 3000, 1, 4)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if got := r.currentCPILocked(); got != defaultCityCPI {
@@ -432,12 +431,12 @@ func TestCurrentCPI_Default(t *testing.T) {
 // tickCity rng 独立性:城市 rng 不吃引擎 rng 流(同 seed 重放引擎演化不受影响)。
 func TestCityRng_IndependentFromEngineRng(t *testing.T) {
 	mk := func() int64 {
-		r := NewWealthRoom("room-rng", 3000, "curated", 999, 4)
+		r := NewWealthRoom("room-rng", 3000, 999, 4)
 		botUsers := make(map[int]string, 12)
 		for seat := 0; seat < 12; seat++ {
 			botUsers[seat] = "b" + string(rune('a'+seat))
 		}
-		r.RegisterBotSeats(botUsers, nil, nil)
+		r.RegisterBotSeats(botUsers, nil)
 		r.SetResidentCount(100)
 		if e := r.Start(nil); e != nil {
 			t.Fatalf("start: %v", e)
@@ -452,7 +451,7 @@ func TestCityRng_IndependentFromEngineRng(t *testing.T) {
 // 建房链路透传:WealthRoomOptions.ResidentCount 经 ApplyRoomOptions 落到房间
 // (service wealthRoomConfigurer → Manager.ApplyRoomOptions 同路径)。
 func TestManager_ApplyRoomOptions_ResidentCount(t *testing.T) {
-	m := NewManager(Config{MonthMs: 3000, PoolDefault: "curated"}, nil)
+	m := NewManager(Config{MonthMs: 3000}, nil)
 	m.ApplyRoomOptions("room-rc", &WealthRoomOptions{MonthMs: 5000, Seed: 42, ResidentCount: 12345})
 	r := m.CreateRoom("room-rc")
 	if r.ResidentCount != 12345 {
@@ -513,14 +512,14 @@ func TestStart_AnchorCityProfiles(t *testing.T) {
 	}
 	const poolN, residents = 12, 6
 	dir := writeAnchorFixture(t, poolN)
-	m := NewManager(Config{MonthMs: 3000, PoolDefault: "docs", Seed: 314}, nil)
+	m := NewManager(Config{MonthMs: 3000, Seed: 314}, nil)
 	m.SetLoader(profession.NewLoader(dir))
 	r := m.CreateRoom("room-anchor")
 	botUsers := make(map[int]string, 12)
 	for seat := 0; seat < 12; seat++ {
 		botUsers[seat] = "b" + string(rune('a'+seat))
 	}
-	r.RegisterBotSeats(botUsers, nil, nil)
+	r.RegisterBotSeats(botUsers, nil)
 	r.SetResidentCount(residents)
 	events := make(chan EventRecord, 16)
 	r.SetHooks(BroadcastHooks{OnEvent: func(_ string, ev EventRecord) {
@@ -589,18 +588,19 @@ func TestStart_AnchorCityProfiles(t *testing.T) {
 	}
 }
 
-// TestStart_CuratedRoomNeverAnchors(契约 §10):pool=curated / 纯合成房不启动
-// 锚定 —— profiles 恒 idle 且 Snapshot 不下发 profiles 块(向后兼容)。
-func TestStart_CuratedRoomNeverAnchors(t *testing.T) {
-	dir := writeAnchorFixture(t, 4)
-	m := NewManager(Config{MonthMs: 3000, PoolDefault: "curated", Seed: 271}, nil)
-	m.SetLoader(profession.NewLoader(dir)) // loader 注入但 pool=curated → 不锚定
-	r := m.CreateRoom("room-anchor-curated")
+// TestStart_NoLoaderRoomNeverAnchors(2026-09-22 §17-CityHuman 契约 03 §2.1
+// 重写,原 curated 夹具删除):pool 概念退役后锚定恒启动的唯一豁免是
+// docLoader==nil —— 纯合成房不锚定,profiles 恒 idle 且 Snapshot 不下发
+// profiles 块(向后兼容)。loader 注入的房恒锚定(见 TestStart_AnchorCityProfiles)。
+func TestStart_NoLoaderRoomNeverAnchors(t *testing.T) {
+	m := NewManager(Config{MonthMs: 3000, Seed: 271}, nil)
+	// 不注入 loader → startCityLocked 跳过锚定流水线。
+	r := m.CreateRoom("room-anchor-noloader")
 	botUsers := make(map[int]string, 12)
 	for seat := 0; seat < 12; seat++ {
 		botUsers[seat] = "b" + string(rune('a'+seat))
 	}
-	r.RegisterBotSeats(botUsers, nil, nil)
+	r.RegisterBotSeats(botUsers, nil)
 	r.SetResidentCount(4)
 	if e := r.Start(m.loader); e != nil {
 		t.Fatalf("start: %v", e)
@@ -608,9 +608,9 @@ func TestStart_CuratedRoomNeverAnchors(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // 若误启动锚定,给它暴露机会
 	_, _, prog := r.CityProfilePage(0, 10, "")
 	if prog.Status != "idle" {
-		t.Fatalf("curated room must stay idle, got %+v", prog)
+		t.Fatalf("loader-less room must stay idle, got %+v", prog)
 	}
 	if snap := r.CitySnapshotView(); snap != nil && snap.Profiles != nil {
-		t.Fatalf("curated room must omit snapshot profiles block, got %+v", snap.Profiles)
+		t.Fatalf("loader-less room must omit snapshot profiles block, got %+v", snap.Profiles)
 	}
 }

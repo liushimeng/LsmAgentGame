@@ -163,7 +163,7 @@ func TestAgentRunner_ActionBroadcastsEventAndTranscript(t *testing.T) {
 func TestWealthAgentPublishesDecisionTranscriptBeforeSubmit(t *testing.T) {
 	var calls int32
 	m := NewManager(Config{
-		MonthMs: 3000, PoolDefault: "curated", AgentEnabled: true,
+		MonthMs: 3000, AgentEnabled: true,
 		AgentDecisionTimeoutSec: 5, AgentConcurrency: DefaultAgentConcurrency,
 	}, fakeSubmitRegistry{p: fakeSubmitProvider{calls: &calls}})
 	r := m.CreateRoom("room-agent-transcript")
@@ -173,7 +173,7 @@ func TestWealthAgentPublishesDecisionTranscriptBeforeSubmit(t *testing.T) {
 		botUsers[seat] = "b" + string(rune('0'+seat))
 		botModels[seat] = "M" + string(rune('A'+seat))
 	}
-	r.RegisterBotSeats(botUsers, botModels, nil)
+	r.RegisterBotSeats(botUsers, botModels)
 	if e := r.Start(nil); e != nil {
 		t.Fatalf("start: %v", e)
 	}
@@ -236,7 +236,7 @@ func TestAgentRunner_RejectsStaleMonthActionAndSubmit(t *testing.T) {
 }
 
 func TestWealthRoom_FullAgentModeRejectsHumanWhileOpen(t *testing.T) {
-	r := NewWealthRoom("room-full-agent-open", 3000, "curated", 1, 4)
+	r := NewWealthRoom("room-full-agent-open", 3000, 1, 4)
 	r.SetFullAgentMode(true)
 	if r.GetStatus() != StatusOpen {
 		t.Fatalf("status = %q, want open", r.GetStatus())
@@ -257,15 +257,15 @@ func TestWealthRoom_FullAgentModeRejectsHumanWhileOpen(t *testing.T) {
 }
 
 func TestManager_CreateRoomUsesPendingOptionsForRoomConfigLog(t *testing.T) {
-	m := NewManager(Config{MonthMs: 8000, PoolDefault: "docs", Seed: 99}, nil)
+	m := NewManager(Config{MonthMs: 8000, Seed: 99}, nil)
 	m.ApplyRoomOptions("room-pending-config", &service.WealthRoomOptions{
 		MonthMs: 3000,
-		Pool:    "curated",
 		Seed:    123,
 	})
 	r := m.CreateRoom("room-pending-config")
-	monthMs, pool := r.roomConfigForLog()
-	if monthMs != 3000 || pool != "curated" {
-		t.Fatalf("room config for create log = (%d, %q), want (3000, curated)", monthMs, pool)
+	// 2026-09-22 §17:roomConfigForLog 第二返回值由 pool 改为 resident_count。
+	monthMs, residents := r.roomConfigForLog()
+	if monthMs != 3000 || residents != 0 {
+		t.Fatalf("room config for create log = (%d, %d), want (3000, 0)", monthMs, residents)
 	}
 }

@@ -39,8 +39,6 @@ const wealthResidents = {
   'wealth.residentDrawer.domain': 'Industry',
   'wealth.residentDrawer.cardId': 'Card ID',
   'wealth.residentDrawer.notFound': 'Resident profile not found',
-  // Create-room modal docs pool hint (profile anchoring design §8.3/§8.4)
-  'wealth.pool.docsProfiles': 'Persona card pool ≈100k — each resident auto-loads a dedicated profile at start',
 };
 
 export default wealthResidents;
