@@ -10,7 +10,7 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
-    "@react-three/drei": "^9.114.0",
+    "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^8.17.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
