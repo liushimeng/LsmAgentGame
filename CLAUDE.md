@@ -191,21 +191,6 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 - **多国语言(i18n)**、`t_lsm_game_user.language` 字段、`/api/user/*` 偏好接口，以及**服务器测试文件 `test_*_test.go`、临时/数据补全文件 `temp_*.go`** 的命名约定，统一记录在 [`lag_docs/通用功能/国际化与命名规范.md`](lag_docs/通用功能/国际化与命名规范.md)。
 - 涉及上述任一主题前请先阅读该文档；新增/删除语言时前后端 `SUPPORTED`/`SupportedLanguages` 必须同步。
 
-## 12.5 "我方在底部" 布局设计规范
-
-> 5 款多人游戏的**界面布局**统一规则："我"的座位 / 棋子 / 手牌永远在屏幕底部。
-> Agent 新增 / 修改游戏布局前**必须**先阅读 [`lag_docs/通用功能/底部玩家布局设计.md`](lag_docs/通用功能/底部玩家布局设计.md)。
-
-**三种实现模式**（按游戏类型选用）：
-
-| 模式 | 适用 | 示例文件 |
-|------|------|---------|
-| Board 180° 翻转 | 2 人棋类 | `XiangqiBoard.tsx:37-62` / `ChessBoard.tsx:45-72` / `JunqiBoard.tsx:46-69` |
-| 虚拟座位旋转 | 3+ 人卡牌类 | `DoudizhuTable.tsx:37-39` / `TexasHoldemTable.tsx:32` |
-| yBase 坐标偏移 | 棋类非对局拖拽面板 | `LayoutPanel.tsx:65-72` |
-
-> 关键约束：本地旋转 ≠ 服务端旋转 / 观战者固定视角 / 服务端权威下发 my_color / my_seat / 视图字段脱敏（不走 BroadcastRoom）/ 旋转只影响视觉不影响逻辑。
-
 ## 13. SubAgent 分工协作规则
 
 > **核心原则：按职责拆分，每条职责线 = 一个独立 SubAgent。** 无法精确覆盖的工作面必须
@@ -274,14 +259,6 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 - **出站请求头**：`Authorization` / `anthropic-version: 2023-06-01` / `User-Agent` / `x-anthropic-billing-header` / `Content-Type`。
 - **预飞归一化**：(1) `tool_use.input == nil` → `{}`（§71a）；(2) `req.Thinking != nil` 时注入 `{type:"thinking"}` 块（§74a）。
 
-### 14.2 狼人杀 AI 玩家随机分配模型
-
-> 当 `POST /api/games/werewolf/rooms` 携带 `len(agent_seats) > 1` 时，服务端自动把重复
-> `model_key` 改写为其他可用模型（Fisher-Yates 洗牌），确保 7 bot 尽量使用不同模型。
-
-- 触发条件：`len(agent_seats) > 1` 且 `len(cfg.LLM.Providers) > 1`
-- 保留用户挑选的不同 model；仅改写重复项；占位 key 过滤；候选池不足时降级为随机轮询。
-
 ### 14.3 Anthropic 三段式 system 提示词（全部 Agent 统一升级）
 
 > 每个出站请求的 `system[]` 最前面固定三段，与 Claude Code 一致：
@@ -300,24 +277,6 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 - **幂等**：`EnsureHead` 检测首位块前缀即跳过（调用方若已自带头不会重复注入）。
 
 **改动纪律**：三段文本逐字节稳定（全体 Agent 的共享 prompt cache 前缀）；改动前须读上述规范文档并同步更新 `sysprompt` 测试锚点。
-
-## 15. 狼人杀 13 人局 Agent（in-process 驱动）
-
-> **现状综合索引**：[`lag_docs/狼人杀/00-游戏信息与Agent现状综合文档.md`](lag_docs/狼人杀/00-游戏信息与Agent现状综合文档.md)
-> 详见 [`lag_docs/狼人杀-Agent与系统/狼人杀Agent设计.md`](lag_docs/狼人杀-Agent与系统/狼人杀Agent设计.md)。
-> **角色实现状态**：`godRolePool` 含 6 个全链路可玩神职：女巫/猎人/白痴/**守卫**/**骑士**/**猎魔人**；
-> 魔术师/奇迹商人/射梦人/乌鸦/稻草人/定序王子/纯白之女 已退役（仅保留 wire 兼容）。
-> 守卫规则与实现见 [`lag_docs/狼人杀-角色设计/狼人杀守卫角色设计.md`](lag_docs/狼人杀-角色设计/狼人杀守卫角色设计.md)。
-> **硬约束**：进卡池的角色要么完整实现，要么移出卡池 —— 「半实现」= 玩家持有无效身份。
-
-- **核心结构** —— `ServerGo/agent/`：`agent.go` / `memory.go` / `tools.go` / `prompt.go` / `ratelimit.go`
-  + `BuildTools(phase, role, seat, alive)` 工具定义 + `DispatchTool` 派发
-  + `GameContext` 含 `MySeat` / `SpeakTurn` / `TurnActingSeat` 等事件上下文
-- **引擎接入** —— Agent 通过 `ToolRunner` 接口（13 个方法）调用 `WerewolfManager.Action_*`，**不走 WS**（in-process）。发言通过 `ChatService.SendFromBot/WhisperFromBot` 复用现有广播路径。
-- **可见性** —— `WerewolfRoom.BotTranscripts[seat]` 挂在 `game.state.bot_contexts[]`，前端 `AgentThoughtPanel` 渲染。
-- **限流** —— driver 用 30s 令牌桶；文本 100 字截断；单轮最多 5 次 tool_use；超时/5xx 走 Provider 重试。
-- **混合房间** —— 全人类 / 全 Agent / 混合；`CreateRoomWithAgents` 入口；`POST /api/rooms` 接受可选 `agent_seats`。
-- **公平性** —— 所有 Agent 代码完全相同，仅模型不同；Memory 可见可追溯。
 
 ## 16. 聊天系统架构
 
@@ -380,18 +339,6 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 - 用户列表权限分级见 [`lag_docs/架构与协议/用户类型与权限.md`](lag_docs/架构与协议/用户类型与权限.md)。
 - 前端 WS 连接生命周期由 `AppLayout` 唯一持有，页面切换不得 connect/close。
 
-## 19. 斗地主 (Doudizhu) 架构
-
-**3 人卡牌 / 1 地主 + 2 农民**。关键差异：手牌始终隐藏 / `BroadcastTo` 按座位单独推送 / WS 帧新增 `game.bid/play/pass`。
-
-**后端**：`ServerGo/game/doudizhu/`（`cards/combo/engine/view/room` + `engine_test`）；`ws/game_service.go` 注册分发；`CreateRoom` 容量=3。
-
-**前端**：`types/doudizhu.ts` / `store/doudizhu.store.ts` / `hooks/useDoudizhu.ts`；`DoudizhuLobbyPage` + `DoudizhuGamePage`。
-
-**两种风格**：`traditional_landlord` / `urban_worker`。美术资源由 `python-generate-image-tool/generate_doudizhu_assets.py` 生成 PNG。
-
-完整规则与 WS 帧协议见 [`lag_docs/斗地主/斗地主规则与协议.md`](lag_docs/斗地主/斗地主规则与协议.md)。
-
 ## 19.5 观战者 (Spectator) — 跨 5 款游戏
 
 任何登录用户都可以进入任意活跃者房间以观察者身份实时观看，**不消耗座位，不影响玩家 UI**。
@@ -401,18 +348,6 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 **要点**：
 - 玩家输入帧在观察者身上后端硬性拒绝 → `ErrSpectatorInputForbidden = 30011`。
 - 路由：`/<game>/spectate/:roomId`；Hook：`useSpectatorMode()`；HTTP：`POST /api/rooms/:id/spectate` / `.../leave_spectate`。
-
-## 20. 德州扑克 (Texas Hold'em) 架构
-
-**2-6 人 No-Limit**。关键差异：押注轮 + 共享公共牌 + 牌型评估 + `game.action` 统一动作（`{type,amount}`）。
-
-**后端**：`ServerGo/game/texasholdem/`（`cards/hand/engine/view/room` + `engine_test`）；`ws/game_service.go` 分发 `game.action`；`CreateRoom` 容量=6。
-
-**前端**：`types/texasholdem.ts` / `store/texasholdem.store.ts` / `hooks/useTexasHoldem.ts`；`TexasHoldemLobbyPage` + `TexasHoldemGamePage`。
-
-**两种风格**：`western_cowboy` / `wilderness_escape`。美术资源由 `python-generate-image-tool/generate_texasholdem_assets.py` 生成 PNG。
-
-完整规则与 WS 帧协议见 [`lag_docs/德州扑克/德州扑克规则与协议.md`](lag_docs/德州扑克/德州扑克规则与协议.md)。
 
 ## 21. Agent 自动化测试账号
 
@@ -445,18 +380,6 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,可使用
 - **报告清理**：修复完成后必须删除已处理的 `TestReport/*.md`（子工程 `UseReport/*.md`），报告不应在仓库中长期堆积；无问题的报告追加 `_无问题` 后缀归档。
 - **提示词内嵌修复**：各游戏提示词已包含完整「测试 → 自动修复 → 提交推送」流程，Agent 无需依赖外部 debug 脚本接力。
 
-## 23. 狼人杀 Web 运行时 UI（房间总运行时间 + 历史抽屉）
-
-> 2026-07-18 用户反馈响应。完整规约见 [`lag_docs/狼人杀-设计/狼人杀13人局UI运行时优化设计.md`](lag_docs/狼人杀-设计/狼人杀13人局UI运行时优化设计.md)。
-
-**核心交付**：
-- `game_started_at` 下发到 `ClientGameState`（`view.go`，`omitempty` 保 0 不污染回放）
-- `RoomRunningClock.tsx` 1s `setInterval` 计算 `nowMs - gameStartedAt*1000` → `{HH:}MM:SS`
-- `HistoryDrawer.tsx` 4 sub-tab（⏱ / 🤖 / ⚰ / 🏆），与 `FactionDrawer` 同宽同位 380px/30vw
-- 3 入口冗余：Header "📜 历史" + 房间信息面板 "📚 500K" 旁 + `GameInfoPanel` 第 5 块改三按钮
-- `max_seat ?? 13` 兜底统一 + `--ww-touch-target: 44px` 触控 token + 中栏 `<1599px` 间距 10→6 → `<1280px` 6→4
-- i18n zh-CN/en/ja 同步 21 键
-
 ## 24. AgentClassName 与 User-Agent 拼装约定
 
 > 2026-08-06 §Agent 重构增强。**所有 Agent 都必须设置** `AgentClassName`，统一登记在 [`ServerGo/agent/class_names.go`](ServerGo/agent/class_names.go)。
@@ -476,23 +399,6 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,可使用
 **接入新 Agent 的 2 步**：(1) `class_names.go` 追加 `AgentClass<Game><Role>` 常量 + 接入 `AllAgentClassNames()`；(2) Agent 实现的 `llm.LLMRequest{...}` 构造点填 `AgentClassName`，并加单测断言 `!= ""`（防「声明了却从不接线」）。
 
 **设计动机**：同一 LLM Provider 被多类 Agent 复用，上游/网关需通过 UA 区分调用方做计费/限流/审计；`AgentClassName`（业务身份） 与 `ModelKey`（推理引擎）正交。
-
-## 25. Agent 道具与 LLM 注入攻击对齐（§20260807-04）
-
-> 仓库 6 份注入攻击演示文件(`lag_docs/注入攻击演示/01-06-*.md`)是 Agent 道具系统的事实来源。详见 [`lag_docs/狼人杀-道具与经济/狼人杀13人局-Agent道具-20260807-04.md`](lag_docs/狼人杀-道具与经济/狼人杀13人局-Agent道具-20260807-04.md)。
-
-### 25.1 三类攻击分类（事实来源 vs 落地方向）
-
-| 攻击文档 | 攻击类型 | 落地方向 | 已实现道具 |
-|---|---|---|---|
-| `第一种：Markdown 格式注入` | Agent → 人类 | 注入 → `gc.PropInjectText` + UI 公告前缀 debuff | `markdown_bomb` + `md_bomb_human` |
-| `第二种：提示词套娃（多层嵌套）` | Agent → 人类 | 注入 → 投票推荐 debuff | `nested_maze` + `nested_maze_human` |
-| `第三种：字符级欺骗（混淆式）` | Agent → 人类 | 注入 → 发言乱码 debuff | `char_confuse` + `char_confuse_human` |
-| `第四种：长上下文注意力失焦` | Agent → Agent | `long_swear`(AOE) → 所有存活 bot `propInjectQueue` + EffectTypes | `long_swear`(v20260807-04 修复 AOE 入队) |
-| `第五种：任务马甲` | Agent → Agent | `expose_identity` + `emotion_disturb_light` 干扰信号 | `task_disguise` + `task_disguise_v3` |
-| `第六种：情绪操控` | Agent → Agent | `emotion_disturb`(下轮 confused/guilty) | `emotion_plea` |
-
-> 关键修复清单 + 道具速查 + 验收依据，详见 [`lag_docs/狼人杀-道具与经济/狼人杀13人局-Agent道具-20260807-04.md`](lag_docs/狼人杀-道具与经济/狼人杀13人局-Agent道具-20260807-04.md) §3/§4/§6。
 
 ## 26. 前端 UI 颜色对比度与可读性规范
 

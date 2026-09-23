@@ -139,7 +139,7 @@
 4. 读 `go-web-debug-tool/MCP_Proc_Def.md` 确认 MCP 操作/抓包接口可用。
 5. **服务探活**(`curl -sk https://127.0.0.1:39001/api/health` → `code: 0`)。
 6. **MCP 探活**:`POST /ListChromePages` 看是否已有 page,清理残留;若无,`POST /NewChromePage {"url": "about:blank"}` 试启,确保 CDP 链路通畅。
-7. **LLM Provider 可用性探测**:`GET /api/llm/models` 验证 ≥8 个模型注册且 key 可用(12 Agent 需 8+ 不同模型,按 §14.2 去重随机分配)。
+7. **LLM Provider 可用性探测**:`GET /api/llm/models` 验证 ≥8 个模型注册且 key 可用(12 Agent 需 8+ 不同模型,按 `lag_docs/狼人杀-Agent与系统/狼人杀Agent设计.md` §12.1 去重随机分配)。
 8. **参考文档清单**(测试前 5 分钟必读清单,作为 UI 合理性审计 + 经济模拟的事实来源):
    - `lag_docs/虚拟城市/已实现/01-产品设计/虚拟城市-P0产品与玩法骨架-v1.md`(玩法总纲、界面线框)
    - `lag_docs/虚拟城市/已实现/02-架构设计/虚拟城市-后端架构与经济引擎-v1.md`(月结 7 步、经济引擎、数值表)
@@ -188,7 +188,7 @@
   - 创建/取消按钮
 - 按 `month_ms:3000` + `pool:"curated"` + `agent_seats: 12`(0 人类)创建全 Agent 房间。
 - 校验创建后房间状态为 `filling` → 12 bot 自动入座。
-- **agent_seats 去重随机化**: 12 bot 的 model_key 应尽量不同(§14.2 Fisher-Yates 洗牌),不一致写入报告。验证 ≥8 个不同模型被使用。
+- **agent_seats 去重随机化**: 12 bot 的 model_key 应尽量不同(Fisher-Yates 洗牌去重,见 `lag_docs/狼人杀-Agent与系统/狼人杀Agent设计.md` §12.1),不一致写入报告。验证 ≥8 个不同模型被使用。
 - 以**观战者 spectator**身份进入房间(`my_seat=-1`),验证可观战 12 Agent 对局。
 
 **6.3.2 开局与座位**
@@ -380,7 +380,7 @@
 
 | 审计项 | 检查方法 | 通过标准 |
 |---|---|---|
-| **点击区域大小** | 取所有按钮 `getBoundingClientRect` | 触摸目标 ≥ 44×44px(CLAUDE.md §23 token) |
+| **点击区域大小** | 取所有按钮 `getBoundingClientRect` | 触摸目标 ≥ 44×44px(`--ww-touch-target: 44px` 触控 token) |
 | **焦点顺序** | 连续按 Tab,记录焦点元素 | 焦点流动符合视觉顺序,不出现焦点陷阱 |
 | **键盘可达性** | 所有交互能否纯键盘完成 | 切换 Agent 面板 / 关闭模态 / 滚动聊天 全部可纯键盘 |
 | **悬停反馈** | hover 关键按钮 / Agent 卡片 / 城区 | 出现视觉变化(色/边框/阴影),且响应 ≤ 100ms |
