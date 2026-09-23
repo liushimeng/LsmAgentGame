@@ -157,6 +157,7 @@ const zhCN: Dict = {
   'auth.registerSuccessTitle': '注册成功!',
   'auth.registerSuccessHint': '这是你的专属邀请码 —— 分享给朋友,通过你注册的用户都会记在你的名下。',
   'auth.goToLogin': '去登录',
+  'auth.tooManyAttempts': '尝试次数过多，请在 {seconds} 秒后重试',
   // 会话已过期 / 无效 / 缺失 — 通过全局 auth-error 提示条展示,替代服务端原文("authorization token expired")。
   'auth.sessionExpired': '登录已过期,请重新登录。',
   'auth.sessionInvalid': '登录状态已失效,请重新登录。',

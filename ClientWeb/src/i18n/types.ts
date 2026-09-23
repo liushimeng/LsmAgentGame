@@ -727,6 +727,9 @@ export interface Dict extends WealthDict {
   'auth.registerSuccessTitle': string;
   'auth.registerSuccessHint': string;
   'auth.goToLogin': string;
+  // 2026-09-23 安全加固：登录被服务端锁定(10501)/突发限流(10502)时的倒计时文案,
+  // {seconds} = 剩余等待秒数。三语必须与 LoginForm 同步（CLAUDE.md §12）。
+  'auth.tooManyAttempts': string;
   // Session expired / invalid / missing — friendly notices shown via the global
   // auth-error toast. These REPLACE the internal server jargon
   // ("authorization token expired", errcode 10003) — we never show that to users.

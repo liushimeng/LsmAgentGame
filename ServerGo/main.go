@@ -298,7 +298,57 @@ func main() {
 	captchaJanitorStop := make(chan struct{})
 	go captchaStore.Janitor(30*time.Second, captchaJanitorStop)
 
+	// ── 20260923-01 §4.9 安全加固接线（登录 / 验证码 / WS 三层节流）────────
+	// security.enabled=false ⇒ loginGuard 与 rateLimiter 均为 nil，下游所有
+	// 注入点（AuthService.SetLoginGuard / AuthAPI / CaptchaAPI / ws）逐一
+	// nil-check 短路，仅保留 middleware.SecurityHeaders 的安全响应头。
+	securityOn := cfg.Security.EnabledResolved()
+	// 第 1 层：验证码 store —— 挂起容量上限（无条件生效，纯内存 DoS 防护，
+	// 与总开关无关）+ 签发/校验 IP 绑定（受 security.enabled 约束）。
+	captchaStore.SetMaxPending(cfg.Security.CaptchaGuard.MaxPending)
+	captchaStore.SetBindIP(securityOn && cfg.Security.CaptchaGuard.BindIPResolved())
+
+	var loginGuard *util.LoginGuard
+	var rateLimiter *util.RateLimiter
+	// 与 captchaJanitorStop 同一停止约定（close on shutdown）。
+	securityJanitorStop := make(chan struct{})
+	if securityOn {
+		// 第 3 层：账户/IP 失败滑窗计数 + 递增锁定（service.AuthService 消费）。
+		loginGuard = util.NewLoginGuard(cfg.Security.LoginGuard)
+		// 第 2 层：三个 IP 令牌桶（突发防护）。回滴量子取
+		// captcha_guard.burst_refill_seconds；PerMinute/Burst<=0 的 spec 在
+		// Register 内部被跳过 —— 配置写 0 不会造出「全拒」桶。
+		rateLimiter = util.NewRateLimiter(
+			time.Duration(cfg.Security.CaptchaGuard.BurstRefillSeconds)*time.Second,
+			util.RateBucketSpec{Name: "captcha", PerMinute: cfg.Security.CaptchaGuard.PerIPPerMinute, Burst: 10},
+			util.RateBucketSpec{Name: "login", PerMinute: 10, Burst: 5},
+			util.RateBucketSpec{Name: "ws", PerMinute: cfg.Security.WSGuard.PerIPPerMinute, Burst: 5},
+		)
+		// §4.7：ServeWS 被 39001(gin) 与 39002(net/http) 两条路径共用，限流器
+		// 经 ws 包级注入点下发。这里必须显式接线（CLAUDE.md §130：
+		// 「声明了却从不接线」）—— 否则升级洪泛防护永远不生效。
+		ws.SetWSRateLimiter(rateLimiter)
+		// 清扫 goroutine：guard 过期档位 + limiter 空闲 IP 桶，防长跑内存膨胀。
+		go loginGuard.Janitor(time.Minute, securityJanitorStop)
+		go rateLimiter.Janitor(time.Minute, securityJanitorStop)
+		logger.L().Info("security hardening enabled (20260923-01)",
+			zap.Int("body_limit_bytes", cfg.Security.BodyLimitBytes),
+			zap.Int("captcha_per_ip_per_minute", cfg.Security.CaptchaGuard.PerIPPerMinute),
+			zap.Int("captcha_max_pending", cfg.Security.CaptchaGuard.MaxPending),
+			zap.Bool("captcha_bind_ip", cfg.Security.CaptchaGuard.BindIPResolved()),
+			zap.Int("ws_per_ip_per_minute", cfg.Security.WSGuard.PerIPPerMinute),
+			zap.Int("ws_max_conns_per_user", cfg.Security.WSGuard.MaxConnsPerUser),
+			zap.Int("login_max_failures", cfg.Security.LoginGuard.MaxFailures),
+			zap.Int("login_ip_max_failures", cfg.Security.LoginGuard.IPMaxFailures),
+			zap.Int("login_lock_seconds", cfg.Security.LoginGuard.LockSeconds))
+	} else {
+		logger.L().Warn("security.enabled=false — 登录/验证码/WS 限流与账户锁定全部停用（仅保留安全响应头与请求体上限）")
+	}
+
 	authSvc := service.NewAuthService(gormDB, cfg, captchaStore)
+	// §4.4：锁定器注入。nil（security 关闭）时 service 内所有 guard 调用短路，
+	// 与加固前行为逐字节一致（单测同样传 nil 路径）。
+	authSvc.SetLoginGuard(loginGuard)
 
 	// Seed a genesis root user on first run so the referrer-gated registration
 	// flow has a valid starting referrer code. No-op once any user exists.
@@ -393,9 +443,9 @@ func main() {
 	// the wallet and login credits the daily bonus.
 	authSvc.SetWalletService(walletSvc)
 
-	authAPI := api.NewAuthAPI(authSvc, cfg)
+	authAPI := api.NewAuthAPI(authSvc, cfg, rateLimiter)
 	gameAPI := api.NewGameAPI(gameSvc)
-	captchaAPI := api.NewCaptchaAPI(cfg, captchaStore)
+	captchaAPI := api.NewCaptchaAPI(cfg, captchaStore, rateLimiter)
 	versionAPI := api.NewVersionAPI(AppVersion, buildDateTime, gitShortSHAFallback())
 	userAPI := api.NewUserAPI(userSvc)
 	chatSvc := ws.NewChatService(gormDB, hub, llmRegistry)
@@ -1055,6 +1105,7 @@ func main() {
 	logger.L().Info("shutdown signal received")
 	close(hubStop)
 	close(captchaJanitorStop)
+	close(securityJanitorStop)
 	close(janitorStop)
 
 	// BUG-WEREWOLF-RESTART-CLEANUP (Round 34): on a clean shutdown, fan a

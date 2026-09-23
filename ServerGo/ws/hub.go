@@ -5,9 +5,9 @@
 //     a Client with the Hub.
 //   - Each Client runs a readPump and a writePump goroutine.
 //   - The Hub keeps three indexes for fan-out:
-//       clients      : userID → set of *Client (per-connection bookkeeping)
-//       lobby        : set of *Client currently subscribed to lobby chat
-//       rooms[roomID]: set of *Client currently subscribed to room chat
+//     clients      : userID → set of *Client (per-connection bookkeeping)
+//     lobby        : set of *Client currently subscribed to lobby chat
+//     rooms[roomID]: set of *Client currently subscribed to room chat
 //
 // Wire format is a length-prefixed JSON envelope; proto framing is added later
 // once the codegen is wired in.
@@ -115,10 +115,10 @@ func buildRoomStateSnapshot(id, gameKind string, capacity, currentCount int, sta
 // The hub maintains **two disjoint** per-room broadcast sets:
 //
 //   - rooms[roomID]      : clients receiving the room's game broadcasts
-//                          (players — receive `game.*` per-seat frames)
+//     (players — receive `game.*` per-seat frames)
 //   - spectators[roomID] : clients receiving only sanitized spectator frames
-//                          (observers — receive `game.state` rebuilt without
-//                          any per-seat secrets)
+//     (observers — receive `game.state` rebuilt without
+//     any per-seat secrets)
 //
 // Keeping the two sets separate is the foundation of spectator isolation:
 // player code paths (`BroadcastRoom`) never have to think about whether a
@@ -127,13 +127,13 @@ func buildRoomStateSnapshot(id, gameKind string, capacity, currentCount int, sta
 // `BroadcastRoom` for players and a separate helper for spectators so that
 // players' chat fan-out is unchanged.
 type Hub struct {
-	mu               sync.RWMutex
-	clients          map[string]map[*Client]struct{} // userID → clients
-	lobby            map[*Client]struct{}            // lobby subscribers
-	rooms            map[string]map[*Client]struct{} // roomID → subscribers (players + chat-only subs)
-	spectators       map[string]map[*Client]struct{} // roomID → spectators
-	pendingDisconnects map[string]*PendingDisconnect  // userID → pending disconnect timer
-	vacancyTimers      map[string]*RoomVacancy        // roomID → pending empty-room deletion timer
+	mu                 sync.RWMutex
+	clients            map[string]map[*Client]struct{} // userID → clients
+	lobby              map[*Client]struct{}            // lobby subscribers
+	rooms              map[string]map[*Client]struct{} // roomID → subscribers (players + chat-only subs)
+	spectators         map[string]map[*Client]struct{} // roomID → spectators
+	pendingDisconnects map[string]*PendingDisconnect   // userID → pending disconnect timer
+	vacancyTimers      map[string]*RoomVacancy         // roomID → pending empty-room deletion timer
 
 	// protoRouter proto 消息路由器（懒加载，为 nil 时仅 JSON 模式可用）
 	protoRouter *ProtoRouter
@@ -337,6 +337,22 @@ func (h *Hub) BroadcastTo(userID string, env Envelope) {
 			}
 		}
 	}
+}
+
+// UserConnCount returns how many live WS connections the user currently holds
+// (20260923-01 §4.7 第 3 步：单用户并发连接数上限的读侧)。
+//
+// Reads the clients index (userID → set of *Client) under the hub read lock,
+// so ServeWS can compare against security.ws_guard.max_conns_per_user before
+// upgrading. "" → 0 (not a keyable user). Connections are removed by
+// Unregister on pump exit, so a finished reconnect no longer counts.
+func (h *Hub) UserConnCount(userID string) int {
+	if userID == "" {
+		return 0
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.clients[userID])
 }
 
 // startDisconnectTimer starts a 15-second timer for a disconnected player.

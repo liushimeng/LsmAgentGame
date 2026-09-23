@@ -4,14 +4,17 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"LsmAgentGame/config"
 	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
 	"LsmAgentGame/models"
 	"LsmAgentGame/util"
 
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -22,10 +25,13 @@ import (
 
 // AuthService is the user-account service.
 type AuthService struct {
-	db       *gorm.DB
-	cfg      *config.Config
-	captcha  *util.CaptchaStore // may be nil; AuthAPI wires it before any login happens
-	wallets  *WalletService     // may be nil when constructed via NewAuthService; callers set via SetWalletService
+	db      *gorm.DB
+	cfg     *config.Config
+	captcha *util.CaptchaStore // may be nil; AuthAPI wires it before any login happens
+	wallets *WalletService     // may be nil when constructed via NewAuthService; callers set via SetWalletService
+	// guard 是 20260923-01 §4.4 的失败计数 + 递增锁定器。nil = 未接线
+	// （security.enabled=false 或单元测试）→ 锁定/延迟/计数全部短路。
+	guard *util.LoginGuard
 }
 
 // NewAuthService builds an AuthService.
@@ -50,6 +56,116 @@ func (s *AuthService) SetCaptchaStore(cs *util.CaptchaStore) {
 	s.captcha = cs
 }
 
+// SetLoginGuard attaches the sliding-window lockout guard (20260923-01 §4.4).
+// Wired from main.go with util.NewLoginGuard(cfg.Security.LoginGuard); nil
+// disables locking entirely (unit tests / security.enabled=false).
+func (s *AuthService) SetLoginGuard(g *util.LoginGuard) {
+	s.guard = g
+}
+
+// dummyPasswordHash 是「计时均一化」专用的包级 bcrypt 常量（cost 10，
+// 20260923-01 §4.4 反枚举）。它是用 crypto/rand 生成的 72 字符随机十六进制
+// 串的哈希——原文已丢弃，任何真实用户密码都不可能与之匹配。账号不存在
+// 路径对它执行一次 VerifyPassword，把「查无此人」与「密码错」两条路径的
+// 响应耗时拉平（消除 ~50ms 级 bcrypt 计时侧信道），对外统一返回 10102。
+// 这不是密钥硬编码：它不保护任何资源，仅用于耗时装平。
+const dummyPasswordHash = "$2a$10$vRRkCTO2ouu5AYGUAa4SgO4fhPZZ82JExGFkGWvh.gWtzsYXSmsQS"
+
+// humanizeDelayCapMs 封顶 credential 失败后的人工化延迟（§4.4：
+// min(fail_delay_ms × 窗口内失败数, 1500ms)）。
+const humanizeDelayCapMs = 1500
+
+// lockoutError 构造 10501 响应：消息含 "retry after Ns"，前端倒计时解析
+// 与 api 层 Retry-After 头共用同一秒数口径（向上取整，最小 1s）。
+func lockoutError(d time.Duration) *errcode.Error {
+	secs := util.CeilSeconds(d)
+	if secs < 1 {
+		secs = 1
+	}
+	return errcode.CodeMsg(errcode.ErrAuthTooManyAttempts,
+		fmt.Sprintf("too many failed attempts, retry after %ds", secs))
+}
+
+// lockoutRemaining 返回账户键与 IP 键中较长的剩余锁定时长（0 = 未锁定）。
+// guard==nil 或键为空时短路返回 0 —— 单元测试（IP=""）与进程内调用零感知。
+func (s *AuthService) lockoutRemaining(acctKey, ipKey string) time.Duration {
+	if s.guard == nil {
+		return 0
+	}
+	d := s.guard.Remaining(acctKey)
+	if r := s.guard.Remaining(ipKey); r > d {
+		d = r
+	}
+	return d
+}
+
+// LockoutRetryAfter 供 api 层写 Retry-After 头（20260923-01 §4.4 导出）。
+// 复用与 Login 完全一致的键推导；未锁定 / guard 未接线时返回 0。
+func (s *AuthService) LockoutRetryAfter(in LoginInput) time.Duration {
+	return s.lockoutRemaining(
+		util.LoginGuardKeyAccount(in.Account, in.Phone),
+		util.LoginGuardKeyIP(in.IP))
+}
+
+// noteIPFailure 把验证码类失败计入 IP 维度（§4.4 第 3 步）：
+// 只 RecordFailure(ipKey)，不加延迟、不触发账户锁定 —— 真人打错码零感知，
+// 爬虫批量试码会在 ip_max_failures 处被锁。空键 / guard 未接线为 no-op。
+func (s *AuthService) noteIPFailure(ipKey string) {
+	if s.guard != nil && ipKey != "" {
+		s.guard.RecordFailure(ipKey)
+	}
+}
+
+// noteRegisterFailure 把可枚举的注册失败（账号/昵称/邮箱/手机号已占用、
+// 邀请码无效）计入 IP 维度（§4.4：ReferrerCode 错 / AccountTaken 等）。
+// 只计数、不延迟、不锁账户 —— 与验证码失败同口径；纯校验错误与 DB 故障
+// 不计数（不是攻击信号）。
+func (s *AuthService) noteRegisterFailure(ipKey string, code int) {
+	switch code {
+	case errcode.ErrAuthAccountTaken, errcode.ErrAuthNicknameTaken,
+		errcode.ErrAuthEmailTaken, errcode.ErrAuthPhoneTaken,
+		errcode.ErrAuthReferrerInvalid:
+		s.noteIPFailure(ipKey)
+	}
+}
+
+// uniformCredentialFailure 是「账号不存在」与「密码错」共用的均一化失败
+// 出口（§4.4 第 4/5 步）：双键计数 + ctx 感知人工化延迟 + 统一 10102。
+func (s *AuthService) uniformCredentialFailure(ctx context.Context, acctKey, ipKey string) *errcode.Error {
+	failures := 0
+	if s.guard != nil {
+		if n := s.guard.RecordFailure(acctKey); n > failures {
+			failures = n
+		}
+		s.guard.RecordFailure(ipKey)
+	}
+	s.humanizeDelay(ctx, failures)
+	return errcode.Code(errcode.ErrAuthPasswordWrong)
+}
+
+// humanizeDelay 在 credential 失败后 sleep min(fail_delay_ms×failures, 1500)ms，
+// ctx 取消立即返回。cfg==nil（部分单测）/ fail_delay_ms<=0 / guard 未计数
+// （failures<=0）三种情况全部关闭 —— 单元测试路径绝不产生 sleep。
+func (s *AuthService) humanizeDelay(ctx context.Context, failures int) {
+	if s.cfg == nil || failures <= 0 {
+		return
+	}
+	base := s.cfg.Security.LoginGuard.FailDelayMs
+	if base <= 0 {
+		return
+	}
+	ms := base * failures
+	if ms > humanizeDelayCapMs {
+		ms = humanizeDelayCapMs
+	}
+	t := time.NewTimer(time.Duration(ms) * time.Millisecond)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+	case <-t.C:
+	}
+}
+
 // RegisterInput is the payload for register.
 //
 // Invitation model (CLAUDE.md §14 chat + invite refactor 2026-06):
@@ -68,6 +184,10 @@ type RegisterInput struct {
 	Phone        string
 	Email        string
 	ReferrerCode string // the inviter's personal code (their MyInviteCode)
+	// IP 是注册请求的来源 IP（api 层 c.ClientIP() 注入）。仅用于
+	// 20260923-01 §4.4 的 IP 维度锁定键；空串（进程内调用/单测）→ 不可键，
+	// 锁定与计数全部短路。
+	IP string
 }
 
 // LoginInput is the payload for login. Provide Account OR Phone (phone wins
@@ -97,15 +217,15 @@ type LoginInput struct {
 // DailyRewardClaimed and DailyRewardAmount surface the UTC+8 daily login
 // bonus state so the frontend can toast the reward without a second call.
 type AuthResponse struct {
-	UserID              string        `json:"user_id"`
-	Token               string        `json:"token"`
-	ExpiresAt           int64         `json:"expires_at"`
-	Language            string        `json:"language"`
-	UserType            models.UserType `json:"user_type"`
-	MyInviteCode        string        `json:"my_invite_code"`
-	CookieValue         string        `json:"-"`
-	DailyRewardClaimed  bool          `json:"daily_reward_claimed"`
-	DailyRewardAmount   int64         `json:"daily_reward_amount"`
+	UserID             string          `json:"user_id"`
+	Token              string          `json:"token"`
+	ExpiresAt          int64           `json:"expires_at"`
+	Language           string          `json:"language"`
+	UserType           models.UserType `json:"user_type"`
+	MyInviteCode       string          `json:"my_invite_code"`
+	CookieValue        string          `json:"-"`
+	DailyRewardClaimed bool            `json:"daily_reward_claimed"`
+	DailyRewardAmount  int64           `json:"daily_reward_amount"`
 }
 
 // Register creates a new user and returns the freshly issued token.
@@ -121,6 +241,15 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (*AuthResp
 	if strings.TrimSpace(in.ReferrerCode) == "" {
 		return nil, errcode.Code(errcode.ErrAuthReferrerMissing)
 	}
+
+	// 20260923-01 §4.4 — 注册入口锁定检查（acct/ip 双键）。越阈直接 10501，
+	// 不触 DB。guard==nil / IP==""（进程内调用与单测）短路。
+	regAcctKey := util.LoginGuardKeyAccount(in.Account, in.Phone)
+	regIPKey := util.LoginGuardKeyIP(in.IP)
+	if d := s.lockoutRemaining(regAcctKey, regIPKey); d > 0 {
+		return nil, lockoutError(d)
+	}
+
 	// Uniqueness checks (read-only — the unique index is the source of truth,
 	// but failing fast with a clear error code keeps the API clean).
 	var count int64
@@ -129,6 +258,7 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (*AuthResp
 		return nil, errcode.Code(errcode.ErrDB)
 	}
 	if count > 0 {
+		s.noteRegisterFailure(regIPKey, errcode.ErrAuthAccountTaken)
 		return nil, errcode.Code(errcode.ErrAuthAccountTaken)
 	}
 	// Nickname: default to account if empty, then validate uniqueness.
@@ -141,6 +271,7 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (*AuthResp
 		return nil, errcode.Code(errcode.ErrDB)
 	}
 	if count > 0 {
+		s.noteRegisterFailure(regIPKey, errcode.ErrAuthNicknameTaken)
 		return nil, errcode.Code(errcode.ErrAuthNicknameTaken)
 	}
 
@@ -150,6 +281,7 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (*AuthResp
 			return nil, errcode.Code(errcode.ErrDB)
 		}
 		if count > 0 {
+			s.noteRegisterFailure(regIPKey, errcode.ErrAuthEmailTaken)
 			return nil, errcode.Code(errcode.ErrAuthEmailTaken)
 		}
 	}
@@ -159,6 +291,7 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (*AuthResp
 			return nil, errcode.Code(errcode.ErrDB)
 		}
 		if count > 0 {
+			s.noteRegisterFailure(regIPKey, errcode.ErrAuthPhoneTaken)
 			return nil, errcode.Code(errcode.ErrAuthPhoneTaken)
 		}
 	}
@@ -251,7 +384,13 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (*AuthResp
 	})
 	if err != nil {
 		ce := errcode.AsError(err)
+		s.noteRegisterFailure(regIPKey, ce.Code)
 		return nil, ce
+	}
+	// 注册成功 → 清除账户键与 IP 键的失败计数（§4.4）。
+	if s.guard != nil {
+		s.guard.Reset(regAcctKey)
+		s.guard.Reset(regIPKey)
 	}
 	return s.issueTokenAndCookie(&user)
 }
@@ -305,6 +444,16 @@ func (s *AuthService) SeedRootUserIfEmpty(ctx context.Context, account, password
 //   - Every account must supply matching CaptchaID/CaptchaAnswer (otherwise
 //     10301/10302/10303). 2026-08-25 起无任何旁路。
 //   - bcrypt password verification is always required, even for the bypass.
+//
+// 20260923-01 §4.4 加固（guard==nil / IP=="" 时全部短路，行为与旧版一致）：
+//  1. 入口锁定检查：账户键或 IP 键处于锁定期 → 10501（不触 DB/bcrypt）。
+//  2. 验证码校验改用 VerifyWithIP（bind_ip 且两侧 IP 非空才生效）；验证码
+//     失败只计入 IP 维度，不加延迟、不锁账户。
+//  3. 账号不存在 → 对包级 dummy bcrypt 哈希执行一次 VerifyPassword 拉平
+//     计时，对外统一返回 10102（内部日志区分 account_not_found）。
+//  4. credential 失败（不存在/密码错）→ 双键计数 + ctx 感知人工化延迟
+//     min(fail_delay_ms×窗口内失败数, 1500)ms。
+//  5. 成功 → Reset 双键。
 func (s *AuthService) Login(ctx context.Context, in LoginInput) (*AuthResponse, error) {
 	in.Account = strings.TrimSpace(in.Account)
 	in.Phone = strings.TrimSpace(in.Phone)
@@ -315,16 +464,28 @@ func (s *AuthService) Login(ctx context.Context, in LoginInput) (*AuthResponse, 
 		return nil, errcode.Code(errcode.ErrValidationFailed)
 	}
 
+	// ── 锁定检查（§4.4 第 2 步）：越阈直接 10501，不做任何 DB/bcrypt 操作 ──
+	acctKey := util.LoginGuardKeyAccount(in.Account, in.Phone)
+	ipKey := util.LoginGuardKeyIP(in.IP)
+	if d := s.lockoutRemaining(acctKey, ipKey); d > 0 {
+		return nil, lockoutError(d)
+	}
+
 	// CAPTCHA gate — 全员强制，无旁路（2026-08-25 安全加固）。
 	if s.captcha == nil {
 		return nil, errcode.Code(errcode.ErrAuthCaptchaMissing)
 	}
-	switch s.captcha.Verify(in.CaptchaID, in.CaptchaAnswer) {
+	// 20260923-01 §4.6：签发/校验 IP 绑定。任一侧 IP 为空（单测、进程内
+	// bot、bind_ip=false）→ 与旧 Verify 完全等价。
+	switch s.captcha.VerifyWithIP(in.CaptchaID, in.CaptchaAnswer, in.IP) {
 	case util.CaptchaMissing:
+		s.noteIPFailure(ipKey)
 		return nil, errcode.Code(errcode.ErrAuthCaptchaMissing)
 	case util.CaptchaExpired:
+		s.noteIPFailure(ipKey)
 		return nil, errcode.Code(errcode.ErrAuthCaptchaExpired)
 	case util.CaptchaWrong:
+		s.noteIPFailure(ipKey)
 		return nil, errcode.Code(errcode.ErrAuthCaptchaWrong)
 	}
 
@@ -340,12 +501,26 @@ func (s *AuthService) Login(ctx context.Context, in LoginInput) (*AuthResponse, 
 	err := q.First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errcode.Code(errcode.ErrAuthAccountNotFound)
+			// ── 反枚举 + 计时均一化（§4.4 第 4 步）──
+			// 对 dummy 哈希执行一次真实 bcrypt 比较，把本路径耗时拉到与
+			// 「密码错」一致；对外统一 10102，内部日志保留 account_not_found。
+			_ = util.VerifyPassword(dummyPasswordHash, in.Password)
+			logger.L().Info("login failed: account_not_found（对外统一 10102，20260923-01 §4.4）",
+				zap.String("account", in.Account),
+				zap.String("phone", in.Phone),
+				zap.String("client_ip", in.IP))
+			return nil, s.uniformCredentialFailure(ctx, acctKey, ipKey)
 		}
 		return nil, errcode.Code(errcode.ErrDB)
 	}
 	if err := util.VerifyPassword(user.PasswordHash, in.Password); err != nil {
-		return nil, errcode.Code(errcode.ErrAuthPasswordWrong)
+		// ── 密码错 → 与账号不存在同一出口（§4.4 第 5 步）──
+		return nil, s.uniformCredentialFailure(ctx, acctKey, ipKey)
+	}
+	// 登录成功 → 清除账户键与 IP 键（§4.4 第 6 步）。
+	if s.guard != nil {
+		s.guard.Reset(acctKey)
+		s.guard.Reset(ipKey)
 	}
 	now := time.Now()
 	s.db.WithContext(ctx).Model(&user).Update("last_login_at", &now)

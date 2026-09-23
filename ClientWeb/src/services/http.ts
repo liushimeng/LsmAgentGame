@@ -24,9 +24,30 @@ export function getAuthToken(): string | null {
 }
 
 export class ApiError extends Error {
-  constructor(public code: number, message: string, public status: number) {
+  /**
+   * 2026-09-23 安全加固（tmpPlan/登录与WebSocket网络安全加固-20260923-01 §6.1）：
+   * 服务端返回 HTTP `Retry-After` 响应头（整数秒）时解析挂载，供调用方
+   * （目前仅 LoginForm 的 10501/10502 锁定倒计时）读取。头缺失或解析失败
+   * 为 undefined。其余行为（超时、会话拦截、信封解包）完全不变。
+   */
+  retryAfter?: number;
+  constructor(
+    public code: number,
+    message: string,
+    public status: number,
+    retryAfter?: number,
+  ) {
     super(message);
+    this.retryAfter = retryAfter;
   }
+}
+
+/** 解析 `Retry-After` 响应头为整数秒；缺失/非整数/负数一律 undefined。 */
+function parseRetryAfter(raw: string | null): number | undefined {
+  if (!raw) return undefined;
+  const n = Number.parseInt(raw.trim(), 10);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return n;
 }
 
 /**
@@ -131,11 +152,13 @@ export async function http<T>(
   if (!res.ok) {
     const code = body?.code ?? res.status;
     const msg = body?.message ?? res.statusText;
+    // 429 锁定/限流（10501/10502）会带 Retry-After；普通错误缺省即 undefined。
+    const retryAfter = parseRetryAfter(res.headers.get('Retry-After'));
     // Classify auth-session failures so we don't leak raw jargon into the UI.
     if (isAuthSessionError(code) || res.status === 401) {
       handleSessionError(code, msg);
     }
-    throw new ApiError(code, msg, res.status);
+    throw new ApiError(code, msg, res.status, retryAfter);
   }
   if (body && typeof body === 'object' && 'code' in body) {
     if (body.code !== 0) {

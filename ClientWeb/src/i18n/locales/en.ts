@@ -156,6 +156,7 @@ const en: Dict = {
   'auth.registerSuccessTitle': 'Account created!',
   'auth.registerSuccessHint': 'This is your personal invite code — share it with friends. Anyone who signs up with your code counts toward your referrals.',
   'auth.goToLogin': 'Go to sign in',
+  'auth.tooManyAttempts': 'Too many attempts, retry in {seconds}s',
   'auth.sessionExpired': 'Your session expired — please sign in again.',
   'auth.sessionInvalid': 'Your session is no longer valid — please sign in again.',
   'auth.sessionMissing': 'Please sign in to continue.',

@@ -31,6 +31,14 @@ const (
 	ErrAuthCaptchaExpired  = 10303
 	ErrPermissionDenied    = 10403
 
+	// 105xx — 认证节流（20260923-01 登录与 WebSocket 网络安全加固 §3）。
+	// ErrAuthTooManyAttempts: 账户/IP 失败计数越阈触发滑动窗口锁定，
+	// HTTP 429 + Retry-After；消息含 "retry after Ns" 供前端倒计时解析。
+	ErrAuthTooManyAttempts = 10501
+	// ErrAuthRateLimited: IP 令牌桶突发限流（login / captcha 签发 / ws 升级），
+	// HTTP 429（Retry-After 可选）。
+	ErrAuthRateLimited = 10502
+
 	// 2xxxx — validation
 	ErrValidationFailed = 20001
 
@@ -188,6 +196,10 @@ var DefaultMessages = map[int]string{
 	ErrAuthCaptchaWrong:    "captcha does not match",
 	ErrAuthCaptchaExpired:  "captcha has expired",
 	ErrPermissionDenied:    "permission denied",
+	// 20260923-01 §3 —— 认证节流。10501 在锁定路径会被替换为含
+	// "retry after Ns" 的动态消息，供前端倒计时解析。
+	ErrAuthTooManyAttempts: "too many failed attempts, retry later",
+	ErrAuthRateLimited:     "request rate exceeded, slow down",
 
 	ErrValidationFailed: "validation failed",
 

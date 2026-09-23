@@ -156,6 +156,7 @@ const ja: Dict = {
   'auth.registerSuccessTitle': 'アカウント作成完了!',
   'auth.registerSuccessHint': 'これはあなたの個人招待コードです。友人と共有しましょう。あなたのコードで登録した人数が、あなたの推薦人数として加算されます。',
   'auth.goToLogin': 'ログインへ',
+  'auth.tooManyAttempts': '試行回数が多すぎます。{seconds} 秒後に再試行してください',
   'auth.sessionExpired': 'セッションの有効期限が切れました。もう一度ログインしてください。',
   'auth.sessionInvalid': 'セッションが無効です。もう一度ログインしてください。',
   'auth.sessionMissing': '続行するにはログインしてください。',

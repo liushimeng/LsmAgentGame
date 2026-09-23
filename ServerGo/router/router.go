@@ -20,16 +20,41 @@ import (
 
 	"LsmAgentGame/api"
 	"LsmAgentGame/config"
+	"LsmAgentGame/logger"
 	"LsmAgentGame/middleware"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // New constructs the *gin.Engine.
 func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, wealthSurveyAPI *api.WealthSurveyAPI, wealthCityAPI *api.WealthCityAPI) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(gin.Recovery(), middleware.RequestID(), middleware.Logging(), middleware.CORS(cfg))
+
+	// ── 20260923-01 §4.8 网络基线 ─────────────────────────────────────────
+	// TrustedProxies 收敛：默认 security.trusted_proxies=[] ⇒ 不信任任何
+	// X-Forwarded-For / X-Real-IP，c.ClientIP() 即真实 socket IP。这堵住了
+	// 方案 A6：服务直连监听 39001/39002（无反代），此前 gin 默认信任全部
+	// XFF，任何 IP 维度防御（本次新增的限流/锁定/验证码 IP 绑定）都能被
+	// 一个伪造头绕过。确实部署在反代后面时，把代理 CIDR 写进 conf。
+	//
+	// SetTrustedProxies 失败（CIDR 语法错）只告警不中断启动：gin 会保留
+	// 上一次（构造时的默认）信任表，服务仍可用，运维从日志修 conf。
+	if err := r.SetTrustedProxies(cfg.Security.TrustedProxies); err != nil {
+		logger.L().Error("SetTrustedProxies failed — X-Forwarded-For trust list NOT narrowed, fix security.trusted_proxies in LsmAgentGame.conf",
+			zap.Strings("trusted_proxies", cfg.Security.TrustedProxies),
+			zap.Error(err))
+	} else {
+		logger.L().Info("trusted proxies configured",
+			zap.Int("count", len(cfg.Security.TrustedProxies)),
+			zap.Strings("trusted_proxies", cfg.Security.TrustedProxies))
+	}
+
+	// SecurityHeaders 放在 Recovery/RequestID/Logging/CORS 之后：Recovery 与
+	// RequestID 必须先跑（panic 也要带头、X-Request-ID 要先落 header），
+	// 安全头本身与 CORS 无覆盖关系（不同 header 名）。
+	r.Use(gin.Recovery(), middleware.RequestID(), middleware.Logging(), middleware.CORS(cfg), middleware.SecurityHeaders(cfg))
 
 	// Static cache policy. Registered BEFORE the static routes so the headers
 	// land on the response that r.Static / r.StaticFile write:
@@ -103,8 +128,10 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 	r.GET("/api/health", authAPI.Health)
 	r.GET("/api/version", versionAPI.Get)
 	r.GET("/api/games", gameAPI.List)
-	// Captcha issue — public; rate-limited at the proxy layer if needed.
-	r.POST("/api/captcha", captchaAPI.Issue)
+	// Captcha issue — public。20260923-01 §4.8：AuthBodyLimit 单独包一层
+	// （请求体 16 KiB 上限 + Cache-Control: no-store）；IP 签发速率限流在
+	// handler 内消费 "captcha" 桶（§4.6），两层职责不重叠。
+	r.POST("/api/captcha", middleware.AuthBodyLimit(cfg), captchaAPI.Issue)
 
 	// 提交记录 —— 公开接口,任何已加载页面的访客都能查看 git 历史摘要。
 	git := r.Group("/api/git")
@@ -128,6 +155,9 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 
 	// Auth.
 	auth := r.Group("/api/auth")
+	// §4.8：/api/auth/* 全部走请求体上限（在 ShouldBindJSON 之前生效）
+	// + no-store（凭据端点绝不进任何缓存）。
+	auth.Use(middleware.AuthBodyLimit(cfg))
 	{
 		auth.POST("/register", authAPI.Register)
 		auth.POST("/login", authAPI.Login)

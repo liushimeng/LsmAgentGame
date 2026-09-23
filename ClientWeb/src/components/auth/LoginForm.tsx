@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { authService } from '@/services/auth.service';
+import { ApiError } from '@/services/http';
 import { uiStorage } from '@/shared/utils/ui-storage';
 import { useT } from '@/hooks/useT';
 
@@ -31,6 +32,11 @@ type LoginPayload = {
   captcha_answer?: string;
 };
 
+// 2026-09-23 安全加固（tmpPlan 20260923-01 §5/§6）：服务端 errcode ——
+// 暴力破解锁定（429 + Retry-After）与 IP 突发限流（429，Retry-After 可缺省）。
+const ERR_TOO_MANY_ATTEMPTS = 10501;
+const ERR_RATE_LIMITED = 10502;
+
 export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
   const login = useAuth((s) => s.login);
   const t = useT();
@@ -47,6 +53,13 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
 
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // 2026-09-23 安全加固：10501/10502 触发的前端锁定倒计时状态。
+  // lockedUntilTs 是**绝对时间戳** —— 切换 account/phone 模式不重置它
+  //（锁定是账号+IP 维度的服务端状态，不是前端局部状态）。
+  const [lockedUntilTs, setLockedUntilTs] = useState(0);
+  const [lockSeconds, setLockSeconds] = useState(0);
+  const locked = lockedUntilTs > 0;
 
   // 当前模式的凭证和验证码
   const creds = mode === 'account' ? accountCreds : phoneCreds;
@@ -84,8 +97,36 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
     }
   }
 
+  // 定时器/跨渲染帧回调读取的「最新闭包」ref：refreshCaptcha 捕获了当前 mode
+  // 对应的 setCaptcha，解锁 tick 触发时必须调用最新一份，否则会刷错模式的验证码。
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
+  const refreshCaptchaRef = useRef(refreshCaptcha);
+  refreshCaptchaRef.current = refreshCaptcha;
+
+  // 锁定倒计时：每秒刷新剩余秒数；归零自动解锁并刷新一次验证码。
+  // 锁定期间刻意不发任何验证码请求（见 catch / 模式切换 effect），避免
+  // 自我放大 /api/captcha 请求加剧限流。effect 以绝对时间戳为键，组件
+  // 卸载时 cleanup 清理定时器，无泄漏。
+  useEffect(() => {
+    if (lockedUntilTs <= 0) return;
+    const tick = () => {
+      const remain = Math.max(0, Math.ceil((lockedUntilTs - Date.now()) / 1000));
+      setLockSeconds(remain);
+      if (remain <= 0) {
+        setLockedUntilTs(0);
+        void refreshCaptchaRef.current();
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [lockedUntilTs]);
+
   // Refresh captcha when mode changes.
   useEffect(() => {
+    // 锁定期间不重新领码；到期由上面的 unlock tick 统一刷新一次。
+    if (lockedRef.current) return;
     refreshCaptcha();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
@@ -127,10 +168,26 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
         phonePassword: ''
       });
     } catch (e) {
-      const err = e as Error & { code?: number };
-      const code = err.code ?? 0;
-      setErr(`[${code}] ${err.message}`);
-      refreshCaptcha();
+      const ae = e as ApiError;
+      const code = ae?.code ?? 0;
+      if (code === ERR_TOO_MANY_ATTEMPTS || code === ERR_RATE_LIMITED) {
+        // 秒数优先级：Retry-After 头 > 消息正文正则 > 缺省 30s（10502 常缺头）。
+        const m = /retry after (\d+)/i.exec(ae?.message ?? '');
+        const fromMsg = m ? Number.parseInt(m[1], 10) : NaN;
+        const seconds =
+          ae?.retryAfter && ae.retryAfter > 0
+            ? ae.retryAfter
+            : Number.isFinite(fromMsg) && fromMsg > 0
+              ? fromMsg
+              : 30;
+        setErr('');
+        setLockSeconds(seconds);
+        setLockedUntilTs(Date.now() + seconds * 1000);
+        // 刻意不调用 refreshCaptcha()：锁定/限流期间任何领码都是自我放大请求。
+      } else {
+        setErr(`[${code}] ${ae?.message}`);
+        refreshCaptcha();
+      }
     } finally {
       setBusy(false);
     }
@@ -212,6 +269,7 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
               type="button"
               className="ghost"
               onClick={refreshCaptcha}
+              disabled={locked}
               aria-label={t('auth.refreshCaptcha')}
             >
               ↻
@@ -227,7 +285,13 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
         </div>
       )}
 
-      {err && <div className="error">{err}</div>}
+      {locked ? (
+        <div className="error" data-testid="login-lock-notice" role="alert">
+          {t('auth.tooManyAttempts', { seconds: lockSeconds })}
+        </div>
+      ) : (
+        err && <div className="error">{err}</div>
+      )}
 
       <div
         style={{
@@ -240,7 +304,7 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
         <button type="button" className="ghost" data-testid="login-switch-to-register" onClick={onSwitch}>
           {t('auth.register')}
         </button>
-        <button type="submit" data-testid="login-submit" disabled={busy}>
+        <button type="submit" data-testid="login-submit" disabled={busy || locked}>
           {busy ? t('auth.signingIn') : t('auth.signIn')}
         </button>
       </div>

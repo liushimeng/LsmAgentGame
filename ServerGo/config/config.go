@@ -25,6 +25,7 @@ type Config struct {
 	Captcha     CaptchaConfig     `json:"captcha"`
 	Log         LogConfig         `json:"log"`
 	CORS        CORSConfig        `json:"cors"`
+	Security    SecurityConfig    `json:"security"`
 	Game        GameConfig        `json:"game"`
 	LLM         LLMConfig         `json:"llm"`
 	Werewolf    WerewolfConfig    `json:"werewolf"`
@@ -459,6 +460,72 @@ type CORSConfig struct {
 	AllowedOrigins []string `json:"allowed_origins"`
 }
 
+// SecurityConfig 是「登录与 WebSocket 网络安全加固」(20260923-01)的总配置段。
+//
+// 运行时 LsmAgentGame.conf 可以完全没有 security 段 —— applyDefaults 会按
+// 方案 §4.1 的默认值全量兜底，零配置即可安全运行。显式写出的字段优先生效。
+//
+// 语义总览（详见 tmpPlan/登录与WebSocket网络安全加固-20260923-01.md §4）：
+//   - 第 0 层：TrustedProxies 收敛 / 安全响应头 / 请求体上限（middleware/security.go）
+//   - 第 1 层：验证码签发限流 + 容量上限 + IP 绑定 + SVG 反爬渲染
+//   - 第 2 层：登录/验证码/WS 的 IP 令牌桶突发限流（util/ip_ratelimit.go）
+//   - 第 3 层：账户/IP 滑动窗口失败计数 + 递增锁定（util/login_guard.go）
+type SecurityConfig struct {
+	// Enabled 总开关。nil（缺省）= true；显式 false 时第 1/2/3 层节流与锁定
+	// 全部停用，仅保留安全响应头（第 0 层的 trusted_proxies 仍生效）。
+	Enabled *bool `json:"enabled"`
+	// TrustedProxies 反向代理 CIDR 白名单。默认 [] = 不信任任何
+	// X-Forwarded-For / X-Real-IP（直连部署），gin 的 ClientIP() 即真实
+	// socket IP，堵住方案 A6 的伪造头绕过。仅当确实部署在反代后面时填写。
+	TrustedProxies []string `json:"trusted_proxies"`
+	// BodyLimitBytes /api/auth/* 与 /api/captcha 的请求体硬上限。
+	BodyLimitBytes int `json:"body_limit_bytes"`
+	// LoginGuard 第 3 层：失败滑窗计数 + 递增锁定。
+	LoginGuard LoginGuardConfig `json:"login_guard"`
+	// CaptchaGuard 第 1/2 层：验证码签发速率 / 挂起容量 / IP 绑定。
+	CaptchaGuard CaptchaGuardConfig `json:"captcha_guard"`
+	// WSGuard 第 2 层：WS 升级速率 / 单用户并发连接数 / 追加 Origin 白名单。
+	WSGuard WSGuardConfig `json:"ws_guard"`
+}
+
+// EnabledResolved 返回 security 总开关的生效值（nil 缺省 = true）。
+func (s *SecurityConfig) EnabledResolved() bool {
+	return s.Enabled == nil || *s.Enabled
+}
+
+// LoginGuardConfig 滑动窗口失败计数 + 递增锁定（util.LoginGuard）。
+//
+// 锁定档位 = LockSeconds × 4^(重复触发次数)，封顶 86400s；重复触发的
+// 升级档位保留 MemorySeconds 后衰减回基础档。
+type LoginGuardConfig struct {
+	WindowSeconds int `json:"window_seconds"`  // 失败计数滑窗（秒）
+	MaxFailures   int `json:"max_failures"`    // 账户维度阈值（仅 credential 类失败计数）
+	IPMaxFailures int `json:"ip_max_failures"` // 单 IP 维度阈值（含验证码/credential 全部失败）
+	LockSeconds   int `json:"lock_seconds"`    // 基础锁定时长（秒），×4 递增，封顶 86400
+	MemorySeconds int `json:"memory_seconds"`  // 升级档位（重复锁定次数）的保留时长（秒）
+	FailDelayMs   int `json:"fail_delay_ms"`   // credential 失败后人工化延迟基数（毫秒，<=0 关闭）
+}
+
+// CaptchaGuardConfig 验证码接口加固（签发限流 + 挂起容量 + IP 绑定）。
+type CaptchaGuardConfig struct {
+	PerIPPerMinute     int   `json:"per_ip_per_minute"`    // /api/captcha 每 IP 签发速率
+	MaxPending         int   `json:"max_pending"`          // 挂起验证码容量上限（超限驱逐最旧）
+	BindIP             *bool `json:"bind_ip"`              // 签发/校验绑定来源 IP（哈希存储；nil 缺省 true）
+	BurstRefillSeconds int   `json:"burst_refill_seconds"` // 令牌桶回滴间隔（1/rate 的量化，秒）
+}
+
+// BindIPResolved 返回 captcha IP 绑定的生效值（nil 缺省 = true）。
+func (c *CaptchaGuardConfig) BindIPResolved() bool {
+	return c.BindIP == nil || *c.BindIP
+}
+
+// WSGuardConfig WebSocket 升级路径加固（util.RateLimiter "ws" 桶 + Origin 白名单）。
+type WSGuardConfig struct {
+	PerIPPerMinute  int      `json:"per_ip_per_minute"`  // /ws 升级尝试（含坏 token）限流
+	MaxConnsPerUser int      `json:"max_conns_per_user"` // 单用户并发连接数上限
+	AllowedOrigins  []string `json:"allowed_origins"`    // 追加 WS Origin 白名单（cors.allowed_origins 之外）
+}
+
 // CookieConfig holds the AES-256-GCM signing key, lifetime, and cookie name
 // for the encrypted auth cookie issued by /api/auth/login.
 //
@@ -479,9 +546,15 @@ type CookieConfig struct {
 // Defaults applied by applyDefaults:
 //   - TTLSeconds = 180 (3 minutes)
 //   - Length = 5 (alphanumeric, all caps)
+//   - Decoys = 2 (20260923-01 §4.6：SVG 干扰字符数量，0=关闭)
 type CaptchaConfig struct {
 	TTLSeconds int `json:"ttl_seconds"`
 	Length     int `json:"length"`
+	// Decoys 是反爬 SVG 渲染中混入的干扰字符数量（浅色系，与真字符视觉
+	// 可分、DOM 不可分）。0 = 关闭。默认 2，由 applyDefaults 兜底。
+	// 注：方案 §4.1 示例把 decoys 画在 captcha_guard 下，但 §4.6 接线明确
+	// 落在 CaptchaConfig —— 以本字段为唯一事实来源。
+	Decoys int `json:"decoys"`
 }
 
 // GameConfig holds game-lobby settings.
@@ -869,6 +942,59 @@ func applyDefaults(c *Config) {
 	}
 	if c.Captcha.Length == 0 {
 		c.Captcha.Length = 5
+	}
+	if c.Captcha.Decoys == 0 {
+		c.Captcha.Decoys = 2
+	}
+	// ── security 段默认值（20260923-01 §4.1）────────────────────────────
+	// 运行时 conf 无 security 段时全部走这里，零配置可运行。
+	if c.Security.Enabled == nil {
+		t := true
+		c.Security.Enabled = &t
+	}
+	if c.Security.TrustedProxies == nil {
+		// 非 nil 空切片：显式「不信任任何代理」。
+		c.Security.TrustedProxies = []string{}
+	}
+	if c.Security.BodyLimitBytes == 0 {
+		c.Security.BodyLimitBytes = 16384 // 16 KiB
+	}
+	if c.Security.LoginGuard.WindowSeconds == 0 {
+		c.Security.LoginGuard.WindowSeconds = 900
+	}
+	if c.Security.LoginGuard.MaxFailures == 0 {
+		c.Security.LoginGuard.MaxFailures = 5
+	}
+	if c.Security.LoginGuard.IPMaxFailures == 0 {
+		c.Security.LoginGuard.IPMaxFailures = 50
+	}
+	if c.Security.LoginGuard.LockSeconds == 0 {
+		c.Security.LoginGuard.LockSeconds = 60
+	}
+	if c.Security.LoginGuard.MemorySeconds == 0 {
+		c.Security.LoginGuard.MemorySeconds = 86400
+	}
+	if c.Security.LoginGuard.FailDelayMs == 0 {
+		c.Security.LoginGuard.FailDelayMs = 300
+	}
+	if c.Security.CaptchaGuard.PerIPPerMinute == 0 {
+		c.Security.CaptchaGuard.PerIPPerMinute = 30
+	}
+	if c.Security.CaptchaGuard.MaxPending == 0 {
+		c.Security.CaptchaGuard.MaxPending = 20000
+	}
+	if c.Security.CaptchaGuard.BindIP == nil {
+		t := true
+		c.Security.CaptchaGuard.BindIP = &t
+	}
+	if c.Security.CaptchaGuard.BurstRefillSeconds == 0 {
+		c.Security.CaptchaGuard.BurstRefillSeconds = 2
+	}
+	if c.Security.WSGuard.PerIPPerMinute == 0 {
+		c.Security.WSGuard.PerIPPerMinute = 20
+	}
+	if c.Security.WSGuard.MaxConnsPerUser == 0 {
+		c.Security.WSGuard.MaxConnsPerUser = 10
 	}
 	if c.Log.Level == "" {
 		c.Log.Level = "info"

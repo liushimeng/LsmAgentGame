@@ -29,7 +29,12 @@
   },
   "captcha": {
     "ttl_seconds": 180,      // 3 minutes — captcha validity
-    "length":      5
+    "length":      5,
+    // 20260923-01 §4.6 — 反爬 SVG 渲染混入的干扰字符数量（浅一档色、
+    // 字号 −20%：人眼可分、DOM 不可分）。0 = 关闭；若个别视觉自动化
+    // （AutoTest 的 OCR 读码）受 decoys 干扰，可置 0 回退，其余渲染加固
+    // （DOM 乱序 / XML 实体 / crypto-rand 抖动 / 前景干扰）不受影响。
+    "decoys":      2
   },
   "game": {
     "max_room": 50
@@ -43,6 +48,51 @@
       "https://localhost:39001",
       "https://127.0.0.1:39001"
     ]
+  },
+
+  // ============================================================================
+  // 20260923-01 — 登录页面与 WebSocket 网络安全加固（四层纵深防御）。
+  // 本段**可整段省略**：ServerGo/config/config.go 的 applyDefaults 会按下面
+  // 同样的默认值全量兜底，运行态 LsmAgentGame.conf 无需改动即可安全运行。
+  // 无任何密钥，全部为阈值/开关。方案见
+  // tmpPlan/登录与WebSocket网络安全加固-20260923-01.md §4.1。
+  // ============================================================================
+  "security": {
+    // 总开关。true(默认)：第 1/2/3 层（验证码加固 / IP 令牌桶 / 账户锁定）
+    // 全部生效；false：一键回退到加固前行为，仅保留安全响应头
+    // (X-Content-Type-Options / X-Frame-Options / Referrer-Policy /
+    // Permissions-Policy / X-Robots-Tag) 与请求体上限。
+    "enabled": true,
+    // 反向代理 CIDR 白名单。[] (默认) = 不信任任何 X-Forwarded-For /
+    // X-Real-IP —— 本服务直连监听 39001/39002（无反代），gin 的 ClientIP()
+    // 必须是真实 socket IP，否则下面所有 IP 维度防御都能被一个伪造头绕过。
+    // 确实部署在 nginx/CDN 后面时，才把代理网段写进来，例如 ["10.0.0.0/8"]。
+    "trusted_proxies": [],
+    // /api/auth/* 与 /api/captcha 的请求体硬上限（字节）。超限在
+    // ShouldBindJSON 读取阶段即被拒（HTTP 400 + 20001），不整包缓冲。
+    "body_limit_bytes": 16384,
+    // 第 3 层：失败滑窗计数 + 递增锁定（HTTP 429 + code 10501 + Retry-After）。
+    "login_guard": {
+      "window_seconds":  900,   // 失败计数滑窗（15 min）
+      "max_failures":    5,     // 账户维度阈值（仅 credential 类失败计数）
+      "ip_max_failures": 50,    // 单 IP 维度阈值（含验证码 + credential 全部失败）
+      "lock_seconds":    60,    // 基础锁定时长；每重复触发 ×4 递增，封顶 86400s
+      "memory_seconds":  86400, // 升级档位（重复锁定次数）的保留时长
+      "fail_delay_ms":   300    // credential 失败后的人工化延迟基数（×窗口内失败数，封顶 1500ms；<=0 关闭）
+    },
+    // 第 1/2 层：验证码签发限流 + 挂起容量 + 来源 IP 绑定。
+    "captcha_guard": {
+      "per_ip_per_minute":    30,   // /api/captcha 每 IP 签发速率（超限 429 + code 10502）
+      "max_pending":          20000,// 挂起验证码容量上限（超限驱逐最旧，绝不拒绝正常用户）
+      "bind_ip":              true, // 签发/校验绑定来源 IP（sha256 存储；任一侧 IP 为空则跳过，保 dev 与单测）
+      "burst_refill_seconds": 2     // IP 令牌桶回滴量子（1/rate 的量化，同时是 Retry-After 的最小值）
+    },
+    // 第 2 层：WSS 升级路径加固（39001 /ws 与 39002 /ws 同策略）。
+    "ws_guard": {
+      "per_ip_per_minute":  20,  // /ws 升级尝试（含坏 token）限流，超限 429 + code 10502，不升级
+      "max_conns_per_user": 10,  // 单用户并发连接数上限（<=0 = 不限；刷新重连有 15s 宽限期兜底）
+      "allowed_origins":    []   // 追加的 WS Origin 白名单（在 cors.allowed_origins 之外；同源与 dev localhost 通配已内置）
+    }
   },
   "llm": {
     // Anthropic wire-format proxy. Base endpoint — the anthropic provider
