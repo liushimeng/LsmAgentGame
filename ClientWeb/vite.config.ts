@@ -31,5 +31,8 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    // 19-Blender3D模型集成：显式声明 .glb 当 asset 导入（Vite 5 默认已支持，显式声明增加可读性）
+    // assetsInlineLimit 维持 4096 默认：.glb 平均 100-500 KB 远大于 4KB，不会被内联成 base64
+    assetsInclude: ['**/*.glb'],
   },
 });
