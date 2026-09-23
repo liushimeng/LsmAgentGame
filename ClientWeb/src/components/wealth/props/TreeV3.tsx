@@ -5,10 +5,16 @@
  *   材质：树干 #5a4634 粗糙；树冠 #2f7a3a + `pbr/synth/foliage_n/r`。
  *   props 形状故意与 TreeV2 对齐（x/z/scale + 内部 hashStr 生成 seed），
  *   让 StreetPropsLayer 无痛替换。
+ *
+ * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
+ *   - url 缺失或加载失败 → children 渲染（程序化几何）
+ *   - url 加载成功 → 渲染真实模型
  */
 import { useMemo } from 'react';
 import { useSynthPBR } from '../textureCache';
 import { u } from '../cityScale';
+import { Model } from '../Model';
+import { modelUrl } from '@/assets/models';
 
 const TRUNK_COLOR = '#5a4634';
 const CROWN_COLORS = ['#2f7a3a', '#3a8a45', '#4a9a55'];
@@ -36,7 +42,25 @@ function hashStr(s: string): number {
   return h >>> 0;
 }
 
+function blenderEnabled(): boolean {
+  return typeof window === 'undefined' ||
+    window.localStorage.getItem('disable-blender-models') !== '1';
+}
+
 export function TreeV3({ x, z, seed, scale = 1, castShadow = true }: TreeV3Props) {
+  const url = modelUrl('nature', 'oak_tree');
+  if (!url || !blenderEnabled()) {
+    return <TreeV3Fallback x={x} z={z} seed={seed} scale={scale} castShadow={castShadow} />;
+  }
+  return (
+    <Model url={url} position={[x, 0, z]} scale={scale} castShadow={castShadow}>
+      <TreeV3Fallback x={x} z={z} seed={seed} scale={scale} castShadow={castShadow} />
+    </Model>
+  );
+}
+
+/** 程序化几何 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。 */
+function TreeV3Fallback({ x, z, seed, scale = 1, castShadow = true }: TreeV3Props) {
   const foliage = useSynthPBR('foliage', { normalScale: [1.2, 1.2] });
   const fp = foliage.matProps;
 

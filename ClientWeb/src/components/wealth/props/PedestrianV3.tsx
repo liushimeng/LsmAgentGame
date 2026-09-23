@@ -22,6 +22,8 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { u } from '../cityScale';
+import { useSharedGLTF } from '../modelCache';
+import { modelUrl } from '@/assets/models';
 
 export interface PedestrianV3Props {
   /** 漫步路径折线（世界坐标 x,z；首尾不闭合，到端点折返）。 */
@@ -107,6 +109,29 @@ function samplePath(
 }
 
 export function PedestrianV3({ path, speed = 0.55, outfit = 0, phase = 0 }: PedestrianV3Props) {
+  // 19-Blender3D模型集成：.glb 模式优先级最高，绕过原 6 mesh + 摆臂逻辑
+  const modelUrlStr = modelUrl('characters', 'pedestrian_walk');
+  const blenderOn = typeof window === 'undefined' ||
+    window.localStorage.getItem('disable-blender-models') !== '1';
+  const useGLB = !!modelUrlStr && blenderOn;
+  void useGLB; // 标记保留：未来 v19.5 通过此 flag 控制 GLB vs 程序化几何 fallback
+  const { scene: glbScene, animations } = useSharedGLTF(modelUrlStr);
+  const glbCloned = useMemo(() => (glbScene ? glbScene.clone(true) : null), [glbScene]);
+  // GLB 模式 mixer（per-instance，独立推进 walk clip）
+  const mixerRef = useRef<THREE.AnimationMixer | null>(null);
+  useEffect(() => {
+    if (!glbCloned || animations.length === 0) return;
+    const m = new THREE.AnimationMixer(glbCloned);
+    const action = m.clipAction(animations[0]);
+    action.play();
+    mixerRef.current = m;
+    return () => {
+      m.stopAllAction();
+      m.uncacheRoot(glbCloned);
+      mixerRef.current = null;
+    };
+  }, [glbCloned, animations]);
+
   const groupRef = useRef<THREE.Group>(null);
   const armLRef = useRef<THREE.Mesh>(null);
   const armRRef = useRef<THREE.Mesh>(null);
@@ -162,6 +187,8 @@ export function PedestrianV3({ path, speed = 0.55, outfit = 0, phase = 0 }: Pede
   };
 
   useFrame((_state, delta) => {
+    // 19-Blender3D模型集成：GLB 模式 mixer 推进 walk clip（与 path 推进 / 摆臂逻辑并行）
+    mixerRef.current?.update(delta);
     const g = groupRef.current;
     if (!g) return;
     // 全静止：吸附 path 起点 + 四肢归零（与 V2 REDUCED_MOTION 行为一致）
@@ -212,28 +239,35 @@ export function PedestrianV3({ path, speed = 0.55, outfit = 0, phase = 0 }: Pede
 
   return (
     <group ref={groupRef} position={[start[0], 0, start[1]]}>
-      {/* 躯干（上衣色；跨度 u(0.82)–u(1.40)） */}
-      <mesh geometry={torsoGeo} position={[0, u(1.11), 0]}>
-        <meshStandardMaterial color={topColor} roughness={0.75} metalness={0.05} />
-      </mesh>
-      {/* 头（肤色；跨度 u(1.43)–u(1.67)） */}
-      <mesh geometry={headGeo} position={[0, u(1.55), 0]}>
-        <meshStandardMaterial color={skinColor} roughness={0.7} metalness={0.02} />
-      </mesh>
-      {/* 左/右臂（上衣色；pivot 落肩 y=u(1.34)，手端垂到 u(0.82)） */}
-      <mesh ref={armLRef} geometry={armGeo} position={[-ARM_X, u(1.34), 0]}>
-        <meshStandardMaterial color={topColor} roughness={0.75} metalness={0.05} />
-      </mesh>
-      <mesh ref={armRRef} geometry={armGeo} position={[ARM_X, u(1.34), 0]}>
-        <meshStandardMaterial color={topColor} roughness={0.75} metalness={0.05} />
-      </mesh>
-      {/* 左/右腿（裤色；pivot 落髋 y=u(0.82)，脚端 y=u(0.82)−u(0.82)=0 贴地） */}
-      <mesh ref={legLRef} geometry={legGeo} position={[-LEG_X, u(0.82), 0]}>
-        <meshStandardMaterial color={pantsColor} roughness={0.8} metalness={0.03} />
-      </mesh>
-      <mesh ref={legRRef} geometry={legGeo} position={[LEG_X, u(0.82), 0]}>
-        <meshStandardMaterial color={pantsColor} roughness={0.8} metalness={0.03} />
-      </mesh>
+      {/* 19-Blender3D模型集成：GLB 模式优先级最高（GLB 自带摆臂动画） */}
+      {glbCloned ? (
+        <primitive object={glbCloned} />
+      ) : (
+        <>
+          {/* 躯干（上衣色；跨度 u(0.82)–u(1.40)） */}
+          <mesh geometry={torsoGeo} position={[0, u(1.11), 0]}>
+            <meshStandardMaterial color={topColor} roughness={0.75} metalness={0.05} />
+          </mesh>
+          {/* 头（肤色；跨度 u(1.43)–u(1.67)） */}
+          <mesh geometry={headGeo} position={[0, u(1.55), 0]}>
+            <meshStandardMaterial color={skinColor} roughness={0.7} metalness={0.02} />
+          </mesh>
+          {/* 左/右臂（上衣色；pivot 落肩 y=u(1.34)，手端垂到 u(0.82)） */}
+          <mesh ref={armLRef} geometry={armGeo} position={[-ARM_X, u(1.34), 0]}>
+            <meshStandardMaterial color={topColor} roughness={0.75} metalness={0.05} />
+          </mesh>
+          <mesh ref={armRRef} geometry={armGeo} position={[ARM_X, u(1.34), 0]}>
+            <meshStandardMaterial color={topColor} roughness={0.75} metalness={0.05} />
+          </mesh>
+          {/* 左/右腿（裤色；pivot 落髋 y=u(0.82)，脚端 y=u(0.82)−u(0.82)=0 贴地） */}
+          <mesh ref={legLRef} geometry={legGeo} position={[-LEG_X, u(0.82), 0]}>
+            <meshStandardMaterial color={pantsColor} roughness={0.8} metalness={0.03} />
+          </mesh>
+          <mesh ref={legRRef} geometry={legGeo} position={[LEG_X, u(0.82), 0]}>
+            <meshStandardMaterial color={pantsColor} roughness={0.8} metalness={0.03} />
+          </mesh>
+        </>
+      )}
     </group>
   );
 }

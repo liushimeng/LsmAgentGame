@@ -26,8 +26,10 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/wealth';
+import { modelUrl } from '@/assets/models';
 import { u } from '../cityScale';
 import { useSharedTexture } from '../textureCache';
+import { useSharedGLTF } from '../modelCache';
 
 type VehicleVariant = 'sedan' | 'truck' | 'bus' | 'taxi';
 
@@ -141,6 +143,17 @@ export function Vehicle({
   const url = propUrl('vehicle', variant);
   // 14-3D渲染深化：共享贴图缓存（多车共用同 variant 贴图只上传一次）
   const tex = useSharedTexture(url);
+  // 19-Blender3D模型集成：Blender 真实模型（优先级最高，绕过 sprite 和 palette）
+  //   - GLB 缺失或加载失败 → scene=null → 走原有 useSprite / 几何体 / palette 分支
+  //   - GLB 加载成功 → 仅渲染 .glb（视觉最丰富）
+  //   - palette 模式（消防/巡逻车换色）→ 强制不走 GLB（GLB 颜色固定）
+  const modelUrlStr = modelUrl('vehicles', variant);
+  const blenderOn = typeof window === 'undefined' ||
+    window.localStorage.getItem('disable-blender-models') !== '1';
+  const useGLB = !palette && blenderOn && !!modelUrlStr;
+  void useGLB; // 标记保留：未来 v19.5 通过此 flag 控制 GLB vs sprite / palette fallback
+  const { scene: glbScene } = useSharedGLTF(modelUrlStr);
+  const glbCloned = useMemo(() => (glbScene ? glbScene.clone(true) : null), [glbScene]);
   const groupRef = useRef<THREE.Group>(null);
   const dims = VEHICLE_DIMS[variant];
   // 18 · 阶段 Z：涂装三色（body 车身 / roof 车顶 / accent 前后端，缺省回退 body）
@@ -148,7 +161,7 @@ export function Vehicle({
   const roofColor = palette?.roof ?? bodyColor;
   const accentColor = palette?.accent ?? bodyColor;
   // 自定义涂装必须走几何体（贴图 sprite 是固定车型彩绘，换不了色）
-  const useSprite = !!tex && !palette;
+  const useSprite = !!tex && !palette && !glbCloned;
 
   // 路径向量
   const { dx, dz, angle } = useMemo(() => {
@@ -182,7 +195,10 @@ export function Vehicle({
 
   return (
     <group ref={groupRef} position={[from[0] + lane.ox, 0.02, from[1] + lane.oz]} rotation={[0, angle, 0]}>
-      {useSprite ? (
+      {/* 19-Blender3D模型集成：.glb 优先级最高，绕过 sprite 和 palette（palette 模式 useGLB=false） */}
+      {glbCloned ? (
+        <primitive object={glbCloned} castShadow />
+      ) : useSprite ? (
         <Billboard position={[0, dims.h / 2 + 0.03, 0]}>
           <mesh>
             {/* 贴图平面与车身尺寸同步（含车底轮子余量） */}
