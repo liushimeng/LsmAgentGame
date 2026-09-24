@@ -1,0 +1,285 @@
+/* 批次 20 FE-2 三功能 UI（副业定价战 / 股票微观结构 / 市长选举）共享样式。
+   组件内直接 import（先例：CityStatsPanel.css；不动 globals.css @import 链）。
+   对比度遵循 CLAUDE.md §26.1：徽章白字实底 ≥4.5:1；禁用态实底灰 + cursor:not-allowed。 */
+
+/* ── F2-2 副业定价区块（ActionPanel 内嵌）── */
+.virtualCity-sideprice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  margin: 2px 0 4px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 8px;
+  background: #141b26;
+}
+.virtualCity-sideprice__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #e5e7eb;
+}
+.virtualCity-sideprice__title {
+  font-weight: 600;
+  color: #f3f4f6;
+}
+.virtualCity-sideprice__tier {
+  padding: 1px 8px;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 11px;
+}
+.virtualCity-sideprice__stats {
+  color: #cbd5e1;
+}
+.virtualCity-sideprice__segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.virtualCity-sideprice__btn {
+  min-width: 64px;
+  padding: 3px 10px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  background: #1f2937;
+  color: #e5e7eb;
+  font-size: 12px;
+  cursor: pointer;
+}
+.virtualCity-sideprice__btn:hover:not(:disabled) {
+  border-color: #94a3b8;
+}
+/* 当前档高亮（实底彩色 + 白字，§26.1 焦点态 ≥6:1 由组件内联 badgeColor 提供） */
+.virtualCity-sideprice__btn--active {
+  color: #fff;
+  font-weight: 700;
+  border-color: transparent;
+}
+/* 同月已改档禁用态：实底灰（禁 opacity 表意，§26.2 反模式 5） */
+.virtualCity-sideprice__btn--locked:disabled,
+.virtualCity-sideprice__btn:disabled {
+  background: #374151;
+  color: #9ca3af;
+  border-color: #4b5563;
+  cursor: not-allowed;
+}
+.virtualCity-sideprice__rivals {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.virtualCity-sideprice__rivals-toggle {
+  align-self: flex-start;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #93c5fd;
+  font-size: 11px;
+  cursor: pointer;
+}
+.virtualCity-sideprice__rivals-toggle:hover {
+  background: #1e293b;
+}
+.virtualCity-sideprice__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 72px;
+  overflow-y: auto; /* 面板内滚动，控件不出界（18-04 防溢出规约） */
+}
+.virtualCity-sideprice__chip {
+  padding: 1px 7px;
+  border-radius: 9px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+.virtualCity-sideprice__error {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #b91c1c;
+  color: #fff;
+  font-size: 12px;
+}
+
+/* ── F2-3 股票微观结构（MarketPanel + 动作弹窗）── */
+.virtualCity-micro__breaker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #b91c1c; /* 白字对比 ≈ 6.0:1，§26.1 徽章 ≥5:1 */
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.virtualCity-micro__prices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 6px;
+  padding-left: 2px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.virtualCity-micro__badge {
+  padding: 1px 8px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+.virtualCity-micro__badge--narrow { background: #15803d; } /* 窄价差 — 绿 */
+.virtualCity-micro__badge--mid    { background: #4b5563; } /* 中价差 — 灰 */
+.virtualCity-micro__badge--wide   { background: #b91c1c; } /* 宽价差 — 红 */
+.virtualCity-micro__badge--t1     { background: #1e40af; } /* T+1 冻结角标 — 蓝 */
+.virtualCity-micro__hold {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 8px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+.virtualCity-micro__blocked {
+  margin: 6px 0;
+}
+
+/* ── F2-5 市长选举横幅（房间顶栏下方）── */
+.virtualCity-election-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 8px;
+  padding: 6px 12px;
+  border-left: 4px solid #d4a017;
+  border-radius: 8px;
+  background: #1e2a44;
+  color: #f3f4f6;
+  font-size: 12px;
+}
+.virtualCity-election-banner__title {
+  font-weight: 700;
+  color: #fbbf24;
+}
+.virtualCity-election-banner__term {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.virtualCity-election-banner__track {
+  width: 120px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+.virtualCity-election-banner__fill {
+  height: 100%;
+  background: #60a5fa;
+}
+.virtualCity-election-banner__stipend {
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #b91c1c;
+  color: #fff;
+  font-weight: 600;
+}
+.virtualCity-election-banner__close {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid #64748b;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #e5e7eb;
+  font-size: 11px;
+  cursor: pointer;
+}
+.virtualCity-election-banner__close:hover {
+  border-color: #94a3b8;
+}
+
+/* ── F2-5 政务票型面板（CityStatsPanel「政务」分组）── */
+.virtualCity-citypanel__gov {
+  margin: 6px 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  padding-top: 6px;
+}
+.virtualCity-citypanel__gov-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fbbf24;
+  margin-bottom: 4px;
+}
+.virtualCity-citypanel__gov-scroll {
+  max-height: 180px;
+  overflow-y: auto; /* 内滚动，控件不出界（18-04） */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.virtualCity-citypanel__gov-row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  color: #e5e7eb;
+}
+.virtualCity-citypanel__gov-row--winner {
+  border: 1px solid #d4a017;
+  border-radius: 6px;
+  padding: 2px 4px;
+  background: #2a2410;
+}
+.virtualCity-citypanel__gov-seat {
+  color: #f3f4f6;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.virtualCity-citypanel__gov-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.virtualCity-citypanel__gov-bar {
+  display: grid;
+  grid-template-columns: 40px 1fr 26px;
+  gap: 4px;
+  align-items: center;
+}
+.virtualCity-citypanel__gov-k {
+  color: #9ca3af;
+  white-space: nowrap;
+}
+.virtualCity-citypanel__gov-track {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08); /* 文档 3 A4 指定底槽色 */
+  overflow: hidden;
+}
+.virtualCity-citypanel__gov-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: #60a5fa;
+}
+.virtualCity-citypanel__gov-v {
+  color: #e5e7eb;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.virtualCity-citypanel__gov-note {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+}

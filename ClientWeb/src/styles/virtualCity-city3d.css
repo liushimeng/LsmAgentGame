@@ -1,0 +1,488 @@
+/**
+ * virtualCity-city3d.css — 13-3D城市渲染优化 · 阶段 E 全部新样式（2026-09-22）。
+ *
+ * 契约：lag_docs/虚拟城市/已实现/13-3D城市渲染优化/04-UI布局规范-面板折叠与防溢出-v1.md。
+ * 落点规约：virtualCity.css 已 1738 行逼近 §4 上限（1800），本批次新样式集中于此；
+ * globals.css 链尾追加 @import（只追加不改序，§2.1 约束 4）。
+ *
+ * 覆盖策略：
+ *   - 对 globals.css 链内既有规则（virtualCity.css）：同特异度靠源码顺序胜出（本文件在链尾）。
+ *   - 对组件内 import 的 CityStatsPanel.css（JS 模块序晚于 globals 链）：
+ *     用 `.virtualCity-sidebar > .virtualCity-citypanel` 提升特异度（0-2-0 > 0-1-0）。
+ *
+ * 对比度（§26.1）：组标题 #b8bfca 对 --virtualCity-panel(#161d28) ≈ 8.6:1；
+ * toggle 按钮文字继承面板正文色 ≥ 4.5:1。
+ */
+
+/* ── Tab 分组（契约 §2）────────────────────────────── */
+.virtualCity-tabs {
+  flex-wrap: wrap;
+  /* 18/04 AB-4：96→112px —— 300px 侧栏下两组 6 按钮换到 3–4 行不再被裁切。 */
+  max-height: 112px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  row-gap: 2px;
+}
+.virtualCity-tabs__group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  min-width: 0;
+}
+.virtualCity-tabs__group-label {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #b8bfca; /* 对深底 ≈ 8.6:1（§26.1 正文 ≥4.5:1） */
+  padding: 0 4px 0 2px;
+  user-select: none;
+}
+.virtualCity-tabs__group-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  min-width: 0;
+}
+
+/* ── 侧栏纵向空间协约（契约 §3）────────────────────── */
+.virtualCity-sidebar__panels {
+  min-height: 160px;
+}
+/* CityStatsPanel：弹性收缩 + 30% 上限（特异度压过组件内 CityStatsPanel.css 的
+   `flex: 0 0 auto; max-height: 260px`）。 */
+.virtualCity-sidebar > .virtualCity-citypanel {
+  flex: 0 1 auto;
+  max-height: 30%;
+}
+
+/* ── 折叠容器（CollapsibleSection）─────────────────── */
+.virtualCity-collapse__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.virtualCity-collapse__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--virtualCity-touch-target, 28px);
+  padding: 2px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: #fff; /* 对 --virtualCity-panel 深底 ≥ 12:1 */
+  text-align: left;
+}
+.virtualCity-collapse__toggle:hover .virtualCity-collapse__arrow {
+  color: #fff;
+}
+.virtualCity-collapse__arrow {
+  flex: 0 0 auto;
+  width: 14px;
+  color: #b8bfca;
+  font-size: 12px;
+}
+.virtualCity-collapse__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.virtualCity-collapse__extra {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* grid 1fr→0fr 折叠动画：无需魔法 max-height；inner 承担 overflow 裁剪。 */
+.virtualCity-collapse__body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.25s ease;
+}
+.virtualCity-collapse__body--collapsed {
+  grid-template-rows: 0fr;
+}
+.virtualCity-collapse__inner {
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* BotPanel 的 inner 不需要额外 gap（卡片自带间距）。 */
+.virtualCity-botpanel .virtualCity-collapse__inner {
+  gap: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .virtualCity-collapse__body {
+    transition: none;
+  }
+}
+
+/* ── 叠层秩序（契约 §4）────────────────────────────── */
+/* 小地图抬到 40：城区 hover 卡 zIndexRange [30,0] 封顶，error banner 50 / modal 200 不变。 */
+.virtualCity-minimap {
+  z-index: 40;
+}
+
+/* ── 阶段 J · 顶栏与占位加固（14-3D城市渲染深化 04 文档 §3）──────────── */
+.virtualCity-topbar {
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  row-gap: 6px;
+}
+.virtualCity-topbar__item {
+  min-width: 0;
+  white-space: nowrap;
+}
+.virtualCity-topbar__actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+@media (max-width: 1279px) {
+  .virtualCity-topbar__actions {
+    margin-left: 0;
+    width: 100%;
+  }
+  .virtualCity-sidebar {
+    flex-basis: 300px;
+  }
+}
+/* waiting 占位：收紧上下留白，内容区居中不空半屏
+   18/04 AB-4：12vh→6vh + max-height:60vh —— 高屏下不再制造 >30vh 连续空白。 */
+.waiting-board {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 160px;
+  padding: 6vh 16px;
+  max-height: 60vh;
+  max-width: 360px;
+  margin: 0 auto;
+}
+/* 地图区最小高度：1280×800 下侧栏挤压时保住可视面积 */
+.virtualCity-map-area {
+  min-height: 320px;
+}
+/* 面板空态（U4）：垂直居中 + 收紧高度，不撑半屏留白 */
+.virtualCity-panel__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  padding: 12px 16px;
+  text-align: center;
+  color: var(--virtualCity-text-dim, #b8bfca);
+}
+
+/* ── 阶段 Q · 界面密度提升（15-3D城市全面真实感深化 · 04 文档 §4）──────── */
+/* Tab 按钮紧凑化（padding/font-size 收紧） */
+.virtualCity-tabs__btn {
+  padding: 4px 8px;
+  font-size: 12.5px;
+  border-radius: 4px;
+}
+.virtualCity-tabs__group-label {
+  font-size: 11px;
+}
+/* 侧栏面板内边距与间距收紧 */
+.virtualCity-sidebar__panels > * {
+  padding: 8px 10px;
+  gap: 8px;
+}
+/* 折叠 header 行高收紧 */
+.virtualCity-collapse__header {
+  min-height: 28px;
+}
+/* 面板 loading 态（统一最小高度，避免大留白） */
+.virtualCity-panel__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  gap: 8px;
+  color: var(--virtualCity-text-dim, #b8bfca);
+}
+/* 行内子导航（市场 Tab 内 listing/loan/info 三按钮） */
+.virtualCity-subtabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 8px;
+}
+.virtualCity-subtabs__btn {
+  background: none;
+  border: none;
+  color: var(--virtualCity-text-dim, #b8bfca);
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  min-height: 26px;
+}
+.virtualCity-subtabs__btn--active {
+  color: #fff;
+  border-bottom-color: #d4a017;
+}
+/* 经济 Tab 内调研入口按钮（小图标按钮） */
+.virtualCity-tab-extra-btn {
+  margin-left: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--virtualCity-text-dim, #b8bfca);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.virtualCity-tab-extra-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* ── 16 · 阶段 V：小地图折叠（契约 16/04 §2）──────────────────── */
+/* 定位上移到 wrap（canvas 由 virtualCity.css 的 absolute 改为块级随 wrap 定位）。 */
+.virtualCity-minimap__wrap {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 40; /* 叠层秩序契约：hover 卡 [30,0] 之上 / error banner 50 之下 */
+}
+.virtualCity-minimap__wrap .virtualCity-minimap {
+  position: static;
+  z-index: auto;
+  display: block;
+}
+.virtualCity-minimap__close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(10, 14, 20, 0.72);
+  color: #dfe5ec; /* 对合成底 ≈ 12:1（§26.1 ≥4.5:1）*/
+  border: 1px solid #3a414c;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.virtualCity-minimap__close:hover {
+  background: rgba(10, 14, 20, 0.9);
+}
+.virtualCity-minimap__pill {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 40;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 16px;
+  background: rgba(10, 14, 20, 0.85);
+  color: #dfe5ec;
+  border: 1px solid #3a414c;
+  font-size: 12.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.virtualCity-minimap__pill:hover {
+  background: rgba(10, 14, 20, 0.95);
+}
+
+/* ── 16 · 阶段 V：侧栏溢出兜底（契约 16/04 §3）────────────────── */
+/* 内容总高 > 视口时侧栏整体内滚（stats/bot/chat 三段折叠上限叠加的极端场景），
+   不再压住下方事件流。tabs 常显由 panels 区独立滚动保证。
+   18/04 AB-4：补 scrollbar-gutter: stable —— 滚动条出现/消失时布局不再横移。 */
+.virtualCity-sidebar {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+/* 聊天面板允许收缩（virtualCity.css 的 :global(.chat-panel) 规则从未命中真实类名，
+   这里按真实类名 game-chat 给出弹性收缩 + 最小可用高度）。 */
+.virtualCity-sidebar > .game-chat {
+  flex: 0 1 240px;
+  min-height: 140px;
+}
+
+/* ── 18 · 阶段 AB：控件防溢出与空间利用收口（契约 18/04 §2–§5）──────── */
+/* 本段只在链尾追加，不改 globals.css @import 顺序（§2.1 约束 4）。
+   对比度（§26.1）：pill/toggle 文字 #dfe5ec 对 rgba(10,14,20,.85) 合成底 ≈ 12:1。 */
+
+/* AB-1 底部动作条折叠 —— 1280×800 下常驻整条与 MonthTicker 叠吃 200px+ 纵向空间 */
+.virtualCity-actionbar {
+  position: relative;
+}
+.virtualCity-actionbar--collapsed {
+  padding: 0;
+  min-height: 0;
+  border: none;
+  background: none;
+  flex-direction: row;
+  align-items: center;
+}
+.virtualCity-actionbar__toggle {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 42; /* 在动作条内层之上，不与小地图 z40 抢层 */
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(10, 14, 20, 0.72);
+  color: #dfe5ec; /* 对合成底 ≈ 12:1（§26.1 ≥4.5:1） */
+  border: 1px solid #3a414c;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.virtualCity-actionbar__toggle:hover {
+  background: rgba(10, 14, 20, 0.9);
+}
+.virtualCity-actionbar__pill {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  background: rgba(10, 14, 20, 0.85);
+  color: #dfe5ec;
+  border: 1px solid #3a414c;
+  font-size: 12.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.virtualCity-actionbar__pill:hover {
+  background: rgba(10, 14, 20, 0.95);
+}
+
+/* AB-2 弹层高度统一 —— 六类弹层 max-height: 86vh + 三段收缩链（head/body/foot）。
+   AppModal 系（终局/拍卖/议价/提前还款）沿用 app-modal__header/body/footer 既有类名，
+   以内容根挂 .virtualCity-modal__body 为标记，仅对财商流弹层补 min-height:0 与 86vh 上限，
+   不动共享 appmodal.css（工作面越界 + 避免波及其它游戏弹层）。 */
+.virtualCity-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200; /* 与 app-modal-overlay 同层约定：modal=200，GlobalToast=1000 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.65);
+}
+.virtualCity-modal {
+  max-height: 86vh;
+  max-width: 640px;
+  width: 92%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--virtualCity-panel, #161d28);
+  border: 1px solid var(--virtualCity-border, #2c3644);
+  border-radius: 12px;
+  color: var(--virtualCity-text, #e5e7eb);
+}
+.virtualCity-modal > .virtualCity-modal__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--virtualCity-panel, #161d28); /* sticky 需不透明底，不能 inherit 渐变 */
+  border-bottom: 1px solid var(--virtualCity-border, #2c3644);
+}
+.virtualCity-modal > .virtualCity-modal__body {
+  flex: 1 1 auto;
+  min-height: 0; /* 缺此一层 flex 子项 min-height:auto 拒绝收缩 → 长内容撑破视口 */
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+.virtualCity-modal > .virtualCity-modal__foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  background: var(--virtualCity-panel, #161d28);
+  border-top: 1px solid var(--virtualCity-border, #2c3644);
+}
+/* AppModal 承载的 4 类财富弹层（内容根挂 .virtualCity-modal__body 仅作标记，
+   三段结构沿用 app-modal__header/body/footer）：外壳补 86vh 上限，
+   body 补 min-height:0 收缩链 —— 16/04 §3.1 同一教训，缺一层即溢出。
+   建房弹窗（.virtualCity-create-form，08/06 已修对比度）同契约仅补 86vh 上限。 */
+.app-modal:has(> .app-modal__body > .virtualCity-modal__body),
+.app-modal:has(> .app-modal__body > .virtualCity-create-form) {
+  max-height: 86vh;
+}
+.app-modal:has(> .app-modal__body > .virtualCity-modal__body) > .app-modal__body,
+.app-modal:has(> .app-modal__body > .virtualCity-create-form) > .app-modal__body {
+  min-height: 0;
+}
+
+/* AB-3 图表与横向溢出 —— 380px / 300px 侧栏下桑基图与洛伦兹曲线不横向溢出 */
+.virtualCity-sankey-scroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+.virtualCity-flow__svg,
+.virtualCity-lorenz__svg {
+  width: 100%;
+  height: auto; /* 原固定 height:200/160 会在窄侧栏压扁不可读；viewBox 等比缩放 */
+  max-width: 100%;
+}
+/* MonthTicker 收缩链补全：flex 行内每个子项都要 min-width:0，__month 原缺 */
+.virtualCity-ticker__month {
+  min-width: 0;
+}
+.virtualCity-ticker__events {
+  min-width: 0; /* 保险：与 virtualCity.css 同值覆盖，防止链尾被覆盖回 auto */
+}
+
+/* AB-2 居民档案抽屉：body 内滚收缩链 + 关闭按钮固定右上（18/04 §3.2） */
+.virtualCity-resident-drawer__panel {
+  overflow: hidden;
+}
+.virtualCity-resident-drawer__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.virtualCity-resident-drawer__close {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex: 0 0 auto;
+  min-width: var(--virtualCity-touch-target, 44px);
+  min-height: var(--virtualCity-touch-target, 44px);
+}
+
+/* 视口高度兜底（18/04 §3.3）：纵向紧张时收字号 + 弹层上限放宽到 92vh */
+@media (max-height: 720px) {
+  .virtualCity-modal,
+  .app-modal:has(> .app-modal__body > .virtualCity-modal__body) {
+    max-height: 92vh;
+  }
+  .virtualCity-actionbar {
+    font-size: 13px;
+  }
+}

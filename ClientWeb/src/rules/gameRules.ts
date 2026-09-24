@@ -10,7 +10,7 @@
 //   - Adding a new game is one entry here, one md file in public/rules/, and
 //     one GamePage button — see docs/游戏规则与查看器.md.
 
-export type GameKind = 'xiangqi' | 'chess' | 'junqi' | 'doudizhu' | 'texasholdem' | 'werewolf' | 'wealth';
+export type GameKind = 'xiangqi' | 'chess' | 'junqi' | 'doudizhu' | 'texasholdem' | 'werewolf' | 'virtual_city';
 
 /** Per-game accent color used in the RulesViewer header / border. */
 export const GAME_ACCENT: Record<GameKind, string> = {
@@ -20,7 +20,7 @@ export const GAME_ACCENT: Record<GameKind, string> = {
   doudizhu: '#c93636',      // 斗地主 — 红（地主身份 / 主色调）
   texasholdem: '#1f7a4d',   // 德州 — 绿（牌桌绒布）
   werewolf: '#7b2c2c',      // 狼人杀 — 暗血红（暗黑中世纪 / 哥特）
-  wealth: '#c9a227',        // 虚拟城市 — 金（暗底对比度 6.1:1，前端架构文档 §6）
+  virtual_city: '#c9a227',        // 虚拟城市 — 金（暗底对比度 6.1:1，前端架构文档 §6）
 };
 
 /** URL of the markdown file for the given game. */

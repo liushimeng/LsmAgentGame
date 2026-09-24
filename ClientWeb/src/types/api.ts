@@ -1,6 +1,6 @@
 // Shared API types for the frontend.
 
-import type { WealthRoomOptions } from '@/types/wealth';
+import type { VirtualCityRoomOptions } from '@/types/virtualCity';
 
 export interface ApiEnvelope<T> {
   code: number;
@@ -238,12 +238,12 @@ export interface RoomInfo {
    */
   my_role?: string;
   /**
-   * 2026-09-19 §全Agent模式: 是否为全 Agent 房间(仅 wealth 生效)。
+   * 2026-09-19 §全Agent模式: 是否为全 Agent 房间(仅 virtualCity 生效)。
    * 全 Agent 房间人类不能加入对局,仅可以观战者身份观看。
    */
   full_agent?: boolean;
   /**
-   * 2026-09-21 §建房解耦 — 城市背景层居民数(仅 wealth 下发)。
+   * 2026-09-21 §建房解耦 — 城市背景层居民数(仅 virtualCity 下发)。
    * >0 时房间列表行显示 🏙 徽标;0/缺省 = 旧形态房间。
    */
   resident_count?: number;
@@ -450,19 +450,19 @@ export interface CreateRoomOptions {
   // big_blind ∈ {10,50,200,1000,5000};start_stack ∈ [20bb,100bb]。
   big_blind?: number;
   start_stack?: number;
-  // 2026-09-14 §财商流 P0 — wealth only。建房可选段（协议契约 §6:
-  // createRoomRequest 新增字段 wealth *WealthRoomOptions,DisallowUnknownFields
+  // 2026-09-14 §财商流 P0 — virtualCity only。建房可选段（协议契约 §6:
+  // createRoomRequest 新增字段 virtualCity *VirtualCityRoomOptions,DisallowUnknownFields
   // 严格校验)。month_ms clamp 3000–30000。
-  // 2026-09-22 §CityHuman全民驱动 — wealth 建房不再发送 agent_seats/pool
-  // （后端忽略 wealth 请求中的 agent_seats，自动合成 12 深度居民座位）。
-  wealth?: WealthRoomOptions;
-  // 2026-09-21 §建房解耦 — wealth only。背景居民规模：
+  // 2026-09-22 §CityHuman全民驱动 — virtualCity 建房不再发送 agent_seats/pool
+  // （后端忽略 virtualCity 请求中的 agent_seats，自动合成 12 深度居民座位）。
+  virtualCity?: VirtualCityRoomOptions;
+  // 2026-09-21 §建房解耦 — virtualCity only。背景居民规模：
   // 缺省 10000；<10 clamp 10；上限 100000 后端 clamp；负值 400。
   resident_count?: number;
   // 2026-09-19 §全Agent模式 — 是否全 Agent 模式（虚拟城市恒 true，
   // 创建者一律为观察者；werewolf 不发送）。现状漏声明但实际在发，一并补齐。
   full_agent?: boolean;
-  // 2026-09-24 §批次20（文档3 A2）— wealth only。市长选举启用开关：
+  // 2026-09-24 §批次20（文档3 A2）— virtualCity only。市长选举启用开关：
   // 缺省/false = 关闭（引擎完全 no-op；本项与 InsuranceEnabled 等
   // 「零值→true」家族不同，后端零值即 false，勿归一化）。
   civic_election_enabled?: boolean;

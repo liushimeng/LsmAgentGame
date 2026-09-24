@@ -10,7 +10,7 @@
  *   .btn-sm / .btn-block）。
  *   它们之所以实际作用于全站，纯粹是**级联顺序的意外**：
  *   globals.css 里 xiangqi.css 排第 3 位、debate.css 排第 76 位，
- *   同特异度下后者压过前者；而 debate.css 又排位早于 wealth.css。
+ *   同特异度下后者压过前者；而 debate.css 又排位早于 virtualCity.css。
  *   实测后果：全站 `.btn-danger` 实际生效的是 debate.css「房主解散小按钮」
  *   那一块（padding:4px 12px / font-size:12px / border-radius:4px），
  *   而不是 xiangqi.css 的 #dc2626 基础块 —— debate 的私有样式泄漏到了全站。
@@ -50,10 +50,10 @@
  *   新增规则（.btn-warning）按惯例追加在文件末尾。
  *
  * 【插入位置硬约束】
- *   本文件在 globals.css 中的 @import **必须**紧邻 `@import './wealth.css';`
- *   的上方（即排在 wealth.css 之前）。若排到 wealth.css 之后，同特异度的
- *   `.btn-*:hover:not(:disabled)` 会靠源码顺序反压 `.wealth-root` /
- *   `.wealth-lobby` / `.app-modal` 作用域下的财富按钮变体。
+ *   本文件在 globals.css 中的 @import **必须**紧邻 `@import './virtualCity.css';`
+ *   的上方（即排在 virtualCity.css 之前）。若排到 virtualCity.css 之后，同特异度的
+ *   `.btn-*:hover:not(:disabled)` 会靠源码顺序反压 `.virtualCity-root` /
+ *   `.virtualCity-lobby` / `.app-modal` 作用域下的财富按钮变体。
  *   本次是「在既有两项之间插入一项」，既有 @import 项之间的相对次序不变
  *   （CLAUDE.md §2.1 约束 4）。
  *

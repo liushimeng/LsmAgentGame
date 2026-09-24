@@ -1,11 +1,11 @@
-import type { WealthDict } from './wealthKeys';
+import type { VirtualCityDict } from './virtualCityKeys';
 
 // Translation dictionary type. Every locale file (zh-CN.ts / en.ts / ja.ts)
 // implements this exact shape so missing keys surface as type errors.
 //
-// ⚠️ 虚拟城市/P2 海量 i18n 键已拆到 wealthKeys.ts（本文件硬上限 ≤1800 行）。
-// 新增 wealth.* / minsky.* / lpr.* / earlyrepay.* 键请去 wealthKeys.ts。
-export interface Dict extends WealthDict {
+// ⚠️ 虚拟城市/P2 海量 i18n 键已拆到 virtualCityKeys.ts（本文件硬上限 ≤1800 行）。
+// 新增 virtualCity.* / minsky.* / lpr.* / earlyrepay.* 键请去 virtualCityKeys.ts。
+export interface Dict extends VirtualCityDict {
   // 通用 / common
   'common.appName': string;
   'common.loading': string;
@@ -1459,7 +1459,7 @@ export interface Dict extends WealthDict {
   // 2026-08-12 §20260812-01 U3 — 情绪传染
   'werewolf.contagion.infected': string;
 
-  // ── 虚拟城市 / minsky / lpr / earlyrepay 键已拆到 wealthKeys.ts（≤1800 行约束）──
+  // ── 虚拟城市 / minsky / lpr / earlyrepay 键已拆到 virtualCityKeys.ts（≤1800 行约束）──
 
 
 }

@@ -21,8 +21,8 @@ import { DebateLobbyPage } from './pages/DebateLobbyPage';
 import { DebateGamePage } from './pages/DebateGamePage';
 import { TexasHoldemLobbyPage } from './pages/TexasHoldemLobbyPage';
 import { TexasHoldemGamePage } from './pages/TexasHoldemGamePage';
-import { WealthLobbyPage } from './pages/WealthLobbyPage';
-import { WealthGamePage } from './pages/WealthGamePage';
+import { VirtualCityLobbyPage } from './pages/VirtualCityLobbyPage';
+import { VirtualCityGamePage } from './pages/VirtualCityGamePage';
 import { AdminUsersPage } from './pages/AdminUsersPage';
 import { ModelAdminPage } from './pages/ModelAdminPage';
 import { ModelDetailPage } from './pages/ModelDetailPage';
@@ -62,10 +62,10 @@ export default function App() {
           <Route path="/texasholdem" element={<TexasHoldemLobbyPage />} />
           <Route path="/texasholdem/:roomId" element={<TexasHoldemGamePage />} />
           <Route path="/texasholdem/spectate/:roomId" element={<TexasHoldemGamePage />} />
-          {/* 2026-09-14 §财商流 P0 — 第 7 款游戏（Agent 组）。 */}
-          <Route path="/wealth" element={<WealthLobbyPage />} />
-          <Route path="/wealth/:roomId" element={<WealthGamePage />} />
-          <Route path="/wealth/spectate/:roomId" element={<WealthGamePage />} />
+          {/* 2026-09-24 §虚拟城市定位 v2.0 — 全 Agent 真实城市模拟器（财富游戏改名）。 */}
+          <Route path="/virtual-city" element={<VirtualCityLobbyPage />} />
+          <Route path="/virtual-city/:roomId" element={<VirtualCityGamePage />} />
+          <Route path="/virtual-city/spectate/:roomId" element={<VirtualCityGamePage />} />
           <Route path="/werewolf" element={<WerewolfLobbyPage />} />
           <Route path="/werewolf/:roomId" element={<WerewolfGamePage />} />
           <Route path="/werewolf/spectate/:roomId" element={<WerewolfGamePage />} />

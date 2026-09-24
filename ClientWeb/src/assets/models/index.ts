@@ -1,7 +1,7 @@
 /**
  * Blender 真实 3D 模型（.glb）访问层（19-Blender3D模型集成）。
  *
- * 与 `assets/images/wealth/index.ts` 完全同构：
+ * 与 `assets/images/virtualCity/index.ts` 完全同构：
  *   - `import.meta.glob` eager=true,import default → Vite 自动为每个 .glb 产物生成 contenthash
  *   - 缺失文件返回 ''（不抛错），调用方走降级链（程序化几何）
  *

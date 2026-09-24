@@ -1,0 +1,530 @@
+/* ════════════════════════════════════════════════════════════════════════
+ * P2 交易系统样式（挂单簿 / 议价 / 借贷 / 拍卖 / 信息市场）
+ * 对比度：正文 ≥4.5:1 / 徽章 ≥5:1 / 选中态 ≥6:1（CLAUDE.md §26）。
+ * ══════════════════════════════════════════════════════════════════════ */
+
+/* ── 动作条交易入口 ── */
+.virtualCity-actionbar__trade {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.virtualCity-actionbar__trade-label {
+  color: var(--virtualCity-text-dim);
+  font-size: 12px;
+}
+.virtualCity-actionbar__trade-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.virtualCity-action-btn--trade {
+  background: #1e293b;
+  border: 1px solid var(--virtualCity-border);
+}
+.virtualCity-action-btn--trade:hover:not(:disabled) { border-color: var(--virtualCity-accent-strong); background: #243044; }
+
+/* ── 挂单簿面板 ── */
+.virtualCity-listingpanel { display: flex; flex-direction: column; gap: 6px; }
+.virtualCity-listingpanel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.virtualCity-listingpanel__title { font-size: 13px; font-weight: 600; color: var(--virtualCity-text); }
+.virtualCity-listingpanel__refresh {
+  background: var(--virtualCity-panel-2);
+  border: 1px solid var(--virtualCity-border);
+  color: var(--virtualCity-text);
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.virtualCity-listingpanel__refresh:hover { border-color: var(--virtualCity-accent-strong); }
+.virtualCity-listingpanel__filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.virtualCity-filter-btn {
+  background: var(--virtualCity-panel-2);
+  border: 1px solid var(--virtualCity-border);
+  color: var(--virtualCity-text-dim);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.virtualCity-filter-btn:hover { color: var(--virtualCity-text); }
+/* 选中态：实底 + 白字 ≥5:1（#1d4ed8 蓝底 ≈6.6:1） */
+.virtualCity-filter-btn--active { background: #1d4ed8; border-color: #1d4ed8; color: #ffffff; font-weight: 600; }
+.virtualCity-listingpanel__integrate {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--virtualCity-text-dim);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.virtualCity-listingpanel__hint {
+  font-size: 11px;
+  color: var(--virtualCity-text-dim);
+  padding: 4px 0;
+}
+
+/* 挂单类型徽章（≥5:1 白字实底） */
+.virtualCity-badge--type-asset   { background: #15803d; } /* 绿 ≈5.0:1 */
+.virtualCity-badge--type-buy     { background: #1d4ed8; } /* 蓝 ≈6.6:1 */
+.virtualCity-badge--type-info    { background: #7c3aed; } /* 紫 ≈6.9:1 */
+.virtualCity-badge--type-loan_ofr{ background: #0e7490; } /* 青 ≈4.6:1 */
+.virtualCity-badge--type-loan_req{ background: #b45309; } /* 琥珀 ≈5.3:1 */
+.virtualCity-badge--status-open  { background: #15803d; }
+.virtualCity-badge--status-negotiating { background: #b45309; }
+.virtualCity-badge--status-deal  { background: #1d4ed8; }
+.virtualCity-badge--status-expired { background: #374151; }
+.virtualCity-badge--status-cancelled { background: #b91c1c; }
+
+/* 表格通用补充 */
+.virtualCity-table__id { font-size: 11px; color: var(--virtualCity-text-dim); font-variant-numeric: tabular-nums; }
+.virtualCity-table__summary {
+  display: block;
+  font-size: 11px;
+  color: var(--virtualCity-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+.virtualCity-table__actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.virtualCity-table__hint { font-size: 11px; color: var(--virtualCity-text-dim); }
+/* 自己的条目：左侧金色竖条（不依赖 color，避反模式） */
+.virtualCity-table__row--mine { box-shadow: inset 3px 0 0 var(--virtualCity-accent-strong); background: rgba(212,160,23,0.06); }
+.virtualCity-table__row--overdue { box-shadow: inset 3px 0 0 #f87171; background: rgba(248,113,113,0.07); }
+/* ── 小尺寸按钮变体（.btn-mini） ──
+ * 使用点仅 3 处，均在虚拟城市内：components/virtual-city/InfoMarketPanel.tsx /
+ * LoanPanel.tsx / ListingPanel.tsx。
+ * 三个上下文缺一不可：
+ *   .virtualCity-root  = 对局页侧栏（三处使用点的实际所在）；
+ *   .virtualCity-lobby = 大厅页；
+ *   .app-modal    = 弹窗（经 createPortal 渲染到 body，在 .virtualCity-root 之外）。
+ * 为什么必须加作用域：virtualCity.css 里 .btn 已改写成 `.virtualCity-root .btn` 等
+ * (0,2,0) 特异的规则（见 virtualCity.css 的 F2 修复），若 .btn-mini 仍是无作用域的
+ * (0,1,0)，会被 `.virtualCity-root .btn` 的 padding/border-radius 反压，小尺寸变体失效；
+ * 加成 (0,2,0) 后靠 virtualCity-p2.css 排在 virtualCity.css 之后（globals.css 链尾）的顺序胜出。
+ * 2026-09-19 §财商流-UI修复。 */
+.virtualCity-root .btn-mini,
+.virtualCity-lobby .btn-mini,
+.app-modal .btn-mini {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--virtualCity-border);
+  cursor: pointer;
+  background: var(--virtualCity-panel-2);
+  color: var(--virtualCity-text);
+  min-height: 24px;
+}
+.virtualCity-root .btn-mini:hover,
+.virtualCity-lobby .btn-mini:hover,
+.app-modal .btn-mini:hover { border-color: var(--virtualCity-accent-strong); }
+.virtualCity-root .btn-mini.btn-primary,
+.virtualCity-lobby .btn-mini.btn-primary,
+.app-modal .btn-mini.btn-primary { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+.virtualCity-root .btn-mini.btn-danger,
+.virtualCity-lobby .btn-mini.btn-danger,
+.app-modal .btn-mini.btn-danger  { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+.virtualCity-root .btn-mini.btn-secondary,
+.virtualCity-lobby .btn-mini.btn-secondary,
+.app-modal .btn-mini.btn-secondary { background: #374151; border-color: #374151; color: #fff; }
+
+/* ── 议价弹窗 ── */
+.virtualCity-negotiate { display: flex; flex-direction: column; gap: 8px; }
+.virtualCity-negotiate__history {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  background: var(--virtualCity-panel);
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+  /* 18/04 AB-2：180px → 40vh（与拍卖出价列表同契约），留言记录长时独立内滚 */
+  max-height: 40vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.virtualCity-negotiate__turn {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--virtualCity-panel-2);
+  font-size: 12px;
+}
+.virtualCity-negotiate__turn--mine { background: rgba(212,160,23,0.1); }
+.virtualCity-negotiate__who { font-weight: 600; }
+.virtualCity-negotiate__action { font-size: 11px; color: var(--virtualCity-text-dim); }
+.virtualCity-negotiate__action--accept { color: #4ade80; font-weight: 600; }
+.virtualCity-negotiate__action--reject { color: #f87171; font-weight: 600; }
+.virtualCity-negotiate__action--counter { color: #60a5fa; font-weight: 600; }
+.virtualCity-negotiate__offer { font-weight: 600; }
+.virtualCity-negotiate__comment { grid-column: 1 / -1; font-size: 11px; color: var(--virtualCity-text-dim); }
+.virtualCity-negotiate__waiting,
+.virtualCity-negotiate__deal,
+.virtualCity-negotiate__expired {
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  text-align: center;
+}
+.virtualCity-negotiate__waiting { background: #1e293b; color: var(--virtualCity-text-dim); }
+.virtualCity-negotiate__deal { background: #14532d; color: #bbf7d0; font-weight: 600; }
+.virtualCity-negotiate__expired { background: #374151; color: var(--virtualCity-text-dim); }
+.virtualCity-negotiate__row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+.virtualCity-negotiate__row span { color: var(--virtualCity-text-dim); }
+.virtualCity-negotiate__row input {
+  background: var(--virtualCity-bg);
+  border: 1px solid var(--virtualCity-border);
+  color: var(--virtualCity-text);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+}
+.virtualCity-negotiate__counter { align-self: flex-start; }
+.virtualCity-negotiate__error {
+  border: 1px solid #f87171;
+  border-radius: 6px;
+  background: #3a1a1e;
+  color: #fecaca;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+/* ── 借贷面板 ── */
+.virtualCity-loanpanel { display: flex; flex-direction: column; gap: 6px; }
+.virtualCity-loanpanel__head { display: flex; align-items: center; justify-content: space-between; }
+.virtualCity-loanpanel__title { font-size: 13px; font-weight: 600; }
+.virtualCity-loanpanel__subtitle { font-size: 11px; color: var(--virtualCity-text-dim); margin: 0; }
+.virtualCity-loanpanel__section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--virtualCity-accent-strong);
+  padding: 6px 0 2px;
+  border-bottom: 1px solid var(--virtualCity-border);
+  margin-top: 4px;
+}
+.virtualCity-loanpanel__create { padding: 6px 0; }
+.virtualCity-loanpanel__create-title { font-size: 12px; font-weight: 600; padding-bottom: 4px; }
+.virtualCity-loanpanel__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--virtualCity-panel);
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+}
+.virtualCity-badge--dir-lend { background: #15803d; }
+.virtualCity-badge--dir-borrow { background: #b45309; }
+.virtualCity-badge--overdue { background: #b91c1c; }
+
+/* ── 拍卖弹窗 ── */
+.virtualCity-auction { display: flex; flex-direction: column; gap: 8px; }
+.virtualCity-auction__head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.virtualCity-auction__listid { margin-left: auto; font-size: 11px; color: var(--virtualCity-text-dim); }
+.virtualCity-auction__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.virtualCity-auction__stat {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  background: var(--virtualCity-panel);
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 6px;
+}
+.virtualCity-auction__stat-label { font-size: 11px; color: var(--virtualCity-text-dim); }
+.virtualCity-auction__stat-value { font-size: 13px; font-weight: 600; }
+.virtualCity-auction__sealedhint { font-size: 11px; color: var(--virtualCity-text-dim); }
+.virtualCity-auction__bids {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  background: var(--virtualCity-panel);
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+  /* 18/04 AB-2：出价列表独立内滚，不把弹层 body 撑破 */
+  max-height: 40vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.virtualCity-auction__bid {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+.virtualCity-auction__bid--mine { background: rgba(212,160,23,0.1); }
+.virtualCity-auction__sealed { color: var(--virtualCity-text-dim); }
+.virtualCity-auction__ended { font-size: 12px; padding: 6px 8px; background: #1e293b; border-radius: 6px; color: var(--virtualCity-text-dim); text-align: center; }
+.virtualCity-auction__bidbox { padding-top: 2px; }
+.virtualCity-auction__error {
+  border: 1px solid #f87171;
+  border-radius: 6px;
+  background: #3a1a1e;
+  color: #fecaca;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.virtualCity-badge--auction-english { background: #1d4ed8; }
+.virtualCity-badge--auction-sealed { background: #7c3aed; }
+.virtualCity-badge--auction-take_it { background: #0e7490; }
+.virtualCity-badge--auction-single_round { background: #b45309; }
+
+/* ── 信息市场面板 ── */
+.virtualCity-infomarket { display: flex; flex-direction: column; gap: 6px; }
+.virtualCity-infomarket__head { display: flex; align-items: center; justify-content: space-between; }
+.virtualCity-infomarket__title { font-size: 13px; font-weight: 600; }
+.virtualCity-infomarket__subtitle { font-size: 11px; color: var(--virtualCity-text-dim); margin: 0; }
+.virtualCity-infomarket__create { padding: 6px 0; }
+.virtualCity-infomarket__create-title { font-size: 12px; font-weight: 600; padding-bottom: 4px; }
+.virtualCity-infomarket__detail {
+  background: var(--virtualCity-bg);
+  border: 1px solid var(--virtualCity-border);
+  color: var(--virtualCity-text);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+  min-height: 48px;
+  resize: vertical;
+}
+.virtualCity-infomarket__hint { font-size: 11px; color: var(--virtualCity-text-dim); }
+.virtualCity-infomarket__bidinput {
+  width: 84px;
+  background: var(--virtualCity-bg);
+  border: 1px solid var(--virtualCity-border);
+  color: var(--virtualCity-text);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+.virtualCity-badge--cat-market { background: #1d4ed8; }
+.virtualCity-badge--cat-intel { background: #7c3aed; }
+.virtualCity-badge--cat-personal { background: #0e7490; }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * P2 v2 财富流动可视化（洛伦兹 / 金字塔 / 资金流向）
+ * 2026-09-19 §P2-可视化 §13.3 §13.5。
+ * 对比度 CLAUDE.md §26：暗色主题正文 ≥4.5:1；徽章 ≥5:1。
+ * ══════════════════════════════════════════════════════════════════════ */
+
+/* 折叠块容器（挂在 EconomyPanel 内部） */
+.virtualCity-dashboard {
+  border-top: 1px dashed var(--virtualCity-border);
+  padding-top: 12px;
+  margin-top: 8px;
+}
+.virtualCity-dashboard__title {
+  font-size: 13px;
+  color: var(--virtualCity-text);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+/* ── 洛伦兹曲线面板 ── */
+.virtualCity-lorenz {
+  background: var(--virtualCity-bg-soft);
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.virtualCity-lorenz__title {
+  font-size: 12px;
+  color: var(--virtualCity-text-dim);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.virtualCity-lorenz__gini {
+  font-weight: 700;
+  color: #a78bfa;
+  font-variant-numeric: tabular-nums;
+}
+.virtualCity-lorenz__svg {
+  display: block;
+  width: 100%;
+  height: 160px;
+  background: var(--virtualCity-bg);
+  border-radius: 4px;
+}
+.virtualCity-lorenz__legend {
+  font-size: 11px;
+  color: var(--virtualCity-text-dim);
+  margin-top: 4px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.virtualCity-lorenz__legend-dot {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.virtualCity-lorenz__legend-dot--equal { background: #94a3b8; border-top: 1px dashed #94a3b8; }
+.virtualCity-lorenz__legend-dot--curve { background: #a78bfa; height: 2px; }
+.virtualCity-lorenz__me {
+  fill: #f472b6;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.virtualCity-lorenz__me-label {
+  fill: #f472b6;
+  font-size: 10px;
+  font-weight: 600;
+}
+.virtualCity-lorenz__empty {
+  font-size: 12px;
+  color: var(--virtualCity-text-dim);
+  padding: 14px 0;
+  text-align: center;
+}
+
+/* ── 财富金字塔面板 ── */
+.virtualCity-pyramid {
+  background: var(--virtualCity-bg-soft);
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.virtualCity-pyramid__title {
+  font-size: 12px;
+  color: var(--virtualCity-text-dim);
+  margin-bottom: 8px;
+}
+.virtualCity-pyramid__layers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.virtualCity-pyramid__row {
+  display: grid;
+  grid-template-columns: 80px 1fr 110px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--virtualCity-bg);
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 4px;
+  font-size: 12px;
+}
+.virtualCity-pyramid__row-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--virtualCity-text);
+}
+.virtualCity-pyramid__row-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.virtualCity-pyramid__row-dot--survival { background: #60a5fa; }
+.virtualCity-pyramid__row-dot--accumulation { background: #d4a017; }
+.virtualCity-pyramid__row-dot--freedom { background: #34d399; }
+.virtualCity-pyramid__row-bar {
+  height: 14px;
+  background: var(--virtualCity-bg-soft);
+  border-radius: 3px;
+  position: relative;
+  overflow: hidden;
+}
+.virtualCity-pyramid__row-bar-fill {
+  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.virtualCity-pyramid__row-bar-fill--survival { background: #60a5fa; }
+.virtualCity-pyramid__row-bar-fill--accumulation { background: #d4a017; }
+.virtualCity-pyramid__row-bar-fill--freedom { background: #34d399; }
+.virtualCity-pyramid__row-meta {
+  color: var(--virtualCity-text-dim);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 资金流向桑基图面板（简化：左源右汇 + 贝塞尔连线） ── */
+.virtualCity-flow {
+  background: var(--virtualCity-bg-soft);
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 6px;
+  padding: 10px;
+}
+.virtualCity-flow__title {
+  font-size: 12px;
+  color: var(--virtualCity-text-dim);
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.virtualCity-flow__totals {
+  display: flex;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.virtualCity-flow__total--in { color: #34d399; }
+.virtualCity-flow__total--out { color: #fb923c; }
+.virtualCity-flow__svg {
+  display: block;
+  width: 100%;
+  height: 200px;
+  background: var(--virtualCity-bg);
+  border-radius: 4px;
+}
+.virtualCity-flow__node-label {
+  fill: var(--virtualCity-text);
+  font-size: 11px;
+  font-weight: 500;
+}
+.virtualCity-flow__node-amount {
+  fill: var(--virtualCity-text-dim);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.virtualCity-flow__link {
+  fill: none;
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+.virtualCity-flow__link:hover { opacity: 0.85; }
+.virtualCity-flow__link--source { stroke: #34d399; }
+.virtualCity-flow__link--sink   { stroke: #fb923c; }
+.virtualCity-flow__link--pass   { stroke: #a78bfa; }
+.virtualCity-flow__empty {
+  font-size: 12px;
+  color: var(--virtualCity-text-dim);
+  padding: 14px 0;
+  text-align: center;
+}

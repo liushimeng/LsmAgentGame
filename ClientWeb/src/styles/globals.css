@@ -100,35 +100,35 @@
 /* 2026-09-19 §财商流-UI修复 — 全站按钮变体(.btn 系列)的唯一事实来源。
    把原先靠「级联顺序意外」生效的 .btn* 规则从 xiangqi.css / debate.css 迁出并合并
    （xiangqi 在链上第 3 位提供盒模型，debate 在链上第 76 位以同特异度胜出）。
-   位置硬约束：**必须**排在 wealth.css 之前，否则同特异度的
-   `.btn-*:hover:not(:disabled)` 会靠源码顺序反压 `.wealth-root` / `.wealth-lobby` /
+   位置硬约束：**必须**排在 virtualCity.css 之前，否则同特异度的
+   `.btn-*:hover:not(:disabled)` 会靠源码顺序反压 `.virtualCity-root` / `.virtualCity-lobby` /
    `.app-modal` 作用域下的财富按钮样式。
    本次仅「在既有两项之间插入一项」，既有 @import 项之间的相对次序不变
    （CLAUDE.md §2.1 约束 4）。 */
 @import './buttons.css';
-/* 2026-09-14 §财商流 P0 — 虚拟城市(wealth, 第 7 款游戏)全部 .wealth-* 样式。
+/* 2026-09-14 §财商流 P0 — 虚拟城市(virtualCity, 第 7 款游戏)全部 .virtualCity-* 样式。
    只追加在末尾,不调整既有 @import 链顺序(CLAUDE.md §2.1 约束 4);
    独立成文件:游戏私有样式按 §2.1 约束 2 落在专属命名空间,不与既有游戏互染。 */
-@import './wealth.css';
+@import './virtualCity.css';
 /* 虚拟城市 P2 交易系统样式（挂单簿 / 议价 / 借贷 / 拍卖 / 信息市场）。
- * 2026-09-19 §财商流-UI修复：原先挂在 wealth.css 末尾的 @import 因位置非法
+ * 2026-09-19 §财商流-UI修复：原先挂在 virtualCity.css 末尾的 @import 因位置非法
  * 被 Vite 静默丢弃，504 行从未生效；此处追加到链尾使其真正加载。
- * 必须排在 wealth.css **之后**：p2 的 .btn-mini 需在同特异度下靠源码顺序
- * 胜过 wealth.css 的 .btn（详见 wealth-p2.css 内注释）。
+ * 必须排在 virtualCity.css **之后**：p2 的 .btn-mini 需在同特异度下靠源码顺序
+ * 胜过 virtualCity.css 的 .btn（详见 virtualCity-p2.css 内注释）。
  * 只追加在末尾，不调整既有 @import 链顺序（CLAUDE.md §2.1 约束 4）。 */
-@import './wealth-p2.css';
+@import './virtualCity-p2.css';
 /* 虚拟城市 P1-4 商业保险（InsurancePanel / 意外身故结局徽章）。
- * 2026-09-19 §财商流P1-4：独立成文件（wealth.css 已 1738 行，逼近 §4 的
- * 1800 行上限）；选择器全部为新增 .wealth-insurance-* 前缀，与既有规则
+ * 2026-09-19 §财商流P1-4：独立成文件（virtualCity.css 已 1738 行，逼近 §4 的
+ * 1800 行上限）；选择器全部为新增 .virtualCity-insurance-* 前缀，与既有规则
  * 零级联冲突。只追加在链尾，不调整既有 @import 链顺序（§2.1 约束 4）。 */
-@import './wealth-insurance.css';
+@import './virtualCity-insurance.css';
 /* 虚拟城市居民人物卡档案抽屉（ResidentProfileDrawer + CityStatsPanel 锚定进度条）。
- * 档案锚定设计 §8.5：独立成文件（wealth.css 已 1738 行，追加会突破 §4 的
- * 1800 行上限）；选择器全部为新增 .wealth-resident-drawer-* 前缀，与既有规则
+ * 档案锚定设计 §8.5：独立成文件（virtualCity.css 已 1738 行，追加会突破 §4 的
+ * 1800 行上限）；选择器全部为新增 .virtualCity-resident-drawer-* 前缀，与既有规则
  * 零级联冲突。只追加在链尾，不调整既有 @import 链顺序（§2.1 约束 4）。 */
-@import './wealth-residents.css';
+@import './virtualCity-residents.css';
 /* 虚拟城市 13-3D城市渲染优化 · 阶段 E（Tab 分组 / 面板折叠 / 叠层秩序）。
- * 2026-09-22：独立成文件（wealth.css 1738 行逼近 §4 上限 1800）；
- * 覆盖 CityStatsPanel.css 的规则一律用 .wealth-sidebar > 前缀提升特异度。
+ * 2026-09-22：独立成文件（virtualCity.css 1738 行逼近 §4 上限 1800）；
+ * 覆盖 CityStatsPanel.css 的规则一律用 .virtualCity-sidebar > 前缀提升特异度。
  * 只追加在链尾，不调整既有 @import 链顺序（§2.1 约束 4）。 */
-@import './wealth-city3d.css';
+@import './virtualCity-city3d.css';
