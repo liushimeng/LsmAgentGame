@@ -341,11 +341,11 @@ func TestCreateRoomWithAgents_NoAgentSeaterSkipsValidationWithWarn(t *testing.T)
 	// reaching this point without panic is the assertion.
 }
 
-// TestClampWealthResidentCount 2026-09-22 §17-CityHuman(契约 03 §3.1 语义
+// TestClampVirtualCityResidentCount 2026-09-22 §17-CityHuman(契约 03 §3.1 语义
 // 更新):resident_count **必达** —— 缺省/0 → 10000;<10 → clamp 10;
 // >maxResidents → clamp(默认 100000);负数由 API 层 400(service 层 v<=0
 // 兜底走缺省 10000);maxResidents<=0 回落默认 100000。
-func TestClampWealthResidentCount(t *testing.T) {
+func TestClampVirtualCityResidentCount(t *testing.T) {
 	cases := []struct {
 		in, max, want int
 	}{
@@ -363,7 +363,7 @@ func TestClampWealthResidentCount(t *testing.T) {
 		{20000, 20000, 20000},
 	}
 	for _, c := range cases {
-		if got := clampWealthResidentCount(c.in, c.max); got != c.want {
+		if got := clampVirtualCityResidentCount(c.in, c.max); got != c.want {
 			t.Errorf("clamp(%d, %d) = %d, want %d", c.in, c.max, got, c.want)
 		}
 	}

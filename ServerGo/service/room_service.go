@@ -56,14 +56,14 @@ type TexasTableConfig struct {
 	StartStack int `json:"start_stack,omitempty"`
 }
 
-// WealthRoomOptions 2026-09-14 §财商流P0 — 房间级配置(仅 wealth 生效;
+// VirtualCityRoomOptions 2026-09-14 §财商流P0 — 房间级配置(仅 wealth 生效;
 // month_ms clamp [3000,30000] 由 service 层校验)。
 // 2026-09-22 §17-CityHuman(契约 03 §2.1):Pool 卡池语义随精选卡层退役 ——
 // 发卡恒走文档池 + 合成兜底。**字段保留但 Deprecated 且被忽略**:HTTP 建房
 // 解码用 DisallowUnknownFields(嵌套字段严格),删字段会让旧客户端的
 // wealth.pool 载荷变 400,违反契约 03 §6「静默忽略」;保留空壳字段使旧载荷
 // 继续解码成功,applyOpts 不再消费(已实测 nested unknown field → 400)。
-type WealthRoomOptions struct {
+type VirtualCityRoomOptions struct {
 	MonthMs int   `json:"month_ms,omitempty"`
 	Seed    int64 `json:"seed,omitempty"`
 	// Pool Deprecated(2026-09-22 §17-CityHuman):原 "curated"|"docs" 卡池
@@ -71,7 +71,7 @@ type WealthRoomOptions struct {
 	Pool string `json:"pool,omitempty"`
 	// ResidentCount 2026-09-21 §虚拟城市 — 城市背景居民数(0=不启用城市层,
 	// 向后兼容旧形态)。建房 body 顶层 resident_count 由 API 层并入本字段;
-	// service 层 clamp [0, cfg.Wealth.MaxResidents](负数在 API 层 400)。
+	// service 层 clamp [0, cfg.VirtualCity.MaxResidents](负数在 API 层 400)。
 	ResidentCount int `json:"resident_count,omitempty"`
 	// CivicElectionEnabled 2026-09-24 §批次20(文档3 A2)— 市长选举启用
 	// (仅 wealth 生效;**缺省 false = 关闭**,与 manager.Config 同零值语义,
@@ -275,13 +275,13 @@ type RoomService struct {
 	// 由 main.go 通过 SetTexasHoldemRoomConfigurer 注入(thpMgr.SetRoomConfig),
 	// 避免 service → ws 反向依赖;nil 时静默跳过(单元测试 / 老装配)。
 	texasHoldemConfigurer func(roomID string, bigBlind, startStack int)
-	// wealthRoomConfigurer 2026-09-14 §财商流P0 — 房间级配置透传(月份节奏 + 卡池 + seed)。
-	// 由 main.go 通过 SetWealthRoomConfigurer 注入。
-	wealthRoomConfigurer func(roomID string, opts *WealthRoomOptions)
-	// wealthResidentCounter 2026-09-21 §虚拟城市 — wealth 房间 resident_count
-	// 只读探针(大厅列表/详情下发)。由 main.go 通过 SetWealthResidentCounter
+	// virtualCityRoomConfigurer 2026-09-14 §财商流P0 — 房间级配置透传(月份节奏 + 卡池 + seed)。
+	// 由 main.go 通过 SetVirtualCityRoomConfigurer 注入。
+	virtualCityRoomConfigurer func(roomID string, opts *VirtualCityRoomOptions)
+	// virtualCityResidentCounter 2026-09-21 §虚拟城市 — wealth 房间 resident_count
+	// 只读探针(大厅列表/详情下发)。由 main.go 通过 SetVirtualCityResidentCounter
 	// 注入;nil 时省略(单元测试/旧装配)。
-	wealthResidentCounter func(roomID string) int
+	virtualCityResidentCounter func(roomID string) int
 	// roomActivityChecker 2026-08-22 §BUG-TEXAS-JANITOR-SPLITBRAIN — 强删前
 	// 探测 in-memory 游戏管理器(狼人杀 + 德州扑克)的权威状态。若管理器认为
 	// 该房间仍有玩家(活跃对局或未开局但已入座),janitor 必须跳过,避免
@@ -331,15 +331,15 @@ func (s *RoomService) SetTexasHoldemRoomConfigurer(fn func(roomID string, bigBli
 	s.texasHoldemConfigurer = fn
 }
 
-// SetWealthRoomConfigurer 2026-09-14 §财商流P0 — 注册房间级配置回调。
-func (s *RoomService) SetWealthRoomConfigurer(fn func(roomID string, opts *WealthRoomOptions)) {
-	s.wealthRoomConfigurer = fn
+// SetVirtualCityRoomConfigurer 2026-09-14 §财商流P0 — 注册房间级配置回调。
+func (s *RoomService) SetVirtualCityRoomConfigurer(fn func(roomID string, opts *VirtualCityRoomOptions)) {
+	s.virtualCityRoomConfigurer = fn
 }
 
-// SetWealthResidentCounter 2026-09-21 §虚拟城市 — 注册 wealth 房间
+// SetVirtualCityResidentCounter 2026-09-21 §虚拟城市 — 注册 wealth 房间
 // resident_count 只读探针(大厅列表/详情的 🏙 徽标数据源)。
-func (s *RoomService) SetWealthResidentCounter(fn func(roomID string) int) {
-	s.wealthResidentCounter = fn
+func (s *RoomService) SetVirtualCityResidentCounter(fn func(roomID string) int) {
+	s.virtualCityResidentCounter = fn
 }
 
 // SetRoomActivityChecker 2026-08-22 §BUG-TEXAS-JANITOR-SPLITBRAIN — 注册
@@ -682,8 +682,8 @@ type RoomInfo struct {
 	// 全 Agent 房间人类不能加入对局,仅可以观战者身份观看。
 	FullAgent bool `json:"full_agent,omitempty"`
 	// ResidentCount 2026-09-21 §虚拟城市(契约 04 §1.3)— 城市背景居民数
-	// (仅 wealth 生效;0/未建城 omit)。来源:in-memory WealthRoom(经
-	// SetWealthResidentCounter 注入的只读回调),不落 DB。
+	// (仅 wealth 生效;0/未建城 omit)。来源:in-memory VirtualCityRoom(经
+	// SetVirtualCityResidentCounter 注入的只读回调),不落 DB。
 	ResidentCount int `json:"resident_count,omitempty"`
 }
 
@@ -702,7 +702,7 @@ func gameKindCN(kind string) string {
 		return "斗地主"
 	case "texasholdem":
 		return "德州扑克"
-	case "wealth":
+	case "virtual_city":
 		return "虚拟城市"
 	case "werewolf":
 		return "狼人杀"

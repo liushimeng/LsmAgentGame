@@ -112,69 +112,69 @@ const (
 	// 2026-07-10.
 	ErrRestartVoteWrongPhase = 30200
 
-	// 35001–35012 — 虚拟城市(wealth)专用段(2026-09-14 §财商流P0)。
+	// 35001–35012 — 虚拟城市(virtual_city)专用段(2026-09-14 §财商流P0)。
 	// 契约: lag_docs/虚拟城市/已实现/02-架构设计/虚拟城市-WS与HTTP协议契约-v1.md §5。
-	ErrWealthRoomNotFound          = 35001
-	ErrWealthNotPlaying            = 35002
-	ErrWealthNotEnoughPlayers      = 35003
-	ErrWealthWrongPhase            = 35004
-	ErrWealthPlayerInactive        = 35005
-	ErrWealthActionBudgetExhausted = 35006
-	ErrWealthInsufficientCash      = 35007
-	ErrWealthAssetInvalid          = 35008
-	ErrWealthLoanInvalid           = 35009
-	ErrWealthGateFailed            = 35010
-	ErrWealthNotOwner              = 35011
-	ErrWealthProfessionPoolEmpty   = 35012
+	ErrVirtualCityRoomNotFound          = 35001
+	ErrVirtualCityNotPlaying            = 35002
+	ErrVirtualCityNotEnoughPlayers      = 35003
+	ErrVirtualCityWrongPhase            = 35004
+	ErrVirtualCityPlayerInactive        = 35005
+	ErrVirtualCityActionBudgetExhausted = 35006
+	ErrVirtualCityInsufficientCash      = 35007
+	ErrVirtualCityAssetInvalid          = 35008
+	ErrVirtualCityLoanInvalid           = 35009
+	ErrVirtualCityGateFailed            = 35010
+	ErrVirtualCityNotOwner              = 35011
+	ErrVirtualCityProfessionPoolEmpty   = 35012
 	// P1: 虚拟城市提前还款 / 明斯基(v2.60 N11-4/N11-5/N12-3/N12-5)专用错误码。
 	ErrLoanNotFound           = 35013
 	ErrEarlyRepayOnlyMortgage = 35014
 	ErrCashNotEnoughRepay     = 35015
 	// 35016–35020 — 虚拟城市 P1 真实经济循环 + 社会调研(2026-09-16 §财商流P1-2)。
-	ErrWealthSurveyOptionsInvalid    = 35016 // 调研选项数非法(须 2-6)或选项索引越界
-	ErrWealthSurveyOpenExists        = 35017 // 已有进行中的调研(每房同时 1 个 open)
-	ErrWealthSurveyMonthlyLimit      = 35018 // 本月已达调研发起上限(每月 1 个/累计 20 个)
-	ErrWealthSurveyNotFound          = 35019 // 调研不存在/已关闭/已回答
-	ErrWealthConsumptionLevelInvalid = 35020 // 消费档位非法(须 0-3)
+	ErrVirtualCitySurveyOptionsInvalid    = 35016 // 调研选项数非法(须 2-6)或选项索引越界
+	ErrVirtualCitySurveyOpenExists        = 35017 // 已有进行中的调研(每房同时 1 个 open)
+	ErrVirtualCitySurveyMonthlyLimit      = 35018 // 本月已达调研发起上限(每月 1 个/累计 20 个)
+	ErrVirtualCitySurveyNotFound          = 35019 // 调研不存在/已关闭/已回答
+	ErrVirtualCityConsumptionLevelInvalid = 35020 // 消费档位非法(须 0-3)
 	// 35021–35035 — 虚拟城市 P2 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
-	ErrWealthListingInvalid    = 35021 // 挂单无效(资产不存在/参数非法)
-	ErrWealthListingExpired    = 35022 // 挂单已过期
-	ErrWealthListingNotFound   = 35023 // 挂单不存在
-	ErrWealthNegotiateNotFound = 35024 // 议价会话不存在
-	ErrWealthNotYourTurn       = 35025 // 非议价轮次(非本方出价)
-	ErrWealthLoanRateInvalid   = 35026 // 借贷利率超限(0.3%-3.6%/月)
-	ErrWealthLoanNoCredit      = 35027 // 信用不足(无法借贷)
-	ErrWealthGuarantorConflict = 35028 // 担保人冲突(不可自担保/已担保过)
-	ErrWealthAuctionEnded      = 35029 // 拍卖已结束
-	ErrWealthBidTooLow         = 35030 // 出价低于当前最高价/起拍价
-	ErrWealthNoPrivilege       = 35031 // 权限不足(非自由圈)
-	ErrWealthListingFull       = 35032 // 挂单已满(每座位最多 3 笔)
-	ErrWealthSelfTrade         = 35033 // 不可自交易(买卖双方相同)
-	ErrWealthAuctionNotFound   = 35034 // 拍卖不存在
-	ErrWealthInfoNotFound      = 35035 // 信息不存在/未成交
-	ErrWealthFullAgentReject   = 35036 // 全 Agent 房间拒绝人类加入(2026-09-19 §全Agent模式)
+	ErrVirtualCityListingInvalid    = 35021 // 挂单无效(资产不存在/参数非法)
+	ErrVirtualCityListingExpired    = 35022 // 挂单已过期
+	ErrVirtualCityListingNotFound   = 35023 // 挂单不存在
+	ErrVirtualCityNegotiateNotFound = 35024 // 议价会话不存在
+	ErrVirtualCityNotYourTurn       = 35025 // 非议价轮次(非本方出价)
+	ErrVirtualCityLoanRateInvalid   = 35026 // 借贷利率超限(0.3%-3.6%/月)
+	ErrVirtualCityLoanNoCredit      = 35027 // 信用不足(无法借贷)
+	ErrVirtualCityGuarantorConflict = 35028 // 担保人冲突(不可自担保/已担保过)
+	ErrVirtualCityAuctionEnded      = 35029 // 拍卖已结束
+	ErrVirtualCityBidTooLow         = 35030 // 出价低于当前最高价/起拍价
+	ErrVirtualCityNoPrivilege       = 35031 // 权限不足(非自由圈)
+	ErrVirtualCityListingFull       = 35032 // 挂单已满(每座位最多 3 笔)
+	ErrVirtualCitySelfTrade         = 35033 // 不可自交易(买卖双方相同)
+	ErrVirtualCityAuctionNotFound   = 35034 // 拍卖不存在
+	ErrVirtualCityInfoNotFound      = 35035 // 信息不存在/未成交
+	ErrVirtualCityFullAgentReject   = 35036 // 全 Agent 房间拒绝人类加入(2026-09-19 §全Agent模式)
 	// 35037–35041 — 虚拟城市 P1 商业保险与风险转移引擎(2026-09-19 §财商流P1-4)。
 	// 契约: lag_docs/虚拟城市/已实现/10-P1保险系统/虚拟城市-P1-商业保险与风险转移引擎-v1.md §9。
-	ErrWealthInsuranceKindInvalid = 35037 // kind 非 4 险种之一
-	ErrWealthInsuranceExists      = 35038 // 重复投保同险种(每人每险种 1 张有效保单)
-	ErrWealthInsuranceNotFound    = 35039 // 退保/操作时无有效保单
-	ErrWealthInsuranceAgeGate     = 35040 // 主时钟年龄 > 55 禁止新投保
-	ErrWealthInsuranceDisabled    = 35041 // insurance_enabled=false 引擎关闭
-	// ErrWealthResidentNotFound: 居民人物卡档案不存在(未锚定/卡号未命中)。
+	ErrVirtualCityInsuranceKindInvalid = 35037 // kind 非 4 险种之一
+	ErrVirtualCityInsuranceExists      = 35038 // 重复投保同险种(每人每险种 1 张有效保单)
+	ErrVirtualCityInsuranceNotFound    = 35039 // 退保/操作时无有效保单
+	ErrVirtualCityInsuranceAgeGate     = 35040 // 主时钟年龄 > 55 禁止新投保
+	ErrVirtualCityInsuranceDisabled    = 35041 // insurance_enabled=false 引擎关闭
+	// ErrVirtualCityResidentNotFound: 居民人物卡档案不存在(未锚定/卡号未命中)。
 	// 2026-09-21 §档案锚定契约 §7。注:契约原文写 35013,该码已被
 	// ErrLoanNotFound(提前还款)占用,顺延取本段首个空闲码 35042 ——
 	// 前端契约以 errcode 常量为准。
-	ErrWealthResidentNotFound = 35042
+	ErrVirtualCityResidentNotFound = 35042
 	// 35043–35044 — 虚拟城市批次20 股票交易微观结构(2026-09-24
 	// §批次20-市长选举启用与股票微观结构 文档3 B3)。
-	ErrWealthMarketCircuitBreak = 35043 // 熔断期股票交易暂停(仅 stock_index)
-	ErrWealthStockT1Locked      = 35044 // 当月买入份额 T+1 冻结不可卖
+	ErrVirtualCityMarketCircuitBreak = 35043 // 熔断期股票交易暂停(仅 stock_index)
+	ErrVirtualCityStockT1Locked      = 35044 // 当月买入份额 T+1 冻结不可卖
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
 	// 契约: lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md §4.4。
-	ErrWealthSenseInvalid   = 35100 // 感知/移动工具参数非法(未知城区、未知 mode、目标不存在)
-	ErrWealthSenseLimit     = 35101 // 当月感知/发言次数超限(see/hear/smell 各 ≤2,speak 合计 ≤2)
-	ErrWealthMoveForbidden  = 35102 // 当前状态不允许移动(破产清算/停赛中等)
-	ErrWealthWhisperTarget  = 35103 // 私聊目标不可达(目标出局/非座位居民/跨房)
+	ErrVirtualCitySenseInvalid   = 35100 // 感知/移动工具参数非法(未知城区、未知 mode、目标不存在)
+	ErrVirtualCitySenseLimit     = 35101 // 当月感知/发言次数超限(see/hear/smell 各 ≤2,speak 合计 ≤2)
+	ErrVirtualCityMoveForbidden  = 35102 // 当前状态不允许移动(破产清算/停赛中等)
+	ErrVirtualCityWhisperTarget  = 35103 // 私聊目标不可达(目标出局/非座位居民/跨房)
 	// ErrAlreadyWolfVoted: 狼人在 night_wolves 阶段已投过票(含弃权),
 	// 再次调用 wolf_kill 一律拒绝。R196 报告 P1:Bot 8 (GLM-5.2) 反复投票
 	// 15+ 次服务端仅覆盖不报错,LLM 看不到反馈陷入循环。
@@ -241,62 +241,62 @@ var DefaultMessages = map[int]string{
 	ErrPropPlayerDead:        "死亡玩家不能使用道具（仅存活玩家可用）",
 	ErrDeadPlayerAction:      "死亡玩家不能执行该动作（仅存活玩家可用）",
 
-	// 虚拟城市(wealth)专用段 — 协议契约文档 §5 默认英文消息照抄。
-	ErrWealthRoomNotFound:          "wealth room not found",
-	ErrWealthNotPlaying:            "wealth game not in playing state",
-	ErrWealthNotEnoughPlayers:      "wealth game needs at least 3 seated players",
-	ErrWealthWrongPhase:            "wealth action only allowed in acting phase",
-	ErrWealthPlayerInactive:        "wealth player is stopped/bankrupt/eliminated",
-	ErrWealthActionBudgetExhausted: "wealth monthly action budget exhausted",
-	ErrWealthInsufficientCash:      "wealth insufficient cash",
-	ErrWealthAssetInvalid:          "wealth asset/units invalid",
-	ErrWealthLoanInvalid:           "wealth loan kind/amount/credit gate invalid",
-	ErrWealthGateFailed:            "wealth cognition/energy/network gate failed",
-	ErrWealthNotOwner:              "wealth operation requires room owner",
-	ErrWealthProfessionPoolEmpty:   "wealth profession pool unavailable",
+	// 虚拟城市(virtual_city)专用段 — 协议契约文档 §5 默认英文消息照抄。
+	ErrVirtualCityRoomNotFound:          "virtual_city room not found",
+	ErrVirtualCityNotPlaying:            "virtual_city game not in playing state",
+	ErrVirtualCityNotEnoughPlayers:      "virtual_city game needs at least 3 seated players",
+	ErrVirtualCityWrongPhase:            "virtual_city action only allowed in acting phase",
+	ErrVirtualCityPlayerInactive:        "virtual_city player is stopped/bankrupt/eliminated",
+	ErrVirtualCityActionBudgetExhausted: "virtual_city monthly action budget exhausted",
+	ErrVirtualCityInsufficientCash:      "virtual_city insufficient cash",
+	ErrVirtualCityAssetInvalid:          "virtual_city asset/units invalid",
+	ErrVirtualCityLoanInvalid:           "virtual_city loan kind/amount/credit gate invalid",
+	ErrVirtualCityGateFailed:            "virtual_city cognition/energy/network gate failed",
+	ErrVirtualCityNotOwner:              "virtual_city operation requires room owner",
+	ErrVirtualCityProfessionPoolEmpty:   "virtual_city profession pool unavailable",
 	// P1: 虚拟城市提前还款 / 明斯基错误码默认英文消息。
 	ErrLoanNotFound:           "loan not found",
 	ErrEarlyRepayOnlyMortgage: "early repay only allowed for mortgage loans",
 	ErrCashNotEnoughRepay:     "cash not enough for early repayment (including penalty)",
 	// 35016–35020 — 虚拟城市 P1 真实经济循环 + 社会调研(2026-09-16 §财商流P1-2)。
-	ErrWealthSurveyOptionsInvalid:    "survey options invalid (need 2-6 non-empty) or option index out of range",
-	ErrWealthSurveyOpenExists:        "an open survey already exists (one open per room)",
-	ErrWealthSurveyMonthlyLimit:      "survey launch limit reached (1 per month / 20 per room)",
-	ErrWealthSurveyNotFound:          "survey not found / closed / already answered",
-	ErrWealthConsumptionLevelInvalid: "consumption level invalid (must be 0-3)",
+	ErrVirtualCitySurveyOptionsInvalid:    "survey options invalid (need 2-6 non-empty) or option index out of range",
+	ErrVirtualCitySurveyOpenExists:        "an open survey already exists (one open per room)",
+	ErrVirtualCitySurveyMonthlyLimit:      "survey launch limit reached (1 per month / 20 per room)",
+	ErrVirtualCitySurveyNotFound:          "survey not found / closed / already answered",
+	ErrVirtualCityConsumptionLevelInvalid: "consumption level invalid (must be 0-3)",
 	// 35021–35035 — 虚拟城市 P2 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
-	ErrWealthListingInvalid:    "wealth listing invalid (asset not found or params invalid)",
-	ErrWealthListingExpired:    "wealth listing expired",
-	ErrWealthListingNotFound:   "wealth listing not found",
-	ErrWealthNegotiateNotFound: "wealth negotiate session not found",
-	ErrWealthNotYourTurn:       "wealth negotiate not your turn to respond",
-	ErrWealthLoanRateInvalid:   "wealth loan rate out of range (0.3%-3.6% per month)",
-	ErrWealthLoanNoCredit:      "wealth loan credit score too low",
-	ErrWealthGuarantorConflict: "wealth guarantor conflict (self-guarantee or already guaranteed)",
-	ErrWealthAuctionEnded:      "wealth auction already ended",
-	ErrWealthBidTooLow:         "wealth bid too low (below current highest/reserve)",
-	ErrWealthNoPrivilege:       "wealth operation requires free-circle privilege",
-	ErrWealthListingFull:       "wealth listing full (max 3 per seat)",
-	ErrWealthSelfTrade:         "wealth self-trade not allowed (buyer=seller)",
-	ErrWealthAuctionNotFound:   "wealth auction not found",
-	ErrWealthInfoNotFound:      "wealth info not found or not won",
-	ErrWealthFullAgentReject:   "wealth full-agent room rejects human join, use spectate instead",
+	ErrVirtualCityListingInvalid:    "virtual_city listing invalid (asset not found or params invalid)",
+	ErrVirtualCityListingExpired:    "virtual_city listing expired",
+	ErrVirtualCityListingNotFound:   "virtual_city listing not found",
+	ErrVirtualCityNegotiateNotFound: "virtual_city negotiate session not found",
+	ErrVirtualCityNotYourTurn:       "virtual_city negotiate not your turn to respond",
+	ErrVirtualCityLoanRateInvalid:   "virtual_city loan rate out of range (0.3%-3.6% per month)",
+	ErrVirtualCityLoanNoCredit:      "virtual_city loan credit score too low",
+	ErrVirtualCityGuarantorConflict: "virtual_city guarantor conflict (self-guarantee or already guaranteed)",
+	ErrVirtualCityAuctionEnded:      "virtual_city auction already ended",
+	ErrVirtualCityBidTooLow:         "virtual_city bid too low (below current highest/reserve)",
+	ErrVirtualCityNoPrivilege:       "virtual_city operation requires free-circle privilege",
+	ErrVirtualCityListingFull:       "virtual_city listing full (max 3 per seat)",
+	ErrVirtualCitySelfTrade:         "virtual_city self-trade not allowed (buyer=seller)",
+	ErrVirtualCityAuctionNotFound:   "virtual_city auction not found",
+	ErrVirtualCityInfoNotFound:      "virtual_city info not found or not won",
+	ErrVirtualCityFullAgentReject:   "virtual_city full-agent room rejects human join, use spectate instead",
 	// 35037–35041 — 虚拟城市 P1 商业保险(2026-09-19 §财商流P1-4 §9 默认英文消息)。
-	ErrWealthInsuranceKindInvalid: "wealth insurance kind invalid",
-	ErrWealthInsuranceExists:      "wealth active policy already exists for this kind",
-	ErrWealthInsuranceNotFound:    "wealth no active policy for this kind",
-	ErrWealthInsuranceAgeGate:     "wealth insurance purchase not allowed above age 55",
-	ErrWealthInsuranceDisabled:    "wealth insurance engine disabled by config",
+	ErrVirtualCityInsuranceKindInvalid: "virtual_city insurance kind invalid",
+	ErrVirtualCityInsuranceExists:      "virtual_city active policy already exists for this kind",
+	ErrVirtualCityInsuranceNotFound:    "virtual_city no active policy for this kind",
+	ErrVirtualCityInsuranceAgeGate:     "virtual_city insurance purchase not allowed above age 55",
+	ErrVirtualCityInsuranceDisabled:    "virtual_city insurance engine disabled by config",
 	// 35042 — 虚拟城市居民人物卡档案(2026-09-21 §档案锚定契约 §7)。
-	ErrWealthResidentNotFound: "居民档案不存在",
+	ErrVirtualCityResidentNotFound: "居民档案不存在",
 	// 35043–35044 — 虚拟城市批次20 股票交易微观结构(2026-09-24 文档3 B3)。
-	ErrWealthMarketCircuitBreak: "wealth stock trading suspended by monthly circuit breaker",
-	ErrWealthStockT1Locked:      "wealth stock units bought this month are T+1 locked and not sellable",
+	ErrVirtualCityMarketCircuitBreak: "virtual_city stock trading suspended by monthly circuit breaker",
+	ErrVirtualCityStockT1Locked:      "virtual_city stock units bought this month are T+1 locked and not sellable",
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
-	ErrWealthSenseInvalid:   "wealth sense/move params invalid (unknown district/mode/target)",
-	ErrWealthSenseLimit:     "wealth sense/speak monthly limit reached",
-	ErrWealthMoveForbidden:  "wealth move forbidden in current state",
-	ErrWealthWhisperTarget:  "wealth whisper target unreachable",
+	ErrVirtualCitySenseInvalid:   "virtual_city sense/move params invalid (unknown district/mode/target)",
+	ErrVirtualCitySenseLimit:     "virtual_city sense/speak monthly limit reached",
+	ErrVirtualCityMoveForbidden:  "virtual_city move forbidden in current state",
+	ErrVirtualCityWhisperTarget:  "virtual_city whisper target unreachable",
 }
 
 // Code constructs a Coded error.

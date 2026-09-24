@@ -5,7 +5,7 @@ import (
 
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/game/chess"
-	"LsmAgentGame/game/wealth"
+	"LsmAgentGame/game/virtual_city"
 	"LsmAgentGame/game/xiangqi"
 	"LsmAgentGame/logger"
 
@@ -35,8 +35,8 @@ func (s *GameService) handleJoin(c *Client, env Envelope) {
 		s.handleDoudizhuJoin(c, env, req.RoomID)
 	case "texasholdem":
 		s.handleTexasHoldemJoin(c, env, req.RoomID)
-	case "wealth":
-		s.handleWealthJoin(c, env, req.RoomID)
+	case "virtual_city":
+		s.handleVirtualCityJoin(c, env, req.RoomID)
 	case "werewolf":
 		s.handleWerewolfJoin(c, env, req.RoomID)
 	default:
@@ -437,15 +437,15 @@ func (s *GameService) handleResign(c *Client, env Envelope) {
 		s.broadcastTexasHoldemState(req.RoomID)
 		s.broadcastTexasHoldemSpectatorState(req.RoomID)
 		s.leaveRoomQuiet(req.RoomID, c.UserID)
-	case "wealth":
-		if s.wealthMgr == nil {
+	case "virtual_city":
+		if s.vcMgr == nil {
 			return
 		}
-		if r := s.wealthMgr.Get(req.RoomID); r != nil {
+		if r := s.vcMgr.Get(req.RoomID); r != nil {
 			// 标记座位挂机(P0;bot 接管为 P1)。
 			r.MarkIdle(c.UserID)
 			// 终局前:触发快照推送(允许其他玩家看到人走)。
-			s.broadcastWealthState(req.RoomID)
+			s.broadcastVirtualCityState(req.RoomID)
 		}
 		s.leaveRoomQuiet(req.RoomID, c.UserID)
 	}
@@ -631,17 +631,17 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 			}
 			s.sendOK(c, env.Seq, "game.state", state)
 			return
-		case "wealth":
-			if s.wealthMgr == nil {
-				s.sendError(c, env.Seq, errcode.ErrWealthRoomNotFound, "")
+		case "virtual_city":
+			if s.vcMgr == nil {
+				s.sendError(c, env.Seq, errcode.ErrVirtualCityRoomNotFound, "")
 				return
 			}
-			r := s.wealthMgr.Get(req.RoomID)
+			r := s.vcMgr.Get(req.RoomID)
 			if r == nil || r.Engine() == nil {
 				s.sendError(c, env.Seq, errcode.ErrRoomNotFound, "")
 				return
 			}
-			cs := wealth.BuildClientState(req.RoomID, -1, r.Engine(),
+			cs := virtual_city.BuildClientState(req.RoomID, -1, r.Engine(),
 				r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
 				r.SnapshotModelKeys(), r.SnapshotTranscripts(),
 				r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CitySnapshotView())
@@ -744,12 +744,12 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 			return
 		}
 		s.sendOK(c, env.Seq, "game.state", state)
-	case "wealth":
-		if s.wealthMgr == nil {
-			s.sendError(c, env.Seq, errcode.ErrWealthRoomNotFound, "")
+	case "virtual_city":
+		if s.vcMgr == nil {
+			s.sendError(c, env.Seq, errcode.ErrVirtualCityRoomNotFound, "")
 			return
 		}
-		r := s.wealthMgr.Get(req.RoomID)
+		r := s.vcMgr.Get(req.RoomID)
 		if r == nil {
 			s.sendError(c, env.Seq, errcode.ErrRoomNotFound, "")
 			return
@@ -761,9 +761,9 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 		// PlaceholderWorld 内部 NewMarket(rng) 保证 Market 非 nil，避免 view.go
 		// 第 214 行 nil 解引用。
 		if eng == nil {
-			eng = wealth.PlaceholderWorld(r.SeedView())
+			eng = virtual_city.PlaceholderWorld(r.SeedView())
 		}
-		cs := wealth.BuildClientState(req.RoomID, seat, eng,
+		cs := virtual_city.BuildClientState(req.RoomID, seat, eng,
 			r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
 			r.SnapshotModelKeys(), r.SnapshotTranscripts(),
 			r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CitySnapshotView())

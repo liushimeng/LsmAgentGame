@@ -109,14 +109,14 @@ func (s *RoomService) ListRoomsForUser(ctx context.Context, gameKind, userID str
 			}
 		}
 		// 2026-09-19 §全Agent模式: wealth 房间 FullAgent 标志下发
-		if r.GameKind == "wealth" && s.gameJoiner != nil {
+		if r.GameKind == "virtual_city" && s.gameJoiner != nil {
 			if isFullAgent, e := s.gameJoiner.IsFullAgentRoom(r.ID); e == nil && isFullAgent {
 				info.FullAgent = true
 			}
 		}
 		// 2026-09-21 §虚拟城市(契约 04 §1.3): wealth 房间居民数下发(🏙 徽标)。
-		if r.GameKind == "wealth" && s.wealthResidentCounter != nil {
-			info.ResidentCount = s.wealthResidentCounter(r.ID)
+		if r.GameKind == "virtual_city" && s.virtualCityResidentCounter != nil {
+			info.ResidentCount = s.virtualCityResidentCounter(r.ID)
 		}
 		out = append(out, info)
 	}
@@ -193,7 +193,7 @@ func resolveRevealRoleOnDeath(revealRoleOnDeath *bool, cfg *config.Config) bool 
 	return *cfg.Werewolf.RevealRoleOnDeathDefault
 }
 
-func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID, name string, agentSeats []AgentSeatConfig, judge *JudgeConfig, agentDifficulty string, commentary *CommentaryConfig, creatorRole string, texasCfg *TexasTableConfig, revealRoleOnDeath *bool, wealthCfg *WealthRoomOptions) (*RoomDetail, *errcode.Error) {
+func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID, name string, agentSeats []AgentSeatConfig, judge *JudgeConfig, agentDifficulty string, commentary *CommentaryConfig, creatorRole string, texasCfg *TexasTableConfig, revealRoleOnDeath *bool, wealthCfg *VirtualCityRoomOptions) (*RoomDetail, *errcode.Error) {
 	// creatorRole (2026-08-06 §20260806-03 自选角色):空/"random" = 随机。
 	// (原为可变参;2026-08-19 §德州扑克盲注透传 追加 texasCfg 参数时归一化为
 	// 普通参数 — Go 仅允许一个可变参且必须在末位。)
@@ -231,7 +231,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	// 替换必须发生在 agentSeatSet 构建/校验/落库之前,使 bot 用户行、
 	// FullAgentMode 判定、ws 层 RegisterBotSeats、自动开局看到同一座位集;
 	// werewolf 等其他游戏路径零变化。
-	if gameKind == "wealth" {
+	if gameKind == "virtual_city" {
 		agentSeats = wealthDeepSeats()
 	}
 
@@ -250,10 +250,10 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	if gameKind == "texasholdem" {
 		maxAgentSeats = 6
 	}
-	if gameKind == "wealth" {
+	if gameKind == "virtual_city" {
 		maxAgentSeats = 12
 	}
-	if len(agentSeats) > 0 && gameKind != "werewolf" && gameKind != "texasholdem" && gameKind != "wealth" {
+	if len(agentSeats) > 0 && gameKind != "werewolf" && gameKind != "texasholdem" && gameKind != "virtual_city" {
 		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "agent_seats only supported for werewolf, texasholdem and wealth")
 	}
 	// agent 最多 N 座(werewolf 13 人局上限=13; texasholdem 6 人局上限=6)。
@@ -270,7 +270,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 			// 2026-09-21 §虚拟城市(契约 04 §1.1): wealth 允许空串 model_key =
 			// 线路池驱动(座位不绑定模型);其他游戏(werewolf 等)仍强制非空。
 			// 纯空白 key 归一为空串,防 "AI· " 之类脏昵称。
-			if gameKind != "wealth" {
+			if gameKind != "virtual_city" {
 				return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "agent seat model_key required")
 			}
 			a.ModelKey = ""
@@ -283,14 +283,14 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	}
 
 	// 2026-09-22 §17-CityHuman(契约 03 §3.1): resident_count **必达**新语义
-	// —— 缺省/0 → 10000;<10 → clamp 10;>上限 → clamp cfg.Wealth.MaxResidents
+	// —— 缺省/0 → 10000;<10 → clamp 10;>上限 → clamp cfg.VirtualCity.MaxResidents
 	// (默认 100000);负数在 API 层 400(此处 v<=0 兜底走缺省 10000)。
-	if gameKind == "wealth" && wealthCfg != nil {
+	if gameKind == "virtual_city" && wealthCfg != nil {
 		maxResidents := 100000
-		if s.cfg != nil && s.cfg.Wealth.MaxResidents > 0 {
-			maxResidents = s.cfg.Wealth.MaxResidents
+		if s.cfg != nil && s.cfg.VirtualCity.MaxResidents > 0 {
+			maxResidents = s.cfg.VirtualCity.MaxResidents
 		}
-		wealthCfg.ResidentCount = clampWealthResidentCount(wealthCfg.ResidentCount, maxResidents)
+		wealthCfg.ResidentCount = clampVirtualCityResidentCount(wealthCfg.ResidentCount, maxResidents)
 	}
 	if !isSelectableRoleName(creatorRolePref) {
 		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, fmt.Sprintf("invalid creator_role %q", creatorRolePref))
@@ -423,7 +423,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	// 2026-09-22 §17-CityHuman(契约 03 §3.1): wealth 排除在外 —— 其 12 个
 	// 深度座位全部是池驱动(ModelKey=""),空串是**合法绑定态**(= 线路池
 	// 分配),重写会破坏池驱动语义。
-	if len(agentSeats) > 1 && gameKind != "wealth" {
+	if len(agentSeats) > 1 && gameKind != "virtual_city" {
 		alternates := s.alternateModelsLocked(agentSeats)
 		if len(alternates) > 0 {
 			seen := make(map[string]struct{}, len(agentSeats))
@@ -476,7 +476,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		cap = 3
 	case "texasholdem":
 		cap = 6
-	case "wealth":
+	case "virtual_city":
 		cap = 12
 	case "werewolf_12":
 		cap = 12
@@ -525,7 +525,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		// 2026-08-19 §德州扑克Agent: texasholdem 同样允许全 AI 房间(创建者降级为观战者)。
 		// 2026-09-14 §财商流P0 / 2026-09-16 §12座扩容:wealth 同款支持(创建者降级为观战者,
 		// 满 MinSeats(10) 即自动开局;MaxSeats=12 留 2 头寸给人类玩家)。
-		if gameKind != "werewolf" && gameKind != "texasholdem" && gameKind != "wealth" {
+		if gameKind != "werewolf" && gameKind != "texasholdem" && gameKind != "virtual_city" {
 			// Other games don't allow spectator-creator semantics.
 			return nil, errcode.CodeMsg(errcode.ErrValidationFailed, "no free seat for creator")
 		}
@@ -666,18 +666,18 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	//
 	// 2026-09-14 §财商流P0-bugfix: wealth 房间配置透传从下方 agent 分支移出 ——
 	// 原实现嵌在 (werewolf|texasholdem) 条件内,wealth 永远短路,导致建房时
-	// month_ms/pool/seed 全部静默丢失(线上日志 "wealth room config set" 0 次)。
+	// month_ms/pool/seed 全部静默丢失(线上日志 "virtual_city room config set" 0 次)。
 	// 配置必须对纯人类 wealth 房同样生效,且早于 RegisterAgentSeats / SyncSeat
 	// (Start 发卡与月结 tick 读房间配置)。
-	if gameKind == "wealth" && wealthCfg != nil && s.wealthRoomConfigurer != nil {
-		s.wealthRoomConfigurer(room.ID, wealthCfg)
-		logger.L().Info("wealth room config set before RegisterAgentSeats",
+	if gameKind == "virtual_city" && wealthCfg != nil && s.virtualCityRoomConfigurer != nil {
+		s.virtualCityRoomConfigurer(room.ID, wealthCfg)
+		logger.L().Info("virtual_city room config set before RegisterAgentSeats",
 			zap.String("room_id", room.ID),
 			zap.Int("month_ms", wealthCfg.MonthMs),
 			zap.Int("resident_count", wealthCfg.ResidentCount))
 	}
-	if gameKind == "wealth" && len(agentSeats) > 0 {
-		s.prepareWealthAgentRoom(room.ID, agentSeats)
+	if gameKind == "virtual_city" && len(agentSeats) > 0 {
+		s.prepareVirtualCityAgentRoom(room.ID, agentSeats)
 	} else if (gameKind == "werewolf" || gameKind == "texasholdem") && len(agentSeats) > 0 && s.agentSeater != nil {
 		// BUG-R136-RACE-001: 复述段落已压缩 — git blame 与 docs/ 索引可还原
 
@@ -749,7 +749,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		// ws.GameService.RegisterAgentSeats 的 werewolf 分支 → ManagerAddPlayerAt
 		// + SetSeatModelKey + ForceStartIfReady;texasholdem 走同函数的
 		// registerTexasHoldemAgentSeats → TexasHoldemManager.AddBotSeat + 启动
-		// BotDriver;wealth 走 registerWealthAgentSeats → WealthRoom.RegisterBotSeats。
+		// BotDriver;wealth 走 registerVirtualCityAgentSeats → VirtualCityRoom.RegisterBotSeats。
 		// 三类游戏共用同一入口,分支由 gameKind 决定(见 ws/game_service.go)。
 		// 2026-09-14 §财商流P0-bugfix: wealth 的 month_ms/pool/seed 配置块已上移
 		// 到本 agent 分支之外(纯人类房也要生效),此处不再重复。
@@ -843,13 +843,13 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 // 10/11 档概念已随精选层退役,契约 03 §3.2),深度座位全注册即无人类可入
 // 座位,不能把剩余物理空位误当成可加入座位。
 func creatorShouldBeSpectator(gameKind string, freeSeatCount, agentSeatCount int) bool {
-	return freeSeatCount == 0 || (gameKind == "wealth" && agentSeatCount >= wealthDeepSeatCount)
+	return freeSeatCount == 0 || (gameKind == "virtual_city" && agentSeatCount >= wealthDeepSeatCount)
 }
 
-// clampWealthResidentCount 2026-09-22 §17-CityHuman(契约 03 §3.1)语义更新:
+// clampVirtualCityResidentCount 2026-09-22 §17-CityHuman(契约 03 §3.1)语义更新:
 // resident_count **必达** —— 缺省/0 → 10000;<10 → clamp 10;>maxResidents
 // → clamp(默认 100000);负数在 API 层已 400,此处 v<=0 兜底走缺省。
-func clampWealthResidentCount(v, maxResidents int) int {
+func clampVirtualCityResidentCount(v, maxResidents int) int {
 	const defaultResidents = 10000
 	const minResidents = 10
 	if maxResidents <= 0 {
@@ -867,13 +867,13 @@ func clampWealthResidentCount(v, maxResidents int) int {
 	return v
 }
 
-// prepareWealthAgentRoom 是 wealth 专用的内存镜像顺序:先设置 FullAgentMode,
+// prepareVirtualCityAgentRoom 是 wealth 专用的内存镜像顺序:先设置 FullAgentMode,
 // 再注册 bot seats。RegisterAgentSeats 到达 MinSeats 后可能立即自动开局,
 // 顺序反置会出现短暂人类可加入窗口。2026-09-22 §17:wealth 恒为全 Agent
 // 城市(12 深度座位),有任何 agent 座位即置位。
-func (s *RoomService) prepareWealthAgentRoom(roomID string, agentSeats []AgentSeatConfig) {
+func (s *RoomService) prepareVirtualCityAgentRoom(roomID string, agentSeats []AgentSeatConfig) {
 	if len(agentSeats) > 0 && s.gameJoiner != nil {
-		if e := s.gameJoiner.SetFullAgentMode("wealth", roomID, true); e != nil {
+		if e := s.gameJoiner.SetFullAgentMode("virtual_city", roomID, true); e != nil {
 			logger.L().Warn("set full agent mode failed",
 				zap.String("room_id", roomID),
 				zap.Int("code", e.Code),
@@ -883,10 +883,10 @@ func (s *RoomService) prepareWealthAgentRoom(roomID string, agentSeats []AgentSe
 	if s.agentSeater == nil {
 		return
 	}
-	if e := s.agentSeater.RegisterAgentSeats("wealth", roomID, agentSeats); e != nil {
+	if e := s.agentSeater.RegisterAgentSeats("virtual_city", roomID, agentSeats); e != nil {
 		logger.L().Warn("agent seater registration failed",
 			zap.String("room_id", roomID),
-			zap.String("game_kind", "wealth"),
+			zap.String("game_kind", "virtual_city"),
 			zap.Int("code", e.Code),
 			zap.String("msg", e.Message))
 	}
@@ -901,9 +901,9 @@ func (s *RoomService) JoinRoom(roomID, userID string) (*RoomDetail, *errcode.Err
 		return nil, errcode.Code(errcode.ErrRoomFull)
 	}
 	// 2026-09-19 §全Agent模式: wealth 全 Agent 房间拒绝人类加入
-	if room.GameKind == "wealth" && s.gameJoiner != nil {
+	if room.GameKind == "virtual_city" && s.gameJoiner != nil {
 		if isFullAgent, e := s.gameJoiner.IsFullAgentRoom(roomID); e == nil && isFullAgent {
-			return nil, errcode.Code(errcode.ErrWealthFullAgentReject)
+			return nil, errcode.Code(errcode.ErrVirtualCityFullAgentReject)
 		}
 	}
 
@@ -1199,15 +1199,15 @@ func (s *RoomService) GetRoomDetailForUser(ctx context.Context, roomID, userID s
 
 	// 2026-09-19 §全Agent模式: wealth 房间 FullAgent 标志下发
 	fullAgent := false
-	if room.GameKind == "wealth" && s.gameJoiner != nil {
+	if room.GameKind == "virtual_city" && s.gameJoiner != nil {
 		if isFullAgent, e := s.gameJoiner.IsFullAgentRoom(roomID); e == nil && isFullAgent {
 			fullAgent = true
 		}
 	}
 	// 2026-09-21 §虚拟城市(契约 04 §1.3): wealth 房间居民数下发。
 	residentCount := 0
-	if room.GameKind == "wealth" && s.wealthResidentCounter != nil {
-		residentCount = s.wealthResidentCounter(roomID)
+	if room.GameKind == "virtual_city" && s.virtualCityResidentCounter != nil {
+		residentCount = s.virtualCityResidentCounter(roomID)
 	}
 
 	return &RoomDetail{

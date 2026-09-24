@@ -14,7 +14,7 @@ import (
 	"LsmAgentGame/game/doudizhu"
 	"LsmAgentGame/game/junqi"
 	"LsmAgentGame/game/texasholdem"
-	"LsmAgentGame/game/wealth"
+	"LsmAgentGame/game/virtual_city"
 	"LsmAgentGame/game/werewolf"
 	"LsmAgentGame/game/xiangqi"
 	"LsmAgentGame/llm"
@@ -45,8 +45,8 @@ type GameService struct {
 	thpDriver      *thpagent.Driver
 
 	// 2026-09-14 §财商流P0 — 虚拟城市管理器 + 文档池加载器(由 main.go 注入)。
-	wealthMgr     *wealth.Manager
-	wealthLoader  *wealth.Loader
+	vcMgr     *virtual_city.Manager
+	vcLoader  *virtual_city.Loader
 
 	// 2026-08-20 §B5/B6/B8 — 德州扑克 bot 运行时支撑字段。
 	// chatSvc: bot 公屏发言(poker_chat)的落库 + 广播通道(§B5,由 main.go SetChatService 注入)。
@@ -92,30 +92,30 @@ func (s *GameService) SetTexasAgentMemoryStore(store texasAgentMemoryStore) {
 	s.thpMemoryStore = store
 }
 
-// SetWealthManager 注入虚拟城市管理器(2026-09-14 §财商流P0)。
-func (s *GameService) SetWealthManager(m *wealth.Manager) {
-	s.wealthMgr = m
+// SetVirtualCityManager 注入虚拟城市管理器(2026-09-14 §财商流P0)。
+func (s *GameService) SetVirtualCityManager(m *virtual_city.Manager) {
+	s.vcMgr = m
 }
 
-// SetWealthChatSender 注入 chat 适配器(供 bot speak)。
+// SetVirtualCityChatSender 注入 chat 适配器(供 bot speak)。
 // P0:每次创建房间时由 Start 路径注入(SendFromBot 通过 room.ChatSender)。
-func (s *GameService) SetWealthChatSender(cs wealth.ChatSender) {
+func (s *GameService) SetVirtualCityChatSender(cs virtual_city.ChatSender) {
 	// 留作 future manager-level 注入;P0 每个 room 在 Start 时单独注入 chatSender。
 	_ = cs
 }
 
-// SetWealthLoader 注入文档池加载器(由 main.go 在 NewGameService 后、SetWealthManager 前)。
-func (s *GameService) SetWealthLoader(l *wealth.Loader) {
-	s.wealthLoader = l
-	if s.wealthMgr != nil {
-		s.wealthMgr.SetLoader(l)
+// SetVirtualCityLoader 注入文档池加载器(由 main.go 在 NewGameService 后、SetVirtualCityManager 前)。
+func (s *GameService) SetVirtualCityLoader(l *virtual_city.Loader) {
+	s.vcLoader = l
+	if s.vcMgr != nil {
+		s.vcMgr.SetLoader(l)
 	}
 }
 
-// broadcastWealthMonthly 是房间级月结后调用的 ws 钩子(由 wealthRoom 通过 BroadcastHooks.OnMonth)。
-// 保留本函数被外部直接调用:startWealthRoom 通过 OnState 触发 ws 层 broadcast。
-func (s *GameService) broadcastWealthMonthly(roomID string, res *wealth.SettleResult) {
-	s.broadcastWealthMonth(roomID, res)
+// broadcastVirtualCityMonthly 是房间级月结后调用的 ws 钩子(由 wealthRoom 通过 BroadcastHooks.OnMonth)。
+// 保留本函数被外部直接调用:startVirtualCityRoom 通过 OnState 触发 ws 层 broadcast。
+func (s *GameService) broadcastVirtualCityMonthly(roomID string, res *virtual_city.SettleResult) {
+	s.broadcastVirtualCityMonth(roomID, res)
 }
 
 // NewGameService builds a GameService with the default set of managers.
@@ -298,8 +298,8 @@ func (s *GameService) RegisterAgentSeats(gameKind, roomID string, seats []servic
 	}
 	// 2026-09-14 §财商流P0-bugfix: wealth 分支(此前直接 return nil,
 	// bot 座位从未注册到 in-memory 房间,bot 永不上场)。
-	if gameKind == "wealth" {
-		return s.registerWealthAgentSeats(roomID, seats)
+	if gameKind == "virtual_city" {
+		return s.registerVirtualCityAgentSeats(roomID, seats)
 	}
 	if gameKind != "werewolf" {
 		return nil
@@ -518,7 +518,7 @@ func (s *GameService) ValidateAgentSeats(gameKind string, seats []service.AgentS
 		// match the registry's clean key. Sanitize in place so downstream
 		// consumers (agent seat allocation, error message) see the clean key.
 		seats[i].ModelKey = util.SanitizeModelKey(seats[i].ModelKey)
-		if gameKind == "wealth" && seats[i].ModelKey == "" {
+		if gameKind == "virtual_city" && seats[i].ModelKey == "" {
 			continue // 池驱动座位:不查 registry,放行(SeatModelKeys 存空串)
 		}
 		if !reg.IsAvailable(seats[i].ModelKey) {
@@ -703,14 +703,14 @@ func (s *GameService) SyncSeat(gameKind, roomID, userID string) (bool, *errcode.
 			})
 		}
 		return started, nil
-	case "wealth":
+	case "virtual_city":
 		// 虚拟城市 WS join Game 入座(§1 中途加入允许);SyncSeat 路径备用。
-		if s.wealthMgr == nil {
+		if s.vcMgr == nil {
 			return false, nil
 		}
-		r := s.wealthMgr.Get(roomID)
+		r := s.vcMgr.Get(roomID)
 		if r == nil {
-			r = s.wealthMgr.CreateRoom(roomID)
+			r = s.vcMgr.CreateRoom(roomID)
 		}
 		seat, full, e := r.JoinGame(userID, "")
 		if e != nil {
@@ -718,7 +718,7 @@ func (s *GameService) SyncSeat(gameKind, roomID, userID string) (bool, *errcode.
 		}
 		_ = seat
 		if full {
-			if e := s.startWealthRoom(roomID); e != nil {
+			if e := s.startVirtualCityRoom(roomID); e != nil {
 				logger.L().Warn("wealth auto start via SyncSeat failed",
 					zap.String("room_id", roomID), zap.Error(e))
 			} else {
@@ -728,7 +728,7 @@ func (s *GameService) SyncSeat(gameKind, roomID, userID string) (bool, *errcode.
 		s.hub.BroadcastRoom(roomID, Envelope{
 			Type: "game.peer_joined",
 			Payload: mustMarshal(map[string]any{
-				"room_id": roomID, "game_kind": "wealth",
+				"room_id": roomID, "game_kind": "virtual_city",
 				"player_count": r.Occupied(),
 			}),
 		})
@@ -748,8 +748,8 @@ func (s *GameService) RemoveRoomState(roomID string) {
 	s.doudizhuMgr.RemoveGame(roomID)
 	s.texasHoldemMgr.RemoveGame(roomID)
 	s.werewolfMgr.RemoveGame(roomID)
-	if s.wealthMgr != nil {
-		s.wealthMgr.RemoveRoom(roomID)
+	if s.vcMgr != nil {
+		s.vcMgr.RemoveRoom(roomID)
 	}
 	// 2026-08-20 §B6/§B8: 同步清理德扑 bot 运行时(串行守卫 + watchdog + driver 注册),
 	// 否则 thpDriver.UnregisterAgents 零生产调用点、Agent goroutine 与 watchdog 泄漏。
@@ -759,13 +759,13 @@ func (s *GameService) RemoveRoomState(roomID string) {
 // SetFullAgentMode 设置 wealth 房间的全 Agent 模式标志(2026-09-19 §全Agent模式)。
 // 非 wealth kind 静默忽略。
 func (s *GameService) SetFullAgentMode(gameKind, roomID string, enabled bool) *errcode.Error {
-	if gameKind != "wealth" {
+	if gameKind != "virtual_city" {
 		return nil
 	}
-	if s.wealthMgr == nil {
+	if s.vcMgr == nil {
 		return nil
 	}
-	r := s.wealthMgr.Get(roomID)
+	r := s.vcMgr.Get(roomID)
 	if r == nil {
 		return nil
 	}
@@ -776,10 +776,10 @@ func (s *GameService) SetFullAgentMode(gameKind, roomID string, enabled bool) *e
 // IsFullAgentRoom 查询 wealth 房间是否为全 Agent 模式(2026-09-19 §全Agent模式)。
 // 非 wealth kind 或房间不存在返回 false。
 func (s *GameService) IsFullAgentRoom(roomID string) (bool, *errcode.Error) {
-	if s.wealthMgr == nil {
+	if s.vcMgr == nil {
 		return false, nil
 	}
-	r := s.wealthMgr.Get(roomID)
+	r := s.vcMgr.Get(roomID)
 	if r == nil {
 		return false, nil
 	}
@@ -845,8 +845,8 @@ func gameKindFromPayload(payload json.RawMessage) string {
 		return "doudizhu"
 	case "texasholdem", "poker", "holdem":
 		return "texasholdem"
-	case "wealth":
-		return "wealth"
+	case "virtual_city":
+		return "virtual_city"
 	case "werewolf", "wolf", "mafia":
 		return "werewolf"
 	}
@@ -900,8 +900,8 @@ func gameKindFromCanonical(payload json.RawMessage) string {
 		return "doudizhu"
 	case "texasholdem", "poker", "holdem":
 		return "texasholdem"
-	case "wealth":
-		return "wealth"
+	case "virtual_city":
+		return "virtual_city"
 	case "werewolf", "wolf", "mafia":
 		return "werewolf"
 	}
@@ -942,12 +942,12 @@ func (s *GameService) HandleClientFrame(c *Client, env Envelope) {
 		s.handleTexasHoldemAction(c, env)
 	case "game.werewolf_action":
 		s.handleWerewolfAction(c, env)
-	case "game.wealth_action":
-		s.handleWealthAction(c, env)
-	case "game.wealth_start":
-		s.handleWealthStart(c, env)
-	case "game.wealth_pause":
-		s.handleWealthPause(c, env)
+	case "game.virtual_city_action":
+		s.handleVirtualCityAction(c, env)
+	case "game.virtual_city_start":
+		s.handleVirtualCityStart(c, env)
+	case "game.virtual_city_pause":
+		s.handleVirtualCityPause(c, env)
 	case "game.werewolf_vote":
 		s.handleWerewolfVote(c, env)
 	case "game.werewolf_suicide":
@@ -1225,21 +1225,21 @@ func (s *GameService) handleSpectate(c *Client, env Envelope) {
 		logger.L().Info("spectator attached", zap.String("kind", "werewolf"),
 			zap.String("room_id", req.RoomID), zap.String("user_id", c.UserID))
 
-	case "wealth":
-		if s.wealthMgr == nil {
-			s.sendError(c, env.Seq, errcode.ErrWealthRoomNotFound, "")
+	case "virtual_city":
+		if s.vcMgr == nil {
+			s.sendError(c, env.Seq, errcode.ErrVirtualCityRoomNotFound, "")
 			return
 		}
 		s.hub.SpectateRoom(req.RoomID, c)
 		// 虚拟城市无独立 spectator manager:view 路径对 -1 viewer 输出公开视图。
 		s.sendOK(c, env.Seq, "game.spectated", map[string]any{
 			"room_id":   req.RoomID,
-			"game_kind": "wealth",
+			"game_kind": "virtual_city",
 			"role":      "spectator",
-			"phase":     wealth.PhaseActing,
+			"phase":     virtual_city.PhaseActing,
 		})
-		s.broadcastWealthState(req.RoomID)
-		logger.L().Info("spectator attached", zap.String("kind", "wealth"),
+		s.broadcastVirtualCityState(req.RoomID)
+		logger.L().Info("spectator attached", zap.String("kind", "virtual_city"),
 			zap.String("room_id", req.RoomID), zap.String("user_id", c.UserID))
 
 	default:
@@ -1269,7 +1269,7 @@ func (s *GameService) handleUnspectate(c *Client, env Envelope) {
 		_ = s.doudizhuMgr.UnspectateGame(req.RoomID, c.UserID)
 	case "texasholdem":
 		_ = s.texasHoldemMgr.UnspectateGame(req.RoomID, c.UserID)
-	case "wealth":
+	case "virtual_city":
 		// 虚拟城市 spectator 走 hub.Spectators 集合,此处 no-op。
 	case "werewolf":
 		_ = s.werewolfMgr.UnspectateGame(req.RoomID, c.UserID)
@@ -1306,7 +1306,7 @@ func (s *GameService) handleSpectatorsList(c *Client, env Envelope) {
 		ids = s.doudizhuMgr.SpectatorList(req.RoomID)
 	case "texasholdem":
 		ids = s.texasHoldemMgr.SpectatorList(req.RoomID)
-	case "wealth":
+	case "virtual_city":
 		ids = nil
 	case "werewolf":
 		ids = s.werewolfMgr.SpectatorList(req.RoomID)

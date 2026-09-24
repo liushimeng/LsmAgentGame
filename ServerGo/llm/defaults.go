@@ -52,7 +52,7 @@ type DefaultProviderSeed struct {
 	ThinkingBudget   int
 	// ConcurrencyLines(虚拟城市 LLM 线路池,2026-09-21)是该模型可并行发起
 	// LLM 调用的线路数。默认 seed 每行 1 —— 8 行启用即 8 条线路,恰好等于
-	// 旧 cfg.Wealth.AgentConcurrency=8,行为零变化;运营在管理页按需调大。
+	// 旧 cfg.VirtualCity.AgentConcurrency=8,行为零变化;运营在管理页按需调大。
 	ConcurrencyLines int
 }
 

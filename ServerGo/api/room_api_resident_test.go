@@ -35,7 +35,7 @@ func postCreateRoom(t *testing.T, kind, body string) *httptest.ResponseRecorder 
 
 // 负数 resident_count → HTTP 400(契约:负数 400,不是静默 clamp)。
 func TestCreateRoom_ResidentCountNegativeRejected(t *testing.T) {
-	w := postCreateRoom(t, "wealth", `{"resident_count":-5}`)
+	w := postCreateRoom(t, "virtual_city", `{"resident_count":-5}`)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("negative resident_count must 400, got %d body=%s", w.Code, w.Body.String())
 	}
@@ -54,7 +54,7 @@ func TestCreateRoom_ResidentCountZeroNotRejectedAtAPI(t *testing.T) {
 
 // 2026-09-22 §17-CityHuman(契约 03 §3.1/§6): resident_count 必达语义与
 // 旧载荷宽松化。clamp 数值断言(缺省→10000、9→10、100001→clamp)在
-// service 层 TestClampWealthResidentCount 覆盖;此处钉死 API 绑定层
+// service 层 TestClampVirtualCityResidentCount 覆盖;此处钉死 API 绑定层
 // (与 handler 相同的 DisallowUnknownFields 解码):
 //   - 正数(9 / 100001)不得在 API 层被拒(负数 400 分支不误伤);
 //   - 旧客户端携带 wealth.pool / agent_seats 的载荷仍可解码(不 400,
@@ -64,8 +64,8 @@ func TestCreateRoom_NewContractBindingTolerances(t *testing.T) {
 	for _, body := range []string{
 		`{"resident_count":9}`,
 		`{"resident_count":100001}`,
-		`{"wealth":{"month_ms":3000,"pool":"docs"},"agent_seats":[{"seat":0,"model_key":"X-model"}]}`,
-		`{"wealth":{"resident_count":50,"pool":"curated"}}`,
+		`{"virtual_city":{"month_ms":3000,"pool":"docs"},"agent_seats":[{"seat":0,"model_key":"X-model"}]}`,
+		`{"virtual_city":{"resident_count":50,"pool":"curated"}}`,
 	} {
 		var req createRoomRequest
 		dec := json.NewDecoder(bytes.NewBufferString(body))
@@ -83,7 +83,7 @@ func TestCreateRoom_NewContractBindingTolerances(t *testing.T) {
 	}
 	// 响应契约钉死:agent_seats_count 已从 Create 响应删除(契约 03 §3.2)。
 	// 响应 map 在 handler 内联构造,此处以源码 grep 防回归(§130 接线验证)。
-	if w := postCreateRoom(t, "wealth", `{"resident_count":-5}`); w.Code != http.StatusBadRequest {
+	if w := postCreateRoom(t, "virtual_city", `{"resident_count":-5}`); w.Code != http.StatusBadRequest {
 		t.Fatalf("negative resident_count must stay 400 at handler level, got %d", w.Code)
 	}
 }

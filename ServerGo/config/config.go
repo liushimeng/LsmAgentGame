@@ -30,7 +30,7 @@ type Config struct {
 	LLM         LLMConfig         `json:"llm"`
 	Werewolf    WerewolfConfig    `json:"werewolf"`
 	TexasHoldem TexasHoldemConfig `json:"texasholdem"`
-	Wealth      WealthConfig      `json:"wealth"`
+	VirtualCity  VirtualCityConfig      `json:"virtual_city"`
 }
 
 // §128 对话即思考重构:AgentParallelConfig 已删除(原 §122)。
@@ -342,9 +342,9 @@ type TexasHoldemConfig struct {
 	MaxPotPerHand         int  `json:"max_pot_per_hand"`          // 默认 100000
 }
 
-// WealthConfig 控制虚拟城市(game_kind=wealth)的月度节奏与 Agent(P0 v1)。
+// VirtualCityConfig 控制虚拟城市(game_kind=virtual_city)的月度节奏与 Agent(P0 v1)。
 // 契约: lag_docs/虚拟城市/已实现/02-架构设计/虚拟城市-后端架构与经济引擎-v1.md §3。
-type WealthConfig struct {
+type VirtualCityConfig struct {
 	// MonthMs 1 游戏月的窗口毫秒数(默认 8000,clamp [3000,30000])。
 	MonthMs int `json:"month_ms"`
 	// ProfessionDocsPath 文档池(75k 人物卡)磁盘根,默认
@@ -358,9 +358,9 @@ type WealthConfig struct {
 	BotMaxActionsPerMonth int `json:"bot_max_actions_per_month"`
 	// RandomSeed 0 = 运行时随机;非 0 时引擎/市场/事件用固定种子(确定性测试/复现)。
 	RandomSeed int64 `json:"random_seed"`
-	// AgentConcurrency 房间级 LLM 并发信号量容量(默认 0 = wealth.DefaultAgentConcurrency
+	// AgentConcurrency 房间级 LLM 并发信号量容量(默认 0 = virtual_city.DefaultAgentConcurrency
 	// 8);10+ bot 同月决策时建议 ≥8,避免 4 并发把 12 人压成串行(详见
-	// game/wealth/engine.go DefaultAgentConcurrency 注释)。
+	// game/virtual_city/engine.go DefaultAgentConcurrency 注释)。
 	AgentConcurrency int `json:"agent_concurrency"`
 	// EconomyEnabled 真实经济循环引擎(消费品市场/内生 CPI/劳动力市场/社会结构,
 	// 2026-09-16 §财商流P1-2)。默认 true;false 回退 P0 行为(消费 to=world、
@@ -402,7 +402,7 @@ type WealthConfig struct {
 
 // CityDriverEnabledResolved 返回驱动层总开关的生效值(nil 缺省 true;
 // 显式 false 生效,契约 02 §7)。
-func (w *WealthConfig) CityDriverEnabledResolved() bool {
+func (w *VirtualCityConfig) CityDriverEnabledResolved() bool {
 	return w.CityDriverEnabled == nil || *w.CityDriverEnabled
 }
 
@@ -1184,75 +1184,75 @@ func applyDefaults(c *Config) {
 		c.TexasHoldem.MaxPotPerHand = 100000
 	}
 
-	// 2026-09-14 §财商流P0 — Wealth 配置默认值(协议契约 §6 与后端架构 §3)。
-	if c.Wealth.MonthMs == 0 {
-		c.Wealth.MonthMs = 8000
+	// 2026-09-14 §财商流P0 — VirtualCity 配置默认值(协议契约 §6 与后端架构 §3)。
+	if c.VirtualCity.MonthMs == 0 {
+		c.VirtualCity.MonthMs = 8000
 	}
-	if c.Wealth.MonthMs < 3000 {
-		c.Wealth.MonthMs = 3000
+	if c.VirtualCity.MonthMs < 3000 {
+		c.VirtualCity.MonthMs = 3000
 	}
-	if c.Wealth.MonthMs > 30000 {
-		c.Wealth.MonthMs = 30000
+	if c.VirtualCity.MonthMs > 30000 {
+		c.VirtualCity.MonthMs = 30000
 	}
-	if c.Wealth.ProfessionDocsPath == "" {
-		c.Wealth.ProfessionDocsPath = "./lag_docs/虚拟城市/玩家职业设计"
+	if c.VirtualCity.ProfessionDocsPath == "" {
+		c.VirtualCity.ProfessionDocsPath = "./lag_docs/虚拟城市/玩家职业设计"
 	}
-	if !c.Wealth.AgentEnabled {
+	if !c.VirtualCity.AgentEnabled {
 		// 默认 true;operator 显式设 false 仍为 false(零值无法区分,与
 		// TexasHoldem.AgentEnabled 同款取舍 — conf 未写该键时零值被强制 true)。
-		c.Wealth.AgentEnabled = true
+		c.VirtualCity.AgentEnabled = true
 	}
-	if c.Wealth.AgentDecisionTimeoutSec == 0 {
-		c.Wealth.AgentDecisionTimeoutSec = 20
+	if c.VirtualCity.AgentDecisionTimeoutSec == 0 {
+		c.VirtualCity.AgentDecisionTimeoutSec = 20
 	}
-	if c.Wealth.BotMaxActionsPerMonth == 0 {
-		c.Wealth.BotMaxActionsPerMonth = 3
+	if c.VirtualCity.BotMaxActionsPerMonth == 0 {
+		c.VirtualCity.BotMaxActionsPerMonth = 3
 	}
 	// P1(2026-09-16 §财商流P1-2 §6.5):真实经济循环 / 社会调研默认开启;
 	// 零值强制 true(operator 显式设 false 会被覆盖 — 与 AgentEnabled 同款
 	// 取舍,关闭请用房间级 SetEconomyFlags / Manager.Config)。
-	if !c.Wealth.EconomyEnabled {
-		c.Wealth.EconomyEnabled = true
+	if !c.VirtualCity.EconomyEnabled {
+		c.VirtualCity.EconomyEnabled = true
 	}
-	if !c.Wealth.SurveyEnabled {
-		c.Wealth.SurveyEnabled = true
+	if !c.VirtualCity.SurveyEnabled {
+		c.VirtualCity.SurveyEnabled = true
 	}
 	// P1-4(2026-09-19 §财商流P1-4 §11):商业保险默认开启;零值强制 true。
-	if !c.Wealth.InsuranceEnabled {
-		c.Wealth.InsuranceEnabled = true
+	if !c.VirtualCity.InsuranceEnabled {
+		c.VirtualCity.InsuranceEnabled = true
 	}
 	// 2026-09-21 §虚拟城市-城市Agent规模化 — 城市背景层配置默认值(契约 03 §7)。
-	if c.Wealth.MaxResidents <= 0 {
-		c.Wealth.MaxResidents = 100000
+	if c.VirtualCity.MaxResidents <= 0 {
+		c.VirtualCity.MaxResidents = 100000
 	}
-	if !c.Wealth.CityVoiceEnabled {
-		c.Wealth.CityVoiceEnabled = true
+	if !c.VirtualCity.CityVoiceEnabled {
+		c.VirtualCity.CityVoiceEnabled = true
 	}
-	if c.Wealth.CityVoicePerMonth == 0 {
-		c.Wealth.CityVoicePerMonth = 4
+	if c.VirtualCity.CityVoicePerMonth == 0 {
+		c.VirtualCity.CityVoicePerMonth = 4
 	}
-	if c.Wealth.CityCalibSampleSize == 0 {
-		c.Wealth.CityCalibSampleSize = 512
+	if c.VirtualCity.CityCalibSampleSize == 0 {
+		c.VirtualCity.CityCalibSampleSize = 512
 	}
 	// 2026-09-22 §17-CityHuman 全民驱动 — 居民驱动层默认值(契约 02 §7)。
 	// CityDriverEnabled 为 *bool 三态,nil 缺省 true(显式 false 保留回退路径)。
-	if c.Wealth.CityDriverWorkers == 0 {
-		c.Wealth.CityDriverWorkers = 4
+	if c.VirtualCity.CityDriverWorkers == 0 {
+		c.VirtualCity.CityDriverWorkers = 4
 	}
-	if c.Wealth.CityDriverWorkers < 0 {
-		c.Wealth.CityDriverWorkers = 4
+	if c.VirtualCity.CityDriverWorkers < 0 {
+		c.VirtualCity.CityDriverWorkers = 4
 	}
-	if c.Wealth.CityDriverWorkers > 16 {
-		c.Wealth.CityDriverWorkers = 16
+	if c.VirtualCity.CityDriverWorkers > 16 {
+		c.VirtualCity.CityDriverWorkers = 16
 	}
-	if c.Wealth.CityDriverPerMonth == 0 {
-		c.Wealth.CityDriverPerMonth = 8
+	if c.VirtualCity.CityDriverPerMonth == 0 {
+		c.VirtualCity.CityDriverPerMonth = 8
 	}
-	if c.Wealth.CityDriverPerMonth < 0 {
-		c.Wealth.CityDriverPerMonth = 8
+	if c.VirtualCity.CityDriverPerMonth < 0 {
+		c.VirtualCity.CityDriverPerMonth = 8
 	}
-	if c.Wealth.CityDriverPerMonth > 64 {
-		c.Wealth.CityDriverPerMonth = 64
+	if c.VirtualCity.CityDriverPerMonth > 64 {
+		c.VirtualCity.CityDriverPerMonth = 64
 	}
 	// §128 对话即思考重构:AgentParallel 默认值已删除(原 §122)。
 

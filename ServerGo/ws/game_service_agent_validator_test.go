@@ -182,15 +182,15 @@ func TestValidateAgentSeats_EmptyKeyRejected(t *testing.T) {
 	}
 }
 
-// TestValidateAgentSeats_WealthEmptyKeyPoolDriven 2026-09-21 §虚拟城市
+// TestValidateAgentSeats_VirtualCityEmptyKeyPoolDriven 2026-09-21 §虚拟城市
 // (契约 04 §1.2): wealth 的空串 model_key = 线路池驱动,直接放行(不查
 // registry);纯空白 key 归一为空串后同样放行;非空 key 行为不变。
 // werewolf 空 key 仍 400(上一用例覆盖)。
-func TestValidateAgentSeats_WealthEmptyKeyPoolDriven(t *testing.T) {
+func TestValidateAgentSeats_VirtualCityEmptyKeyPoolDriven(t *testing.T) {
 	s := newWerewolfSvc(stubRegistry(t, map[string]string{
 		"MeiTuan-model": "sk-real",
 	}))
-	if err := s.ValidateAgentSeats("wealth", []service.AgentSeatConfig{
+	if err := s.ValidateAgentSeats("virtual_city", []service.AgentSeatConfig{
 		{Seat: 0, ModelKey: ""},
 		{Seat: 1, ModelKey: "   "}, // 纯空白 → 归一空串 → 放行
 		{Seat: 2, ModelKey: "MeiTuan-model"},
@@ -198,7 +198,7 @@ func TestValidateAgentSeats_WealthEmptyKeyPoolDriven(t *testing.T) {
 		t.Fatalf("wealth empty model_key must pass as pool-driven, got %v", err)
 	}
 	// 非空未知 key 在 wealth 下同样拒绝。
-	if err := s.ValidateAgentSeats("wealth", []service.AgentSeatConfig{
+	if err := s.ValidateAgentSeats("virtual_city", []service.AgentSeatConfig{
 		{Seat: 0, ModelKey: "NoSuch-model"},
 	}); err == nil || err.Code != errcode.ErrValidationFailed {
 		t.Fatalf("wealth unknown non-empty key must still be rejected, got %v", err)

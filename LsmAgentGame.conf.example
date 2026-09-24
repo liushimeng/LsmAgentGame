@@ -222,10 +222,10 @@
   },
 
   // ============================================================================
-  // 2026-09-14 §财商流P0 — 虚拟城市(game_kind=wealth)配置。全部占位默认值,
+  // 2026-09-14 §财商流P0 — 虚拟城市(game_kind=virtual_city)配置。全部占位默认值,
   // 无任何密钥。真实值只进 LsmAgentGame.conf(§5 安全)。
   // ============================================================================
-  "wealth": {
+  "virtual_city": {
     // 1 游戏月窗口毫秒数,clamp [3000, 30000]。
     "month_ms": 8000,
     // 文档池(75k 人物卡,Schema v1.1)磁盘根。
@@ -236,7 +236,7 @@
     "agent_decision_timeout_sec": 20,
     // bot 每月动作工具上限(与人类 ActionBudget 同规则)。
     "bot_max_actions_per_month": 3,
-    // 房间级 LLM 并发信号量容量(默认 0 = wealth.DefaultAgentConcurrency 8);
+    // 房间级 LLM 并发信号量容量(默认 0 = virtual_city.DefaultAgentConcurrency 8);
     // 10+ bot 同月决策时建议 ≥8,避免 4 并发把 12 人压成串行。
     "agent_concurrency": 0,
     // 0 = 运行时随机;非 0 = 固定种子(确定性测试/复现)。

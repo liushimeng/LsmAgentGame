@@ -204,9 +204,9 @@ const (
 	// City-Banker/City-Firm 五类合并为一 —— 虚拟城市是全 Agent 真实城市模拟器,
 	// 没有玩家 Agent,City-Human 即城市居民)。
 	// 两个调用方共用本 AgentClass,仅调用深度不同:
-	//   1. 焦点层(座位 1~12): ServerGo/agent/wealthplayer/ 的 Agent struct,
+	//   1. 焦点层(座位 1~12): ServerGo/agent/vcplayer/ 的 Agent struct,
 	//      LLM 每月决策(经济工具 + 感知行动工具 see/hear/smell/move/speak)。
-	//   2. 背景层(抽样发声): game/wealth/city 的 VoiceScheduler.speakOne,
+	//   2. 背景层(抽样发声): game/virtual_city/city 的 VoiceScheduler.speakOne,
 	//      无工具、无 Memory 的极短对话,产物作为 city_voice 事件全城广播。
 	// 政府/央行/企业公告若未来接入 LLM,一律复用本 AgentClass + 角色提示词,
 	// 不再新增 AgentClass(§130: 零消费方常量已删除)。

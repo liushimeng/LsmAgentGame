@@ -43,12 +43,12 @@ type createRoomRequest struct {
 	RevealRoleOnDeath *bool `json:"reveal_role_on_death,omitempty"`
 	// 2026-09-14 §财商流P0 — wealth 房间配置(仅 wealth 生效)。
 	// month_ms clamp [3000,30000] 由 service 层校验。
-	Wealth *service.WealthRoomOptions `json:"wealth,omitempty"`
+	VirtualCity *service.VirtualCityRoomOptions `json:"virtual_city,omitempty"`
 	// ResidentCount 2026-09-21 §虚拟城市(契约 04 §1.1)— 城市背景居民数
 	// (仅 wealth 生效,其他 kind 静默忽略;与 reveal_role_on_death 同策略)。
 	// 2026-09-22 §17-CityHuman(契约 03 §3.1)**必达**新语义:缺省/0 → 10000;
 	// <10 → clamp 10;>上限由 service 层 clamp(默认 100000);负数 400。
-	// 并入 Wealth.ResidentCount 透传(wealth 子对象亦可显式携带,顶层优先)。
+	// 并入 VirtualCity.ResidentCount 透传(virtual_city 子对象亦可显式携带,顶层优先)。
 	ResidentCount int `json:"resident_count,omitempty"`
 	// FullAgent 2026-09-19 §全Agent模式 — 是否全 Agent 模式(仅 wealth 生效)。
 	// 缺省 / true = 全 Agent 模式;false = 允许人类加入(不推荐)。
@@ -141,7 +141,7 @@ func (a *RoomAPI) Create(c *gin.Context) {
 	if req.BigBlind != 0 || req.StartStack != 0 {
 		texasCfg = &service.TexasTableConfig{BigBlind: req.BigBlind, StartStack: req.StartStack}
 	}
-	wealthCfg, bad := mergeWealthBodyFields(req, kind, req.Wealth)
+	wealthCfg, bad := mergeVirtualCityBodyFields(req, kind, req.VirtualCity)
 	if bad != "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    errcode.ErrValidationFailed,
@@ -161,7 +161,7 @@ func (a *RoomAPI) Create(c *gin.Context) {
 	// (前端无消费方;wealth 的 agent_seats 已被服务端忽略,回显数字只会误导),
 	// full_agent 回显保留 —— wealth 恒为全 Agent 城市(12 深度座位),创建成功
 	// 即 full_agent=true;其他游戏恒 false。
-	fullAgent := kind == "wealth"
+	fullAgent := kind == "virtual_city"
 	c.JSON(http.StatusOK, gin.H{
 		"code":       errcode.OK,
 		"message":    "ok",
@@ -170,15 +170,15 @@ func (a *RoomAPI) Create(c *gin.Context) {
 	})
 }
 
-// mergeWealthBodyFields 把顶层 wealth 参数并入 wealth 子对象(仅 kind=="wealth"
+// mergeVirtualCityBodyFields 把顶层 wealth 参数并入 wealth 子对象(仅 kind=="virtual_city"
 // 生效;其他 kind 静默忽略,与 reveal_role_on_death 同策略):
 //   - resident_count(2026-09-21 契约 04 §1.1;负数返回 400 原因);
 //   - civic_election_enabled(2026-09-24 批次20 文档3 A2;缺省 false 不构造
 //     配置对象 —— 与 resident_count 不同,false 无需任何动作)。
 //
 // 纯函数便于单测钉死绑定与并入语义(负数 → 非空 err → handler 400)。
-func mergeWealthBodyFields(req createRoomRequest, kind string, cfg *service.WealthRoomOptions) (*service.WealthRoomOptions, string) {
-	if kind != "wealth" {
+func mergeVirtualCityBodyFields(req createRoomRequest, kind string, cfg *service.VirtualCityRoomOptions) (*service.VirtualCityRoomOptions, string) {
+	if kind != "virtual_city" {
 		return cfg, ""
 	}
 	if req.ResidentCount != 0 {
@@ -186,13 +186,13 @@ func mergeWealthBodyFields(req createRoomRequest, kind string, cfg *service.Weal
 			return cfg, "resident_count must be >= 0"
 		}
 		if cfg == nil {
-			cfg = &service.WealthRoomOptions{}
+			cfg = &service.VirtualCityRoomOptions{}
 		}
 		cfg.ResidentCount = req.ResidentCount
 	}
 	if req.CivicElectionEnabled {
 		if cfg == nil {
-			cfg = &service.WealthRoomOptions{}
+			cfg = &service.VirtualCityRoomOptions{}
 		}
 		cfg.CivicElectionEnabled = true
 	}

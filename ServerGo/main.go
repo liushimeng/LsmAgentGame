@@ -42,7 +42,7 @@ import (
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/game/debate"
 	"LsmAgentGame/game/texasholdem"
-	"LsmAgentGame/game/wealth"
+	"LsmAgentGame/game/virtual_city"
 	"LsmAgentGame/game/werewolf"
 	"LsmAgentGame/llm"
 	"LsmAgentGame/llm/sysprompt"
@@ -940,43 +940,43 @@ func main() {
 	hub.SetGameManagerCleanupFunc(gameSvcWs.RemoveRoomState)
 
 	// 2026-09-14 §财商流P0 — 构造 wealth 管理器 + 文档池加载器。
-	wealthLoader := wealth.NewLoader(cfg.Wealth.ProfessionDocsPath)
-	wealthMgr := wealth.NewManager(wealth.Config{
-		MonthMs:                 cfg.Wealth.MonthMs,
-		AgentEnabled:            cfg.Wealth.AgentEnabled,
-		AgentDecisionTimeoutSec: cfg.Wealth.AgentDecisionTimeoutSec,
-		BotMaxActionsPerMonth:   cfg.Wealth.BotMaxActionsPerMonth,
-		Seed:                    cfg.Wealth.RandomSeed,
-		AgentConcurrency:        cfg.Wealth.AgentConcurrency,
+	vcLoader := virtual_city.NewLoader(cfg.VirtualCity.ProfessionDocsPath)
+	vcMgr := virtual_city.NewManager(virtual_city.Config{
+		MonthMs:                 cfg.VirtualCity.MonthMs,
+		AgentEnabled:            cfg.VirtualCity.AgentEnabled,
+		AgentDecisionTimeoutSec: cfg.VirtualCity.AgentDecisionTimeoutSec,
+		BotMaxActionsPerMonth:   cfg.VirtualCity.BotMaxActionsPerMonth,
+		Seed:                    cfg.VirtualCity.RandomSeed,
+		AgentConcurrency:        cfg.VirtualCity.AgentConcurrency,
 		// P1(2026-09-16 §财商流P1-2 §6.5):真实经济循环 / 社会调研开关。
-		EconomyEnabled: cfg.Wealth.EconomyEnabled,
-		SurveyEnabled:  cfg.Wealth.SurveyEnabled,
+		EconomyEnabled: cfg.VirtualCity.EconomyEnabled,
+		SurveyEnabled:  cfg.VirtualCity.SurveyEnabled,
 		// P1-4(2026-09-19 §财商流P1-4 §11):商业保险与风险转移引擎开关。
-		InsuranceEnabled: cfg.Wealth.InsuranceEnabled,
+		InsuranceEnabled: cfg.VirtualCity.InsuranceEnabled,
 		// 2026-09-21 §虚拟城市(契约 03 §7)— 城市背景层配置。
-		MaxResidents:        cfg.Wealth.MaxResidents,
-		CityVoiceEnabled:    cfg.Wealth.CityVoiceEnabled,
-		CityVoicePerMonth:   cfg.Wealth.CityVoicePerMonth,
-		CityCalibSampleSize: cfg.Wealth.CityCalibSampleSize,
+		MaxResidents:        cfg.VirtualCity.MaxResidents,
+		CityVoiceEnabled:    cfg.VirtualCity.CityVoiceEnabled,
+		CityVoicePerMonth:   cfg.VirtualCity.CityVoicePerMonth,
+		CityCalibSampleSize: cfg.VirtualCity.CityCalibSampleSize,
 		// 2026-09-22 §17-CityHuman(契约 02 §7)— 居民驱动层配置。
-		CityDriverEnabled:  cfg.Wealth.CityDriverEnabledResolved(),
-		CityDriverWorkers:  cfg.Wealth.CityDriverWorkers,
-		CityDriverPerMonth: cfg.Wealth.CityDriverPerMonth,
+		CityDriverEnabled:  cfg.VirtualCity.CityDriverEnabledResolved(),
+		CityDriverWorkers:  cfg.VirtualCity.CityDriverWorkers,
+		CityDriverPerMonth: cfg.VirtualCity.CityDriverPerMonth,
 	}, llmRegistry)
 	// 2026-09-21 §虚拟城市 G6:注入 LLM 线路池来源(Registry.Reload 换池后
 	// 经函数现取自动生效)+ 城市校准表后台预热(sync.Once goroutine,不阻塞启动)。
-	wealthMgr.SetLinePoolSource(llmRegistry.LinePool)
-	wealthMgr.WarmCityCalibration()
+	vcMgr.SetLinePoolSource(llmRegistry.LinePool)
+	vcMgr.WarmCityCalibration()
 	// 2026-09-14 §财商流P0-bugfix: 服务重启后内存房间 Seats/BotSeats 全空,必须从
-	// t_lsm_game_player 恢复人类 + bot 座位,否则 Start() 永远 ErrWealthNotEnoughPlayers。
-	wealthMgr.SetSeatHydrator(func(roomID string) ([]wealth.SeatRestoreInfo, error) {
+	// t_lsm_game_player 恢复人类 + bot 座位,否则 Start() 永远 ErrVirtualCityNotEnoughPlayers。
+	vcMgr.SetSeatHydrator(func(roomID string) ([]virtual_city.SeatRestoreInfo, error) {
 		seats, err := roomSvc.SeatsForRoom(roomID)
 		if err != nil {
 			return nil, err
 		}
-		out := make([]wealth.SeatRestoreInfo, 0, len(seats))
+		out := make([]virtual_city.SeatRestoreInfo, 0, len(seats))
 		for _, s := range seats {
-			out = append(out, wealth.SeatRestoreInfo{
+			out = append(out, virtual_city.SeatRestoreInfo{
 				Seat:     s.Seat,
 				UserID:   s.UserID,
 				IsBot:    s.Role == models.PlayerRoleAgent,
@@ -985,25 +985,25 @@ func main() {
 		}
 		return out, nil
 	})
-	wealthMgr.SetLoader(wealthLoader)
-	gameSvcWs.SetWealthManager(wealthMgr)
-	gameSvcWs.SetWealthLoader(wealthLoader)
-	gameSvcWs.SetWealthChatSender(&wsChatSenderAdapter{chat: chatSvc})
-	roomSvc.SetWealthRoomConfigurer(wealthMgr.ApplyRoomOptions)
+	vcMgr.SetLoader(vcLoader)
+	gameSvcWs.SetVirtualCityManager(vcMgr)
+	gameSvcWs.SetVirtualCityLoader(vcLoader)
+	gameSvcWs.SetVirtualCityChatSender(&wsChatSenderAdapter{chat: chatSvc})
+	roomSvc.SetVirtualCityRoomConfigurer(vcMgr.ApplyRoomOptions)
 	// 2026-09-21 §虚拟城市(契约 04 §1.3):大厅列表/详情下发 wealth 房间
 	// resident_count(🏙 徽标;in-memory 只读探针,不落 DB)。
-	roomSvc.SetWealthResidentCounter(func(roomID string) int {
-		if r := wealthMgr.Get(roomID); r != nil {
+	roomSvc.SetVirtualCityResidentCounter(func(roomID string) int {
+		if r := vcMgr.Get(roomID); r != nil {
 			return r.ResidentCountView()
 		}
 		return 0
 	})
-	// 2026-09-16 §财商流P1-2 — 社会调研 HTTP 入口(房间源 = wealthMgr)。
-	wealthSurveyAPI := api.NewWealthSurveyAPI(wealthMgr)
-	// 2026-09-21 §档案锚定契约 §7 — 居民人物卡档案两端点(房间源 = wealthMgr)。
-	wealthCityAPI := api.NewWealthCityAPI(wealthMgr)
+	// 2026-09-16 §财商流P1-2 — 社会调研 HTTP 入口(房间源 = vcMgr)。
+	vcSurveyAPI := api.NewVirtualCitySurveyAPI(vcMgr)
+	// 2026-09-21 §档案锚定契约 §7 — 居民人物卡档案两端点(房间源 = vcMgr)。
+	vcCityAPI := api.NewVirtualCityAPI(vcMgr)
 
-	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, wealthSurveyAPI, wealthCityAPI)
+	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, vcSurveyAPI, vcCityAPI)
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.
@@ -1186,7 +1186,7 @@ func (a botUserProvisionerAdapter) EnsureBotUserForProvider(ctx context.Context,
 	return a.svc.EnsureBotUserForProvider(ctx, p)
 }
 
-// wsChatSenderAdapter 把 ws.ChatService 适配到 wealth.ChatSender(2026-09-14 §财商流P0)。
+// wsChatSenderAdapter 把 ws.ChatService 适配到 virtual_city.ChatSender(2026-09-14 §财商流P0)。
 type wsChatSenderAdapter struct {
 	chat *ws.ChatService
 }

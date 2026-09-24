@@ -1014,7 +1014,7 @@ func (r *Registry) rebuildLinePoolLocked() {
 
 // LinePool 返回当前行表对应的线路池(原子读;Reload 后自动指向新池)。
 // 永不返回 nil —— 池尚未构建(零值 Registry)时返回共享空池,消费方以
-// Total()==0 判定「池不可用」并回退 cfg.Wealth.AgentConcurrency。
+// Total()==0 判定「池不可用」并回退 cfg.VirtualCity.AgentConcurrency。
 // Get(modelKey) 的固定模型语义与此正交,狼人杀/德州路径不受影响。
 func (r *Registry) LinePool() *LinePool {
 	if r == nil {
