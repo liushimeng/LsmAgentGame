@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# AutoTestAndDebug_Wealth.sh
+# AutoTestAndDebug_VirtualCity.sh
 # ---------------------------------------------------------------
 # 用途：
 #   虚拟城市 P0 专用自动化测试入口。随机选择一个可用的编程 Agent CLI
 #   （Claude Code / OpenCode / Codex），读取当前目录或仓库根
-#   的 AutoTestAndDebug_Wealth.md 作为提示词执行自动化测试；Agent
+#   的 AutoTestAndDebug_VirtualCity.md 作为提示词执行自动化测试；Agent
 #   退出后自动将 TestReport 中以「虚拟城市自动化测试报告_」开头的
 #   报告文件以中文 git 提交，子模块 UseReport 在子仓库内单独提交。
 #   提示词已内嵌「自动修复流程」章节，Agent 测试完成后在同一会话内
@@ -15,10 +15,10 @@
 #   - 支持全部编程 Agent CLI（Claude Code / OpenCode / Codex）随机选择执行
 #   - 通过 nohup + setsid + & + disown 脱离调用者，**不阻塞**调用者进程
 #   - 日志体系：
-#     * 单次运行日志 ./logs/auto_test_debug_wealth_<Agent程序名>_<timestamp>.log
+#     * 单次运行日志 ./logs/auto_test_debug_virtual_city_<Agent程序名>_<timestamp>.log
 #     * 运行索引日志 ./logs/auto_run_index.log
 #     * 旧运行日志超过保留期自动清理
-#   - AutoTestAndDebug_Wealth.md 优先取当前目录，其次仓库根
+#   - AutoTestAndDebug_VirtualCity.md 优先取当前目录，其次仓库根
 #   - Agent 退出后自动执行 `git add` + `git commit`（中文提交信息，逐路径容错）
 #   - **虚拟城市专用**：仅扫描 `虚拟城市自动化测试报告_*.md` 主报告 glob
 #     + `虚拟城市测试工具使用报告_*.md` 工具报告 glob
@@ -36,8 +36,8 @@ set -u
 # ---------- 配置 ----------
 PROJECT_DIR="/usr/local/LsmAgentGame/LsmAgentGame"
 LOG_DIR="${PROJECT_DIR}/logs"
-SCRIPT_TAG="AutoTestAndDebug_Wealth"
-PROMPT_FILE_NAME="AutoTestAndDebug_Wealth.md"
+SCRIPT_TAG="AutoTestAndDebug_VirtualCity"
+PROMPT_FILE_NAME="AutoTestAndDebug_VirtualCity.md"
 TS="$(date +%Y%m%d_%H%M%S)"
 
 mkdir -p "${LOG_DIR}"
@@ -69,7 +69,7 @@ cd "${PROJECT_DIR}" || { echo "[ERROR] 无法进入 ${PROJECT_DIR}"; exit 1; }
 pick_agent "${SCRIPT_TAG}"
 
 # ---------- 日志文件名含 Agent 程序名 ----------
-LOG_FILE="${LOG_DIR}/auto_test_debug_wealth_${SELECTED_AGENT}_${TS}.log"
+LOG_FILE="${LOG_DIR}/auto_test_debug_virtual_city_${SELECTED_AGENT}_${TS}.log"
 
 # ---------- 启动日志头 + 运行索引 ----------
 print_section_header "${SCRIPT_TAG}" "${PROMPT_FILE}" "${LOG_FILE}" "${PROJECT_DIR}" "${SELECTED_AGENT}"
@@ -94,16 +94,16 @@ BG_PID="$(start_agent_in_background "${LOG_FILE}" "
     # 注(§20260820-03)：TestReport/* 已整目录入 .gitignore(报告处理完即删,不在仓库
     # 堆积),本节 git add 通常无暂存内容、提交自动跳过,保留以兼容未来策略调整。
     # 虚拟城市专用：仅 add 虚拟城市主报告 + 协议抓包报告 glob
-    WEALTH_MAIN_GLOB=\"\$(enqueue_game_glob wealth main)\"
-    WEALTH_PROTOCOL_GLOB=\"\$(enqueue_game_glob wealth protocol)\"
-    git_add_safe \"TestReport/\${WEALTH_MAIN_GLOB}\" || bg_log '${SCRIPT_TAG}' '警告: TestReport/虚拟城市主报告无可暂存内容(已忽略)'
-    git_add_safe \"TestReport/\${WEALTH_PROTOCOL_GLOB}\" 2>/dev/null || true
+    VC_MAIN_GLOB=\"\$(enqueue_game_glob wealth main)\"
+    VC_PROTOCOL_GLOB=\"\$(enqueue_game_glob wealth protocol)\"
+    git_add_safe \"TestReport/\${VC_MAIN_GLOB}\" || bg_log '${SCRIPT_TAG}' '警告: TestReport/虚拟城市主报告无可暂存内容(已忽略)'
+    git_add_safe \"TestReport/\${VC_PROTOCOL_GLOB}\" 2>/dev/null || true
 
     # 子模块 UseReport 需在子仓库内先提交，再回主仓库暂存 gitlink
-    WEALTH_USAGE_GLOB=\"\$(enqueue_game_glob wealth usage)\"
+    VC_USAGE_GLOB=\"\$(enqueue_game_glob wealth usage)\"
     if [[ -d go-web-debug-tool/UseReport ]]; then
-        WEALTH_USAGE_FILES=\$(find go-web-debug-tool/UseReport -maxdepth 1 -name \"\${WEALTH_USAGE_GLOB}\" ! -name '*_无问题.md' 2>/dev/null)
-        if [[ -n \"\${WEALTH_USAGE_FILES}\" ]]; then
+        VC_USAGE_FILES=\$(find go-web-debug-tool/UseReport -maxdepth 1 -name \"\${VC_USAGE_GLOB}\" ! -name '*_无问题.md' 2>/dev/null)
+        if [[ -n \"\${VC_USAGE_FILES}\" ]]; then
             git -C go-web-debug-tool add -- UseReport/ 2>/dev/null || true
             if ! git -C go-web-debug-tool diff --cached --quiet 2>/dev/null; then
                 if git -C go-web-debug-tool commit -m \"测试: 虚拟城市工具使用报告自动提交 ${TS}\" 2>/dev/null; then

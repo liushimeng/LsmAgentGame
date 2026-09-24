@@ -4,7 +4,7 @@
 > 本文件为虚拟城市专用入口，**仅产出** `虚拟城市自动化测试报告_YYYYMMDD_HHMMSS.md` 前缀的报告。
 
 - **工作目录**: `/usr/local/LsmAgentGame/LsmAgentGame`
-- **入口脚本**: `AutoTestAndDebug_Wealth.sh`(随机选编程 Agent CLI → 跑测试 → 报告落盘 → **同一 Agent 会话内**自动进入修复流程)
+- **入口脚本**: `AutoTestAndDebug_VirtualCity.sh`(随机选编程 Agent CLI → 跑测试 → 报告落盘 → **同一 Agent 会话内**自动进入修复流程)
 - **产物路径(仅虚拟城市,glob 集中到 `auto_run_common.sh::GAME_GLOBS`)**:
   - 测试报告: `TestReport/虚拟城市自动化测试报告_YYYYMMDD_HHMMSS.md`(单一 glob,无兼容旧文件)
   - 进度文件: `AutoTestProgress/虚拟城市自动化测试进度_YYYYMMDD_HHMMSS.md`
@@ -39,7 +39,7 @@
 
 | 接口 | 用途 | 全 Agent 模拟场景示例 |
 |------|------|--------------|
-| `POST /NewChromePage` | 打开新标签页 | `{"url":"https://127.0.0.1:39001/wealth"}` |
+| `POST /NewChromePage` | 打开新标签页 | `{"url":"https://127.0.0.1:39001/virtual-city"}` |
 | `POST /ControlChromePage` | 模拟观战者动作 | `click`(创建全 Agent 房间) / `scroll`(浏览面板) / `hover`(查看 Agent 信息) |
 | `POST /LookChromePageInfo` | 读取页面状态 | `screenshot`(宏观概览) / `dom`(经济数据) / `console`(Agent 决策日志) / `network`(WS 帧) / `accessibility`(可达性) |
 | `POST /CloseChromePage` | 关闭标签页 | 测试结束后清理 |
@@ -82,7 +82,7 @@
 
 | 维度 | 值 |
 |------|-----|
-| game_kind | `wealth` |
+| game_kind | `virtual_city` |
 | 中文名 | 虚拟城市 |
 | 房间座位 | 12 座(10–12 可玩) |
 | 节奏 | 实时月度 tick(默认 8000ms/月,宏观涌现测试用 1000ms,快速功能测试用 3000ms) |
@@ -145,7 +145,7 @@
    - `lag_docs/虚拟城市/已实现/02-架构设计/虚拟城市-后端架构与经济引擎-v1.md`(月结 7 步、经济引擎、数值表)
    - `lag_docs/虚拟城市/已实现/02-架构设计/虚拟城市-WS与HTTP协议契约-v1.md`(协议契约、错误码 350xx、动作语义表)
    - `lag_docs/虚拟城市/已实现/02-架构设计/虚拟城市-前端架构与2.5D地图-v1.md`(前端布局、组件树、i18n 键、对比度约束)
-   - `lag_docs/虚拟城市/已实现/03-Agent设计/虚拟城市-WealthPlayer-Agent设计-v1.md`(Agent 行为预期、17 工具、月度决策循环)
+   - `lag_docs/虚拟城市/已实现/03-Agent设计/虚拟城市-WealthPlayer-Agent设计-v1.md`（历史禁改区文件名，§4 保留；内容描述 CityHuman Agent 的 17 工具、月度决策循环；当前代码路径 `ServerGo/agent/vcplayer/`，UA `LsmAgentGame-City-Human`）
    - `lag_docs/虚拟城市/已实现/03-Agent设计/虚拟城市-职业卡与加载器设计-v1.md`(职业卡数据、精选 10 职业)
    - `lag_docs/虚拟城市/已实现/04-验收/虚拟城市-P0验收清单-v1.md`(功能勾选表 F01–F33、经济不变量 I1–I10、前端/Agent 验收要点)
    - `lag_docs/虚拟城市/虚拟城市规则与经济系统.md`(数值手册:五维资源、三表、收支、投资、市场周期、债务、税务)
@@ -181,7 +181,7 @@
 #### 6.3 A 阶段:全 Agent 房间生命周期(观战者视角)
 
 **6.3.1 全 Agent 房间创建(12 bot / 0 人类)**
-- 校验 `WealthCreateRoomModal` 创建弹窗各配置项渲染完整、可交互:
+- 校验 `VirtualCityCreateRoomModal` 创建弹窗各配置项渲染完整、可交互:
   - 房间名输入
   - Agent 座位配置(`agent_seats: 12`, model_key 列表)
   - 游戏配置(month_ms 滑块/输入 / pool 选择 / seed 输入)
@@ -192,7 +192,7 @@
 - 以**观战者 spectator**身份进入房间(`my_seat=-1`),验证可观战 12 Agent 对局。
 
 **6.3.2 开局与座位**
-- 12 bot 到齐后自动开局(或房主点击「提前开始」`game.wealth_start`),验证 `game.started` + 首个 `game.state`。
+- 12 bot 到齐后自动开局(或房主点击「提前开始」`game.virtual_city_start`),验证 `game.started` + 首个 `game.state`。
 - 验证开局聊天:12 Agent 通过 `SendFromBot` 发送职业卡 `opening_hook` 开场白(30–50 字)。
 - 验证 12 个座位职业卡展示正确(职业名/头像/初始五维资源),**职业分布多样化**(不应 12 人同一职业)。
 
@@ -204,18 +204,18 @@
 
 **6.3.4 观战模式(本测试主视角)**
 - 验证观战者能实时看到 `game.month` 汇总帧 + 12 Agent 公开发言 + 市场数据。
-- 验证观战者发送 `game.wealth_action` 被后端硬拒(错误码 **30011**)。
+- 验证观战者发送 `game.virtual_city_action` 被后端硬拒(错误码 **30011**)。
 - 验证观战者**不能**看到其他玩家 `my.*` 私有信息(现金/贷款/资产详情),但能看到脱敏后的资产柱/排名。
 - 验证观战者能看到 `bot_contexts`(12 Agent 思考面板)——这是宏观涌现观察的关键入口。
 
 **6.3.5 退出与断线恢复**
 - 验证 Agent 掉线后转 bot 接管(有可用 provider)。
 - 验证终局 60s 后自动 `game.removed`。
-- 验证刷新 `/wealth/:roomId` → `game.state` 快照恢复全部面板,无状态丢失。
+- 验证刷新 `/virtual-city/:roomId` → `game.state` 快照恢复全部面板,无状态丢失。
 
 #### 6.4 B 阶段:经济引擎与月结
 
-> **重要**: 经济引擎数值正确性以**服务端单元测试**为第一事实来源。前端测试聚焦**状态同步 + 渲染正确性 + 宏观数据一致性**。若 `go test ./ServerGo/game/wealth/...` 全绿,则引擎数值可信;测试重点转为前端是否正确展示引擎产出。
+> **重要**: 经济引擎数值正确性以**服务端单元测试**为第一事实来源。前端测试聚焦**状态同步 + 渲染正确性 + 宏观数据一致性**。若 `go test ./ServerGo/game/virtual_city/...` 全绿,则引擎数值可信;测试重点转为前端是否正确展示引擎产出。
 
 **6.4.1 月结流程**
 - 验证月结 7 步顺序(工资→被动收入→固定支出→税+社保→生活支出→债务→市场波动)。
@@ -341,18 +341,18 @@
 #### 6.7 E 阶段:前端渲染(观战者视角)
 
 **6.7.1 2.5D 地图(12 token 分布)**
-- 验证 `WealthCityMap` r3f Canvas:8 城区楼群 + 道路 + **12 个 Agent token**。
+- 验证 `VirtualCityCityMap` r3f Canvas:8 城区楼群 + 道路 + **12 个 Agent token**。
 - 验证 hover 城区显示房价/租金信息卡。
 - 验证 `AgentToken` 圆柱 token + Billboard 头像 + 名牌,**12 token 颜色/名牌可区分**。
 - 验证 token 迁区 lerp 动画(连续 2~3 帧截图流畅)。
-- 验证 `WealthMinimap` Canvas2D 小地图:城区色块 + **12 agent 点** + 视野框。
+- 验证 `VirtualCityMinimap` Canvas2D 小地图:城区色块 + **12 agent 点** + 视野框。
 - 验证楼群高度随 `price_index` 变化。
 
 **6.7.2 面板栈**
 - `FinancialPanel`:现金/月收支柱状/FI 仪表/五维资源条/资产负债 Tab。
 - `MarketPanel`:股指/金价/债券利率/8 区房价指数。
 - `LedgerPanel`:双式流水(最近 50 条)+ 月度汇总。
-- `WealthGameChatPanel`:房间聊天面板(12 Agent 发言)。
+- `VirtualCityGameChatPanel`:房间聊天面板(12 Agent 发言)。
 - `AgentThoughtPanel`:12 Agent 思考面板(`bot_contexts`),可切换查看各 Agent 决策摘要。
 
 **6.7.3 MonthTicker 与 GameOverModal**
@@ -449,7 +449,7 @@
 - **多 Agent 并发与 Git**: 测试期间留意其他开发 Agent;测试阶段**仅做只读 Git 查询**(`git status` / `git log` / `git diff`),**禁止** `git add` / `git commit` / `git push` 等一切写操作——测试产物按 `.gitignore` 策略仅留本地,不入库、不提交。**进入 §12 修复流程后按该章节 Git 规则执行**。
 - **单轮单模块**: 硬性约束,禁止「提高效率」连测多个模块;全模块覆盖靠多轮推进。
 - **长对局处理**: D 阶段宏观涌现验证需连续跑 ≥60 月,使用 `month_ms:1000` 加速(60 月 ≈ 60 秒)。B 阶段功能测试可用 `month_ms:3000`。破产/终局独立建房间验证。
-- **经济引擎优先相信单测**: `go test ./ServerGo/game/wealth/...` 全绿则数值可信;前端聚焦状态同步与渲染。
+- **经济引擎优先相信单测**: `go test ./ServerGo/game/virtual_city/...` 全绿则数值可信;前端聚焦状态同步与渲染。
 - **重大问题立即停**(§3 已列):不待页面超时,不绕路,立刻写报告 + 进入修复流程。
 - **经济不变量硬约束**: Ledger 双式守恒 / 资产负债恒等 / 税费率正确性为**不可破坏**的硬约束,任何修复不得破坏这些不变量。
 - **宏观数据采集伦理**: 采集 12 Agent 宏观数据用于测试分析是允许的,但**禁止**通过 eval_ws/eval_js 向 Agent 注入指令影响其决策(保持 Agent 自主性)。
@@ -464,8 +464,8 @@
 
 #### 10.1 第一层:REST API 快照
 
-- `GET /api/games/wealth/rooms` — 开放房间列表
-- `GET /api/games/wealth/rooms/:id` — 房间详情
+- `GET /api/games/virtual_city/rooms` — 开放房间列表
+- `GET /api/games/virtual_city/rooms/:id` — 房间详情
 - `GET /api/llm/models` — 验证 ≥8 个模型注册且 key 可用(排查 Agent 静默根因)
 - `GET /api/admin/llm/providers` — Provider 可用性
 - **权威状态(phase/month/players/bot_contexts)**:通过以下只读方式:
@@ -478,7 +478,7 @@
 #### 10.2 第二层:服务端日志诊断
 
 通过 `journalctl` / 服务日志观察:
-- `wealth game started` 后是否有 `agent started` × 12
+- `virtual_city game started` 后是否有 `agent started` × 12
 - `LLM call` / `stream` 相关日志(12 Agent 每月应产生 ≥12 次 LLM 调用)
 - `month` 推进日志
 - `settlement` 相关日志
@@ -488,11 +488,11 @@
 
 ```sql
 -- 验证 12 bot user
-SELECT COUNT(*) FROM t_lsm_game_user WHERE IsBot=1 AND username LIKE 'wealth_%';
+SELECT COUNT(*) FROM t_lsm_game_user WHERE IsBot=1 AND username LIKE 'virtual_city_%';
 -- 验证 provider 是否注册且 key 非占位(≥8 个不同模型)
 SELECT id, model, provider_type, LENGTH(api_key_enc) FROM t_lsm_game_llm_provider;
 -- 验证房间 DB 状态
-SELECT id, status, current_count FROM t_lsm_game_room WHERE game_kind='wealth' ORDER BY id DESC LIMIT 5;
+SELECT id, status, current_count FROM t_lsm_game_room WHERE game_kind='virtual_city' ORDER BY id DESC LIMIT 5;
 ```
 
 #### 10.4 降级路径产出要求
