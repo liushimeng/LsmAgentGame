@@ -53,7 +53,7 @@ func (s *GameService) registerVirtualCityAgentSeats(roomID string, seats []servi
 		// 全 Agent 模式判定(len(seatUsers) ≥ MinSeats)不受空 key 影响。
 		seatModels[seatCfg.Seat] = seatCfg.ModelKey
 	}
-	// 2026-09-22 §17-CityHuman(契约 03 §3.2): 深度层固定 12 —— 正常路径下
+	// 2026-09-22 §17-CityHuman(契约 03 §3.2): 抽样层固定 12 —— 正常路径下
 	// service 层已在落库前合成 wealthDeepSeats()(12 池驱动座位);若注册进来
 	// 的座位仍不足 MinSeats(例如旧链路/重启恢复绕过了 service 层),用池驱动
 	// bot(ModelKey="")防御性补填空闲座位至 MinSeats,幂等无害。roomSvc 不可用

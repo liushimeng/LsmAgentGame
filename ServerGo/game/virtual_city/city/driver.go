@@ -9,11 +9,11 @@
 //
 // 成本算术:10 万居民 × 每月 1 次 × 3~8s/次,即使 64 条线路也需 1.3~3 小时/月。
 // 驱动层以 per_month 预算 + 跨月轮转(cursor)保证「每个居民都会被驱动到,
-// 且城市规模与线路数解耦」;深度层 12 名不受此限。
+// 且城市规模与线路数解耦」;12 名 UI 展示居民同样经驱动层抽样。
 //
 // 锁纪律(§92a/契约 §8):Driver 全程**不持有 Backdrop.mu 跨 LLM 调用** ——
-// brief 锁内快照、ApplyIntent 锁内短临界区(与 voice.go 同款);worker 数与
-// 深度层 agentSem 互不影响(驱动层不经 agentSem,仅经全局 LinePool);
+// brief 锁内快照、ApplyIntent 锁内短临界区(与 voice.go 同款);worker 数仅
+// 经全局 LinePool;
 // LLM 调用流式优先(chatViaLease → ChatStreamAccumulate),15s 租约超时 +
 // 单轮 256 max tokens,无长循环续命需求(§197)。
 //
@@ -52,7 +52,7 @@ const (
 	driverMinWorkers     = 1
 	driverMaxWorkers     = 16
 	// driverDefaultPerMonth / clamp 边界(契约 §7:per_month 缺省 8,clamp [0,64];
-	// 0=仅深度层)。driverMinPerMonth=0 时语义=关闭(契约 §5)。
+	// 2026-09-24 重构:0 = 缺省 8,删除「仅抽样层」语义,所有居民都被驱动)。
 	driverDefaultPerMonth = 8
 	driverMaxPerMonth     = 64
 	driverMinPerMonth     = 0
@@ -93,7 +93,7 @@ type ResidentDriver struct {
 }
 
 // NewResidentDriver 构造驱动层(cfg 归一:Workers 0→4 且 clamp [1,16];
-// PerMonth clamp [0,64],0=仅深度层;AcquireTimeoutMS 0→15000)。
+// PerMonth clamp [0,64],0=缺省 8;AcquireTimeoutMS 0→15000)。
 func NewResidentDriver(cfg DriverConfig, pool LinePoolSource) *ResidentDriver {
 	if cfg.Workers <= 0 {
 		cfg.Workers = driverDefaultWorkers

@@ -259,7 +259,7 @@ export interface VirtualCityDict {
   'virtualCity.cityDistrictsCollapse': string;
   /** 驱动层指示（17-CityHuman 02 §6）：{n} = 上月实际驱动居民数。 */
   'virtualCity.cityDriven': string;
-  'virtualCity.seatsCount': string; // {n} {max} — 深度居民
+  'virtualCity.seatsCount': string; // {n} {max} — 抽样展示居民
   'virtualCity.seatsWaiting': string; // 无占位符
   'virtualCity.botPanel.seat': string;
   'virtualCity.botPanel.titleCount': string; // {count}

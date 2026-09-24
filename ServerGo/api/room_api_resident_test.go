@@ -58,7 +58,7 @@ func TestCreateRoom_ResidentCountZeroNotRejectedAtAPI(t *testing.T) {
 // (与 handler 相同的 DisallowUnknownFields 解码):
 //   - 正数(9 / 100001)不得在 API 层被拒(负数 400 分支不误伤);
 //   - 旧客户端携带 wealth.pool / agent_seats 的载荷仍可解码(不 400,
-//     契约 03 §6「静默忽略」—— agent_seats 由服务端忽略并合成 12 深度座位;
+//     契约 03 §6「静默忽略」—— agent_seats 由服务端忽略并合成 12 抽样展示位;
 //     wealth.pool 为 Deprecated 空壳字段,任何值都被忽略)。
 func TestCreateRoom_NewContractBindingTolerances(t *testing.T) {
 	for _, body := range []string{

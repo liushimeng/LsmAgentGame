@@ -89,7 +89,7 @@ export function VirtualCityLobbyPage() {
           name: req.name,
           // §20260921 建房解耦 — 背景居民规模（顶层字段，仅 virtualCity 生效）。
           // 2026-09-22 §CityHuman全民驱动 — 不再发送 agent_seats/pool
-          // （后端自动合成 12 深度居民座位，档案唯一源 = 人物卡知识库）。
+          // （后端自动合成 12 抽样展示居民，档案唯一源 = 人物卡知识库）。
           resident_count: req.resident_count,
           virtualCity: { month_ms: req.month_ms, ...(req.seed ? { seed: req.seed } : {}) },
           full_agent: req.full_agent === true,

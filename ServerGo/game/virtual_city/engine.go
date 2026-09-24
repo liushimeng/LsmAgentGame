@@ -24,23 +24,24 @@ const (
 	PhaseSettling = "settling"
 )
 
-// MaxSeats 房间容量(2026-09-16 §12 座扩容:8 → 12,给「1 人类 + 11 bot」
-// 留头寸;同时也是精选卡池 / 文档池抽卡张数的硬下限)。
+// MaxSeats UI 展示位数 = 月抽样数(2026-09-16 §12 座扩容:8 → 12;
+// 2026-09-24 重构:12 = 当月从 Backdrop 居民中随机均匀抽样展示的代表数,
+// 无固定/特权/抽样层)。
 const MaxSeats = 12
 
-// MinSeats 最少开局座位(2026-09-16 §12 座扩容:3 → 10,即最少 10 个 Agent
-// 可跑全场;与 MaxSeats 之间保留 2 个头寸给人类玩家)。
+// MinSeats 最少开局展示位数(2026-09-16 §12 座扩容:3 → 10;
+// 2026-09-24 重构:10 = 最少 10 个抽样展示居民即可开局,无人类玩家概念)。
 const MinSeats = 10
 
 // DefaultAgentConcurrency 是房间级 LLM 并发信号量(agentSem)的默认容量
 // (2026-09-16 §12 座扩容 新定)。
 //
 // 设计取舍:
-//   - 狼人杀 / 德扑的 bot 是「轮到才动」,4 并发够用;虚拟城市 12 个 bot 每
-//     个月**同时**决策 → 4 并发会把 12 人压成 4 批串行,月窗口(默认 8s)内
+//   - 狼人杀 / 德扑的 bot 是「轮到才动」,4 并发够用;虚拟城市 12 个抽样居民每月
+//     同时**被 LLM 驱动 → 4 并发会把 12 人压成 4 批串行,月窗口(默认 8s)内
 //     后几批根本来不及跑 → 「10+ Agent 跑全场」等于 4 个在跑、其余被强制
 //     submit。放宽到 8(≈ MaxSeats 的 2/3)后,12 人分 2 批,配合月窗口上限
-//     30s 与 decisionTimeout 20s,足够全部 bot 完成一轮决策。
+//     30s 与 decisionTimeout 20s,足够全部抽样居民完成一轮 LLM 驱动。
 //   - 不设成 MaxSeats(12):LLM Provider 自身有全局并发/配额上限,12 路并发
 //     容易触发 429 被 quarantine;8 是 Provider 配额与房间并发间的平衡。
 //   - NewVirtualCityRoom 的 llmConcurrency 参数=0 时回落此默认;管理器可按需覆盖。
@@ -55,7 +56,7 @@ const DefaultAgentConcurrency = 8
 //
 // 输出: ∈ [4, 64];目标值 = maxSeats/2+1,再 cap 到 poolTotal 与 64。
 //
-// 设计动机:12 焦点玩家 × 时 LinePool 容量动态调整,避免 Provider 429。
+// 设计动机:12 抽样居民 + 8 线路 → 7;200 背景居民 + 64 线路 → 64。
 // 典型值:12 焦点玩家 + 8 线路 → 7;200 背景居民 + 64 线路 → 64。
 // 向后兼容:老客户端 poolTotal 传入 0 时回落 DefaultAgentConcurrency,
 // 与 NewVirtualCityRoom 既有行为一致,客户无感。

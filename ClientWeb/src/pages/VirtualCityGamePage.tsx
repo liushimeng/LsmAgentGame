@@ -333,7 +333,7 @@ export function VirtualCityGamePage() {
         </div>
       )}
 
-      {/* 座位未就绪提示（MinSeats=10）：等待 12 深度居民 Agent 注册完成 */}
+      {/* 抽样展示位未就绪提示（MinSeats=10）：等待 12 抽样居民 Agent 注册完成 */}
       {waitingForSeats && (
         <div className="virtualCity-seats-hint" role="status" data-testid="virtualCity-seats-hint">
           {t('virtualCity.seatsWaiting' as TKey)}

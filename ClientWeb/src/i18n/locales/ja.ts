@@ -1619,7 +1619,7 @@ const ja: Dict = {
   'virtualCity.cityDistrictsCollapse': 'リストを折りたたむ',
   // 17-CityHuman 全住民駆動 — ドライバ層インジケータ（{n} = 先月駆動した住民数）。
   'virtualCity.cityDriven': '今月駆動した住民：{n} 人',
-  'virtualCity.seatsCount': '深度住民 {n}/{max}',
+  'virtualCity.seatsCount': '抽出表示住民 {n}/{max}',
   'virtualCity.seatsWaiting': '住民 Agent の準備を待っています…',
   'virtualCity.botPanel.seat': '{n}番',
   'virtualCity.botPanel.titleCount': '住民思考（{n}）',

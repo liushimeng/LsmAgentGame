@@ -325,7 +325,7 @@ func TestResidentDriver_Disabled(t *testing.T) {
 	if calls, _ := fp.stats(); calls != 0 {
 		t.Fatalf("disabled driver must not call llm, got %d", calls)
 	}
-	// PerMonth=0(仅深度层)→ 同样零调用。
+	// PerMonth=0 → 同样零调用(0 归一为缺省 8,旧"仅抽样层"语义删除)。
 	d2 := NewResidentDriver(DriverConfig{Enabled: true, Workers: 4, PerMonth: 0}, newDriverPool(fp, 2))
 	d2.RunMonth(b, 1, func(VoiceRecord) { t.Fatal("no records expected at per_month=0") })
 	if calls, _ := fp.stats(); calls != 0 {

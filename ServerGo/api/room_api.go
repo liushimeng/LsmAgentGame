@@ -159,7 +159,7 @@ func (a *RoomAPI) Create(c *gin.Context) {
 	}
 	// 2026-09-22 §17-CityHuman(契约 03 §3.2): 响应删 agent_seats_count
 	// (前端无消费方;wealth 的 agent_seats 已被服务端忽略,回显数字只会误导),
-	// full_agent 回显保留 —— wealth 恒为全 Agent 城市(12 深度座位),创建成功
+	// full_agent 回显保留 —— wealth 恒为全 Agent 城市(12 抽样展示位),创建成功
 	// 即 full_agent=true;其他游戏恒 false。
 	fullAgent := kind == "virtual_city"
 	c.JSON(http.StatusOK, gin.H{

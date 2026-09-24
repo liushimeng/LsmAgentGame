@@ -454,7 +454,7 @@ export interface CreateRoomOptions {
   // createRoomRequest 新增字段 virtualCity *VirtualCityRoomOptions,DisallowUnknownFields
   // 严格校验)。month_ms clamp 3000–30000。
   // 2026-09-22 §CityHuman全民驱动 — virtualCity 建房不再发送 agent_seats/pool
-  // （后端忽略 virtualCity 请求中的 agent_seats，自动合成 12 深度居民座位）。
+  // （后端忽略 virtualCity 请求中的 agent_seats，自动合成 12 抽样展示居民）。
   virtualCity?: VirtualCityRoomOptions;
   // 2026-09-21 §建房解耦 — virtualCity only。背景居民规模：
   // 缺省 10000；<10 clamp 10；上限 100000 后端 clamp；负值 400。

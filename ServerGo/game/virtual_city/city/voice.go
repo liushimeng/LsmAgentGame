@@ -4,8 +4,8 @@
 // (llm.LinePool)约束 —— 每名居民一次极短对话(无工具、无 Memory、小
 // max_tokens),经 LinePool.Acquire(ctx 15s);失败/超时丢弃本条(下月再抽),
 // 绝不阻塞月结。AgentClassName = LsmAgentGame-City-Human(§24 两步注册;
-// 2026-09-22 §CityHuman重构: 五类 AgentClass 合一,背景层发声与焦点层
-// 决策共用同一「城市居民」身份,仅调用深度不同)。
+// 2026-09-22 §CityHuman重构: 五类 AgentClass 合一,背景层发声与抽样展示层
+// 共用同一「城市居民」身份,2026-09-24 重构:无调用深度差异,所有居民同样深度。
 package city
 
 import (

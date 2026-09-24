@@ -227,7 +227,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 
 	// 2026-09-22 §17-CityHuman 全民驱动(契约 03 §3.1): wealth 建房**忽略**
 	// 传入的 agent_seats(旧客户端携带任意值静默忽略,不 400 —— HTTP 契约
-	// 宽松化,§6),由服务端固定合成 12 名池驱动深度居民座位(ModelKey="")。
+	// 宽松化,§6),由服务端固定合成 12 名池驱动抽样居民座位(ModelKey="")。
 	// 替换必须发生在 agentSeatSet 构建/校验/落库之前,使 bot 用户行、
 	// FullAgentMode 判定、ws 层 RegisterBotSeats、自动开局看到同一座位集;
 	// werewolf 等其他游戏路径零变化。
@@ -421,7 +421,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	//     distinct models we wrap around (round-robin on the shuffled pool).
 	//
 	// 2026-09-22 §17-CityHuman(契约 03 §3.1): wealth 排除在外 —— 其 12 个
-	// 深度座位全部是池驱动(ModelKey=""),空串是**合法绑定态**(= 线路池
+	// 抽样展示位全部是池驱动(ModelKey=""),空串是**合法绑定态**(= 线路池
 	// 分配),重写会破坏池驱动语义。
 	if len(agentSeats) > 1 && gameKind != "virtual_city" {
 		alternates := s.alternateModelsLocked(agentSeats)
@@ -839,8 +839,8 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 }
 
 // creatorShouldBeSpectator 判定创建者是否必须降级为观战者。wealth 恒为
-// 全 Agent 城市(12 深度座位,wealthDeepSeatCount —— 原 wealthMinAgentSeats
-// 10/11 档概念已随精选层退役,契约 03 §3.2),深度座位全注册即无人类可入
+// 全 Agent 城市(12 抽样展示位,wealthDeepSeatCount —— 原 wealthMinAgentSeats
+// 10/11 档概念已随精选层退役,契约 03 §3.2),抽样展示位全注册即无人类可入
 // 座位,不能把剩余物理空位误当成可加入座位。
 func creatorShouldBeSpectator(gameKind string, freeSeatCount, agentSeatCount int) bool {
 	return freeSeatCount == 0 || (gameKind == "virtual_city" && agentSeatCount >= wealthDeepSeatCount)
@@ -870,7 +870,7 @@ func clampVirtualCityResidentCount(v, maxResidents int) int {
 // prepareVirtualCityAgentRoom 是 wealth 专用的内存镜像顺序:先设置 FullAgentMode,
 // 再注册 bot seats。RegisterAgentSeats 到达 MinSeats 后可能立即自动开局,
 // 顺序反置会出现短暂人类可加入窗口。2026-09-22 §17:wealth 恒为全 Agent
-// 城市(12 深度座位),有任何 agent 座位即置位。
+// 城市(12 抽样展示位),有任何 agent 座位即置位。
 func (s *RoomService) prepareVirtualCityAgentRoom(roomID string, agentSeats []AgentSeatConfig) {
 	if len(agentSeats) > 0 && s.gameJoiner != nil {
 		if e := s.gameJoiner.SetFullAgentMode("virtual_city", roomID, true); e != nil {

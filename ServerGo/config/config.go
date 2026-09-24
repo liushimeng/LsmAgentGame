@@ -393,7 +393,7 @@ type VirtualCityConfig struct {
 	CityDriverEnabled *bool `json:"city_driver_enabled,omitempty"`
 	// CityDriverWorkers 驱动层线程池 worker 数(缺省 4,clamp [1,16])。
 	CityDriverWorkers int `json:"city_driver_workers"`
-	// CityDriverPerMonth 每月驱动居民数(缺省 8,clamp [0,64];0=仅深度层,
+	// CityDriverPerMonth 每月驱动居民数(缺省 8,clamp [0,64];0=缺省 8,
 	// 该语义仅在运行时经 Manager.Config 直接构造可达 —— conf 显式 0 与缺省
 	// 无法区分,与 city_voice_per_month 同款取舍;需停驱动层请置
 	// city_driver_enabled=false)。

@@ -406,7 +406,8 @@ func (r *VirtualCityRoom) JoinGame(userID, nickname string) (int, bool, *errcode
 // Seats[seat]=="" 跳过 → bot 永不上场。现扩展为同时入住 bot userID
 // (seatUsers,仅写空位,不覆盖已有人类座位)。
 // 2026-09-22 §17-CityHuman(契约 03 §1.4):第三参 professions 座位职业偏好
-// 随精选层退役删除(原恒传 nil 的死路径,§130 死代码清算)。
+// 随精选层退役删除(原恒传 nil 的死路径,§130 死代码清算)。2026-09-24 重构:
+// 座位 = 当月抽样展示居民,档案来自 Backdrop 真实居民,无人类玩家概念。
 func (r *VirtualCityRoom) RegisterBotSeats(seatUsers map[int]string, seatModels map[int]string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

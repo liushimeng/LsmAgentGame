@@ -1,14 +1,14 @@
-// Package service — room_service_wealth_fill_test.go: 虚拟城市深度层座位
+// Package service — room_service_wealth_fill_test.go: 虚拟城市抽样层座位
 // 合成单测(2026-09-22 §17-CityHuman 全民驱动,契约 03 §4 重写)。
 //
-// 覆盖:wealthDeepSeats 恒 12 名池驱动深度座位(ModelKey="" 全空、座位
+// 覆盖:wealthDeepSeats 恒 12 名池驱动抽样展示位(ModelKey="" 全空、座位
 // 0..11 升序);AgentSeatConfig 无 Profession 字段(精选层退役,§1.4);
-// creatorShouldBeSpectator 对 12 深度座位的判定。
+// creatorShouldBeSpectator 对 12 抽样展示位的判定。
 package service
 
 import "testing"
 
-// TestVirtualCityDeepSeats_TwelvePoolDrivenSeats wealth 深度层恒 12 名池驱动座位
+// TestVirtualCityDeepSeats_TwelvePoolDrivenSeats wealth 抽样层恒 12 名池驱动座位
 // (契约 03 §3.2):座位 0..11 升序、ModelKey 全空(= LLM 线路池分配)、
 // Role 空(不注入角色偏好)。
 func TestVirtualCityDeepSeats_TwelvePoolDrivenSeats(t *testing.T) {
@@ -40,7 +40,7 @@ func TestAgentSeatConfig_NoProfessionField(t *testing.T) {
 	_ = a
 }
 
-// TestCreatorShouldBeSpectator_VirtualCityDeepSeats wealth 12 深度座位 → 创建者
+// TestCreatorShouldBeSpectator_VirtualCityDeepSeats wealth 12 抽样展示位 → 创建者
 // 恒降级为观战者;其他游戏不受影响。
 func TestCreatorShouldBeSpectator_VirtualCityDeepSeats(t *testing.T) {
 	cases := []struct {

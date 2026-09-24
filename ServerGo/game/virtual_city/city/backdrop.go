@@ -5,8 +5,9 @@
 // (≈22B,仍满足 ≤40B 预算;契约 02 §4)。
 //
 // 背景居民是数据,不是 goroutine:每城 1..100,000+ 名居民以紧凑结构存储,
-// 数值规则逐月演化(TickMonth);LLM 深认知只给深度座位(≤12,全量引擎不变)、
-// 「城市之声」抽样居民(voice.go)与**驱动层**轮次居民(driver.go)。
+// 数值规则逐月演化(TickMonth);12 个 UI 展示位 = 当月 cursor 随机均匀抽样
+// 代表(AgentClassCityHuman 驱动)、「城市之声」抽样居民(voice.go)
+// 与**驱动层**轮次居民(driver.go)共享同一居民池。
 // 性能预算:100K 初始化 <200ms、月度 tick <100ms、常驻内存增量 <32MB。
 package city
 

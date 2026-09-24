@@ -1,7 +1,7 @@
 // Package virtual_city — room_autofill_test.go: 焦点居民自动填充后开局链路单测
 // (2026-09-22 §CityHuman重构,前端联调)。
 //
-// 场景:wealth 建房服务端恒合成 12 深度座位(契约 03 §3.2;旧填充逻辑已
+// 场景:wealth 建房服务端恒合成 12 抽样展示位(契约 03 §3.2;旧填充逻辑已
 // 退役),ws 层注册池驱动 bot 座位(ModelKey="")→ FullAgentMode=true →
 // 满 MinSeats 自动开局。本测试在房间层验证该终态:座位集注册 →
 // Occupied()>=MinSeats → Start 成功 → playing。

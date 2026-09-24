@@ -42,9 +42,9 @@ type Config struct {
 	BotMaxActionsPerMonth   int
 	Seed                    int64
 	// AgentConcurrency 房间级 LLM 并发信号量容量;0 = DefaultAgentConcurrency(8)。
-	// 2026-09-16 §12 座扩容 新增:10+ bot 同月决策时,4 并发会把 12 人压成
-	// 4 批串行,月窗口(默认 8s)内后几批来不及跑。8 是 Provider 配额与房间
-	// 并发间的平衡(详见 engine.go DefaultAgentConcurrency 注释)。
+	// 2026-09-16 §12 座扩容 新增:10+ 抽样居民同月 LLM 调用时,4 并发会把
+	// 12 人压成 4 批串行,月窗口(默认 8s)内后几批来不及跑。8 是 Provider
+	// 配额与房间并发间的平衡(详见 engine.go DefaultAgentConcurrency 注释)。
 	AgentConcurrency int
 	// P1(2026-09-16 §财商流P1-2 §6.5):真实经济循环 / 社会调研总开关。
 	// NewManager 归一:零值 → true(false 回退 P0 行为;与 cfg.VirtualCity 同名键)。
@@ -76,7 +76,7 @@ type Config struct {
 	// CityDriverWorkers 线程池 worker 数(使用点 NewResidentDriver clamp
 	// [1,16],0 → 4)。
 	CityDriverWorkers int
-	// CityDriverPerMonth 每月驱动居民数(clamp [0,64];0 = 仅深度层)。
+	// CityDriverPerMonth 每月驱动居民数(clamp [0,64];0 = 缺省 8,无「仅抽样层」语义)。
 	CityDriverPerMonth int
 }
 

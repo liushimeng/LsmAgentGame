@@ -62,8 +62,8 @@ func TestCreateRoomVirtualCity_TenOrElevenBotsAreFullAgentBeforeRegistration(t *
 }
 
 // TestCreatorShouldBeSpectator_VirtualCityTenOrElevenBots 2026-09-22 §17-CityHuman
-// (契约 03 §3.2)语义更新:wealth 深度层固定 12 —— 判定阈值由 10 改 12
-// (10/11 档概念随「焦点居民数」退役);12 深度座位 → 创建者恒观战者。
+// (契约 03 §3.2)语义更新:wealth 抽样层固定 12 —— 判定阈值由 10 改 12
+// (10/11 档概念随「焦点居民数」概念退役);12 抽样展示位 → 创建者恒观战者。
 func TestCreatorShouldBeSpectator_VirtualCityTenOrElevenBots(t *testing.T) {
 	cases := []struct {
 		name           string

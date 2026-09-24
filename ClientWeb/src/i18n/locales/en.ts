@@ -1621,7 +1621,7 @@ const en: Dict = {
   'virtualCity.cityDistrictsCollapse': 'Collapse list',
   // 17-CityHuman all-resident driving — driver-layer indicator ({n} = residents driven last month).
   'virtualCity.cityDriven': 'Residents driven this month: {n}',
-  'virtualCity.seatsCount': 'Deep residents {n}/{max}',
+  'virtualCity.seatsCount': 'Sampled residents {n}/{max}',
   'virtualCity.seatsWaiting': 'Waiting for resident Agents to be ready…',
   'virtualCity.botPanel.seat': 'Seat {n}',
   'virtualCity.botPanel.titleCount': 'Resident thoughts ({n})',

@@ -1620,7 +1620,7 @@ const zhCN: Dict = {
   'virtualCity.cityDistrictsCollapse': '收起列表',
   // 17-CityHuman 全民驱动 — 驱动层指示（{n} = 上月实际驱动居民数）。
   'virtualCity.cityDriven': '本月驱动 {n} 名居民',
-  'virtualCity.seatsCount': '深度居民 {n}/{max}',
+  'virtualCity.seatsCount': '抽样展示居民 {n}/{max}',
   'virtualCity.seatsWaiting': '正在等待居民 Agent 就绪…',
   'virtualCity.botPanel.seat': '{n} 号',
   'virtualCity.botPanel.titleCount': '居民思维（{n}）',

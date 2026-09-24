@@ -6,8 +6,8 @@
 //  3. 9 座拒绝开局返回 ErrVirtualCityNotEnoughPlayers(35003)。
 //
 // 2026-09-22 §17-CityHuman(契约 03 §4):原精选池数量门禁随精选卡层退役
-// 删除;新增「wealth 建房恒 12 深度座位」断言(发卡池恒满 MaxSeats、来源
-// 恒 docs-or-synthetic;12 深度座位的服务端合成由
+// 删除;新增「wealth 建房恒 12 抽样展示位」断言(发卡池恒满 MaxSeats、来源
+// 恒 docs-or-synthetic;12 抽样展示位的服务端合成由
 // service/room_service_wealth_fill_test.go 的 wealthDeepSeats 断言)。
 package virtual_city
 
@@ -27,19 +27,19 @@ import (
 	llmtypes "LsmAgentGame/llm/types"
 )
 
-// TestSeats12_DeepSeatCardPoolAlwaysFull wealth 建房恒 12 深度座位:
+// TestSeats12_DeepSeatCardPoolAlwaysFull wealth 建房恒 12 抽样展示位:
 // 无 loader(合成兜底)时发卡池也必须恒满 MaxSeats(12) 张、互不重复、
 // 全部 Validate 通过且 Source=synthetic(精选层退役后的兜底,契约 03 §2.2)。
 func TestSeats12_DeepSeatCardPoolAlwaysFull(t *testing.T) {
 	if MaxSeats != 12 {
-		t.Fatalf("MaxSeats = %d, want 12 (深度层固定 12)", MaxSeats)
+		t.Fatalf("MaxSeats = %d, want 12 (抽样层固定 12)", MaxSeats)
 	}
 	r := NewVirtualCityRoom("room-deep12", 3000, 7, 4)
 	r.mu.Lock()
 	cards := r.buildCardPoolLocked()
 	r.mu.Unlock()
 	if len(cards) != MaxSeats {
-		t.Fatalf("card pool = %d, want %d (12 深度座位发卡恒满)", len(cards), MaxSeats)
+		t.Fatalf("card pool = %d, want %d (12 抽样展示位发卡恒满)", len(cards), MaxSeats)
 	}
 	seen := map[string]struct{}{}
 	for i, c := range cards {
