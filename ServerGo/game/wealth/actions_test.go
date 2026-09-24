@@ -7,7 +7,8 @@ import (
 	"LsmAgentGame/game/wealth/profession"
 )
 
-// TestActions_BuySellStock I7:股票佣金 0.025% 最低 5 元。
+// TestActions_BuySellStock I7:股票佣金 0.025% 最低 5 元;批次20 文档3 B2:
+// 成交按 ask/bid 单边价、当月买入 T+1 冻结(35044)、月结开头解冻后放行。
 func TestActions_BuySellStock(t *testing.T) {
 	w := NewWorld(1, [MaxSeats]profession.Card{{ID: "P09"}})
 	w.Players[0] = newPlayerFromCard(0, w.Players[0].Card)
@@ -15,7 +16,9 @@ func TestActions_BuySellStock(t *testing.T) {
 	w.StartGame()
 	w.Month = 1
 
-	// 买 10000 元,units = floor(10000/3.5)=2857。
+	// 买 10000 元:成交价 = ask 单边(recovery 价差 4bp → idx×1.0002)。
+	ask := w.Market.StockBuyUnit()
+	wantUnits := float64(int64(10000 / ask)) // floor 口径复核用
 	text, err := w.ApplyAction(0, Action{Type: ActBuyAsset, Asset: AssetStockIndex, AmountCNY: 10000})
 	if err != nil {
 		t.Fatalf("buy stock: %v", err)
@@ -27,10 +30,29 @@ func TestActions_BuySellStock(t *testing.T) {
 	if at == nil || at.Units <= 0 {
 		t.Fatalf("stock not held after buy")
 	}
-	// 卖出 1000 份(应获 gross − 佣金)。
+	if at.Units != wantUnits {
+		t.Errorf("units by ask price: got %v, want %v (mid=%.4f ask=%.4f)", at.Units, wantUnits, w.Market.StockIndex, ask)
+	}
+	// B2-3 T+1:当月买入全部冻结。
+	if w.Players[0].StockT1Locked != int64(at.Units) {
+		t.Fatalf("T1 lock: got %d, want %d", w.Players[0].StockT1Locked, int64(at.Units))
+	}
+	// 同月卖出 → 35044(不再成功)。
 	_, err = w.ApplyAction(0, Action{Type: ActSellAsset, Asset: AssetStockIndex, Units: 1000})
-	if err != nil {
-		t.Fatalf("sell stock: %v", err)
+	if err == nil || err.Code != errcode.ErrWealthStockT1Locked {
+		t.Fatalf("same-month sell must be 35044, got %v", err)
+	}
+	// 月结开头解冻 → 次月可卖(bid 单边价成交,毛额略低于中价)。
+	w.SettleMonth()
+	if w.Players[0].StockT1Locked != 0 {
+		t.Fatalf("T1 must thaw at settle month head, got %d", w.Players[0].StockT1Locked)
+	}
+	cashBefore := w.Players[0].Cash
+	if _, err = w.ApplyAction(0, Action{Type: ActSellAsset, Asset: AssetStockIndex, Units: 1000}); err != nil {
+		t.Fatalf("next-month sell: %v", err)
+	}
+	if w.Players[0].Cash <= cashBefore {
+		t.Errorf("next-month sell must credit cash: %d -> %d", cashBefore, w.Players[0].Cash)
 	}
 }
 

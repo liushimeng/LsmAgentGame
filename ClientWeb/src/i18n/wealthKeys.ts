@@ -69,7 +69,8 @@ export interface WealthDict {
   'wealth.district.residential': string;
   'wealth.district.suburb': string;
   'wealth.district.riverside': string;
-  // v2.12 阶段 2 扩展城区（8→16；与 types/wealth.ts WEALTH_DISTRICTS 同步）。
+  // v2.12 阶段 2 扩展城区（8→16；与 types/wealth.ts WEALTH_DISTRICTS 同步）；
+  // 批次 20 再扩至 32（下方 16 新键）。
   'wealth.district.logistics_port': string;
   'wealth.district.hightech_park': string;
   'wealth.district.edu_district': string;
@@ -78,6 +79,23 @@ export interface WealthDict {
   'wealth.district.central_park': string;
   'wealth.district.transport_hub': string;
   'wealth.district.cultural_creative': string;
+  // 批次 20 城市扩张新增 16 区（名 = 文档 1 §2.1 三语表；与 types/wealth.ts 同步）。
+  'wealth.district.fin_sub_center': string;
+  'wealth.district.software_park': string;
+  'wealth.district.airport_town': string;
+  'wealth.district.air_logistics': string;
+  'wealth.district.auto_city': string;
+  'wealth.district.mountain_resort': string;
+  'wealth.district.chem_park': string;
+  'wealth.district.agri_park': string;
+  'wealth.district.health_town': string;
+  'wealth.district.steel_town': string;
+  'wealth.district.old_city_culture': string;
+  'wealth.district.university_town': string;
+  'wealth.district.wetland_park': string;
+  'wealth.district.sports_new_city': string;
+  'wealth.district.bay_new_town': string;
+  'wealth.district.highspeed_rail_town': string;
   'wealth.cash': string;
   'wealth.netWorth': string;
   'wealth.fiIndex': string;
@@ -236,6 +254,9 @@ export interface WealthDict {
   'wealth.cityVoiceOfMonth': string;
   /** 城区人口条形紧凑模式聚合行：{n} = 未展示城区数（v2.12 阶段 2，>12 区时）。 */
   'wealth.cityOtherDistricts': string;
+  // 批次 20 §3.4：32 区紧凑模式「展开全部 N 区 / 收起」折叠列表按钮。
+  'wealth.cityDistrictsExpand': string;
+  'wealth.cityDistrictsCollapse': string;
   /** 驱动层指示（17-CityHuman 02 §6）：{n} = 上月实际驱动居民数。 */
   'wealth.cityDriven': string;
   'wealth.seatsCount': string; // {n} {max} — 深度居民
@@ -650,4 +671,47 @@ export interface WealthDict {
   'wealth.residentDrawer.cardId': string;
   /** focusCardId 单卡查询未命中（35013）。 */
   'wealth.residentDrawer.notFound': string;
+
+  // ── 批次 20 FE-2：副业定价战 / 股票微观结构 / 市长选举（2026-09-24）──
+  // 值表拆到 locales/wealthBatch20-{zh,en,ja}.ts（≤1800 行约束，先例 wealthP2-*）。
+  // 副业定价（ActionPanel 副业区块 + 开业弹窗；批次 20 文档 2 §5）。
+  /** 开业弹窗定价档行标签（文档未列，UI 需要，见实施报告疑点）。 */
+  'wealth.sidePrice.label': string;
+  'wealth.sidePrice.low': string;
+  'wealth.sidePrice.mid': string;
+  'wealth.sidePrice.high': string;
+  /** 客群份额：{pct} 整数百分比（不含 % 号）。 */
+  'wealth.sideShare': string;
+  /** 预期收入估算：{amount} 已格式化金额。 */
+  'wealth.sideExpected': string;
+  /** 同品类对手折叠行：{n} = 对手数。 */
+  'wealth.sideCompetitors': string;
+  /** 同月限改禁用 tooltip（每月 ≤1 次）。 */
+  'wealth.sidePriceGate': string;
+  // 股票微观结构（MarketPanel + 买卖弹窗；批次 20 文档 3 B4）。
+  'wealth.micro.buyUnit': string;   // {price}
+  'wealth.micro.sellUnit': string;  // {price}
+  'wealth.micro.spread': string;    // {bps}
+  'wealth.micro.t1Locked': string;  // {n}
+  'wealth.micro.breaker': string;   // {n} = 最后一个禁止月
+  // 市长选举（建房开关 / 横幅 / 政务票型；批次 20 文档 3 A4）。
+  'wealth.election.title': string;
+  /** 建房弹窗开关文案。 */
+  'wealth.election.switch': string;
+  /** 横幅市长行：{seat} = 1-based 座位号，{name} = 「 · 昵称」或空串。 */
+  'wealth.election.mayor': string;
+  'wealth.election.bannerClose': string;
+  /** 津贴停发徽标（数据源 = public_services.stipend_stopped）。 */
+  'wealth.election.stipendStopped': string;
+  /** CityStatsPanel「政务」分组标题。 */
+  'wealth.election.votePanel': string;
+  /** {m} = 下届选举月。 */
+  'wealth.election.nextElection': string;
+  /** 任期进度 tooltip：{elapsed}/{interval} 月。 */
+  'wealth.election.termProgress': string;
+  // 票型表格行内指标标签。
+  'wealth.election.colScore': string;
+  'wealth.election.colWealth': string;
+  'wealth.election.colNetwork': string;
+  'wealth.election.colSatisfaction': string;
 }

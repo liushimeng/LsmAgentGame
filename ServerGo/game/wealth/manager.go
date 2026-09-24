@@ -54,6 +54,12 @@ type Config struct {
 	// NewManager 归一:零值 → true(false 时投保/退保返回 35041、月结不扣缴、
 	// 意外事件不掷骰)。
 	InsuranceEnabled bool
+	// CivicElectionEnabled 批次20(文档3 A2):市长选举启用。
+	// **零值 = false —— 有意区别于 InsuranceEnabled/EconomyEnabled 家族的
+	// 「零值→true」归一化**(它们靠 NewManager 兜底默认开;选举是 R8-2
+	// 定义的「完全可选」机制,默认关闭保持旧行为零偏移)。
+	// ⚠️ 后人勿按惯性在 NewManager 里加 `if !cfg.CivicElectionEnabled { = true }`。
+	CivicElectionEnabled bool
 	// 2026-09-21 §虚拟城市(契约 03 §7)— 城市背景层配置。
 	// MaxResidents resident_count 上限(service 层 clamp 用);零值 → 100000。
 	MaxResidents int
@@ -238,6 +244,9 @@ func (m *Manager) CreateRoom(roomID string) *WealthRoom {
 	r.SetEconomyFlags(m.cfg.EconomyEnabled, m.cfg.SurveyEnabled)
 	// P1-4(§财商流P1-4 §11):保险引擎开关接线(Start 前回写)。
 	r.SetInsuranceEnabled(m.cfg.InsuranceEnabled)
+	// 批次20(文档3 A2):市长选举开关接线(零值=false,不做归一化;
+	// 建房 HTTP body civic_election_enabled 经 applyOpts 房间级覆盖)。
+	r.SetElectionEnabled(m.cfg.CivicElectionEnabled)
 	// 2026-09-21 §虚拟城市:线路池来源 + 城市之声配置接线(Start 前回写;
 	// m.mu 写锁内调房间锁,锁序 m.mu → r.mu 全库一致,无反向路径)。
 	r.SetLinePoolSource(m.linePoolSource)

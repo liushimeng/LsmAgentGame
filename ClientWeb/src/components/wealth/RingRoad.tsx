@@ -2,8 +2,8 @@
  * RingRoad — CBD 环形路（16-3D城市WebGL质感与城市补全 · 阶段 S）：
  *
  * 16 边形近似圆环路，半径 5.6（CBD 底板外缘 4.05 之外），路宽 1.0；
- * 沥青贴图（缺失 → 纯色）+ 每段中央白色虚线条；与 len>12 放射主干道交点
- * 外侧画停止线（确定性 ≤ 12 处）。
+ * 沥青贴图（缺失 → 纯色）+ 每段中央白色虚线条；与 len>MAIN_ROAD_MIN_LEN
+ * 放射主干道交点外侧画停止线（批次 20 §3.2：阈值从写死 12 改为派生常量）。
  *
  * 分层：RING_Y = 0.017（主干道 0.015 之上），交叉处不 z-fighting。
  *
@@ -14,6 +14,7 @@ import { useMemo } from 'react';
 import { streetTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/wealth';
 import { districtCenter, WEALTH_DISTRICTS } from '@/types/wealth';
 import { useSharedTexture, useSharedPBR, withPBR } from './textureCache';
+import { MAIN_ROAD_MIN_LEN } from './WealthCityMap';
 
 /** 环路半径（世界单位；CBD 8×8 底板半宽 4.05 + curb，环内缘 5.1 不压底板）。 */
 const RING_RADIUS = 5.6;
@@ -60,12 +61,13 @@ export function RingRoad({ fallbackColor = '#232b38' }: Props) {
     });
   }, []);
 
-  // 放射主干道（len > 12）与环的交点角（确定性；交点停止线）
+  // 放射主干道（len > MAIN_ROAD_MIN_LEN，批次 20 §3.2 派生化）与环的交点角
+  // （确定性；交点停止线）
   const junctionAngles = useMemo(() => {
     return WEALTH_DISTRICTS
       .filter((d) => d.id !== 'finance')
       .map((d) => districtCenter(d.id))
-      .filter((c) => Math.sqrt(c.x * c.x + c.z * c.z) > 12)
+      .filter((c) => Math.sqrt(c.x * c.x + c.z * c.z) > MAIN_ROAD_MIN_LEN)
       .map((c) => Math.atan2(c.z, c.x));
   }, []);
 

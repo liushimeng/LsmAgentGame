@@ -1,8 +1,9 @@
 /**
  * WealthMinimap — 左上角 Canvas2D 小地图（**不开第二个 r3f Canvas**，性能考虑）。
  *
- * 绘制：80×80 世界 → 132px（v2.12 阶段 2：地图 40×40 → 80×80）；
- *   - 16 城区色块（透明度 0.35）+ 区名首字；
+ * 绘制：120×120 世界 → 132px（v2.12：40→80；批次 20：80→120，32 城区）；
+ *   - 32 城区色块（透明度 0.35）；SCALE ≥1.4 px/单位时叠加区名首字，
+ *     批次 20 后 SCALE=132/120=1.1 <1.4 → 只画色块，悬停以 canvas title 显示区名；
  *   - agent 点（职业色 4px 圆，与主地图 districtSeatOffset 同一落位公式）；
  *   - 相机视野框（主 Canvas viewRef 回传 target/distance 推算白框）；
  *   - rAF 与主 Canvas 同频重绘。
@@ -11,7 +12,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { districtSeatOffset } from './AgentToken';
-import { WORLD_SIZE, type WealthCameraView } from './WealthCityMap';
+import { WORLD_SIZE, GROUND_TILE, type WealthCameraView } from './WealthCityMap';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import {
@@ -23,10 +24,12 @@ import {
 } from '@/types/wealth';
 
 const SIZE = 132;                      // CSS 像素（触控目标 ≥44px 满足）
-const WORLD = WORLD_SIZE;              // 世界 80×80（与主场景同源常量）
-const SCALE = SIZE / WORLD;            // 1.65 px / 世界单位
-/** 城区底板边长（世界单位；与 DistrictBlock 8×8 底板一致）。 */
-const DISTRICT_SIZE = 8;
+const WORLD = WORLD_SIZE;              // 世界 120×120（与主场景同源常量；批次 20）
+const SCALE = SIZE / WORLD;            // 批次 20 后 = 132/120 ≈ 1.1 px / 世界单位
+/** 区名首字渲染门槛（px/世界单位）：低于此值色块过密，只画色块 + canvas title 悬停。 */
+const SHOW_LABEL = SCALE >= 1.4;
+/** 城区底板边长（世界单位）——与 DistrictBlock / 主场景地面 GROUND_TILE 同源。 */
+const DISTRICT_SIZE = GROUND_TILE;
 /** 城区命中半径（点击容差）。 */
 const DISTRICT_HIT_RADIUS = DISTRICT_SIZE / 2;
 
@@ -98,12 +101,15 @@ export function WealthMinimap({ gameState, viewRef, selectedDistrict, onSelectDi
         ctx.strokeStyle = d.id === selectedRef.current ? '#d4a017' : '#4b5563';
         ctx.lineWidth = d.id === selectedRef.current ? 2 : 1;
         ctx.strokeRect(px, py, size, size);
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = '#e5e7eb';
-        ctx.font = 'bold 11px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(d.nameZh.charAt(0), px + size / 2, py + size / 2);
+        // 批次 20：32 区后 SCALE≈1.1 <1.4 → 隐藏区名首字（只画色块，悬停看 title）。
+        if (SHOW_LABEL) {
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = '#e5e7eb';
+          ctx.font = 'bold 11px system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(d.nameZh.charAt(0), px + size / 2, py + size / 2);
+        }
       }
 
       // agent 点（职业色 4px 圆；同区多 token 环形落位与主地图一致）。
@@ -149,19 +155,31 @@ export function WealthMinimap({ gameState, viewRef, selectedDistrict, onSelectDi
     return () => cancelAnimationFrame(raf);
   }, [viewRef]);
 
-  // 点击 → 命中城区 → 联动主地图聚焦 + 选中态。
-  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // 命中测试：canvas 像素 → 世界坐标 → 城区底板（批次 20：32 区）。
+  const districtAt = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
     const wx = px / SCALE - WORLD / 2;
     const wz = py / SCALE - WORLD / 2;
-    const hit = WEALTH_DISTRICTS.find(
+    return WEALTH_DISTRICTS.find(
       (d) =>
         Math.abs(wx - d.x) <= DISTRICT_HIT_RADIUS &&
         Math.abs(wz - d.z) <= DISTRICT_HIT_RADIUS,
     );
+  };
+
+  // 点击 → 命中城区 → 联动主地图聚焦 + 选中态。
+  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const hit = districtAt(e);
     if (hit) onSelectDistrict(hit.id);
+  };
+
+  // 悬停：SHOW_LABEL 关闭时（32 区 SCALE<1.4）以 canvas title 显示区名。
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (SHOW_LABEL) return;
+    const hit = districtAt(e);
+    e.currentTarget.title = hit ? hit.nameZh : '';
   };
 
   // 16 · 阶段 V：折叠态渲染 pill 按钮（占位同位，点击展开）
@@ -187,6 +205,7 @@ export function WealthMinimap({ gameState, viewRef, selectedDistrict, onSelectDi
         width={SIZE}
         height={SIZE}
         onClick={handleClick}
+        onMouseMove={handleMouseMove}
         aria-label={t('wealth.minimap.aria' as TKey)}
       />
       <button

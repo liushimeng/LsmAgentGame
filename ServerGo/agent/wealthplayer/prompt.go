@@ -154,6 +154,10 @@ func UserPrompt(ctx *wealthtypes.GameContext, memText string) string {
 	b.WriteString("■ 市场行情\n")
 	fmt.Fprintf(&b, "股票指数 %.2f 元/份;黄金 %d 元/克;新购债券年化 %.1f%%。\n",
 		ctx.Market.StockIndex, int64(ctx.Market.GoldPrice), ctx.Market.BondRate*100)
+	// 批次20 文档3 B4:股票微观结构现价行(双边价/T+1/熔断;无信息不注入)。
+	if ctx.MicroPriceBrief != "" {
+		b.WriteString(ctx.MicroPriceBrief + "\n")
+	}
 	b.WriteString("各区房价指数:")
 	districts := make([]string, 0, len(ctx.Market.HouseIdx))
 	for d := range ctx.Market.HouseIdx {
@@ -164,6 +168,13 @@ func UserPrompt(ctx *wealthtypes.GameContext, memText string) string {
 		fmt.Fprintf(&b, " %s %.2f", d, ctx.Market.HouseIdx[d])
 	}
 	b.WriteString("\n\n")
+
+	// 批次20 文档2 §4.3:副业定价市场小节(≤350B;无副业不注入)。
+	if ctx.SideMarketBrief != "" {
+		b.WriteString("■ 副业定价市场(可用 set_side_price 改档,每月限 1 次)\n")
+		b.WriteString(ctx.SideMarketBrief)
+		b.WriteString("\n\n")
+	}
 
 	// P1(§财商流P1-2 §7.3): 经济环境段(EconomyBrief 已含 CPI 同比/环比、
 	// 失业率、涨幅前二商品)+ 本人消费档位 + 待答调研(无 open 调研时省略)。
@@ -261,6 +272,12 @@ func UserPrompt(ctx *wealthtypes.GameContext, memText string) string {
 				p.Seat, p.Nickname, p.ProfessionTitle, p.NetWorth, p.FIIndex)
 		}
 		b.WriteString("\n")
+	}
+	// 批次20 文档3 A5:市长选举小节(未启用不注入;无新工具,投票是统计模型)。
+	if ctx.ElectionBrief != "" {
+		b.WriteString("■ 市政选举\n")
+		b.WriteString(ctx.ElectionBrief)
+		b.WriteString("\n\n")
 	}
 	if memText != "" {
 		b.WriteString("■ 我的记忆\n")

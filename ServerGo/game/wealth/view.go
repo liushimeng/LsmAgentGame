@@ -66,6 +66,9 @@ type ClientGameState struct {
 	// 2026-09-21 §虚拟城市(契约 04 §1.3):城市背景层快照(resident_count>0
 	// 时非 nil;旧房/未建城 omit)。无座位隐私,观战/玩家全量可见。
 	City *city.Snapshot `json:"city,omitempty"`
+	// SideMarket 副业定价市场(批次20 文档2 §3):kind → 经营者列表
+	// (seat 升序;仅含有经营者的品类,≤12×4 条)。无经营者 → omit。
+	SideMarket map[string][]SideMarketRowJSON `json:"side_market,omitempty"`
 }
 
 // ConsumerMarketJSON 是 consumer_market 子结构(P1 §6.1)。
@@ -270,6 +273,12 @@ type PublicServicesJSON struct {
 	ElectionEnabled bool           `json:"election_enabled"`
 	MayorSeat       int            `json:"mayor_seat"`
 	LastVotes       []ElectionVote `json:"last_votes,omitempty"`
+	// NextElectionMonth 下届选举月 = LastElectionMonth+Interval(批次20
+	// 文档3 A3;未启用 → 0 + omitempty 不下发)。
+	NextElectionMonth int `json:"next_election_month,omitempty"`
+	// StipendStopped 上月市长津贴是否断发(批次20 文档3 A3;false 时
+	// omitempty 不下发 —— FE-2 当选横幅徽标用,替代 event 文本探测)。
+	StipendStopped bool `json:"stipend_stopped,omitempty"`
 }
 
 // buildPublicServicesJSON 公共服务+监管+选举快照(阶段8;nil 守卫)。
@@ -302,6 +311,11 @@ func buildPublicServicesJSON(world *World) *PublicServicesJSON {
 		ps.ElectionEnabled = world.Election.Enabled
 		ps.MayorSeat = world.Election.MayorSeat
 		ps.LastVotes = world.Election.LastVotes
+		// 批次20 文档3 A3:下届选举月(未启用返回 0 → omitempty 不下发)。
+		ps.NextElectionMonth = world.Election.NextElectionMonth()
+		// 批次20 文档3 A3:津贴停发徽标(断发转换沿期间 true;false →
+		// omitempty 不下发,前端缺省视为未停发)。
+		ps.StipendStopped = world.Election.StipendStopped
 	}
 	return ps
 }
@@ -505,6 +519,12 @@ type MarketJSON struct {
 	GoldPrice  float64              `json:"gold_price"`
 	BondYield  float64              `json:"bond_yield"`
 	Districts  []MarketDistrictJSON `json:"districts"`
+	// 批次20 文档3 B4:股票微观结构(双边价/价差基点/熔断禁止月;
+	// breaker_until=0 表示未触发。成交以 actions.go 引擎路径为权威)。
+	StockBuyUnit  float64 `json:"stock_buy_unit"`
+	StockSellUnit float64 `json:"stock_sell_unit"`
+	SpreadBps     int     `json:"spread_bps"`
+	BreakerUntil  int     `json:"breaker_until"`
 }
 
 // MarketDistrictJSON 是 districts 单项(idx_d / rent_index)。
@@ -591,6 +611,8 @@ type MyJSON struct {
 	Salary         int64         `json:"salary"`
 	SpouseIncome   int64         `json:"spouse_income"`
 	SideIncome     int64         `json:"side_income"`
+	// SideBusiness 副业侧栏(批次20 文档2 §3;无副业 = nil/omit)。
+	SideBusiness *MySideBusinessJSON `json:"side_business,omitempty"`
 	PassiveIncome  int64         `json:"passive_income"`
 	Monthly        MyMonthlyJSON `json:"monthly"`
 	Resources      ResourceJSON  `json:"resources"`
@@ -609,6 +631,31 @@ type MyJSON struct {
 	// LocalPos 区内归一化坐标(2026-09-22 §CityHuman重构 my_local_pos;
 	// 仅本人可见;观战者经 bot_contexts[].local_pos 获取 bot 座位)。
 	LocalPos []float64 `json:"local_pos,omitempty"`
+	// StockT1Locked 当月买入 T+1 冻结份数(批次20 文档3 B2-3;FE-2「冻结 n」
+	// 角标数据源;0 = omit)。
+	StockT1Locked int64 `json:"stock_t1_locked,omitempty"`
+}
+
+// MySideBusinessJSON 是 my.side_business 子结构(批次20 文档2 §3:定价档 +
+// 客群份额;market_share 0..1,独占 = 1.0)。
+type MySideBusinessJSON struct {
+	Kind        string  `json:"kind"`
+	KindCN      string  `json:"kind_cn"`
+	BaseIncome  int64   `json:"base_income"`
+	OpenedMonth int     `json:"opened_month"`
+	PriceTier   int     `json:"price_tier"`     // 0=中价 1=低价 2=高价
+	PriceTierCN string  `json:"price_tier_cn"`  // 中价/低价/高价
+	MarketShare float64 `json:"market_share"`   // 当前客群份额 0..1
+	// TierSetMonth 最近改档月(0=未改过;FE-2 同月改档禁用与服务端权威对齐,
+	// tier_set_month == 当前 month 即禁)。
+	TierSetMonth int `json:"tier_set_month"`
+}
+
+// SideMarketRowJSON 是 side_market 单项(批次20 文档2 §3:seat 升序)。
+type SideMarketRowJSON struct {
+	Seat  int     `json:"seat"`
+	Tier  int     `json:"tier"`  // 0=中价 1=低价 2=高价
+	Share float64 `json:"share"` // 客群份额 0..1
 }
 
 // MyMonthlyJSON 是 my.monthly 子结构。
@@ -743,6 +790,11 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		StockIndex: world.Market.StockIndex,
 		GoldPrice:  world.Market.GoldPrice,
 		BondYield:  p.BondRate,
+		// 批次20 文档3 B4:股票微观结构快照。
+		StockBuyUnit:  world.Market.StockBuyUnit(),
+		StockSellUnit: world.Market.StockSellUnit(),
+		SpreadBps:     int(world.Market.StockSpread()*10000 + 0.5),
+		BreakerUntil:  world.Market.BreakerUntilMonth,
 	}
 	for _, d := range DistrictDefs {
 		idx := world.Market.DistrictIdx[d.ID]
@@ -861,11 +913,29 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		cs.Players[s] = pj
 	}
 
+	// SideMarket 副业定价市场(批次20 文档2 §3:仅含有经营者品类;每品类
+	// seat 升序,view_test 钉排序稳定)。shares 为纯函数快照,零副作用。
+	sideShares := sideMarketShares(world)
+	if len(sideShares) > 0 {
+		cs.SideMarket = make(map[string][]SideMarketRowJSON, len(sideShares))
+		for kind := range sideShares {
+			seats := sideOperatorSeats(sideShares, kind)
+			rows := make([]SideMarketRowJSON, 0, len(seats))
+			for _, s := range seats {
+				op := world.Players[s]
+				rows = append(rows, SideMarketRowJSON{
+					Seat: s, Tier: op.SideBusiness.PriceTier, Share: sideShares[kind][s],
+				})
+			}
+			cs.SideMarket[kind] = rows
+		}
+	}
+
 	// 观战者:my=null, my_seat=-1。
 	isSpectator := viewer < 0 || viewer >= MaxSeats
 	if !isSpectator && viewer >= 0 && viewer < MaxSeats {
 		cs.MySeat = viewer
-		cs.My = myJSONFor(world.Players[viewer])
+		cs.My = myJSONFor(world.Players[viewer], sideShares)
 		// P1-4(§财商流P1-4 §8.2):insurance_enabled=false 时整体 omit。
 		if world.InsuranceEnabled && cs.My != nil {
 			cs.My.Insurance = world.buildInsuranceJSON(world.Players[viewer])
@@ -1081,8 +1151,9 @@ func seatModelDisplay(isBot bool, modelKey string) string {
 	return ModelDisplayName(modelKey)
 }
 
-// myJSONFor 单座位 my.* 镜像。
-func myJSONFor(p *Player) *MyJSON {
+// myJSONFor 单座位 my.* 镜像。sideShares = 副业客群份额快照
+// (kind→seat→s_i,批次20 文档2;BuildClientState 顶层 side_market 同源)。
+func myJSONFor(p *Player, sideShares map[string]map[int]float64) *MyJSON {
 	if p == nil {
 		return nil
 	}
@@ -1095,6 +1166,8 @@ func myJSONFor(p *Player) *MyJSON {
 		NetWorth:  p.NetWorth(globalMarketSnap(p)),
 		// P1: 上月消费结构(nil→{};§6.2)。
 		ConsumptionByGoods: consumptionByGoodsView(p),
+		// 批次20 文档3 B2-3:T+1 冻结份数(FE-2 角标数据源)。
+		StockT1Locked: p.StockT1Locked,
 		// 2026-09-14 §财商流P0-bugfix: 数组一律非 nil(空集合序列化为 [],
 		// 防止前端 null.map 崩溃)。
 		Goals:  append([]string{}, p.Card.Goals...),
@@ -1103,6 +1176,26 @@ func myJSONFor(p *Player) *MyJSON {
 		// §CityHuman重构:区内坐标(walk/run 区内移动更新)。
 		LocalPos: []float64{p.LocalPos[0], p.LocalPos[1]},
 	}
+	// 批次20 文档2 §3:副业侧栏(定价档 + 当前客群份额;独占 = 1.0)。
+	if p.SideBusiness != nil {
+		share := 1.0
+		if kindShares, ok := sideShares[p.SideBusiness.Kind]; ok {
+			if s, ok2 := kindShares[p.Seat]; ok2 && s > 0 {
+				share = s
+			}
+		}
+		my.SideBusiness = &MySideBusinessJSON{
+			Kind:         p.SideBusiness.Kind,
+			KindCN:       sideBizCN(p.SideBusiness.Kind),
+			BaseIncome:   p.SideBusiness.BaseIncome,
+			OpenedMonth:  p.SideBusiness.OpenedMonth,
+			PriceTier:    p.SideBusiness.PriceTier,
+			PriceTierCN:  sideTierCN(p.SideBusiness.PriceTier),
+			MarketShare:  share,
+			TierSetMonth: p.SideBusiness.TierSetMonth,
+		}
+	}
+	my.StockT1Locked = p.StockT1Locked
 	for i := range p.Assets {
 		my.Assets = append(my.Assets, MyAssetJSON{
 			Kind:           p.Assets[i].Kind,
@@ -1150,6 +1243,10 @@ type MyMy struct {
 	ConsumptionByGoods map[string]float64
 	// LocalPos 区内归一化坐标(§CityHuman重构)。
 	LocalPos []float64
+	// SideBusiness 副业侧栏(批次20 文档2;nil = 无副业)。
+	SideBusiness *MySideBusinessJSON
+	// StockT1Locked 当月买入冻结份数(批次20 文档3 B2-3)。
+	StockT1Locked int64
 }
 
 // jsonMy 把 MyMy 转成 *MyJSON(避免在 MyMy 上重复 JSON 标签)。
@@ -1167,6 +1264,8 @@ func jsonMy(m *MyMy) *MyJSON {
 		FIIndex: m.FIIndex, NetWorth: m.NetWorth, Goals: m.Goals,
 		ConsumptionByGoods: m.ConsumptionByGoods,
 		LocalPos:           m.LocalPos,
+		SideBusiness:       m.SideBusiness,
+		StockT1Locked:      m.StockT1Locked,
 	}
 }
 

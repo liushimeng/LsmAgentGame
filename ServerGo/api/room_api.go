@@ -54,6 +54,10 @@ type createRoomRequest struct {
 	// 缺省 / true = 全 Agent 模式;false = 允许人类加入(不推荐)。
 	// 当 agent_seats >= MinSeats(10) 时自动置位,无需前端显式传递。
 	FullAgent *bool `json:"full_agent,omitempty"`
+	// CivicElectionEnabled 2026-09-24 §批次20(文档3 A2)— 市长选举启用开关
+	// (仅 wealth 生效,其他 kind 静默忽略;缺省/false = 关闭,R8-2 默认关闭
+	// 语义)。与 resident_count 同段并入 wealth 子对象透传。
+	CivicElectionEnabled bool `json:"civic_election_enabled,omitempty"`
 }
 
 // RoomAPI serves the room management endpoints.
@@ -137,21 +141,13 @@ func (a *RoomAPI) Create(c *gin.Context) {
 	if req.BigBlind != 0 || req.StartStack != 0 {
 		texasCfg = &service.TexasTableConfig{BigBlind: req.BigBlind, StartStack: req.StartStack}
 	}
-	// 2026-09-21 §虚拟城市(契约 04 §1.1):顶层 resident_count 并入 wealth
-	// 房间配置(仅 wealth 生效;负数 400 —— 显式拒绝而非静默取绝对值)。
-	wealthCfg := req.Wealth
-	if kind == "wealth" && req.ResidentCount != 0 {
-		if req.ResidentCount < 0 {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"code":    errcode.ErrValidationFailed,
-				"message": "resident_count must be >= 0",
-			})
-			return
-		}
-		if wealthCfg == nil {
-			wealthCfg = &service.WealthRoomOptions{}
-		}
-		wealthCfg.ResidentCount = req.ResidentCount
+	wealthCfg, bad := mergeWealthBodyFields(req, kind, req.Wealth)
+	if bad != "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    errcode.ErrValidationFailed,
+			"message": bad,
+		})
+		return
 	}
 	detail, e := a.svc.CreateRoomWithAgents(c.Request.Context(), kind, userID, req.Name, req.AgentSeats, req.Judge, req.AgentDifficulty, req.Commentary, req.CreatorRole, texasCfg, req.RevealRoleOnDeath, wealthCfg)
 	if e != nil {
@@ -172,6 +168,35 @@ func (a *RoomAPI) Create(c *gin.Context) {
 		"data":       detail,
 		"full_agent": fullAgent,
 	})
+}
+
+// mergeWealthBodyFields 把顶层 wealth 参数并入 wealth 子对象(仅 kind=="wealth"
+// 生效;其他 kind 静默忽略,与 reveal_role_on_death 同策略):
+//   - resident_count(2026-09-21 契约 04 §1.1;负数返回 400 原因);
+//   - civic_election_enabled(2026-09-24 批次20 文档3 A2;缺省 false 不构造
+//     配置对象 —— 与 resident_count 不同,false 无需任何动作)。
+//
+// 纯函数便于单测钉死绑定与并入语义(负数 → 非空 err → handler 400)。
+func mergeWealthBodyFields(req createRoomRequest, kind string, cfg *service.WealthRoomOptions) (*service.WealthRoomOptions, string) {
+	if kind != "wealth" {
+		return cfg, ""
+	}
+	if req.ResidentCount != 0 {
+		if req.ResidentCount < 0 {
+			return cfg, "resident_count must be >= 0"
+		}
+		if cfg == nil {
+			cfg = &service.WealthRoomOptions{}
+		}
+		cfg.ResidentCount = req.ResidentCount
+	}
+	if req.CivicElectionEnabled {
+		if cfg == nil {
+			cfg = &service.WealthRoomOptions{}
+		}
+		cfg.CivicElectionEnabled = true
+	}
+	return cfg, ""
 }
 
 // Join POST /api/rooms/:id/join — join an existing room.

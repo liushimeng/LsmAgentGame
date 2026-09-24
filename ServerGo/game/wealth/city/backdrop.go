@@ -289,14 +289,17 @@ type DistrictPop struct {
 	Population int    `json:"population"`
 }
 
-// districtNames 16 城区展示名(顺序与 profession.DistrictIDs /
+// districtNames 32 城区展示名(顺序与 profession.DistrictIDs /
 // game/wealth.DistrictDefs 对齐:finance/tech/industry/oldtown/commerce/
-// residential/suburb/riverside + 8 新区;city 不 import wealth,此处独立维护,
-// 与 loader 的 districtIDs 同款同步策略)。
-// 2026-09-21 §城市扩张v2.12 阶段2:8 → 16(前 8 P0 区顺序冻结,追加 8 新区)。
+// residential/suburb/riverside + v2.12 8 区 + 批次20 16 新区;city 不 import
+// wealth,此处独立维护,与 loader 的 districtIDs 同款同步策略)。
+// 2026-09-21 §城市扩张v2.12 阶段2:8 → 16(前 8 P0 区顺序冻结,追加 8 新区);
+// 2026-09-24 批次20:16 → 32(前 16 区顺序冻结,按契约 §2 表序追加 16 新区)。
 var districtNames = [districtCount]string{
 	"金融CBD", "科技园", "工业区", "老城区", "商业中心", "居住区", "郊区", "滨河新区",
 	"物流港", "高新园区", "教育园区", "医疗城", "产业基地", "中央公园", "交通枢纽", "文创区",
+	"金融副中心", "软件园", "空港小镇", "航空物流园", "汽车城", "山居民宿区", "化工园区", "现代农业园",
+	"康养小镇", "特钢镇", "古城文化区", "大学城", "湿地公园", "体育新城", "湾区新城", "高铁新城",
 }
 
 // Snapshot 城市聚合快照(契约 03 §4.4;随 game.state.city 下发,无座位隐私,

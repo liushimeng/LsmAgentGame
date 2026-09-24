@@ -17,7 +17,7 @@ import * as THREE from 'three';
 import { Html } from '@react-three/drei';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
-import { districtTexture, groundTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/wealth';
+import { districtTexture, districtTextureStem, groundTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/wealth';
 import { BuildingMesh, type BuildingSpec } from './BuildingMesh';
 import { DISTRICT_FLOORS, buildingHeight, u } from './cityScale';
 import { useSharedPBR, useSharedTexture, withPBR } from './textureCache';
@@ -92,10 +92,13 @@ export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect
   // 14-3D渲染深化：共享贴图缓存（失败静默降级主色底板 —— 降级策略 §9）。
   const texture = useSharedTexture(texUrl);
   // 18-X：底板 PBR（02 §2.3 行 4：districts/<id>，normalScale [0.5,0.5]）。
+  // 批次 20 §3.5：16 新区贴图 stem 先查别名（districtTexture 内部同源已解析，
+  // PBR 名需显式走 districtTextureStem）。
+  const stem = districtTextureStem(def.id);
   const boardPbr = useSharedPBR(
     texUrl,
-    pbrNormalUrl('districts', def.id),
-    pbrRoughUrl('districts', def.id),
+    pbrNormalUrl('districts', stem),
+    pbrRoughUrl('districts', stem),
     { normalScale: [0.5, 0.5] },
   );
   // 地表覆盖层：中央公园草地 / 交通枢纽+金融广场（缺失降级纯色）

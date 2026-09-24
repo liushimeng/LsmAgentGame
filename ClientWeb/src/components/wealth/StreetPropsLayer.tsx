@@ -19,15 +19,19 @@
  * 阶段 P 远景层：
  *   - FarBuildingSilhouette 由 AtmosphereLayer 注入，本层不再处理
  *
- * 总 mesh 预算核算：
- *   - 楼栋 ~80×3 = 240（DistrictBlock 持有）
- *   - 行人 56×6 = 336（V3 躯干+头+四肢，18 · 阶段 Z）
- *   - 树 64×4 = 256（V2 干+3 层冠）
- *   - 家具 60-80
- *   - 道路 + 灯 ~120
- *   - 总 ~900 mesh，< 2500 护栏
+ * 总 mesh 预算核算（批次 20 InstancedMesh 改造后结构实测口径）：
+ *   - 楼栋 ~240（DistrictBlock 持有，不变）
+ *   - 行人 上限 110（V3 逐体动画 mixer，不实例化）→ ≤660 mesh
+ *   - 树：行道树 + 区内树合并 <TreesInstanced>（主干/分枝/冠三段 InstancedMesh，
+ *     ~490 棵 1 draw call/段 = 3 draw call，改造前 ~2.4k mesh）
+ *   - 路灯：全道路汇总 <StreetLightsInstanced>（底座/主杆/灯头三段，
+ *     ~370 盏 = 3 draw call，改造前每盏 3-4 mesh 且挂在旋转组内点位错算）
+ *   - 家具/标识 60-80 + 车辆 ~50（GLB clone，不实例化）
+ *   - draw call 目标 ≤1500 / mesh ≤3500；?debug=1 时 window.__cityRenderInfo
+ *     可查 renderer.info 实时值（WealthCityMap onCreated 挂载，实测记入批次 20 实施记录）
  *
- * 契约：lag_docs/虚拟城市/已实现/15-3D城市渲染深化/02-架构设计 §1。
+ * 契约：lag_docs/虚拟城市/已实现/15-3D城市渲染深化/02-架构设计 §1
+ * + 批次 20 文档 1 §2.3 / §3.2 / §3.3。
  */
 
 import { useMemo } from 'react';
@@ -36,7 +40,8 @@ import {
   type WealthDistrictDef,
 } from '@/types/wealth';
 import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
-import { TreeV3 } from './props/TreeV3'; // 18-AA：TreeV2 → TreeV3（V2 文件保留不删）
+import { MAIN_ROAD_MIN_LEN } from './WealthCityMap';
+import { TreesInstanced } from './props/TreesInstanced'; // 批次 20 §3.3：TreeV3 逐实例 → 全局 InstancedMesh（形态同源）
 import { Vehicle } from './props/Vehicle';
 import { PedestrianV3, type PedestrianV3Props } from './props/PedestrianV3';
 import { Sign } from './props/Sign';
@@ -160,12 +165,24 @@ const ROOFTOP_VARIANTS: Array<'ac' | 'tank' | 'antenna'> = ['ac', 'tank', 'anten
 const VEHICLE_VARIANTS: Array<'sedan' | 'truck' | 'bus' | 'taxi'> = ['sedan', 'truck', 'bus', 'taxi'];
 
 /**
+ * 全城行人总量上限。批次 20（文档 1 §2.3）：56 → **110**（实例化只覆盖树/灯，
+ * 行人仍逐体 V3 mixer，上限受动画帧耗时约束）。前 16 区合计 56 + 新 16 区 47
+ * （§2.3 PEDESTRIAN_DENSITY 列合计，契约文中「新 51」与其表列差 4，按表列为准）
+ * = 103 < 110，截断守卫不触发但保留（超出时按表序裁尾部新区）。
+ */
+export const PEDESTRIAN_TOTAL_CAP = 110;
+/** 全城树（行道 + 区内）实例总量上限（超出按 hash 种子稳定截断，§3.3）。 */
+export const TREE_TOTAL_CAP = 550;
+
+/**
  * 城区行人密度档位（按城区属性分档：核心 5-6 / 一般 3-4 / 郊区 2）。
  *
  * 18 · 阶段 Z：全城行人硬上限 56（01 §3.3）。密度表原值合计 59 > 56，
  * 按「核心区优先、郊区先减」裁 3 人：industry / industrial_park / logistics_port
  * 各 2→1（-3 → 56）；核心区（finance/commerce/tech/hightech_park）与中央公园保满编。
  * 合计核对：核心 21 + 一般 16 + 医疗居住滨河 9 + 郊区工业 5 + 公园 5 = 56。
+ *
+ * 批次 20（文档 1 §2.3）：追加 16 新区档位（列值逐字），总上限重定 110。
  */
 const PEDESTRIAN_DENSITY: Record<string, number> = {
   // 核心商务区（高密度）
@@ -177,6 +194,11 @@ const PEDESTRIAN_DENSITY: Record<string, number> = {
   suburb: 2, industry: 1, industrial_park: 1, logistics_port: 1,
   // 公园
   central_park: 5, // 含 2 静止
+  // ── 批次 20 新增 16 区（= 文档 1 §2.3 PEDESTRIAN_DENSITY 列）──
+  fin_sub_center: 4, software_park: 4, airport_town: 4, air_logistics: 1,
+  auto_city: 2, mountain_resort: 2, chem_park: 1, agri_park: 2,
+  health_town: 3, steel_town: 1, old_city_culture: 4, university_town: 5,
+  wetland_park: 3, sports_new_city: 4, bay_new_town: 3, highspeed_rail_town: 4,
 };
 
 /** 城区 outfit 倾向（0 商务蓝 / 1 休闲灰 / 2 亮色红 / 3 卡其，对应 PEDESTRIAN_OUTFITS）。 */
@@ -197,10 +219,18 @@ const OUTFIT_AFFINITY: Record<string, Array<NonNullable<PedestrianV3Props['outfi
   industrial_park: [3, 2],
   logistics_port: [3, 2],
   central_park: [1, 2],
+  // ── 批次 20 新增 16 区（= 文档 1 §2.3 OUTFIT_AFFINITY 列）──
+  fin_sub_center: [0, 1], software_park: [1, 0], airport_town: [2, 1], air_logistics: [3, 2],
+  auto_city: [3, 2], mountain_resort: [3], chem_park: [3, 2], agri_park: [3, 1],
+  health_town: [1, 3], steel_town: [3, 2], old_city_culture: [3, 1], university_town: [1, 2],
+  wetland_park: [1, 2], sports_new_city: [2, 1], bay_new_town: [0, 1], highspeed_rail_town: [2, 1],
 };
 
-/** 报刊亭布点列表（按城区属性）。 */
-const KIOSK_DISTRICTS = new Set(['finance', 'commerce', 'oldtown', 'transport_hub', 'cultural_creative']);
+/** 报刊亭布点列表（按城区属性；批次 20 §2.3 白名单就近补 fin_sub/bay/sports/高铁新城/大学城）。 */
+const KIOSK_DISTRICTS = new Set([
+  'finance', 'commerce', 'oldtown', 'transport_hub', 'cultural_creative',
+  'fin_sub_center', 'bay_new_town', 'sports_new_city', 'highspeed_rail_town', 'university_town',
+]);
 /** 自行车布点列表。 */
 const BICYCLE_DISTRICTS = new Set(['residential', 'edu_district', 'commerce', 'transport_hub', 'riverside']);
 /** 电话亭布点列表。 */
@@ -403,7 +433,7 @@ function vehiclesForRoads(districts: WealthDistrictDef[]): RoadVehicle[] {
       const dx = -c.x;
       const dz = -c.z;
       const len = Math.sqrt(dx * dx + dz * dz);
-      if (len < 12) return;
+      if (len < MAIN_ROAD_MIN_LEN) return;
       const variant = VEHICLE_VARIANTS[i % VEHICLE_VARIANTS.length];
       const speedMap = { sedan: 0.07, truck: 0.04, bus: 0.05, taxi: 0.08 };
       // 右行偏移：bus/truck 更宽，偏移略大
@@ -456,7 +486,7 @@ function roadTreesForRoads(districts: WealthDistrictDef[]): RoadTree[] {
       const dx = -c.x;
       const dz = -c.z;
       const len = Math.sqrt(dx * dx + dz * dz);
-      if (len < 12) return; // 仅主干道
+      if (len < MAIN_ROAD_MIN_LEN) return; // 仅主干道
       const count = Math.max(2, Math.floor(len / 2.5));
       const nx = -dz / len;
       const nz = dx / len;
@@ -489,7 +519,7 @@ function trafficLightsForRoads(districts: WealthDistrictDef[]): Layout['trafficL
       const dx = -c.x;
       const dz = -c.z;
       const len = Math.sqrt(dx * dx + dz * dz);
-      if (len < 12) return;
+      if (len < MAIN_ROAD_MIN_LEN) return;
       const t = 0.12;
       const nx = -dz / len;
       const nz = dx / len;
@@ -513,7 +543,7 @@ function busStopsForRoads(districts: WealthDistrictDef[]): Layout['busStops'] {
       const dx = -c.x;
       const dz = -c.z;
       const len = Math.sqrt(dx * dx + dz * dz);
-      if (len < 12) return;
+      if (len < MAIN_ROAD_MIN_LEN) return;
       const t = 0.35;
       const nx = -dz / len;
       const nz = dx / len;
@@ -532,9 +562,28 @@ interface StreetPropsLayerProps {
   districts: WealthDistrictDef[];
 }
 
+/**
+ * 全城行人总上限守卫（批次 20：PEDESTRIAN_TOTAL_CAP=110）。
+ * 超出时按卡池表序裁尾部（新区先减，前 16 区满编）；确定性，无随机。
+ */
+function capPedestrians(districtProps: DistrictProps[]): void {
+  let total = 0;
+  for (const dp of districtProps) total += dp.pedestrians.length;
+  if (total <= PEDESTRIAN_TOTAL_CAP) return;
+  for (let i = districtProps.length - 1; i >= 0 && total > PEDESTRIAN_TOTAL_CAP; i--) {
+    const dp = districtProps[i];
+    const excess = Math.min(dp.pedestrians.length, total - PEDESTRIAN_TOTAL_CAP);
+    if (excess > 0) {
+      dp.pedestrians.splice(dp.pedestrians.length - excess, excess);
+      total -= excess;
+    }
+  }
+}
+
 export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
   const layout = useMemo<Layout>(() => {
     const districtProps = districts.map((d, idx) => propsForDistrict(d, idx));
+    capPedestrians(districtProps);
     const roadVehicles = vehiclesForRoads(districts);
     const roadTrees = roadTreesForRoads(districts);
     const trafficLights = trafficLightsForRoads(districts);
@@ -542,15 +591,20 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
     return { districtProps, roadVehicles, roadTrees, trafficLights, busStops };
   }, [districts]);
 
+  // 批次 20 §3.3：区内树 + 行道树合并单一 InstancedMesh 集合（3 draw call）。
+  const allTrees = useMemo(
+    () => [
+      ...layout.districtProps.flatMap((dp) => dp.trees.map((t) => ({ x: t.x, z: t.z, scale: t.scale }))),
+      ...layout.roadTrees.map((t) => ({ x: t.x, z: t.z, scale: t.scale })),
+    ],
+    [layout],
+  );
+
   return (
     <>
-      {/* 城区树 + 楼顶杂物 + 行人 + 家具 + 标识 */}
+      {/* 楼顶杂物 + 行人 + 家具 + 标识（树已抽出为全局 TreesInstanced） */}
       {layout.districtProps.map((dp) => (
         <group key={dp.districtId}>
-          {/* 阶段 L V2 立体树 */}
-          {dp.trees.map((t, i) => (
-            <TreeV3 key={`tree-${i}`} x={t.x} z={t.z} scale={t.scale} />
-          ))}
           {/* 楼顶杂物 */}
           {dp.rooftop.map((r, i) => (
             <RooftopAcc
@@ -606,10 +660,8 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
         </group>
       ))}
 
-      {/* 阶段 L 行道树（沿主干道布点） */}
-      {layout.roadTrees.map((t, i) => (
-        <TreeV3 key={`roadtree-${i}`} x={t.x} z={t.z} scale={t.scale} />
-      ))}
+      {/* 批次 20 §3.3：区内树 + 行道树 → 单一全局 InstancedMesh 集合（3 draw call） */}
+      <TreesInstanced trees={allTrees} totalCap={TREE_TOTAL_CAP} />
 
       {/* 主干道车辆（16 · 阶段 S：双向车道，右行偏移） */}
       {layout.roadVehicles.map((v, i) => (
@@ -637,6 +689,9 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
   );
 }
 
-// 注：V1 Pedestrian / PedestrianV2 / Tree 仍保留在 props/ 目录（契约要求保留，未来如需回退可 import）。
-// 新版 StreetPropsLayer 行人用 V3（PedestrianV3），树仍用 TreeV2（TreeV3 属 18-Z 后续接线）。
+// 注：V1 Pedestrian / PedestrianV2 / Tree / TreeV2 / TreeV3 / StreetLight 组件文件仍保留在
+// props/ 目录（契约要求保留，未来如需回退可 import）。
+// 行人：V3（PedestrianV3）逐体动画 mixer，批次 20 不实例化（总上限 110）。
+// 树：批次 20 §3.3 起改走 TreesInstanced（形态与 TreeV3Fallback 同源 treeSeed/treeShape）。
+// 路灯：批次 20 §3.3 起由 WealthCityMap 汇总点位走 StreetLightsInstanced。
 // V1 Pedestrian 仍由原 props/Pedestrian.tsx 导出，本层不再引用。

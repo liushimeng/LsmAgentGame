@@ -462,6 +462,10 @@ export interface CreateRoomOptions {
   // 2026-09-19 §全Agent模式 — 是否全 Agent 模式（虚拟城市恒 true，
   // 创建者一律为观察者；werewolf 不发送）。现状漏声明但实际在发，一并补齐。
   full_agent?: boolean;
+  // 2026-09-24 §批次20（文档3 A2）— wealth only。市长选举启用开关：
+  // 缺省/false = 关闭（引擎完全 no-op；本项与 InsuranceEnabled 等
+  // 「零值→true」家族不同，后端零值即 false，勿归一化）。
+  civic_election_enabled?: boolean;
 }
 
 /** One bot seat requested at room-creation time (werewolf only). */

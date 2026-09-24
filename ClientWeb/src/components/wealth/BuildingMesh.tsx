@@ -21,6 +21,7 @@
 import {
   districtFacadeUrl,
   districtRoofUrl,
+  districtTextureStem,
   pbrNormalUrl,
   pbrRoughUrl,
 } from '@/assets/images/wealth';
@@ -48,30 +49,32 @@ interface Props {
 }
 
 export function BuildingMesh({ spec, def, prosperity }: Props) {
-  // 14-3D渲染深化：共享贴图缓存（16 区 × 5 楼同源贴图只上传一次 GPU）
-  const facadeBaseTex = useSharedTexture(districtFacadeUrl(def.id, 'base'));
-  const facadeMidTex = useSharedTexture(districtFacadeUrl(def.id, 'mid'));
-  const roofTex = useSharedTexture(districtRoofUrl(def.id));
+  // 14-3D渲染深化：共享贴图缓存（区数 × 楼数同源贴图只上传一次 GPU）
+  // 批次 20 §3.5：先查贴图别名再取 def.id（16 新区复用旧 stem，零新增图片）。
+  const stem = districtTextureStem(def.id);
+  const facadeBaseTex = useSharedTexture(districtFacadeUrl(stem, 'base'));
+  const facadeMidTex = useSharedTexture(districtFacadeUrl(stem, 'mid'));
+  const roofTex = useSharedTexture(districtRoofUrl(stem));
 
   // 18-X PBR 三件套（02 §2.3 接线表 1/2/3 行）。
   // stem 拼接仅在此处发生（def.id 由父层注入，符合 02 §3.3「stem 拼接只允许在 BuildingMesh」）；
   // 法线/粗糙度 useSharedTexture 内部固定 srgb:false → NoColorSpace。
   const pbrBase = useSharedPBR(
-    districtFacadeUrl(def.id, 'base'),
-    pbrNormalUrl('facades', `${def.id}_base`),
-    pbrRoughUrl('facades', `${def.id}_base`),
+    districtFacadeUrl(stem, 'base'),
+    pbrNormalUrl('facades', `${stem}_base`),
+    pbrRoughUrl('facades', `${stem}_base`),
     { normalScale: [0.8, 0.8] },
   );
   const pbrMid = useSharedPBR(
-    districtFacadeUrl(def.id, 'mid'),
-    pbrNormalUrl('facades', `${def.id}_mid`),
-    pbrRoughUrl('facades', `${def.id}_mid`),
+    districtFacadeUrl(stem, 'mid'),
+    pbrNormalUrl('facades', `${stem}_mid`),
+    pbrRoughUrl('facades', `${stem}_mid`),
     { normalScale: [0.8, 0.8] },
   );
   const roofPbr = useSharedPBR(
-    districtRoofUrl(def.id),
-    pbrNormalUrl('roofs', def.id),
-    pbrRoughUrl('roofs', def.id),
+    districtRoofUrl(stem),
+    pbrNormalUrl('roofs', stem),
+    pbrRoughUrl('roofs', stem),
     { normalScale: [0.7, 0.7] },
   );
 

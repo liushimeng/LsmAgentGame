@@ -44,9 +44,41 @@ export function professionAvatar(id: string): string {
   return agentImgs[`./agents/${id.toLowerCase()}.png`] ?? '';
 }
 
+// ── 批次 20 §3.5：贴图别名机制（16 新区零新增贴图，复用旧 stem）──────
+import type { WealthDistrictId } from '@/types/wealth';
+
+/**
+ * 新区 → 旧贴图 stem 别名表（文档 1 §2.3 第 4 列逐字）。
+ * 解析规则：贴图/PBR stem 一律先查本表，未命中回落 def.id；
+ * 底板纹理 / 立面 / 屋顶 / PBR 法线粗糙度全部同源（districtTextureStem）。
+ */
+export const DISTRICT_TEXTURE_ALIAS: Partial<Record<WealthDistrictId, string>> = {
+  fin_sub_center: 'finance',
+  software_park: 'hightech_park',
+  airport_town: 'transport_hub',
+  air_logistics: 'logistics_port',
+  auto_city: 'industrial_park',
+  mountain_resort: 'suburb',
+  chem_park: 'industrial_park',
+  agri_park: 'suburb',
+  health_town: 'suburb',
+  steel_town: 'industrial_park',
+  old_city_culture: 'oldtown',
+  university_town: 'edu_district',
+  wetland_park: 'central_park',
+  sports_new_city: 'transport_hub',
+  bay_new_town: 'riverside',
+  highspeed_rail_town: 'transport_hub',
+};
+
+/** 贴图 stem 解析（先查别名再取原 id；前 16 区恒等）。 */
+export function districtTextureStem(id: string): string {
+  return DISTRICT_TEXTURE_ALIAS[id as WealthDistrictId] ?? id;
+}
+
 /** 城区底板纹理 URL（缺失 = ''，DistrictBlock 回落 DistrictDefs 主色）。 */
 export function districtTexture(id: string): string {
-  return districtImgs[`./districts/${id}.png`] ?? '';
+  return districtImgs[`./districts/${districtTextureStem(id)}.png`] ?? '';
 }
 
 /** CPI 八大类消费品图标 URL（缺失 = ''，组件回落类别主色/emoji）。 */
@@ -66,12 +98,12 @@ export type FacadeVariant = 'base' | 'mid';
  * @param variant    'base' = 楼栋底层 / 'mid' = 楼栋中上层（循环贴图避免接缝）
  */
 export function districtFacadeUrl(districtId: string, variant: FacadeVariant): string {
-  return facadeImgs[`./facades/${districtId}_${variant}.png`] ?? '';
+  return facadeImgs[`./facades/${districtTextureStem(districtId)}_${variant}.png`] ?? '';
 }
 
 /** 城区楼顶贴图 URL（缺失 = ''，BuildingMesh 退回到 DistrictDefs 主色）。 */
 export function districtRoofUrl(districtId: string): string {
-  return roofImgs[`./roofs/${districtId}.png`] ?? '';
+  return roofImgs[`./roofs/${districtTextureStem(districtId)}.png`] ?? '';
 }
 
 /** 街道铺装类型字面量（与 generate_wealth_city_assets.py::STREETS 对齐）。 */

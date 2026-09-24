@@ -30,6 +30,8 @@ export interface WealthCreateRequest {
   seed?: number;
   /** 2026-09-19 §全Agent模式: 是否全 Agent 模式(默认 true)。 */
   full_agent?: boolean;
+  /** 批次 20 文档 3 A2/A4：市长选举启用开关（缺省 false = 关闭，R8-2 语义）。 */
+  civic_election_enabled?: boolean;
 }
 
 interface Props {
@@ -75,6 +77,8 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
   const [residentCount, setResidentCount] = useState(RESIDENT_DEFAULT);
   const [monthMs, setMonthMs] = useState(8000);
   const [seed, setSeed] = useState('');
+  // 批次 20 文档 3 A4：市长选举启用（默认关，随 body.civic_election_enabled 提交）。
+  const [election, setElection] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [localSubmitting, setLocalSubmitting] = useState(false);
 
@@ -126,6 +130,8 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
         month_ms: monthMs,
         ...(seedNum > 0 ? { seed: seedNum } : {}),
         full_agent: true, // 2026-09-19 §全Agent模式: 虚拟城市默认全 Agent
+        // 批次 20 文档 3 A2：仅勾选时置 true（后端零值=false，勿做归一化）。
+        civic_election_enabled: election,
       });
       if (!ok) {
         // 父组件已 setErr + reportGlobalError；这里不重复上报，仅保留弹窗。
@@ -278,6 +284,19 @@ export const WealthCreateRoomModal: React.FC<Props> = ({
             placeholder="0"
             disabled={busy}
           />
+        </label>
+
+        {/* 批次 20 文档 3 A4：市长选举启用开关（默认关 = 引擎完全 no-op，旧行为零偏移） */}
+        {/* 复用既有 wealth-action-form__check 样式（globals wealth.css），不新增类 */}
+        <label className="wealth-action-form__check">
+          <input
+            type="checkbox"
+            checked={election}
+            onChange={(e) => setElection(e.target.checked)}
+            disabled={busy}
+            data-testid="wealth-create-election"
+          />
+          🗳 {t('wealth.election.switch' as TKey)}
         </label>
 
         {formError && <div className="wealth-action-form__error" role="alert">{formError}</div>}

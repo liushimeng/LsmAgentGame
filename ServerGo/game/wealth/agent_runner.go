@@ -120,15 +120,23 @@ func (a *AgentRunner) RepayLoan(seat int, loanID string, amountCNY int64) error 
 	})
 }
 
-func (a *AgentRunner) StartSideBusiness(seat int, kind string) error {
+// StartSideBusiness 批次20(文档2 §3)增 tier:0=中价(缺省旧行为)/1=低价/2=高价。
+func (a *AgentRunner) StartSideBusiness(seat int, kind string, tier int) error {
 	return a.apply(seat, wealthplayer.ToolStartSide, "", func() (string, error) {
-		return a.room.World.ApplyAction(seat, Action{Type: ActStartSide, Kind: kind})
+		return a.room.World.ApplyAction(seat, Action{Type: ActStartSide, Kind: kind, Tier: tier})
 	})
 }
 
 func (a *AgentRunner) StopSideBusiness(seat int) error {
 	return a.apply(seat, wealthplayer.ToolStopSide, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActStopSide})
+	})
+}
+
+// SetSidePrice 副业改价(批次20 文档2 §3;走 ApplyAction 与人类同一路径)。
+func (a *AgentRunner) SetSidePrice(seat int, tier int) error {
+	return a.apply(seat, wealthplayer.ToolSetSidePrice, "", func() (string, error) {
+		return a.room.World.ApplyAction(seat, Action{Type: ActSetSidePrice, Tier: tier})
 	})
 }
 
@@ -1077,7 +1085,11 @@ func BuildContextForAgent(r *WealthRoom, seat int) (*wealthtypes.GameContext, bo
 	}
 
 	return &wealthtypes.GameContext{
-		RoomID: r.RoomID, GameKind: "wealth",
+		// 批次20(文档2 §4.3 / 文档3 A5/B4):三块预渲染小节(无信息 → "")。
+		SideMarketBrief: sideMarketBriefLocked(r, seat),
+		ElectionBrief:   electionBriefLocked(r.World, seat),
+		MicroPriceBrief: microPriceBriefLocked(r.World, p),
+		RoomID:          r.RoomID, GameKind: "wealth",
 		MySeat: seat, MyUserID: r.Seats[seat], ModelKey: r.SeatModelKeys[seat],
 		Month: month, Age: age, Phase: r.Phase,
 		TimeRemainingSec: int(time.Until(r.NextMonthAt).Seconds()),
@@ -1130,6 +1142,129 @@ func surroundingsForLocked(r *WealthRoom, p *Player) []wealthtypes.NeighborBrief
 	}
 	return out
 }
+
+// clipBytes UTF-8 字节预算裁剪(按 rune 边界,不切半个汉字;批次20 上下文
+// 字节预算纪律,文档2 §4.3 ≤350B / 文档3 B4 ≤120B)。
+func clipBytes(s string, budget int) string {
+	if len(s) <= budget {
+		return s
+	}
+	r := []rune(s)
+	out := strings.Builder{}
+	for _, c := range r {
+		if out.Len()+len(string(c)) > budget-3 { // 预留「…」
+			break
+		}
+		out.WriteRune(c)
+	}
+	return out.String() + "…"
+}
+
+// sideMarketBriefLocked 副业定价市场小节(文档2 §4.3;锁内纯读;≤350B;
+// 无副业 → "" 不注入)。对手仅档位/份额,不含对方 BaseIncome 细节。
+func sideMarketBriefLocked(r *WealthRoom, seat int) string {
+	if r.World == nil {
+		return ""
+	}
+	p := r.World.Players[seat]
+	if p == nil || p.SideBusiness == nil {
+		return ""
+	}
+	shares := sideMarketShares(r.World)
+	sb := p.SideBusiness
+	share := 1.0
+	if ks, ok := shares[sb.Kind]; ok {
+		if s, ok2 := ks[seat]; ok2 && s > 0 {
+			share = s
+		}
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "你的副业:%s %s档,客群份额 %.0f%%,上月实收 ¥%d。",
+		sideBizCN(sb.Kind), sideTierCN(sb.PriceTier), share*100, p.Monthly.SideIncome)
+	rivals := sideOperatorSeats(shares, sb.Kind)
+	if len(rivals) >= 2 {
+		b.WriteString("同品类对手:")
+		shown := 0
+		for _, s := range rivals {
+			if s == seat || shown >= 5 {
+				continue
+			}
+			op := r.World.Players[s]
+			fmt.Fprintf(&b, " %d号位%s档份额%.0f%%;", s,
+				sideTierCN(op.SideBusiness.PriceTier), shares[sb.Kind][s]*100)
+			shown++
+		}
+	} else {
+		b.WriteString("该品类暂无竞争对手。")
+	}
+	b.WriteString("规则:低50%·中30%·高20%客群;高价利润×1.25但份额看对手;集体低价=集体受损。")
+	if share < 0.4 {
+		b.WriteString("份额偏低,考虑差异化档位或转行。")
+	}
+	return clipBytes(b.String(), sideMarketBriefBudget)
+}
+
+// sideMarketBriefBudget 文档2 §4.3 上下文增量字节预算。
+const sideMarketBriefBudget = 350
+
+// electionBriefLocked 市长选举小节(文档3 A5;锁内纯读;未启用 → "")。
+func electionBriefLocked(w *World, seat int) string {
+	if w == nil || w.Election == nil || !w.Election.Enabled {
+		return ""
+	}
+	ce := w.Election
+	var b strings.Builder
+	if ce.MayorSeat >= 0 && ce.MayorSeat == seat {
+		fmt.Fprintf(&b, "本城已启动市长选举:你是现任市长,下届选举在第 %d 月。", ce.NextElectionMonth())
+	} else if ce.MayorSeat >= 0 {
+		fmt.Fprintf(&b, "本城已启动市长选举:现任市长为 %d 号位,下届选举在第 %d 月。", ce.MayorSeat, ce.NextElectionMonth())
+	} else {
+		fmt.Fprintf(&b, "本城已启动市长选举:市长职位空缺,下届选举在第 %d 月。", ce.NextElectionMonth())
+	}
+	// 本人上届得票排名(LastVotes 已按得分降序)。
+	if rank := electionRankOf(ce, seat); rank > 0 {
+		fmt.Fprintf(&b, "你上届得票排名第 %d 名。", rank)
+	}
+	b.WriteString("财富/人脉/满意度决定选情,socialize 也是竞选资源。")
+	return b.String()
+}
+
+// electionRankOf 座位在最近一次得票明细中的排名(1 起;无记录 → 0)。
+func electionRankOf(ce *CivicElection, seat int) int {
+	for i, v := range ce.LastVotes {
+		if v.Seat == seat {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+// microPriceBriefLocked 股票微观结构现价小节(文档3 B4;锁内纯读;≤120B)。
+// 「有信息才注入」:熔断生效、有 T+1 冻结或持有股票时输出,否则 ""。
+func microPriceBriefLocked(w *World, p *Player) string {
+	if w == nil || w.Market == nil {
+		return ""
+	}
+	m := w.Market
+	breaker := m.StockBreakerActive(w.Month)
+	hasStock := p != nil && (p.StockT1Locked > 0 || p.assetOf(AssetStockIndex) != nil)
+	if !breaker && !hasStock {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "股票现价 买%.2f/卖%.2f(价差 %dbp)。",
+		m.StockBuyUnit(), m.StockSellUnit(), int(m.StockSpread()*10000+0.5))
+	if p != nil && p.StockT1Locked > 0 {
+		fmt.Fprintf(&b, "T+1 冻结 %d 份。", p.StockT1Locked)
+	}
+	if breaker {
+		fmt.Fprintf(&b, "熔断暂停股票交易至第 %d 月。", m.BreakerUntilMonth)
+	}
+	return clipBytes(b.String(), microPriceBriefBudget)
+}
+
+// microPriceBriefBudget 文档3 B4 字节预算。
+const microPriceBriefBudget = 120
 
 // fiIndexFor 包装 p.FIIndex(锁内)。
 func fiIndexFor(r *WealthRoom, p *Player) float64 {

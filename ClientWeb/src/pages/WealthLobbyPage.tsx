@@ -93,6 +93,8 @@ export function WealthLobbyPage() {
           resident_count: req.resident_count,
           wealth: { month_ms: req.month_ms, ...(req.seed ? { seed: req.seed } : {}) },
           full_agent: req.full_agent === true,
+          // 批次 20 文档 3 A2：市长选举启用（顶层字段，仅 wealth 生效）。
+          civic_election_enabled: req.civic_election_enabled === true,
         });
         // 先导航，副作用 best-effort（BUG-R229 教训）。
         if (detail.my_role === 'spectator') {

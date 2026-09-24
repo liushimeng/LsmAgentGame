@@ -2,8 +2,9 @@
  * CanalBridge — 跨运河桥（16-3D城市WebGL质感与城市补全 · 阶段 S）：
  *
  * 桥面（box 微高路面）+ 两侧栏杆 + 端柱 + 4 桥墩 + 2 桥头灯。
- * 位置由 CanalBridgeSpots() 通式计算：len>12 放射干道与运河 z=17 的交点
- * （当前数据命中 edu_district / medical_city 两条 → 2 座桥）。
+ * 位置由 CanalBridgeSpots() 通式计算：len>MAIN_ROAD_MIN_LEN 放射干道与运河 z=17
+ * 的交点（批次 20：运河 x 半跨 32→48 与 CANAL_Z 均从 WealthCityMap 常量同源 import；
+ * 32 区 + 东延后命中数增加，通式自适应）。
  *
  * 契约：lag_docs/虚拟城市/已实现/16-3D城市WebGL质感与城市补全/02-架构设计 §6。
  */
@@ -12,11 +13,7 @@ import { useMemo } from 'react';
 import { streetTileUrl } from '@/assets/images/wealth';
 import { districtCenter, WEALTH_DISTRICTS } from '@/types/wealth';
 import { useSharedTexture } from './textureCache';
-
-/** 运河中心 z（与 WealthCityMap::WaterLayer 契约一致）。 */
-const CANAL_Z = 17;
-/** 运河 x 半跨（水面横贯 x ∈ [-32, 32]）。 */
-const CANAL_HALF_X = 32;
+import { CANAL_Z, CANAL_HALF_X, MAIN_ROAD_MIN_LEN } from './WealthCityMap';
 /**
  * 桥面宽 / 厚 / 中心 y。顶面 = 0.035：高于水面 0.028（不没水）、仅高于路面
  * 0.015 一线（车辆 y=0.02 直接过桥不穿模——桥面与车轮着地差 0.015 不可辨）。
@@ -104,8 +101,10 @@ export interface BridgeSpot {
 }
 
 /**
- * 通式求桥位：对每条 len>12 放射干道，解与运河 z=CANAL_Z 的交点；
- * 交点 |x| ≤ CANAL_HALF_X 即建桥。当前 16 城区数据命中 edu / medical 两条。
+ * 通式求桥位：对每条 len > MAIN_ROAD_MIN_LEN 放射主干道，解与运河 z=CANAL_Z 的交点；
+ * 交点 |x| ≤ CANAL_HALF_X 即建桥（批次 20 通式自适应：CANAL_Z/CANAL_HALF_X 与
+ * WealthCityMap::WaterLayer 常量同源 import，运河东延 ±48 后命中
+ * edu / medical / fin_sub / sports_new_city / bay_new_town / university_town / wetland 等）。
  */
 export function CanalBridgeSpots(): BridgeSpot[] {
   const spots: BridgeSpot[] = [];
@@ -114,7 +113,7 @@ export function CanalBridgeSpots(): BridgeSpot[] {
     const c = districtCenter(d.id);
     if (c.z <= CANAL_Z) continue; // 只考虑运河以北（z 更大）城区的放射路
     const len = Math.sqrt(c.x * c.x + c.z * c.z);
-    if (len < 12) continue; // 仅主干道
+    if (len < MAIN_ROAD_MIN_LEN) continue; // 仅主干道
     const xAt = c.x * (CANAL_Z / c.z);
     if (Math.abs(xAt) > CANAL_HALF_X) continue;
     spots.push({

@@ -11,7 +11,9 @@ import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import {
   WEALTH_DISTRICTS,
+  formatCny,
   formatPct,
+  wealthStockBreakerActive,
   type WealthCentralBank,
   type WealthCycle,
   type WealthCyclePhase,
@@ -19,6 +21,14 @@ import {
   type WealthGameState,
 } from '@/types/wealth';
 import type { WealthMarketPoint } from '@/store/wealth.store';
+import './wealth-batch20.css';
+
+/** 价差徽章色阶（批次 20 文档 3 B4：过热窄、恐慌宽；阈值按四阶段 4/8/15/20bps 分档）。 */
+function spreadTierClass(bps: number): string {
+  if (bps <= 5) return 'wealth-micro__badge--narrow'; // 扩张 4bp — 绿（流动性好）
+  if (bps <= 10) return 'wealth-micro__badge--mid';   // 衰退 8bp — 灰
+  return 'wealth-micro__badge--wide';                 // 恐慌 15 / 过热 20bp — 红
+}
 
 /** 迷你走势 SVG 折线（最近 N 点，归一化高度）。 */
 function Sparkline({ points, color }: { points: number[]; color: string }) {
@@ -188,8 +198,20 @@ export function MarketPanel({ gameState, marketHistory, onSelectDistrict }: Prop
     [market, maxIdx],
   );
 
+  // ── 批次 20 文档 3 B4：股票微观结构（旧局字段缺省 → 对应 UI 整段不渲染）──
+  const breakerActive = wealthStockBreakerActive(gameState);
+  const spreadBps = market.spread_bps;
+  const stockHeld = (gameState.my?.assets ?? []).find((a) => a.kind === 'stock_index');
+  const t1Locked = gameState.my?.stock_t1_locked ?? 0;
+
   return (
     <div className="wealth-marketpanel">
+      {/* 熔断期顶部红条（month ≤ breaker_until；买卖按钮禁用由 ActionPanel 弹窗承担） */}
+      {breakerActive && (
+        <div className="wealth-micro__breaker" role="alert" data-testid="wealth-breaker-banner">
+          🛑 {t('wealth.micro.breaker' as TKey, { n: market.breaker_until ?? 0 })}
+        </div>
+      )}
       <div className="wealth-marketpanel__head">
         <span className={`wealth-badge wealth-cycle ${CYCLE_CLASS[cycle.phase]}`}>
           {t(`wealth.cycle.${cycle.phase}` as TKey)}
@@ -218,6 +240,34 @@ export function MarketPanel({ gameState, marketHistory, onSelectDistrict }: Prop
         history={stocks}
         color="#60a5fa"
       />
+      {/* 双边价 + 价差徽章（文档 3 B2-2：买价上浮 / 卖价下沉，价差按阶段） */}
+      {(market.stock_buy_unit !== undefined || market.stock_sell_unit !== undefined) && (
+        <div className="wealth-micro__prices" data-testid="wealth-micro-prices">
+          <span>{t('wealth.micro.buyUnit' as TKey, { price: (market.stock_buy_unit ?? market.stock_index).toFixed(2) })}</span>
+          <span>{t('wealth.micro.sellUnit' as TKey, { price: (market.stock_sell_unit ?? market.stock_index).toFixed(2) })}</span>
+          {spreadBps !== undefined && spreadBps > 0 && (
+            <span className={`wealth-micro__badge ${spreadTierClass(spreadBps)}`}>
+              {t('wealth.micro.spread' as TKey, { bps: spreadBps })}
+            </span>
+          )}
+        </div>
+      )}
+      {/* 持仓行：份数 + T+1 冻结角标（t1_locked 未下发时不渲染角标） */}
+      {stockHeld && (
+        <div className="wealth-micro__hold" data-testid="wealth-micro-hold">
+          <span>
+            {t('wealth.asset.stock' as TKey)} ×{stockHeld.units} · ¥{formatCny(stockHeld.value_cny)}
+          </span>
+          {t1Locked > 0 && (
+            <span
+              className="wealth-micro__badge wealth-micro__badge--t1"
+              title={t('wealth.micro.t1Locked' as TKey, { n: t1Locked })}
+            >
+              {t('wealth.micro.t1Locked' as TKey, { n: t1Locked })}
+            </span>
+          )}
+        </div>
+      )}
       <QuoteRow
         label={t('wealth.goldPrice' as TKey)}
         value={market.gold_price.toFixed(0)}

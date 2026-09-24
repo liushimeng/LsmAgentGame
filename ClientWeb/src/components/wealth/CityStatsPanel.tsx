@@ -24,16 +24,27 @@
 import { useState } from 'react';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
-import { formatCny, formatPct, type WealthCitySnapshot } from '@/types/wealth';
+import {
+  formatCny,
+  formatPct,
+  type WealthCitySnapshot,
+  type WealthPlayer,
+  type WealthPublicServices,
+} from '@/types/wealth';
 import { ResidentProfileDrawer } from '@/components/wealth/ResidentProfileDrawer';
 import { CollapsibleSection } from '@/components/wealth/CollapsibleSection';
 import './CityStatsPanel.css';
+import './wealth-batch20.css';
 
 interface Props {
   /** 城市背景层快照；缺省（旧房 / 尚未到达）时整面板不渲染。 */
   city?: WealthCitySnapshot | null;
   /** 房间 ID（居民档案抽屉 REST 拉取用）。 */
   roomId: string;
+  /** 批次 20 文档 3 A4：选举段快照（public_services）；未启用/无票型 → 政务组不渲染。 */
+  election?: WealthPublicServices | null;
+  /** 票型表格座位→昵称查表（可选）。 */
+  players?: WealthPlayer[];
 }
 
 /** 城区人口竖条单元（v2.12 阶段 2）：人口数 / 底对齐条形 / 区名（自上而下）。
@@ -72,11 +83,16 @@ function DistrictBarCell({
   );
 }
 
-export function CityStatsPanel({ city, roomId }: Props) {
+export function CityStatsPanel({ city, roomId, election, players }: Props) {
   const t = useT();
   // 档案抽屉开关 + 定位卡号（城市之声 resident_id 点击进入）。
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerCardId, setDrawerCardId] = useState<string | null>(null);
+  // 批次 20 文档 3 A4：政务票型表格折叠（默认展开一次选举数据；内滚动防溢出）。
+  const [govOpen, setGovOpen] = useState(true);
+  // 批次 20 §3.4：32 区紧凑模式新增「展开全部 32 区」折叠列表 —— 展开态网格
+  // 滚动内收（max-height + overflow-y，控件不出界，防溢出规约 18-04）。
+  const [districtsExpanded, setDistrictsExpanded] = useState(false);
 
   const openDrawer = (cardId: string | null) => {
     setDrawerCardId(cardId);
@@ -97,6 +113,8 @@ export function CityStatsPanel({ city, roomId }: Props) {
     : districts;
   const restRows = compact ? ranked.slice(COMPACT_TOP) : [];
   const districtRows = compact ? ranked.slice(0, COMPACT_TOP) : ranked;
+  const gridRows = compact && districtsExpanded ? ranked : districtRows;
+  const gridScroll = compact && districtsExpanded;
   const voices = (city.voices ?? []).slice(-8).reverse();
   const prof = city.profiles ?? null;
   const hydratePct =
@@ -210,24 +228,104 @@ export function CityStatsPanel({ city, roomId }: Props) {
       {/* ② 城区人口迷你条形（v2.12 阶段 2：auto-fill 网格 + 底对齐竖条，§26 对比度：
           实底条形 + 显式文字；>12 区紧凑模式 top 10 + 「其他 N 个」） */}
       {districts.length > 0 && (
-        <div className="wealth-citypanel__districts">
-          {districtRows.map((d, i) => (
-            <DistrictBarCell
-              key={d.id >= 0 ? d.id : `row-${i}`}
-              id={d.id}
-              name={d.name}
-              population={d.population || 0}
-              maxPop={maxPop}
-            />
-          ))}
-          {restRows.length > 0 && (
-            <DistrictBarCell
-              id={-1}
-              name={t('wealth.cityOtherDistricts' as TKey, { n: restRows.length })}
-              population={restRows.reduce((s, d) => s + (d.population || 0), 0)}
-              maxPop={maxPop}
-              dimmed
-            />
+        <div className="wealth-citypanel__districts-wrap">
+          <div
+            className={`wealth-citypanel__districts${gridScroll ? ' wealth-citypanel__districts--scroll' : ''}`}
+          >
+            {gridRows.map((d, i) => (
+              <DistrictBarCell
+                key={d.id >= 0 ? d.id : `row-${i}`}
+                id={d.id}
+                name={d.name}
+                population={d.population || 0}
+                maxPop={maxPop}
+              />
+            ))}
+            {compact && !districtsExpanded && restRows.length > 0 && (
+              <DistrictBarCell
+                id={-1}
+                name={t('wealth.cityOtherDistricts' as TKey, { n: restRows.length })}
+                population={restRows.reduce((s, d) => s + (d.population || 0), 0)}
+                maxPop={maxPop}
+                dimmed
+              />
+            )}
+          </div>
+          {compact && (
+            <button
+              type="button"
+              className="wealth-citypanel__expand"
+              onClick={() => setDistrictsExpanded((v) => !v)}
+              aria-expanded={districtsExpanded}
+              data-testid="wealth-city-districts-expand"
+            >
+              {districtsExpanded
+                ? `▲ ${t('wealth.cityDistrictsCollapse' as TKey)}`
+                : `▼ ${t('wealth.cityDistrictsExpand' as TKey, { n: districts.length })}`}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ②.5 政务（批次 20 文档 3 A4）：市长选举票型表格。
+          未启用选举 / 无 last_votes → 整组不渲染；表格内滚动，控件不出界（18-04）。 */}
+      {election?.election_enabled && (election.last_votes?.length ?? 0) > 0 && (
+        <div className="wealth-citypanel__gov" data-testid="wealth-gov-panel">
+          <button
+            type="button"
+            className="wealth-citypanel__gov-title"
+            onClick={() => setGovOpen((v) => !v)}
+            aria-expanded={govOpen}
+            data-testid="wealth-gov-toggle"
+          >
+            {govOpen ? '▲' : '▼'} 🗳 {t('wealth.election.votePanel' as TKey)}
+          </button>
+          {govOpen && (
+            <div className="wealth-citypanel__gov-scroll">
+              {(election.last_votes ?? []).map((v) => {
+                const name = players?.find((p) => p.seat === v.seat)?.nickname;
+                const isMayor = v.seat === election.mayor_seat;
+                return (
+                  <div
+                    key={v.seat}
+                    className={`wealth-citypanel__gov-row${isMayor ? ' wealth-citypanel__gov-row--winner' : ''}`}
+                    data-testid={`wealth-gov-row-${v.seat}`}
+                  >
+                    <span className="wealth-citypanel__gov-seat" title={name ?? undefined}>
+                      S{v.seat + 1}
+                      {isMayor ? ' 🗳' : ''}
+                      {name ? ` ${name}` : ''}
+                    </span>
+                    <span className="wealth-citypanel__gov-bars">
+                      {([
+                        ['wealth.election.colScore', v.score],
+                        ['wealth.election.colWealth', v.wealth_score],
+                        ['wealth.election.colNetwork', v.network_score],
+                        ['wealth.election.colSatisfaction', v.satisfaction],
+                      ] as const).map(([k, val]) => (
+                        <span className="wealth-citypanel__gov-bar" key={k}>
+                          <span className="wealth-citypanel__gov-k">{t(k as TKey)}</span>
+                          <span className="wealth-citypanel__gov-track">
+                            {/* bar 宽度 = score%（0..100 直渲；文档 3 A4） */}
+                            <span
+                              className="wealth-citypanel__gov-fill"
+                              style={{ width: `${Math.max(0, Math.min(100, val))}%` }}
+                              aria-hidden="true"
+                            />
+                          </span>
+                          <span className="wealth-citypanel__gov-v">{Math.round(val)}</span>
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                );
+              })}
+              {(election.next_election_month ?? 0) > 0 && (
+                <div className="wealth-citypanel__gov-note">
+                  {t('wealth.election.nextElection' as TKey, { m: election.next_election_month ?? 0 })}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

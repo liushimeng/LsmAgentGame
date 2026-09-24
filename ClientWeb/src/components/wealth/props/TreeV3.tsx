@@ -16,8 +16,38 @@ import { u } from '../cityScale';
 import { Model } from '../Model';
 import { modelUrl } from '@/assets/models';
 
-const TRUNK_COLOR = '#5a4634';
-const CROWN_COLORS = ['#2f7a3a', '#3a8a45', '#4a9a55'];
+export const TRUNK_COLOR = '#5a4634';
+export const CROWN_COLORS = ['#2f7a3a', '#3a8a45', '#4a9a55'];
+
+/** 树形态种子（StreetPropsLayer / TreesInstanced 共用，保证逐实例形态一致）。 */
+export function treeSeed(x: number, z: number): number {
+  return hashStr(`tree:${x.toFixed(3)}:${z.toFixed(3)}`);
+}
+
+/** 确定性树形态（主干/分枝/3 球冠）——TreeV3Fallback 与 TreesInstanced 同源。 */
+export function treeShape(effectiveSeed: number): {
+  branchCount: number;
+  crowns: Array<{ x: number; y: number; z: number; r: number; color: number }>;
+} {
+  const h = (s: number) => {
+    let xh = (s * 2654435761) >>> 0;
+    xh ^= xh >>> 13;
+    xh = Math.imul(xh, 2246822519) >>> 0;
+    xh ^= xh >>> 16;
+    return xh / 0xffffffff;
+  };
+  const r1 = h(effectiveSeed);
+  const r2 = h(effectiveSeed * 31 + 1);
+  const r3 = h(effectiveSeed * 131 + 7);
+  return {
+    branchCount: r1 > 0.5 ? 2 : 1,
+    crowns: [
+      { x: u(0), y: u(2.3) + r1 * u(0.3), z: u(0), r: u(0.7) + r2 * u(0.2), color: 0 },
+      { x: (r1 - 0.5) * u(0.7), y: u(2.45) + r2 * u(0.25), z: (r3 - 0.5) * u(0.7), r: u(0.85) + r3 * u(0.15), color: 1 },
+      { x: (r2 - 0.5) * u(0.7), y: u(2.15) + r3 * u(0.3), z: (r1 - 0.5) * u(0.7), r: u(0.6) + r1 * u(0.15), color: 2 },
+    ],
+  };
+}
 
 export interface TreeV3Props {
   /** 世界坐标 x。 */
@@ -64,28 +94,9 @@ function TreeV3Fallback({ x, z, seed, scale = 1, castShadow = true }: TreeV3Prop
   const foliage = useSynthPBR('foliage', { normalScale: [1.2, 1.2] });
   const fp = foliage.matProps;
 
-  const effectiveSeed = seed ?? hashStr(`tree:${x.toFixed(3)}:${z.toFixed(3)}`);
+  const effectiveSeed = seed ?? treeSeed(x, z);
 
-  const { branchCount, crowns } = useMemo(() => {
-    const h = (s: number) => {
-      let xh = (s * 2654435761) >>> 0;
-      xh ^= xh >>> 13;
-      xh = Math.imul(xh, 2246822519) >>> 0;
-      xh ^= xh >>> 16;
-      return xh / 0xffffffff;
-    };
-    const r1 = h(effectiveSeed);
-    const r2 = h(effectiveSeed * 31 + 1);
-    const r3 = h(effectiveSeed * 131 + 7);
-    return {
-      branchCount: r1 > 0.5 ? 2 : 1,
-      crowns: [
-        { x: u(0), y: u(2.3) + r1 * u(0.3), z: u(0), r: u(0.7) + r2 * u(0.2), color: 0 },
-        { x: (r1 - 0.5) * u(0.7), y: u(2.45) + r2 * u(0.25), z: (r3 - 0.5) * u(0.7), r: u(0.85) + r3 * u(0.15), color: 1 },
-        { x: (r2 - 0.5) * u(0.7), y: u(2.15) + r3 * u(0.3), z: (r1 - 0.5) * u(0.7), r: u(0.6) + r1 * u(0.15), color: 2 },
-      ],
-    };
-  }, [effectiveSeed]);
+  const { branchCount, crowns } = useMemo(() => treeShape(effectiveSeed), [effectiveSeed]);
 
   return (
     <group position={[x, 0, z]} scale={scale}>

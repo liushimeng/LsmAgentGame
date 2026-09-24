@@ -198,7 +198,8 @@ func TestDocsPool_Draw12AllDocs(t *testing.T) {
 }
 
 // TestDocsPool_DistrictSpread 文档池城区映射不得退化:抽样 600 张卡,
-// 命中的城区种类 ≥ 5(旧实现 100% 落 residential,地图/房价/搬迁机制全废)。
+// 命中的城区种类 ≥ 5(旧实现 100% 落 residential,地图/房价/搬迁机制全废);
+// 批次20 §2.4:行业分流覆盖 16 个新区出生地,阈值提为 ≥ 16。
 func TestDocsPool_DistrictSpread(t *testing.T) {
 	if testing.Short() {
 		t.Skip("-short: 跳过真实池抽样")
@@ -217,8 +218,8 @@ func TestDocsPool_DistrictSpread(t *testing.T) {
 		}
 		dist[card.HomeDistrict]++
 	}
-	if len(dist) < 5 {
-		t.Errorf("district spread = %d kinds (%v), want ≥ 5", len(dist), dist)
+	if len(dist) < 16 {
+		t.Errorf("district spread = %d kinds (%v), want ≥ 16(批次20 §2.4 行业分流覆盖新区)", len(dist), dist)
 	}
 	t.Logf("城区分布: %v", dist)
 }

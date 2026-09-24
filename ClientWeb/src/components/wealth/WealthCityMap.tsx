@@ -26,6 +26,12 @@
  *   - Ground：urban_base 城市底色优先（替代满城沥青）。
  *   - RingRoad（CBD 环路）+ CanalBridges（运河 2 桥）+ LandmarksLayer
  *     （喷泉/园路/塔吊/停车场）+ CloudLayer（天空云层）。
+ *
+ * 批次 20（32 城区地图扩展 + 渲染性能专项，文档 1 §3）：
+ *   - WORLD_SIZE 80 → 120 / WORLD_GROUND_SIZE → 160，fog 1.0W/2.0W、SUN ×1.5、
+ *     SHADOW_HALF=0.5W、minDistance=0.1W、CANAL_HALF_X 32→48 全部随 W 派生或更新。
+ *   - 导出 MAIN_ROAD_MIN_LEN = W×0.15（7 处 len>12 字面量统一派生）。
+ *   - ?debug=1 时 onCreated 挂 window.__cityRenderInfo = renderer.info。
  */
 
 import { useMemo, useRef } from 'react';
@@ -35,7 +41,8 @@ import { OrbitControls, Sky } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { DistrictBlock } from './DistrictBlock';
 import { AgentToken } from './AgentToken';
-import { Road } from './Road';
+import { Road, lampsForRoad } from './Road';
+import { StreetLightsInstanced } from './props/StreetLightsInstanced';
 import { StreetPropsLayer } from './StreetPropsLayer';
 import { WaterPlane } from './props/WaterPlane';
 import { WaterMist } from './props/WaterMist';
@@ -65,32 +72,40 @@ export interface WealthCameraView {
 // ── v2.12 阶段 2 世界尺寸常量（地图 40×40 → 80×80，面积 ×4）──────────
 // 所有 40 相关魔法数收敛于此；地面贴图 / 雾化 / 相机 / 光照按比例派生。
 
-/** 世界边长（世界单位；1 单位 = 10 米，见 cityScale.ts）。 */
-export const WORLD_SIZE = 80;
+/** 世界边长（世界单位；1 单位 = 10 米，见 cityScale.ts）。
+ *  批次 20（文档 1 §3.1）：80 → 120（1200m×1200m，面积 ×2.25），唯一总闸，其余派生。 */
+export const WORLD_SIZE = 120;
 /** 18 · 阶段 AA：地面 plane 边长（建成区外的腹地）。只影响 Ground 与其贴图 repeat，
- *  建成区/相机/雾化语义不变。原 WORLD_SIZE=80 仍是「城区半径」语义。 */
-export const WORLD_GROUND_SIZE = 120;
+ *  建成区/相机/雾化语义不变。原 WORLD_SIZE=80 仍是「城区半径」语义。
+ *  批次 20：120 → 160（腹地 + 远景环带用）。 */
+export const WORLD_GROUND_SIZE = 160;
 /** 地面贴图每 8 单位平铺一次（与城区底板 8×8 同标尺）。 */
 export const GROUND_TILE = 8;
-/** 地面贴图重复次数 = WORLD_GROUND_SIZE / GROUND_TILE（18-AA: 80/8=10 → 120/8=15）。 */
+/** 地面贴图重复次数 = WORLD_GROUND_SIZE / GROUND_TILE（批次 20: 160/8=20）。 */
 export const GROUND_REPEAT = WORLD_GROUND_SIZE / GROUND_TILE;
-/** 远景雾化近/远平面。16 · 视觉验收两轮回归：
- *  0.7/1.5 与 0.85/1.9 在最大缩放（相机距离=ORBIT_MAX_DISTANCE=80）下把
- *  城市大半泡进雾色 → 近端抬到 1.25×（=100，超过最大缩放下城市最远角
- *  ≈120 的雾感收敛到 20% 以内），远端 2.5×（=200）保天际线剪影柔和消隐。 */
-export const FOG_NEAR = WORLD_SIZE * 1.25;
-export const FOG_FAR = WORLD_SIZE * 2.5;
+/** 主干道判定阈值：放射路 len > 此值 → main（车道/路灯/行道树/红绿灯/公交站台全随它）。
+ *  批次 20（文档 1 §3.2）：原写死 12 → 派生 WORLD_SIZE*0.15（80→12 / 120→18），
+ *  防止 32 区 100% 主干道化导致道具超线性爆炸。 */
+export const MAIN_ROAD_MIN_LEN = WORLD_SIZE * 0.15;
+/** 远景雾化近/远平面。批次 20（文档 1 §3.1）：批次 11 已证「不可等比外推」，
+ *  按 80 时代绝对观感（100/200）近似保留 → 1.0×W / 2.0×W（=120 / 240），截图验收定稿。 */
+export const FOG_NEAR = WORLD_SIZE * 1.0;
+export const FOG_FAR = WORLD_SIZE * 2.0;
 /** 相机初始位置与 OrbitControls maxDistance（随世界边长等比缩放）。 */
 export const CAMERA_START: [number, number, number] = [WORLD_SIZE * 0.35, WORLD_SIZE * 0.3, WORLD_SIZE * 0.35];
 export const ORBIT_MAX_DISTANCE = WORLD_SIZE;
+/** 批次 20（文档 1 §3.1）：最近距离 8 写死 → W×0.1=12，防大地图穿地视角。 */
+export const ORBIT_MIN_DISTANCE = WORLD_SIZE * 0.1;
 
 // ── v2.13 阶段 C 光照/天空常量 ────────────────────────────────
-/** 主方向光位置（世界坐标）。 */
-const SUN_POSITION: [number, number, number] = [20, 32, 16];
-/** Sky 太阳方向：与主方向光同向归一化 ×100（[20,32,16] / |[20,32,16]| ≈ [0.516,0.826,0.413]）。 */
+/** 主方向光位置（世界坐标）。批次 20：[20,32,16] ×1.5 等比 → [30,48,24]（阴影方向不变）。 */
+const SUN_POSITION: [number, number, number] = [30, 48, 24];
+/** Sky 太阳方向：与主方向光同向归一化 ×100（SUN [30,48,24] 与旧 [20,32,16] 同射线，
+ *  归一化值 [0.516,0.826,0.413] 不变）。 */
 const SKY_SUN_POSITION: [number, number, number] = [51.6, 82.6, 41.3];
-/** 方向光阴影相机半宽：覆盖全城（±WORLD_SIZE*0.6；默认 ±5 只能罩住原点一小块）。 */
-const SHADOW_CAMERA_HALF = WORLD_SIZE * 0.6;
+/** 方向光阴影相机半宽：批次 20 采纳批次 15 §9.3 建议 W×0.6→W×0.5=60
+ *  （shadow map 保持 2048；默认 ±5 只能罩住原点一小块）。 */
+const SHADOW_CAMERA_HALF = WORLD_SIZE * 0.5;
 /** 雾色（与 Sky 地平线色接近，远景自然消隐）。 */
 const FOG_COLOR = '#aeb8c6';
 
@@ -143,11 +158,12 @@ function Ground() {
 
 /**
  * 道路层：从每个非 finance 城区中心辐射到原点（金融 CBD）。
- * 主干道 vs 次干道按 from→to 距离判：len > 12 → main，否则 side。
+ * 主干道 vs 次干道按 from→to 距离判：len > MAIN_ROAD_MIN_LEN → main，否则 side
+ * （批次 20 §3.2 派生化：80 时代写死 12 → W×0.15）。
  */
 function RoadsLayer() {
-  const roads = useMemo(() => {
-    return WEALTH_DISTRICTS
+  const { roads, lamps } = useMemo(() => {
+    const list = WEALTH_DISTRICTS
       .filter((d) => d.id !== 'finance')
       .map((d) => {
         const c = districtCenter(d.id);
@@ -161,6 +177,10 @@ function RoadsLayer() {
           len,
         };
       });
+    const rs = list.map((r) => ({ ...r, kind: (r.len > MAIN_ROAD_MIN_LEN ? 'main' : 'side') as 'main' | 'side' }));
+    // 批次 20 §3.3：全部道路的路灯点位汇总 → 全局 InstancedMesh（3 draw call）
+    const lampList = rs.flatMap((r) => lampsForRoad(r.from, r.to, r.kind));
+    return { roads: rs, lamps: lampList };
   }, []);
 
   return (
@@ -170,9 +190,10 @@ function RoadsLayer() {
           key={r.key}
           from={r.from}
           to={r.to}
-          kind={r.len > 12 ? 'main' : 'side'}
+          kind={r.kind}
         />
       ))}
+      <StreetLightsInstanced lamps={lamps} />
     </>
   );
 }
@@ -183,16 +204,24 @@ function RoadsLayer() {
  *   - 水面岸雾 WaterMist（15 阶段 P）：沿运河/港池两岸各加半透明雾 plane
  * 位置契约 01 文档 §3.1：运河 z=+17（滨河新区 riverside(14,10) 与教育/医疗城 z=22 之间），
  * 港池 (-30,-4) 物流港西侧。贴图缺失降级纯色水面（WaterPlane 内处理）。
+ * 批次 20（文档 1 §3.4）：运河 x 半跨 32 → 48（东延入 software_park/airport_town 之间空隙；
+ * 与 fin_sub/sports/bay/university 底板 z≥22 不交，CanalBridge 常量同源 import）。
  */
+/** 运河中心 z（与 CanalBridge 契约一致）。 */
+export const CANAL_Z = 17;
+/** 运河 x 半跨（水面横贯 x ∈ [-CANAL_HALF_X, CANAL_HALF_X]）。 */
+export const CANAL_HALF_X = 48;
+
 function WaterLayer() {
   const bankTex = useSharedTexture(streetTileUrl('sidewalk_side'), {
     wrap: 'repeat',
     repeat: [16, 1],
   });
+  const canalLen = CANAL_HALF_X * 2;
   return (
     <>
-      {/* 城市运河（64×3，横贯 x ∈ [-32, 32]） */}
-      <WaterPlane x={0} z={17} w={64} d={3} />
+      {/* 城市运河（96×3，横贯 x ∈ [-48, 48]；批次 20 东延） */}
+      <WaterPlane x={0} z={CANAL_Z} w={canalLen} d={3} />
       {/* 物流港港池（6×8） */}
       <WaterPlane x={-30} z={-4} w={6} d={8} />
       {/* 两岸草皮收边（窄条，色 #3f7a3a 与中央公园草地呼应） */}
@@ -200,10 +229,10 @@ function WaterLayer() {
         <mesh
           key={`bank-${side}`}
           rotation={[-Math.PI / 2, 0, 0]}
-          position={[0, 0.024, 17 + side * 1.85]}
+          position={[0, 0.024, CANAL_Z + side * 1.85]}
           receiveShadow
         >
-          <planeGeometry args={[64, 0.7]} />
+          <planeGeometry args={[canalLen, 0.7]} />
           <meshStandardMaterial
             map={bankTex ?? undefined}
             color={bankTex ? '#ffffff' : '#3f7a3a'}
@@ -212,8 +241,8 @@ function WaterLayer() {
         </mesh>
       ))}
       {/* 阶段 P：运河两岸薄雾（覆盖水体外缘各 1.5 单位的过渡带） */}
-      <WaterMist x={0} z={17 + 2.35} w={64} d={1.5} opacity={0.18} />
-      <WaterMist x={0} z={17 - 2.35} w={64} d={1.5} opacity={0.18} />
+      <WaterMist x={0} z={CANAL_Z + 2.35} w={canalLen} d={1.5} opacity={0.18} />
+      <WaterMist x={0} z={CANAL_Z - 2.35} w={canalLen} d={1.5} opacity={0.18} />
       {/* 港池四周薄雾 */}
       <WaterMist x={-30 + 3.85} z={-4} w={1.5} d={8} opacity={0.15} />
       <WaterMist x={-30 - 3.85} z={-4} w={1.5} d={8} opacity={0.15} />
@@ -314,6 +343,13 @@ export function WealthCityMap({
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 1.05;
           gl.shadowMap.type = THREE.PCFSoftShadowMap;
+          // 批次 20 · 文档 1 §3.3：?debug=1 时挂 renderer.info 供 CDP 实测
+          // （draw call / mesh / geometry / program），一次性挂载无 runtime 开销。
+          if (typeof window !== 'undefined' && window.location.search.includes('debug=1')) {
+            (window as unknown as { __cityRenderInfo?: typeof gl.info }).__cityRenderInfo = gl.info;
+            // eslint-disable-next-line no-console
+            console.log('[city-debug] renderer.info mounted on window.__cityRenderInfo', gl.info);
+          }
         }}
       >
         {/* v2.13 阶段 C：Sky 天空穹顶接管背景（删除纯色 <color>），太阳方向与主方向光一致 */}
@@ -398,7 +434,7 @@ export function WealthCityMap({
           enableDamping
           dampingFactor={0.08}
           maxPolarAngle={1.2}
-          minDistance={8}
+          minDistance={ORBIT_MIN_DISTANCE}
           maxDistance={ORBIT_MAX_DISTANCE}
           target={[0, 0, 0]}
         />

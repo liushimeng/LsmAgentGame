@@ -60,6 +60,13 @@ export const DISTRICT_ARCHETYPE: Record<WealthDistrictId, BuildingArchetype> = {
   oldtown: 'house', suburb: 'house',
   industry: 'shed', industrial_park: 'shed', logistics_port: 'shed',
   central_park: 'pavilion',
+  // ── 批次 20 城市扩张新增 16 区（archetype = 文档 1 §2.3 表）──
+  fin_sub_center: 'tower', bay_new_town: 'tower',
+  software_park: 'slab', airport_town: 'slab', university_town: 'slab',
+  sports_new_city: 'slab', highspeed_rail_town: 'slab',
+  mountain_resort: 'house', agri_park: 'house', health_town: 'house', old_city_culture: 'house',
+  air_logistics: 'shed', auto_city: 'shed', chem_park: 'shed', steel_town: 'shed',
+  wetland_park: 'pavilion',
 };
 
 /** 暖窗光（契约 §2.3；ACES 下强度由调用方 ≤0.35 控制）。 */

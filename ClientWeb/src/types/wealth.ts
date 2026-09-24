@@ -8,13 +8,18 @@ import type { TKey } from '@/i18n';
 // 静态表（城区 / 职业色 / 动作元数据）出处：协议 §4 + 后端架构文档 §4 DistrictDefs
 // + 前端架构文档 §3 职业色（P0 新定）。
 
-/** 16 城区 id（顺序 = DistrictDefs 静态表 / market.districts 数组顺序；
- *  前 8 为 P0 原有城区，后 8 为 v2.12 阶段 2 扩展城区）。 */
+/** 32 城区 id（顺序 = DistrictDefs 静态表 / market.districts 数组顺序；
+ *  前 8 为 P0 原有城区，中 8 为 v2.12 阶段 2 扩展城区，后 16 为批次 20 城市扩张城区）。 */
 export type WealthDistrictId =
   | 'finance' | 'tech' | 'industry' | 'oldtown'
   | 'commerce' | 'residential' | 'suburb' | 'riverside'
   | 'logistics_port' | 'hightech_park' | 'edu_district' | 'medical_city'
-  | 'industrial_park' | 'central_park' | 'transport_hub' | 'cultural_creative';
+  | 'industrial_park' | 'central_park' | 'transport_hub' | 'cultural_creative'
+  // ── 批次 20 新增 16 区（下标 16–31，顺序 = 文档 1 §2 表）──
+  | 'fin_sub_center' | 'software_park' | 'airport_town' | 'air_logistics'
+  | 'auto_city' | 'mountain_resort' | 'chem_park' | 'agri_park'
+  | 'health_town' | 'steel_town' | 'old_city_culture' | 'university_town'
+  | 'wetland_park' | 'sports_new_city' | 'bay_new_town' | 'highspeed_rail_town';
 
 /** 市场周期四阶段（《规则》§7.1）。 */
 export type WealthCyclePhase = 'recovery' | 'boom' | 'recession' | 'depression';
@@ -81,8 +86,17 @@ export interface WealthMarket {
   gold_price: number;
   /** 当期新购债券年化，小数（如 0.032）。 */
   bond_yield: number;
-  /** 16 项，顺序 = DistrictDefs 静态表。 */
+  /** 32 项，顺序 = DistrictDefs 静态表。 */
   districts: WealthDistrictMarket[];
+  // ── 批次 20 文档 3 B4：股票交易微观结构（旧局/旧后端缺省 undefined，UI 兜底）──
+  /** 股票买入单价（idx × (1 + spread/2)），元/份。 */
+  stock_buy_unit?: number;
+  /** 股票卖出单价（idx × (1 − spread/2)），元/份。 */
+  stock_sell_unit?: number;
+  /** 买卖价差（基点，按市场阶段 4/8/15/20bps）。 */
+  spread_bps?: number;
+  /** 熔断「最后一个禁止月」（0/缺省 = 从未触发；month ≤ 此值期间禁买禁卖股票）。 */
+  breaker_until?: number;
 }
 
 /** 央行货币政策快照（game.state.central_bank，P1 央行引擎下发）。 */
@@ -191,6 +205,80 @@ export interface WealthAsset {
   monthly_flow_cny: number;
 }
 
+/** 副业定价档位（批次 20 文档 2 §2；0=中价默认，兼容旧档零值 / 1=低价 / 2=高价）。 */
+export type WealthSidePriceTier = 0 | 1 | 2;
+
+export interface WealthSideTierMeta {
+  tier: WealthSidePriceTier;
+  /** i18n key：`wealth.sidePrice.<i18nKey>`。 */
+  i18nKey: 'low' | 'mid' | 'high';
+  /** 客群权重 w(t)（低价 0.50 / 中价 0.30 / 高价 0.20）。 */
+  weight: number;
+  /** 收入乘数 m(t)（低价 0.75 / 中价 1.00 / 高价 1.25）。 */
+  multiplier: number;
+  /** 档位徽章底色（§26.1：低=蓝 中=绿 高=橙，白字 ≥4.5:1）。 */
+  badgeColor: string;
+}
+
+/** 三档定价静态表（文档 2 §1 数值契约；渲染顺序 = 低/中/高）。 */
+export const WEALTH_SIDE_TIERS: WealthSideTierMeta[] = [
+  { tier: 1, i18nKey: 'low',  weight: 0.50, multiplier: 0.75, badgeColor: '#1d4ed8' },
+  { tier: 0, i18nKey: 'mid',  weight: 0.30, multiplier: 1.00, badgeColor: '#15803d' },
+  { tier: 2, i18nKey: 'high', weight: 0.20, multiplier: 1.25, badgeColor: '#c2410c' },
+];
+
+export function wealthSideTierMeta(tier: number | undefined | null): WealthSideTierMeta {
+  return WEALTH_SIDE_TIERS.find((x) => x.tier === tier) ?? WEALTH_SIDE_TIERS[1];
+}
+
+/** 副业品类开档认知门槛（后端 actions.go sideBizDefs.GateCognition 同值；
+ *  高价档对 tutoring/freelance 另要求 认知 ≥ 门槛+1 —— 仅前端 tooltip 提示，服务端权威）。 */
+export const WEALTH_SIDE_BIZ_GATE: Record<string, number> = {
+  delivery: 0, content: 2, tutoring: 4, freelance: 3,
+};
+
+/** 熔断是否生效（文档 3 B2-4：breaker_until 存「最后一个禁止月」，
+ *  0/缺省 = 从未触发；month ≤ breaker_until 期间禁买禁卖 stock_index）。 */
+export function wealthStockBreakerActive(gs: WealthGameState | null | undefined): boolean {
+  const until = gs?.market?.breaker_until ?? 0;
+  const month = gs?.month ?? 0;
+  return until > 0 && month <= until;
+}
+
+/** 副业定价预期收入前端估算：Base × m(t) × s（整数；文档 2 §5）。 */
+export function wealthSideExpectedIncome(
+  baseIncome: number | undefined | null, tier: number, share: number,
+): number {
+  const m = wealthSideTierMeta(tier).multiplier;
+  const s = Number.isFinite(share) ? Math.max(0, Math.min(1, share)) : 1;
+  return Math.round((baseIncome ?? 0) * m * s);
+}
+
+/** 玩家侧栏副业条目（my.side_business，批次 20 文档 2 §3；无副业 = omit/null）。 */
+export interface WealthSideBusiness {
+  kind: string;
+  /** 后端人读中文名（i18n 缺键时兜底）。 */
+  kind_cn?: string;
+  base_income: number;
+  opened_month?: number;
+  price_tier: WealthSidePriceTier | number;
+  price_tier_cn?: string;
+  /** 当前客群份额 0..1（独占 = 1.0）。 */
+  market_share: number;
+  /**
+   * 批次 20 文档 2 §2（集成契约更新）：最近改档月（主钟月；0/缺省=未改过）。
+   * 「同月限改 1 次」禁用判定 = tier_set_month === game.state.month。
+   */
+  tier_set_month?: number;
+}
+
+/** side_market 单经营者行（game.state.side_market[kind][]，seat 升序；文档 2 §3）。 */
+export interface WealthSideMarketRow {
+  seat: number;
+  tier: WealthSidePriceTier | number;
+  share: number;
+}
+
 export interface WealthLoan {
   id: string;                // "L3"
   kind: WealthLoanKind | string;
@@ -215,6 +303,13 @@ export interface WealthMyState {
   spouse_income: number;
   /** 上月副业净收入。 */
   side_income: number;
+  /** 副业侧栏（批次 20 文档 2 §3：定价档 + 客群份额；无副业 = omit/null）。 */
+  side_business?: WealthSideBusiness | null;
+  /**
+   * 批次 20 文档 3 B2-3（集成契约更新）：当月新买入股票 T+1 冻结份数
+   * （卖出可卖量 = 持仓 − 此值；月结开头清零）。旧后端缺省 undefined = 0。
+   */
+  stock_t1_locked?: number;
   /** 上月被动收入合计。 */
   passive_income: number;
   /** 最近一次月结（或当月预估）。 */
@@ -466,6 +561,55 @@ export interface WealthGameState {
   flow_stat?: WealthFlowStat;
   /** 城市背景层快照（§20260921 建房解耦；resident_count=0 旧房 omit）。 */
   city?: WealthCitySnapshot;
+  /** 副业定价市场（批次 20 文档 2 §3）：kind → 经营者行（seat 升序）；
+   *  仅含有经营者的品类（≤12×4 条），无经营者 = omit。 */
+  side_market?: Record<string, WealthSideMarketRow[]>;
+  /** 公共服务 + 监管 + 市长选举快照（阶段 8；economy_enabled=false 旧房 omit。
+   *  FE-2 仅消费选举四字段段，其余字段原样透传不声明）。 */
+  public_services?: WealthPublicServices;
+}
+
+// ── 市长选举（批次 20 文档 3 A1/A3；game.state.public_services 选举段）────
+
+/** 单座得票明细（civic_election.go ElectionVote，30/40/30 得票模型）。 */
+export interface WealthElectionVote {
+  seat: number;
+  /** 综合得分 0..100。 */
+  score: number;
+  /** 财富排名分 0..100。 */
+  wealth_score: number;
+  /** 人脉分 0..100。 */
+  network_score: number;
+  /** 社会满意度 0..100（全城同值）。 */
+  satisfaction: number;
+}
+
+/** public_services 选举段（未启用：election_enabled=false / mayor_seat=-1 / votes 空）。 */
+export interface WealthPublicServices {
+  election_enabled: boolean;
+  /** 现任市长座位；-1 = 尚无。 */
+  mayor_seat: number;
+  last_votes?: WealthElectionVote[];
+  /** 下届选举月 = LastElectionMonth + 48（未启用/未选过 = omit/0）。 */
+  next_election_month?: number;
+  /** 上月市长津贴是否断发（国库不足；后端 omitempty —— false 不下发，缺省即未停发）。 */
+  stipend_stopped?: boolean;
+  /** 公共服务 / 监管等其余字段 FE-2 不消费，保留透传。 */
+  [key: string]: unknown;
+}
+
+/** 市长选举届期间隔月（后端 ElectionIntervalMonths = 48，4 年一届）。 */
+export const WEALTH_ELECTION_INTERVAL_MONTHS = 48;
+
+/** 任期已过月数（lastElection = next_election_month − 48；无数据 = 0）。 */
+export function wealthElectionTermElapsed(
+  month: number | undefined | null, nextElectionMonth: number | undefined | null,
+): number {
+  if (!nextElectionMonth || !month) return 0;
+  return Math.max(0, Math.min(
+    WEALTH_ELECTION_INTERVAL_MONTHS,
+    month - (nextElectionMonth - WEALTH_ELECTION_INTERVAL_MONTHS),
+  ));
 }
 
 /** 明斯基全局概览（game.state.minsky_overview，P1 明斯基引擎）。 */
@@ -984,7 +1128,7 @@ export interface WealthErrorFrame {
 
 export type WealthActionType =
   | 'buy_asset' | 'sell_asset' | 'buy_house' | 'take_loan' | 'repay_loan'
-  | 'start_side_business' | 'stop_side_business' | 'study' | 'socialize'
+  | 'start_side_business' | 'stop_side_business' | 'set_side_price' | 'study' | 'socialize'
   | 'rest' | 'work_overtime' | 'move_district' | 'consume' | 'donate'
   | 'submit_month'
   | 'early_repay'
@@ -997,8 +1141,9 @@ export type WealthAction =
   | { type: 'buy_house'; district: WealthDistrictId; downpay_ratio: number }
   | { type: 'take_loan'; kind: 'consumer' | 'credit' | 'business'; amount_cny: number }
   | { type: 'repay_loan'; loan_id: string; amount_cny: number }
-  | { type: 'start_side_business'; kind: 'delivery' | 'content' | 'tutoring' | 'freelance' }
+  | { type: 'start_side_business'; kind: 'delivery' | 'content' | 'tutoring' | 'freelance'; tier?: WealthSidePriceTier }
   | { type: 'stop_side_business' }
+  | { type: 'set_side_price'; tier: WealthSidePriceTier }
   | { type: 'study' }
   | { type: 'socialize' }
   | { type: 'rest' }
@@ -1078,6 +1223,14 @@ export const INSURANCE_ERR_I18N: Record<number, TKey> = {
   [WEALTH_INSURANCE_ERR.Disabled]: 'wealth.error.insuranceDisabled' as TKey,
 };
 
+/** 批次 20 文档 3 B3：股票微观结构错误码（errcode.go 35043/35044）。 */
+export const WEALTH_MICRO_ERR = {
+  /** 熔断期股票交易暂停。 */
+  CircuitBreak: 35043,
+  /** 当月买入份额 T+1 冻结不可卖。 */
+  StockT1Locked: 35044,
+} as const;
+
 /** POST /api/games/wealth/rooms 的 wealth 段（协议 §6）。 */
 export interface WealthRoomOptions {
   /** 1 游戏月时长 ms，3000–30000，缺省 8000。 */
@@ -1094,7 +1247,7 @@ export interface WealthDistrictDef {
   nameZh: string;
   /** 主色（后端 DistrictDefs）。 */
   color: string;
-  /** 80×80 地图平面坐标（前端 DistrictBlock / 小地图共用）。 */
+  /** 120×120 地图平面坐标（前端 DistrictBlock / 小地图共用）。 */
   x: number;
   z: number;
   /** 房价 beta。 */
@@ -1103,9 +1256,10 @@ export interface WealthDistrictDef {
   basePriceWan: number;
 }
 
-/** 16 城区静态表（后端架构文档 §4 DistrictDefs，顺序即数组下标）。
- *  前 8 区为 P0 原有城区（id/顺序不可修改）；后 8 区为 v2.12 阶段 2 扩展
- *  （地图 40×40 → 80×80，位置均在 ±30 单位内）。 */
+/** 32 城区静态表（后端架构文档 §4 DistrictDefs，顺序即数组下标）。
+ *  前 8 区为 P0 原有城区（id/顺序不可修改）；中 8 区为 v2.12 阶段 2 扩展
+ *  （地图 40×40 → 80×80，位置均在 ±30 单位内）；后 16 区为批次 20 城市扩张
+ *  （地图 80×80 → 120×120，位置均在 |x|≤50、|z|≤48 内，契约=文档 1 §2）。 */
 export const WEALTH_DISTRICTS: WealthDistrictDef[] = [
   { id: 'finance',     nameZh: '金融CBD', color: '#1d4ed8', x: 0,   z: 0,   houseBeta: 1.3,  basePriceWan: 800 },
   { id: 'tech',        nameZh: '科技园',  color: '#0e7490', x: -10, z: 4,   houseBeta: 1.15, basePriceWan: 500 },
@@ -1124,6 +1278,23 @@ export const WEALTH_DISTRICTS: WealthDistrictDef[] = [
   { id: 'central_park',      nameZh: '中央公园', color: '#16a34a', x: 0,   z: -22, houseBeta: 1.0,  basePriceWan: 500 },
   { id: 'transport_hub',     nameZh: '交通枢纽', color: '#ea580c', x: 22,  z: -14, houseBeta: 0.85, basePriceWan: 280 },
   { id: 'cultural_creative', nameZh: '文创区',   color: '#e11d48', x: 24,  z: 8,   houseBeta: 1.1,  basePriceWan: 380 },
+  // ── 批次 20 城市扩张新增 16 区（下标 16–31；id/顺序/坐标/颜色逐字 = 文档 1 §2 表）──
+  { id: 'fin_sub_center',    nameZh: '金融副中心', color: '#1e40af', x: 24,  z: 30,  houseBeta: 1.30, basePriceWan: 650 },
+  { id: 'software_park',     nameZh: '软件园',   color: '#0d9488', x: 38,  z: 14,  houseBeta: 1.20, basePriceWan: 520 },
+  { id: 'airport_town',      nameZh: '空港小镇', color: '#0369a1', x: 44,  z: -20, houseBeta: 1.05, basePriceWan: 300 },
+  { id: 'air_logistics',     nameZh: '航空物流园', color: '#334155', x: 36,  z: -38, houseBeta: 0.95, basePriceWan: 260 },
+  { id: 'auto_city',         nameZh: '汽车城',   color: '#a16207', x: 8,   z: -40, houseBeta: 1.00, basePriceWan: 300 },
+  { id: 'mountain_resort',   nameZh: '山居民宿区', color: '#4d7c0f', x: -8,  z: -44, houseBeta: 0.90, basePriceWan: 180 },
+  { id: 'chem_park',         nameZh: '化工园区', color: '#52525b', x: -20, z: -44, houseBeta: 0.70, basePriceWan: 130 },
+  { id: 'agri_park',         nameZh: '现代农业园', color: '#ca8a04', x: -40, z: -36, houseBeta: 0.80, basePriceWan: 160 },
+  { id: 'health_town',       nameZh: '康养小镇', color: '#fb7185', x: -44, z: -10, houseBeta: 0.80, basePriceWan: 200 },
+  { id: 'steel_town',        nameZh: '特钢镇',   color: '#44403c', x: -46, z: 2,   houseBeta: 0.75, basePriceWan: 150 },
+  { id: 'old_city_culture',  nameZh: '古城文化区', color: '#9a3412', x: -44, z: 22,  houseBeta: 0.85, basePriceWan: 240 },
+  { id: 'university_town',   nameZh: '大学城',   color: '#6366f1', x: -32, z: 34,  houseBeta: 0.95, basePriceWan: 300 },
+  { id: 'wetland_park',      nameZh: '湿地公园', color: '#14b8a6', x: -12, z: 40,  houseBeta: 0.90, basePriceWan: 280 },
+  { id: 'sports_new_city',   nameZh: '体育新城', color: '#facc15', x: 10,  z: 40,  houseBeta: 1.05, basePriceWan: 340 },
+  { id: 'bay_new_town',      nameZh: '湾区新城', color: '#7e22ce', x: 40,  z: 28,  houseBeta: 1.25, basePriceWan: 580 },
+  { id: 'highspeed_rail_town', nameZh: '高铁新城', color: '#c2410c', x: 46, z: 2,   houseBeta: 1.15, basePriceWan: 380 },
 ];
 
 export const WEALTH_DISTRICT_IDS: WealthDistrictId[] =
@@ -1134,7 +1305,7 @@ export function wealthDistrict(id: string): WealthDistrictDef | undefined {
   return WEALTH_DISTRICTS.find((d) => d.id === id);
 }
 
-/** 城区中心（80×80 世界坐标）；未知 id 回落原点。 */
+/** 城区中心（120×120 世界坐标）；未知 id 回落原点。 */
 export function districtCenter(id: string): { x: number; z: number } {
   const d = wealthDistrict(id);
   return d ? { x: d.x, z: d.z } : { x: 0, z: 0 };

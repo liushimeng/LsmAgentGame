@@ -37,6 +37,9 @@ type Action struct {
 	Level int `json:"level,omitempty"`
 	// move(§CityHuman重构): walk|run(区内) / bus|metro|taxi(跨城区)
 	Mode string `json:"mode,omitempty"`
+	// set_side_price / start_side_business(批次20 文档2):定价档位
+	// 0=中价(缺省,兼容旧客户端/旧 Agent) 1=低价 2=高价。
+	Tier int `json:"tier,omitempty"`
 }
 
 // 动作类型常量(协议 §4)。
@@ -69,6 +72,8 @@ const (
 	// P1 新增(§财商流P1-4 §8.1): 商业保险投保/退保(复用 Kind 字段,Action struct 零变更)。
 	ActBuyInsurance    = "buy_insurance"
 	ActCancelInsurance = "cancel_insurance"
+	// 批次20 新增(文档2 §3):副业改价 { "tier": 0|1|2 },预算 1(working)。
+	ActSetSidePrice = "set_side_price"
 )
 
 // 信用贷档位面额(协议 §4:credit 档位必须是 50000/100000/200000 之一)。
@@ -78,17 +83,19 @@ var creditTierAmounts = map[int64]string{
 	200000: LoanCreditT3,
 }
 
-// 副业档位(协议 §4)。
+// 副业档位(协议 §4)。Kind 批次20 补入:sideTierGate 按品类差异化门槛
+// (tutoring/freelance 高价认知 +1),见 side_market.go。
 type sideBizDef struct {
+	Kind          string
 	GateCognition int
 	Low, High     int64
 }
 
 var sideBizDefs = map[string]sideBizDef{
-	"delivery":  {0, 2500, 4000},
-	"content":   {2, 2000, 6000},
-	"tutoring":  {4, 3000, 5000},
-	"freelance": {3, 3000, 6000},
+	"delivery":  {Kind: "delivery", GateCognition: 0, Low: 2500, High: 4000},
+	"content":   {Kind: "content", GateCognition: 2, Low: 2000, High: 6000},
+	"tutoring":  {Kind: "tutoring", GateCognition: 4, Low: 3000, High: 5000},
+	"freelance": {Kind: "freelance", GateCognition: 3, Low: 3000, High: 6000},
 }
 
 // ApplyAction 校验并执行座位动作(引擎层;phase/status 由房间层前置校验)。
@@ -115,6 +122,8 @@ func (w *World) ApplyAction(seat int, a Action) (string, *errcode.Error) {
 		return w.actRepayLoan(p, a)
 	case ActStartSide:
 		return w.actStartSide(p, a)
+	case ActSetSidePrice:
+		return w.actSetSidePrice(p, a)
 	case ActStopSide:
 		return w.actStopSide(p)
 	case ActStudy:
@@ -170,11 +179,18 @@ func (w *World) actBuyAsset(p *Player, a Action) (string, *errcode.Error) {
 	}
 	switch a.Asset {
 	case AssetStockIndex:
-		units := math.Floor(float64(a.AmountCNY) / w.Market.StockIndex)
+		// 批次20 文档3 B2:熔断期禁买(35043);成交价用 ask 单边价(B2-2);
+		// 当月买入份数记入 T+1 冻结量(B2-3,月结开头解冻)。
+		if w.Market.StockBreakerActive(w.Month) {
+			return "", errcode.CodeMsg(errcode.ErrWealthMarketCircuitBreak,
+				fmt.Sprintf("熔断期股票交易暂停至第 %d 月", w.Market.BreakerUntilMonth))
+		}
+		buyUnit := w.Market.StockBuyUnit()
+		units := math.Floor(float64(a.AmountCNY) / buyUnit)
 		if units < 1 {
 			return "", errcode.CodeMsg(errcode.ErrWealthAssetInvalid, "amount too small for 1 unit")
 		}
-		cost := int64(units*w.Market.StockIndex + 0.5)
+		cost := int64(units*buyUnit + 0.5)
 		fee := commissionStock(cost)
 		if p.Cash < cost+fee {
 			return "", errcode.Code(errcode.ErrWealthInsufficientCash)
@@ -186,6 +202,7 @@ func (w *World) actBuyAsset(p *Player, a Action) (string, *errcode.Error) {
 		} else {
 			p.Assets = append(p.Assets, Asset{Kind: AssetStockIndex, Units: units, CostCNY: cost, OpenMonth: w.Month})
 		}
+		p.StockT1Locked += int64(units)
 		text := fmt.Sprintf("买入指数基金 %.0f 份(¥%d)", units, cost+fee)
 		w.spendBudget(p, "trading", text)
 		return text, nil
@@ -257,11 +274,22 @@ func (w *World) actSellAsset(p *Player, a Action) (string, *errcode.Error) {
 	}
 	switch {
 	case a.Asset == AssetStockIndex:
+		// 批次20 文档3 B2:熔断期禁卖(35043);成交价用 bid 单边价(B2-2);
+		// 可卖量 = 持仓 − 当月买入 T+1 冻结量(B2-3,不足 → 35044)。
+		if w.Market.StockBreakerActive(w.Month) {
+			return "", errcode.CodeMsg(errcode.ErrWealthMarketCircuitBreak,
+				fmt.Sprintf("熔断期股票交易暂停至第 %d 月", w.Market.BreakerUntilMonth))
+		}
 		at := p.assetOf(AssetStockIndex)
 		if at == nil || at.Units < a.Units {
 			return "", errcode.Code(errcode.ErrWealthAssetInvalid)
 		}
-		gross := int64(a.Units*w.Market.StockIndex + 0.5)
+		if a.Units > p.stockSellableUnits() {
+			return "", errcode.CodeMsg(errcode.ErrWealthStockT1Locked,
+				fmt.Sprintf("可卖 %d 份,当月买入 %d 份 T+1 冻结",
+					int(at.Units-float64(p.StockT1Locked)+0.5), p.StockT1Locked))
+		}
+		gross := int64(a.Units*w.Market.StockSellUnit() + 0.5)
 		fee := commissionStock(gross)
 		w.Pay(p.Seat, EntityMarket, SeatEntity(p.Seat), gross, CatSell, "卖出指数基金")
 		w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, fee, CatFee, "卖出佣金")
@@ -808,6 +836,10 @@ func (w *World) estimateSavedInterest(loan *Loan) int64 {
 }
 
 // ── 副业 ──
+
+// actStartSide 启动副业。批次20(文档2 §3)增可选 tier 参数:
+// 缺省/0 = 中价(旧行为逐字不变),1=低价,2=高价。TierSetMonth 保持 0
+// —— 开业不是改档,当月仍可用 set_side_price 调一次。
 func (w *World) actStartSide(p *Player, a Action) (string, *errcode.Error) {
 	if p.ActionBudget <= 0 {
 		return "", errcode.Code(errcode.ErrWealthActionBudgetExhausted)
@@ -819,14 +851,52 @@ func (w *World) actStartSide(p *Player, a Action) (string, *errcode.Error) {
 	if p.SideBusiness != nil {
 		return "", errcode.CodeMsg(errcode.ErrWealthGateFailed, "side business already running")
 	}
+	if !sideTierValid(a.Tier) {
+		return "", errcode.CodeMsg(errcode.ErrWealthGateFailed, "tier must be 0(中价)|1(低价)|2(高价)")
+	}
 	if p.Cognition < def.GateCognition {
 		return "", errcode.Code(errcode.ErrWealthGateFailed)
 	}
+	if e := sideTierGate(p, def, a.Tier); e != nil {
+		return "", e
+	}
 	base := (def.Low + def.High) / 2
-	p.SideBusiness = &SideBusiness{Kind: a.Kind, BaseIncome: base, OpenedMonth: w.Month}
+	p.SideBusiness = &SideBusiness{Kind: a.Kind, BaseIncome: base, OpenedMonth: w.Month, PriceTier: a.Tier}
 	p.Assets = append(p.Assets, Asset{Kind: AssetSideBusiness, Units: 1, CostCNY: 0, OpenMonth: w.Month,
 		Extra: map[string]any{"kind": a.Kind}})
 	text := fmt.Sprintf("启动副业(%s),月入约 ¥%d–%d", sideBizCN(a.Kind), def.Low, def.High)
+	if a.Tier != PriceTierMid {
+		text += fmt.Sprintf(",定价%s档(客群%d%%)", sideTierCN(a.Tier), int(sideTierWeight(a.Tier)*100+0.5))
+	}
+	w.spendBudget(p, "working", text)
+	return text, nil
+}
+
+// actSetSidePrice 副业改价(批次20 文档2 §3):预算 1(working);gate =
+// 有副业 / tier ∈ 0..2 / 本月未改过档(每月 ≤1 次)/ sideTierGate 品类门槛。
+func (w *World) actSetSidePrice(p *Player, a Action) (string, *errcode.Error) {
+	if p.ActionBudget <= 0 {
+		return "", errcode.Code(errcode.ErrWealthActionBudgetExhausted)
+	}
+	if p.SideBusiness == nil {
+		return "", errcode.CodeMsg(errcode.ErrWealthGateFailed, "no running side business")
+	}
+	if !sideTierValid(a.Tier) {
+		return "", errcode.CodeMsg(errcode.ErrWealthGateFailed, "tier must be 0(中价)|1(低价)|2(高价)")
+	}
+	if p.SideBusiness.TierSetMonth == w.Month {
+		return "", errcode.CodeMsg(errcode.ErrWealthGateFailed, "本月已改过价,每月限 1 次")
+	}
+	def, ok := sideBizDefs[p.SideBusiness.Kind]
+	if !ok {
+		def = sideBizDef{Kind: p.SideBusiness.Kind}
+	}
+	if e := sideTierGate(p, def, a.Tier); e != nil {
+		return "", e
+	}
+	p.SideBusiness.PriceTier = a.Tier
+	p.SideBusiness.TierSetMonth = w.Month
+	text := fmt.Sprintf("副业改价:%s档(客群%d%%)", sideTierCN(a.Tier), int(sideTierWeight(a.Tier)*100+0.5))
 	w.spendBudget(p, "working", text)
 	return text, nil
 }

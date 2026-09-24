@@ -155,6 +155,49 @@
   min-width: 0;
 }
 
+/* 批次 20 §3.4：32 区「展开全部 / 收起」折叠列表 —— 展开态网格滚动内收
+ * （max-height + overflow-y: auto，控件不出界，防溢出规约 18-04）。 */
+.wealth-citypanel__districts-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wealth-citypanel__districts--scroll {
+  max-height: 168px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  align-items: end;
+}
+
+/* 展开/收起按钮：与「居民档案」入口同族实底深底 + 琥珀文字（§26 ≥6:1；
+ * focus 光晕与 __open 一致，选中/激活态与未选态差异走边框 + 光晕双通道）。 */
+.wealth-citypanel__expand {
+  align-self: flex-start;
+  padding: 3px 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #ffd76b;
+  background: #243144;
+  border: 1px solid rgba(201, 162, 39, 0.45);
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.wealth-citypanel__expand:hover {
+  border-color: rgba(201, 162, 39, 0.85);
+  background: #2b3a52;
+}
+.wealth-citypanel__expand:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.55);
+}
+.wealth-citypanel__expand[aria-expanded='true'] {
+  border-color: rgba(201, 162, 39, 0.9);
+  background: #2f4059; /* 激活态明度差 >1.5 倍 + 描边双通道（§26.2 反模式 4） */
+}
+
 /* 紧凑模式「其他 N 个」聚合行：中性灰，与实体城区区分（§26 disabled 反模式：
  * 不用 opacity 污染，改独立灰底 + 正常对比度文字）。 */
 .wealth-citypanel__district--other .wealth-citypanel__district-fill {

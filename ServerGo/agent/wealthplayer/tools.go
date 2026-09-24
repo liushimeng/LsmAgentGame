@@ -9,11 +9,31 @@ package wealthplayer
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"LsmAgentGame/agent/wealthtypes"
 	"LsmAgentGame/errcode"
+	"LsmAgentGame/game/wealth/profession"
 	llmtypes "LsmAgentGame/llm/types"
 )
+
+// districtIDsHintDesc 城区 id 描述串(批次20 B2-9):动态从
+// profession.DistrictIDs() 生成 —— BE-1 扩表(8→16→32)时本串自动跟随,
+// **不写死数量**(旧文案「8 区 id:…」在 16 区表下曾误导 LLM,§130)。
+// 格式:前 8 个示例 + 「…等 N 区」(N=总数;N≤8 时全列并标 N 区)。
+func districtIDsHintDesc() string {
+	ids := profession.DistrictIDs()
+	n := len(ids)
+	first := ids
+	if n > 8 {
+		first = ids[:8]
+	}
+	base := strings.Join(first, "|")
+	if n > 8 {
+		return fmt.Sprintf("城区 id:%s…等 %d 区", base, n)
+	}
+	return fmt.Sprintf("城区 id:%s(%d 区)", base, n)
+}
 
 // ToolRunner 是引擎桥接口(game/wealth/agent_runner.go 实现;in-process 不走 WS)。
 // 所有方法返回 error(引擎侧为 *errcode.Error,350xx 错误码)。
@@ -24,8 +44,12 @@ type ToolRunner interface {
 	BuyHouse(seat int, district string, downpayRatio float64, asset string) error
 	TakeLoan(seat int, kind string, amountCNY int64) error
 	RepayLoan(seat int, loanID string, amountCNY int64) error
-	StartSideBusiness(seat int, kind string) error
+	// StartSideBusiness 批次20(文档2 §3)增 tier 参数:0=中价(缺省旧行为)
+	// 1=低价 2=高价。
+	StartSideBusiness(seat int, kind string, tier int) error
 	StopSideBusiness(seat int) error
+	// SetSidePrice 副业改价(批次20 文档2 §3;耗 1 点月预算,每月 ≤1 次)。
+	SetSidePrice(seat int, tier int) error
 	Study(seat int) error
 	Socialize(seat int) error
 	Rest(seat int) error
@@ -85,6 +109,8 @@ const (
 	ToolRepayLoan    = "repay_loan"
 	ToolStartSide    = "start_side_business"
 	ToolStopSide     = "stop_side_business"
+	// ToolSetSidePrice 副业改价(批次20 文档2 §4.1;动作类,耗 1 点月预算)。
+	ToolSetSidePrice = "set_side_price"
 	ToolStudy        = "study"
 	ToolSocialize    = "socialize"
 	ToolRest         = "rest"
@@ -140,7 +166,8 @@ func BuildTools() []llmtypes.ToolDef {
 		{
 			Name: ToolBuyAsset,
 			Description: "按市价买入金融资产:stock_index(指数基金,佣金0.025%最低5元)/" +
-				"bond(债券,锁定当期年化)/gold(黄金)。金额 ≥1000 元;整份成交。",
+				"bond(债券,锁定当期年化)/gold(黄金)。金额 ≥1000 元;整份成交。" +
+				"股票按 ask 单边价成交,当月买入 T+1 冻结不可当月卖出,熔断月暂停交易(见上下文市场现价行)。",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -152,7 +179,7 @@ func BuildTools() []llmtypes.ToolDef {
 		},
 		{
 			Name:        ToolSellAsset,
-			Description: "卖出持仓:金融资产按份额(units≥1);房产/商铺整售(units=1)。股票佣金0.025%最低5元;黄金手续费0.5%;房产增值税5%+中介2%(满5年唯一免增值税),卖房先偿房贷。",
+			Description: "卖出持仓:金融资产按份额(units≥1);房产/商铺整售(units=1)。股票按 bid 单边价成交(与买价有阶段价差),佣金0.025%最低5元;当月买入的股票 T+1 冻结不可卖,熔断月暂停交易;黄金手续费0.5%;房产增值税5%+中介2%(满5年唯一免增值税),卖房先偿房贷。",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -168,7 +195,7 @@ func BuildTools() []llmtypes.ToolDef {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"district":      strSchema("8 区 id:finance|tech|industry|oldtown|commerce|residential|suburb|riverside"),
+					"district":      strSchema(districtIDsHintDesc()),
 					"downpay_ratio": map[string]any{"type": "number", "minimum": 0.3, "maximum": 1.0, "description": "首付比例"},
 					"asset":         strSchema(`"house"(默认)|"shop"`),
 				},
@@ -200,20 +227,42 @@ func BuildTools() []llmtypes.ToolDef {
 			},
 		},
 		{
-			Name:        ToolStartSide,
-			Description: "启动副业:delivery(无门槛)/content(认知≥2)/freelance(认知≥3)/tutoring(认知≥4);月入约 2000–6000 元,月耗精力 2。",
+			Name: ToolStartSide,
+			Description: "启动副业:delivery(无门槛)/content(认知≥2)/freelance(认知≥3)/tutoring(认知≥4);" +
+				"月入约 2000–6000 元,月耗精力 2。可选定价档位 tier(缺省中价):同品类多经营者时按客群份额切分收入。",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"kind": strSchema("delivery|content|tutoring|freelance"),
+					"tier": map[string]any{
+						"type":        "integer",
+						"enum":        []int{0, 1, 2},
+						"description": "定价档(可选,缺省 0):0 中价(客群30%,×1.0)/1 低价(客群50%,×0.75)/2 高价(客群20%,×1.25;家教/自由接单需认知≥门槛+1;跑腿高价月结额外精力-1;内容高价且认知<3 收入折半)",
+					},
 				},
 				"required": []string{"kind"},
 			},
 		},
 		{
-			Name:        ToolStopSide,
+			Name: ToolStopSide,
 			Description: "停掉副业(无残值,精力释放)。",
 			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		},
+		{
+			Name: ToolSetSidePrice,
+			Description: "副业改价(耗 1 次动作预算,每月限 1 次):份额 = 我的客群权重 ÷ 同品类全部经营者权重和" +
+				"(低50/中30/高20)。高价收入×1.25 但份额看对手;集体低价 = 集体受损(定价战囚徒困境)。当前竞争简况见「副业定价市场」段。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"tier": map[string]any{
+						"type":        "integer",
+						"enum":        []int{0, 1, 2},
+						"description": "0 中价/1 低价/2 高价",
+					},
+				},
+				"required": []string{"tier"},
+			},
 		},
 		{
 			Name:        ToolStudy,
@@ -241,7 +290,7 @@ func BuildTools() []llmtypes.ToolDef {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"district": strSchema("8 区 id 之一(不可与当前相同)"),
+					"district": strSchema(districtIDsHintDesc() + "(不可与当前相同)"),
 				},
 				"required": []string{"district"},
 			},
@@ -425,11 +474,11 @@ func BuildTools() []llmtypes.ToolDef {
 
 // ToolNames 返回全部工具名(测试/lint 用)。
 // P0 基础 17 + P1 央行/银行 5 + 明斯基/提前还款 2 + P1-2 经济循环 3 +
-// P1-4 商业保险 3 + P2 交易 12 = 42。
+// P1-4 商业保险 3 + P2 交易 12 + 批次20 副业改价 1 = 43。
 func ToolNames() []string {
 	out := []string{
 		ToolCheckState, ToolBuyAsset, ToolSellAsset, ToolBuyHouse, ToolTakeLoan,
-		ToolRepayLoan, ToolStartSide, ToolStopSide, ToolStudy, ToolSocialize,
+		ToolRepayLoan, ToolStartSide, ToolStopSide, ToolSetSidePrice, ToolStudy, ToolSocialize,
 		ToolRest, ToolWorkOvertime, ToolMoveDistrict, ToolConsume, ToolDonate,
 		ToolSpeak, ToolSubmitMonth,
 		ToolQueryCentralBank, ToolQueryBankingSystem, ToolApplyLoanWithCredit,
@@ -519,9 +568,11 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 	case ToolRepayLoan:
 		return failOr(a.runner.RepayLoan(seat, getStr("loan_id"), getInt("amount_cny")), "还款成功", res)
 	case ToolStartSide:
-		return failOr(a.runner.StartSideBusiness(seat, getStr("kind")), "副业已启动", res)
+		return failOr(a.runner.StartSideBusiness(seat, getStr("kind"), int(getInt("tier"))), "副业已启动", res)
 	case ToolStopSide:
 		return failOr(a.runner.StopSideBusiness(seat), "副业已停止", res)
+	case ToolSetSidePrice:
+		return failOr(a.runner.SetSidePrice(seat, int(getInt("tier"))), "副业改价完成", res)
 	case ToolStudy:
 		return failOr(a.runner.Study(seat), "学习完成", res)
 	case ToolSocialize:

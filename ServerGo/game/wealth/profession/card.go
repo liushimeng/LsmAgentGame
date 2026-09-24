@@ -24,7 +24,7 @@ type Card struct {
 	Network         int      // 初始人脉 0–10
 	Cognition       int      // 初始认知 0–10
 	CreditScore     int      // 初始信用分 400–850
-	HomeDistrict    string   // 工作区/初始所在区(8 区 id)
+	HomeDistrict    string   // 工作区/初始所在区(32 区 id)
 	RiskPreference  string   // conservative | balanced | aggressive
 	Personality     []string // 2–4 词(Schema v1.1 词库)
 	BehaviorTraits  []string // 2–4 词(可空)
@@ -69,13 +69,18 @@ func (c *Card) Validate() error {
 	return nil
 }
 
-// districtIDs 16 区 id 集中定义(与 game/wealth/districts.go 静态表对齐;
+// districtIDs 32 区 id 集中定义(与 game/wealth/districts.go 静态表对齐;
 // profession 不得反向 import wealth,此处独立维护——两处同步由 loader_test 覆盖)。
-// 2026-09-21 §城市扩张v2.12 阶段2:8 → 16(前 8 P0 区顺序冻结,追加 8 新区)。
+// 2026-09-21 §城市扩张v2.12 阶段2:8 → 16(前 8 P0 区顺序冻结,追加 8 新区);
+// 2026-09-24 批次20:16 → 32(前 16 区顺序冻结,按契约 §2 表序追加 16 新区)。
 var districtIDs = []string{
 	"finance", "tech", "industry", "oldtown", "commerce", "residential", "suburb", "riverside",
 	"logistics_port", "hightech_park", "edu_district", "medical_city",
 	"industrial_park", "central_park", "transport_hub", "cultural_creative",
+	"fin_sub_center", "software_park", "airport_town", "air_logistics",
+	"auto_city", "mountain_resort", "chem_park", "agri_park",
+	"health_town", "steel_town", "old_city_culture", "university_town",
+	"wetland_park", "sports_new_city", "bay_new_town", "highspeed_rail_town",
 }
 
 func validDistrict(id string) bool {
@@ -87,7 +92,7 @@ func validDistrict(id string) bool {
 	return false
 }
 
-// DistrictIDs 返回 8 区 id 副本(供 loader 映射/校验)。
+// DistrictIDs 返回 32 区 id 副本(供 loader 映射/校验)。
 func DistrictIDs() []string {
 	out := make([]string, len(districtIDs))
 	copy(out, districtIDs)

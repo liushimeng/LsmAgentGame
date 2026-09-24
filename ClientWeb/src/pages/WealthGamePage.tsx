@@ -40,6 +40,7 @@ import { MarketTradePanel } from '@/components/wealth/MarketTradePanel';
 import { InsurancePanel } from '@/components/wealth/InsurancePanel';
 import { GameOverModal } from '@/components/wealth/GameOverModal';
 import { CityStatsPanel } from '@/components/wealth/CityStatsPanel';
+import { CivicElectionBanner } from '@/components/wealth/CivicElectionBanner';
 import { WealthBotPanel } from '@/components/wealth/WealthBotPanel';
 import { WealthGameChatPanel } from '@/components/wealth/WealthGameChatPanel';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -243,6 +244,16 @@ export function WealthGamePage() {
     { key: 'trade', labelKey: 'wealth.tabgroup.trade' as TKey },
   ];
 
+  // ── 批次 20 文档 3 A4：市长选举横幅 / 政务数据（纯派生值，不走 hook —— 位于
+  //    上方 if (!roomId) 早退之后，加 hook 会违反 Rules of Hooks）。──
+  const election = gameState?.public_services ?? null;
+  const mayorSeat = election?.election_enabled ? (election.mayor_seat ?? -1) : -1;
+  const mayorNickname = mayorSeat >= 0
+    ? gameState?.players.find((p) => p.seat === mayorSeat)?.nickname
+    : undefined;
+  // 津贴停发徽标：已改由 CivicElectionBanner 直接消费 public_services.stipend_stopped
+  // （旧「当月 policy 事件中文文本探测」best-effort 逻辑已删除）。
+
   return (
     <div className="wealth-root wealth-game">
       {/* 顶部信息栏 */}
@@ -306,6 +317,13 @@ export function WealthGamePage() {
           </button>
         </div>
       </header>
+
+      {/* 批次 20 文档 3 A4：当选横幅（顶栏下方；未启用/无市长整条不渲染，可关闭按届重现） */}
+      <CivicElectionBanner
+        election={election}
+        month={gameState?.month ?? 0}
+        mayorNickname={mayorNickname}
+      />
 
       {/* 就地错误 banner（§7.1 双通道之二；全局 toast 由 useWealth 上报） */}
       {lastError && (
@@ -413,7 +431,12 @@ export function WealthGamePage() {
           )}
           {/* §20260921 城市背景层 — city 缺省（旧房）时整面板不渲染；
               roomId 供居民档案抽屉（档案锚定设计 §8.3）拉取 REST。 */}
-          <CityStatsPanel city={gameState?.city} roomId={roomId} />
+          <CityStatsPanel
+            city={gameState?.city}
+            roomId={roomId}
+            election={election}
+            players={gameState?.players}
+          />
           <WealthBotPanel
             botContexts={gameState?.bot_contexts ?? []}
             players={gameState?.players ?? []}

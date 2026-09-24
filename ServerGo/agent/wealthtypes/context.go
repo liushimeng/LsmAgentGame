@@ -67,6 +67,15 @@ type GameContext struct {
 	// §CityHuman重构(2026-09-22): 感官上下文(引擎持锁构造、Agent 锁外只读)。
 	Surroundings []NeighborBrief // 同城区邻居摘要(座位居民优先 + 抽样背景居民,≤8 条)
 	Ambiance     AmbianceBrief   // 当月所在城区感官画像(气味/声响标签)
+
+	// 批次20(2026-09-24):三块引擎侧预渲染上下文小节(§2 依赖反转 ——
+	// 本包不 import game/wealth,文案在 game/wealth/agent_runner.go 生成)。
+	// SideMarketBrief 副业定价市场小节(文档2 §4.3;≤350B;无副业 → "")。
+	SideMarketBrief string
+	// ElectionBrief 市长选举小节(文档3 A5;两行;未启用 → "")。
+	ElectionBrief string
+	// MicroPriceBrief 股票微观结构现价小节(文档3 B4;≤120B;无信息 → "")。
+	MicroPriceBrief string
 }
 
 // NeighborBrief 是 see/hear 感知结果中「人」的摘要(全部来自已锚定真实档案;

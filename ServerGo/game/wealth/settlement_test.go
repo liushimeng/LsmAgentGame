@@ -391,3 +391,72 @@ func TestAction_SetConsumption(t *testing.T) {
 		t.Errorf("budget exhausted: got %v, want %d", e, errcode.ErrWealthActionBudgetExhausted)
 	}
 }
+
+// TestSettle_SidePricingZeroOffset_Golden 批次20 回归红线(文档2 §6):**全员
+// 默认中价 + 每品类无竞争时,旧 seed 对局结算金额逐分不差**。
+// 金标准取自批次20 改动落地前的代码(settlePlayer 级,seed 20260924,2 名
+// 独占中价经营者 12 月;variance/salary 抽样逐位对齐)。与 districtCount 等
+// 无关输入解耦,只钉副业结算路径本身。
+func TestSettle_SidePricingZeroOffset_Golden(t *testing.T) {
+	type gold struct {
+		side, cash, energy int64
+		text               string
+	}
+	// GOLD2 采集值:month | sideA cashA energyA textA | sideB cashB energyB textB
+	rows := []gold{
+		{3705, 204470, 7, "副业收入"}, {3478, 208713, 6, "副业收入"},
+		{3274, 212752, 5, "副业收入"}, {3138, 216655, 4, "副业收入"},
+		{3254, 220674, 3, "副业收入"}, {2927, 224366, 2, "副业收入"},
+		{3567, 228698, 1, "副业收入"}, {3026, 232489, 0, "副业收入"},
+		{3660, 236914, -1, "副业收入"}, {0, 237679, -2, ""},
+		{0, 238444, -2, ""}, {0, 239209, -2, ""},
+	}
+	rowsB := []gold{
+		{4033, 204798, 7, "副业收入"}, {3666, 209229, 6, "副业收入"},
+		{3636, 213630, 5, "副业收入"}, {4008, 218403, 4, "副业收入"},
+		{4013, 223181, 3, "副业收入"}, {4336, 228282, 2, "副业收入"},
+		{4594, 233641, 1, "副业收入"}, {4189, 238595, 0, "副业收入"},
+		{4398, 243758, -1, "副业收入"}, {0, 244523, -2, ""},
+		{0, 245288, -2, ""}, {0, 246053, -2, ""},
+	}
+	w := NewWorld(20260924, emptyCardsFor(2))
+	for s := 0; s < 2; s++ {
+		w.Players[s] = newPlayerFromCard(s, synthCard(s, 200000))
+	}
+	w.StartGame()
+	// PriceTier 零值 = 中价;两人不同品类 → sideMarketShares 全部独占 s=1.0。
+	w.Players[0].SideBusiness = &SideBusiness{Kind: "delivery", BaseIncome: 3250, OpenedMonth: w.Month}
+	w.Players[1].SideBusiness = &SideBusiness{Kind: "content", BaseIncome: 4000, OpenedMonth: w.Month}
+	for m := 1; m <= 12; m++ {
+		shares := sideMarketShares(w)
+		w.settlePlayer(w.Players[0], m, shares)
+		w.settlePlayer(w.Players[1], m, shares)
+		a, b := w.Players[0], w.Players[1]
+		gotA := textOfSideDetail(a)
+		gotB := textOfSideDetail(b)
+		if a.Monthly.SideIncome != rows[m-1].side || a.Cash != rows[m-1].cash || int64(a.Energy) != rows[m-1].energy {
+			t.Fatalf("seat A month %d: got (%d,%d,%d, %q), golden (%d,%d,%d)", m,
+				a.Monthly.SideIncome, a.Cash, a.Energy, gotA, rows[m-1].side, rows[m-1].cash, rows[m-1].energy)
+		}
+		if gotA != rows[m-1].text {
+			t.Fatalf("seat A month %d text: got %q, want %q(旧文案逐字)", m, gotA, rows[m-1].text)
+		}
+		if b.Monthly.SideIncome != rowsB[m-1].side || b.Cash != rowsB[m-1].cash || int64(b.Energy) != rowsB[m-1].energy {
+			t.Fatalf("seat B month %d: got (%d,%d,%d), golden (%d,%d,%d)", m,
+				b.Monthly.SideIncome, b.Cash, b.Energy, rowsB[m-1].side, rowsB[m-1].cash, rowsB[m-1].energy)
+		}
+		if gotB != rowsB[m-1].text {
+			t.Fatalf("seat B month %d text: got %q, want %q", m, gotB, rowsB[m-1].text)
+		}
+	}
+}
+
+// textOfSideDetail 取月结明细中 side 行文案(无则空串)。
+func textOfSideDetail(p *Player) string {
+	for _, d := range p.Monthly.Detail {
+		if d.Key == "side" {
+			return d.Text
+		}
+	}
+	return ""
+}

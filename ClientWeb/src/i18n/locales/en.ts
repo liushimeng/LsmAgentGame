@@ -2,6 +2,7 @@ import type { Dict } from '../types';
 import wealthP2 from './wealthP2-en';
 import wealthInsurance from './wealthInsurance-en';
 import wealthResidents from './wealthResidents-en';
+import wealthBatch20 from './wealthBatch20-en';
 
 // English — en
 const en: Dict = {
@@ -1448,6 +1449,23 @@ const en: Dict = {
   'wealth.district.central_park': 'Central Park',
   'wealth.district.transport_hub': 'Transport Hub',
   'wealth.district.cultural_creative': 'Cultural Quarter',
+  // Batch 20: 16 new districts (names per doc1 §2.1)
+  'wealth.district.fin_sub_center': 'Financial Sub-CBD',
+  'wealth.district.software_park': 'Software Park',
+  'wealth.district.airport_town': 'Airport Town',
+  'wealth.district.air_logistics': 'Air Logistics Park',
+  'wealth.district.auto_city': 'Auto City',
+  'wealth.district.mountain_resort': 'Mountain Resort',
+  'wealth.district.chem_park': 'Chemical Park',
+  'wealth.district.agri_park': 'Modern Agri Park',
+  'wealth.district.health_town': 'Wellness Town',
+  'wealth.district.steel_town': 'Steel Town',
+  'wealth.district.old_city_culture': 'Old Town Culture',
+  'wealth.district.university_town': 'University Town',
+  'wealth.district.wetland_park': 'Wetland Park',
+  'wealth.district.sports_new_city': 'Sports New City',
+  'wealth.district.bay_new_town': 'Bay New Town',
+  'wealth.district.highspeed_rail_town': 'HSR New Town',
   'wealth.cash': 'Cash',
   'wealth.netWorth': 'Net worth',
   'wealth.fiIndex': 'FI Index',
@@ -1599,6 +1617,8 @@ const en: Dict = {
   'wealth.cityVoices': 'City voices',
   'wealth.cityVoiceOfMonth': 'Month {month}',
   'wealth.cityOtherDistricts': 'Other ({n})',
+  'wealth.cityDistrictsExpand': 'Expand all {n} districts',
+  'wealth.cityDistrictsCollapse': 'Collapse list',
   // 17-CityHuman all-resident driving — driver-layer indicator ({n} = residents driven last month).
   'wealth.cityDriven': 'Residents driven this month: {n}',
   'wealth.seatsCount': 'Deep residents {n}/{max}',
@@ -1706,14 +1726,8 @@ const en: Dict = {
   'wealth.consumption.forcedHint': 'When cash falls below 2× monthly living expense, settlement force-downgrades you to Frugal (living ×0.6)',
   'wealth.consumption.invalid': 'Invalid consumption level (must be 0-3)',
 
-  // ── P2 trading system split to wealthP2-en.ts (≤1800 line cap) ──
-  ...wealthP2,
-
-  // ── P1-4 commercial insurance split to wealthInsurance-en.ts (≤1800 line cap) ──
-  ...wealthInsurance,
-
-  // ── resident profile anchoring split to wealthResidents-en.ts (≤1800 line cap) ──
-  ...wealthResidents,
+  // ── wealth split files (≤1800 line cap): P2 trading / P1-4 insurance / residents / batch20 ──
+  ...wealthP2, ...wealthInsurance, ...wealthResidents, ...wealthBatch20,
 
   // ── P1 Minsky Engine + LPR Reprice + Early Repayment ──
   'minsky.title': 'Minsky Financing Status',

@@ -2,6 +2,7 @@ import type { Dict } from '../types';
 import wealthP2 from './wealthP2-zh';
 import wealthInsurance from './wealthInsurance-zh';
 import wealthResidents from './wealthResidents-zh';
+import wealthBatch20 from './wealthBatch20-zh';
 
 // 中文 (默认) — zh-CN
 const zhCN: Dict = {
@@ -1447,6 +1448,23 @@ const zhCN: Dict = {
   'wealth.district.central_park': '中央公园',
   'wealth.district.transport_hub': '交通枢纽',
   'wealth.district.cultural_creative': '文创区',
+  // 批次 20 城市扩张新增 16 区（名 = 文档 1 §2.1，顺序 = §2 表）
+  'wealth.district.fin_sub_center': '金融副中心',
+  'wealth.district.software_park': '软件园',
+  'wealth.district.airport_town': '空港小镇',
+  'wealth.district.air_logistics': '航空物流园',
+  'wealth.district.auto_city': '汽车城',
+  'wealth.district.mountain_resort': '山居民宿区',
+  'wealth.district.chem_park': '化工园区',
+  'wealth.district.agri_park': '现代农业园',
+  'wealth.district.health_town': '康养小镇',
+  'wealth.district.steel_town': '特钢镇',
+  'wealth.district.old_city_culture': '古城文化区',
+  'wealth.district.university_town': '大学城',
+  'wealth.district.wetland_park': '湿地公园',
+  'wealth.district.sports_new_city': '体育新城',
+  'wealth.district.bay_new_town': '湾区新城',
+  'wealth.district.highspeed_rail_town': '高铁新城',
   'wealth.cash': '现金',
   'wealth.netWorth': '净资产',
   'wealth.fiIndex': '财务自由指数',
@@ -1598,6 +1616,8 @@ const zhCN: Dict = {
   'wealth.cityVoices': '城市之声',
   'wealth.cityVoiceOfMonth': '第 {month} 月',
   'wealth.cityOtherDistricts': '其他 {n} 区',
+  'wealth.cityDistrictsExpand': '展开全部 {n} 区',
+  'wealth.cityDistrictsCollapse': '收起列表',
   // 17-CityHuman 全民驱动 — 驱动层指示（{n} = 上月实际驱动居民数）。
   'wealth.cityDriven': '本月驱动 {n} 名居民',
   'wealth.seatsCount': '深度居民 {n}/{max}',
@@ -1706,14 +1726,8 @@ const zhCN: Dict = {
   'wealth.consumption.invalid': '消费档位非法（须 0-3）',
 
 
-  // ── P2 交易系统拆到 wealthP2-zh.ts（≤1800 行约束）──
-  ...wealthP2,
-
-  // ── P1-4 商业保险拆到 wealthInsurance-zh.ts（≤1800 行约束）──
-  ...wealthInsurance,
-
-  // ── 居民人物卡档案锚定拆到 wealthResidents-zh.ts（≤1800 行约束）──
-  ...wealthResidents,
+  // ── wealth 拆分文件（≤1800 行约束）：P2 交易 / P1-4 保险 / 居民档案 / 批次20 三功能 ──
+  ...wealthP2, ...wealthInsurance, ...wealthResidents, ...wealthBatch20,
 
   // ── P1 明斯基引擎 + LPR 重定价 + 提前还款 ──
   'minsky.title': '明斯基融资状态',

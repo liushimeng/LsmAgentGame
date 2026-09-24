@@ -4,7 +4,7 @@
 // 虚拟城市-大规模城市居民背景模拟设计-v1.md §3(2026-09-21)。
 //
 // CalibTable 是背景居民合成(Backdrop)的数值来源:把 10 万级职业卡池抽样
-// 成 26 个 L1 行业域 × 16 城区的紧凑分布参数。构建兜底链 docs → synthetic
+// 成 26 个 L1 行业域 × 32 城区的紧凑分布参数。构建兜底链 docs → synthetic
 // (2026-09-22 §17-CityHuman:curated 中间层删除,契约 03 §2.2);后台
 // goroutine 预热(sync.Once,不阻塞启动),房间创建不等预热 —— 未 Ready 时
 // 用合成默认即时建城,Ready 后下一房生效(进行中房间不回填,避免中途分布
@@ -26,7 +26,7 @@ import (
 // 契约常量(03 §3)。
 const (
 	domainCount   = 26 // L1 行业域 A..Z
-	districtCount = 16 // 城区(2026-09-21 §城市扩张v2.12 阶段2:8 → 16)
+	districtCount = 32 // 城区(批次20 §20260924-20:16 → 32;前 16 区顺序冻结,尾部追加 16 新区)
 	// defaultEmployment 基线就业率(契约默认 0.94)。
 	defaultEmployment = 0.94
 	// defaultCalibSampleSize 校准抽样卡数默认值(契约 512)。

@@ -434,27 +434,44 @@ _enrich_v44:
 }
 
 // TestResolveDistrict_Priority 城区解析优先级:行业 > 城市关键词 > 城市分层 > 哈希散列。
+// 批次20 §2.4:行业值为候选集(多候选按卡 id 哈希稳定散列),断言相应改为
+// 「落在契约候选集内」;单候选行业仍为逐字相等。
 func TestResolveDistrict_Priority(t *testing.T) {
 	cases := []struct {
-		industry, city, id, want string
+		industry, city, id string
+		wants              []string // 允许结果集(单元素 = 逐字相等)
 	}{
-		{"Q", "县城", "X1", "finance"},  // 行业优先(金融与保险)
-		{"", "一线城市", "X2", "finance"}, // 关键词表
-		{"", "高新区", "X3", "tech"},     // 关键词表
-		{"", "北京", "X4", "finance"},   // 城市分层:一线
-		{"", "杭州", "X5", "tech"},      // 城市分层:新一线
-		{"", "厦门", "X6", "commerce"},  // 城市分层:二线
-		{"P", "未知", "X7", "tech"},     // 行业:信息与通信
-		{"A", "未知", "X8", "suburb"},   // 行业:农林牧渔
+		{"Q", "县城", "X1", []string{"finance", "fin_sub_center"}},  // 行业优先(§2.4 row2:finance + 金融副中心)
+		{"", "一线城市", "X2", []string{"finance"}},                 // 关键词表
+		{"", "高新区", "X3", []string{"tech"}},                      // 关键词表
+		{"", "北京", "X4", []string{"finance"}},                     // 城市分层:一线
+		{"", "杭州", "X5", []string{"tech"}},                        // 城市分层:新一线
+		{"", "厦门", "X6", []string{"commerce"}},                    // 城市分层:二线
+		{"P", "未知", "X7", []string{"tech", "software_park"}},      // 行业:信息传输/软件(§2.4 row1)
+		{"A", "未知", "X8", []string{"agri_park"}},                  // 行业:农林牧渔 → 现代农业园(§2.4 改派)
+		{"V", "未知", "X9", []string{"sports_new_city", "cultural_creative", "old_city_culture"}}, // 文体传媒(§2.4 row10/11)
 	}
 	for _, c := range cases {
 		got := resolveDistrict(c.industry, c.city, c.id)
-		if got != c.want {
-			t.Errorf("resolveDistrict(%q,%q,%q) = %q, want %q", c.industry, c.city, c.id, got, c.want)
+		ok := false
+		for _, w := range c.wants {
+			if got == w {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			t.Errorf("resolveDistrict(%q,%q,%q) = %q, want ∈ %v", c.industry, c.city, c.id, got, c.wants)
 		}
 	}
-	// 同 id 同区(确定性,不吃 rng);不同 id 落在 spreadDistricts 之一。
-	hashSet := map[string]struct{}{"oldtown": {}, "residential": {}, "suburb": {}, "riverside": {}, "industry": {}}
+	// 同 id 同区(确定性,不吃 rng);不同 id 落在 spreadDistricts(批次20 扩为 12 区)之一。
+	hashSet := map[string]struct{}{}
+	for _, d := range spreadDistricts {
+		hashSet[d] = struct{}{}
+	}
+	if len(spreadDistricts) != 12 {
+		t.Errorf("spreadDistricts = %d 区, want 12(批次20 §2.4)", len(spreadDistricts))
+	}
 	got := resolveDistrict("", "未知", "N2005")
 	if _, ok := hashSet[got]; !ok {
 		t.Errorf("N2005 应落在 spreadDistricts, got %s", got)

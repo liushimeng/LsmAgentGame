@@ -263,6 +263,13 @@ func (w *World) CreateListing(seat int, lType ListingType, payload ListingPayloa
 		if !w.assetExists(p, payload.Asset.Asset) {
 			return nil, errcode.CodeMsg(errcode.ErrWealthListingInvalid, "asset not in seller portfolio")
 		}
+		// 批次20 文档3 B2-3:股票挂牌过户同受 T+1 约束(评审口径「更严格
+		// 更安全」)—— 可挂量 = 持仓 − 当月买入冻结,不足 → 35044。
+		if payload.Asset.Asset.Kind == AssetStockIndex &&
+			payload.Asset.Asset.Units > p.stockSellableUnits() {
+			return nil, errcode.CodeMsg(errcode.ErrWealthStockT1Locked,
+				"当月买入份数 T+1 冻结,暂不可挂牌")
+		}
 		if askCNY < 100 {
 			return nil, errcode.CodeMsg(errcode.ErrWealthListingInvalid, "ask_cny must be >= 100")
 		}

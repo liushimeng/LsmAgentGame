@@ -100,10 +100,13 @@ type Loan struct {
 }
 
 // SideBusiness 副业状态。
+// 批次20(文档2 §2)追加定价档字段;JSON 兼容旧档(零值 = 中价 = 旧行为)。
 type SideBusiness struct {
 	Kind        string // delivery|content|tutoring|freelance
 	BaseIncome  int64  // 档位基准(展示)
 	OpenedMonth int
+	PriceTier   int // 0=中价(默认,兼容旧档零值) 1=低价 2=高价(常量见 side_market.go)
+	TierSetMonth int // 最近改档月(0=未改过;set_side_price 每月限 1 次)
 }
 
 // Policy 一张有效/历史保单(2026-09-19 §财商流P1-4 §2.2)。
@@ -194,6 +197,11 @@ type Player struct {
 	SalaryVolatile bool
 
 	SideBusiness *SideBusiness
+
+	// StockT1Locked 当月新买入的股票份数(批次20 文档3 B2-3 T+1:月度节拍
+	// 下的「当日」= 当月投影 —— 当月买入不可当月卖出;月结开头清零解冻)。
+	// 可卖量 = 持仓 stock 总份数 − StockT1Locked;不足卖出 → 35044。
+	StockT1Locked int64
 
 	OvertimeThisMonth bool // work_overtime 置位,月结发放工资×0.3
 
@@ -435,6 +443,22 @@ func (p *Player) monthlyIncomeEstimate() int64 {
 		inc += p.SideBusiness.BaseIncome
 	}
 	return inc
+}
+
+// stockSellableUnits 当前可卖股票份数(批次20 文档3 B2-3 T+1:持仓 − 当月
+// 买入冻结量;负数 clamp 0)。卖出与挂牌(ListingAsset)共用同一口径。
+func (p *Player) stockSellableUnits() float64 {
+	total := 0.0
+	for i := range p.Assets {
+		if p.Assets[i].Kind == AssetStockIndex {
+			total += p.Assets[i].Units
+		}
+	}
+	sellable := total - float64(p.StockT1Locked)
+	if sellable < 0 {
+		sellable = 0
+	}
+	return sellable
 }
 
 // AssetValue 单笔资产当前市值(后端架构 §6 净资产公式)。

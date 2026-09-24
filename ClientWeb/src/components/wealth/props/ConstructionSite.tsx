@@ -9,8 +9,8 @@
 
 import { u } from '../cityScale';
 
-const SITE_X = 28; // 文化创意区 (24,8) 与交通枢纽 (22,-14) 之间的空地（任一 pad 之外），
-const SITE_Z = -1; // 楼群 / 围挡 / 塔吊不与城区建筑穿插
+const SITE_X = 28; // 批次 20 §3.4 语义改注：软件园区界（software_park (38,14) 西南侧空地，
+const SITE_Z = -1; // 坐标不动，与 16 新区底板两两校验无碰撞）；楼群 / 围挡 / 塔吊不与城区建筑穿插
 const SITE_W = 3.4;
 const SITE_D = 2.6;
 

@@ -73,6 +73,11 @@ type WealthRoomOptions struct {
 	// 向后兼容旧形态)。建房 body 顶层 resident_count 由 API 层并入本字段;
 	// service 层 clamp [0, cfg.Wealth.MaxResidents](负数在 API 层 400)。
 	ResidentCount int `json:"resident_count,omitempty"`
+	// CivicElectionEnabled 2026-09-24 §批次20(文档3 A2)— 市长选举启用
+	// (仅 wealth 生效;**缺省 false = 关闭**,与 manager.Config 同零值语义,
+	// 不属于 InsuranceEnabled 家族)。建房 body 顶层 civic_election_enabled
+	// 由 API 层并入本字段(与 resident_count 同段)。
+	CivicElectionEnabled bool `json:"civic_election_enabled,omitempty"`
 }
 
 // GameJoiner is the callback RoomService invokes after a successful CreateRoom

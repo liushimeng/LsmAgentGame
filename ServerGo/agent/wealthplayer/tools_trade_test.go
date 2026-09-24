@@ -32,6 +32,8 @@ type fakeTradeRunner struct {
 	viewFilter      string
 	negCalled       bool
 	negID           string
+	// 批次20:副业定价参数。
+	lastTier int
 }
 
 func (f *fakeTradeRunner) CheckState(seat int) string { return "" }
@@ -42,8 +44,16 @@ func (f *fakeTradeRunner) BuyHouse(seat int, district string, downpayRatio float
 }
 func (f *fakeTradeRunner) TakeLoan(seat int, kind string, amountCNY int64) error { return nil }
 func (f *fakeTradeRunner) RepayLoan(seat int, loanID string, amountCNY int64) error { return nil }
-func (f *fakeTradeRunner) StartSideBusiness(seat int, kind string) error { return nil }
+func (f *fakeTradeRunner) StartSideBusiness(seat int, kind string, tier int) error {
+	f.lastTool = "start_side_business"
+	return nil
+}
 func (f *fakeTradeRunner) StopSideBusiness(seat int) error { return nil }
+func (f *fakeTradeRunner) SetSidePrice(seat int, tier int) error {
+	f.lastTool = "set_side_price"
+	f.lastTier = tier
+	return nil
+}
 func (f *fakeTradeRunner) Study(seat int) error { return nil }
 func (f *fakeTradeRunner) Socialize(seat int) error { return nil }
 func (f *fakeTradeRunner) Rest(seat int) error { return nil }
@@ -185,8 +195,8 @@ func TestTradeTools_InputSchema(t *testing.T) {
 // TestToolNames_IncludesTrade P2 交易工具已并入 ToolNames()(总计 46,含 §CityHuman重构 4)。
 func TestToolNames_IncludesTrade(t *testing.T) {
 	names := ToolNames()
-	if len(names) != 46 {
-		t.Errorf("names count: got %d, want 46 (17 P0 + 5 P1 央行/银行 + 2 明斯基 + 3 P1-2 + 3 P1-4 保险 + 12 P2 + 4 感知行动)", len(names))
+	if len(names) != 47 {
+		t.Errorf("names count: got %d, want 47 (17 P0 + 5 P1 央行/银行 + 2 明斯基 + 3 P1-2 + 3 P1-4 保险 + 12 P2 + 4 感知行动)", len(names))
 	}
 	for _, tn := range TradeToolNames() {
 		found := false

@@ -55,6 +55,9 @@ type CivicElection struct {
 	MonthsRun         int  // Enabled 期间累计月步次数(§130 接线验证)
 	LastStepMonth     int  // 最近一次 MonthlyStep 的主钟月份
 	LastVotes         []ElectionVote // 最近一次得票明细(得分降序;view 下发)
+	// StipendStopped 上月津贴是否断发(批次20 文档3 A3:「市长津贴停发」
+	// event 只在 停→停 转换沿播一次,恢复发放后重新计)。
+	StipendStopped bool
 }
 
 // NewCivicElection 构造:默认关闭、48 月一届、无市长。
@@ -98,11 +101,33 @@ func (ce *CivicElection) MonthlyStep(w *World) {
 	}
 
 	// ③ 市长津贴(gov:treasury → seat,CatWelfare;国库不足不发)。
-	if ce.MayorSeat >= 0 && w.Treasury != nil && w.Treasury.Cash >= MayorStipendCNY {
-		w.Pay(ce.MayorSeat, EntityGovernment, SeatEntity(ce.MayorSeat),
-			MayorStipendCNY, CatWelfare, "市长津贴")
-		w.Treasury.Cash -= MayorStipendCNY
+	// 批次20 文档3 A3:津贴月度不单独播报(Ledger 可查);**断发**(国库
+	// 不足)播报一条 event,恢复发放后允许再次播报(StipendStopped 转换沿)。
+	if ce.MayorSeat >= 0 {
+		if w.Treasury != nil && w.Treasury.Cash >= MayorStipendCNY {
+			w.Pay(ce.MayorSeat, EntityGovernment, SeatEntity(ce.MayorSeat),
+				MayorStipendCNY, CatWelfare, "市长津贴")
+			w.Treasury.Cash -= MayorStipendCNY
+			ce.StipendStopped = false
+		} else if !ce.StipendStopped {
+			ce.StipendStopped = true
+			w.emitEvent("policy", ce.MayorSeat, "市长津贴停发(国库不足)")
+		}
 	}
+}
+
+// NextElectionMonth 下届选举主钟月 = LastElectionMonth + Interval(从未选举
+// → Interval;批次20 文档3 A3,view 下发 next_election_month)。
+// Enabled=false 返回 0(view 字段 omitempty 不下发 —— 未启用无「下届」)。
+func (ce *CivicElection) NextElectionMonth() int {
+	if ce == nil || !ce.Enabled {
+		return 0
+	}
+	interval := ce.IntervalMonths
+	if interval <= 0 {
+		interval = ElectionIntervalMonths
+	}
+	return ce.LastElectionMonth + interval
 }
 
 // RunElection 举行一次选举:ComputeVotes 得分降序取首名(并列按座位升序,

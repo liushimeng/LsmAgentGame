@@ -69,6 +69,19 @@ type MarketState struct {
 	StockIndex      float64
 	GoldPrice       float64
 	DistrictIdx     map[string]float64 // district id → idx_d(初值恒 1.0)
+
+	// 批次20 文档3 B2:股票微观结构状态(仅 stock_index 作用域)。
+	// BreakerUntilMonth 熔断「最后一个禁止月」(0=从未;月结判定见
+	// market_microstructure.go checkStockCircuitBreaker)。
+	BreakerUntilMonth int
+	// LastStockRawDelta 最近一次 MonthStep 涨跌停 clamp **前**的原始月涨跌
+	// (熔断判定输入;每次 MonthStep 覆写,零持久化语义)。
+	LastStockRawDelta float64
+
+	// 批次20 文档2 §3:副业品类价格竞争播报状态(kind → 是否已在竞争 /
+	// 最近播报月;仅事件去重,不影响任何金额与 rand)。
+	SideCompetitionTracked    map[string]bool
+	SideCompetitionEventMonth map[string]int
 }
 
 // NewMarket 构造初始市场(开局默认 recovery,阶段时长 U(24,48) 月)。
@@ -78,6 +91,10 @@ func NewMarket(rng *rand.Rand) *MarketState {
 		StockIndex:  InitialStockIndex,
 		GoldPrice:   InitialGoldPrice,
 		DistrictIdx: make(map[string]float64, DistrictCount),
+		// 批次20 文档2:副业竞争播报状态(直接构造的旧 World 由
+		// stepSideMarketEvents 惰性初始化兜底)。
+		SideCompetitionTracked:    map[string]bool{},
+		SideCompetitionEventMonth: map[string]int{},
 	}
 	for _, d := range DistrictDefs {
 		m.DistrictIdx[d.ID] = 1.0
@@ -131,11 +148,19 @@ func (m *MarketState) ShopRent(districtID string) int64 {
 // 在月结完成后、进入下一月前调用(§14 时序步骤③)。
 func (m *MarketState) MonthStep(rng *rand.Rand) {
 	p := m.Params()
-	// 股票
-	m.StockIndex *= 1 + p.StockAnnual/12 + stockMonthlySigma*normFloat64(rng)
-	if m.StockIndex < 0.01 {
-		m.StockIndex = 0.01
+	// 股票(批次20 文档3 B2-1/B2-4:记录 clamp 前原始 Δ 供熔断判定,再做
+	// ±10% 保号截断。带内月份乘式与旧实现 `m *= 1+drift` 逐位一致 →
+	// 旧 seed 对局零偏移;σ=3% 月波动 p99 <10%,绝大多数月份走此路径)。
+	oldIdx := m.StockIndex
+	raw := oldIdx * (1 + p.StockAnnual/12 + stockMonthlySigma*normFloat64(rng))
+	if oldIdx > 0 {
+		m.LastStockRawDelta = raw/oldIdx - 1
 	}
+	next := clampStockMonthlyLimit(oldIdx, raw)
+	if next < 0.01 {
+		next = 0.01
+	}
+	m.StockIndex = next
 	// 黄金
 	m.GoldPrice *= 1 + p.GoldAnnual/12 + goldMonthlySigma*normFloat64(rng)
 	if m.GoldPrice < 1 {

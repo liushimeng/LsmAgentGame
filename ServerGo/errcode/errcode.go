@@ -165,6 +165,10 @@ const (
 	// ErrLoanNotFound(提前还款)占用,顺延取本段首个空闲码 35042 ——
 	// 前端契约以 errcode 常量为准。
 	ErrWealthResidentNotFound = 35042
+	// 35043–35044 — 虚拟城市批次20 股票交易微观结构(2026-09-24
+	// §批次20-市长选举启用与股票微观结构 文档3 B3)。
+	ErrWealthMarketCircuitBreak = 35043 // 熔断期股票交易暂停(仅 stock_index)
+	ErrWealthStockT1Locked      = 35044 // 当月买入份额 T+1 冻结不可卖
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
 	// 契约: lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md §4.4。
 	ErrWealthSenseInvalid   = 35100 // 感知/移动工具参数非法(未知城区、未知 mode、目标不存在)
@@ -285,6 +289,9 @@ var DefaultMessages = map[int]string{
 	ErrWealthInsuranceDisabled:    "wealth insurance engine disabled by config",
 	// 35042 — 虚拟城市居民人物卡档案(2026-09-21 §档案锚定契约 §7)。
 	ErrWealthResidentNotFound: "居民档案不存在",
+	// 35043–35044 — 虚拟城市批次20 股票交易微观结构(2026-09-24 文档3 B3)。
+	ErrWealthMarketCircuitBreak: "wealth stock trading suspended by monthly circuit breaker",
+	ErrWealthStockT1Locked:      "wealth stock units bought this month are T+1 locked and not sellable",
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
 	ErrWealthSenseInvalid:   "wealth sense/move params invalid (unknown district/mode/target)",
 	ErrWealthSenseLimit:     "wealth sense/speak monthly limit reached",

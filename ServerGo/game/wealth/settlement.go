@@ -65,6 +65,19 @@ type SettleResult struct {
 func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 	res = &SettleResult{Month: w.Month, Age: w.Age(), HouseIdx: map[string]float64{}}
 
+	// ⓪ T+1 解冻(批次20 文档3 B2-3):月结开头清零上月冻结 —— 当月买入
+	// 只冻结当月,结算后进入下月即可卖。零金额影响,旧档零偏移。
+	for _, p := range w.Players {
+		if p != nil {
+			p.StockT1Locked = 0
+		}
+	}
+
+	// ⓪B 副业客群份额快照(批次20 文档2 §1:同品类存活经营者归一化权重;
+	// 全员默认中价 + 无竞争时全部 s=1.0,乘式退化为旧公式)。月内一次性
+	// 计算,供 ③ 结算与竞争播报共用,不随破产/死亡中途重算(确定性)。
+	sideShares := sideMarketShares(w)
+
 	// ① 央行月度决策(P1:在月度事件之前,内生 CPI/LPR/信贷约束)。
 	if w.CB != nil {
 		w.CB.MonthlyDecision(w, w.Rand)
@@ -94,7 +107,7 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		}
 		cashBefore := p.Cash
 		if p.Alive {
-			w.settlePlayer(p, age)
+			w.settlePlayer(p, age, sideShares)
 			// P1: 月结后按最新收入重算明斯基分级(工资/收入可能变化)(v2.60 N11-4)。
 			w.reclassifyPlayerMinsky(p)
 			// P1: 重置明斯基时刻触发标记。
@@ -140,6 +153,12 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 			cyclePhaseCN(w.Market.CyclePhase), np.LPR*100, np.CPI*100))
 	}
 	w.Market.MonthStep(w.Rand)
+	// 批次20 文档3 B2-4:熔断判定(MonthStep 内 clamp **前**的原始跌幅
+	// ≤ −15% → 下全月禁股票买卖 + event;仅 stock_index 作用域)。
+	w.checkStockCircuitBreaker()
+	// 批次20 文档2 §3:品类首次出现 2+ 经营者 → 价格竞争播报
+	// (零金额影响、零 rand;竞争持续月不重复播)。
+	w.stepSideMarketEvents(sideShares)
 	for _, d := range DistrictDefs {
 		res.HouseIdx[d.ID] = w.Market.DistrictIdx[d.ID]
 	}
@@ -302,7 +321,8 @@ func cyclePhaseCN(p CyclePhase) string {
 // settlePlayer 单座位月结 7 步(§9.2,顺序锁定)。
 // 步骤 3–5 的房租/物业/税/社保/生活支出为强制扣款(现金可为负);
 // 仅贷款月供允许「不足 → 逾期」(§8.4:罚息 5%、信用分 −50)。
-func (w *World) settlePlayer(p *Player, age int) {
+// sideShares = 本月初副业客群份额快照(kind→seat→s_i,批次20 文档2)。
+func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]float64) {
 	stopped := p.StoppedMonths > 0
 	seat := p.Seat
 	var income, expense, passive int64
@@ -366,16 +386,38 @@ func (w *World) settlePlayer(p *Player, age int) {
 			addIncome(p.Family.SpouseIncome, "spouse", "配偶收入", false)
 		}
 		if p.SideBusiness != nil {
+			sb := p.SideBusiness
 			if p.Energy >= 0 {
-				base := float64(p.SideBusiness.BaseIncome) * p.BrassSideFactor()
+				// 批次20 文档2 §1:收入 = Base × m(t) × s × Brass × variance。
+				// variance 既有 rand 消耗形态不变;中价(m=1)+ 独占(s=1)时
+				// 乘式逐位退化为旧公式(回归零偏移)。
+				mult := sideTierMultiplier(sb.PriceTier)
+				share := 1.0
+				if kindShares, ok := sideShares[sb.Kind]; ok {
+					if s, ok2 := kindShares[seat]; ok2 && s > 0 {
+						share = s
+					}
+				}
+				base := float64(sb.BaseIncome) * mult * share * p.BrassSideFactor()
 				variance := 0.85 + w.Rand.Float64()*0.3
 				side = int64(base*variance + 0.5)
+				halfNote := ""
+				if sb.PriceTier == PriceTierHigh && sb.Kind == "content" && p.Cognition < 3 {
+					// content 高价且认知 <3 → 涨粉慢,收入 ×0.5(月结内乘,不拒绝定价)。
+					side = int64(float64(side)*0.5 + 0.5)
+					halfNote = "·涨粉折半"
+				}
 				if side > 0 {
-					w.Pay(seat, EntityMarket, SeatEntity(seat), side, CatSide, "副业收入")
-					addIncome(side, "side", "副业收入", false)
+					text := "副业收入" + sidePriceTextSuffix(sb.PriceTier, share) + halfNote
+					w.Pay(seat, EntityMarket, SeatEntity(seat), side, CatSide, text)
+					addIncome(side, "side", text, false)
 				}
 			}
 			p.Energy -= sideEnergyCost
+			// delivery 高价档 = 体力透支:结算额外精力 −1(文档2 §1)。
+			if sb.PriceTier == PriceTierHigh && sb.Kind == "delivery" {
+				p.Energy -= 1
+			}
 		}
 	}
 

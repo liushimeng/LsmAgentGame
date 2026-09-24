@@ -1,7 +1,11 @@
 /**
  * 北环轻轨（18-AA · §5.2 RailViaduct）
- *   沿 z=+30 横向架设，箱梁 + 13 桥墩 + 2 车站（西站/北站）+ 停靠列车 3 节。
- *   布点 z=30，x∈[-30,30]（02 §5.5 已预检：z=30 远离所有城区底板）。
+ *   沿 z=+46 横向架设，箱梁 + 13 桥墩 + 2 车站（西站/北站）+ 停靠列车 3 节。
+ *   批次 20（文档 1 §3.4）：z=30 → 46 北迁 —— 32 区后 wetland(-12,40)/
+ *   sports(10,40)/university(-32,34)/fin_sub(24,30)/bay(40,28) 底板半径 4
+ *   与旧 z=30 走廊交叠；z=46 位于 fin_sub/sports 北侧、|z|≤48 底板带内
+ *   且 WORLD_SIZE=120 边缘留 ≥14 单位缓冲；进出站方向不变。
+ *   布点 x∈[-30,30]（已预检：z=46 不与任何城区底板相交）。
  */
 import { useCivicPBR } from './CivicPBR';
 import { u } from '../cityScale';
@@ -21,13 +25,13 @@ export function RailViaduct() {
   return (
     <group>
       {/* 箱梁：60m × 0.16m × 4.5m @ y=u(9) */}
-      <mesh castShadow position={[0, u(9), 30]}>
+      <mesh castShadow position={[0, u(9), 46]}>
         <boxGeometry args={[60, u(1.6), u(4.5)]} />
         <meshStandardMaterial color="#7a8290" {...c} roughness={c.roughnessMap ? undefined : 0.85} />
       </mesh>
       {/* 桥墩 13 根 */}
       {piers.map((x) => (
-        <mesh key={`pier-${x}`} castShadow receiveShadow position={[x, u(4.5), 30]}>
+        <mesh key={`pier-${x}`} castShadow receiveShadow position={[x, u(4.5), 46]}>
           <boxGeometry args={[u(1.8), u(9), u(1.8)]} />
           <meshStandardMaterial color="#8a8f98" {...c} roughness={c.roughnessMap ? undefined : 0.85} />
         </mesh>
@@ -37,22 +41,22 @@ export function RailViaduct() {
         [-28, -23, -18, -13, -8, -3, 2, 7, 12, 17, 22, 27].map((x, i) => (
           <mesh
             key={`rail-${side}-${i}`}
-            position={[x, u(10.6), 30 + side * (u(2.3))]}
+            position={[x, u(10.6), 46 + side * (u(2.3))]}
           >
             <cylinderGeometry args={[u(0.04), u(0.04), u(1.2), 6]} />
             <meshStandardMaterial color="#7a8290" metalness={0.4} roughness={0.5} />
           </mesh>
         )),
       )}
-      {/* 车站 2 座：西站 (-18,30)、北站 (0,30) */}
-      <Station x={-18} z={30} side={'W'} />
-      <Station x={0} z={30} side={'N'} />
+      {/* 车站 2 座：西站 (-18,46)、北站 (0,46) */}
+      <Station x={-18} z={46} side={'W'} />
+      <Station x={0} z={46} side={'N'} />
       {/* 列车 3 节：停靠北站附近 */}
       {[-1, 0, 1].map((i) => (
         <mesh
           key={`car-${i}`}
           castShadow
-          position={[4 + i * u(23), u(11.5), 30]}
+          position={[4 + i * u(23), u(11.5), 46]}
           rotation={[0, Math.PI, 0]}
         >
           <boxGeometry args={[u(22), u(3.2), u(3.2)]} />
@@ -61,7 +65,7 @@ export function RailViaduct() {
       ))}
       {/* 列车窗带（半透明深色，3 节） */}
       {[-1, 0, 1].map((i) => (
-        <mesh key={`window-${i}`} position={[4 + i * u(23), u(12), 30]}>
+        <mesh key={`window-${i}`} position={[4 + i * u(23), u(12), 46]}>
           <boxGeometry args={[u(20), u(1.0), u(3.4)]} />
           <meshStandardMaterial color={TRAIN_DARK} transparent opacity={0.65} roughness={0.1} metalness={0.4} />
         </mesh>

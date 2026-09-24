@@ -627,39 +627,48 @@ func parseDocCard(fm []byte) (docCard, error) {
 
 // ─────────────────── 城区映射(行业 → 城区) ───────────────────
 
-// industryDistrictMap 一级行业代码 → 起始城区(2026-09-16 §文档池解析修复)。
+// industryDistrictMap 一级行业代码 → 起始城区候选集(2026-09-16 §文档池解析修复;
+// 批次20 §2.4 行业→城区出生地重分流)。
 //
 // 动机: 真实卡 housing_city 是具体城市名(抽样 146 个:上海/北京/成都/杭州…),
 // 旧 cityToDistrict 的关键词(一线/高新/县城/新区…)一条都命不中 → 75k 文档池
 // 100% 落在 residential,12 座同开局挤在同一区,房价指数/搬迁/商铺机制全部退化。
 // 改为按「职业所在产业」定城区(语义更贴近工作地),分布见下表注释。
-var industryDistrictMap = map[string]string{
-	"A": "suburb",      // 农林牧渔 → 郊区
-	"B": "industry",    // 采矿与冶金
-	"C": "industry",    // 食品饮料与烟草
-	"D": "industry",    // 纺织服装与鞋帽
-	"E": "industry",    // 木材家具与造纸印刷
-	"F": "tech",        // 医药与生物制造
-	"G": "industry",    // 化工与新材料
-	"H": "industry",    // 金属制品与通用机械
-	"I": "tech",        // 电子半导体与仪器仪表
-	"J": "industry",    // 汽车与交通装备
-	"K": "industry",    // 能源与电力
-	"L": "commerce",    // 建筑与房地产
-	"M": "commerce",    // 批发零售与商贸流通
-	"N": "suburb",      // 交通运输与物流仓储
-	"O": "oldtown",     // 住宿与餐饮
-	"P": "tech",        // 信息与通信技术
-	"Q": "finance",     // 金融与保险
-	"R": "finance",     // 专业服务
-	"S": "tech",        // 科学研究与技术服务
-	"T": "residential", // 教育与培训
-	"U": "residential", // 医疗健康与社会照护
-	"V": "riverside",   // 文化传媒体育与娱乐
-	"W": "oldtown",     // 公共管理与国防
-	"X": "residential", // 社会组织与公益慈善
-	"Y": "oldtown",     // 居民生活服务
-	"Z": "riverside",   // 新兴交叉职业与其他
+//
+// 批次20(16→32 城区):值为**候选城区列表**,多候选按卡 id FNV-1a 哈希在列表内
+// 稳定散列(确定性:同卡同区,不吃 rng)。契约 §2.4 原则「只增改映射、不动 26 个
+// 行业键本身」——26 键全部保留;「+」行(追加)保留旧区并与新区并列,「改派」行
+// 整组换到新区。目标:16 个批次20 新区全部可获得 doc 卡出生地(N/O/V 一域多向
+// 拆分即契约 row3/4/10/11/13 的「等/含」语义)。
+var industryDistrictMap = map[string][]string{
+	"A": {"agri_park"},    // 农林牧渔 → 现代农业园(§2.4 改派,原 suburb)
+	"B": {"steel_town"},   // 采矿与冶金(黑色金属/冶炼)→ 特钢镇(§2.4 改派,原 industry)
+	"C": {"industry"},     // 食品饮料与烟草
+	"D": {"industry"},     // 纺织服装与鞋帽
+	"E": {"industry"},     // 木材家具与造纸印刷
+	"F": {"tech"},         // 医药与生物制造
+	"G": {"chem_park"},    // 化工与新材料 → 化工园区(§2.4 改派,原 industry)
+	"H": {"industry"},     // 金属制品与通用机械
+	"I": {"tech"},         // 电子半导体与仪器仪表
+	"J": {"auto_city"},    // 汽车与交通装备 → 汽车城(§2.4 改派,原 industry)
+	"K": {"industry"},     // 能源与电力
+	"L": {"commerce"},     // 建筑与房地产
+	"M": {"commerce"},     // 批发零售与商贸流通
+	// 交通运输/仓储/航空(§2.4 row3+row4):航空物流园 + 高铁新城(追加)+ 空港小镇(改派)。
+	"N": {"airport_town", "air_logistics", "highspeed_rail_town"},
+	// 住宿与餐饮/旅游(§2.4 row13):山居民宿区 + 湿地公园 + 湾区新城。
+	"O": {"mountain_resort", "wetland_park", "bay_new_town"},
+	"P": {"tech", "software_park"},                 // 信息传输/软件(§2.4 row1 追加软件园)
+	"Q": {"finance", "fin_sub_center"},             // 货币金融(§2.4 row2 追加金融副中心)
+	"R": {"finance"},                               // 专业服务
+	"S": {"tech"},                                  // 科学研究与技术服务
+	"T": {"university_town"},                       // 教育与培训 → 大学城(§2.4 改派,原 residential)
+	"U": {"medical_city", "health_town"},           // 卫生/康养(§2.4 row12 追加康养小镇)
+	"V": {"sports_new_city", "cultural_creative", "old_city_culture"}, // 文化传媒体育(§2.4 row10/11)
+	"W": {"oldtown"},                               // 公共管理与国防
+	"X": {"residential"},                           // 社会组织与公益慈善
+	"Y": {"oldtown"},                               // 居民生活服务
+	"Z": {"riverside"},                             // 新兴交叉职业与其他
 }
 
 // cityTierDistrict 真实城市名 → 城区(行业缺失时的次级信号)。
@@ -677,12 +686,19 @@ var cityTierDistrict = []struct {
 }
 
 // spreadDistricts 末级兜底:行业/城市都无信号(如 housing_city=未知)时,按卡 id
-// 的 FNV-1a 哈希在 5 个非核心城区里稳定散列 —— 确定性(同卡同区,不吃 rng)、
+// 的 FNV-1a 哈希在 12 个城区里稳定散列 —— 确定性(同卡同区,不吃 rng)、
 // 且避免全部落 residential。
-var spreadDistricts = []string{"oldtown", "residential", "suburb", "riverside", "industry"}
+// 批次20 §2.4:原 5 旧区扩为 12 区(追加 7 个批次20 新区,方位东西南北均匀散布)。
+var spreadDistricts = []string{
+	"oldtown", "residential", "suburb", "riverside", "industry",
+	"software_park", "airport_town", "mountain_resort", "steel_town",
+	"university_town", "wetland_park", "bay_new_town",
+}
 
-// resolveDistrict 城区解析优先级(2026-09-16 §文档池解析修复):
-//  1. industry_l1 → industryDistrictMap(真实卡 100% 命中);
+// resolveDistrict 城区解析优先级(2026-09-16 §文档池解析修复;
+// 批次20 §2.4 行业分流多候选版):
+//  1. industry_l1 → industryDistrictMap 候选集(真实卡 100% 命中;多候选按
+//     卡 id FNV-1a 哈希在列表内稳定散列,同卡同区、不吃 rng);
 //  2. housing_city 关键词表 cityToDistrict(兼容合成 fixture:一线城市/高新区/县城);
 //  3. 真实城市名分层 cityTierDistrict;
 //  4. 卡 id 哈希散列 spreadDistricts(确定性兜底)。
@@ -691,8 +707,13 @@ func resolveDistrict(industryL1, city, cardID string) string {
 	if len(code) > 1 {
 		code = code[:1]
 	}
-	if d, ok := industryDistrictMap[code]; ok {
-		return d
+	if ds, ok := industryDistrictMap[code]; ok && len(ds) > 0 {
+		if len(ds) == 1 {
+			return ds[0]
+		}
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(cardID))
+		return ds[int(h.Sum32())%len(ds)]
 	}
 	for _, m := range cityToDistrict {
 		if strings.Contains(city, m.Keyword) {
@@ -711,12 +732,33 @@ func resolveDistrict(industryL1, city, cardID string) string {
 	return spreadDistricts[int(h.Sum32())%len(spreadDistricts)]
 }
 
-// cityToDistrict 城市名关键词 → 8 区启发映射(加载器文档 §4;合成 fixture 与
+// cityToDistrict 城市名关键词 → 32 区启发映射(加载器文档 §4;合成 fixture 与
 // 少量描述性城市名用,如「一线城市」「高新区」「县城」)。
+// 批次20:补 16 个新区中文名关键词,且置于旧通用词之前(新区专名优先于
+// 「金融/新区/商业」等泛词,如「金融副中心」不得被「金融」抢走、「高铁新城」
+// 不得被「新区」语义误吞)。
 var cityToDistrict = []struct {
 	Keyword  string
 	District string
 }{
+	// ── 批次20 新区中文名关键词(优先匹配) ──
+	{"副中心", "fin_sub_center"},
+	{"软件园", "software_park"},
+	{"空港", "airport_town"},
+	{"航空物流", "air_logistics"},
+	{"高铁", "highspeed_rail_town"},
+	{"汽车城", "auto_city"},
+	{"山居", "mountain_resort"},
+	{"化工", "chem_park"},
+	{"农业园", "agri_park"},
+	{"康养", "health_town"},
+	{"特钢", "steel_town"},
+	{"古城", "old_city_culture"},
+	{"大学城", "university_town"},
+	{"湿地", "wetland_park"},
+	{"体育", "sports_new_city"},
+	{"湾区", "bay_new_town"},
+	// ── P0 旧关键词 ──
 	{"一线", "finance"},
 	{"核心", "finance"},
 	{"金融", "finance"},

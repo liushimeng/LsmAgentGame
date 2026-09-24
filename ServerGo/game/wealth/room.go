@@ -135,6 +135,10 @@ type WealthRoom struct {
 	// P1-4(2026-09-19 §财商流P1-4 §11):商业保险引擎开关(默认 true;
 	// Manager.CreateRoom 按 Manager.Config 调 SetInsuranceEnabled 回写)。
 	insuranceEnabled bool
+	// electionEnabled 批次20(文档3 A2):市长选举房间级开关。
+	// **默认 false(零值)= 关闭** —— 与 insuranceEnabled(NewWorld 恒 true,
+	// Start 回写)方向相反;NewWealthRoom 不初始化 true,勿按保险家族惯性写。
+	electionEnabled bool
 	// FullAgentMode 标记该房间为全 Agent 模式（人类不能参与对局）。
 	// 2026-09-19 §全Agent模式 新增：创建时由 agent_seats 满 MinSeats 自动置位，
 	// 或前端显式请求 full_agent=true 置位。
@@ -237,6 +241,18 @@ func (r *WealthRoom) SetInsuranceEnabled(enabled bool) {
 	}
 }
 
+// SetElectionEnabled 市长选举房间级开关(批次20 文档3 A2)。与保险家族的
+// 「NewWorld 恒 true + Start 回写」不同:NewCivicElection 默认即 false,
+// 本方法显式 true 才启用;false 房 MonthlyStep 完全 no-op(R8-2 回归红线)。
+func (r *WealthRoom) SetElectionEnabled(enabled bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.electionEnabled = enabled
+	if r.World != nil && r.World.Election != nil {
+		r.World.Election.Enabled = enabled
+	}
+}
+
 // SetFullAgentMode 设置房间的全 Agent 模式标志(2026-09-19 §全Agent模式)。
 // 全 Agent 模式下人类玩家不能加入对局,仅可以观战者身份观看。
 func (r *WealthRoom) SetFullAgentMode(enabled bool) {
@@ -282,6 +298,16 @@ func (r *WealthRoom) applyOpts(opts *service.WealthRoomOptions) {
 		r.ResidentCount = opts.ResidentCount
 	} else if opts.ResidentCount < 0 {
 		r.ResidentCount = 0
+	}
+	// 批次20(文档3 A2):body.civic_election_enabled(缺省 false)。零值与
+	// 「未传」不可区分,故单调置位:true 覆盖 manager 默认,false 保持
+	// manager 默认(生产默认即 false → 语义 = 任一来源为 true 才启用)。
+	// applyOpts 已持 r.mu,直写字段(不可调 SetElectionEnabled,锁不可重入)。
+	if opts.CivicElectionEnabled {
+		r.electionEnabled = true
+		if r.World != nil && r.World.Election != nil {
+			r.World.Election.Enabled = true
+		}
 	}
 }
 
@@ -480,6 +506,12 @@ func (r *WealthRoom) Start(loader *profession.Loader) *errcode.Error {
 	r.World.EconomyEnabled = r.economyEnabled
 	// P1-4(§财商流P1-4 §11):NewWorld 恒置 InsuranceEnabled=true,此处按开关回写。
 	r.World.InsuranceEnabled = r.insuranceEnabled
+	// 批次20(文档3 A2):市长选举接线 —— NewCivicElection 默认 Enabled=false
+	// (零值=false 家族,勿按上面 InsuranceEnabled 的反向语义写);房间级
+	// 开关 true 才启用。false 时 MonthlyStep 完全 no-op,与升级前逐分不差。
+	if r.World.Election != nil {
+		r.World.Election.Enabled = r.electionEnabled
+	}
 	r.World.StartGame()
 	// 2026-09-21 §虚拟城市(契约 03 §6):resident_count>0 时建城(确定性:
 	// 房间 seed 派生独立 rng);B5:线路池可用时房间信号量容量 = 总线路数。

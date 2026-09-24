@@ -2,6 +2,7 @@ import type { Dict } from '../types';
 import wealthP2 from './wealthP2-ja';
 import wealthInsurance from './wealthInsurance-ja';
 import wealthResidents from './wealthResidents-ja';
+import wealthBatch20 from './wealthBatch20-ja';
 
 // 日本語 — ja
 const ja: Dict = {
@@ -1446,6 +1447,23 @@ const ja: Dict = {
   'wealth.district.central_park': '中央公園',
   'wealth.district.transport_hub': '交通ハブ',
   'wealth.district.cultural_creative': '文化クリエイティブ区',
+  // バッチ20 都市拡張 新16区（名称 = 文档1 §2.1）
+  'wealth.district.fin_sub_center': '副都心金融区',
+  'wealth.district.software_park': 'ソフトウェアパーク',
+  'wealth.district.airport_town': '空港タウン',
+  'wealth.district.air_logistics': '航空物流園',
+  'wealth.district.auto_city': '自動車都市',
+  'wealth.district.mountain_resort': '山岳リゾート',
+  'wealth.district.chem_park': '化学工業団地',
+  'wealth.district.agri_park': '現代農業園',
+  'wealth.district.health_town': '健康保養タウン',
+  'wealth.district.steel_town': '特殊鋼タウン',
+  'wealth.district.old_city_culture': '古城文化区',
+  'wealth.district.university_town': '大学城',
+  'wealth.district.wetland_park': '湿地公園',
+  'wealth.district.sports_new_city': 'スポーツニュータウン',
+  'wealth.district.bay_new_town': 'ベイエリア新城',
+  'wealth.district.highspeed_rail_town': '鉄道新城',
   'wealth.cash': '現金',
   'wealth.netWorth': '純資産',
   'wealth.fiIndex': 'FI指数',
@@ -1597,6 +1615,8 @@ const ja: Dict = {
   'wealth.cityVoices': '都市の声',
   'wealth.cityVoiceOfMonth': '第 {month} 月',
   'wealth.cityOtherDistricts': 'その他 {n} 区',
+  'wealth.cityDistrictsExpand': '全区 {n} 件を表示',
+  'wealth.cityDistrictsCollapse': 'リストを折りたたむ',
   // 17-CityHuman 全住民駆動 — ドライバ層インジケータ（{n} = 先月駆動した住民数）。
   'wealth.cityDriven': '今月駆動した住民：{n} 人',
   'wealth.seatsCount': '深度住民 {n}/{max}',
@@ -1704,14 +1724,8 @@ const ja: Dict = {
   'wealth.consumption.forcedHint': '現金が月生活費の2倍を下回ると、決済時に倹約档へ強制ダウン（生活費×0.6）',
   'wealth.consumption.invalid': '消費水準が不正です（0-3）',
 
-  // ── P2 取引システムを wealthP2-ja.ts に分割 ──
-  ...wealthP2,
-
-  // ── P1-4 商業保険を wealthInsurance-ja.ts に分割（≤1800 行制約）──
-  ...wealthInsurance,
-
-  // ── 住民人物カードプロファイル固定を wealthResidents-ja.ts に分割（≤1800 行制約）──
-  ...wealthResidents,
+  // ── wealth 分割ファイル（≤1800 行制約）：P2 取引 / P1-4 保険 / 住民档案 / バッチ20 ──
+  ...wealthP2, ...wealthInsurance, ...wealthResidents, ...wealthBatch20,
 
   // ── P1 ミンスキーエンジン + LPR リプライシング + 早期返済 ──
   'minsky.title': 'ミンスキー融資状態',

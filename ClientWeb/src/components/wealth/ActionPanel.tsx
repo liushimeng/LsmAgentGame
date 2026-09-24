@@ -17,12 +17,16 @@ import {
   WEALTH_ACTIONS,
   WEALTH_CONSUMPTION_LEVELS,
   WEALTH_DISTRICTS,
+  WEALTH_MICRO_ERR,
+  WEALTH_SIDE_TIERS,
   WEALTH_SUBMIT_MONTH,
   wealthDistrict,
+  wealthStockBreakerActive,
   type WealthAction,
   type WealthActionMeta,
   type WealthDistrictId,
   type WealthGameState,
+  type WealthSidePriceTier,
 } from '@/types/wealth';
 import {
   selectActionsUsedThisMonth,
@@ -32,6 +36,8 @@ import {
 } from '@/store/wealth.store';
 import { EarlyRepayModal } from './EarlyRepayModal';
 import { MinskyStatusBar } from './MinskyStatusBar';
+import { SideBusinessPricing } from './SideBusinessPricing';
+import './wealth-batch20.css';
 
 const AWAIT_TIMEOUT_MS = 8000;
 
@@ -79,6 +85,13 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
   const [bizKind, setBizKind] = useState<BizKind>('delivery');
   const [reason, setReason] = useState('');
   const [repayFull, setRepayFull] = useState(false);
+  // ── 批次 20 FE-2 ──
+  // 开业弹窗的定价档（缺省中价=0，兼容旧行为；非 0 才随 start_side_business 下发）。
+  const [bizTier, setBizTier] = useState<WealthSidePriceTier>(0);
+  // 本自然月已提交过改价（前端 UX 门；服务端 TierSetMonth 权威，失败文案内联展示）。
+  const [tierChangedMonth, setTierChangedMonth] = useState<number | null>(null);
+  // 最近一次提交是 set_side_price：其失败回执渲染到副业定价区块而非消费档位行。
+  const [sidePricePending, setSidePricePending] = useState(false);
 
   const my = gameState?.my ?? null;
   const playing = gameState?.status === 'playing';
@@ -96,6 +109,15 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
   const actionsDisabled = !playing || !acting || budgetLeft <= 0;
   const me = gameState?.players.find((p) => p.seat === mySeat);
   const stopped = !!me && !me.alive;
+  // 批次 20 文档 3 B2-4：熔断期内 stock_index 禁买禁卖（弹窗确认键禁用 + 原因 tooltip）。
+  const stockBreakerActive = wealthStockBreakerActive(gameState);
+  // 批次 20 文档 2 §2：同月限改禁用 —— 服务端 tier_set_month === 当月为权威，
+  // 乐观 tierChangedMonth 仅作点击后、快照回传前的即时反馈兜底。
+  const curMonth = gameState?.month ?? -1;
+  const serverTierLocked = (my?.side_business?.tier_set_month ?? 0) === curMonth
+    && (my?.side_business?.tier_set_month ?? 0) > 0;
+  const sideTierLockedThisMonth = serverTierLocked
+    || (tierChangedMonth !== null && tierChangedMonth === curMonth);
 
   // P1 提前还款弹窗状态。
   const [earlyRepayOpen, setEarlyRepayOpen] = useState(false);
@@ -125,6 +147,16 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
   roomIdRef.current = roomId;
   const mySeatRef = useRef(mySeat);
   mySeatRef.current = mySeat;
+  // 批次 20：错误码 → i18n 需要的上下文（熔断禁止月 / T+1 冻结份数）经 ref 读最新值，
+  // 不把 gameState 放进监听器 effect 依赖（避免每帧快照都重注册监听）。
+  const gameStateRef = useRef(gameState);
+  gameStateRef.current = gameState;
+
+  /** 本人股票当月 T+1 冻结份数（my.stock_t1_locked；旧后端缺省 = 0）。 */
+  const stockT1Locked = useCallback(
+    () => gameStateRef.current?.my?.stock_t1_locked ?? 0,
+    [],
+  );
 
   // mapError 必须声明于 wsClient.on 监听器之前（监听器闭包引用它）。
   const mapError = useCallback(
@@ -133,9 +165,16 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
       if (code === 35007) return t('wealth.error.cash' as TKey);
       // P1 真实经济循环 §6.4：消费档位非法（须 0-3）。
       if (code === 35020) return t('wealth.consumption.invalid' as TKey);
+      // 批次 20 文档 3 B3：35043 熔断期禁股票交易 / 35044 T+1 冻结不可卖。
+      if (code === WEALTH_MICRO_ERR.CircuitBreak) {
+        return t('wealth.micro.breaker' as TKey, { n: gameStateRef.current?.market?.breaker_until ?? 0 });
+      }
+      if (code === WEALTH_MICRO_ERR.StockT1Locked) {
+        return t('wealth.micro.t1Locked' as TKey, { n: stockT1Locked() });
+      }
       return message || t('wealth.error.generic' as TKey);
     },
-    [t],
+    [t, stockT1Locked],
   );
 
   useEffect(() => {
@@ -154,6 +193,7 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
           setAwaiting(false);
           setActive(null);
           setFormError(null);
+          setSidePricePending(false);
         }
       } else if (env.type === 'game.error') {
         const p = env.payload as { code: number; message: string };
@@ -184,6 +224,7 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
     setUnits('1');
     setRatio(0.3);
     setRepayFull(false);
+    setBizTier(0); // 批次 20：开业定价缺省中价（= 旧行为）
     const loans = my?.loans ?? [];
     setLoanId(loans.length > 0 ? loans[0].id : '');
     if (meta.type === 'buy_house') {
@@ -210,6 +251,13 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
     sendAction(action);
   };
 
+  /** 副业改价（批次 20 文档 2 §3，set_side_price 动作；乐观置当月锁定，失败文案内联）。 */
+  const handleSetSidePrice = (tier: WealthSidePriceTier) => {
+    setSidePricePending(true);
+    setTierChangedMonth(gameState?.month ?? 0);
+    fire({ type: 'set_side_price', tier });
+  };
+
   const handleBtn = (meta: WealthActionMeta) => {
     if (actionsDisabled || stopped) return;
     if (meta.form === 'none') {
@@ -226,13 +274,22 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
     try {
       switch (active.type) {
         case 'buy_asset':
+          if (assetKind === 'stock_index' && stockBreakerActive) {
+            throw new Error(t('wealth.micro.breaker' as TKey, { n: gameState?.market?.breaker_until ?? 0 }));
+          }
           if (amt < 1000) throw new Error(t('wealth.action.minAmount' as TKey, { n: 1000 }));
           fire({ type: 'buy_asset', asset: assetKind as 'stock_index' | 'bond' | 'gold', amount_cny: amt });
           return;
         case 'sell_asset': {
           if (!assetKind) throw new Error(t('wealth.action.pickAsset' as TKey));
+          if (assetKind === 'stock_index' && stockBreakerActive) {
+            throw new Error(t('wealth.micro.breaker' as TKey, { n: gameState?.market?.breaker_until ?? 0 }));
+          }
           const held = (my?.assets ?? []).find((a) => a.kind === assetKind);
-          const maxUnits = held?.units ?? 0;
+          // 批次 20 文档 3 B2-3：股票可卖量 = 持仓 − T+1 冻结（字段缺省时退化全量）。
+          const maxUnits = assetKind === 'stock_index'
+            ? Math.max(0, (held?.units ?? 0) - stockT1Locked())
+            : held?.units ?? 0;
           if (u < 1 || u > maxUnits) throw new Error(t('wealth.action.unitsRange' as TKey, { n: maxUnits }));
           fire({ type: 'sell_asset', asset: assetKind, units: u });
           return;
@@ -263,7 +320,12 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
           return;
         }
         case 'start_side_business':
-          fire({ type: 'start_side_business', kind: bizKind });
+          // 批次 20 文档 2 §3：开业可带定价档（缺省中价 = 旧行为，不发 tier 字段）。
+          fire({
+            type: 'start_side_business',
+            kind: bizKind,
+            ...(bizTier !== 0 ? { tier: bizTier } : {}),
+          });
           return;
         case 'move_district':
           fire({ type: 'move_district', district });
@@ -297,6 +359,11 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
   const modalTitle = active
     ? `${active.icon} ${t(`wealth.action.${active.i18nKey}` as TKey)}`
     : '';
+  // 熔断期股票买卖弹窗：确认键禁用（tooltip 给原因；其它资产不受影响）。
+  const modalConfirmBlocked = !!active
+    && (active.type === 'buy_asset' || active.type === 'sell_asset')
+    && assetKind === 'stock_index'
+    && stockBreakerActive;
   const modalBody = !active ? null : (
     <div className="wealth-action-form">
       {active.type === 'buy_asset' && (
@@ -325,6 +392,12 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
               placeholder="10000"
             />
           </label>
+          {/* 批次 20 文档 3 B2-4：熔断期股票禁买（确认键禁用 + 原因；其它资产不受影响） */}
+          {assetKind === 'stock_index' && stockBreakerActive && (
+            <div className="wealth-micro__blocked wealth-action-form__error" role="alert">
+              🛑 {t('wealth.micro.breaker' as TKey, { n: gameState?.market?.breaker_until ?? 0 })}
+            </div>
+          )}
         </>
       )}
 
@@ -359,6 +432,20 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
               disabled={awaiting}
             />
           </label>
+          {/* 批次 20 文档 3 B2-3/B2-4：股票 T+1 冻结量提示 + 熔断禁卖条 */}
+          {assetKind === 'stock_index' && stockT1Locked() > 0 && (
+            <p className="wealth-action-form__hint" data-testid="wealth-sell-t1-hint">
+              {t('wealth.micro.t1Locked' as TKey, { n: stockT1Locked() })} ·{' '}
+              {t('wealth.action.unitsRange' as TKey, {
+                n: Math.max(0, ((my?.assets ?? []).find((a) => a.kind === 'stock_index')?.units ?? 0) - stockT1Locked()),
+              })}
+            </p>
+          )}
+          {assetKind === 'stock_index' && stockBreakerActive && (
+            <div className="wealth-micro__blocked wealth-action-form__error" role="alert">
+              🛑 {t('wealth.micro.breaker' as TKey, { n: gameState?.market?.breaker_until ?? 0 })}
+            </div>
+          )}
         </>
       )}
 
@@ -486,19 +573,45 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
       )}
 
       {active.type === 'start_side_business' && (
-        <label className="wealth-action-form__row">
-          <span>{t('wealth.action.businessKind' as TKey)}</span>
-          <select
-            value={bizKind}
-            onChange={(e) => setBizKind(e.target.value as BizKind)}
-            disabled={awaiting}
-          >
-            <option value="delivery">{t('wealth.biz.delivery' as TKey)}</option>
-            <option value="content">{t('wealth.biz.content' as TKey)}（K≥2）</option>
-            <option value="freelance">{t('wealth.biz.freelance' as TKey)}（K≥3）</option>
-            <option value="tutoring">{t('wealth.biz.tutoring' as TKey)}（K≥4）</option>
-          </select>
-        </label>
+        <>
+          <label className="wealth-action-form__row">
+            <span>{t('wealth.action.businessKind' as TKey)}</span>
+            <select
+              value={bizKind}
+              onChange={(e) => setBizKind(e.target.value as BizKind)}
+              disabled={awaiting}
+            >
+              <option value="delivery">{t('wealth.biz.delivery' as TKey)}</option>
+              <option value="content">{t('wealth.biz.content' as TKey)}（K≥2）</option>
+              <option value="freelance">{t('wealth.biz.freelance' as TKey)}（K≥3）</option>
+              <option value="tutoring">{t('wealth.biz.tutoring' as TKey)}（K≥4）</option>
+            </select>
+          </label>
+          {/* 批次 20 文档 2 §3：开业定价档选择（缺省中价 = 旧行为） */}
+          <div className="wealth-action-form__row">
+            <span>{t('wealth.sidePrice.label' as TKey)}</span>
+            <div className="wealth-sideprice__segmented" role="group">
+              {WEALTH_SIDE_TIERS.map((meta) => {
+                const activeTier = bizTier === meta.tier;
+                return (
+                  <button
+                    key={meta.tier}
+                    type="button"
+                    className={'wealth-sideprice__btn' + (activeTier ? ' wealth-sideprice__btn--active' : '')}
+                    style={activeTier ? { background: meta.badgeColor } : undefined}
+                    disabled={awaiting}
+                    aria-pressed={activeTier}
+                    title={`${t(`wealth.sidePrice.${meta.i18nKey}` as TKey)} · ${t('wealth.sideShare' as TKey, { pct: Math.round(meta.weight * 100) })} · ×${meta.multiplier.toFixed(2)}`}
+                    onClick={() => setBizTier(meta.tier)}
+                    data-testid={`wealth-start-tier-${meta.tier}`}
+                  >
+                    {t(`wealth.sidePrice.${meta.i18nKey}` as TKey)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
       )}
 
       {active.type === 'move_district' && (
@@ -648,11 +761,22 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
             );
           })}
         </div>
-        {/* 无弹窗打开时的就地错误条（§7.1：不吞进 console） */}
-        {formError && !active && (
+        {/* 无弹窗打开时的就地错误条（§7.1：不吞进 console；定价失败路由到副业区块） */}
+        {formError && !active && !sidePricePending && (
           <div className="wealth-consumption__error" role="alert">{formError}</div>
         )}
       </div>
+
+      {/* 批次 20 文档 2 §5：副业定价区块（三档选择器 + 份额/预期 + 对手 chips；
+          仅 my.side_business 非空时渲染，随动作条折叠一并隐藏） */}
+      <SideBusinessPricing
+        gameState={gameState}
+        mySeat={mySeat}
+        busy={awaiting || actionsDisabled || stopped}
+        lockedThisMonth={sideTierLockedThisMonth}
+        error={sidePricePending ? formError : null}
+        onSetPrice={handleSetSidePrice}
+      />
 
       {/* P2 交易入口：挂单簿 / 借贷市场 / 信息市场（不耗动作预算，交易类动作） */}
       <div className="wealth-actionbar__trade">
@@ -753,7 +877,15 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
               <button type="button" className="btn btn-secondary" onClick={closeModal} disabled={awaiting}>
                 {t('common.cancel')}
               </button>
-              <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={awaiting}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSubmit}
+                disabled={awaiting || modalConfirmBlocked}
+                title={modalConfirmBlocked
+                  ? t('wealth.micro.breaker' as TKey, { n: gameState?.market?.breaker_until ?? 0 })
+                  : undefined}
+              >
                 {awaiting ? t('common.loading') : t('wealth.action.confirm' as TKey)}
               </button>
             </>
