@@ -451,11 +451,13 @@ export interface CreateRoomOptions {
   big_blind?: number;
   start_stack?: number;
   // 2026-09-14 §财商流 P0 — virtualCity only。建房可选段（协议契约 §6:
-  // createRoomRequest 新增字段 virtualCity *VirtualCityRoomOptions,DisallowUnknownFields
+  // createRoomRequest 新增字段 virtual_city *VirtualCityRoomOptions,DisallowUnknownFields
   // 严格校验)。month_ms clamp 3000–30000。
-  // 2026-09-22 §CityHuman全民驱动 — virtualCity 建房不再发送 agent_seats/pool
-  // （后端忽略 virtualCity 请求中的 agent_seats，自动合成 12 抽样展示居民）。
-  virtualCity?: VirtualCityRoomOptions;
+  // 2026-09-25 §建房400修复 — 属性名 virtualCity → virtual_city 对齐后端 json tag
+  //（camelCase 经 JSON.stringify 原样发出，DisallowUnknownFields 报 unknown field）。
+  // 2026-09-22 §CityHuman全民驱动 — virtual_city 建房不再发送 agent_seats/pool
+  // （后端忽略 virtual_city 请求中的 agent_seats，自动合成 12 抽样展示居民）。
+  virtual_city?: VirtualCityRoomOptions;
   // 2026-09-21 §建房解耦 — virtualCity only。背景居民规模：
   // 缺省 10000；<10 clamp 10；上限 100000 后端 clamp；负值 400。
   resident_count?: number;

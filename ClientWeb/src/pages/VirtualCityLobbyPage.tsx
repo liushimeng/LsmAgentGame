@@ -91,7 +91,9 @@ export function VirtualCityLobbyPage() {
           // 2026-09-22 §CityHuman全民驱动 — 不再发送 agent_seats/pool
           // （后端自动合成 12 抽样展示居民，档案唯一源 = 人物卡知识库）。
           resident_count: req.resident_count,
-          virtualCity: { month_ms: req.month_ms, ...(req.seed ? { seed: req.seed } : {}) },
+          // 2026-09-25 §建房400修复 — 键名 virtualCity → virtual_city 对齐后端
+          // json tag（DisallowUnknownFields 严格校验，camelCase 会 400）。
+          virtual_city: { month_ms: req.month_ms, ...(req.seed ? { seed: req.seed } : {}) },
           full_agent: req.full_agent === true,
           // 批次 20 文档 3 A2：市长选举启用（顶层字段，仅 virtualCity 生效）。
           civic_election_enabled: req.civic_election_enabled === true,
