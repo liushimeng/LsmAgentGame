@@ -282,7 +282,6 @@ export interface VirtualCityDict {
   'virtualCity.botPanel.sense.hear': string;
   'virtualCity.botPanel.sense.smell': string;
   'virtualCity.botPanel.sense.empty': string;
-  'virtualCity.chat.playerFallback': string;
   'virtualCity.minimap.aria': string;
 
   // ── P1 第二期：真实经济循环引擎 + 社会调研系统（2026-09-16）──

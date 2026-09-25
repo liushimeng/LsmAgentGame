@@ -42,6 +42,22 @@ export interface VirtualCityMarketPoint {
   bond: number;
 }
 
+/**
+ * 批次 23：座位居民 3D 语音气泡。chat.message（from_role='bot'）→
+ * hooks/useVirtualCitySpeech 写入；AgentToken 按 seat 订阅冒泡，
+ * 过期（12s）由渲染端按 ts 判定（store 不挂定时器）。
+ */
+export interface VirtualCitySpeechBubble {
+  /** 发言者座位号（≥0）。 */
+  seat: number;
+  /** 显示名（model_display #座位 风格）。 */
+  name: string;
+  /** 展示文本（渲染端再截 60 字）。 */
+  text: string;
+  /** Date.now()，过期判定基准。 */
+  ts: number;
+}
+
 const MAX_EVENT_FEED = 100;
 const MAX_MONTH_FRAMES = 420;
 const MAX_MARKET_HISTORY = 60;
@@ -58,6 +74,8 @@ interface VirtualCityStore {
   startedInfo: VirtualCityStartedFrame | null;
   /** game.event 增量事件流（截断 100）。 */
   eventFeed: VirtualCityEventFrame[];
+  /** 批次 23：座位居民语音气泡（key = seat，每座位只留最新一条，同座位覆盖）。 */
+  speechBubbles: Record<number, VirtualCitySpeechBubble>;
   /** game.month 月度汇总帧（截断 420；GameOverModal 净资产曲线数据源）。 */
   monthFrames: VirtualCityMonthFrame[];
   /** 每月一条市场快照（cap 60；走势迷你图）。 */
@@ -88,6 +106,8 @@ interface VirtualCityStore {
   setMySeat: (seat: number) => void;
   setStartedInfo: (info: VirtualCityStartedFrame | null) => void;
   pushEvent: (ev: VirtualCityEventFrame) => void;
+  /** 批次 23：同座位新发言顶掉旧气泡。 */
+  setSpeechBubble: (b: VirtualCitySpeechBubble) => void;
   applyMonthFrame: (frame: VirtualCityMonthFrame) => void;
   setGameOver: (over: VirtualCityOverFrame | null) => void;
   setLastError: (err: { code: number; message: string } | null) => void;
@@ -110,6 +130,7 @@ export const useVirtualCityStore = create<VirtualCityStore>((set) => ({
   mySeat: -1,
   startedInfo: null,
   eventFeed: [],
+  speechBubbles: {},
   monthFrames: [],
   marketHistory: [],
   gameOver: null,
@@ -156,8 +177,15 @@ export const useVirtualCityStore = create<VirtualCityStore>((set) => ({
   setMySeat: (seat) => set({ mySeat: seat }),
   setStartedInfo: (info) => set({ startedInfo: info }),
 
+  // 批次 23：入队时补到达时间戳（CityVoiceBubbleLayer 按 ts 判过期；
+  // 类型上是可选字段，MonthTicker 等既有消费方不受影响）。
   pushEvent: (ev) =>
-    set((s) => ({ eventFeed: [...s.eventFeed, ev].slice(-MAX_EVENT_FEED) })),
+    set((s) => ({
+      eventFeed: [...s.eventFeed, ev.ts ? ev : { ...ev, ts: Date.now() }].slice(-MAX_EVENT_FEED),
+    })),
+
+  setSpeechBubble: (b) =>
+    set((s) => ({ speechBubbles: { ...s.speechBubbles, [b.seat]: b } })),
 
   applyMonthFrame: (frame) =>
     set((s) => ({
@@ -208,6 +236,7 @@ export const useVirtualCityStore = create<VirtualCityStore>((set) => ({
       mySeat: -1,
       startedInfo: null,
       eventFeed: [],
+      speechBubbles: {},
       monthFrames: [],
       marketHistory: [],
       gameOver: null,

@@ -55,6 +55,8 @@ import {
 import type { CameraView, FocusTarget } from '@/engine3d';
 import { DistrictBlock } from './DistrictBlock';
 import { AgentToken } from './AgentToken';
+import { CityVoiceBubbleLayer } from './CityVoiceBubbleLayer';
+import { useVirtualCityStore } from '@/store/virtualCity.store';
 import { Road, lampsForRoad } from './Road';
 import { StreetLightsInstanced } from './props/StreetLightsInstanced';
 import { StreetPropsLayer } from './StreetPropsLayer';
@@ -296,6 +298,8 @@ export function VirtualCityCityMap({
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const { players, byDistrict, counts } = useMemo(() => tokenLayout(gameState), [gameState]);
   const mySeat = gameState?.my_seat ?? -1;
+  // 批次 23：座位居民语音气泡（useVirtualCitySpeech 写入；key = seat）。
+  const speechBubbles = useVirtualCityStore((s) => s.speechBubbles);
   const marketById = useMemo(() => {
     const m = new Map<string, number>();
     // 2026-09-14 §财商流P0-bugfix: 半截可选链 `?.market.districts` 在
@@ -414,9 +418,12 @@ export function VirtualCityCityMap({
               index={index < 0 ? 0 : index}
               total={inDistrict.length}
               isMe={p.seat === mySeat}
+              speech={speechBubbles[p.seat] ?? null}
             />
           );
         })}
+        {/* 批次 23：市民之声气泡层（市政厅上空，eventFeed city_voice 驱动，不依赖座位） */}
+        <CityVoiceBubbleLayer />
         {/* 批次 22：俯瞰 / 漫游互斥挂载（切换时经 walkStart / orbitResume 衔接位姿）；
             相机俯仰角上限 1.2 → 1.54（2.5D 锁定俯视 → 3D 自由视角） */}
         {viewMode === 'orbit' ? (

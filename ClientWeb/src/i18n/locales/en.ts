@@ -1641,7 +1641,6 @@ const en: Dict = {
   'virtualCity.botPanel.sense.hear': 'Heard',
   'virtualCity.botPanel.sense.smell': 'Smelled',
   'virtualCity.botPanel.sense.empty': 'No senses recorded this month',
-  'virtualCity.chat.playerFallback': 'Resident {n}',
   'virtualCity.minimap.aria': 'Virtual City minimap',
 
   // ── P1 Wave 2: Real Economy Loop Engine + Social Survey System (2026-09-16) ──

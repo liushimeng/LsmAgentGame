@@ -46,6 +46,7 @@ import (
 
 	"LsmAgentGame/agent/wwplayer"
 	"LsmAgentGame/agent/core"
+	"LsmAgentGame/errcode"
 	"LsmAgentGame/llm"
 
 	"LsmAgentGame/logger"
@@ -190,15 +191,22 @@ type ActivityEvent struct {
 	TS            int64  `json:"ts"` // unix milliseconds
 }
 
+// gameKindLookuper 是 ChatService 对 RoomService 的最小依赖面(仅 GameKindOf)。
+// 收敛为接口便于单测注入 mock(2026-09-25 §23 虚拟城市房间禁言);
+// *service.RoomService 天然满足该接口。
+type gameKindLookuper interface {
+	GameKindOf(roomID string) string
+}
+
 // ChatService persists and dispatches chat messages over the WS hub.
 type ChatService struct {
 	db       *gorm.DB
 	hub      *Hub
 	llmReg   *llm.Registry // optional; used to surface bot model name in chat frames
 
-	// roomSvc 用于狼人杀房间内 whisper 阵营守卫(§20260810-03 F1)。
-	// nil 时不做阵营校验(向后兼容:旧部署/测试桩)。
-	roomSvc *service.RoomService
+	// roomSvc 用于狼人杀房间内 whisper 阵营守卫(§20260810-03 F1)与虚拟城市
+	// 房间禁言判定(2026-09-25 §23)。nil 时不做校验(向后兼容:旧部署/测试桩)。
+	roomSvc gameKindLookuper
 
 	// factionLookup 接收 (roomID, userID) → faction 字符串("werewolf"|"good"|"unknown")
 	// + alive bool + isSpectator bool。由 ChatService.SetFactionLookup 注入。
@@ -282,10 +290,24 @@ func (s *ChatService) SetRoomMessageHook(fn func(msg *ChatMessage)) {
 
 // SetRoomService wires the RoomService so Whisper can query the room's
 // game_kind to decide whether to apply the §20260810-03 F1 cross-faction
-// guard. Pass nil to disable the guard (default for tests / non-werewolf
-// deployments).
+// guard, and so Send/Whisper can reject human text chat in virtual_city
+// rooms (§23). Pass nil to disable both guards (default for tests /
+// non-werewolf deployments).
 func (s *ChatService) SetRoomService(svc *service.RoomService) {
+	if svc == nil {
+		s.roomSvc = nil
+		return
+	}
 	s.roomSvc = svc
+}
+
+// virtualCityChatDisabled 报告该房间是否为已停用人类文字聊天的虚拟城市房间
+//(2026-09-25 §23 房间聊天删除与3D语音气泡:房间聊天面板由 3D 语音气泡取代)。
+// 空 roomID / nil roomSvc / 其他游戏房间一律 false;bot 发言走 SendFromBot /
+// WhisperFromBot 不经此判定。
+func (s *ChatService) virtualCityChatDisabled(roomID string) bool {
+	return roomID != "" && s.roomSvc != nil &&
+		s.roomSvc.GameKindOf(roomID) == "virtual_city"
 }
 
 // SetFactionLookup wires the werewolf-side helper that resolves a
@@ -455,7 +477,7 @@ func (s *ChatService) HandleClientFrame(c *Client, env Envelope) {
 		}
 		msg, err := s.Send(c, p.Scope, p.RoomID, text)
 		if err != nil {
-			s.sendError(c, 20001, err.Error())
+			s.sendOpError(c, err)
 			return
 		}
 		_ = msg // fan-out already done in Send
@@ -495,7 +517,7 @@ func (s *ChatService) HandleClientFrame(c *Client, env Envelope) {
 		}
 		msg, err := s.Whisper(c, p.RoomID, p.ToUserID, p.ToAccount, text)
 		if err != nil {
-			s.sendError(c, 20001, err.Error())
+			s.sendOpError(c, err)
 			return
 		}
 		_ = msg
@@ -563,6 +585,11 @@ func (s *ChatService) Send(c *Client, scope, roomID, text string) (*ChatMessage,
 	case "room":
 		if roomID == "" {
 			return nil, errRoomIDRequired
+		}
+		// 2026-09-25 §23 — 虚拟城市房间停用人类文字聊天(3D 语音气泡取代房间
+		// 聊天面板):一律拒绝并返回 35104;落库/广播之前拦截。
+		if s.virtualCityChatDisabled(roomID) {
+			return nil, errcode.Code(errcode.ErrVirtualCityRoomChatDisabled)
 		}
 	default:
 		return nil, errUnknownScope
@@ -644,6 +671,12 @@ func (s *ChatService) Send(c *Client, scope, roomID, text string) (*ChatMessage,
 //(与 Agent whisper 同等待遇);§20260810-03 F2:纯 emoji 短消息(≤5 emoji)被
 // 接受并走与普通 whisper 同样的入库/广播路径。
 func (s *ChatService) Whisper(c *Client, roomID, toUserID, toAccount, text string) (*ChatMessage, error) {
+	// 2026-09-25 §23 — 虚拟城市房间停用人类文字聊天:与 Send 同规则,
+	// 入口处拦截并返回 35104(先于狼人杀阵营守卫与落库)。
+	if s.virtualCityChatDisabled(roomID) {
+		return nil, errcode.Code(errcode.ErrVirtualCityRoomChatDisabled)
+	}
+
 	account := s.lookupAccount(c.UserID)
 	role := s.senderRole("room", roomID, c)
 
@@ -1497,6 +1530,18 @@ func (s *ChatService) trySend(c *Client, env Envelope) bool {
 // (Debug-2026-08-12-01 P1-4); callers with no request context pass 0.
 func (s *ChatService) sendError(c *Client, code int, msg string) {
 	s.sendErrorSeq(c, 0, code, msg)
+}
+
+// sendOpError emits chat.error for Send/Whisper failures: coded errors
+// (*errcode.Error, e.g. 35104 virtual_city room chat disabled, §23) keep
+// their code so the client can branch on it; everything else falls back to
+// the 20001 validation bucket as before.
+func (s *ChatService) sendOpError(c *Client, err error) {
+	if ce, ok := err.(*errcode.Error); ok {
+		s.sendError(c, ce.Code, ce.Message)
+		return
+	}
+	s.sendError(c, 20001, err.Error())
 }
 
 func (s *ChatService) sendErrorSeq(c *Client, seq int64, code int, msg string) {

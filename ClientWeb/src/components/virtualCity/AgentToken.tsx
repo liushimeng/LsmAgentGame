@@ -8,7 +8,7 @@
  * 见 cityScale.ts）——圆柱 / 光环 / Billboard / Html 标签全部联动缩放。
  */
 
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Billboard, Html } from '@react-three/drei';
@@ -54,6 +54,17 @@ const STATUS_ICON_EMOJI: Record<string, string> = {
   working: '💼', idle: '💤', trading: '📊', resting: '😴', moved: '🚚',
 };
 
+/** 批次 23：语音气泡存活时长（与 CityVoiceBubbleLayer 同值）。 */
+export const SPEECH_BUBBLE_TTL_MS = 12000;
+
+/** 名牌 Html 锚点 y（0.67）；气泡在其上方 +0.9，避免遮挡职业色 token 与金环。 */
+const TAG_Y = 0.67;
+
+/** 气泡文本截断（store 原文可达 100 字，展示只留 60 字）。 */
+function clipText(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
 interface Props {
   player: VirtualCityPlayer;
   /** 城区中心（世界坐标）。 */
@@ -63,9 +74,11 @@ interface Props {
   index: number;
   total: number;
   isMe: boolean;
+  /** 批次 23：座位居民公开发话气泡（store.speechBubbles[seat]；null = 无发言）。 */
+  speech?: { text: string; ts: number } | null;
 }
 
-export function AgentToken({ player, cx, cz, index, total, isMe }: Props) {
+export function AgentToken({ player, cx, cz, index, total, isMe, speech }: Props) {
   const t = useT();
   const groupRef = useRef<THREE.Group>(null);
   const color = professionColor(player.profession.id);
@@ -91,6 +104,21 @@ export function AgentToken({ player, cx, cz, index, total, isMe }: Props) {
     g.position.x += (targetX - g.position.x) * 0.06;
     g.position.z += (targetZ - g.position.z) * 0.06;
   });
+
+  // 批次 23：气泡过期 —— 按 speech.ts 设 timeout 置 expired；新发言（ts 变化）重置。
+  // 同座位新发言顶掉旧气泡由 store 保证（speechBubbles 每座位只留最新一条）。
+  // 注意：hook 必须位于下方 !player.alive 早退之前（Rules of Hooks）。
+  const [speechExpired, setSpeechExpired] = useState(false);
+  useEffect(() => {
+    if (!speech) {
+      setSpeechExpired(false);
+      return;
+    }
+    setSpeechExpired(false);
+    const remain = SPEECH_BUBBLE_TTL_MS - (Date.now() - speech.ts);
+    const timer = window.setTimeout(() => setSpeechExpired(true), Math.max(remain, 0));
+    return () => window.clearTimeout(timer);
+  }, [speech]);
 
   if (!player.alive) {
     // 出局 token 移出地图（§9.1：players[].alive=false 不渲染）。
@@ -139,7 +167,7 @@ export function AgentToken({ player, cx, cz, index, total, isMe }: Props) {
         </Html>
       )}
       {/* 名牌：座位号 + 昵称 + 职业图标 + 状态图标（0.67 > 头像顶 0.61，不压盖） */}
-      <Html position={[0, 0.67, 0]} center distanceFactor={12} zIndexRange={[9, 0]}>
+      <Html position={[0, TAG_Y, 0]} center distanceFactor={12} zIndexRange={[9, 0]}>
         <div
           className={
             'virtualCity-token-tag' +
@@ -164,6 +192,14 @@ export function AgentToken({ player, cx, cz, index, total, isMe }: Props) {
           )}
         </div>
       </Html>
+      {/* 批次 23：3D 语音气泡（居民公开发话，名牌上方 +0.9；12s TTL 后消失） */}
+      {speech && !speechExpired && (
+        <Html center distanceFactor={12} position={[0, TAG_Y + 0.9, 0]} zIndexRange={[40, 0]}>
+          <div className="virtualCity-speech-bubble" role="status">
+            <span className="virtualCity-speech-bubble__text">{clipText(speech.text, 60)}</span>
+          </div>
+        </Html>
+      )}
       {/* a11y：屏幕阅读器可读名牌（视觉隐藏由 CSS 处理） */}
       <Html position={[0, -0.1, 0]} center style={{ pointerEvents: 'none' }} zIndexRange={[0, 0]}>
         <span className="virtualCity-sr-only">

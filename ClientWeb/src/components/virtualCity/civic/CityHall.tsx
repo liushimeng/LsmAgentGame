@@ -16,6 +16,20 @@ const STONE_DARK = '#7a7a76';
 const ROOF_DARK = '#3a3f4a';
 const GOLD = '#d4a017';
 
+/**
+ * 市政厅布点（世界坐标）：主楼/模型 group 原点。
+ * 批次 23 起导出为市民之声气泡锚点基准（CityVoiceBubbleLayer），
+ * CityHall 本体的两处落位（Model / fallback group）同用一份，防止坐标漂移。
+ */
+export const CITY_HALL_POSITION = { x: -9.0, z: -1.7 } as const;
+
+/** 市民之声气泡锚点：钟楼尖顶（u(17)+u(3) ≈ 2.0）再上浮 0.6，悬浮于市政厅上空。 */
+export const CITY_HALL_BUBBLE_ANCHOR: [number, number, number] = [
+  CITY_HALL_POSITION.x,
+  2.6,
+  CITY_HALL_POSITION.z,
+];
+
 /** 全局开关：测试/回滚用，缺省 false = 用 .glb */
 export function CityHall() {
   const url = modelUrl('civic', 'city_hall');
@@ -24,7 +38,7 @@ export function CityHall() {
     return <CityHallFallback />;
   }
   return (
-    <Model url={url} position={[-9.0, 0, -1.7]} castShadow receiveShadow>
+    <Model url={url} position={[CITY_HALL_POSITION.x, 0, CITY_HALL_POSITION.z]} castShadow receiveShadow>
       <CityHallFallback />
     </Model>
   );
@@ -33,7 +47,7 @@ export function CityHall() {
 /** 保留原程序化几何作为 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。 */
 function CityHallFallback() {
   return (
-    <group position={[-9.0, 0, -1.7]}>
+    <group position={[CITY_HALL_POSITION.x, 0, CITY_HALL_POSITION.z]}>
       {/* 主楼：u(14) × u(9) × u(8) */}
       <mesh position={[0, u(4.5), 0]} castShadow receiveShadow>
         <boxGeometry args={[u(14), u(9), u(8)]} />

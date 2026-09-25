@@ -4,7 +4,8 @@
  * 布局（产品设计 §6.1 线框）：
  *   顶部信息栏（月 / 年龄 / 周期徽章 / 运行时钟 / 我的座位 / 提前开始 / 离开）
  *   ├─ 左主区：3D 城市地图（VirtualCityCityMap，批次 22 起 orbit 俯瞰 + 街景漫游双模式）+ 左上角小地图叠加
- *   ├─ 右侧栏：面板 Tab（财务 / 行情 / 流水）+ Agent 思维 + 房间聊天
+ *   ├─ 右侧栏：面板 Tab（财务 / 行情 / 流水）+ Agent 思维
+ *   ├─ 3D 语音气泡（批次 23：居民公开发话冒在座位 token 头顶，市民之声冒在市政厅上空）
  *   ├─ 底部动作条（ActionPanel，仅人类座位）
  *   └─ 事件流（MonthTicker）
  *
@@ -17,6 +18,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useVirtualCityStore } from '@/store/virtualCity.store';
 import { selectSeatedCount, selectSeatCapacity, selectSeatsReady } from '@/store/virtualCity.store';
 import { useVirtualCity } from '@/hooks/useVirtualCity';
+import { useVirtualCitySpeech } from '@/hooks/useVirtualCitySpeech';
 import { useSpectatorMode } from '@/hooks/useSpectatorMode';
 import { wsClient } from '@/services/ws';
 import { roomService } from '@/services/auth.service';
@@ -42,7 +44,6 @@ import { GameOverModal } from '@/components/virtualCity/GameOverModal';
 import { CityStatsPanel } from '@/components/virtualCity/CityStatsPanel';
 import { CivicElectionBanner } from '@/components/virtualCity/CivicElectionBanner';
 import { VirtualCityBotPanel } from '@/components/virtualCity/VirtualCityBotPanel';
-import { VirtualCityGameChatPanel } from '@/components/virtualCity/VirtualCityGameChatPanel';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 const CYCLE_CLASS: Record<string, string> = {
@@ -149,6 +150,8 @@ export function VirtualCityGamePage() {
   const {
     spectate, unspectate, leaveGame, requestState, sendAction, sendTrade, startEarly,
   } = useVirtualCity(roomId ?? '');
+  // 批次 23：房间聊天面板已删除，居民公开发话改在 3D 地图头顶冒泡（store.speechBubbles）。
+  useVirtualCitySpeech(roomId ?? '');
 
   const [leavePromptOpen, setLeavePromptOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
@@ -441,7 +444,6 @@ export function VirtualCityGamePage() {
             botContexts={gameState?.bot_contexts ?? []}
             players={gameState?.players ?? []}
           />
-          <VirtualCityGameChatPanel roomId={roomId} gameState={gameState} currentMonth={gameState?.month ?? null} />
         </aside>
       </div>
 

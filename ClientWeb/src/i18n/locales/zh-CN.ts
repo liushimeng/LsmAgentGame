@@ -1640,7 +1640,6 @@ const zhCN: Dict = {
   'virtualCity.botPanel.sense.hear': '听见',
   'virtualCity.botPanel.sense.smell': '闻到',
   'virtualCity.botPanel.sense.empty': '本月尚无感知记录',
-  'virtualCity.chat.playerFallback': '居民{n}号',
   'virtualCity.minimap.aria': '虚拟城市小地图',
 
   // ── P1 第二期：真实经济循环引擎 + 社会调研系统（2026-09-16）──

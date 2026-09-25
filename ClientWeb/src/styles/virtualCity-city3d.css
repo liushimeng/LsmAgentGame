@@ -304,18 +304,13 @@
 }
 
 /* ── 16 · 阶段 V：侧栏溢出兜底（契约 16/04 §3）────────────────── */
-/* 内容总高 > 视口时侧栏整体内滚（stats/bot/chat 三段折叠上限叠加的极端场景），
+/* 内容总高 > 视口时侧栏整体内滚（stats/bot 两段折叠上限叠加的极端场景），
    不再压住下方事件流。tabs 常显由 panels 区独立滚动保证。
-   18/04 AB-4：补 scrollbar-gutter: stable —— 滚动条出现/消失时布局不再横移。 */
+   18/04 AB-4：补 scrollbar-gutter: stable —— 滚动条出现/消失时布局不再横移。
+   批次 23：房间聊天面板已删除（居民发言改 3D 语音气泡），原 .game-chat 死规则一并移除。 */
 .virtualCity-sidebar {
   overflow-y: auto;
   scrollbar-gutter: stable;
-}
-/* 聊天面板允许收缩（virtualCity.css 的 :global(.chat-panel) 规则从未命中真实类名，
-   这里按真实类名 game-chat 给出弹性收缩 + 最小可用高度）。 */
-.virtualCity-sidebar > .game-chat {
-  flex: 0 1 240px;
-  min-height: 140px;
 }
 
 /* ── 18 · 阶段 AB：控件防溢出与空间利用收口（契约 18/04 §2–§5）──────── */
@@ -484,5 +479,70 @@
   }
   .virtualCity-actionbar {
     font-size: 13px;
+  }
+}
+
+/* ── 批次 23：3D 语音气泡（§3.3.3-C；§26.3 三件套同提交：JSX class + 规则 + @keyframes + reduced-motion 兜底）── */
+/* 对比度（§26.1/§26.2-2）：白字 #fff 对 rgba(16,20,28,0.85) 深色合成底 ≈ 15:1，远超 AA 4.5:1。 */
+.virtualCity-speech-bubble {
+  position: relative;
+  max-width: 220px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(16, 20, 28, 0.85);
+  color: #fff;
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: left;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+  animation: virtualCity-speech-pop 240ms ease-out;
+}
+/* 气泡尾巴（朝下，指向 token / 市政厅） */
+.virtualCity-speech-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid rgba(16, 20, 28, 0.85);
+}
+.virtualCity-speech-bubble__text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+}
+/* 市民之声（市政厅上空）：青蓝色相区分（§26 状态徽章色相库），前缀行高亮 */
+.virtualCity-speech-bubble--voice {
+  border-color: rgba(94, 200, 234, 0.65);
+}
+.virtualCity-speech-bubble--voice::after {
+  border-top-color: rgba(16, 20, 28, 0.85);
+}
+.virtualCity-speech-bubble__name {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #7fd8f2; /* 对 rgba(16,20,28,.85) 底 ≈ 9:1，≥ 4.5:1 */
+}
+@keyframes virtualCity-speech-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .virtualCity-speech-bubble {
+    animation: none;
   }
 }

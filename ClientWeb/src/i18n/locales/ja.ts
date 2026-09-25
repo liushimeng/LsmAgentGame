@@ -1639,7 +1639,6 @@ const ja: Dict = {
   'virtualCity.botPanel.sense.hear': '聞いた',
   'virtualCity.botPanel.sense.smell': '嗅いだ',
   'virtualCity.botPanel.sense.empty': '今月の感覚記録はまだありません',
-  'virtualCity.chat.playerFallback': '住民{n}',
   'virtualCity.minimap.aria': '仮想都市ミニマップ',
 
   // ── P1 第2期：実物経済循環エンジン + 社会調査システム（2026-09-16）──

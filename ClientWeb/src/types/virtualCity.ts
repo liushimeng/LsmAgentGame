@@ -1070,6 +1070,9 @@ export interface VirtualCityEventFrame {
   data?: unknown;
   /** city_profiles 事件的进度载荷（档案锚定设计 §5：{profiles:{status,done,total,…}}）。 */
   profiles?: VirtualCityCityProfileProgress;
+  /** 前端入队时补的到达时间戳（store.pushEvent；批次 23 语音气泡过期判定用）。
+   *  服务端帧本身不带此字段，勿用于跨端语义。 */
+  ts?: number;
 }
 
 export interface VirtualCityMonthSummary {
