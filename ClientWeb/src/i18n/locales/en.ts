@@ -148,6 +148,7 @@ const en: Dict = {
   'auth.account': 'Account',
   'auth.phone': 'Phone',
   'auth.password': 'Password',
+  'auth.rememberPassword': 'Remember password',
   'auth.captcha': 'Captcha',
   'auth.refreshCaptcha': 'Refresh captcha',
   'auth.signingIn': 'Signing in…',

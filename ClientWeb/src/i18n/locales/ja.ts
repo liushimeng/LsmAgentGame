@@ -148,6 +148,7 @@ const ja: Dict = {
   'auth.account': 'アカウント',
   'auth.phone': '電話番号',
   'auth.password': 'パスワード',
+  'auth.rememberPassword': 'パスワードを記憶する',
   'auth.captcha': '認証コード',
   'auth.refreshCaptcha': '認証コードを更新',
   'auth.signingIn': 'ログイン中…',

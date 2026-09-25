@@ -51,6 +51,7 @@ export function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
         inviteCode,
       );
       // §20260821-05: 注册成功后不保存密码到本地存储，只保存 account/phone
+      // （v4: rememberPassword 恒 false —— 注册页无「记住密码」勾选，同时清掉登录页可能存在的旧密文）
       await uiStorage.save({
         account: account.trim(),
         phone: phone.trim(),
@@ -58,6 +59,7 @@ export function RegisterForm({ onSwitch }: { onSwitch: () => void }) {
         mode: 'account',
         accountPassword: '',
         phonePassword: '',
+        rememberPassword: false,
       });
     } catch (e) {
       // §20260817-04 P1 — 与 LoginForm 错误前缀口径统一(code 缺省时省略方括号)。

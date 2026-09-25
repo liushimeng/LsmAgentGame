@@ -717,6 +717,8 @@ export interface Dict extends VirtualCityDict {
   'auth.account': string;
   'auth.phone': string;
   'auth.password': string;
+  // 2026-09-25 v4: 登录「记住密码」opt-in 勾选框文案（三语同步，CLAUDE.md §12）。
+  'auth.rememberPassword': string;
   'auth.captcha': string;
   'auth.refreshCaptcha': string;
   'auth.signingIn': string;

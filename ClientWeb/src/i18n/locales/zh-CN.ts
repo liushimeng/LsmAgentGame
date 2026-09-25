@@ -149,6 +149,7 @@ const zhCN: Dict = {
   'auth.account': '账号',
   'auth.phone': '手机号',
   'auth.password': '密码',
+  'auth.rememberPassword': '记住密码',
   'auth.captcha': '验证码',
   'auth.refreshCaptcha': '刷新验证码',
   'auth.signingIn': '登录中…',

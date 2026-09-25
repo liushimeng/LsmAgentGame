@@ -54,6 +54,9 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // 2026-09-25 v4「记住密码」opt-in 勾选（tmpPlan/登录-记住密码功能恢复方案-20260925.md）。
+  const [rememberPwd, setRememberPwd] = useState(false);
+
   // 2026-09-23 安全加固：10501/10502 触发的前端锁定倒计时状态。
   // lockedUntilTs 是**绝对时间戳** —— 切换 account/phone 模式不重置它
   //（锁定是账号+IP 维度的服务端状态，不是前端局部状态）。
@@ -76,9 +79,10 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
     (async () => {
       const saved = await uiStorage.load();
       if (cancelled) return;
-      // 2026-08-25 安全加固：只回填账号/手机号，不回填密码。
-      setAccountCreds({ identifier: saved.account, password: '' });
-      setPhoneCreds({ identifier: saved.phone, password: '' });
+      // 2026-09-25 v4：勾选过「记住密码」才回填对应模式密码；否则只回填账号/手机号（v3 行为）。
+      setAccountCreds({ identifier: saved.account, password: saved.rememberPassword ? saved.accountPassword : '' });
+      setPhoneCreds({ identifier: saved.phone, password: saved.rememberPassword ? saved.phonePassword : '' });
+      setRememberPwd(saved.rememberPassword);
       setMode(saved.mode);
     })();
     return () => {
@@ -155,8 +159,8 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
         payload = { account: identifier, password: passwordValue, captcha_id: captchaId, captcha_answer: captchaAnswer };
       }
       await login(payload);
-      // §20260821-05 按模式保存账号；2026-08-25 安全加固：不再保存密码，
-      // 密码字段恒为空串（同时以 v3 覆盖旧存量密文）。
+      // §20260821-05 按模式保存账号；2026-09-25 v4：勾选「记住密码」时按模式
+      // 保存密码，未勾选则全部写空串（取消勾选即清除存量密文，含旧版本迁移残留）。
       const accountVal = mode === 'account' ? creds.identifier.trim() : accountCreds.identifier.trim();
       const phoneVal = mode === 'phone' ? creds.identifier.trim() : phoneCreds.identifier.trim();
       await uiStorage.save({
@@ -164,8 +168,9 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
         phone: phoneVal,
         password: '',
         mode,
-        accountPassword: '',
-        phonePassword: ''
+        accountPassword: rememberPwd ? (mode === 'account' ? creds.password : accountCreds.password) : '',
+        phonePassword: rememberPwd ? (mode === 'phone' ? creds.password : phoneCreds.password) : '',
+        rememberPassword: rememberPwd
       });
     } catch (e) {
       const ae = e as ApiError;
@@ -250,6 +255,30 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
           required
           minLength={6}
         />
+      </div>
+
+      {/* 2026-09-25 v4「记住密码」opt-in 勾选 —— 默认不勾选，行为等同 v3（不存密码）。 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          marginBottom: 12,
+          color: 'var(--muted)',
+          fontSize: 12,
+        }}
+      >
+        <input
+          id="login-remember"
+          type="checkbox"
+          data-testid="login-remember-password"
+          checked={rememberPwd}
+          onChange={(e) => setRememberPwd(e.target.checked)}
+          style={{ accentColor: 'var(--accent)', width: 14, height: 14, margin: 0 }}
+        />
+        <label htmlFor="login-remember" style={{ cursor: 'pointer', userSelect: 'none' }}>
+          {t('auth.rememberPassword')}
+        </label>
       </div>
 
       {requireCaptcha && (
