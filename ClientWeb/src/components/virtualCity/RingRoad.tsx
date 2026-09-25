@@ -13,7 +13,7 @@
 import { useMemo } from 'react';
 import { streetTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/virtualCity';
 import { districtCenter, VIRTUAL_CITY_DISTRICTS } from '@/types/virtualCity';
-import { useSharedTexture, useSharedPBR, withPBR } from './textureCache';
+import { useSharedTexture, useSharedPBR, withPBR } from '@/engine3d';
 import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
 
 /** 环路半径（世界单位；CBD 8×8 底板半宽 4.05 + curb，环内缘 5.1 不压底板）。 */

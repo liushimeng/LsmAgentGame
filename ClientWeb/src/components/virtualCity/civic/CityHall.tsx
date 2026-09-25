@@ -5,10 +5,10 @@
  * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
  *   - modelUrl 返回 '' → 走 fallback（程序化几何，与原行为像素一致）
  *   - .glb 加载成功 → 渲染真实模型，children 不渲染
- *   - 切换开关：localStorage.getItem('disable-blender-models') === '1' 强制 fallback
+ *   - 切换开关：engine3d blenderModelsEnabled()（localStorage disable-blender-models=1）强制 fallback
  */
 import { u } from '../cityScale';
-import { Model } from '../Model';
+import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
 
 const STONE = '#a8a4a0';
@@ -17,11 +17,6 @@ const ROOF_DARK = '#3a3f4a';
 const GOLD = '#d4a017';
 
 /** 全局开关：测试/回滚用，缺省 false = 用 .glb */
-function blenderEnabled(): boolean {
-  return typeof window === 'undefined' ||
-    window.localStorage.getItem('disable-blender-models') !== '1';
-}
-
 export function CityHall() {
   const url = modelUrl('civic', 'city_hall');
   // url 缺失或全局开关关闭 → 直接渲染原程序化几何

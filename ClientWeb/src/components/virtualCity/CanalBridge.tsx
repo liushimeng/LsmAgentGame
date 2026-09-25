@@ -12,7 +12,7 @@
 import { useMemo } from 'react';
 import { streetTileUrl } from '@/assets/images/virtualCity';
 import { districtCenter, VIRTUAL_CITY_DISTRICTS } from '@/types/virtualCity';
-import { useSharedTexture } from './textureCache';
+import { useSharedTexture } from '@/engine3d';
 import { CANAL_Z, CANAL_HALF_X, MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
 /**
  * 桥面宽 / 厚 / 中心 y。顶面 = 0.035：高于水面 0.028（不没水）、仅高于路面

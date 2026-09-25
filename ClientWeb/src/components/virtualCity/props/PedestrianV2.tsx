@@ -1,5 +1,5 @@
 /**
- * PedestrianV2 — 2.5D 街道行人 V2（15-3D城市全面真实感深化 · 阶段 K）：
+ * PedestrianV2 — 3D 城市场景行人 V2（15-3D城市全面真实感深化 · 阶段 K）：
  *
  * V1 → V2 升级点：
  *   - V1：Billboard sprite（贴纸感，无体积） + 单圆环原地微抖
@@ -25,7 +25,7 @@ import { useFrame } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { pedestrianHeadUrl, type PedestrianHeadOutfit } from '@/assets/images/virtualCity';
 import { u } from '../cityScale';
-import { useSharedTexture } from '../textureCache';
+import { useSharedTexture } from '@/engine3d';
 
 type Outfit = PedestrianHeadOutfit;
 

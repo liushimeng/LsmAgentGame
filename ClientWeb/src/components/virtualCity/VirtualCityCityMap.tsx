@@ -1,5 +1,5 @@
 /**
- * VirtualCityCityMap — r3f 主场景（08-UI优化 v2）：
+ * VirtualCityCityMap — r3f 主场景（08-UI优化 v2 → 22-3D世界升级）。
  *
  * P1-A 改造：
  *   - 删除 gridHelper 黑线（line 56 of v1），地面改用 RepeatWrapping 沥青贴图。
@@ -19,8 +19,6 @@
  *     显式阴影相机 ±WORLD_SIZE*0.6 覆盖全城（默认 ±5 曾导致大部分楼无阴影）。
  *   - 雾色随天际线改 #aeb8c6；ambient 0.45 / hemisphere 0.5 / 日光暖白 #fff2e0。
  *
- * 相机 / OrbitControls / CameraReporter / FocusController 行为不变（与 v1 完全兼容）。
- *
  * 16-3D城市WebGL质感与城市补全（阶段 R/S/T/U）：
  *   - EnvBinder：PMREM 烘焙 Sky → scene.environment（幕墙反射）+ 冷色填充光。
  *   - Ground：urban_base 城市底色优先（替代满城沥青）。
@@ -31,14 +29,30 @@
  *   - WORLD_SIZE 80 → 120 / WORLD_GROUND_SIZE → 160，fog 1.0W/2.0W、SUN ×1.5、
  *     SHADOW_HALF=0.5W、minDistance=0.1W、CANAL_HALF_X 32→48 全部随 W 派生或更新。
  *   - 导出 MAIN_ROAD_MIN_LEN = W×0.15（7 处 len>12 字面量统一派生）。
- *   - ?debug=1 时 onCreated 挂 window.__cityRenderInfo = renderer.info。
+ *
+ * 批次 22（2.5D → 3D 世界升级 + 引擎模块化，tmpPlan/虚拟城市-2.5D升级3D世界与引擎模块化方案-20260925.md）：
+ *   - 通用渲染能力全部迁入 `@/engine3d`：EngineCanvas（ACES/PCFSoft/debug info）、
+ *     Model/modelCache、textureCache/useSharedPBR、EnvBinder（参数化）、
+ *     CameraViewReporter / FocusLerpController（原内联 CameraReporter/FocusController 泛化）。
+ *   - 相机解锁 2.5D 俯视约束：maxPolarAngle 1.2 → 1.54（≈88°，可压到近街面视角）。
+ *   - 新增「俯瞰 / 街景漫游」双模式：漫游模式挂载 engine3d WalkControls
+ *     （WASD + 鼠标拖拽环视，眼高 1.7m），与 OrbitControls 互斥挂载、切换时衔接相机位姿。
+ *   - ?debug=1 时挂 window.__cityRenderInfo = renderer.info（经 EngineCanvas 的
+ *     debugGlobalName 保持原全局名，CDP 验收工具链兼容）。
  */
 
-import { useMemo, useRef } from 'react';
-import * as THREE from 'three';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { useMemo, useRef, useState } from 'react';
 import { OrbitControls, Sky } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import {
+  EngineCanvas,
+  EnvBinder,
+  useSharedTexture,
+  CameraViewReporter,
+  FocusLerpController,
+  WalkControls,
+} from '@/engine3d';
+import type { CameraView, FocusTarget } from '@/engine3d';
 import { DistrictBlock } from './DistrictBlock';
 import { AgentToken } from './AgentToken';
 import { Road, lampsForRoad } from './Road';
@@ -47,13 +61,11 @@ import { StreetPropsLayer } from './StreetPropsLayer';
 import { WaterPlane } from './props/WaterPlane';
 import { WaterMist } from './props/WaterMist';
 import { AtmosphereLayer } from './AtmosphereLayer';
-import { EnvBinder } from './EnvBinder';
 import { RingRoad } from './RingRoad';
 import { CanalBridges } from './CanalBridge';
 import { LandmarksLayer } from './LandmarksLayer';
 import { CloudLayer } from './props/CloudLayer';
 import { CivicLayer } from './CivicLayer';
-import { useSharedTexture } from './textureCache';
 import { groundTileUrl, streetTileUrl } from '@/assets/images/virtualCity';
 import {
   VIRTUAL_CITY_DISTRICTS,
@@ -61,13 +73,10 @@ import {
   type VirtualCityDistrictId,
   type VirtualCityGameState,
 } from '@/types/virtualCity';
+import { u } from './cityScale';
 
 /** 主场景 → 小地图的相机视野快照（ref 每帧覆写，不触发 React 渲染）。 */
-export interface VirtualCityCameraView {
-  x: number;
-  z: number;
-  dist: number;
-}
+export type VirtualCityCameraView = CameraView;
 
 // ── v2.12 阶段 2 世界尺寸常量（地图 40×40 → 80×80，面积 ×4）──────────
 // 所有 40 相关魔法数收敛于此；地面贴图 / 雾化 / 相机 / 光照按比例派生。
@@ -109,11 +118,20 @@ const SHADOW_CAMERA_HALF = WORLD_SIZE * 0.5;
 /** 雾色（与 Sky 地平线色接近，远景自然消隐）。 */
 const FOG_COLOR = '#aeb8c6';
 
+// ── 批次 22：3D 世界相机常量 ─────────────────────────────────
+/** 批次 22：俯仰角上限 1.2（≈69°，2.5D 锁定俯视）→ 1.54（≈88°，可压到近街面视角，
+ *  仍留约 2° 余量防止完全平视时地平线穿帮）。 */
+const ORBIT_MAX_POLAR_ANGLE = 1.54;
+/** 街景漫游眼高：1.7m（u(1.7)，cityScale 世界标尺 1 单位 = 10 米）。 */
+const WALK_EYE_HEIGHT = u(1.7);
+/** 街景漫游移速：3 单位/秒 = 30 m/s（观光速度；Shift ×3 加速）。 */
+const WALK_SPEED = 3;
+
 /** 小地图 / 面板 → 主场景的聚焦目标（null = 无聚焦请求）。 */
-export interface VirtualCityFocusTarget {
-  x: number;
-  z: number;
-}
+export type VirtualCityFocusTarget = FocusTarget;
+
+/** 视角模式：orbit = 轨道俯瞰（默认）；walk = 街景漫游（批次 22 新增）。 */
+type ViewMode = 'orbit' | 'walk';
 
 interface Props {
   gameState: VirtualCityGameState | null;
@@ -198,6 +216,11 @@ function RoadsLayer() {
   );
 }
 
+/** 运河中心 z（与 CanalBridge 契约一致）。 */
+export const CANAL_Z = 17;
+/** 运河 x 半跨（水面横贯 x ∈ [-CANAL_HALF_X, CANAL_HALF_X]）。 */
+export const CANAL_HALF_X = 48;
+
 /**
  * 水系层（14-3D城市渲染深化 · 阶段 I + 15-3D城市全面真实感深化 · 阶段 P）：
  *   - 城市运河 + 物流港港池 + 两岸草皮收边（14 阶段 I）
@@ -207,11 +230,6 @@ function RoadsLayer() {
  * 批次 20（文档 1 §3.4）：运河 x 半跨 32 → 48（东延入 software_park/airport_town 之间空隙；
  * 与 fin_sub/sports/bay/university 底板 z≥22 不交，CanalBridge 常量同源 import）。
  */
-/** 运河中心 z（与 CanalBridge 契约一致）。 */
-export const CANAL_Z = 17;
-/** 运河 x 半跨（水面横贯 x ∈ [-CANAL_HALF_X, CANAL_HALF_X]）。 */
-export const CANAL_HALF_X = 48;
-
 function WaterLayer() {
   const bankTex = useSharedTexture(streetTileUrl('sidewalk_side'), {
     wrap: 'repeat',
@@ -252,50 +270,6 @@ function WaterLayer() {
   );
 }
 
-/** useFrame 内读 controls.target + 相机距离 → 写 viewRef（小地图视野框）。 */
-function CameraReporter({
-  controlsRef,
-  viewRef,
-}: {
-  controlsRef: React.MutableRefObject<OrbitControlsImpl | null>;
-  viewRef: React.MutableRefObject<VirtualCityCameraView>;
-}) {
-  const camera = useThree((s) => s.camera);
-  useFrame(() => {
-    const c = controlsRef.current;
-    if (!c) return;
-    viewRef.current.x = c.target.x;
-    viewRef.current.z = c.target.z;
-    viewRef.current.dist = camera.position.distanceTo(c.target);
-  });
-  return null;
-}
-
-/** focusRef 有值 → lerp OrbitControls.target 到目标区，到位清空。 */
-function FocusController({
-  controlsRef,
-  focusRef,
-}: {
-  controlsRef: React.MutableRefObject<OrbitControlsImpl | null>;
-  focusRef: React.MutableRefObject<VirtualCityFocusTarget | null>;
-}) {
-  const tmpRef = useRef(new THREE.Vector3());
-  useFrame(() => {
-    const c = controlsRef.current;
-    const f = focusRef.current;
-    if (!c || !f) return;
-    const tmp = tmpRef.current;
-    tmp.x = f.x;
-    tmp.y = 0;
-    tmp.z = f.z;
-    c.target.lerp(tmp, 0.08);
-    if (c.target.distanceTo(tmp) < 0.05) {
-      focusRef.current = null;
-    }
-  });
-  return null;
-}
-
 /** 按城区聚合玩家，产出 token 布点参数。 */
 function tokenLayout(gameState: VirtualCityGameState | null) {
   const players = gameState?.players ?? [];
@@ -331,26 +305,42 @@ export function VirtualCityCityMap({
     return m;
   }, [gameState]);
 
+  // ── 批次 22：俯瞰 / 街景漫游双模式（互斥挂载，切换时衔接位姿）────────
+  const [viewMode, setViewMode] = useState<ViewMode>('orbit');
+  /** 漫游落点与初始朝向（orbit → walk 切换时从当前轨道位姿推导）。 */
+  const [walkStart, setWalkStart] = useState<{ x: number; z: number; yaw: number }>({ x: 0, z: 8, yaw: 0 });
+  /** walk → orbit 恢复轨道聚焦点；epoch 递增强制 OrbitControls 重挂载应用新 target。 */
+  const [orbitResume, setOrbitResume] = useState<{ target: [number, number, number]; epoch: number }>({
+    target: [0, 0, 0],
+    epoch: 0,
+  });
+
+  const switchToWalk = () => {
+    const c = controlsRef.current;
+    if (c) {
+      // 落点 = 当前轨道聚焦点；初始朝向 = 从相机位置看向聚焦点的水平方向
+      const cam = c.object.position;
+      const dx = c.target.x - cam.x;
+      const dz = c.target.z - cam.z;
+      setWalkStart({ x: c.target.x, z: c.target.z, yaw: Math.atan2(-dx, -dz) });
+    }
+    setViewMode('walk');
+  };
+
+  const switchToOrbit = () => {
+    // 聚焦点 = 漫游最后所在位置（viewRef 在漫游模式上报相机自身 x/z）
+    setOrbitResume((prev) => ({
+      target: [viewRef.current.x, 0, viewRef.current.z],
+      epoch: prev.epoch + 1,
+    }));
+    setViewMode('orbit');
+  };
+
   return (
     <div className="virtualCity-map-host">
-      <Canvas
-        shadows
-        dpr={[1, 1.75]}
+      <EngineCanvas
         camera={{ position: CAMERA_START, fov: 45 }}
-        gl={{ antialias: true, powerPreference: 'high-performance' }}
-        onCreated={({ gl }) => {
-          // v2.13 阶段 C：胶片色调映射（高光不过曝）+ 柔和阴影边缘
-          gl.toneMapping = THREE.ACESFilmicToneMapping;
-          gl.toneMappingExposure = 1.05;
-          gl.shadowMap.type = THREE.PCFSoftShadowMap;
-          // 批次 20 · 文档 1 §3.3：?debug=1 时挂 renderer.info 供 CDP 实测
-          // （draw call / mesh / geometry / program），一次性挂载无 runtime 开销。
-          if (typeof window !== 'undefined' && window.location.search.includes('debug=1')) {
-            (window as unknown as { __cityRenderInfo?: typeof gl.info }).__cityRenderInfo = gl.info;
-            // eslint-disable-next-line no-console
-            console.log('[city-debug] renderer.info mounted on window.__cityRenderInfo', gl.info);
-          }
-        }}
+        debugGlobalName="__cityRenderInfo"
       >
         {/* v2.13 阶段 C：Sky 天空穹顶接管背景（删除纯色 <color>），太阳方向与主方向光一致 */}
         <Sky sunPosition={SKY_SUN_POSITION} turbidity={6} rayleigh={1.2} />
@@ -359,8 +349,9 @@ export function VirtualCityCityMap({
         <ambientLight intensity={0.45} />
         {/* P1-A 新增：天/地反弹 */}
         <hemisphereLight args={['#7a93b8', '#1a1f2a', 0.5]} />
-        {/* 16 · 阶段 R：环境反射（PMREM 烘焙 Sky → scene.environment，一次性） */}
-        <EnvBinder />
+        {/* 16 · 阶段 R：环境反射（PMREM 烘焙 Sky → scene.environment，一次性）；
+            批次 22：EnvBinder 迁入 engine3d 并参数化（显式传参，与主天空同 uniforms） */}
+        <EnvBinder sunPosition={SKY_SUN_POSITION} turbidity={6} rayleigh={1.2} intensity={0.35} />
         {/* 16 · 阶段 R：冷色填充光（背光面抬亮，不投影） */}
         <directionalLight position={[-24, 20, -18]} color="#b8cce8" intensity={0.3} />
         {/* v2.12 阶段 2：光位随世界边长等比 ×2（方向向量不变，阴影形态不变）；
@@ -426,21 +417,62 @@ export function VirtualCityCityMap({
             />
           );
         })}
-        <OrbitControls
-          ref={controlsRef}
-          enablePan
-          enableZoom
-          enableRotate
-          enableDamping
-          dampingFactor={0.08}
-          maxPolarAngle={1.2}
-          minDistance={ORBIT_MIN_DISTANCE}
-          maxDistance={ORBIT_MAX_DISTANCE}
-          target={[0, 0, 0]}
+        {/* 批次 22：俯瞰 / 漫游互斥挂载（切换时经 walkStart / orbitResume 衔接位姿）；
+            相机俯仰角上限 1.2 → 1.54（2.5D 锁定俯视 → 3D 自由视角） */}
+        {viewMode === 'orbit' ? (
+          <>
+            <OrbitControls
+              key={`orbit-${orbitResume.epoch}`}
+              ref={controlsRef}
+              enablePan
+              enableZoom
+              enableRotate
+              enableDamping
+              dampingFactor={0.08}
+              maxPolarAngle={ORBIT_MAX_POLAR_ANGLE}
+              minDistance={ORBIT_MIN_DISTANCE}
+              maxDistance={ORBIT_MAX_DISTANCE}
+              target={orbitResume.target}
+            />
+            <FocusLerpController controlsRef={controlsRef} focusRef={focusRef} />
+          </>
+        ) : (
+          <WalkControls
+            eyeHeight={WALK_EYE_HEIGHT}
+            bounds={WORLD_SIZE * 0.5}
+            speed={WALK_SPEED}
+            start={[walkStart.x, walkStart.z]}
+            startYaw={walkStart.yaw}
+          />
+        )}
+        {/* 批次 22：原内联 CameraReporter → engine3d CameraViewReporter；
+            漫游模式无 orbit target → fallbackToCamera 上报相机自身位置 */}
+        <CameraViewReporter
+          targetRef={controlsRef}
+          fallbackToCamera={viewMode === 'walk'}
+          viewRef={viewRef}
         />
-        <CameraReporter controlsRef={controlsRef} viewRef={viewRef} />
-        <FocusController controlsRef={controlsRef} focusRef={focusRef} />
-      </Canvas>
+      </EngineCanvas>
+      {/* 批次 22：俯瞰 / 街景漫游切换（§26 对比度：显式白字 + ≥45% 不透明底） */}
+      <button
+        type="button"
+        onClick={viewMode === 'orbit' ? switchToWalk : switchToOrbit}
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          zIndex: 10,
+          padding: '6px 12px',
+          background: 'rgba(10, 14, 20, 0.78)',
+          color: '#e6edf3',
+          border: '1px solid rgba(255, 255, 255, 0.28)',
+          borderRadius: 8,
+          fontSize: 13,
+          cursor: 'pointer',
+        }}
+      >
+        {viewMode === 'orbit' ? '🚶 街景漫游' : '🗺️ 返回俯瞰'}
+      </button>
       {/* 小地图由 VirtualCityGamePage 以绝对定位叠加（左上角） */}
     </div>
   );

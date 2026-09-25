@@ -46,12 +46,15 @@ go-web-debug-tool/          子模块 —— Chrome CDP 自动化调试服务
 
 ```
 ClientWeb/src/
+├── engine3d/            通用 WebGL/3D 渲染引擎（批次 22 起；游戏无关：
+│                        EngineCanvas / Model+modelCache / textureCache+useSharedPBR /
+│                        EnvBinder / quality / controls(CameraViewReporter·FocusLerp·Walk)）
 ├── shared/utils/        跨游戏工具（balance / ui-storage / format / time）
 ├── components/
 │   ├── chat/            ChatPanel(大厅) + GameChatPanel(房间，5 款游戏共用)
 │   ├── common/ ui/ layout/ auth/ lobby/ rules/ wallet/ ...   共享界面
 │   └── <game>/          各游戏私有组件（xiangqi/chess/junqi/doudizhu/
-│                        texasholdem/werewolf），werewolf/emotion.ts 亦在此
+│                        texasholdem/werewolf/virtualCity），werewolf/emotion.ts 亦在此
 ├── hooks/ store/ types/ api/ pages/ scenes/ services/ i18n/ rules/
 ├── styles/              globals.css 为唯一入口，@import 顺序即级联优先级
 └── assets/images/<game>/index.ts
@@ -62,6 +65,7 @@ ClientWeb/src/
 2. **游戏私有代码必须落在 `<game>/` 内** —— 判据是「引用方是否 100% 属于该游戏」。共享目录（`shared/` `components/ui|common/`）中出现单一游戏的 i18n 键或类型即为违规。
 3. **共享工具只有一处**：`shared/utils/`。不得再新建 `util/` 或 `utils/`。
 4. **`styles/globals.css` 的 `@import` 顺序不可调整** —— `werewolf.css` → `werewolf-v2.css` → `werewolf-emotion.css` → `werewolf-speech.css` 之间存在同优先级选择器覆盖链（`.werewolf-seat` 等），改序即样式回归。CSS 文件超 §4 行数上限时，**只能整段搬移 + 在原位置插入 `@import`**，并以「构建产物 CSS 字节一致」验证零回归。
+5. **`engine3d/` 禁止 import 游戏私有模块** —— 通用 3D 渲染引擎（2026-09-25 批次 22 自 virtualCity 抽取）只依赖 three / @react-three/fiber / @react-three/drei / three-stdlib；游戏私有的资产路径拼接留在游戏侧薄适配层（如 `components/virtualCity/cityPbr.ts`）。游戏组件一律经 `@/engine3d` 单点引入。
 
 ## 2.5 lag_docs/ 知识库索引
 
@@ -444,8 +448,8 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,可使用
 ClientWeb/src/assets/models/{civic|vehicles|nature|characters|road}/<name>.glb (入 git,二进制)
     ↓ import.meta.glob ?url, eager:true
 ClientWeb/src/assets/models/index.ts → modelUrl(category, name)
-ClientWeb/src/components/wealth/modelCache.ts → useSharedGLTF(url)
-ClientWeb/src/components/wealth/Model.tsx → <primitive object={scene.clone(true)}>
+ClientWeb/src/engine3d/modelCache.ts → useSharedGLTF(url)（批次 22 起迁入引擎层）
+ClientWeb/src/engine3d/Model.tsx → <primitive object={scene.clone(true)}>
     ↓ vite build (contenthash)
 ClientWeb/dist/assets/<name>-<hash8>.glb
     ↓ rsync (rebuild_restart_app.sh)
@@ -508,4 +512,4 @@ done
 | 关键词 | 触发子代理 | 工作面 |
 |--------|-----------|--------|
 | Blender / .glb / 3D 模型 / 几何 | art-designer | 3d_script/build_*.py + ClientWeb/src/assets/models/ |
-| GLTFLoader / useSharedGLTF / modelUrl | frontend-dev | ClientWeb/src/components/wealth/{modelCache,Model}.tsx + 12 个接入组件 |
+| GLTFLoader / useSharedGLTF / modelUrl | frontend-dev | ClientWeb/src/engine3d/{modelCache,Model}.tsx + 游戏侧接入组件（批次 22 起迁入引擎层） |

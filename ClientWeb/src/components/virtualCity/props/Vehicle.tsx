@@ -1,5 +1,5 @@
 /**
- * Vehicle — 2.5D 街道车辆（P1-C）：
+ * Vehicle — 3D 城市场景车辆（P1-C）：
  *
  * 简化几何（缺失贴图）：小盒子 + 主色（按 variant）。
  * 加载 props/vehicle/<variant>_vehicle.png 后：Billboard 朝相机 sprite。
@@ -28,8 +28,8 @@ import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/virtualCity';
 import { modelUrl } from '@/assets/models';
 import { u } from '../cityScale';
-import { useSharedTexture } from '../textureCache';
-import { useSharedGLTF } from '../modelCache';
+import { useSharedTexture } from '@/engine3d';
+import { useSharedGLTF, blenderModelsEnabled } from '@/engine3d';
 
 type VehicleVariant = 'sedan' | 'truck' | 'bus' | 'taxi';
 
@@ -148,8 +148,7 @@ export function Vehicle({
   //   - GLB 加载成功 → 仅渲染 .glb（视觉最丰富）
   //   - palette 模式（消防/巡逻车换色）→ 强制不走 GLB（GLB 颜色固定）
   const modelUrlStr = modelUrl('vehicles', variant);
-  const blenderOn = typeof window === 'undefined' ||
-    window.localStorage.getItem('disable-blender-models') !== '1';
+  const blenderOn = blenderModelsEnabled();
   const useGLB = !palette && blenderOn && !!modelUrlStr;
   void useGLB; // 标记保留：未来 v19.5 通过此 flag 控制 GLB vs sprite / palette fallback
   const { scene: glbScene } = useSharedGLTF(modelUrlStr);

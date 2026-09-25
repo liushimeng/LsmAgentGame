@@ -11,7 +11,7 @@ import { useMemo } from 'react';
 import { districtCenter } from '@/types/virtualCity';
 import { groundTileUrl } from '@/assets/images/virtualCity';
 import { u } from '../cityScale';
-import { useSharedTexture } from '../textureCache';
+import { useSharedTexture } from '@/engine3d';
 
 const FLOWER_COLORS = ['#c8453a', '#d8c44a', '#7c3aed', '#e07a3f'];
 const SOIL = '#4a3f30';

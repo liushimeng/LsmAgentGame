@@ -11,9 +11,9 @@
  *   - url 加载成功 → 渲染真实模型
  */
 import { useMemo } from 'react';
-import { useSynthPBR } from '../textureCache';
+import { useSynthPBR } from '../cityPbr';
 import { u } from '../cityScale';
-import { Model } from '../Model';
+import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
 
 export const TRUNK_COLOR = '#5a4634';
@@ -70,11 +70,6 @@ function hashStr(s: string): number {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
-}
-
-function blenderEnabled(): boolean {
-  return typeof window === 'undefined' ||
-    window.localStorage.getItem('disable-blender-models') !== '1';
 }
 
 export function TreeV3({ x, z, seed, scale = 1, castShadow = true }: TreeV3Props) {

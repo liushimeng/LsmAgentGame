@@ -22,7 +22,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { u } from '../cityScale';
-import { useSharedGLTF } from '../modelCache';
+import { useSharedGLTF, blenderModelsEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
 
 export interface PedestrianV3Props {
@@ -111,8 +111,7 @@ function samplePath(
 export function PedestrianV3({ path, speed = 0.55, outfit = 0, phase = 0 }: PedestrianV3Props) {
   // 19-Blender3D模型集成：.glb 模式优先级最高，绕过原 6 mesh + 摆臂逻辑
   const modelUrlStr = modelUrl('characters', 'pedestrian_walk');
-  const blenderOn = typeof window === 'undefined' ||
-    window.localStorage.getItem('disable-blender-models') !== '1';
+  const blenderOn = blenderModelsEnabled();
   const useGLB = !!modelUrlStr && blenderOn;
   void useGLB; // 标记保留：未来 v19.5 通过此 flag 控制 GLB vs 程序化几何 fallback
   const { scene: glbScene, animations } = useSharedGLTF(modelUrlStr);

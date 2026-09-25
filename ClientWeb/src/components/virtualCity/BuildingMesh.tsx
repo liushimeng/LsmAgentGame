@@ -28,7 +28,7 @@ import {
 import type { VirtualCityDistrictDef } from '@/types/virtualCity';
 import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
 import { BuildingShape, DISTRICT_ARCHETYPE } from './building_shapes';
-import { useSharedTexture, useSharedPBR } from './textureCache';
+import { useSharedTexture, useSharedPBR } from '@/engine3d';
 
 export interface BuildingSpec {
   /** 相对区中心偏移（x, z）。 */

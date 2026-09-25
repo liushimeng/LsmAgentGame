@@ -1,5 +1,5 @@
 /**
- * Sign — 2.5D 街道标识牌（P1-C）：
+ * Sign — 3D 城市场景标识牌（P1-C）：
  *
  * 简化几何（缺失贴图）：pole + 小色板（traffic 红 / info 蓝）。
  * 加载 props/sign/<variant>_sign.png 后：色板贴图 sprite。
@@ -12,7 +12,7 @@
 
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/virtualCity';
-import { useSharedTexture } from '../textureCache';
+import { useSharedTexture } from '@/engine3d';
 
 type SignVariant = 'traffic' | 'info';
 

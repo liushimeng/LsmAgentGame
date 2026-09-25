@@ -5,17 +5,12 @@
  * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
  */
 import { u } from '../cityScale';
-import { Model } from '../Model';
+import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
 
 const BLUE = '#2a4e7a';
 const WHITE = '#e8e3dc';
 const CAR_BLACK = '#2a2e36';
-
-function blenderEnabled(): boolean {
-  return typeof window === 'undefined' ||
-    window.localStorage.getItem('disable-blender-models') !== '1';
-}
 
 export function PoliceStation() {
   const url = modelUrl('civic', 'police_station');

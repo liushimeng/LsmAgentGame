@@ -1,10 +1,13 @@
 // Lobby scene — a slow, ambient, low-poly cube + ground plane. Purely
 // decorative; demonstrates R3F plumbing without committing to a game design.
+//
+// 批次 22（2.5D → 3D 世界升级）：裸 <Canvas> 切换为 engine3d <EngineCanvas>。
 
 import { useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import type { Mesh } from 'three';
+import { EngineCanvas } from '@/engine3d';
 
 function Spinner() {
   const ref = useRef<Mesh>(null);
@@ -23,7 +26,7 @@ function Spinner() {
 
 export function LobbyScene() {
   return (
-    <Canvas shadows camera={{ position: [3, 2.5, 4], fov: 50 }}>
+    <EngineCanvas camera={{ position: [3, 2.5, 4], fov: 50 }}>
       <ambientLight intensity={0.4} />
       <directionalLight position={[5, 8, 5]} intensity={0.9} castShadow />
       <Spinner />
@@ -32,6 +35,6 @@ export function LobbyScene() {
         <meshStandardMaterial color="#161b22" />
       </mesh>
       <OrbitControls enablePan={false} />
-    </Canvas>
+    </EngineCanvas>
   );
 }

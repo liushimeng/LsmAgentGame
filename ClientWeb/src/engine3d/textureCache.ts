@@ -1,21 +1,20 @@
 /**
- * textureCache — 进程级共享贴图缓存（14-3D城市渲染深化 · 阶段 H）。
+ * engine3d/textureCache — 进程级共享贴图缓存 + 通用 PBR 三件套拼装。
  *
- * 动机（契约 02-架构设计 §1）：BuildingMesh / Road / DistrictBlock / Vehicle /
- * Pedestrian / Tree / Sign / RooftopAcc / StreetLight / Ground 各自 new TextureLoader
- * → 同源 PNG 重复 GPU 上传（约 240 次 vs 约 30 张唯一贴图），且组件卸载各自 dispose()
- * 有误销毁共享源的风险。
+ * 自 components/virtualCity/textureCache.ts 迁入（22-3D世界升级与引擎模块化，
+ * 14-3D城市渲染深化 · 阶段 H 的原始契约不变）：
+ *   - key = `${url}|${wrap}|${rx}|${ry}|${srgb}|${aniso}`；命中同步复用。
+ *   - **禁止组件侧 dispose 共享纹理** —— 缓存随页面生命周期存活（页面卸载即整页销毁）。
+ *   - url === ''（资产缺失）→ 返回 null，零副作用（降级链由调用方处理）。
+ *   - 加载失败缓存哨兵：tex=null, done=true，后续调用直接返回 null（不反复重试）。
  *
- * 规约：
- *   - key = `${url}|${wrap}|${rx}|${ry}|${srgb}`；命中同步复用。
- *   - **禁止组件侧 dispose 共享纹理** —— 缓存随页面生命周期存活（游戏页卸载即整页销毁）。
- *   - url === ''（资产缺失）→ 返回 null，零副作用（§9 降级链由调用方处理）。
- *   - 加载失败缓存哨兵 FAILED，后续调用直接返回 null（不反复重试）。
+ * 通用模块：只接受 URL 参数，不 import 任何游戏的资产路径模块。
+ * 游戏私有的「stem → URL」拼接（如虚拟城市 synth 合成材质）由各游戏侧薄适配层完成
+ * （虚拟城市：components/virtualCity/cityPbr.ts）。
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
-import { pbrNormalUrl, pbrRoughUrl } from '@/assets/images/virtualCity';
 
 export interface SharedTextureOpts {
   /** repeat = RepeatWrapping（路面/地面/水面）；clamp = ClampToEdge（立面/道具 sprite）。 */
@@ -25,7 +24,7 @@ export interface SharedTextureOpts {
   /** 默认 true（颜色贴图走 sRGB）。 */
   srgb?: boolean;
   /**
-   * 16 · 阶段 R：各向异性过滤等级。repeat 模式默认 8（路面/地面掠射角清晰），
+   * 各向异性过滤等级。repeat 模式默认 8（路面/地面掠射角清晰），
    * clamp 模式默认 1。three 上传时自动 clamp 到 GPU 上限，无需读 renderer。
    */
   anisotropy?: number;
@@ -57,7 +56,7 @@ function startLoad(url: string, key: string, opts: SharedTextureOpts): CacheEntr
       loaded.colorSpace = (opts.srgb !== false) ? THREE.SRGBColorSpace : THREE.NoColorSpace;
       loaded.magFilter = THREE.LinearFilter;
       loaded.minFilter = THREE.LinearMipmapLinearFilter;
-      // 16 · 阶段 R：各向异性过滤（GPU 上限由 three 内部 clamp，设置值过大安全）
+      // 各向异性过滤（GPU 上限由 three 内部 clamp，设置值过大安全）
       loaded.anisotropy = opts.anisotropy ?? (opts.wrap === 'repeat' ? 8 : 1);
       if (opts.wrap === 'repeat') {
         loaded.wrapS = loaded.wrapT = THREE.RepeatWrapping;
@@ -130,18 +129,7 @@ export function clearTextureCache(): void {
   CACHE.clear();
 }
 
-// ── 18-3D城市PBR材质与真实城市冲刺 · 阶段 X（PBR 三件套）────────────────
-
-/** synth 合成材质固定 stem（与 3d_script/procedural_pbr_maps.py::synth_jobs 对齐）。
- *  由 useSynthPBR 内部消费，building_shapes 不感知具体 URL 拼接。 */
-export type SynthStem =
-  | 'water'
-  | 'concrete'
-  | 'brick'
-  | 'metal_deck'
-  | 'tile_roof'
-  | 'asphalt_wear'
-  | 'foliage';
+// ── 通用 PBR 三件套（18-3D城市PBR材质与真实城市冲刺 · 02 架构设计 §2.2）─────
 
 export interface SharedPBROpts {
   /** 三张贴图共用同一 wrap（颜色图走 sRGB，法线/粗糙度在 useSharedPBR 内固定 srgb:false）。 */
@@ -169,8 +157,7 @@ export interface SharedPBR {
 }
 
 /**
- * 共享 PBR 三件套（18-3D城市PBR材质与真实城市冲刺 · 02 架构设计 §2.2）。
- * 三张贴图共用同一 wrap/repeat（同一套 UV），
+ * 共享 PBR 三件套。三张贴图共用同一 wrap/repeat（同一套 UV），
  * 法线/粗糙度固定 `srgb: false`（colorSpace = NoColorSpace，线性空间）——这是常踩的
  * 「法线过弱」根因：法线是方向向量、粗糙度是标量，走 sRGB 会被色彩空间扭曲。
  * 全部走 useSharedTexture → 进程级缓存，禁组件自建 loader。
@@ -209,17 +196,7 @@ export function useSharedPBR(
 }
 
 /**
- * synth 合成材质 PBR（02 架构设计 §2.3 表内第 11-14 行：concrete / brick / metal_deck /
- * tile_roof / foliage 等）。颜色图为空 → 材质保持纯色 + 硬编码属性，仅由法线/粗糙度贴图
- * 贡献凹凸与光泽差。building_shapes 用此 hook 而非直接 import pbr 路径，
- * 满足 §3.3「stem 拼接只允许在 BuildingMesh.tsx」的约束。
- */
-export function useSynthPBR(name: SynthStem, opts?: SharedPBROpts): SharedPBR {
-  return useSharedPBR('', pbrNormalUrl('synth', name), pbrRoughUrl('synth', name), opts);
-}
-
-/**
- * 统一材质规则（02 架构设计 §2.3 withPBR）：
+ * 统一材质规则（withPBR）：
  *   - 有 roughnessMap 时不传 roughness（由贴图全权决定；three 用 roughnessMap.g × 1.0）。
  *   - 无 roughnessMap 时保留 base.roughness 硬编码值。
  * 贴图 map/normalMap 缺失时 matProps 自动不含对应键。

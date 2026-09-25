@@ -15,7 +15,7 @@ import { Billboard, Html } from '@react-three/drei';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import { professionAvatar } from '@/assets/images/virtualCity';
-import { useSharedTexture } from './textureCache';
+import { useSharedTexture } from '@/engine3d';
 import {
   formatCny,
   professionColor,

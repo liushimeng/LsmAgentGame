@@ -9,7 +9,7 @@
 
 import { signUrlExt } from '@/assets/images/virtualCity';
 import { u } from '../cityScale';
-import { useSharedTexture } from '../textureCache';
+import { useSharedTexture } from '@/engine3d';
 
 const POLE = '#5a6270';
 const HEAD_BLUE = '#3a78c8';

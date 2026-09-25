@@ -1,5 +1,5 @@
 /**
- * Road — 2.5D 城市场景道路组件（P1-A）：
+ * Road — 3D 城市场景道路组件（P1-A）：
  *
  * 把单 plane 道路升级为 4 层组合 ——
  *   1. 主车道（asphalt_main.png 平铺；缺失 → 纯色 #1f2733）
@@ -24,7 +24,7 @@ import type { Texture } from 'three';
 import { streetTileUrl, pbrNormalUrl, pbrRoughUrl, type StreetTileName } from '@/assets/images/virtualCity';
 import { u } from './cityScale';
 import type { InstancedLamp } from './props/StreetLightsInstanced';
-import { useSharedPBR, useSharedTexture, withPBR } from './textureCache';
+import { useSharedPBR, useSharedTexture, withPBR } from '@/engine3d';
 
 interface Props {
   /** 道路起点世界坐标（城区中心）。 */

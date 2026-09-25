@@ -1,5 +1,5 @@
 /**
- * Pedestrian — 2.5D 街道行人（14-3D城市渲染深化 · 阶段 I 漫步改造）：
+ * Pedestrian — 3D 城市场景行人（14-3D城市渲染深化 · 阶段 I 漫步改造）：
  *
  * 简化几何（缺失贴图）：小圆 + 主色（warm/cool 双调色板）。
  * 加载 props/pedestrian/<variant>_pedestrian.png 后：Billboard 朝相机 sprite。
@@ -16,7 +16,7 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/virtualCity';
-import { useSharedTexture } from '../textureCache';
+import { useSharedTexture } from '@/engine3d';
 
 type PedestrianVariant = 'warm' | 'cool';
 

@@ -9,7 +9,7 @@
 
 import { streetTileUrl } from '@/assets/images/virtualCity';
 import { u } from '../cityScale';
-import { useSharedTexture } from '../textureCache';
+import { useSharedTexture } from '@/engine3d';
 
 const LOT_X = 12.4; // commerce (10,-2) 东北角：pad 内缘 x 6..14 / z -6..2，
 const LOT_Z = -4.9; // 楼群占中心 ±3.1 → 场地收窄到 2.8×2.0 贴 pad 东北角避让

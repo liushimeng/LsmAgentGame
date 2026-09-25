@@ -13,7 +13,7 @@
 import * as THREE from 'three';
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/virtualCity';
-import { useSharedTexture } from '../textureCache';
+import { useSharedTexture } from '@/engine3d';
 
 type RooftopVariant = 'ac' | 'tank' | 'antenna';
 

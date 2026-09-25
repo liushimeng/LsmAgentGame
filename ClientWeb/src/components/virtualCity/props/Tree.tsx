@@ -1,5 +1,5 @@
 /**
- * Tree — 2.5D 街道树木（P1-C）：
+ * Tree — 3D 城市场景树木（P1-C）：
  *
  * 简化几何（缺失贴图）：棕色细圆柱树干 + 绿色 sphere 树冠。
  * 加载 props/tree/<variant>_tree.png 后：树冠用 Billboard 朝相机的 sprite。
@@ -8,7 +8,7 @@
 
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/virtualCity';
-import { useSharedTexture } from '../textureCache';
+import { useSharedTexture } from '@/engine3d';
 
 type TreeVariant = 'oak' | 'pine' | 'palm';
 

@@ -5,17 +5,12 @@
  * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
  */
 import { u } from '../cityScale';
-import { Model } from '../Model';
+import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
 
 const TANK_GREEN = '#5a7a4e';
 const TANK_LIGHT = '#7a9a6e';
 const TANK_DARK = '#3a5240';
-
-function blenderEnabled(): boolean {
-  return typeof window === 'undefined' ||
-    window.localStorage.getItem('disable-blender-models') !== '1';
-}
 
 export function WaterTower() {
   const url = modelUrl('civic', 'water_tower');

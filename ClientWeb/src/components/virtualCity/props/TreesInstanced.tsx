@@ -13,7 +13,7 @@
 
 import { useMemo } from 'react';
 import { Instances, Instance } from '@react-three/drei';
-import { useSynthPBR } from '../textureCache';
+import { useSynthPBR } from '../cityPbr';
 import { u } from '../cityScale';
 import {
   TRUNK_COLOR,

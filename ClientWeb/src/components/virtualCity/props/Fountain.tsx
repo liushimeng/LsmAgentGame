@@ -10,7 +10,7 @@
 import { Sparkles } from '@react-three/drei';
 import { groundTileUrl } from '@/assets/images/virtualCity';
 import { u } from '../cityScale';
-import { useSharedTexture } from '../textureCache';
+import { useSharedTexture } from '@/engine3d';
 
 const REDUCED_MOTION =
   typeof window !== 'undefined' &&

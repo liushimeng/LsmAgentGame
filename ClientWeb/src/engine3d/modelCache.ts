@@ -1,16 +1,16 @@
 /**
- * modelCache — 进程级共享 GLTFLoader 缓存（19-Blender3D模型集成 · 阶段 A）。
+ * engine3d/modelCache — 进程级共享 GLTFLoader 缓存。
  *
- * 动机（与 textureCache.ts 同源，契约见 lag_docs/虚拟城市/已实现/19-Blender3D模型集成/02-架构设计 §3）：
- *   - 56 个行人 / N 车 / N 市政厅若各自 new GLTFLoader → 同一 .glb 被 N 次 fetch + parse
- *   - 同源 scene 必须 .clone(true) per instance（共享 scene 会让多组件 transform 互相污染）
- *   - 缓存 key = url（GLB 不像贴图有 wrap/repeat 参数，材质贴图由 mesh 内 material slot 自带）
+ * 自 components/virtualCity/modelCache.ts 迁入（22-3D世界升级与引擎模块化，
+ * 19-Blender3D模型集成 · 阶段 A 的原始契约不变）：
+ *   - 同 url 多组件只发一次网络请求 / 只占一份 GPU 几何 + 材质。
+ *   - 命中同步复用 GLTFData，但调用方拿到 scene 后**必须 .clone(true)** 再挂载
+ *     （共享 scene 会让多实例 transform 互相污染）。
+ *   - **禁止组件侧 dispose 共享 scene** —— 缓存随页面生命周期存活。
+ *   - url === ''（资产缺失）→ 返回 null，零副作用（降级链由调用方处理）。
+ *   - 加载失败缓存哨兵：gltf=null, done=true，后续调用直接返回 null（不反复重试）。
  *
- * 规约（与 textureCache.ts 完全对齐）：
- *   - 命中同步复用 GLTFData，但 scene.clone(true) per useSharedGLTF 调用
- *   - **禁止组件侧 dispose 共享 scene** —— 缓存随页面生命周期存活（游戏页卸载即整页销毁）
- *   - url === ''（资产缺失）→ 返回 null，零副作用（§9 降级链由调用方处理）
- *   - 加载失败缓存哨兵：gltf=null, done=true，后续调用直接返回 null（不反复重试）
+ * 通用模块：不依赖任何游戏业务代码，任何 3D 游戏/程序可直接复用。
  */
 
 import { useEffect, useState } from 'react';
@@ -64,7 +64,7 @@ function startLoad(url: string): CacheEntry {
  * 未加载完成或失败返回 { scene: null, animations: [] }；url 为空直接返回 null scene。
  *
  * ⚠️ 调用方拿到的 scene 必须 .clone(true) 后再挂载，否则多实例 transform 会互相污染。
- * 详见 <Model /> 组件（ClientWeb/src/components/virtual-city/Model.tsx）的 useMemo clone 模式。
+ * 详见 engine3d/Model.tsx 的 useMemo clone 模式。
  */
 export function useSharedGLTF(url: string): SharedGLTF {
   const [gltf, setGltf] = useState<SharedGLTF | null>(() => {

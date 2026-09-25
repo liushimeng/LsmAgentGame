@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { skyUrl } from '@/assets/images/virtualCity';
-import { useSharedTexture } from '../textureCache';
+import { useSharedTexture } from '@/engine3d';
 
 const REDUCED_MOTION =
   typeof window !== 'undefined' &&

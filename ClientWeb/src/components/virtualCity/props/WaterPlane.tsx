@@ -19,7 +19,7 @@ import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { groundTileUrl, pbrNormalUrl } from '@/assets/images/virtualCity';
-import { useSharedPBR } from '../textureCache';
+import { useSharedPBR } from '@/engine3d';
 
 const REDUCED_MOTION =
   typeof window !== 'undefined' &&

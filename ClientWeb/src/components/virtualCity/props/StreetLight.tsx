@@ -1,5 +1,5 @@
 /**
- * StreetLight — 2.5D 街道路灯（P1-C）：
+ * StreetLight — 3D 城市场景路灯（P1-C）：
  *
  * 简化几何（缺失贴图时）：底座小圆柱 + 主杆细圆柱 + 灯头小盒子（带 emissive 暖光）。
  * 加载 props/streetlamp/<variant>_streetlamp.png 贴图（透明）后：
@@ -14,7 +14,7 @@
 
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/virtualCity';
-import { useSharedTexture } from '../textureCache';
+import { useSharedTexture } from '@/engine3d';
 
 interface Props {
   x: number;

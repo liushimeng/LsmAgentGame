@@ -11,7 +11,7 @@
 
 import { vendorUrl } from '@/assets/images/virtualCity';
 import { u } from '../cityScale';
-import { useSharedTexture } from '../textureCache';
+import { useSharedTexture } from '@/engine3d';
 
 const WOOD = '#6b4f3a';
 const ROOF = '#c8453a';

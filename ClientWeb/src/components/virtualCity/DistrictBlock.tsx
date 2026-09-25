@@ -20,7 +20,7 @@ import type { TKey } from '@/i18n';
 import { districtTexture, districtTextureStem, groundTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/virtualCity';
 import { BuildingMesh, type BuildingSpec } from './BuildingMesh';
 import { DISTRICT_FLOORS, buildingHeight, u } from './cityScale';
-import { useSharedPBR, useSharedTexture, withPBR } from './textureCache';
+import { useSharedPBR, useSharedTexture, withPBR } from '@/engine3d';
 import {
   VIRTUAL_CITY_DISTRICTS,
   formatCny,

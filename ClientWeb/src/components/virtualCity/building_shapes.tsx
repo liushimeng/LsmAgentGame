@@ -41,7 +41,7 @@ import {
   type SynthStem,
   useSynthPBR,
   withPBR,
-} from './textureCache';
+} from './cityPbr';
 
 // ── Archetype 分派（契约 §2.1 表格，勿随意改派）────────────────────
 

@@ -1,19 +1,20 @@
 /**
- * Model — 通用 GLB 渲染组件（19-Blender3D模型集成 · 阶段 A）。
+ * engine3d/Model — 通用 GLB 渲染组件。
  *
- * 契约（02-架构设计 §4）：
+ * 自 components/virtualCity/Model.tsx 迁入（22-3D世界升级与引擎模块化，
+ * 19-Blender3D模型集成 · 阶段 A 的原始契约不变）：
  *   - 必传：url + 任一 children fallback（缺失 / 失败 / 加载中 三态都走 fallback）
  *   - 每实例独立 scene.clone(true)：共享 GLTFLoader 缓存的 scene 会导致多组件 transform 互相污染
- *   - playAnimation=true 时自动调度 animations[0] clip（行人 walk）
+ *   - playAnimation=true 时自动调度 animations[0] clip
  *   - 降级链：url==='' 或加载失败 → children 渲染，零代码分支
  *
  * 设计动机（为什么用 children fallback 而不是 if/else 切换）：
  *   - 调用方接入零侵入：<Model url={...}>{原程序化几何}</Model>，加载成功 → 渲染 .glb 不渲染 children
- *   - 单 .glb 致命问题（mesh 错位 / 骨骼丢失）→ 改 modelUrl 调用即可，组件无需改动
+ *   - 单 .glb 致命问题（mesh 错位 / 骨骼丢失）→ 改 url 调用即可，组件无需改动
  *   - 删除 .glb 文件 + 不动一行代码 → 自动回退原行为（与原程序化几何像素一致）
  *
  * 性能注：
- *   - 56 个 PedestrianV3 → 56 次 .clone(true)（~1ms/次，总 < 60ms）
+ *   - N 个实例 → N 次 .clone(true)（~1ms/次）
  *   - clone 是 shallow copy：material / geometry 引用共享 → GPU 上传只一次
  *   - mixer per-instance（不能共享）：mixer 持有 root 引用，独立 update / dispose
  */
@@ -30,9 +31,9 @@ interface Props {
   position?: [number, number, number];
   rotation?: [number, number, number];
   scale?: number | [number, number, number];
-  /** 是否播放 animations[0]（仅 characters/pedestrian_walk 用） */
+  /** 是否播放 animations[0]（如人物行走 clip） */
   playAnimation?: boolean;
-  /** 加载中 / 失败 / url 缺失 时渲染的 fallback 几何（必传；modelUrl 返回 '' 时原行为即 children） */
+  /** 加载中 / 失败 / url 缺失 时渲染的 fallback 几何（必传；url 为 '' 时原行为即 children） */
   children?: ReactNode;
   castShadow?: boolean;
   receiveShadow?: boolean;
