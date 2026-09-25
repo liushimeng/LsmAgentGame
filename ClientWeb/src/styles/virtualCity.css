@@ -793,6 +793,24 @@
 .virtualCity-create-form__hint { color: #fde68a; font-size: 12.5px; }
 /* 座位数达标（不小于 MinSeats）时的绿色确认提示（与黄条警示同位置，避免布局跳动）。 */
 .virtualCity-create-form__hint--ok { color: #86efac; }
+/* 2026-09-25 §LLM线路池配额 — 数值步进行:[−] 输入 [+] 三段式（居民规模/线路池共用）。 */
+.virtualCity-create-form__stepper { display: flex; gap: 6px; align-items: stretch; min-width: 0; }
+.virtualCity-create-form__stepper input {
+  flex: 1; min-width: 0; text-align: center;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.virtualCity-create-form__stepper input::-webkit-outer-spin-button,
+.virtualCity-create-form__stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.virtualCity-create-form__stepper__btn {
+  width: 40px; flex: 0 0 40px; min-height: var(--virtualCity-touch-target);
+  border-radius: 8px; border: 1px solid var(--virtualCity-border);
+  background: #0f141c; color: var(--virtualCity-text);
+  font-size: 18px; line-height: 1; cursor: pointer;
+}
+.virtualCity-create-form__stepper__btn:hover:not(:disabled) { border-color: var(--virtualCity-accent-strong); }
+.virtualCity-create-form__stepper__btn:disabled {
+  background: #1a2029; color: #6b7480; cursor: not-allowed; border-color: var(--virtualCity-border);
+}
 /* 创建者身份行（由 Agent 数推导：入座玩家 / 观战者全 Agent 房），非交互展示。 */
 .virtualCity-create-form__creatorrole { color: var(--virtualCity-text); font-size: 13px; }
 /* 2026-09-22 §CityHuman全民驱动 — 职业卡一览 / 职业卡池 UI 退役，

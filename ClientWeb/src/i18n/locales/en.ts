@@ -3,6 +3,7 @@ import virtualCityP2 from './virtualCityP2-en';
 import virtualCityInsurance from './virtualCityInsurance-en';
 import virtualCityResidents from './virtualCityResidents-en';
 import virtualCityBatch20 from './virtualCityBatch20-en';
+import virtualCityLinePool from './virtualCityLinePool-en';
 
 // English — en
 const en: Dict = {
@@ -1726,8 +1727,8 @@ const en: Dict = {
   'virtualCity.consumption.forcedHint': 'When cash falls below 2× monthly living expense, settlement force-downgrades you to Frugal (living ×0.6)',
   'virtualCity.consumption.invalid': 'Invalid consumption level (must be 0-3)',
 
-  // ── virtualCity split files (≤1800 line cap): P2 trading / P1-4 insurance / residents / batch20 ──
-  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20,
+  // ── virtualCity split files (≤1800 line cap): P2 trading / P1-4 insurance / residents / batch20 / line pool ──
+  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool,
 
   // ── P1 Minsky Engine + LPR Reprice + Early Repayment ──
   'minsky.title': 'Minsky Financing Status',

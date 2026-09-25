@@ -94,12 +94,43 @@ func (r *VirtualCityRoom) startCityLocked() {
 	}
 	r.cityRng = rand.New(rand.NewSource(r.seed ^ citySeedSalt))
 	r.City = city.NewBackdrop(r.ResidentCount, r.cityRng, city.CurrentCalibration())
+	// 2026-09-25 §LLM线路池配额:池总量计算上移到装配 driver 之前 —— 生效
+	// 线路数 effLines = 房间配额 L>0 ? min(L, poolLines) : poolLines(建房时
+	// 快照语义;池 Reload 后实际可用以 Acquire 现取为准)。快照 Lines 记录
+	// 「本房请求配额或池总量」:L=0 → poolLines;poolLines=0 时 effLines=0,
+	// 仍照记请求值(前端如实可见,不静默吞掉)。
+	poolLines := 0
+	if r.linePoolSource != nil {
+		if p := r.linePoolSource(); p != nil {
+			poolLines = p.Total()
+		}
+	}
+	L := r.cityDriverLines
+	effLines := poolLines
+	if L > 0 {
+		effLines = min(L, poolLines)
+	}
+	snapLines := L
+	if snapLines == 0 {
+		snapLines = poolLines
+	}
 	if r.cityDriverEnabled {
-		r.cityDriver = city.NewResidentDriver(city.DriverConfig{
+		cfg := city.DriverConfig{
 			Enabled:  true,
 			Workers:  r.cityDriverWorkers,
 			PerMonth: r.cityDriverPerMonth,
-		}, r.linePoolSource)
+			Lines:    snapLines,
+		}
+		if L > 0 {
+			// Workers 用请求配额 L(线程池按房间配额跑,超池部分由全局
+			// LinePool Acquire 闸门硬约束 —— 配额只能收窄不能放大预算);
+			// PerMonth 取 max(原值, L) —— 预算喂满并发,配额不为任务数空转。
+			cfg.Workers = L
+			if cfg.PerMonth < L {
+				cfg.PerMonth = L
+			}
+		}
+		r.cityDriver = city.NewResidentDriver(cfg, r.linePoolSource)
 		r.cityDriver.SetAmbianceSource(r.cityAmbianceSource)
 		r.City.SetDriver(r.cityDriver)
 		r.cityVoice = nil
@@ -107,17 +138,13 @@ func (r *VirtualCityRoom) startCityLocked() {
 		r.cityDriver = nil
 		r.cityVoice = city.NewVoiceScheduler(r.cityVoiceEnabled, r.cityVoicePerMonth, r.linePoolSource)
 	}
-	poolLines := 0
-	if r.linePoolSource != nil {
-		if p := r.linePoolSource(); p != nil {
-			poolLines = p.Total()
-		}
-	}
 	logger.L().Info("wealth city backdrop created",
 		zap.String("room_id", r.RoomID),
 		zap.Int("residents", r.ResidentCount),
 		zap.Int64("seed", r.seed),
 		zap.Int("pool_lines", poolLines),
+		zap.Int("llm_lines", snapLines),
+		zap.Int("llm_lines_eff", effLines),
 		zap.Bool("driver_enabled", r.cityDriverEnabled))
 	// 2026-09-21 §档案锚定(契约 §5):文档池注入时后台异步把人物卡档案锚定
 	// 到居民(不阻塞开局/月结,期间合成数值兜底)。2026-09-22 §17-CityHuman
@@ -247,9 +274,11 @@ func (r *VirtualCityRoom) CityProfileOf(cardID string) (city.ResidentProfile, bo
 	return b.ProfileByCardID(cardID)
 }
 
-// resizeAgentSemLocked 线路池可用时把房间信号量容量抬到总线路数
-// (契约 01 §3.2 B5:LinePool 可用且 Total()>0 → 容量 = Total();否则保持
-// AgentConcurrency 默认)。仅在 Start 锁内调用 —— 此时 wakeBots 尚未运行,
+// resizeAgentSemLocked 线路池可用时把房间信号量容量设为生效线路数
+// (契约 01 §3.2 B5:LinePool 可用且 Total()>0 → 容量 = Total();2026-09-25
+// §LLM线路池配额:建房 llm_lines L>0 时收窄为 min(L, Total()) —— 房间配额
+// 只能收窄、不能放大全局预算;池不可用/Total()==0 时保持 AgentConcurrency
+// 默认)。仅在 Start 锁内调用 —— 此时 wakeBots 尚未运行,
 // 无并发 runOneBot 读 r.agentSem,替换通道无数据竞争。
 func (r *VirtualCityRoom) resizeAgentSemLocked() {
 	if r.linePoolSource == nil {
@@ -259,7 +288,11 @@ func (r *VirtualCityRoom) resizeAgentSemLocked() {
 	if pool == nil || pool.Total() <= 0 {
 		return
 	}
-	r.agentSem = make(chan struct{}, pool.Total())
+	cap := pool.Total()
+	if r.cityDriverLines > 0 && r.cityDriverLines < cap {
+		cap = r.cityDriverLines
+	}
+	r.agentSem = make(chan struct{}, cap)
 }
 
 // currentCPILocked 返回月环比通胀(城市 tick 用):P1 消费篮子 CPIMom

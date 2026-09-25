@@ -165,6 +165,9 @@ type VirtualCityRoom struct {
 	cityDriverEnabled  bool
 	cityDriverWorkers  int
 	cityDriverPerMonth int
+	// cityDriverLines 2026-09-25 §LLM线路池配额 — 建房 llm_lines([1,64];
+	// 0=未指定保持缺省:agentSem=池总量、Workers=config)。
+	cityDriverLines int
 
 	// 2026-09-22 §CityHuman重构:感知与发言支撑。
 	utterances []UtteranceRecord // 公开发言环形缓冲(cap 50,hear 数据源)
@@ -308,6 +311,12 @@ func (r *VirtualCityRoom) applyOpts(opts *service.VirtualCityRoomOptions) {
 		if r.World != nil && r.World.Election != nil {
 			r.World.Election.Enabled = true
 		}
+	}
+	// 2026-09-25 §LLM线路池配额:body.llm_lines([1,64],0=未指定保持缺省)。
+	if opts.LLMLines > 0 {
+		r.cityDriverLines = clampInt(opts.LLMLines, 1, 64)
+	} else if opts.LLMLines < 0 {
+		r.cityDriverLines = 0
 	}
 }
 

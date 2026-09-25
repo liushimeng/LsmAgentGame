@@ -465,6 +465,58 @@ func TestManager_ApplyRoomOptions_ResidentCount(t *testing.T) {
 	}
 }
 
+// ── 2026-09-25 §LLM线路池配额:建房 llm_lines 房间级并发配额接线 ──
+
+// L=3 + 池 8:快照 Lines/Workers=3、PerMonth≥3(config 原值 2 被抬到 3 ——
+// 预算喂满并发,配额不为任务数空转)、agentSem 容量=min(3,8)=3(房间配额
+// 只能收窄、不能放大全局预算)。L=0(未指定)零回归:Lines=池总量、
+// agentSem=池总量、Workers/PerMonth 维持 config。
+func TestManager_ApplyRoomOptions_LLMLines(t *testing.T) {
+	pool := llm.NewLinePool([]llm.LineSpec{{
+		ModelKey: "LinesFake-model", Info: llmtypes.ModelInfo{Model: "LinesFake-model"},
+		Provider: fakeTextProvider{}, APIKey: "k", Lines: 8,
+	}})
+	m := NewManager(Config{
+		MonthMs: 3000, CityDriverEnabled: true,
+		CityDriverWorkers: 4, CityDriverPerMonth: 2,
+	}, nil)
+	m.SetLinePoolSource(func() *llm.LinePool { return pool })
+	start := func(roomID string, opts *VirtualCityRoomOptions) (*city.DriverSnapshot, int) {
+		t.Helper()
+		m.ApplyRoomOptions(roomID, opts)
+		r := m.CreateRoom(roomID)
+		botUsers := make(map[int]string, 12)
+		for seat := 0; seat < 12; seat++ {
+			botUsers[seat] = "b" + string(rune('a'+seat))
+		}
+		r.RegisterBotSeats(botUsers, nil)
+		if e := r.Start(nil); e != nil {
+			t.Fatalf("%s start: %v", roomID, e)
+		}
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return r.City.Snapshot().Driver, cap(r.agentSem)
+	}
+
+	// L=3:配额收窄生效。
+	drv, semCap := start("room-lines3", &VirtualCityRoomOptions{ResidentCount: 500, LLMLines: 3})
+	if drv == nil || drv.Lines != 3 || drv.Workers != 3 || drv.PerMonth < 3 {
+		t.Fatalf("L=3 driver snapshot = %+v, want lines=3 workers=3 perMonth>=3", drv)
+	}
+	if semCap != 3 {
+		t.Fatalf("L=3 agentSem cap = %d, want 3 (min(L=3, pool=8))", semCap)
+	}
+
+	// L=0(未指定):零回归 —— Lines/agentSem=池总量,Workers/PerMonth=config。
+	drv0, semCap0 := start("room-lines0", &VirtualCityRoomOptions{ResidentCount: 500})
+	if drv0 == nil || drv0.Lines != 8 || drv0.Workers != 4 || drv0.PerMonth != 2 {
+		t.Fatalf("L=0 driver snapshot = %+v, want lines=8 workers=4 perMonth=2 (config)", drv0)
+	}
+	if semCap0 != 8 {
+		t.Fatalf("L=0 agentSem cap = %d, want 8 (pool total, 零回归)", semCap0)
+	}
+}
+
 // ── 2026-09-21 §档案锚定(契约 §5/§12):Start 后台锚定流水线接线 ──
 
 // writeAnchorFixture 造 n 张最小可解析人物卡(docs 池;L1 域目录 Q-)。

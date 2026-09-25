@@ -47,10 +47,12 @@ const (
 	driverNeighborCap = 3
 	// driverDefaultAcquireTimeoutMS 线路租约等待缺省(契约 §2:15000ms)。
 	driverDefaultAcquireTimeoutMS = 15000
-	// driverDefaultWorkers / clamp 边界(契约 §7:workers 缺省 4,clamp [1,16])。
+	// driverDefaultWorkers / clamp 边界(契约 §7:workers 缺省 4,clamp [1,16];
+	// 2026-09-25 §LLM线路池配额 — 房间级 llm_lines 可达 64,worker 上限同步
+	// 放宽为 [1,64],config 全局路径默认 4 不受影响)。
 	driverDefaultWorkers = 4
 	driverMinWorkers     = 1
-	driverMaxWorkers     = 16
+	driverMaxWorkers     = 64
 	// driverDefaultPerMonth / clamp 边界(契约 §7:per_month 缺省 8,clamp [0,64];
 	// 2026-09-24 重构:0 = 缺省 8,删除「仅抽样层」语义,所有居民都被驱动)。
 	driverDefaultPerMonth = 8
@@ -61,9 +63,11 @@ const (
 // DriverConfig 驱动层配置(config [wealth] 段注入)。
 type DriverConfig struct {
 	Enabled          bool // city_driver_enabled,缺省 true
-	Workers          int  // city_driver_workers,线程池大小,缺省 4,clamp [1,16]
+	Workers          int  // city_driver_workers,线程池大小,缺省 4,clamp [1,64]
 	PerMonth         int  // city_driver_per_month,每月驱动居民数,缺省 8,clamp [0,64]
 	AcquireTimeoutMS int  // 线路租约等待,缺省 15000
+	// Lines 2026-09-25 §LLM线路池配额 — 本房生效线路数(快照展示用;0=未指定)。
+	Lines int
 }
 
 // DriverSnapshot 驱动层快照(随 game.state.city.driver 下发;omitempty ——
@@ -73,6 +77,7 @@ type DriverSnapshot struct {
 	Workers    int  `json:"workers"`
 	PerMonth   int  `json:"per_month"`
 	DrivenLast int  `json:"driven_last"` // 最近一个月实际完成轮次数
+	Lines      int  `json:"lines"`       // 本房生效线路配额
 }
 
 // ResidentDriver 居民驱动层:线程池 + 线路池 + 跨月轮转游标。每房一个,
@@ -92,8 +97,8 @@ type ResidentDriver struct {
 	ambiance func() map[string]AmbianceTags
 }
 
-// NewResidentDriver 构造驱动层(cfg 归一:Workers 0→4 且 clamp [1,16];
-// PerMonth clamp [0,64],0=缺省 8;AcquireTimeoutMS 0→15000)。
+// NewResidentDriver 构造驱动层(cfg 归一:Workers 0→4 且 clamp [1,64];
+// PerMonth clamp [0,64],0=缺省 8;AcquireTimeoutMS 0→15000;Lines 负数→0)。
 func NewResidentDriver(cfg DriverConfig, pool LinePoolSource) *ResidentDriver {
 	if cfg.Workers <= 0 {
 		cfg.Workers = driverDefaultWorkers
@@ -112,6 +117,10 @@ func NewResidentDriver(cfg DriverConfig, pool LinePoolSource) *ResidentDriver {
 	}
 	if cfg.AcquireTimeoutMS <= 0 {
 		cfg.AcquireTimeoutMS = driverDefaultAcquireTimeoutMS
+	}
+	// 2026-09-25 §LLM线路池配额:纯展示字段,负数防御归 0。
+	if cfg.Lines < 0 {
+		cfg.Lines = 0
 	}
 	return &ResidentDriver{cfg: cfg, pool: pool}
 }
@@ -137,6 +146,7 @@ func (d *ResidentDriver) Snapshot() DriverSnapshot {
 		Workers:    d.cfg.Workers,
 		PerMonth:   d.cfg.PerMonth,
 		DrivenLast: d.lastDriven,
+		Lines:      d.cfg.Lines,
 	}
 }
 

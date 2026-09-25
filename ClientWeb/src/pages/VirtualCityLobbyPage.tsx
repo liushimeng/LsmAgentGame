@@ -95,6 +95,9 @@ export function VirtualCityLobbyPage() {
           full_agent: req.full_agent === true,
           // 批次 20 文档 3 A2：市长选举启用（顶层字段，仅 virtualCity 生效）。
           civic_election_enabled: req.civic_election_enabled === true,
+          // 2026-09-25 §LLM线路池配额 — 本房 Agent 并发线路数（顶层字段，
+          // 仅 virtualCity 生效；undefined 不发送，后端按池总量运行）。
+          llm_lines: req.llm_lines,
         });
         // 先导航，副作用 best-effort（BUG-R229 教训）。
         if (detail.my_role === 'spectator') {

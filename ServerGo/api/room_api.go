@@ -58,6 +58,10 @@ type createRoomRequest struct {
 	// (仅 wealth 生效,其他 kind 静默忽略;缺省/false = 关闭,R8-2 默认关闭
 	// 语义)。与 resident_count 同段并入 wealth 子对象透传。
 	CivicElectionEnabled bool `json:"civic_election_enabled,omitempty"`
+	// LLMLines 2026-09-25 §LLM线路池配额 — 本房间 Agent 并发线路数(仅 virtual_city
+	// 生效,其他 kind 静默忽略)。[1,64];0/缺省 = 未指定(维持 agentSem=池总量、
+	// Workers=config 缺省,零回归);负数 400。并入 VirtualCity.LLMLines 透传。
+	LLMLines int `json:"llm_lines,omitempty"`
 }
 
 // RoomAPI serves the room management endpoints.
@@ -174,7 +178,9 @@ func (a *RoomAPI) Create(c *gin.Context) {
 // 生效;其他 kind 静默忽略,与 reveal_role_on_death 同策略):
 //   - resident_count(2026-09-21 契约 04 §1.1;负数返回 400 原因);
 //   - civic_election_enabled(2026-09-24 批次20 文档3 A2;缺省 false 不构造
-//     配置对象 —— 与 resident_count 不同,false 无需任何动作)。
+//     配置对象 —— 与 resident_count 不同,false 无需任何动作);
+//   - llm_lines(2026-09-25 §LLM线路池配额;负数返回 400 原因,0/缺省不
+//     动作 —— clamp [1,64] 与池总量取 min 在 game 层 applyOpts 完成)。
 //
 // 纯函数便于单测钉死绑定与并入语义(负数 → 非空 err → handler 400)。
 func mergeVirtualCityBodyFields(req createRoomRequest, kind string, cfg *service.VirtualCityRoomOptions) (*service.VirtualCityRoomOptions, string) {
@@ -195,6 +201,17 @@ func mergeVirtualCityBodyFields(req createRoomRequest, kind string, cfg *service
 			cfg = &service.VirtualCityRoomOptions{}
 		}
 		cfg.CivicElectionEnabled = true
+	}
+	// 2026-09-25 §LLM线路池配额:负数 400;正数并入(顶层优先,子对象
+	// virtual_city.llm_lines 亦可显式携带);0/缺省 = 未指定,不构造配置对象。
+	if req.LLMLines != 0 {
+		if req.LLMLines < 0 {
+			return cfg, "llm_lines must be >= 0"
+		}
+		if cfg == nil {
+			cfg = &service.VirtualCityRoomOptions{}
+		}
+		cfg.LLMLines = req.LLMLines
 	}
 	return cfg, ""
 }

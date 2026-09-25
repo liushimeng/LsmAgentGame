@@ -242,6 +242,10 @@ export interface VirtualCityDict {
   /** {n} = Σ concurrency_lines（线路池容量）。 */
   'virtualCity.linePoolInfo': string;
   'virtualCity.linePoolEmpty': string;
+  /** 2026-09-25 §LLM线路池配额 — 建房弹窗 stepper 行标签（max=min(池总量,64)）。 */
+  'virtualCity.llmLines': string;
+  /** 游戏内城市面板：{n} = 本房生效线路数。 */
+  'virtualCity.cityDriverLines': string;
   // CityStatsPanel（右侧栏城市面板）。
   'virtualCity.cityTitle': string;
   'virtualCity.cityPopulation': string;

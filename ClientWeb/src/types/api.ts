@@ -466,6 +466,9 @@ export interface CreateRoomOptions {
   // 缺省/false = 关闭（引擎完全 no-op；本项与 InsuranceEnabled 等
   // 「零值→true」家族不同，后端零值即 false，勿归一化）。
   civic_election_enabled?: boolean;
+  // 2026-09-25 §LLM线路池配额 — virtualCity only。本房 Agent 并发线路数
+  // [1,64]；0/缺省 = 不指定（后端按池总量运行）。
+  llm_lines?: number;
 }
 
 /** One bot seat requested at room-creation time (werewolf only). */

@@ -510,6 +510,8 @@ export interface VirtualCityCitySnapshot {
     per_month: number;
     /** 上月实际驱动居民数。 */
     driven_last: number;
+    /** 本房生效线路配额（2026-09-25 §LLM线路池配额）。 */
+    lines: number;
   };
 }
 
@@ -1237,6 +1239,9 @@ export interface VirtualCityRoomOptions {
   month_ms?: number;
   /** 可选随机种子（测试确定性复现）。 */
   seed?: number;
+  /** 2026-09-25 §LLM线路池配额 — 本房 Agent 并发线路数 [1,64]；
+   *  0/缺省 = 不指定（后端按池总量运行）。 */
+  llm_lines?: number;
 }
 
 // ── 静态表 ────────────────────────────────────────────────────────────

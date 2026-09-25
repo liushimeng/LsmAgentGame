@@ -223,6 +223,15 @@ export function CityStatsPanel({ city, roomId, election, players }: Props) {
             </span>
           </div>
         )}
+        {/* 2026-09-25 §LLM线路池配额 — 本房生效线路数（旧房 driver.lines 缺省不渲染）。 */}
+        {city.driver && city.driver.lines > 0 && (
+          <div className="virtualCity-citypanel__stat" data-testid="virtualCity-city-driver-lines">
+            <span className="virtualCity-citypanel__stat-k">🔌</span>
+            <span className="virtualCity-citypanel__stat-v">
+              {t('virtualCity.cityDriverLines' as TKey, { n: city.driver.lines })}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ② 城区人口迷你条形（v2.12 阶段 2：auto-fill 网格 + 底对齐竖条，§26 对比度：

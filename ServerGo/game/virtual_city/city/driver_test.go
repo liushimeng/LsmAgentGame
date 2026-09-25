@@ -331,9 +331,10 @@ func TestResidentDriver_Disabled(t *testing.T) {
 	if calls, _ := fp.stats(); calls != 0 {
 		t.Fatalf("per_month=0 must not call llm, got %d", calls)
 	}
-	// clamp:Workers 0→4 / 99→16;PerMonth 99→64;超时 0→15000。
-	clamped := NewResidentDriver(DriverConfig{Enabled: true, Workers: 99, PerMonth: 99, AcquireTimeoutMS: 0}, nil)
-	if s := clamped.Snapshot(); s.Workers != 16 || s.PerMonth != 64 {
+	// clamp:Workers 0→4 / 99→64(2026-09-25 §LLM线路池配额 16→64);PerMonth
+	// 99→64;超时 0→15000;Lines 负数→0。
+	clamped := NewResidentDriver(DriverConfig{Enabled: true, Workers: 99, PerMonth: 99, AcquireTimeoutMS: 0, Lines: -3}, nil)
+	if s := clamped.Snapshot(); s.Workers != 64 || s.PerMonth != 64 || s.Lines != 0 {
 		t.Fatalf("clamp drifted: %+v", s)
 	}
 	def := NewResidentDriver(DriverConfig{Enabled: true}, nil)

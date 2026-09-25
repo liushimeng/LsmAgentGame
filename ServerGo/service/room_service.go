@@ -78,6 +78,9 @@ type VirtualCityRoomOptions struct {
 	// 不属于 InsuranceEnabled 家族)。建房 body 顶层 civic_election_enabled
 	// 由 API 层并入本字段(与 resident_count 同段)。
 	CivicElectionEnabled bool `json:"civic_election_enabled,omitempty"`
+	// LLMLines 2026-09-25 §LLM线路池配额 — 本房 Agent 并发线路数。[1,64] 的
+	// clamp 在 game 层 applyOpts 完成(还需与全局池总量取 min,池在 ws/main 侧)。
+	LLMLines int `json:"llm_lines,omitempty"`
 }
 
 // GameJoiner is the callback RoomService invokes after a successful CreateRoom
