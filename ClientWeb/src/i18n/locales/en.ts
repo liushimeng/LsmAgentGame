@@ -1600,6 +1600,8 @@ const en: Dict = {
   'virtualCity.create.meSeat': 'me, 1 seat',
   'virtualCity.create.noModels': 'LLM model list unavailable — cannot add Agents',
   'virtualCity.create.failed': 'Failed to create room, adjust and retry',
+  // 2026-09-25 §建房超时修复 — 超时 ≠ 失败:引导用户勿重复提交,刷新列表后观战。
+  'virtualCity.create.timeoutHint': 'The city is still being created on the server (cold start or heavy load may exceed 30s). Please do not resubmit; refresh the list shortly and you can spectate once the room is ready.',
   // 2026-09-22 §CityHuman refactor — creator is always a spectator (seat tiers retired).
   'virtualCity.create.seatNo': 'Seat #{n}',
   'virtualCity.create.creatorRole': 'Creator role',

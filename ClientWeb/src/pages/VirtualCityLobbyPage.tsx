@@ -9,8 +9,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { isSessionExpiredError } from '@/services/http';
-import { reportGlobalError } from '@/services/globalError';
+import { isSessionExpiredError, isTimeoutError } from '@/services/http';
+import { reportGlobalError, errorMessage } from '@/services/globalError';
 import { roomService } from '@/services/auth.service';
 import { useVirtualCityStore } from '@/store/virtualCity.store';
 import { useLobbyLiveUpdate } from '@/hooks/useLobbyLiveUpdate';
@@ -111,6 +111,20 @@ export function VirtualCityLobbyPage() {
         fetchRooms().catch(() => undefined);
         return true;
       } catch (e: any) {
+        // 2026-09-25 §建房超时修复 — 建房 HTTP 超时(30s)≠ 建房失败:服务端极可能
+        // 仍在跑冷启动链路并最终成功。必须关弹窗防重复提交 —— 全 Agent 城无 owner
+        // 无法暂停/解散,重复建出的房会持续烧 LLM 配额。改为引导刷新列表观战
+        // (§7.1 页面内联 + 全局 toast 两层表面都做;return true 让弹窗不叠加
+        // 「create.failed」内联错误)。
+        if (isTimeoutError(e)) {
+          setCreateOpen(false);
+          const hint = t('virtualCity.create.timeoutHint' as TKey);
+          const msg = `${errorMessage(e, e?.message ?? '')} — ${hint}`;
+          setErr(msg);
+          reportGlobalError({ message: msg, severity: 'error' });
+          fetchRooms().catch(() => undefined);
+          return true;
+        }
         if (!isSessionExpiredError(e)) {
           setErr(e.message);
           reportGlobalError({ message: e.message, severity: 'error' });
@@ -122,7 +136,7 @@ export function VirtualCityLobbyPage() {
         setLoading(false);
       }
     },
-    [nav, fetchRooms],
+    [nav, fetchRooms, t],
   );
 
   const handleJoin = async (roomId: string) => {
@@ -138,8 +152,11 @@ export function VirtualCityLobbyPage() {
         nav(`/virtual-city/${roomId}`);
       }
     } catch (e: any) {
-      if (e.code === 35013) {
-        // 2026-09-19 §全Agent模式: 全 Agent 房间拒绝人类加入,自动跳转观战
+      if (e.code === 35036) {
+        // 2026-09-19 §全Agent模式: 全 Agent 房间拒绝人类加入,自动跳转观战。
+        // 2026-09-25 §观战35036修复 — 后端实际返回 ErrVirtualCityFullAgentReject
+        // = 35036(errcode.go);此处曾误用 P2 交易错误码旧编号(设计文档漂移),
+        // 永不命中。
         setMyRoles((prev) => ({ ...prev, [roomId]: 'spectator' }));
         nav(`/virtual-city/spectate/${roomId}`);
       } else if (e.code === 30001 || e.code === 30003) {

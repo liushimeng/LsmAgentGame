@@ -988,6 +988,20 @@ func main() {
 	vcMgr.SetLoader(vcLoader)
 	gameSvcWs.SetVirtualCityManager(vcMgr)
 	gameSvcWs.SetVirtualCityLoader(vcLoader)
+	// 2026-09-25 §建房超时修复 — 职业卡池冷启动（100k md walk + 200 张采样自检，
+	// 冷页缓存实测 ~37s）从「进程重启后首次建房请求」移到启动期后台预热，
+	// 建房 HTTP 路径只付 sync.Once 已完成的常数成本。ForceIndex 内部 sync.Once
+	// 幂等并发安全，含 runSelfCheckOnce（日志锚点 "self-check ok"），不阻塞启动。
+	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logger.L().Error("virtual_city profession loader warmup panic",
+					zap.Any("panic", rec))
+			}
+		}()
+		vcLoader.ForceIndex()
+		logger.L().Info("virtual_city profession loader warmup finished")
+	}()
 	gameSvcWs.SetVirtualCityChatSender(&wsChatSenderAdapter{chat: chatSvc})
 	roomSvc.SetVirtualCityRoomConfigurer(vcMgr.ApplyRoomOptions)
 	// 2026-09-21 §虚拟城市(契约 04 §1.3):大厅列表/详情下发 wealth 房间

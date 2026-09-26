@@ -213,7 +213,9 @@ export function RoomListTable({
             // joinable 仅在未知角色时参与兜底。
             const myRole = room.id && myRoles ? myRoles[room.id] : undefined;
             const knownRole = myRole !== undefined;
-            const canJoin = !knownRole && joinable(room);
+            // 2026-09-25 §观战35036修复 — 未知角色 + 全 Agent 房:后端硬性拒绝
+            // 人类入座(35036),行点击也不应触发必然失败的 join。
+            const canJoin = !knownRole && !room.full_agent && joinable(room);
             const idShort = room.id.length > 10 ? `${room.id.slice(0, 8)}…` : room.id;
             return (
               <tr
@@ -333,6 +335,23 @@ export function RoomListTable({
                           </button>
                         );
                       }
+                      if (room.full_agent) {
+                        // 2026-09-25 §观战35036修复 — 未知角色 + 全 Agent 房:
+                        // 主按钮直出「👁 观战」,不再渲染必然被后端 35036 拒绝的
+                        // 「加入」按钮(行为对齐人类入座硬规则)。样式复用现有
+                        // 观战按钮类,已知 player / spectator 分支不受影响。
+                        return (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary room-list-spectate"
+                            onClick={() => onSpectate(room.id)}
+                            disabled={busy}
+                            title={t('lobby.watchButton')}
+                          >
+                            👁 {t('lobby.watchButton')}
+                          </button>
+                        );
+                      }
                       // 未知角色:用 joinable() 兜底(历史行为)。
                       return (
                         <button
@@ -349,7 +368,10 @@ export function RoomListTable({
                     {/* 观战按钮:非 spectator 角色时作为第二按钮保留。
                         2026-07-30 §R210-05: 已知 player 角色时也保留观战按钮
                         (免得用户被锁死在玩家路由);spectator 角色已被主按钮覆盖。 */}
-                    {!(room.id && myRoles && myRoles[room.id] === 'spectator') && (
+                    {/* 2026-09-25 §观战35036修复 — 未知角色 + 全 Agent 房主按钮
+                        已直出观战,此处不再重复渲染第二枚观战按钮。 */}
+                    {!(room.id && myRoles && myRoles[room.id] === 'spectator') &&
+                      !(myRole === undefined && room.full_agent) && (
                       <button
                         type="button"
                         className="btn btn-sm btn-secondary room-list-spectate"

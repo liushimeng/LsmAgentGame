@@ -1598,6 +1598,8 @@ const ja: Dict = {
   'virtualCity.create.meSeat': '作成者1席',
   'virtualCity.create.noModels': 'LLMモデル一覧が利用不可。Agentを追加できません',
   'virtualCity.create.failed': 'ルーム作成に失敗しました。調整して再試行してください',
+  // 2026-09-25 §建房超时修复 — 超时 ≠ 失败:引导用户勿重复提交,刷新列表后观战。
+  'virtualCity.create.timeoutHint': 'シティは現在サーバー側で作成中です（コールドスタートや高負荷時は30秒を超える場合があります）。再送信しないでください。しばらくして一覧を更新すると、準備完了後にそのまま観戦できます。',
   // 2026-09-22 §CityHuman refactor — 作成者は常に観戦者（席数ティアは廃止）。
   'virtualCity.create.seatNo': '{n}番席',
   'virtualCity.create.creatorRole': '作成者の立場',

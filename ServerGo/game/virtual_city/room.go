@@ -475,6 +475,12 @@ func (r *VirtualCityRoom) buildCardPoolLocked() []profession.Card {
 // Start 开局:发卡 → 初始注入 → 广播 → 进入月份 1。返回错误(人数不足等)。
 // caller: manager(锁外;内部自行持锁)。
 func (r *VirtualCityRoom) Start(loader *profession.Loader) *errcode.Error {
+	// 2026-09-25 §建房超时修复 — 兜底预热必须发生在锁外:sync.Once 未完成时
+	// ForceIndex 可能等待数十秒,若发生在 r.mu 持锁区内,会把大厅
+	// GET /rooms 轮询(IsFullAgentRoom 探针)整条链路一起阻塞(实测 33.8s)。
+	if loader != nil {
+		loader.ForceIndex()
+	}
 	r.mu.Lock()
 	if r.Status != StatusOpen {
 		r.mu.Unlock()

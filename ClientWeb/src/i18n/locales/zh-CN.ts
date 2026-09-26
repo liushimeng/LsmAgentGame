@@ -1599,6 +1599,8 @@ const zhCN: Dict = {
   'virtualCity.create.meSeat': '我 1 座',
   'virtualCity.create.noModels': 'LLM 模型列表不可用，无法添加居民 Agent',
   'virtualCity.create.failed': '创建城市失败，请调整后重试',
+  // 2026-09-25 §建房超时修复 — 超时 ≠ 失败:引导用户勿重复提交,刷新列表后观战。
+  'virtualCity.create.timeoutHint': '城市仍在服务端创建中（冷启动或高负载可能超过 30 秒），请勿重复提交；稍后刷新列表，房间就绪后可直接观战。',
   // 2026-09-22 §CityHuman重构 — 创建者恒为观察者（座位档位已退役）。
   'virtualCity.create.seatNo': '{n} 号位',
   'virtualCity.create.creatorRole': '创建者身份',

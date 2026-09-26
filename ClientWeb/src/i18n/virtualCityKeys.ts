@@ -229,6 +229,8 @@ export interface VirtualCityDict {
   'virtualCity.create.meSeat': string;
   'virtualCity.create.noModels': string;
   'virtualCity.create.failed': string;
+  // 2026-09-25 §建房超时修复 — 建房 HTTP 30s 超时但服务端很可能仍在建房的引导文案。
+  'virtualCity.create.timeoutHint': string;
   // 2026-09-16 §财商流10–12座位改造 — 建房弹窗座位档位 / 创建者身份 残留键。
   'virtualCity.create.seatNo': string;
   'virtualCity.create.creatorRole': string;

@@ -148,14 +148,25 @@ export const roomService = {
     });
   },
   join(roomId: string) {
-    return http<RoomDetail>(`/api/rooms/${encodeURIComponent(roomId)}/join`, { method: 'POST' });
+    // 2026-09-25 §建房超时修复 — 对齐 create 的 BUG-R212-P1-03 模式:后端建房
+    // 链路冷 IO / 持锁卡顿时(实测 GET /rooms 曾被连带阻塞 33.8s),fetch 默认
+    // 永不超时 → 大厅点「加入」永久转圈。30s 兜底(§7.1 绝不永久转圈)。
+    return http<RoomDetail>(`/api/rooms/${encodeURIComponent(roomId)}/join`, {
+      method: 'POST',
+      timeoutMs: 30_000,
+    });
   },
   leave(roomId: string) {
     return http<{ ok: true }>(`/api/rooms/${encodeURIComponent(roomId)}/leave`, { method: 'POST' });
   },
   // Spectator endpoints — observers attach to a room without taking a seat.
   spectate(roomId: string) {
-    return http<RoomDetail>(`/api/rooms/${encodeURIComponent(roomId)}/spectate`, { method: 'POST' });
+    // 2026-09-25 §建房超时修复 — 同 join:30s 超时兜底,防后端卡锁时观战入口
+    // 永久转圈(§7.1)。
+    return http<RoomDetail>(`/api/rooms/${encodeURIComponent(roomId)}/spectate`, {
+      method: 'POST',
+      timeoutMs: 30_000,
+    });
   },
   leaveSpectate(roomId: string) {
     return http<{ ok: true }>(`/api/rooms/${encodeURIComponent(roomId)}/leave_spectate`, { method: 'POST' });
