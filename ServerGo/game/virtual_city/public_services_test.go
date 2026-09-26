@@ -34,9 +34,9 @@ func TestPublicServices_QualityAccumulation(t *testing.T) {
 	ps := NewPublicServices()
 	ps.MonthlyStep(w)
 
-	wantEdu := FiscalBudget.Education * PublicSvcQualityGain   // 0.30 × 0.01 = 0.003
-	wantMed := FiscalBudget.Healthcare * PublicSvcQualityGain  // 0.25 × 0.01 = 0.0025
-	wantPen := FiscalBudget.Pension * PublicSvcQualityGain     // 0.20 × 0.01 = 0.002
+	wantEdu := FiscalBudget.Education * PublicSvcQualityGain  // 0.30 × 0.01 = 0.003
+	wantMed := FiscalBudget.Healthcare * PublicSvcQualityGain // 0.25 × 0.01 = 0.0025
+	wantPen := FiscalBudget.Pension * PublicSvcQualityGain    // 0.20 × 0.01 = 0.002
 	if ps.EduQuality != wantEdu {
 		t.Errorf("EduQuality = %v, want %v", ps.EduQuality, wantEdu)
 	}
@@ -264,7 +264,7 @@ func TestPublicServices_WiredIntoSettleMonth(t *testing.T) {
 	}
 
 	cs := BuildClientState("room-s8", 0, w, [MaxSeats]string{"u:0"}, [MaxSeats]string{"玩家0"},
-		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, nil)
+		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, 0, nil)
 	if cs.PublicSvc == nil {
 		t.Fatalf("view public_services nil after SettleMonth (wired)")
 	}

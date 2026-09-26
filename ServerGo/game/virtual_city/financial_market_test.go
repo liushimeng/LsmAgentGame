@@ -29,16 +29,16 @@ func TestFundRating_5StarSeparation(t *testing.T) {
 		sharpe, dd float64
 		want       int
 	}{
-		{2.5, 0.05, 5},  // 夏普>2 且回撤<10%
-		{2.5, 0.15, 4},  // 回撤≥10% 降 4 星
-		{2.0, 0.05, 4},  // 夏普=2 非严格大于 → 4
-		{1.6, 0.05, 4},  // >1.5
-		{1.5, 0.05, 3},  // =1.5 非严格大于 → 3
-		{1.1, 0.05, 3},  // >1
-		{0.6, 0.05, 2},  // >0.5
-		{0.5, 0.05, 1},  // =0.5 非严格大于 → 1
-		{0.2, 0.05, 1},  // 其余
-		{0.2, 0.50, 1},  // 深回撤同 1 星
+		{2.5, 0.05, 5}, // 夏普>2 且回撤<10%
+		{2.5, 0.15, 4}, // 回撤≥10% 降 4 星
+		{2.0, 0.05, 4}, // 夏普=2 非严格大于 → 4
+		{1.6, 0.05, 4}, // >1.5
+		{1.5, 0.05, 3}, // =1.5 非严格大于 → 3
+		{1.1, 0.05, 3}, // >1
+		{0.6, 0.05, 2}, // >0.5
+		{0.5, 0.05, 1}, // =0.5 非严格大于 → 1
+		{0.2, 0.05, 1}, // 其余
+		{0.2, 0.50, 1}, // 深回撤同 1 星
 	}
 	for _, c := range cases {
 		if got := fundStars(c.sharpe, c.dd); got != c.want {
@@ -507,7 +507,7 @@ func TestFinancialMarket_WiredIntoSettleMonth(t *testing.T) {
 	}
 	// view 接线:game.state 载荷含 fin_market。
 	cs := BuildClientState("fin-test", 0, w, [MaxSeats]string{}, [MaxSeats]string{},
-		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, nil)
+		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, 0, nil)
 	if cs.FinMarket == nil {
 		t.Fatalf("cs.FinMarket should be wired into view snapshot")
 	}

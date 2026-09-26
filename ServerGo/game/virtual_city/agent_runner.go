@@ -16,6 +16,7 @@ import (
 	"LsmAgentGame/agent/vcplayer"
 	"LsmAgentGame/agent/vctypes"
 	"LsmAgentGame/errcode"
+	"LsmAgentGame/game/virtual_city/city"
 )
 
 // AgentRunner 实现 vcplayer.ToolRunner(锁内执行;调用方已不在房间锁内)。
@@ -31,6 +32,8 @@ func NewAgentRunner(r *VirtualCityRoom, seat int) *AgentRunner {
 
 // BeginDecision 原子获取本月决策槽。月窗推进后,旧上下文无法再获取/执行;
 // 同一座位上一轮 LLM 未结束时,新一轮 wake 直接放弃,避免排队旧决策堆叠。
+// 2026-09-26 §批次25(§3.3):「本月已决策」去重 —— agentDecisionDone[seat]
+// == month 时拒绝(无论上次决策成功/失败/超时,同月不再发起第二轮 LLM)。
 func (a *AgentRunner) BeginDecision(seat, month int) error {
 	a.room.mu.Lock()
 	defer a.room.mu.Unlock()
@@ -47,6 +50,9 @@ func (a *AgentRunner) BeginDecision(seat, month int) error {
 	if a.room.agentDecisionActive[seat] {
 		return errcode.CodeMsg(errcode.ErrVirtualCityWrongPhase, "agent decision already active")
 	}
+	if a.room.agentDecisionDone[seat] == month {
+		return errcode.CodeMsg(errcode.ErrVirtualCityWrongPhase, "agent decision already done this month")
+	}
 	if month != a.room.World.Month {
 		return errcode.CodeMsg(errcode.ErrVirtualCityWrongPhase, "stale agent month")
 	}
@@ -57,18 +63,22 @@ func (a *AgentRunner) BeginDecision(seat, month int) error {
 
 // EndDecision 释放匹配的决策槽;若释放时房间已进入更新月份,则补一次 wake,
 // 避免本轮 LLM 占用槽位导致当前月 wake 被丢弃后无人再触发。
+// 2026-09-26 §批次25(§3.3):补 wake 只针对**本座位**(不再 wakeBots 全员
+// 重跑 —— 旧实现会让已提交/已决策的同月居民被重复唤醒);同时把本座位本月
+// 标记为已决策(agentDecisionDone,无论成败)。
 func (a *AgentRunner) EndDecision(seat, month int) {
 	a.room.mu.Lock()
 	matched := a.room.agentDecisionActive[seat] && a.room.agentDecisionMonth[seat] == month
 	if matched {
 		a.room.agentDecisionActive[seat] = false
+		a.room.agentDecisionDone[seat] = month
 	}
 	shouldWake := matched && a.room.Status == StatusPlaying &&
 		a.room.Phase == PhaseActing && a.room.World != nil &&
 		a.room.World.Month > month
 	a.room.mu.Unlock()
 	if shouldWake {
-		a.room.wakeBots()
+		a.room.wakeBotSeat(seat)
 	}
 }
 
@@ -519,7 +529,28 @@ func (a *AgentRunner) Speak(seat int, text, internalThought string) error {
 	a.appendUtteranceLocked(UtteranceRecord{
 		Month: a.room.World.Month, Seat: seat, District: p.District, Text: clip(text, 100),
 	})
+	// 2026-09-26 §批次25(§3.2 发言气泡不回归):座位 Agent speak 同步产出
+	// 城市之声 —— N≤12 时驱动层 PerMonth=0,3D 语音气泡由座位发言供给。
+	// 语音记录本体锁外 AppendVoice(Backdrop 自带互斥),广播经
+	// emitCityVoiceEvent(§92a:锁内追加事件、锁外回调)。
+	var voiceRec city.VoiceRecord
+	b := a.room.City
+	if b != nil && text != "" {
+		voiceRec = city.VoiceRecord{
+			Month:      a.room.World.Month,
+			Name:       a.room.Nicknames[seat],
+			Text:       clip(text, 100),
+			ModelKey:   modelKey,
+			ResidentID: p.Card.ID,
+			Occupation: p.Card.Title,
+		}
+	}
 	a.room.mu.Unlock()
+
+	if b != nil && voiceRec.Text != "" {
+		b.AppendVoice(voiceRec)
+		a.room.emitCityVoiceEvent(voiceRec)
+	}
 
 	if chat != nil && text != "" {
 		truncated := clip(text, 100)
@@ -550,14 +581,9 @@ func (a *AgentRunner) SubmitMonth(seat int) error {
 		return nil
 	}
 	p.Submitted = true
-	all := a.room.allSubmittedLocked()
 	a.room.mu.Unlock()
-	if all {
-		select {
-		case a.room.settleCh <- struct{}{}:
-		default:
-		}
-	}
+	// 2026-09-26 §批次25(§3.3 月节拍回归):「全员提交即推 settleCh」快路径
+	// 已删除 —— 月结固定发生在 NextMonthAt(trySettle 不再提前结算)。
 	return nil
 }
 
@@ -876,8 +902,6 @@ func (a *AgentRunner) apply(seat int, toolName, toolID string, fn func() (string
 	t.LastToolInput = toolName
 	t.LastToolResult = text
 	a.room.Transcripts[seat] = t
-	// 全员 submitted 检查(触发 settle 提前推进)。
-	all := a.room.allSubmittedLocked()
 	hooks := a.room.hooks
 	roomID := a.room.RoomID
 	a.room.mu.Unlock()
@@ -890,12 +914,8 @@ func (a *AgentRunner) apply(seat int, toolName, toolID string, fn func() (string
 			Month: monthAfter, Type: eventType, Seat: seat, Text: text,
 		})
 	}
-	if all {
-		select {
-		case a.room.settleCh <- struct{}{}:
-		default:
-		}
-	}
+	// 2026-09-26 §批次25(§3.3 月节拍回归):动作后「全员提交即推 settleCh」
+	// 快路径已删除 —— 月结固定发生在 NextMonthAt。
 	return nil
 }
 

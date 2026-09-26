@@ -39,6 +39,7 @@ func (a *Agent) callProvider(ctx context.Context, req llm.LLMRequest, onProgress
 	type streamingProvider interface {
 		ChatStreamAccumulate(context.Context, string, llm.LLMRequest, func(llmtypes.StreamEvent) error) (llm.LLMResponse, error)
 	}
+	a.noteLLMCall(a.ModelKey) // 批次 25:调用计数(真实发起前)
 	if sp, ok := a.provider().(streamingProvider); ok {
 		return sp.ChatStreamAccumulate(ctx, a.apiKey(), req, onProgress)
 	}
@@ -65,6 +66,7 @@ func (a *Agent) callProviderViaPool(ctx context.Context, req llm.LLMRequest, onP
 		return llm.LLMResponse{}, err
 	}
 	defer lease.Release()
+	a.noteLLMCall(lease.ModelKey) // 批次 25:调用计数(租约线路,真实发起前)
 	req.Model = lease.ModelKey
 	if req.Thinking == nil && a.registry != nil {
 		if enabled, budget := a.registry.GetThinkingEnabled(lease.ModelKey); enabled {

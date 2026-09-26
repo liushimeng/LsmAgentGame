@@ -51,8 +51,9 @@ type createRoomRequest struct {
 	// 并入 VirtualCity.ResidentCount 透传(virtual_city 子对象亦可显式携带,顶层优先)。
 	ResidentCount int `json:"resident_count,omitempty"`
 	// FullAgent 2026-09-19 §全Agent模式 — 是否全 Agent 模式(仅 wealth 生效)。
-	// 缺省 / true = 全 Agent 模式;false = 允许人类加入(不推荐)。
-	// 当 agent_seats >= MinSeats(10) 时自动置位,无需前端显式传递。
+	// 缺省 / true = 全 Agent 模式;false = 允许人类加入空位。
+	// 2026-09-26 §批次25 接线:显式 false 时 FullAgentMode=false,JoinGame
+	// 不再返回 35036(仅 wealth 生效,其他 kind 静默忽略)。
 	FullAgent *bool `json:"full_agent,omitempty"`
 	// CivicElectionEnabled 2026-09-24 §批次20(文档3 A2)— 市长选举启用开关
 	// (仅 wealth 生效,其他 kind 静默忽略;缺省/false = 关闭,R8-2 默认关闭
@@ -104,7 +105,8 @@ func (a *RoomAPI) List(c *gin.Context) {
 // Create POST /api/games/:kind/rooms — create a new room.
 //
 // Body (optional JSON):
-//   { "agent_seats": [{ "seat": 0..6, "model_key": "X-model" }, ...] }
+//
+//	{ "agent_seats": [{ "seat": 0..6, "model_key": "X-model" }, ...] }
 //
 // agent_seats is only honored for the "werewolf" kind; other kinds forward to
 // CreateRoomWithAgents which silently treats an empty list as "no agents".
@@ -163,9 +165,13 @@ func (a *RoomAPI) Create(c *gin.Context) {
 	}
 	// 2026-09-22 §17-CityHuman(契约 03 §3.2): 响应删 agent_seats_count
 	// (前端无消费方;wealth 的 agent_seats 已被服务端忽略,回显数字只会误导),
-	// full_agent 回显保留 —— wealth 恒为全 Agent 城市(12 抽样展示位),创建成功
-	// 即 full_agent=true;其他游戏恒 false。
+	// full_agent 回显保留 —— wealth 缺省恒为全 Agent 城市,创建成功即
+	// full_agent=true;其他游戏恒 false。2026-09-26 §批次25:显式 full_agent:false
+	// 回显 false(人类可加入空位)。
 	fullAgent := kind == "virtual_city"
+	if kind == "virtual_city" && wealthCfg != nil && wealthCfg.FullAgent != nil && !*wealthCfg.FullAgent {
+		fullAgent = false
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"code":       errcode.OK,
 		"message":    "ok",
@@ -212,6 +218,14 @@ func mergeVirtualCityBodyFields(req createRoomRequest, kind string, cfg *service
 			cfg = &service.VirtualCityRoomOptions{}
 		}
 		cfg.LLMLines = req.LLMLines
+	}
+	// 2026-09-26 §批次25(25 文档 §3.2):full_agent 三态接线 —— 显式 false
+	// 允许人类加入空位;nil/true 保持恒全 Agent。原字段声明后从不被读取(§130)。
+	if req.FullAgent != nil {
+		if cfg == nil {
+			cfg = &service.VirtualCityRoomOptions{}
+		}
+		cfg.FullAgent = req.FullAgent
 	}
 	return cfg, ""
 }

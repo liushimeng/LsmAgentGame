@@ -76,8 +76,10 @@ func (s *GameService) registerVirtualCityAgentSeats(roomID string, seats []servi
 	}
 	// 必须在 RegisterBotSeats / 自动开局前置位。否则全 Agent 房会在
 	// FullAgentMode=false 的窗口内自动开局,创建者或并发人类仍可能尝试入座。
+	// 2026-09-26 §批次25:改为 EnsureFullAgentMode —— 建房请求显式
+	// full_agent:false 的房间已由 service 层置位过,此处不再翻回 true。
 	if len(seatUsers) >= virtual_city.MinSeats {
-		r.SetFullAgentMode(true)
+		r.EnsureFullAgentMode()
 	}
 	r.RegisterBotSeats(seatUsers, seatModels)
 	logger.L().Info("wealth bot seats registered",
@@ -89,7 +91,9 @@ func (s *GameService) registerVirtualCityAgentSeats(roomID string, seats []servi
 	// 10-11 bot 房注册完 bot 后永远停在 open。满 MinSeats(10) 即开,与
 	// JoinGame 的 full 语义一致;若人类创建者随后 SyncSeat 会再触发一次
 	// startVirtualCityRoom,但 r.Start 在 Status!=Open 时幂等返回错误(仅日志),不重复开局。
-	if r.GetStatus() == virtual_city.StatusOpen && r.Occupied() >= virtual_city.MinSeats {
+	// 2026-09-26 §批次25:非全 Agent 房(显式 full_agent:false)不走兜底自动
+	// 开局 —— 创建者将经 SyncSeat 正常入座并触发开局(IsFullAgentMode 门控)。
+	if r.IsFullAgentMode() && r.GetStatus() == virtual_city.StatusOpen && r.Occupied() >= virtual_city.MinSeats {
 		if e := s.startVirtualCityRoom(roomID); e != nil {
 			logger.L().Warn("registerVirtualCityAgentSeats: auto-start failed",
 				zap.String("room_id", roomID), zap.Error(e))

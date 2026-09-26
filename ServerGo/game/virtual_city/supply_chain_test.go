@@ -322,7 +322,7 @@ func TestSupplyChainWiredIntoSettleMonth(t *testing.T) {
 	}
 	// view 接线:玩家/观战者快照携带产业链与产业集群。
 	cs := BuildClientState("room-1", -1, w, [MaxSeats]string{}, [MaxSeats]string{},
-		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, nil)
+		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, 0, nil)
 	if cs.SupplyChain == nil {
 		t.Fatalf("cs.SupplyChain nil, want snapshot(§130 view 断线)")
 	}
@@ -345,7 +345,7 @@ func TestSupplyChainWiredIntoSettleMonth(t *testing.T) {
 			scMonth, w2.SupplyChain.LastTickMonth)
 	}
 	cs2 := BuildClientState("room-2", -1, w2, [MaxSeats]string{}, [MaxSeats]string{},
-		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, nil)
+		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, 0, nil)
 	if cs2.SupplyChain != nil || cs2.Clusters != nil {
 		t.Errorf("economy off: cs.SupplyChain/cs.Clusters should be omitted")
 	}

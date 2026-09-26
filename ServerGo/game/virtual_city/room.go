@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -117,12 +118,16 @@ type VirtualCityRoom struct {
 	rng       *rand.Rand
 	docLoader *profession.Loader // Manager 注入(可能为 nil → 合成兜底)
 
-	hooks            BroadcastHooks
-	chatSender       ChatSender
-	agents           map[int]*vcplayer.Agent
-	agentSem         chan struct{} // 房间级 LLM 并发信号量(默认 DefaultAgentConcurrency=8)
-	eventsSent       int           // World.Events 已下发条数
-	cardPool         []profession.Card
+	hooks      BroadcastHooks
+	chatSender ChatSender
+	agents     map[int]*vcplayer.Agent
+	agentSem   chan struct{} // 房间级 LLM 并发信号量(默认 DefaultAgentConcurrency=8)
+	eventsSent int           // World.Events 已下发条数
+	cardPool   []profession.Card
+	// cardPoolPaths 批次 25 persona 统一:与 cardPool 按序对应的卡来源相对路径
+	// (文档池卡 = 真实路径;合成兜底卡 = "")。N≤12 时档案锚定复用同一批路径,
+	// 使背景居民 i 的人物卡 = 座位 i 的人物卡(消掉双 rng 流)。
+	cardPoolPaths    []string
 	cardPoolIdx      int
 	openingHooksSent bool
 
@@ -142,7 +147,11 @@ type VirtualCityRoom struct {
 	// FullAgentMode 标记该房间为全 Agent 模式（人类不能参与对局）。
 	// 2026-09-19 §全Agent模式 新增：创建时由 agent_seats 满 MinSeats 自动置位，
 	// 或前端显式请求 full_agent=true 置位。
-	FullAgentMode bool
+	// 2026-09-26 §批次25:full_agent 建房字段接线 —— 显式 false 时保持 false
+	// (允许人类加入空位);fullAgentModeSet 记录「已被显式配置」,ws 侧
+	// EnsureFullAgentMode 防御门只兜底从未配置过的房间,不覆盖显式 false。
+	FullAgentMode    bool
+	fullAgentModeSet bool
 
 	// 2026-09-21 §虚拟城市(契约 03 §6)— 城市背景层。
 	// ResidentCount 建房参数(>0 时 Start 建城);City 背景居民世界。
@@ -168,9 +177,29 @@ type VirtualCityRoom struct {
 	// cityDriverLines 2026-09-25 §LLM线路池配额 — 建房 llm_lines([1,64];
 	// 0=未指定保持缺省:agentSem=池总量、Workers=config)。
 	cityDriverLines int
+	// agentLLMMinIntervalMs 2026-09-26 §批次25(§3.3)— 每个 City-Human 的
+	// LLM 调用令牌桶补充间隔(驱动层 RunMonth 共享桶同款间隔;座位 Agent 的
+	// 桶由 manager 在 ensureAgentsWithPool 装配)。
+	agentLLMMinIntervalMs int
 
 	// 2026-09-22 §CityHuman重构:感知与发言支撑。
 	utterances []UtteranceRecord // 公开发言环形缓冲(cap 50,hear 数据源)
+
+	// agentPending 批次 25(§3.3):per-seat 单槽 pending —— agentSem 满槽时
+	// 登记(true 覆盖 true 幂等),信号量释放侧补跑;替代旧的无界排队 goroutine。
+	agentPending [MaxSeats]bool
+	// agentDecisionDone 批次 25(§3.3):每座位「本月已决策」去重标记
+	// (值 = 已完成决策的月份;BeginDecision 遇同月拒绝)。
+	agentDecisionDone [MaxSeats]int
+
+	// llmStats 批次 25 可观测性:房间级 LLM 调用计数(seat/driver/voice)。
+	llmStats roomLLMStats
+
+	// 城市时钟(批次 25 问题 3):cityEpochBaseMs 固定纪元(2025-01-01 08:00
+	// +0800);pausedAccumMs 累计暂停时长;pauseStartAtMs 当前暂停起点(0=未暂停)。
+	cityEpochBaseMs int64
+	pausedAccumMs   int64
+	pauseStartAtMs  int64
 
 	done     chan struct{}
 	settleCh chan struct{}
@@ -216,7 +245,17 @@ func NewVirtualCityRoom(roomID string, monthMs int, seed int64, llmConcurrency i
 		// 按 cfg 覆盖;无线路池时调度器自动空转,零开销)。
 		cityVoiceEnabled:  true,
 		cityVoicePerMonth: 4,
+		// 批次 25(问题 3):城市时钟固定纪元 2025-01-01 08:00 +0800。
+		cityEpochBaseMs: cityEpochBaseMillis(),
 	}
+}
+
+// cityEpochTZ 城市时钟纪元时区(固定东八区;批次 25)。
+var cityEpochTZ = time.FixedZone("Asia/Shanghai", 8*3600)
+
+// cityEpochBaseMillis 城市时钟纪元毫秒:2025-01-01 08:00 +0800(批次 25 问题 3)。
+func cityEpochBaseMillis() int64 {
+	return time.Date(2025, 1, 1, 8, 0, 0, 0, cityEpochTZ).UnixMilli()
 }
 
 // SetEconomyFlags 回写房间级 economy/survey 开关(P1 §6.5;由
@@ -258,10 +297,26 @@ func (r *VirtualCityRoom) SetElectionEnabled(enabled bool) {
 
 // SetFullAgentMode 设置房间的全 Agent 模式标志(2026-09-19 §全Agent模式)。
 // 全 Agent 模式下人类玩家不能加入对局,仅可以观战者身份观看。
+// 2026-09-26 §批次25:记录「已被显式配置」(fullAgentModeSet),供
+// EnsureFullAgentMode 防御门识别显式 full_agent:false。
 func (r *VirtualCityRoom) SetFullAgentMode(enabled bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.FullAgentMode = enabled
+	r.fullAgentModeSet = true
+}
+
+// EnsureFullAgentMode 防御性置位(2026-09-26 §批次25):仅当 FullAgentMode
+// 从未被显式配置过时置 true。ws 注册 bot 座位时(botSeats ≥ MinSeats)调用,
+// 兜底「service 层未先置位」的旧链路;建房请求显式 full_agent:false 的房间
+// 已由 service 层置位过(fullAgentModeSet=true),此处不覆盖。
+func (r *VirtualCityRoom) EnsureFullAgentMode() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.fullAgentModeSet {
+		r.FullAgentMode = true
+		r.fullAgentModeSet = true
+	}
 }
 
 // IsFullAgentMode 返回房间是否为全 Agent 模式。
@@ -269,6 +324,14 @@ func (r *VirtualCityRoom) IsFullAgentMode() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.FullAgentMode
+}
+
+// SetAgentLLMMinIntervalMs 批次 25(§3.3):每 Agent LLM 令牌桶补充间隔
+// (Manager.CreateRoom 装配;驱动层 RunMonth 共享桶同款间隔)。
+func (r *VirtualCityRoom) SetAgentLLMMinIntervalMs(ms int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.agentLLMMinIntervalMs = ms
 }
 
 // SetHooks 注入 ws 广播钩子(房间创建后、Start 前调用一次)。
@@ -317,6 +380,13 @@ func (r *VirtualCityRoom) applyOpts(opts *service.VirtualCityRoomOptions) {
 		r.cityDriverLines = clampInt(opts.LLMLines, 1, 64)
 	} else if opts.LLMLines < 0 {
 		r.cityDriverLines = 0
+	}
+	// 2026-09-26 §批次25:full_agent 三态(body 顶层 full_agent → 本字段)。
+	// 经 pendingOpts 在房间创建时应用(早于 ws 层 EnsureFullAgentMode 防御门,
+	// 故显式 false 不会被翻回 true)。仅 Start 前生效。
+	if opts.FullAgent != nil {
+		r.FullAgentMode = *opts.FullAgent
+		r.fullAgentModeSet = true
 	}
 }
 
@@ -461,9 +531,21 @@ func (r *VirtualCityRoom) drawCardLocked() profession.Card {
 // buildCardPoolLocked 构建洗牌后的开局卡池(2026-09-22 §17-CityHuman 契约
 // 03 §2.1:恒走文档池 docLoader.Draw,不可用时 SyntheticCards 合成兜底并
 // 洗牌 —— 精选 14 卡层已退役,没有非 docs 模式)。
+// 2026-09-26 §批次25 persona 统一:文档池改走 DrawWithDomain(与 Draw 共用
+// drawPairs,rng 消耗序列零变化),同时把每张卡的来源相对路径存入
+// cardPoolPaths(供 N≤12 时档案锚定复用同一批卡,见 room_city.go
+// anchorCityProfiles 的 sharedPaths 参数)。
 func (r *VirtualCityRoom) buildCardPoolLocked() []profession.Card {
+	r.cardPoolPaths = nil
 	if r.docLoader != nil {
-		if cards := r.docLoader.Draw(MaxSeats, r.rng); len(cards) > 0 {
+		if pairs := r.docLoader.DrawWithDomain(MaxSeats, r.rng); len(pairs) > 0 {
+			cards := make([]profession.Card, len(pairs))
+			paths := make([]string, len(pairs))
+			for i := range pairs {
+				cards[i] = pairs[i].Card
+				paths[i] = pairs[i].SourcePath
+			}
+			r.cardPoolPaths = paths
 			return cards
 		}
 	}
@@ -536,6 +618,9 @@ func (r *VirtualCityRoom) Start(loader *profession.Loader) *errcode.Error {
 	r.Status = StatusPlaying
 	r.Phase = PhaseActing
 	r.gameStartedAt = time.Now().Unix()
+	// 批次 25(问题 3):城市时钟暂停累计归零(重开/再开局不复用旧暂停)。
+	r.pausedAccumMs = 0
+	r.pauseStartAtMs = 0
 	r.MonthMs = clampInt(r.MonthMs, 3000, 30000)
 	r.NextMonthAt = time.Now().Add(time.Duration(r.MonthMs) * time.Millisecond)
 	r.resetMonthFlagsLocked()
@@ -560,6 +645,7 @@ func (r *VirtualCityRoom) Start(loader *profession.Loader) *errcode.Error {
 		hooks.OnState(r.RoomID)
 	}
 	r.sendOpeningHooks(openings)
+	r.startLLMStatsLoop() // 批次 25 可观测性:60s 汇总 virtual_city llm rate
 	r.wakeBots()
 	logger.L().Info("virtual_city game started",
 		zap.String("room_id", r.RoomID), zap.Int("seats", occupied))
@@ -736,11 +822,11 @@ func (r *VirtualCityRoom) trySettle(onFinish func(roomID string)) bool {
 		return false
 	}
 	if r.Paused || time.Now().Before(r.NextMonthAt) {
-		// 提前信号(全员提交)在暂停时忽略;未到窗口不看。
-		if allSubmitted := r.allSubmittedLocked(); !(allSubmitted && !r.Paused) {
-			r.mu.Unlock()
-			return false
-		}
+		// 2026-09-26 §批次25(§3.3 月节拍回归):月结固定发生在 NextMonthAt ——
+		// 「全员提交提前结算」快路径已删除(原会把实际月速压到最慢 bot 决策时长,
+		// month_ms 从节拍退化为上限,放大 LLM 调用频率)。
+		r.mu.Unlock()
+		return false
 	}
 
 	// settling:停止接收动作。
@@ -850,15 +936,10 @@ func (r *VirtualCityRoom) SubmitMonth(seat int) *errcode.Error {
 		return nil // 幂等
 	}
 	p.Submitted = true
-	all := r.allSubmittedLocked()
 	r.mu.Unlock()
-
-	if all {
-		select {
-		case r.settleCh <- struct{}{}:
-		default:
-		}
-	}
+	// 2026-09-26 §批次25(§3.3 月节拍回归):「最后一座提交即推 settleCh」
+	// 快路径已删除 —— 月结固定发生在 NextMonthAt(月节拍 = month_ms,
+	// 一局 420 月 ≈ 56 分钟),不再被最慢 bot 决策时长压速。
 	return nil
 }
 
@@ -890,6 +971,8 @@ func (r *VirtualCityRoom) MarkIdle(userID string) {
 }
 
 // Pause 房主暂停/恢复(月结边界生效;B8)。
+// 2026-09-26 §批次25(问题 3):暂停期间城市时钟冻结 —— 暂停开始记
+// pauseStartAtMs,恢复时累加进 pausedAccumMs(CityClockMs 计算时扣除)。
 func (r *VirtualCityRoom) Pause(userID string, pause bool) *errcode.Error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -899,13 +982,48 @@ func (r *VirtualCityRoom) Pause(userID string, pause bool) *errcode.Error {
 	if r.Status != StatusPlaying {
 		return errcode.Code(errcode.ErrVirtualCityNotPlaying)
 	}
-	r.Paused = pause
-	if !pause {
+	nowMs := time.Now().UnixMilli()
+	if pause && !r.Paused {
+		r.pauseStartAtMs = nowMs
+	}
+	if !pause && r.Paused {
+		r.pausedAccumMs += nowMs - r.pauseStartAtMs
+		r.pauseStartAtMs = 0
 		r.NextMonthAt = time.Now().Add(time.Duration(r.MonthMs) * time.Millisecond)
 	}
+	r.Paused = pause
 	logger.L().Info("virtual_city room pause toggled",
 		zap.String("room_id", r.RoomID), zap.Bool("paused", pause))
 	return nil
+}
+
+// CityClockMs 城市时钟(2026-09-26 §批次25 问题 3):现实 1 分钟 = 城市 1 小时
+// (60× 加速),与月结 tick 解耦,纯叙事/展示层。
+//
+//	CityClockMs = cityEpochBaseMs + (now - gameStartedAt - pausedAccumMs) × 60
+//
+// 未开局(gameStartedAt==0)返回 0;暂停期间冻结(进行中的暂停段即时扣除)。
+func (r *VirtualCityRoom) CityClockMs() int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cityClockMsLocked(time.Now())
+}
+
+// cityClockMsLocked 锁内变体(view 广播路径在锁内构造快照时复用)。
+func (r *VirtualCityRoom) cityClockMsLocked(now time.Time) int64 {
+	if r.gameStartedAt == 0 {
+		return 0
+	}
+	nowMs := now.UnixMilli()
+	excluded := r.pausedAccumMs
+	if r.Paused && r.pauseStartAtMs > 0 {
+		excluded += nowMs - r.pauseStartAtMs
+	}
+	elapsedMs := nowMs - r.gameStartedAt*1000 - excluded
+	if elapsedMs < 0 {
+		elapsedMs = 0
+	}
+	return r.cityEpochBaseMs + elapsedMs*60
 }
 
 // Close 停止 loop(房间删除/终局清理)。
@@ -1193,6 +1311,9 @@ func clampInt(v, lo, hi int) int {
 
 // wakeBots 唤醒全部 bot 座位决策(由 Start()/每轮 settle 后调用,锁外路径)。
 // 房间级并发信号量(默认 4;NewVirtualCityRoom 已设)。
+// 2026-09-26 §批次25(§3.3):跳过当月已 Submitted 的座位 —— 已提交的居民
+// 本月不再需要 wake(同月重复决策由 BeginDecision 的 agentDecisionDone 拦截,
+// 此处提前短路省 goroutine)。
 func (r *VirtualCityRoom) wakeBots() {
 	r.mu.Lock()
 	if r.closed || r.Status != StatusPlaying || r.Paused {
@@ -1201,6 +1322,9 @@ func (r *VirtualCityRoom) wakeBots() {
 	}
 	agents := make(map[int]*vcplayer.Agent, len(r.agents))
 	for s, a := range r.agents {
+		if p := r.World.Players[s]; p != nil && p.Submitted {
+			continue
+		}
 		agents[s] = a
 	}
 	r.mu.Unlock()
@@ -1209,20 +1333,73 @@ func (r *VirtualCityRoom) wakeBots() {
 	}
 }
 
+// wakeBotSeat 唤醒单个 bot 座位(2026-09-26 §批次25;EndDecision 跨月补 wake
+// 只针对本座位,不再全员重跑)。
+func (r *VirtualCityRoom) wakeBotSeat(seat int) {
+	r.mu.Lock()
+	if r.closed || r.Status != StatusPlaying || r.Paused {
+		r.mu.Unlock()
+		return
+	}
+	agent := r.agents[seat]
+	r.mu.Unlock()
+	if agent == nil {
+		return
+	}
+	go r.runOneBot(seat, agent)
+}
+
+// runOneBot 单座位决策入口。2026-09-26 §批次25(§3.3):agentSem 满槽时不再
+// 起无界排队 goroutine(旧实现阻塞等待,月窗高速推进时可堆积),改为登记
+// per-seat 单槽 pending(幂等覆盖),由信号量释放侧补跑。
 func (r *VirtualCityRoom) runOneBot(seat int, agent *vcplayer.Agent) {
 	select {
 	case r.agentSem <- struct{}{}:
-		defer func() { <-r.agentSem }()
 	default:
-		// 满槽:稍后再 wake,避免抢锁。
-		go func() {
-			r.agentSem <- struct{}{}
-			defer func() { <-r.agentSem }()
-			r.runAgentCtx(seat, agent)
-		}()
+		r.mu.Lock()
+		r.agentPending[seat] = true
+		r.mu.Unlock()
 		return
 	}
+	// 释放 + pending 补跑必须在 panic 时也执行(信号量不泄漏);
+	// recover 兜底防止单 bot panic 拖垮整个进程。
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.L().Error("virtual_city runOneBot panic recovered",
+				zap.String("room_id", r.RoomID), zap.Int("seat", seat),
+				zap.Any("panic", rec), zap.String("stack", string(debug.Stack())))
+		}
+		r.releaseAgentSemAndDrain()
+	}()
 	r.runAgentCtx(seat, agent)
+}
+
+// releaseAgentSemAndDrain 释放并发信号量并补跑一个 pending 座位(若有)。
+// pending 座位重新走 runOneBot(拿不到槽会再回 pending,由下一次释放再补;
+// 极端无后续释放时由 watchdog/月结兜底提交,绝不泄漏 goroutine)。
+func (r *VirtualCityRoom) releaseAgentSemAndDrain() {
+	<-r.agentSem
+	r.mu.Lock()
+	if r.closed || r.Status != StatusPlaying || r.Paused {
+		r.mu.Unlock()
+		return
+	}
+	seat := -1
+	var agent *vcplayer.Agent
+	for s, pending := range r.agentPending {
+		if !pending {
+			continue
+		}
+		r.agentPending[s] = false
+		if a := r.agents[s]; a != nil {
+			seat, agent = s, a
+		}
+		break
+	}
+	r.mu.Unlock()
+	if agent != nil {
+		r.runOneBot(seat, agent)
+	}
 }
 
 func (r *VirtualCityRoom) runAgentCtx(seat int, agent *vcplayer.Agent) {

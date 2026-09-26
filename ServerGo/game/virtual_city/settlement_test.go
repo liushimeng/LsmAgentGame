@@ -8,6 +8,7 @@ import (
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/game/virtual_city/profession"
 )
+
 var _ = profession.Card{} // profession 夹具改内联卡面(2026-09-22 §17-CityHuman)
 
 // TestMonthlyIncomeTax_F12 个税复算:月薪 20000 → 社保 2100、税 1170。
@@ -25,10 +26,10 @@ func TestMonthlyIncomeTax_F12(t *testing.T) {
 // TestMonthlyIncomeTax_Brackets 7 级累进边界复算(《规则》§9.1)。
 func TestMonthlyIncomeTax_Brackets(t *testing.T) {
 	cases := []struct {
-		salary    int64
-		minTax    int64
-		maxTax    int64
-		note      string
+		salary int64
+		minTax int64
+		maxTax int64
+		note   string
 	}{
 		{5000, 0, 0, "≤ 起征点"},
 		{15000, 100, 1200, "15k bracket"},
@@ -350,7 +351,7 @@ func TestSettle_EconomyEnabledResFields(t *testing.T) {
 	}
 	// view 快照:goods 8 类非空 + surveys 空数组(非 null)。
 	cs := BuildClientState("room-p1", 0, w, [MaxSeats]string{"u:0"}, [MaxSeats]string{"玩家0"},
-		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, nil)
+		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, 0, nil)
 	if len(cs.ConsumerMarket.Goods) != len(goodsOrder) {
 		t.Errorf("consumer market goods: got %d, want %d", len(cs.ConsumerMarket.Goods), len(goodsOrder))
 	}

@@ -1,16 +1,16 @@
 package service
 
 import (
-	"fmt"
-	mrand "math/rand/v2"
-	"strings"
-	"time"
 	"LsmAgentGame/config"
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/llm"
 	"LsmAgentGame/models"
 	"LsmAgentGame/util"
+	"fmt"
 	"gorm.io/gorm"
+	mrand "math/rand/v2"
+	"strings"
+	"time"
 )
 
 // BotUserRoleAgent is a cross-package alias so callers that want "this user is
@@ -81,6 +81,11 @@ type VirtualCityRoomOptions struct {
 	// LLMLines 2026-09-25 §LLM线路池配额 — 本房 Agent 并发线路数。[1,64] 的
 	// clamp 在 game 层 applyOpts 完成(还需与全局池总量取 min,池在 ws/main 侧)。
 	LLMLines int `json:"llm_lines,omitempty"`
+	// FullAgent 2026-09-26 §批次25 接线(25 文档 §3.2):三态全 Agent 开关。
+	// nil(未传)/true = 恒全 Agent 城市(人类不可入座,创建者降级为观战者);
+	// 显式 false = 允许人类加入空位(FullAgentMode=false,JoinGame 不再返回 35036)。
+	// 建房 body 顶层 full_agent 由 API 层并入本字段。
+	FullAgent *bool `json:"full_agent,omitempty"`
 }
 
 // GameJoiner is the callback RoomService invokes after a successful CreateRoom
@@ -201,6 +206,7 @@ type CommentaryConfig struct {
 	Style    string `json:"style,omitempty"`     // "pro" | "fun";空/未知值 → "pro"
 	ModelKey string `json:"model_key,omitempty"` // 空 → 复用 JudgeModelKey;再空 → 随机
 }
+
 // engine's current phase/day/winner for werewolf rooms. Returns ("", 0, "", false) when
 // the room has no live in-memory state yet (e.g. lobby list before the first
 // player joins) or when the hook is nil (unit tests). Round 23 P1 BUG 修复:
@@ -373,7 +379,7 @@ type AgentSeatInfo struct {
 	ModelKey string `json:"model_key"`
 	// Role 标识该座位是 agent 还是 player(空 = player)。用于 wealth
 	// 重启恢复时区分 BotSeats[] 标记。2026-09-14 §财商流P0-bugfix。
-	Role     string `json:"role,omitempty"`
+	Role string `json:"role,omitempty"`
 }
 
 // BotSeatsForRoom returns every agent seat configured for `roomID`, ordered by

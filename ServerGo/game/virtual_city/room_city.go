@@ -115,32 +115,40 @@ func (r *VirtualCityRoom) startCityLocked() {
 		snapLines = poolLines
 	}
 	if r.cityDriverEnabled {
+		// 2026-09-26 §批次25(§3.2 居民-Agent 统一):驱动层预算与座位数解耦 ——
+		// N≤12 时全体居民皆常驻座位 Agent,驱动层 0 条(空转,无 LLM 轮次);
+		// N>12 时 12 个座位代表全城,每月抽样 min(PerMonth, N-座位数) 条。
+		// 同时删除旧「PerMonth = max(PerMonth, llm_lines)」放大(线路数是并发
+		// 配额,不是任务预算;放大曾把默认 8 条抬到 13 条/月)。
 		cfg := city.DriverConfig{
-			Enabled:  true,
-			Workers:  r.cityDriverWorkers,
-			PerMonth: r.cityDriverPerMonth,
-			Lines:    snapLines,
+			Enabled:          true,
+			Workers:          r.cityDriverWorkers,
+			PerMonth:         driverPerMonthBudget(r.cityDriverPerMonth, r.ResidentCount, r.occupiedLocked()),
+			Lines:            snapLines,
+			LLMMinIntervalMs: r.agentLLMMinIntervalMs,
 		}
 		if L > 0 {
 			// Workers 用请求配额 L(线程池按房间配额跑,超池部分由全局
 			// LinePool Acquire 闸门硬约束 —— 配额只能收窄不能放大预算);
-			// PerMonth 取 max(原值, L) —— 预算喂满并发,配额不为任务数空转。
+			// llm_lines 仅保留并发语义,不再放大每月驱动条数。
 			cfg.Workers = L
-			if cfg.PerMonth < L {
-				cfg.PerMonth = L
-			}
 		}
 		r.cityDriver = city.NewResidentDriver(cfg, r.linePoolSource)
 		r.cityDriver.SetAmbianceSource(r.cityAmbianceSource)
+		// 批次 25 可观测性:驱动条目 LLM 调用计数。
+		r.cityDriver.SetLLMCallHook(r.noteDriverLLMCall)
 		r.City.SetDriver(r.cityDriver)
 		r.cityVoice = nil
 	} else {
 		r.cityDriver = nil
 		r.cityVoice = city.NewVoiceScheduler(r.cityVoiceEnabled, r.cityVoicePerMonth, r.linePoolSource)
+		// 批次 25 可观测性:城市之声 LLM 调用计数。
+		r.cityVoice.LLMCallHook = r.noteVoiceLLMCall
 	}
 	logger.L().Info("wealth city backdrop created",
 		zap.String("room_id", r.RoomID),
 		zap.Int("residents", r.ResidentCount),
+		zap.Int("seats", r.occupiedLocked()),
 		zap.Int64("seed", r.seed),
 		zap.Int("pool_lines", poolLines),
 		zap.Int("llm_lines", snapLines),
@@ -154,8 +162,29 @@ func (r *VirtualCityRoom) startCityLocked() {
 	// 触碰 r.mu(§92a)。
 	if r.docLoader != nil {
 		loader, n, seed, b := r.docLoader, r.ResidentCount, r.seed, r.City
-		go r.anchorCityProfiles(b, loader, n, seed)
+		// 2026-09-26 §批次25 persona 统一:N≤12 时背景居民 i 的人物卡 = 座位 i
+		// 的人物卡 —— 复用 Start 发卡时记下的卡池来源路径(同一批卡,消掉
+		// DrawPaths 独立 rng 流);N>12 时保持独立抽样(rng2 流)。
+		var sharedPaths []string
+		if n > 0 && n <= MaxSeats && len(r.cardPoolPaths) >= n {
+			sharedPaths = append([]string(nil), r.cardPoolPaths[:n]...)
+		}
+		go r.anchorCityProfiles(b, loader, n, seed, sharedPaths)
 	}
+}
+
+// driverPerMonthBudget 批次 25(§3.2):每月驱动条目预算 =
+// min(cfgPerMonth, max(0, residentCount-seatCount));N≤座位数 ⇒ 0(驱动层空转)。
+// 独立成纯函数便于单测钉死边界。
+func driverPerMonthBudget(cfgPerMonth, residentCount, seatCount int) int {
+	extra := residentCount - seatCount
+	if extra < 0 {
+		extra = 0
+	}
+	if cfgPerMonth < extra {
+		return cfgPerMonth
+	}
+	return extra
 }
 
 // cityAmbianceSource 驱动层氛围来源(自取房间锁的薄包装;driver worker 在
@@ -171,7 +200,10 @@ func (r *VirtualCityRoom) cityAmbianceSource() map[string]city.AmbianceTags {
 // 3. HydrateBatch 并行水合(进度每 512 张经 SetProfileProgress 回写,随
 // Snapshot 自然下发,无额外广播)→ 4. AnchorProfiles 一次性热替换 →
 // 5. Info 日志 + 终态 city_profiles 事件(BroadcastHooks 锁外)。
-func (r *VirtualCityRoom) anchorCityProfiles(b *city.Backdrop, loader *profession.Loader, n int, seed int64) {
+// 2026-09-26 §批次25 persona 统一:sharedPaths 非空(N≤12)时直接复用座位
+// 卡池的来源路径(背景居民 i = 座位 i 的人物卡),跳过 DrawPaths 独立抽样;
+// sharedPaths 为空(N>12 / 合成兜底)保持 rng2 独立流。
+func (r *VirtualCityRoom) anchorCityProfiles(b *city.Backdrop, loader *profession.Loader, n int, seed int64, sharedPaths []string) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			logger.L().Error("wealth city profile anchor panic recovered",
@@ -183,8 +215,11 @@ func (r *VirtualCityRoom) anchorCityProfiles(b *city.Backdrop, loader *professio
 	if b == nil || loader == nil || n <= 0 {
 		return
 	}
-	rng2 := rand.New(rand.NewSource(seed ^ cityProfileSeedSalt))
-	paths := loader.DrawPaths(n, rng2)
+	paths := sharedPaths
+	if len(paths) == 0 {
+		rng2 := rand.New(rand.NewSource(seed ^ cityProfileSeedSalt))
+		paths = loader.DrawPaths(n, rng2)
+	}
 	poolSize := loader.PoolSize()
 	if len(paths) == 0 {
 		// 根目录缺失/索引空:failed + 合成兜底(契约 §10),REST progress

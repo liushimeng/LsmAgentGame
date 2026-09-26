@@ -962,6 +962,8 @@ func main() {
 		CityDriverEnabled:  cfg.VirtualCity.CityDriverEnabledResolved(),
 		CityDriverWorkers:  cfg.VirtualCity.CityDriverWorkers,
 		CityDriverPerMonth: cfg.VirtualCity.CityDriverPerMonth,
+		// 2026-09-26 §批次25(§3.3):每 City-Human LLM 令牌桶补充间隔。
+		AgentLLMMinIntervalMs: cfg.VirtualCity.AgentLLMMinIntervalMs,
 	}, llmRegistry)
 	// 2026-09-21 §虚拟城市 G6:注入 LLM 线路池来源(Registry.Reload 换池后
 	// 经函数现取自动生效)+ 城市校准表后台预热(sync.Once goroutine,不阻塞启动)。

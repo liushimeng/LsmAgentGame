@@ -35,13 +35,17 @@ type ClientGameState struct {
 	MaxSeat       int             `json:"max_seat"`
 	NextMonthAt   int64           `json:"next_month_at"`
 	GameStartedAt int64           `json:"game_started_at"`
-	Players       []PlayerJSON    `json:"players"`
-	MySeat        int             `json:"my_seat"`
-	My            *MyJSON         `json:"my"` // nil = 观战者
-	BotContexts   []BotCtxJSON    `json:"bot_contexts"`
-	LedgerRecent  []LedgerJSON    `json:"ledger_recent"`
-	EventsRecent  []EventJSON     `json:"events_recent"`
-	Minsky        MinskyOverview  `json:"minsky_overview"`
+	// CityClockMs 城市时钟(2026-09-26 §批次25 问题 3):城市时间 epoch 毫秒
+	// (现实 1 分钟 = 城市 1 小时,60× 加速,与月结解耦;暂停期间冻结;
+	// 未开局为 0)。与 next_month_at 同频下发。
+	CityClockMs  int64          `json:"city_clock_ms"`
+	Players      []PlayerJSON   `json:"players"`
+	MySeat       int            `json:"my_seat"`
+	My           *MyJSON        `json:"my"` // nil = 观战者
+	BotContexts  []BotCtxJSON   `json:"bot_contexts"`
+	LedgerRecent []LedgerJSON   `json:"ledger_recent"`
+	EventsRecent []EventJSON    `json:"events_recent"`
+	Minsky       MinskyOverview `json:"minsky_overview"`
 	// P1(§财商流P1-2 §6.1):economy_enabled=false 时为零值/空数组下发。
 	ConsumerMarket ConsumerMarketJSON `json:"consumer_market"`
 	LaborMarket    LaborMarketJSON    `json:"labor_market"`
@@ -201,13 +205,13 @@ type ClusterJSON struct {
 // FinMarketJSON 是 fin_market 子结构(阶段6 2026-09-21 §城市扩张v2.12;
 // 政府/观战者全量可见,无座位隐私)。
 type FinMarketJSON struct {
-	QuantIndex      float64              `json:"quant_index"`       // 量化基金指数(基 100)
-	QuantLastReturn float64              `json:"quant_last_return"` // 上月组合收益(小数)
-	QuantStrategies []QuantStrategyJSON  `json:"quant_strategies"`  // 5 策略权重
-	CD              CDSnapshotJSON       `json:"cd"`                // 同业存单快照
-	Convertibles    []CBondJSON          `json:"convertibles"`     // 可转债 top3(按市价)
-	Short           ShortSnapshotJSON    `json:"short"`             // 融券快照
-	FundRatings     []FundRatingJSON     `json:"fund_ratings"`      // 基金评级 top5(按星数)
+	QuantIndex      float64             `json:"quant_index"`       // 量化基金指数(基 100)
+	QuantLastReturn float64             `json:"quant_last_return"` // 上月组合收益(小数)
+	QuantStrategies []QuantStrategyJSON `json:"quant_strategies"`  // 5 策略权重
+	CD              CDSnapshotJSON      `json:"cd"`                // 同业存单快照
+	Convertibles    []CBondJSON         `json:"convertibles"`      // 可转债 top3(按市价)
+	Short           ShortSnapshotJSON   `json:"short"`             // 融券快照
+	FundRatings     []FundRatingJSON    `json:"fund_ratings"`      // 基金评级 top5(按星数)
 }
 
 // QuantStrategyJSON 是 fin_market.quant_strategies 单项。
@@ -219,9 +223,9 @@ type QuantStrategyJSON struct {
 
 // CDSnapshotJSON 是 fin_market.cd 子结构(Rates 键为期限月数)。
 type CDSnapshotJSON struct {
-	AvgRate        float64           `json:"avg_rate"`          // 存量加权平均票面
-	OutstandingWan float64           `json:"outstanding_wan"`   // 挂牌存量(万元)
-	Rates          map[string]float64 `json:"rates"`            // 期限 → 票面("1"/"3"/"6"/"12")
+	AvgRate        float64            `json:"avg_rate"`        // 存量加权平均票面
+	OutstandingWan float64            `json:"outstanding_wan"` // 挂牌存量(万元)
+	Rates          map[string]float64 `json:"rates"`           // 期限 → 票面("1"/"3"/"6"/"12")
 }
 
 // CBondJSON 是 fin_market.convertibles 单项。
@@ -606,24 +610,24 @@ type ResourceJSON struct {
 
 // MyJSON 是 my.* 全量快照(仅本人/已登录玩家可见,观战者 = nil)。
 type MyJSON struct {
-	Cash           int64         `json:"cash"`
-	SavingsDeposit int64         `json:"savings_deposit"` // P1: 定期存款(M2)
-	Salary         int64         `json:"salary"`
-	SpouseIncome   int64         `json:"spouse_income"`
-	SideIncome     int64         `json:"side_income"`
+	Cash           int64 `json:"cash"`
+	SavingsDeposit int64 `json:"savings_deposit"` // P1: 定期存款(M2)
+	Salary         int64 `json:"salary"`
+	SpouseIncome   int64 `json:"spouse_income"`
+	SideIncome     int64 `json:"side_income"`
 	// SideBusiness 副业侧栏(批次20 文档2 §3;无副业 = nil/omit)。
-	SideBusiness *MySideBusinessJSON `json:"side_business,omitempty"`
-	PassiveIncome  int64         `json:"passive_income"`
-	Monthly        MyMonthlyJSON `json:"monthly"`
-	Resources      ResourceJSON  `json:"resources"`
-	Assets         []MyAssetJSON `json:"assets"`
-	Loans          []MyLoanJSON  `json:"loans"`
-	PensionCNY     int64         `json:"pension_cny"`
-	CreditScore    int           `json:"credit_score"`
-	Family         MyFamilyJSON  `json:"family"`
-	FIIndex        float64       `json:"fi_index"`
-	NetWorth       int64         `json:"net_worth"`
-	Goals          []string      `json:"goals"`
+	SideBusiness  *MySideBusinessJSON `json:"side_business,omitempty"`
+	PassiveIncome int64               `json:"passive_income"`
+	Monthly       MyMonthlyJSON       `json:"monthly"`
+	Resources     ResourceJSON        `json:"resources"`
+	Assets        []MyAssetJSON       `json:"assets"`
+	Loans         []MyLoanJSON        `json:"loans"`
+	PensionCNY    int64               `json:"pension_cny"`
+	CreditScore   int                 `json:"credit_score"`
+	Family        MyFamilyJSON        `json:"family"`
+	FIIndex       float64             `json:"fi_index"`
+	NetWorth      int64               `json:"net_worth"`
+	Goals         []string            `json:"goals"`
 	// P1(§财商流P1-2 §6.2):上月消费结构(仅本人;nil→{})。
 	ConsumptionByGoods map[string]float64 `json:"consumption_by_goods"`
 	// P1-4(§财商流P1-4 §8.2):商业保险段(仅本人;insurance_enabled=false 时 omit)。
@@ -643,9 +647,9 @@ type MySideBusinessJSON struct {
 	KindCN      string  `json:"kind_cn"`
 	BaseIncome  int64   `json:"base_income"`
 	OpenedMonth int     `json:"opened_month"`
-	PriceTier   int     `json:"price_tier"`     // 0=中价 1=低价 2=高价
-	PriceTierCN string  `json:"price_tier_cn"`  // 中价/低价/高价
-	MarketShare float64 `json:"market_share"`   // 当前客群份额 0..1
+	PriceTier   int     `json:"price_tier"`    // 0=中价 1=低价 2=高价
+	PriceTierCN string  `json:"price_tier_cn"` // 中价/低价/高价
+	MarketShare float64 `json:"market_share"`  // 当前客群份额 0..1
 	// TierSetMonth 最近改档月(0=未改过;FE-2 同月改档禁用与服务端权威对齐,
 	// tier_set_month == 当前 month 即禁)。
 	TierSetMonth int `json:"tier_set_month"`
@@ -740,12 +744,13 @@ type EventJSON struct {
 //
 // worldSnapshot / ages 来自房间;此函数无锁;调用方应持房间锁构造 World 快照。
 // citySnap(2026-09-21 §虚拟城市):城市背景层快照,nil = 未建城(omitempty)。
-func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]string, nicknames [MaxSeats]string, botSeats [MaxSeats]bool, modelKeys [MaxSeats]string, transcripts [MaxSeats]BotTranscript, gameStartedAt, nextMonthAtUnixMs int64, citySnap *city.Snapshot) *ClientGameState {
+func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]string, nicknames [MaxSeats]string, botSeats [MaxSeats]bool, modelKeys [MaxSeats]string, transcripts [MaxSeats]BotTranscript, gameStartedAt, nextMonthAtUnixMs, cityClockMs int64, citySnap *city.Snapshot) *ClientGameState {
 	cs := &ClientGameState{
 		RoomID: roomID, GameKind: "virtual_city",
 		Status: StatusOpen, MaxSeat: MaxSeats,
 		MySeat: viewer, NextMonthAt: nextMonthAtUnixMs,
 		GameStartedAt: gameStartedAt,
+		CityClockMs:   cityClockMs,
 		Players:       make([]PlayerJSON, MaxSeats),
 		// 2026-09-14 §财商流P0-bugfix: 数组字段必须序列化为 [] 而非 null ——
 		// Go nil slice → JSON null,前端 xxx.map 直接 TypeError 整页崩溃

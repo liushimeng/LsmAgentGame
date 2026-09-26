@@ -46,7 +46,7 @@ func TestCreateRoomVirtualCity_TenOrElevenBotsAreFullAgentBeforeRegistration(t *
 				seats[i] = AgentSeatConfig{Seat: i, ModelKey: "test-model"}
 			}
 
-			s.prepareVirtualCityAgentRoom("room-virtual-city-order", seats)
+			s.prepareVirtualCityAgentRoom("room-virtual-city-order", seats, true)
 
 			if len(rec.events) != 2 {
 				t.Fatalf("events = %v, want full-agent then register", rec.events)
@@ -61,28 +61,28 @@ func TestCreateRoomVirtualCity_TenOrElevenBotsAreFullAgentBeforeRegistration(t *
 	}
 }
 
-// TestCreatorShouldBeSpectator_VirtualCityTenOrElevenBots 2026-09-22 §17-CityHuman
-// (契约 03 §3.2)语义更新:wealth 抽样层固定 12 —— 判定阈值由 10 改 12
-// (10/11 档概念随「焦点居民数」概念退役);12 抽样展示位 → 创建者恒观战者。
-func TestCreatorShouldBeSpectator_VirtualCityTenOrElevenBots(t *testing.T) {
+// TestCreatorShouldBeSpectator_VirtualCityFullAgent 2026-09-26 §批次25:
+// wealth 判定从「座位数阈值」改为「全 Agent 开关」—— 居民-Agent 统一后
+// 10/11 座位是常态,全 Agent 语义由 full_agent(缺省 true)承载。
+func TestCreatorShouldBeSpectator_VirtualCityFullAgent(t *testing.T) {
 	cases := []struct {
-		name           string
-		gameKind       string
-		freeSeatCount  int
-		agentSeatCount int
-		want           bool
+		name                 string
+		gameKind             string
+		freeSeatCount        int
+		virtualCityFullAgent bool
+		want                 bool
 	}{
-		{"wealth 9 bots keeps creator player", "virtual_city", 3, 9, false},
-		{"wealth 10 bots with free seats keeps creator player", "virtual_city", 2, 10, false},
-		{"wealth 11 bots with free seat keeps creator player", "virtual_city", 1, 11, false},
-		{"wealth 12 deep seats has no physical seat", "virtual_city", 0, 12, true},
-		{"texas 10 agents still has creator player seat", "texasholdem", 2, 10, false},
+		{"wealth full agent 10 seats downgrades creator", "virtual_city", 2, true, true},
+		{"wealth full agent 11 seats downgrades creator", "virtual_city", 1, true, true},
+		{"wealth full agent 12 seats downgrades creator", "virtual_city", 0, true, true},
+		{"wealth full_agent=false with free seat keeps creator player", "virtual_city", 2, false, false},
+		{"texas with free seats keeps creator player seat", "texasholdem", 2, false, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := creatorShouldBeSpectator(tc.gameKind, tc.freeSeatCount, tc.agentSeatCount); got != tc.want {
-				t.Fatalf("creatorShouldBeSpectator(%q, free=%d, agents=%d) = %v, want %v",
-					tc.gameKind, tc.freeSeatCount, tc.agentSeatCount, got, tc.want)
+			if got := creatorShouldBeSpectator(tc.gameKind, tc.freeSeatCount, tc.virtualCityFullAgent); got != tc.want {
+				t.Fatalf("creatorShouldBeSpectator(%q, free=%d, fullAgent=%v) = %v, want %v",
+					tc.gameKind, tc.freeSeatCount, tc.virtualCityFullAgent, got, tc.want)
 			}
 		})
 	}

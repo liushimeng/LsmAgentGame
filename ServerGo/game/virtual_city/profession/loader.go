@@ -327,7 +327,7 @@ func (l *Loader) drawPairs(n int, rng *rand.Rand) []DomainCard {
 			if err != nil {
 				continue
 			}
-			out = append(out, DomainCard{Card: card, Domain: domainOfPath(rel)})
+			out = append(out, DomainCard{Card: card, Domain: domainOfPath(rel), SourcePath: rel})
 		}
 		if len(out) < n {
 			logger.L().Warn("virtual_city profession docs pool cannot supply requested card count, falling back to synthetic",

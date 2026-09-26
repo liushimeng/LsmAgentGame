@@ -78,6 +78,10 @@ type Config struct {
 	CityDriverWorkers int
 	// CityDriverPerMonth 每月驱动居民数(clamp [0,64];0 = 缺省 8,无「仅抽样层」语义)。
 	CityDriverPerMonth int
+	// AgentLLMMinIntervalMs 2026-09-26 §批次25(§3.3)— 每个 City-Human 的
+	// LLM 调用令牌桶补充间隔(容量 2;0 = 缺省 30000,clamp [5000,300000];
+	// config 层 virtual_city.agent_llm_min_interval_ms 同源归一)。
+	AgentLLMMinIntervalMs int
 }
 
 // LLMRegistry 窄接口(llm.Registry 满足;避免 manager 包 import llm)。
@@ -107,6 +111,16 @@ func NewManager(cfg Config, reg LLMRegistry) *Manager {
 	}
 	if cfg.AgentConcurrency <= 0 {
 		cfg.AgentConcurrency = DefaultAgentConcurrency
+	}
+	// 批次 25:LLM 调用节流间隔归一(0/缺省 → 30000ms;clamp [5000,300000])。
+	if cfg.AgentLLMMinIntervalMs <= 0 {
+		cfg.AgentLLMMinIntervalMs = 30000
+	}
+	if cfg.AgentLLMMinIntervalMs < 5000 {
+		cfg.AgentLLMMinIntervalMs = 5000
+	}
+	if cfg.AgentLLMMinIntervalMs > 300000 {
+		cfg.AgentLLMMinIntervalMs = 300000
 	}
 	// P1(§6.5):零值 → true(默认开启;false 回退 P0)。
 	if !cfg.EconomyEnabled {
@@ -254,6 +268,9 @@ func (m *Manager) CreateRoom(roomID string) *VirtualCityRoom {
 	// 2026-09-22 §17-CityHuman(契约 02 §5):居民驱动层配置接线(与城市之声
 	// 互斥,Start 时按开关二选一装配)。
 	r.SetCityDriverConfig(m.cfg.CityDriverEnabled, m.cfg.CityDriverWorkers, m.cfg.CityDriverPerMonth)
+	// 2026-09-26 §批次25(§3.3):LLM 令牌桶间隔接线(驱动层 RunMonth 共享桶用;
+	// 座位 Agent 桶在 ensureAgentsWithPool 装配)。
+	r.SetAgentLLMMinIntervalMs(m.cfg.AgentLLMMinIntervalMs)
 	if m.loader != nil {
 		r.mu.Lock()
 		r.docLoader = m.loader
@@ -412,6 +429,9 @@ func (m *Manager) ensureAgentsWithPool(poolSource func() *llm.LinePool, r *Virtu
 			m.cfg.BotMaxActionsPerMonth,
 			time.Duration(m.cfg.AgentDecisionTimeoutSec)*time.Second)
 		agent.BindRegistry(m.registry)
+		// 批次 25(§3.3):LLM 令牌桶(配置间隔)+ 调用计数钩子(房间统计)。
+		agent.SetLLMRateLimit(time.Duration(m.cfg.AgentLLMMinIntervalMs) * time.Millisecond)
+		agent.BindLLMCallHook(func(modelKey string) { r.noteSeatLLMCall(seat, modelKey) })
 		if modelKey == "" {
 			agent.BindLinePoolSource(poolSource)
 		}
@@ -429,40 +449,10 @@ func ModelDisplayName(modelKey string) string {
 	return "模型 " + modelKey
 }
 
-// wakeBots 唤醒全部 bot 座位决策(在锁外由房间调用,本方法在 manager 上;
-// 房间自身有 wakeBots 间接调用)。
-func (m *Manager) wakeBots(r *VirtualCityRoom) {
-	r.mu.Lock()
-	agents := make(map[int]*vcplayer.Agent, len(r.agents))
-	for s, a := range r.agents {
-		agents[s] = a
-	}
-	closed := r.closed
-	r.mu.Unlock()
-	if closed {
-		return
-	}
-	for seat, agent := range agents {
-		go m.wakeOne(r, seat, agent)
-	}
-}
-
-func (m *Manager) wakeOne(r *VirtualCityRoom, seat int, agent *vcplayer.Agent) {
-	// 房间级并发信号量(默认 4;NewVirtualCityRoom 已设)。
-	select {
-	case r.agentSem <- struct{}{}:
-		defer func() { <-r.agentSem }()
-	default:
-		// 满槽:稍后再 wake。
-		go func() {
-			r.agentSem <- struct{}{}
-			defer func() { <-r.agentSem }()
-			m.runAgentMonth(r, seat, agent)
-		}()
-		return
-	}
-	m.runAgentMonth(r, seat, agent)
-}
+// (2026-09-26 §批次25 §130 死代码清算:Manager.wakeBots/wakeOne 已删除 ——
+// 零生产调用点(房间侧 wakeBots/runOneBot 是唯一调度路径,且批次 25 已把
+// 满槽无界排队 goroutine 改为 per-seat 单槽 pending);runAgentMonth 仍有
+// agent_observability_test.go 消费,保留。)
 
 func (m *Manager) runAgentMonth(r *VirtualCityRoom, seat int, agent *vcplayer.Agent) {
 	// 房间持锁构造 GameContext 快照,锁外消费。

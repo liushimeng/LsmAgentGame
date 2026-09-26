@@ -65,6 +65,13 @@ type Agent struct {
 	maxActions      int
 	decisionTimeout time.Duration
 
+	// rate 每 Agent LLM 调用令牌桶(2026-09-26 §批次25;容量 2,默认每 30s
+	// 补 1 枚,manager 装配经 SetLLMRateLimit 覆盖为配置值)。
+	rate *TokenBucket
+	// llmCallHook LLM 调用计数钩子(批次 25 可观测性;房间侧注入,每次
+	// callProvider 真实发起前回调一次;nil-safe)。
+	llmCallHook func(modelKey string)
+
 	// 思维可见性(game.state.bot_contexts;读侧锁)。
 	mu         sync.Mutex
 	transcript BotTranscript
@@ -121,6 +128,7 @@ func NewAgent(roomID, userID, modelKey, modelName string, seat int, maxActions i
 		maxActions:      maxActions,
 		decisionTimeout: decisionTimeout,
 		senseUsed:       map[string]int{},
+		rate:            NewTokenBucket(0), // 批次 25:默认 30s 间隔;manager 覆盖
 	}
 }
 
@@ -138,6 +146,19 @@ func (a *Agent) BindRegistry(r LLMRegistry) {
 // ModelKey=="" 座位上调用,2026-09-21 §虚拟城市 B3)。
 func (a *Agent) BindLinePoolSource(fn func() *llm.LinePool) {
 	a.linePoolSource = fn
+}
+
+// BindLLMCallHook 注入 LLM 调用计数钩子(2026-09-26 §批次25 可观测性;
+// 房间侧统计 virtual_city llm rate 用;nil-safe)。
+func (a *Agent) BindLLMCallHook(fn func(modelKey string)) {
+	a.llmCallHook = fn
+}
+
+// noteLLMCall 每次真实发起 LLM 调用前回调计数钩子(modelKey 为实际服务线路)。
+func (a *Agent) noteLLMCall(modelKey string) {
+	if a.llmCallHook != nil {
+		a.llmCallHook(modelKey)
+	}
 }
 
 // IsPoolMode 报告该 Agent 是否线路池驱动(ModelKey=="")。

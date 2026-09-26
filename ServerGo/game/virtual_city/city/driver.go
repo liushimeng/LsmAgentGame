@@ -30,6 +30,9 @@ import (
 	"time"
 
 	agentroot "LsmAgentGame/agent"
+	// vcplayer 引用:复用其令牌桶(TokenBucket)做驱动条目限速(2026-09-26
+	// §批次25 §3.3;vcplayer 不反向 import 本包,无环)。
+	"LsmAgentGame/agent/vcplayer"
 	"LsmAgentGame/llm"
 	llmtypes "LsmAgentGame/llm/types"
 	"LsmAgentGame/logger"
@@ -68,6 +71,11 @@ type DriverConfig struct {
 	AcquireTimeoutMS int  // 线路租约等待,缺省 15000
 	// Lines 2026-09-25 §LLM线路池配额 — 本房生效线路数(快照展示用;0=未指定)。
 	Lines int
+	// LLMMinIntervalMs 2026-09-26 §批次25(§3.3)— 驱动条目令牌桶补充间隔
+	// (一次 RunMonth 内逐条共享一个桶:容量 2、每该间隔补 1 枚)。
+	// >0 = 启用限速;<=0 = 不限速(直接构造的旧调用方/测试夹具;生产由
+	// room 层装配 config 归一值,恒为正)。
+	LLMMinIntervalMs int
 }
 
 // DriverSnapshot 驱动层快照(随 game.state.city.driver 下发;omitempty ——
@@ -95,6 +103,10 @@ type ResidentDriver struct {
 
 	// ambiance 单城区气味/声响来源(room 注入,锁外调用;nil = 无氛围段)。
 	ambiance func() map[string]AmbianceTags
+
+	// llmCallHook LLM 调用计数钩子(2026-09-26 §批次25 可观测性;room 侧
+	// 注入,每次真实发起前回调;nil-safe,不持锁 —— 钩子实现自带互斥)。
+	llmCallHook func(modelKey string)
 }
 
 // NewResidentDriver 构造驱动层(cfg 归一:Workers 0→4 且 clamp [1,64];
@@ -118,6 +130,12 @@ func NewResidentDriver(cfg DriverConfig, pool LinePoolSource) *ResidentDriver {
 	if cfg.AcquireTimeoutMS <= 0 {
 		cfg.AcquireTimeoutMS = driverDefaultAcquireTimeoutMS
 	}
+	// 2026-09-26 §批次25:LLMMinIntervalMs<=0 = 未配置 → 不建令牌桶(不限速;
+	// 兼容直接构造 DriverConfig 的旧调用方/测试夹具)。生产路径由 room 层
+	// 装配 config 归一值(缺省 30000,clamp [5000,300000])恒为正。
+	if cfg.LLMMinIntervalMs < 0 {
+		cfg.LLMMinIntervalMs = 0
+	}
 	// 2026-09-25 §LLM线路池配额:纯展示字段,负数防御归 0。
 	if cfg.Lines < 0 {
 		cfg.Lines = 0
@@ -132,6 +150,14 @@ func (d *ResidentDriver) SetAmbianceSource(fn func() map[string]AmbianceTags) {
 		return
 	}
 	d.ambiance = fn
+}
+
+// SetLLMCallHook 注入 LLM 调用计数钩子(2026-09-26 §批次25;room 注入,nil 安全)。
+func (d *ResidentDriver) SetLLMCallHook(fn func(modelKey string)) {
+	if d == nil {
+		return
+	}
+	d.llmCallHook = fn
 }
 
 // Snapshot 返回驱动层快照(city.Snapshot.Driver 下发;mu 只圈 lastDriven)。
@@ -173,6 +199,13 @@ func (d *ResidentDriver) RunMonth(b *Backdrop, month int, onVoice func(VoiceReco
 	if len(picks) == 0 {
 		return
 	}
+	// 2026-09-26 §批次25(§3.3):一次 RunMonth 内逐条共享同一个令牌桶
+	// (容量 2、每 LLMMinIntervalMs 补 1 枚)—— 桶空条目直接丢弃,不重试。
+	// LLMMinIntervalMs<=0(直接构造的旧调用方/测试夹具)= 不限速。
+	var rate *vcplayer.TokenBucket
+	if d.cfg.LLMMinIntervalMs > 0 {
+		rate = vcplayer.NewTokenBucket(time.Duration(d.cfg.LLMMinIntervalMs) * time.Millisecond)
+	}
 	workers := d.cfg.Workers
 	if workers > len(picks) {
 		workers = len(picks)
@@ -189,7 +222,7 @@ func (d *ResidentDriver) RunMonth(b *Backdrop, month int, onVoice func(VoiceReco
 		go func() {
 			defer wg.Done()
 			for idx := range tasks {
-				if d.runOne(b, pool, month, idx, onVoice) {
+				if d.runOne(b, pool, month, idx, onVoice, rate) {
 					done.Add(1)
 				}
 			}
@@ -209,13 +242,19 @@ func (d *ResidentDriver) setLastDriven(n int) {
 // runOne 居民轮次 runOne(单居民单月;契约 §2.1 五步)。返回是否完成一次
 // LLM 轮次(Acquire 失败/LLM 错误 → false,静默丢弃)。
 //
-//	1. brief := b.DriverBrief(idx)         锁内快照:档案人格 + 月度状态 + 邻居
-//	2. ctx 超时 → pool.Acquire(ctx)        ErrAllLinesBusy → 丢弃本条
-//	3. req := LLMRequest{persona / context / commonToolDefs / 256 tokens}
-//	4. resp := chatViaLease(...)           复用 voice.go 的租约调用路径(流式优先)
-//	5. 解析 resp tool_use 块(单轮,不发 tool_result 二轮):
-//	   set_intent → b.ApplyIntent / speak → VoiceRecord → onVoice 回调
-func (d *ResidentDriver) runOne(b *Backdrop, pool *llm.LinePool, month, idx int, onVoice func(VoiceRecord)) bool {
+//  1. brief := b.DriverBrief(idx)         锁内快照:档案人格 + 月度状态 + 邻居
+//  2. ctx 超时 → pool.Acquire(ctx)        ErrAllLinesBusy → 丢弃本条
+//  3. req := LLMRequest{persona / context / commonToolDefs / 256 tokens}
+//  4. resp := chatViaLease(...)           复用 voice.go 的租约调用路径(流式优先)
+//  5. 解析 resp tool_use 块(单轮,不发 tool_result 二轮):
+//     set_intent → b.ApplyIntent / speak → VoiceRecord → onVoice 回调
+//
+// 2026-09-26 §批次25(§3.3):chatViaLease 前先取令牌(rate.Allow);桶空 ⇒
+// 本条丢弃(不重试、不阻塞其他条目)。
+func (d *ResidentDriver) runOne(b *Backdrop, pool *llm.LinePool, month, idx int, onVoice func(VoiceRecord), rate *vcplayer.TokenBucket) bool {
+	if rate != nil && !rate.Allow() {
+		return false // 批次 25:令牌桶空,丢弃本条
+	}
 	brief, ok := b.DriverBrief(idx)
 	if !ok {
 		return false
@@ -230,6 +269,9 @@ func (d *ResidentDriver) runOne(b *Backdrop, pool *llm.LinePool, month, idx int,
 		return false
 	}
 	defer lease.Release()
+	if d.llmCallHook != nil {
+		d.llmCallHook(lease.ModelKey) // 批次 25:调用计数(真实发起前)
+	}
 
 	req := llm.LLMRequest{
 		Model:          lease.ModelKey,

@@ -4,6 +4,7 @@ import virtualCityInsurance from './virtualCityInsurance-zh';
 import virtualCityResidents from './virtualCityResidents-zh';
 import virtualCityBatch20 from './virtualCityBatch20-zh';
 import virtualCityLinePool from './virtualCityLinePool-zh';
+import virtualCityCityClock from './virtualCityCityClock-zh';
 
 // 中文 (默认) — zh-CN
 const zhCN: Dict = {
@@ -1730,7 +1731,7 @@ const zhCN: Dict = {
 
 
   // ── virtualCity 拆分文件（≤1800 行约束）：P2 交易 / P1-4 保险 / 居民档案 / 批次20 / 线路池 ──
-  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool,
+  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock,
 
   // ── P1 明斯基引擎 + LPR 重定价 + 提前还款 ──
   'minsky.title': '明斯基融资状态',

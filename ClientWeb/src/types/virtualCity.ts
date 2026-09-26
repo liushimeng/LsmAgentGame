@@ -534,6 +534,10 @@ export interface VirtualCityGameState {
   next_month_at: number;
   /** unix_s；RoomRunningClock 同源语义。 */
   game_started_at: number;
+  /** 城市时钟 epoch 毫秒（批次 25 §3.4：60× 叙事层，现实 1 分钟 = 城市 1 小时；
+   *  暂停时冻结；纪元起点映射 2025-01-01 08:00）。旧帧/旧后端 omit → 前端兜底
+   *  回退显示现实运行时长（fmtElapsed）。 */
+  city_clock_ms?: number;
   players: VirtualCityPlayer[];
   /** -1 = 观战。 */
   my_seat: number;

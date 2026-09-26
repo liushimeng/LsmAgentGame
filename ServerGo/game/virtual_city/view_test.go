@@ -38,7 +38,7 @@ func TestBuildClientState_Desensitization(t *testing.T) {
 		[MaxSeats]bool{false, false, false, false, false, false, false, false},
 		[MaxSeats]string{"", "", "", "", "", "", "", ""},
 		[MaxSeats]BotTranscript{},
-		0, 0,
+		0, 0, 0,
 		nil,
 	)
 	if cs == nil {
@@ -66,7 +66,7 @@ func TestBuildClientState_SpectatorView(t *testing.T) {
 		[MaxSeats]bool{true},
 		[MaxSeats]string{"MeiTuan-model"},
 		[MaxSeats]BotTranscript{},
-		0, 0,
+		0, 0, 0,
 		nil,
 	)
 	if cs.My != nil {
@@ -97,7 +97,7 @@ func TestBuildClientState_NonViewerBotFiltered(t *testing.T) {
 		[MaxSeats]string{"", ""},
 		[MaxSeats]bool{true, true},
 		[MaxSeats]string{"model1", "model2"},
-		transcripts, 0, 0,
+		transcripts, 0, 0, 0,
 		nil,
 	)
 	if len(cs.BotContexts) != 1 {
@@ -120,13 +120,14 @@ func TestBuildClientState_JSONEncodable(t *testing.T) {
 		[MaxSeats]bool{false},
 		[MaxSeats]string{""},
 		[MaxSeats]BotTranscript{},
-		0, 0,
+		0, 0, 0,
 		nil,
 	)
 	if _, err := json.Marshal(cs); err != nil {
 		t.Errorf("json marshal: %v", err)
 	}
 }
+
 // ── 批次20(view 扩字段)──
 
 // viewBatch20World 定价/微观/选举三特性齐备的夹具世界。
@@ -157,7 +158,7 @@ func viewBatch20World(t *testing.T) *World {
 func viewBatch20State(w *World, viewer int) *ClientGameState {
 	return BuildClientState("room-b20", viewer, w, [MaxSeats]string{"u0", "u1", "u2"},
 		[MaxSeats]string{"", "", ""}, [MaxSeats]bool{}, [MaxSeats]string{},
-		[MaxSeats]BotTranscript{}, 0, 0, nil)
+		[MaxSeats]BotTranscript{}, 0, 0, 0, nil)
 }
 
 // TestView_SideMarket 顶层 side_market:仅含有经营者品类;seat 升序;份额归一。

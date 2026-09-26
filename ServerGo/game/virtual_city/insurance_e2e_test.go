@@ -260,7 +260,7 @@ func TestInsuranceE2E_TwelveSeats_26Months(t *testing.T) {
 		bots[i] = true
 		models[i] = "FakeModel"
 	}
-	cs := BuildClientState("room-ins-e2e", 4, w, seats, nicks, bots, models, [MaxSeats]BotTranscript{}, 0, 0, nil)
+	cs := BuildClientState("room-ins-e2e", 4, w, seats, nicks, bots, models, [MaxSeats]BotTranscript{}, 0, 0, 0, nil)
 	if cs.My == nil || cs.My.Insurance == nil {
 		t.Fatalf("my.insurance missing for viewer 4 (insurance_enabled=true)")
 	}

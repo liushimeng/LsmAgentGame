@@ -644,7 +644,7 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 			cs := virtual_city.BuildClientState(req.RoomID, -1, r.Engine(),
 				r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
 				r.SnapshotModelKeys(), r.SnapshotTranscripts(),
-				r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CitySnapshotView())
+				r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CityClockMs(), r.CitySnapshotView())
 			s.sendOK(c, env.Seq, "game.state", cs)
 			return
 		}
@@ -766,7 +766,7 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 		cs := virtual_city.BuildClientState(req.RoomID, seat, eng,
 			r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
 			r.SnapshotModelKeys(), r.SnapshotTranscripts(),
-			r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CitySnapshotView())
+			r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CityClockMs(), r.CitySnapshotView())
 		s.sendOK(c, env.Seq, "game.state", cs)
 	}
 }
@@ -781,5 +781,3 @@ func (s *GameService) broadcastXiangqiSpectatorState(roomID string) {
 		s.hub.BroadcastTo(uid, Envelope{Type: "game.state", Payload: mustMarshal(state)})
 	}
 }
-
-

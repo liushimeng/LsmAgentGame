@@ -401,7 +401,7 @@ func TestSettleMonth_TreasuryWired(t *testing.T) {
 	}
 	// view 接线:BuildClientState 透出 treasury。
 	cs := BuildClientState("room-test", 0, w, [MaxSeats]string{}, [MaxSeats]string{},
-		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, nil)
+		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, 0, nil)
 	if cs.Treasury == nil {
 		t.Fatal("view must expose treasury snapshot (§130 wiring)")
 	}

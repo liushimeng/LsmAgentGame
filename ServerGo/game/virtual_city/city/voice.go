@@ -56,6 +56,9 @@ type VoiceScheduler struct {
 	Enabled  bool
 	PerMonth int
 	Pool     LinePoolSource
+	// LLMCallHook 2026-09-26 §批次25 可观测性:每次真实发起 LLM 调用前回调
+	// (房间侧 virtual_city llm rate 统计用;nil-safe)。
+	LLMCallHook func(modelKey string)
 }
 
 // NewVoiceScheduler 构造调度器(perMonth clamp [0,32];0 = 关闭)。
@@ -108,6 +111,9 @@ func (s *VoiceScheduler) speakOne(b *Backdrop, pool *llm.LinePool, month, idx in
 		return VoiceRecord{}, false
 	}
 	defer lease.Release()
+	if s.LLMCallHook != nil {
+		s.LLMCallHook(lease.ModelKey) // 批次 25:调用计数(真实发起前)
+	}
 
 	employDesc := "就业中"
 	if !br.Employed {

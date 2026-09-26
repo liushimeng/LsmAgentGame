@@ -36,7 +36,7 @@ func (a *Agent) BuildLLMRequest(sysBlocks []llmtypes.SystemBlock, userText strin
 		System:         sysBlocks,
 		Messages:       []llmtypes.Message{{Role: "user", Content: []llmtypes.ContentBlock{{Type: "text", Text: userText}}}},
 		Tools:          tools,
-		MaxTokens:      4096,
+		MaxTokens:      1024, // 批次 25:4096 → 1024(月度意图短文,超量)
 		Metadata:       llmtypes.Metadata{UserID: a.MyUserID},
 		AgentClassName: string(a.AgentClass()),
 	}
@@ -162,6 +162,12 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *vctypes.GameContext) {
 
 	// 2. 工具循环 ≤3 轮(或直至 submit_month / 超时)。
 	for round := 0; round < 3; round++ {
+		// 2026-09-26 §批次25(§3.3):每轮 LLM 调用消耗 1 枚令牌;桶空即中止
+		// 本月决策循环(走既有 finalize + submit_month 兜底路径,绝不无限重试)。
+		if !a.rateAllowLLM() {
+			lastToolInput, lastToolResult = "rate_limited", "LLM 节流:本月令牌耗尽,提前结束思考"
+			break
+		}
 		req := a.BuildLLMRequest(sysBlocks, "", tools)
 		req.Messages = messages
 
@@ -219,6 +225,7 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *vctypes.GameContext) {
 
 		// 处理每个 tool_use:dispatch + tool_result 回喂。
 		results := make([]llmtypes.ContentBlock, 0, len(tus))
+		overBudget := false
 		for _, tu := range tus {
 			res := a.DispatchTool(tu.Name, tu.Input)
 			// 累计动作计数。
@@ -242,8 +249,11 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *vctypes.GameContext) {
 			if actionsUsed >= actionsLimit && isBudgetAction(tu.Name) {
 				// 超预算:本工具被拒;直接给 submit 提示,下一轮结束。
 				a.finalizeTranscript(lastSummary, lastToolInput, lastToolResult)
-				a.appendMessages(&messages, resp.Content, results)
-				// 主动结束:不再加 tool_use,强制提交。
+				// 2026-09-26 §批次25 修复双重追加 bug:此处不再调用
+				// appendMessages —— 旧实现 append 后 break,外层又 append 一次,
+				// 导致 assistant tool_use / tool_result 重复入流。统一由循环尾
+				// 的 appendMessages 恰好追加一次。
+				overBudget = true
 				break
 			}
 			if speakUsed && tu.Name == ToolSpeak {
@@ -251,6 +261,10 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *vctypes.GameContext) {
 			}
 		}
 		a.appendMessages(&messages, resp.Content, results)
+		if overBudget {
+			// 主动结束:不再加 tool_use,强制提交。
+			break
+		}
 		// 若本轮全为非动作(纯 speak/check_state)且已用完,仍然 break;
 		// 我们用 actionsUsed 兜底,actionsUsed 不再增长则安全。
 		if actionsUsed > actionsLimit {

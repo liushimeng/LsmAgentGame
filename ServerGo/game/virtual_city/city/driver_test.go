@@ -370,3 +370,29 @@ func TestSnapshotDriverOmitEmpty(t *testing.T) {
 		t.Fatalf("driver-on snapshot missing fields: %s", data)
 	}
 }
+
+// TestResidentDriver_RateLimitBucket 2026-09-26 §批次25(§3.3):LLMMinIntervalMs>0
+// 时一次 RunMonth 内逐条共享令牌桶(容量 2)—— PerMonth=5 也只放行 2 条,
+// 其余直接丢弃(不重试);LLMMinIntervalMs<=0 保持不限速(旧测试语义)。
+func TestResidentDriver_RateLimitBucket(t *testing.T) {
+	fp := &fakeDriverProvider{}
+	d := NewResidentDriver(DriverConfig{Enabled: true, Workers: 2, PerMonth: 5, LLMMinIntervalMs: 60000}, newDriverPool(fp, 4))
+	b := NewBackdrop(50, rand.New(rand.NewSource(21)), nil)
+	sink := &syncVoiceSink{}
+	done := make(chan struct{})
+	go func() {
+		d.RunMonth(b, 3, sink.collect)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("RunMonth blocked")
+	}
+	if calls, _ := fp.stats(); calls != 2 {
+		t.Fatalf("llm calls = %d, want 2 (令牌桶容量限制;PerMonth=5 被收窄)", calls)
+	}
+	if ds := d.Snapshot(); ds.DrivenLast != 2 {
+		t.Fatalf("driver snapshot DrivenLast = %d, want 2", ds.DrivenLast)
+	}
+}

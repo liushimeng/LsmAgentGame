@@ -2,7 +2,7 @@
  * 虚拟城市 — 对局页（/virtual-city/:roomId 与 /virtual-city/spectate/:roomId）。
  *
  * 布局（产品设计 §6.1 线框）：
- *   顶部信息栏（月 / 年龄 / 周期徽章 / 运行时钟 / 我的座位 / 提前开始 / 离开）
+ *   顶部信息栏（月 / 年龄 / 周期徽章 / 城市时钟（旧帧兜底运行时长）/ 我的座位 / 提前开始 / 离开）
  *   ├─ 左主区：3D 城市地图（VirtualCityCityMap，批次 22 起 orbit 俯瞰 + 街景漫游双模式）+ 左上角小地图叠加
  *   ├─ 右侧栏：面板 Tab（财务 / 行情 / 流水）+ Agent 思维
  *   ├─ 3D 语音气泡（批次 23：居民公开发话冒在座位 token 头顶，市民之声冒在市政厅上空）
@@ -53,6 +53,7 @@ const CYCLE_CLASS: Record<string, string> = {
   depression: 'virtualCity-cycle--depression',
 };
 
+// 现实运行时长 HH:MM:SS —— 批次 25 §3.4 起仅作 city_clock_ms 缺失（旧帧/旧后端）时的兜底显示。
 function fmtElapsed(startedAtSec: number, nowMs: number): string {
   if (!startedAtSec) return '--:--';
   const s = Math.max(0, Math.floor(nowMs / 1000) - startedAtSec);
@@ -61,6 +62,28 @@ function fmtElapsed(startedAtSec: number, nowMs: number): string {
   const sec = s % 60;
   const p = (n: number) => String(n).padStart(2, '0');
   return h > 0 ? `${h}:${p(m)}:${p(sec)}` : `${p(m)}:${p(sec)}`;
+}
+
+/** 批次 25 §3.4 城市时钟：时段文案键（6–9 清晨 / 9–17 白天 / 17–20 傍晚 / 20–6 夜晚）。 */
+function cityPhaseKey(hour: number): TKey {
+  if (hour >= 6 && hour < 9) return 'virtualCity.cityClockPhaseDawn' as TKey;
+  if (hour >= 9 && hour < 17) return 'virtualCity.cityClockPhaseDay' as TKey;
+  if (hour >= 17 && hour < 20) return 'virtualCity.cityClockPhaseDusk' as TKey;
+  return 'virtualCity.cityClockPhaseNight' as TKey;
+}
+
+type TranslateFn = (key: TKey, vars?: Record<string, string | number>) => string;
+
+/** 批次 25 §3.4：城市时间 epoch 毫秒 →「M月D日 HH:MM（时段）」（本地月日时分，不用秒）。 */
+function fmtCityClock(cityMs: number, t: TranslateFn): string {
+  const d = new Date(cityMs);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return t('virtualCity.cityClockDisplay' as TKey, {
+    month: d.getMonth() + 1,
+    day: d.getDate(),
+    time: `${p(d.getHours())}:${p(d.getMinutes())}`,
+    phase: t(cityPhaseKey(d.getHours())),
+  });
 }
 
 /**
@@ -157,12 +180,29 @@ export function VirtualCityGamePage() {
   const [now, setNow] = useState(Date.now());
   const viewRef = useRef<VirtualCityCameraView>({ x: 0, z: 0, dist: 34 });
   const focusRef = useRef<VirtualCityFocusTarget | null>(null);
+  // 批次 25 §3.4 城市时钟帧锚点：帧内 city_clock_ms + 帧到达时刻；
+  // 显示 = 锚点 + (now − 到达) × speed（运行 60×，暂停 0）。
+  const cityClockRef = useRef<{ cityMs: number; at: number; speed: number } | null>(null);
 
   // 运行时钟（game_started_at，RoomRunningClock 同源语义）。
+  // 批次 25 §3.4：250ms 步进，同时驱动城市时钟插值（与 MonthTicker 同节奏）。
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    const timer = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, []);
+
+  // 批次 25 §3.4：帧到达时重锚定城市时钟。连续帧 city_clock_ms 不变 ⇒
+  // 后端暂停冻结（speed=0 保持显示），避免暂停期随插值漂移出锯齿回跳。
+  // c <= 0（未开局旧帧占位）视为缺失，不锚定（纪元 2025-01-01 起恒为正）。
+  useEffect(() => {
+    const c = gameState?.city_clock_ms;
+    if (typeof c !== 'number' || c <= 0) return;
+    const prev = cityClockRef.current;
+    cityClockRef.current =
+      prev && prev.cityMs === c
+        ? { cityMs: c, at: prev.at, speed: 0 }
+        : { cityMs: c, at: Date.now(), speed: 60 };
+  }, [gameState]);
 
   // 入场：join / spectate（WS 未 OPEN 时 500ms 重试）+ 8s 轮询全量快照。
   useEffect(() => {
@@ -257,6 +297,20 @@ export function VirtualCityGamePage() {
   // 津贴停发徽标：已改由 CivicElectionBanner 直接消费 public_services.stipend_stopped
   // （旧「当月 policy 事件中文文本探测」best-effort 逻辑已删除）。
 
+  // ── 批次 25 §3.4 城市时钟（60× 叙事层）：帧锚点 + (now − 帧到达) × speed 插值。
+  //    city_clock_ms 缺失（旧帧/旧后端）→ 兜底回退现实运行时长（fmtElapsed）。──
+  const cityClock = cityClockRef.current;
+  const hasCityClock =
+    cityClock !== null &&
+    typeof gameState?.city_clock_ms === 'number' &&
+    gameState.city_clock_ms > 0;
+  const clockTitle = hasCityClock
+    ? t('virtualCity.cityClock' as TKey)
+    : t('virtualCity.runningTime' as TKey);
+  const clockText = hasCityClock
+    ? `🏙 ${fmtCityClock(cityClock.cityMs + (now - cityClock.at) * cityClock.speed, t)}`
+    : `⏱ ${fmtElapsed(gameState?.game_started_at ?? 0, now)}`;
+
   return (
     <div className="virtualCity-root virtualCity-game">
       {/* 顶部信息栏 */}
@@ -282,8 +336,9 @@ export function VirtualCityGamePage() {
                 {t('virtualCity.phase.settling' as TKey)}
               </span>
             )}
-            <span className="virtualCity-topbar__item" title={t('virtualCity.runningTime' as TKey)}>
-              ⏱ {fmtElapsed(gameState.game_started_at, now)}
+            {/* 批次 25 §3.4：城市时钟（60× 叙事层）；旧帧无 city_clock_ms 时兜底现实运行时长。 */}
+            <span className="virtualCity-topbar__item" title={clockTitle}>
+              {clockText}
             </span>
             <span
               className="virtualCity-topbar__item"

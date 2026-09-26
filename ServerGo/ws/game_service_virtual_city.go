@@ -69,7 +69,7 @@ func (s *GameService) handleVirtualCityJoin(c *Client, env Envelope, roomID stri
 // handleVirtualCityAction 处理 game.virtual_city_action。
 func (s *GameService) handleVirtualCityAction(c *Client, env Envelope) {
 	var req struct {
-		RoomID string        `json:"room_id"`
+		RoomID string              `json:"room_id"`
 		Action virtual_city.Action `json:"action"`
 	}
 	if err := json.Unmarshal(env.Payload, &req); err != nil || req.RoomID == "" {
@@ -273,17 +273,18 @@ func (s *GameService) broadcastVirtualCityState(roomID string) {
 	gameStartedAt := r.GameStartedAtUnix()
 	nextMonth := r.NextMonthAtUnix()
 	citySnap := r.CitySnapshotView() // 2026-09-21 §虚拟城市:城市背景层快照(未建城 nil)
+	cityClock := r.CityClockMs()     // 2026-09-26 §批次25:城市时钟(60× 叙事层)
 	// 玩家座位单发。
 	for seat := 0; seat < virtual_city.MaxSeats; seat++ {
 		uid := seats[seat]
 		if uid == "" {
 			continue
 		}
-		cs := virtual_city.BuildClientState(roomID, seat, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, citySnap)
+		cs := virtual_city.BuildClientState(roomID, seat, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, cityClock, citySnap)
 		s.hub.BroadcastTo(uid, wsEnvelope("game.state", 0, cs))
 	}
 	// 观战者(viewer = -1)。
-	cs := virtual_city.BuildClientState(roomID, -1, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, citySnap)
+	cs := virtual_city.BuildClientState(roomID, -1, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, cityClock, citySnap)
 	for _, uid := range s.hub.connectedSpectatorUserIDs(roomID) {
 		s.hub.BroadcastTo(uid, wsEnvelope("game.state", 0, cs))
 	}

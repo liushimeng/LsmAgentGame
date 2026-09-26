@@ -225,14 +225,39 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		}
 	}
 
+	// 2026-09-22 §17-CityHuman(契约 03 §3.1): resident_count **必达**新语义
+	// —— 缺省/0 → 10000;<10 → clamp 10;>上限 → clamp cfg.VirtualCity.MaxResidents
+	// (默认 100000);负数在 API 层 400(此处 v<=0 兜底走缺省)。
+	// 2026-09-26 §批次25:clamp 前移 —— 座位数合成(wealthDeepSeats)必须取到
+	// clamp 后的 ResidentCount(座位数 = clamp(N,10,12))。
+	if gameKind == "virtual_city" && wealthCfg != nil {
+		maxResidents := 100000
+		if s.cfg != nil && s.cfg.VirtualCity.MaxResidents > 0 {
+			maxResidents = s.cfg.VirtualCity.MaxResidents
+		}
+		wealthCfg.ResidentCount = clampVirtualCityResidentCount(wealthCfg.ResidentCount, maxResidents)
+	}
+	// 2026-09-26 §批次25(25 文档 §3.2)full_agent 接线:createRoomRequest.FullAgent
+	// 原声明后从不被读取(§130)。三态解析:nil(缺省)/true = 恒全 Agent 城市
+	// (人类不可入座);显式 false = 允许人类加入空位(FullAgentMode=false)。
+	virtualCityFullAgent := gameKind == "virtual_city"
+	if wealthCfg != nil && wealthCfg.FullAgent != nil && !*wealthCfg.FullAgent {
+		virtualCityFullAgent = false
+	}
+
 	// 2026-09-22 §17-CityHuman 全民驱动(契约 03 §3.1): wealth 建房**忽略**
 	// 传入的 agent_seats(旧客户端携带任意值静默忽略,不 400 —— HTTP 契约
-	// 宽松化,§6),由服务端固定合成 12 名池驱动抽样居民座位(ModelKey="")。
+	// 宽松化,§6),由服务端合成池驱动居民座位(ModelKey="")。
+	// 2026-09-26 §批次25:座位数 = clamp(resident_count,10,12)(居民-Agent 统一)。
 	// 替换必须发生在 agentSeatSet 构建/校验/落库之前,使 bot 用户行、
 	// FullAgentMode 判定、ws 层 RegisterBotSeats、自动开局看到同一座位集;
 	// werewolf 等其他游戏路径零变化。
 	if gameKind == "virtual_city" {
-		agentSeats = wealthDeepSeats()
+		residentN := 0
+		if wealthCfg != nil {
+			residentN = wealthCfg.ResidentCount
+		}
+		agentSeats = wealthDeepSeats(residentN)
 	}
 
 	// Validate agent-seat requests up front, failing fast before any DB writes.
@@ -282,16 +307,8 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		}
 	}
 
-	// 2026-09-22 §17-CityHuman(契约 03 §3.1): resident_count **必达**新语义
-	// —— 缺省/0 → 10000;<10 → clamp 10;>上限 → clamp cfg.VirtualCity.MaxResidents
-	// (默认 100000);负数在 API 层 400(此处 v<=0 兜底走缺省 10000)。
-	if gameKind == "virtual_city" && wealthCfg != nil {
-		maxResidents := 100000
-		if s.cfg != nil && s.cfg.VirtualCity.MaxResidents > 0 {
-			maxResidents = s.cfg.VirtualCity.MaxResidents
-		}
-		wealthCfg.ResidentCount = clampVirtualCityResidentCount(wealthCfg.ResidentCount, maxResidents)
-	}
+	// (resident_count clamp 已前移至 wealthDeepSeats 合成之前 —— 2026-09-26
+	// §批次25;原位于此处的 clamp 块删除,避免两处维护同一规则漂移。)
 	if !isSelectableRoleName(creatorRolePref) {
 		return nil, errcode.CodeMsg(errcode.ErrValidationFailed, fmt.Sprintf("invalid creator_role %q", creatorRolePref))
 	}
@@ -521,7 +538,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	}
 	creatorSeat := -1
 	creatorAsSpectator := false
-	if creatorShouldBeSpectator(gameKind, len(freeSeats), len(agentSeats)) {
+	if creatorShouldBeSpectator(gameKind, len(freeSeats), virtualCityFullAgent) {
 		// 2026-08-19 §德州扑克Agent: texasholdem 同样允许全 AI 房间(创建者降级为观战者)。
 		// 2026-09-14 §财商流P0 / 2026-09-16 §12座扩容:wealth 同款支持(创建者降级为观战者,
 		// 满 MinSeats(10) 即自动开局;MaxSeats=12 留 2 头寸给人类玩家)。
@@ -677,7 +694,7 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 			zap.Int("resident_count", wealthCfg.ResidentCount))
 	}
 	if gameKind == "virtual_city" && len(agentSeats) > 0 {
-		s.prepareVirtualCityAgentRoom(room.ID, agentSeats)
+		s.prepareVirtualCityAgentRoom(room.ID, agentSeats, virtualCityFullAgent)
 	} else if (gameKind == "werewolf" || gameKind == "texasholdem") && len(agentSeats) > 0 && s.agentSeater != nil {
 		// BUG-R136-RACE-001: 复述段落已压缩 — git blame 与 docs/ 索引可还原
 
@@ -838,12 +855,12 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	return rd, nil
 }
 
-// creatorShouldBeSpectator 判定创建者是否必须降级为观战者。wealth 恒为
-// 全 Agent 城市(12 抽样展示位,wealthDeepSeatCount —— 原 wealthMinAgentSeats
-// 10/11 档概念已随精选层退役,契约 03 §3.2),抽样展示位全注册即无人类可入
-// 座位,不能把剩余物理空位误当成可加入座位。
-func creatorShouldBeSpectator(gameKind string, freeSeatCount, agentSeatCount int) bool {
-	return freeSeatCount == 0 || (gameKind == "virtual_city" && agentSeatCount >= wealthDeepSeatCount)
+// creatorShouldBeSpectator 判定创建者是否必须降级为观战者。2026-09-26 §批次25:
+// wealth 判定从「agent 座位数 >= 12」改为「全 Agent 开关」(居民-Agent 统一后
+// 座位数可为 10/11,恒全 Agent 语义不变 —— 缺省 true 时创建者恒观战者;
+// 显式 full_agent:false 才允许创建者占空位)。其他游戏行为不变(座位满 → 观战)。
+func creatorShouldBeSpectator(gameKind string, freeSeatCount int, virtualCityFullAgent bool) bool {
+	return freeSeatCount == 0 || (gameKind == "virtual_city" && virtualCityFullAgent)
 }
 
 // clampVirtualCityResidentCount 2026-09-22 §17-CityHuman(契约 03 §3.1)语义更新:
@@ -870,10 +887,13 @@ func clampVirtualCityResidentCount(v, maxResidents int) int {
 // prepareVirtualCityAgentRoom 是 wealth 专用的内存镜像顺序:先设置 FullAgentMode,
 // 再注册 bot seats。RegisterAgentSeats 到达 MinSeats 后可能立即自动开局,
 // 顺序反置会出现短暂人类可加入窗口。2026-09-22 §17:wealth 恒为全 Agent
-// 城市(12 抽样展示位),有任何 agent 座位即置位。
-func (s *RoomService) prepareVirtualCityAgentRoom(roomID string, agentSeats []AgentSeatConfig) {
+// 城市(抽样展示位),有任何 agent 座位即置位。2026-09-26 §批次25:fullAgent
+// 由建房请求 full_agent 字段决定(缺省/true=全 Agent;显式 false=允许人类
+// 加入空位),显式置 false 同样先于 RegisterAgentSeats 落地,使 ws 侧
+// EnsureFullAgentMode 防御门不会把它翻回 true。
+func (s *RoomService) prepareVirtualCityAgentRoom(roomID string, agentSeats []AgentSeatConfig, fullAgent bool) {
 	if len(agentSeats) > 0 && s.gameJoiner != nil {
-		if e := s.gameJoiner.SetFullAgentMode("virtual_city", roomID, true); e != nil {
+		if e := s.gameJoiner.SetFullAgentMode("virtual_city", roomID, fullAgent); e != nil {
 			logger.L().Warn("set full agent mode failed",
 				zap.String("room_id", roomID),
 				zap.Int("code", e.Code),

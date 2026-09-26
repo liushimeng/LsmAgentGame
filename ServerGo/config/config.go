@@ -30,7 +30,7 @@ type Config struct {
 	LLM         LLMConfig         `json:"llm"`
 	Werewolf    WerewolfConfig    `json:"werewolf"`
 	TexasHoldem TexasHoldemConfig `json:"texasholdem"`
-	VirtualCity  VirtualCityConfig      `json:"virtual_city"`
+	VirtualCity VirtualCityConfig `json:"virtual_city"`
 }
 
 // §128 对话即思考重构:AgentParallelConfig 已删除(原 §122)。
@@ -398,6 +398,10 @@ type VirtualCityConfig struct {
 	// 无法区分,与 city_voice_per_month 同款取舍;需停驱动层请置
 	// city_driver_enabled=false)。
 	CityDriverPerMonth int `json:"city_driver_per_month"`
+	// AgentLLMMinIntervalMs 每个 City-Human 的 LLM 调用最小间隔(2026-09-26
+	// §批次25 §3.3 令牌桶节流:容量 2、每该间隔补 1 枚,座位 Agent 与驱动层
+	// RunMonth 共享桶同款)。缺省 30000,clamp [5000,300000]。
+	AgentLLMMinIntervalMs int `json:"agent_llm_min_interval_ms"`
 }
 
 // CityDriverEnabledResolved 返回驱动层总开关的生效值(nil 缺省 true;
@@ -1253,6 +1257,17 @@ func applyDefaults(c *Config) {
 	}
 	if c.VirtualCity.CityDriverPerMonth > 64 {
 		c.VirtualCity.CityDriverPerMonth = 64
+	}
+	// 2026-09-26 §批次25(§3.3):每 Agent LLM 令牌桶补充间隔归一
+	// (0/缺省 → 30000ms;clamp [5000,300000])。
+	if c.VirtualCity.AgentLLMMinIntervalMs == 0 {
+		c.VirtualCity.AgentLLMMinIntervalMs = 30000
+	}
+	if c.VirtualCity.AgentLLMMinIntervalMs < 5000 {
+		c.VirtualCity.AgentLLMMinIntervalMs = 5000
+	}
+	if c.VirtualCity.AgentLLMMinIntervalMs > 300000 {
+		c.VirtualCity.AgentLLMMinIntervalMs = 300000
 	}
 	// §128 对话即思考重构:AgentParallel 默认值已删除(原 §122)。
 

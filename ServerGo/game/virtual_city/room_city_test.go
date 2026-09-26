@@ -122,7 +122,7 @@ func TestStart_CityBackdropCreatedAndViewExposed(t *testing.T) {
 	// view 透出 + 池驱动座位 model_display。
 	cs := BuildClientState("room-city", 0, r.Engine(), r.SnapshotSeats(), r.SnapshotNicknames(),
 		r.SnapshotBotSeats(), r.SnapshotModelKeys(), r.SnapshotTranscripts(),
-		r.GameStartedAtUnix(), r.NextMonthAtUnix(), snap)
+		r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CityClockMs(), snap)
 	if cs.City == nil || cs.City.ResidentCount != 5000 {
 		t.Fatalf("game.state.city missing: %+v", cs.City)
 	}
@@ -133,7 +133,7 @@ func TestStart_CityBackdropCreatedAndViewExposed(t *testing.T) {
 	}
 	cs2 := BuildClientState("room-nocity", 0, r2.Engine(), r2.SnapshotSeats(), r2.SnapshotNicknames(),
 		r2.SnapshotBotSeats(), r2.SnapshotModelKeys(), r2.SnapshotTranscripts(),
-		r2.GameStartedAtUnix(), r2.NextMonthAtUnix(), r2.CitySnapshotView())
+		r2.GameStartedAtUnix(), r2.NextMonthAtUnix(), r2.CityClockMs(), r2.CitySnapshotView())
 	if cs2.City != nil {
 		t.Fatalf("resident_count=0 room must omit city block, got %+v", cs2.City)
 	}
@@ -176,13 +176,15 @@ func TestTrySettle_TicksCityAfterSettleMonth(t *testing.T) {
 		t.Fatalf("start: %v", e)
 	}
 	before := r.CitySnapshotView()
-	// 全员提交 → 提前月结路径。
+	// 全员提交 + 窗口到期 → 月结(2026-09-26 §批次25:「全员提交提前结算」
+	// 快路径已删除,月结固定发生在 NextMonthAt;测试把窗口推到过去模拟到期)。
 	r.mu.Lock()
 	for _, p := range r.World.Players {
 		if p != nil {
 			p.Submitted = true
 		}
 	}
+	r.NextMonthAt = time.Now().Add(-time.Second)
 	r.mu.Unlock()
 	if !r.trySettle(func(string) {}) {
 		t.Fatal("trySettle did not advance a month")
@@ -384,6 +386,8 @@ func TestCityVoice_EventEmittedAfterSettle(t *testing.T) {
 			p.Submitted = true
 		}
 	}
+	// 批次 25:月结固定走 NextMonthAt(提前结算快路径已删),推到过去模拟到期。
+	r.NextMonthAt = time.Now().Add(-time.Second)
 	r.mu.Unlock()
 	if !r.trySettle(func(string) {}) {
 		t.Fatal("settle failed")
@@ -467,8 +471,9 @@ func TestManager_ApplyRoomOptions_ResidentCount(t *testing.T) {
 
 // ── 2026-09-25 §LLM线路池配额:建房 llm_lines 房间级并发配额接线 ──
 
-// L=3 + 池 8:快照 Lines/Workers=3、PerMonth≥3(config 原值 2 被抬到 3 ——
-// 预算喂满并发,配额不为任务数空转)、agentSem 容量=min(3,8)=3(房间配额
+// L=3 + 池 8:快照 Lines/Workers=3、PerMonth=2(2026-09-26 §批次25:
+// llm_lines 仅保留并发语义 —— 旧「PerMonth=max(原值,L)」放大已删除,
+// 线路数是并发配额不是任务预算)、agentSem 容量=min(3,8)=3(房间配额
 // 只能收窄、不能放大全局预算)。L=0(未指定)零回归:Lines=池总量、
 // agentSem=池总量、Workers/PerMonth 维持 config。
 func TestManager_ApplyRoomOptions_LLMLines(t *testing.T) {
@@ -500,8 +505,9 @@ func TestManager_ApplyRoomOptions_LLMLines(t *testing.T) {
 
 	// L=3:配额收窄生效。
 	drv, semCap := start("room-lines3", &VirtualCityRoomOptions{ResidentCount: 500, LLMLines: 3})
-	if drv == nil || drv.Lines != 3 || drv.Workers != 3 || drv.PerMonth < 3 {
-		t.Fatalf("L=3 driver snapshot = %+v, want lines=3 workers=3 perMonth>=3", drv)
+	// 批次 25:PerMonth = min(config 2, 500-12)=2(llm_lines 不再放大预算)。
+	if drv == nil || drv.Lines != 3 || drv.Workers != 3 || drv.PerMonth != 2 {
+		t.Fatalf("L=3 driver snapshot = %+v, want lines=3 workers=3 perMonth=2", drv)
 	}
 	if semCap != 3 {
 		t.Fatalf("L=3 agentSem cap = %d, want 3 (min(L=3, pool=8))", semCap)

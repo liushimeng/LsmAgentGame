@@ -28,7 +28,17 @@ export interface VirtualCityDict {
   'virtualCity.startHint': string;
   'virtualCity.month': string;
   'virtualCity.age': string;
+  // deprecated（批次 25 §3.4 起顶栏主显示改为城市时钟）：仅 city_clock_ms
+  // 缺失（旧帧）时兜底 tooltip 使用，勿删（可能他处引用）。
   'virtualCity.runningTime': string;
+  // 城市时钟（60× 叙事层）：tooltip + 「M月D日 HH:MM（时段）」合成模板
+  // + 时段四键（6–9 清晨 / 9–17 白天 / 17–20 傍晚 / 20–6 夜晚）。
+  'virtualCity.cityClock': string;
+  'virtualCity.cityClockDisplay': string;
+  'virtualCity.cityClockPhaseDawn': string;
+  'virtualCity.cityClockPhaseDay': string;
+  'virtualCity.cityClockPhaseDusk': string;
+  'virtualCity.cityClockPhaseNight': string;
   'virtualCity.mySeat': string;
   'virtualCity.waiting': string;
   'virtualCity.spectating': string;

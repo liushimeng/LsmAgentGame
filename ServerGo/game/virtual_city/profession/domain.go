@@ -18,6 +18,10 @@ type DomainCard struct {
 	Card
 	// Domain 是 L1 行业域名(路径首段,形如 "A-农林牧渔");非 26 域来源为 ""。
 	Domain string
+	// SourcePath 卡来源相对路径(如 "A-农林牧渔/N9012/xxx.md";合成兜底卡为 "")。
+	// 2026-09-26 §批次25 persona 统一:座位卡池记住来源路径,N≤12 时档案锚定
+	// 直接复用同一批路径,使背景居民 i 的人物卡 = 座位 i 的人物卡。
+	SourcePath string
 }
 
 // domainOfPath 从卡池相对路径提取 L1 域名(首段)。合法 L1 域目录名形如
