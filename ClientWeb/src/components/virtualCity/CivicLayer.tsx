@@ -1,6 +1,7 @@
 /**
  * CivicLayer（18-AA · §1 总体架构 / §5.3 地面扩围）—— 市政层统一挂载点。
- *   在 VirtualCityCityMap 内挂载，调用 15 项 civic 设施 + IntersectionSignals + TreeV3。
+ *   在 VirtualCityCityMap 内挂载，调用 15 项 civic 设施（批次 24 起路口信号灯
+ *   移交 <TrafficSignals> 全局实例化，civic/IntersectionSignals.tsx 已删除）。
  *   地面扩围 WORLD_GROUND_SIZE = 120（02 §5.3）：原 WORLD_SIZE=80 不变，仅 Ground 平面放大。
  *   这里同时挂载扩围后的远景 Outskirts（r∈[38,58]）。
  */
@@ -18,7 +19,6 @@ import { CityHall } from './civic/CityHall';
 import { Outskirts } from './civic/Outskirts';
 import { ParkExtras } from './civic/ParkExtras';
 import { CanalExtras } from './civic/CanalExtras';
-import { IntersectionSignals } from './civic/IntersectionSignals';
 
 export function CivicLayer() {
   return (
@@ -37,7 +37,6 @@ export function CivicLayer() {
       <Outskirts />
       <ParkExtras />
       <CanalExtras />
-      <IntersectionSignals />
     </group>
   );
 }

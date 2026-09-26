@@ -19,6 +19,12 @@
  * 阶段 P 远景层：
  *   - FarBuildingSilhouette 由 AtmosphereLayer 注入，本层不再处理
  *
+ * 批次 24「真实马路与交通设施」（文档 24 §6）：
+ *   - 红绿灯渲染职责移出本层：trafficSignalsForCity()（双端 + 环岛对角布点、
+ *     A/B 相位组）交 VirtualCityCityMap → <TrafficSignals> 全局实例化 + 相位动画；
+ *   - 新增 roadsideBinsForCity()（主干道 ≈6u 两侧交替 + 公交站台旁）；
+ *   - busStopsForRoads 更名导出 busStopsForCity（站台旁垃圾桶布点复用）。
+ *
  * 总 mesh 预算核算（批次 20 InstancedMesh 改造后结构实测口径）：
  *   - 楼栋 ~240（DistrictBlock 持有，不变）
  *   - 行人 上限 110（V3 逐体动画 mixer，不实例化）→ ≤660 mesh
@@ -46,7 +52,6 @@ import { Vehicle } from './props/Vehicle';
 import { PedestrianV3, type PedestrianV3Props } from './props/PedestrianV3';
 import { Sign } from './props/Sign';
 import { RooftopAcc } from './props/RooftopAcc';
-import { TrafficLight } from './props/TrafficLight';
 import { BusStop } from './props/BusStop';
 import { SolarPanel } from './props/SolarPanel';
 import { VendorKiosk } from './props/VendorKiosk';
@@ -156,7 +161,6 @@ interface Layout {
   districtProps: DistrictProps[];
   roadVehicles: RoadVehicle[];
   roadTrees: RoadTree[];
-  trafficLights: Array<{ x: number; z: number; rotation: number }>;
   busStops: Array<{ x: number; z: number; rotation: number }>;
 }
 
@@ -509,9 +513,39 @@ function roadTreesForRoads(districts: VirtualCityDistrictDef[]): RoadTree[] {
   return trees;
 }
 
-/** 主干道路侧红绿灯。 */
-function trafficLightsForRoads(districts: VirtualCityDistrictDef[]): Layout['trafficLights'] {
-  const out: Layout['trafficLights'] = [];
+// ── 批次 24：红绿灯 / 路侧垃圾桶布点（文档 24 §6.2；取代 trafficLightsForRoads）──
+
+/** 红绿灯点位规格（TrafficSignals 组件渲染契约）。 */
+export interface TrafficSignalSpot {
+  x: number;
+  z: number;
+  /**
+   * 绕 Y 旋转（弧度）。语义 = TrafficSignals 组件 local +z（灯面法向）指向的
+   * 世界方向：布点层保证灯面朝向来车（行进方向的反方向）。
+   */
+  rotation: number;
+  /** 相位组：A = 周期 0s 起；B = +8s 偏移（16s 周期：绿 6 / 黄 2 / 红 8）。 */
+  phase: 'A' | 'B';
+}
+
+/** 环岛半径（与 RingRoad RING_RADIUS 同标尺；IntersectionSignals 退役后此处为布点权威）。 */
+const SIGNAL_RING_RADIUS = 5.6;
+/** 灯杆离受控车道中心线的侧向距离（主干道半宽 0.7 + 路缘余量，立于右侧路缘）。 */
+const SIGNAL_SIDE_OFFSET = 0.95;
+
+/**
+ * 全城红绿灯布点（批次 24 §6.2）：
+ *   - 主干道（len ≥ MAIN_ROAD_MIN_LEN）双端 t=0.90 / t=0.10 各 1 座，立于受控
+ *     车道行进方向右侧路缘（右行侧 = 行进向量 (dx,dz) 的 (dz,-dx)/len 侧，
+ *     与 Vehicle laneOffset 同一右行语义），灯面朝来车；
+ *   - 环岛路口：主干道放射线与 RING_RADIUS 圆交点对角 2 座（面向放射来车 = A 组、
+ *     面向环岛来车 = B 组；环道按逆时针切向）；替代原 IntersectionSignals 的
+ *     len<=12 硬编码（顺带修正其交点被镜像到环对侧的坐标 bug）；
+ *   - 相位组：道路索引奇偶定 A / B；环岛 2 座固定 A/B 对置。
+ */
+export function trafficSignalsForCity(districts: VirtualCityDistrictDef[]): TrafficSignalSpot[] {
+  const out: TrafficSignalSpot[] = [];
+  let mainIdx = 0;
   districts
     .filter((d) => d.id !== 'finance')
     .forEach((d) => {
@@ -520,21 +554,119 @@ function trafficLightsForRoads(districts: VirtualCityDistrictDef[]): Layout['tra
       const dz = -c.z;
       const len = Math.sqrt(dx * dx + dz * dz);
       if (len < MAIN_ROAD_MIN_LEN) return;
-      const t = 0.12;
-      const nx = -dz / len;
-      const nz = dx / len;
-      const sideOffset = 1.4 / 2 + 0.35;
+      const phase: TrafficSignalSpot['phase'] = mainIdx % 2 === 0 ? 'A' : 'B';
+      mainIdx++;
+      // 行进方向单位向量（district → origin，正向车）；右行侧 = (uz, -ux)
+      const ux = dx / len;
+      const uz = dz / len;
+
+      // ① 原点端（t=0.90）：控制正向车（district→origin），杆在正向车右行侧，灯面朝 -u
       out.push({
-        x: c.x + dx * t + nx * sideOffset,
-        z: c.z + dz * t + nz * sideOffset,
-        rotation: Math.atan2(dx, dz) + Math.PI,
+        x: c.x + dx * 0.9 + uz * SIGNAL_SIDE_OFFSET,
+        z: c.z + dz * 0.9 - ux * SIGNAL_SIDE_OFFSET,
+        rotation: Math.atan2(-ux, -uz),
+        phase,
+      });
+      // ② 城区端（t=0.10）：控制反向车（origin→district），杆在反向车右行侧 = (−uz, ux)，灯面朝 +u
+      out.push({
+        x: c.x + dx * 0.1 - uz * SIGNAL_SIDE_OFFSET,
+        z: c.z + dz * 0.1 + ux * SIGNAL_SIDE_OFFSET,
+        rotation: Math.atan2(ux, uz),
+        phase,
+      });
+
+      // ③ 环岛路口对角 2 座：交点 = 原点向城区方向 RING_RADIUS 处（径向外向 o = (ox,oz)）
+      const ox = -ux; // = c.x / len
+      const oz = -uz; // = c.z / len
+      const jx = ox * SIGNAL_RING_RADIUS;
+      const jz = oz * SIGNAL_RING_RADIUS;
+      // 环道逆时针切向 t = (−oz, ox)；放射正向车右行侧 = (uz, −ux) = −t
+      const tx = -oz;
+      const tz = ox;
+      // 面向放射来车（A 组）：位于放射正向车右行侧（junction − t·off），灯面朝径向外 o
+      out.push({
+        x: jx - tx * SIGNAL_SIDE_OFFSET,
+        z: jz - tz * SIGNAL_SIDE_OFFSET,
+        rotation: Math.atan2(ox, oz),
+        phase: 'A',
+      });
+      // 面向环岛来车（B 组）：位于环道车右行侧（junction + o·off），灯面朝 −t
+      out.push({
+        x: jx + ox * SIGNAL_SIDE_OFFSET,
+        z: jz + oz * SIGNAL_SIDE_OFFSET,
+        rotation: Math.atan2(-tx, -tz),
+        phase: 'B',
       });
     });
   return out;
 }
 
-/** 主干道路侧公交站台。 */
-function busStopsForRoads(districts: VirtualCityDistrictDef[]): Layout['busStops'] {
+/** 路侧垃圾桶点位规格（RoadsideBins 组件渲染契约）。 */
+export interface RoadsideBinSpot {
+  x: number;
+  z: number;
+  rotation: number;
+  /** 分类双色：green = 厨余绿 / blue = 可回收蓝（TrashCan_Green / TrashCan_Blue）。 */
+  variant: 'green' | 'blue';
+}
+
+/** 路侧垃圾桶间距（沿主干道 ≈6u 一对，两侧交替 → 单侧 ≈12u）。 */
+const BIN_SPACING = 6;
+/** 垃圾桶横向偏移（主干道半宽 0.7 + 0.16，人行道外缘附近）。 */
+const BIN_SIDE_OFFSET = 1.4 / 2 + 0.16;
+
+/**
+ * 全城路侧垃圾桶布点（批次 24 §5/§6）：
+ *   - 主干道每 ≈6u 沿线、道路两侧交替（sideOffset = roadWidth/2 + 0.16），
+ *     t 起点与路灯（2.5u 网格、起点 2.5）错开半格（起点 3.75）；
+ *   - 每个公交站台旁（沿路向 +0.45）追加 1 个；
+ *   - variant 按布点顺序 green / blue 交替（确定性，无随机）。
+ */
+export function roadsideBinsForCity(districts: VirtualCityDistrictDef[]): RoadsideBinSpot[] {
+  const out: RoadsideBinSpot[] = [];
+  let seq = 0;
+  const nextVariant = (): RoadsideBinSpot['variant'] => (seq++ % 2 === 0 ? 'green' : 'blue');
+  districts
+    .filter((d) => d.id !== 'finance')
+    .forEach((d) => {
+      const c = districtCenter(d.id);
+      const dx = -c.x;
+      const dz = -c.z;
+      const len = Math.sqrt(dx * dx + dz * dz);
+      if (len < MAIN_ROAD_MIN_LEN) return;
+      const ux = dx / len;
+      const uz = dz / len;
+      const rx = uz; // 右行侧单位向量
+      const rz = -ux;
+      // 沿线：s = 3.75 + i·6（与路灯 2.5 网格错开 1.25 = 半格）；两端各留 ≥3u 给路口标线
+      const count = Math.max(0, Math.floor((len - 3 - 3.75) / BIN_SPACING) + 1);
+      for (let i = 0; i < count; i++) {
+        const s = 3.75 + i * BIN_SPACING;
+        if (s > len - 3) break;
+        const side = i % 2 === 0 ? 1 : -1; // 两侧交替
+        out.push({
+          x: c.x + ux * s + rx * BIN_SIDE_OFFSET * side,
+          z: c.z + uz * s + rz * BIN_SIDE_OFFSET * side,
+          rotation: Math.atan2(rx * side, rz * side),
+          variant: nextVariant(),
+        });
+      }
+    });
+  // 每个公交站台旁追加 1 个（站台 rotation = atan2(dx,dz)，可还原路向 u=(sin,cos)；
+  // 桶沿路向 +0.45 错开雨棚，站台本身只布在主干道上，无重复计入问题）
+  for (const bs of busStopsForCity(districts)) {
+    out.push({
+      x: bs.x + Math.sin(bs.rotation) * 0.45,
+      z: bs.z + Math.cos(bs.rotation) * 0.45,
+      rotation: bs.rotation,
+      variant: nextVariant(),
+    });
+  }
+  return out;
+}
+
+/** 主干道路侧公交站台（批次 24 起导出：roadsideBinsForCity 站台旁布桶复用）。 */
+export function busStopsForCity(districts: VirtualCityDistrictDef[]): Layout['busStops'] {
   const out: Layout['busStops'] = [];
   districts
     .filter((d) => d.id !== 'finance')
@@ -586,9 +718,8 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
     capPedestrians(districtProps);
     const roadVehicles = vehiclesForRoads(districts);
     const roadTrees = roadTreesForRoads(districts);
-    const trafficLights = trafficLightsForRoads(districts);
-    const busStops = busStopsForRoads(districts);
-    return { districtProps, roadVehicles, roadTrees, trafficLights, busStops };
+    const busStops = busStopsForCity(districts);
+    return { districtProps, roadVehicles, roadTrees, busStops };
   }, [districts]);
 
   // 批次 20 §3.3：区内树 + 行道树合并单一 InstancedMesh 集合（3 draw call）。
@@ -676,10 +807,8 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
         />
       ))}
 
-      {/* 主干道红绿灯 */}
-      {layout.trafficLights.map((tl, i) => (
-        <TrafficLight key={`tl-${i}`} x={tl.x} z={tl.z} rotation={tl.rotation} />
-      ))}
+      {/* 主干道红绿灯：批次 24 起移至 <TrafficSignals>（VirtualCityCityMap
+          RoadsLayer 汇总 trafficSignalsForCity 全局实例化渲染，含相位动画） */}
 
       {/* 主干道公交站台 */}
       {layout.busStops.map((bs, i) => (

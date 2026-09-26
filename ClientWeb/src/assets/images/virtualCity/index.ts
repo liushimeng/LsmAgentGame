@@ -16,8 +16,9 @@
  *     128×128 透明（统计局 CPI 八大类消费品图标，P1 真实经济循环引擎）
  *   facades/<districtId>_{base,mid}.png                  512×1024 透明（P1-B 楼宇贴图）
  *   roofs/<districtId>.png                               512×512  透明
- *   streets/{asphalt_main,asphalt_side,sidewalk_main,sidewalk_side,crosswalk,centerline}.png
- *     街道铺装贴图（P1-A 道路重做）
+ *   streets/{asphalt_main,asphalt_side,road_main,road_side,sidewalk_main,sidewalk_side,
+ *            crosswalk,stopline,arrow_straight,centerline}.png
+ *     街道铺装贴图（P1-A 道路重做；批次 24 真实马路升级：标线烘焙路面 + 停止线/箭头）
  *   ground/{grass_tile,plaza_tile,water_tile}.png           512×512 可平铺（14-3D渲染深化地表环境）
  *   props/{streetlamp,tree,vehicle,pedestrian,sign,rooftop}/<variant>_<category>.png
  *     街景道具贴图（P1-C 街道道具层）
@@ -106,13 +107,22 @@ export function districtRoofUrl(districtId: string): string {
   return roofImgs[`./roofs/${districtTextureStem(districtId)}.png`] ?? '';
 }
 
-/** 街道铺装类型字面量（与 python-generate-image-tool 子模块街道铺装常量对齐）。 */
+/**
+ * 街道铺装类型字面量（与 python-generate-image-tool 子模块街道铺装常量对齐）。
+ * 批次 24 新增：road_main / road_side（标线烘焙进整幅路面）/ stopline / arrow_straight。
+ * centerline 自批次 24 起 Road 改用 road_main 烘焙标线，前端已无运行时引用
+ * （类型成员与 png 文件保留，历史资产不删）。
+ */
 export type StreetTileName =
   | 'asphalt_main'
   | 'asphalt_side'
+  | 'road_main'
+  | 'road_side'
   | 'sidewalk_main'
   | 'sidewalk_side'
   | 'crosswalk'
+  | 'stopline'
+  | 'arrow_straight'
   | 'centerline';
 
 /**

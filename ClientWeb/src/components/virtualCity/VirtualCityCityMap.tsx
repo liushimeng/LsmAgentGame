@@ -39,6 +39,13 @@
  *     （WASD + 鼠标拖拽环视，眼高 1.7m），与 OrbitControls 互斥挂载、切换时衔接相机位姿。
  *   - ?debug=1 时挂 window.__cityRenderInfo = renderer.info（经 EngineCanvas 的
  *     debugGlobalName 保持原全局名，CDP 验收工具链兼容）。
+ *
+ * 批次 24「真实马路与交通设施」（文档 24 §6）：
+ *   - RoadsLayer 追加 <TrafficSignals>（trafficSignalsForCity 布点：主干道双端 +
+ *     环岛对角，全城实例化 ≈6 draw call + 16s 相位动画）与 <RoadsideBins>
+ *     （roadsideBinsForCity 布点：主干道两侧 + 公交站台旁，GLB 实例化）；
+ *   - 旧 <TrafficLight>（StreetPropsLayer）与 <IntersectionSignals>（CivicLayer）
+ *     渲染移除，两文件删除。
  */
 
 import { useMemo, useRef, useState } from 'react';
@@ -59,7 +66,13 @@ import { CityVoiceBubbleLayer } from './CityVoiceBubbleLayer';
 import { useVirtualCityStore } from '@/store/virtualCity.store';
 import { Road, lampsForRoad } from './Road';
 import { StreetLightsInstanced } from './props/StreetLightsInstanced';
-import { StreetPropsLayer } from './StreetPropsLayer';
+import {
+  StreetPropsLayer,
+  trafficSignalsForCity,
+  roadsideBinsForCity,
+} from './StreetPropsLayer';
+import { TrafficSignals } from './props/TrafficSignals';
+import { RoadsideBins } from './props/RoadsideBins';
 import { WaterPlane } from './props/WaterPlane';
 import { WaterMist } from './props/WaterMist';
 import { AtmosphereLayer } from './AtmosphereLayer';
@@ -182,7 +195,7 @@ function Ground() {
  * （批次 20 §3.2 派生化：80 时代写死 12 → W×0.15）。
  */
 function RoadsLayer() {
-  const { roads, lamps } = useMemo(() => {
+  const { roads, lamps, signals, bins } = useMemo(() => {
     const list = VIRTUAL_CITY_DISTRICTS
       .filter((d) => d.id !== 'finance')
       .map((d) => {
@@ -200,7 +213,11 @@ function RoadsLayer() {
     const rs = list.map((r) => ({ ...r, kind: (r.len > MAIN_ROAD_MIN_LEN ? 'main' : 'side') as 'main' | 'side' }));
     // 批次 20 §3.3：全部道路的路灯点位汇总 → 全局 InstancedMesh（3 draw call）
     const lampList = rs.flatMap((r) => lampsForRoad(r.from, r.to, r.kind));
-    return { roads: rs, lamps: lampList };
+    // 批次 24：红绿灯（双端 + 环岛对角，A/B 相位组）与路侧垃圾桶布点汇总，
+    // 交 <TrafficSignals> / <RoadsideBins> 全局实例化渲染（风格照 lampsForRoad）。
+    const signalList = trafficSignalsForCity(VIRTUAL_CITY_DISTRICTS);
+    const binList = roadsideBinsForCity(VIRTUAL_CITY_DISTRICTS);
+    return { roads: rs, lamps: lampList, signals: signalList, bins: binList };
   }, []);
 
   return (
@@ -214,6 +231,10 @@ function RoadsLayer() {
         />
       ))}
       <StreetLightsInstanced lamps={lamps} />
+      {/* 批次 24：全城红绿灯（≈6 draw call，16s 相位：绿 6/黄 2/红 8，A/B 组错半周期） */}
+      <TrafficSignals signals={signals} />
+      {/* 批次 24：全城路侧垃圾桶（GLB 实例化 2~6 draw call；缺失回退程序化桶密度减半） */}
+      <RoadsideBins bins={bins} />
     </>
   );
 }
