@@ -46,6 +46,12 @@
  *     （roadsideBinsForCity 布点：主干道两侧 + 公交站台旁，GLB 实例化）；
  *   - 旧 <TrafficLight>（StreetPropsLayer）与 <IntersectionSignals>（CivicLayer）
  *     渲染移除，两文件删除。
+ *
+ * 批次 26「城市坐标系统与四缘环境带」（lag_docs/虚拟城市/已实现/26-坐标系统与城市边缘环境/01-现状分析与方案设计.md）：
+ *   - AtmosphereLayer 之后注入 <CityEdgeLayer />：北雪山 / 西沙漠 / 东森林 /
+ *     南海洋+南港 四缘真实环境带（z/x ∈ ±[62,80] 带域，海面延至 z=150）；
+ *   - 罗盘契约确立：北 = −Z / 南 = +Z / 东 = +X / 西 = −X（小地图固定朝上=北）；
+ *   - 四缘 FarBuildingSilhouette 灰盒剪影移除（真实环境带取代），文件删除。
  */
 
 import { useMemo, useRef, useState } from 'react';
@@ -76,6 +82,7 @@ import { RoadsideBins } from './props/RoadsideBins';
 import { WaterPlane } from './props/WaterPlane';
 import { WaterMist } from './props/WaterMist';
 import { AtmosphereLayer } from './AtmosphereLayer';
+import { CityEdgeLayer } from './edge/CityEdgeLayer';
 import { RingRoad } from './RingRoad';
 import { CanalBridges } from './CanalBridge';
 import { LandmarksLayer } from './LandmarksLayer';
@@ -399,8 +406,10 @@ export function VirtualCityCityMap({
         <Ground />
         {/* 14-3D渲染深化：城市水系（运河 + 港池 + 岸草皮） */}
         <WaterLayer />
-        {/* 15-3D渲染深化：氛围层（远景剪影 + 公园落叶 Sparkles） */}
+        {/* 15-3D渲染深化：氛围层（公园落叶 Sparkles；批次 26 起远景剪影移除） */}
         <AtmosphereLayer />
+        {/* 批次 26：四缘环境带（北雪山 / 西沙漠 / 东森林 / 南海洋+南港，方案 §2.1） */}
+        <CityEdgeLayer />
         {/* 16 · 阶段 U：天空云层（6 团 Billboard 云，慢速漂移；y=60-80 在相机
             轨道最高点之上，任何缩放都不会遮盖城市——视觉验收三轮回归结论） */}
         <CloudLayer />

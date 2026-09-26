@@ -17,7 +17,8 @@
  *   - 新增 6 种家具：报刊亭 / 自行车 / 垃圾箱 / 电话亭 / 邮筒 / 停车牌
  *
  * 阶段 P 远景层：
- *   - FarBuildingSilhouette 由 AtmosphereLayer 注入，本层不再处理
+ *   - 远景剪影原由 AtmosphereLayer 注入；批次 26 起四缘改由 edge/CityEdgeLayer
+ *     真实环境带（雪山/沙漠/森林/海洋）承担，本层始终不处理远景
  *
  * 批次 24「真实马路与交通设施」（文档 24 §6）：
  *   - 红绿灯渲染职责移出本层：trafficSignalsForCity()（双端 + 环岛对角布点、

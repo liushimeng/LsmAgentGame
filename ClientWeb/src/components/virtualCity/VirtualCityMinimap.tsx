@@ -208,6 +208,11 @@ export function VirtualCityMinimap({ gameState, viewRef, selectedDistrict, onSel
         onMouseMove={handleMouseMove}
         aria-label={t('virtualCity.minimap.aria' as TKey)}
       />
+      {/* 批次 26：静态罗盘角标（小地图固定朝向 上=北=−Z，方案 §1.1 罗盘契约）。
+          置于关闭钮左侧避免遮挡；样式 §26：显式白字 + ≥45% 不透明底。 */}
+      <span className="virtualCity-minimap__compass" aria-hidden="true" title="北（上）">
+        北↑
+      </span>
       <button
         type="button"
         className="virtualCity-minimap__close"

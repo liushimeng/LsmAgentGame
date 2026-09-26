@@ -1,12 +1,17 @@
 /**
  * 外围腹地（18-AA · §5.2 Outskirts）
- *   农田 8 块 + 丘陵 4 个 + 环城高速 + 风机 2 座。
+ *   农田 4 块（批次 26 起仅四角象限）+ 丘陵 4 个 + 环城高速 + 风机 2 座。
  *   批次 20（文档 1 §3.4）：半径带整体 ×1.33 → **r∈[50,77]**，与外圈新区
  *   底板（最远 |x|=50）留 ≥6 单位缓冲（WORLD_GROUND_SIZE=160 半幅 80 内）：
  *     农田 6×4.5 @ r∈[56,73]（= 旧 42..55 ×1.33）
  *     丘陵 r=66（旧 50），sphereGeometry r=u(80) + scale[1,0.3,1] + position.y=u(-9)
  *     环城高速 r=58（旧 44）、32 段（旧 24，等弧长加密）
  *     风机 @ r=64（旧 48）
+ *   批次 26（26-坐标系统与城市边缘环境 · 方案 §2.4）：农田 8 块均布 →
+ *     **仅四角象限 4 块**（角 45°±15° 抖动、r ∈ [52,58]），保证农田边缘
+ *     |x|,|z| ≤ 58+3 = 61 不伸进四缘环境带（|x| 或 |z| > 62 为雪山/沙漠/
+ *     森林/海洋带域）；丘陵 / 风机 / 环城高速不动（45° 对角 r=64~66 不与
+ *     边缘带冲突）。
  */
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
@@ -20,12 +25,15 @@ const ROAD_COLOR = '#1f2733';
 const WHITE = '#e8e3dc';
 
 export function Outskirts() {
-  // 农田 8 块：8 个等角槽（每个弧长 2π/8），中心角 0..7 × 45° → 起始角加 22.5°
+  // 批次 26：农田 8 块均布 → 仅四角象限 4 块（角 45°+k·90° ±15° 抖动、
+  // r ∈ [52,58]，确定性 mulberry32），保证农田（6×4.5）边缘不越过
+  // |x|,|z| ≤ 61，不伸进四缘环境带（>62）。
   const fields = useMemo(() => {
+    const rnd = mulberry32(hashStr('outskirts:fields26'));
     const out: Array<{ cx: number; cz: number; rot: number; color: string; idx: number }> = [];
-    for (let i = 0; i < 8; i++) {
-      const baseAngle = (i * Math.PI * 2) / 8 + Math.PI / 8; // 22.5° 偏移避开正交
-      const r = (42 + ((i * 7) % 14)) * 1.33; // 批次 20 ×1.33：56..73 等间距扰动
+    for (let i = 0; i < 4; i++) {
+      const baseAngle = Math.PI / 4 + (i * Math.PI) / 2 + (rnd() - 0.5) * (Math.PI / 6); // 45°±15°
+      const r = 52 + rnd() * 6; // r ∈ [52,58]
       out.push({
         cx: Math.cos(baseAngle) * r,
         cz: Math.sin(baseAngle) * r,

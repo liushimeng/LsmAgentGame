@@ -282,6 +282,24 @@
 .virtualCity-minimap__close:hover {
   background: rgba(10, 14, 20, 0.9);
 }
+/* 批次 26：小地图静态罗盘角标「北↑」（固定朝向 上=北=−Z，方案 26/01 §1.1）。
+   §26 对比度：显式白字 #fff + rgba(10,14,20,0.72) 底（对合成底 ≈ 15:1 ≥ 4.5:1）；
+   置于关闭钮左侧（right:32px）避免遮挡。 */
+.virtualCity-minimap__compass {
+  position: absolute;
+  top: 4px;
+  right: 32px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(10, 14, 20, 0.72);
+  color: #ffffff;
+  border: 1px solid #3a414c;
+  font-size: 12px;
+  line-height: 22px;
+  pointer-events: none; /* 纯指示，不挡 canvas 点击命中 */
+  user-select: none;
+}
 .virtualCity-minimap__pill {
   position: absolute;
   top: 12px;

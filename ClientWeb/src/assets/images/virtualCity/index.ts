@@ -19,7 +19,9 @@
  *   streets/{asphalt_main,asphalt_side,road_main,road_side,sidewalk_main,sidewalk_side,
  *            crosswalk,stopline,arrow_straight,centerline}.png
  *     街道铺装贴图（P1-A 道路重做；批次 24 真实马路升级：标线烘焙路面 + 停止线/箭头）
- *   ground/{grass_tile,plaza_tile,water_tile}.png           512×512 可平铺（14-3D渲染深化地表环境）
+ *   ground/{grass_tile,plaza_tile,water_tile,urban_base}.png      512×512 可平铺（14-3D渲染深化地表环境）
+ *   ground/{sand_tile,rock_snow_tile,forest_floor_tile,ocean_tile}.png
+ *     1024×1024 无缝平铺（批次 26 四缘环境带：西沙漠/北雪山山脚/东森林/南海洋）
  *   props/{streetlamp,tree,vehicle,pedestrian,sign,rooftop}/<variant>_<category>.png
  *     街景道具贴图（P1-C 街道道具层）
  */
@@ -133,8 +135,18 @@ export function streetTileUrl(name: StreetTileName): string {
   return streetImgs[`./streets/${name}.png`] ?? '';
 }
 
-/** 地表环境贴图字面量（与 3d_script/procedural_city_textures.py::ground 对齐，14-3D渲染深化）。 */
-export type GroundTileName = 'grass_tile' | 'plaza_tile' | 'water_tile' | 'urban_base';
+/** 地表环境贴图字面量（与 3d_script/procedural_city_textures.py::ground 对齐，14-3D渲染深化；
+ *  批次 26 追加 sand_tile / rock_snow_tile / forest_floor_tile / ocean_tile，
+ *  与 python-generate-image-tool/generate_virtual_city_edge_assets.py::TILES 对齐）。 */
+export type GroundTileName =
+  | 'grass_tile'
+  | 'plaza_tile'
+  | 'water_tile'
+  | 'urban_base'
+  | 'sand_tile'
+  | 'rock_snow_tile'
+  | 'forest_floor_tile'
+  | 'ocean_tile';
 
 /**
  * 地表环境贴图 URL（缺失 = ''，组件回退纯色：grass #3f7a3a / plaza #9aa1ab / water #1a3a52）。
