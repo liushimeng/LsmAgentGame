@@ -20,6 +20,7 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { groundTileUrl, pbrNormalUrl } from '@/assets/images/virtualCity';
 import { useSharedPBR } from '@/engine3d';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const REDUCED_MOTION =
   typeof window !== 'undefined' &&
@@ -44,9 +45,12 @@ interface Props {
   d: number;
   /** 绕 Y 旋转（默认 0）。 */
   rotation?: number;
+  /** 批次 28 B2：catalog id（water.canal / water.harbour，默认运河）。 */
+  infoId?: string;
 }
 
-export function WaterPlane({ x, z, w, d, rotation = 0 }: Props) {
+export function WaterPlane({ x, z, w, d, rotation = 0, infoId = 'water.canal' }: Props) {
+  const info = useObjectInfoProps(infoId, { anchorY: 0.4 });
   // 18-X PBR：颜色贴图 + 法线（synth/water 无粗糙度图）。wrap/repeat 共用。
   const shared = useSharedPBR(
     groundTileUrl('water_tile'),
@@ -119,7 +123,7 @@ export function WaterPlane({ x, z, w, d, rotation = 0 }: Props) {
   }
 
   return (
-    <group position={[x, 0, z]} rotation={[0, rotation, 0]}>
+    <group {...info} position={[x, 0, z]} rotation={[0, rotation, 0]}>
       {/* 主水面 y=0.028（高于地面 0.02 / plaza 0.025，低于 curb 顶） */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.028, 0]} receiveShadow>
         <planeGeometry args={[w, d]} />

@@ -10,6 +10,7 @@
 import { u } from '../cityScale';
 import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const STONE = '#a8a4a0';
 const STONE_DARK = '#7a7a76';
@@ -33,14 +34,22 @@ export const CITY_HALL_BUBBLE_ANCHOR: [number, number, number] = [
 /** 全局开关：测试/回滚用，缺省 false = 用 .glb */
 export function CityHall() {
   const url = modelUrl('civic', 'city_hall');
+  // 批次 28 B2：市政厅信息交互（根组包住 GLB/fallback 双路径，零几何改动）。
+  const info = useObjectInfoProps('civic.city-hall', { anchorY: 5 });
   // url 缺失或全局开关关闭 → 直接渲染原程序化几何
   if (!url || !blenderEnabled()) {
-    return <CityHallFallback />;
+    return (
+      <group {...info}>
+        <CityHallFallback />
+      </group>
+    );
   }
   return (
-    <Model url={url} position={[CITY_HALL_POSITION.x, 0, CITY_HALL_POSITION.z]} castShadow receiveShadow>
-      <CityHallFallback />
-    </Model>
+    <group {...info}>
+      <Model url={url} position={[CITY_HALL_POSITION.x, 0, CITY_HALL_POSITION.z]} castShadow receiveShadow>
+        <CityHallFallback />
+      </Model>
+    </group>
   );
 }
 

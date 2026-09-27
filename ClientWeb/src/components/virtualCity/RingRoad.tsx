@@ -14,6 +14,7 @@ import { useMemo } from 'react';
 import { streetTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/virtualCity';
 import { districtCenter, VIRTUAL_CITY_DISTRICTS } from '@/types/virtualCity';
 import { useSharedTexture, useSharedPBR, withPBR } from '@/engine3d';
+import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
 
 /** 环路半径（世界单位；CBD 8×8 底板半宽 4.05 + curb，环内缘 5.1 不压底板）。 */
@@ -84,9 +85,11 @@ export function RingRoad({ fallbackColor = '#232b38' }: Props) {
       )}
     />
   );
+  // 批次 28 B2：环路信息交互。
+  const info = useObjectInfoProps('road.ring', { anchorY: 0.3 });
 
   return (
-    <group>
+    <group {...info}>
       {segs.map((s) => (
         <group key={`ring-seg-${s.key}`} position={[s.cx, 0, s.cz]} rotation={[0, s.rotY, 0]}>
           {/* 路面（plane X=宽，Y=长 → rotation.x=-π/2 后长沿局部 Z） */}

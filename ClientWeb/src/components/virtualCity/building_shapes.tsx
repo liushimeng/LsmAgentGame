@@ -1,5 +1,6 @@
 /**
- * building_shapes — 建筑体块形态系统（13-3D城市渲染优化 · 阶段 B + 18-3D城市PBR与真实城市冲刺 · 阶段 X/Y）：
+ * building_shapes — 建筑体块形态系统（13-3D城市渲染优化 · 阶段 B + 18 · 阶段 X/Y +
+ * 批次 28 二轮 · 楼栋按材质类合并）：
  *
  * 体块形态（13 阶段 B）：
  *   - tower    高层塔楼：裙楼(podium) + 塔身(body) + 顶部收分(crown)
@@ -8,21 +9,23 @@
  *   - shed     工业厂房：大跨 box + 山墙三角 + 烟囱
  *   - pavilion 公园景观低层：平顶小品 + 大挑檐
  *
- * 18 阶段 X：ShapeProps 追加 pbrBase / pbrMid / roofPbr，BoxFaces 透传 pbrA/pbrB/pbrTop，
- * sideMatProps / topMatProps spread matProps 并实现 withPBR（无 roughnessMap 保留硬编码，
- * 有 roughnessMap 不传 roughness 由贴图全权决定）。
- *
- * 18 阶段 Y：导出 mergeBoxes + 8 个构造件（ParapetRing / EntranceLobby / CornerQuoins /
- * AcUnits / LiftRoom / PodiumRail / SawtoothRoof / ShedWindowBands），BalconyLines 改为
- * 四面合并成 1 mesh；四种体块按 §3.3 表格追加构造件。
+ * 批次 28 二轮（G1 DC 攻坚）：每栋楼从 tower≈18 / slab≈13 / house≈6 / shed≈11 /
+ * pavilion≈2 mesh 收敛为 **2 个 mesh**（几何全等合并，engine3d/geoMerge）：
+ *   1) 墙体 mesh（多 group）：侧A/侧B/顶面/坡屋顶/锯齿齿面/楼冠/玻璃/发光件
+ *      按材质索引分桶拼接 —— 三角形、UV、法向与原逐件渲染逐位一致，
+ *      DC = 材质组数（tower 7-8 / slab 5 / house 5 / shed 4-5 / pavilion 2）。
+ *   2) 点缀 mesh（单材质 + 顶点色）：女儿墙/角柱/空调外机/电梯机房+擦窗机轨道/
+ *      裙楼栏杆/门框/雨棚/阳台线/屋顶设备/檐口/卷帘门/高窗带/烟囱/挑檐等纯色件
+ *      合并为 1 mesh —— 部件颜色经顶点色 100% 保留；粗糙度/金属度统一为
+ *      ACCENT_ROUGH/ACCENT_METAL（原 0.05–0.95 区间 → 0.7/0.25，视觉取舍见
+ *      批次 28 报告），synth concrete/brick 法线贴图随之取消（城市尺度不可辨）。
+ * 不跨楼合并（逐楼 hover 由 BuildingMesh 根 group 的 useObjectInfoProps 保留）。
  *
  * 契约：lag_docs/虚拟城市/已实现/13-3D城市渲染优化/02-架构设计-WebGL渲染管线优化-v1.md §2、
- *       lag_docs/虚拟城市/已实现/18-3D城市PBR材质与真实城市冲刺/02-架构设计-PBR材质管线与建筑几何深化-v1.md
+ *       lag_docs/虚拟城市/已实现/18-3D城市PBR材质与真实城市冲刺/02-架构设计-PBR材质管线与建筑几何深化-v1.md、
+ *       lag_docs/虚拟城市/已实现/28-3D性能优化与物件信息交互/01-方案设计-v1.md §4 A2
  *
  * 技术要点：
- *   - 每个体块用 boxGeometry + 6 面材质数组（three BoxGeometry 面序稳定：
- *     [+X, -X, +Y, -Y, +Z, -Z]），R3F 以 attach="material-N" 声明式挂载，
- *     替代旧版「每面独立 plane mesh」（mesh 数从 5×体块数 降到 1×体块数）。
  *   - 立面贴图分配：+X/-X 用 facadeBase（侧 A）、+Z/-Z 用 facadeMid（侧 B），
  *     塔楼裙楼固定 facadeBase、塔身固定 facadeMid（契约 §2.2）。
  *   - emissive 统一暖窗光 #ffd9a0；有贴图时 emissiveMap 复用立面贴图
@@ -42,6 +45,15 @@ import {
   useSynthPBR,
   withPBR,
 } from './cityPbr';
+import {
+  type GroupedMergePart,
+  type MergePart,
+  boxFaces,
+  boxPart,
+  cylPart,
+  mergeGrouped,
+  mergeParts,
+} from '@/engine3d';
 
 // ── Archetype 分派（契约 §2.1 表格，勿随意改派）────────────────────
 
@@ -75,6 +87,18 @@ export const EMISSIVE_WINDOW = '#ffd9a0';
 // ── 14-3D城市渲染深化 · 阶段 I：临街底商 + 广告牌（契约 02 §4）──────
 const AWNING_COLOR = '#8a5a44';   // 雨棚暖木色
 const BILLBOARD_POLE = '#5a6270'; // 广告牌支架
+const FRAME_COLOR = '#3a414c';    // 门框/轨道/栏杆深金属
+const AWNING_BLUE = '#4a5568';    // 门厅雨棚
+const AC_COLOR = '#c5c8ce';       // 空调外机
+const LIFT_COLOR = '#6b7280';     // 电梯机房
+const CONCRETE_COLOR = '#8a8f98'; // 女儿墙
+const QUOIN_COLOR = '#9a8f84';    // 角柱
+const BALCONY_COLOR = '#2a2e36';  // 阳台线 / 卷帘门横纹
+const SHUTTER_COLOR = '#3a414c';  // 卷帘门主体
+const WINBAND_COLOR = '#7fa8c4';  // 厂房高窗带
+const ROOFTOP_TANK = '#a8a4a0';   // 屋顶水箱
+const ROOFTOP_VENT = '#8a8d96';   // 屋顶通风管
+const ROOFTOP_SKY = '#5a6270';    // 屋顶天窗小盒
 
 const CROWN_COLOR = '#3a4250';   // 塔楼收分金属
 const CORNICE_COLOR = '#242a35'; // 板楼檐口
@@ -82,7 +106,15 @@ const ROOF_TILE_COLOR = '#8a4b3a'; // 坡屋顶红瓦兜底
 const GABLE_COLOR = '#6b7280';   // 厂房山墙/烟囱
 const EAVE_COLOR = '#3f3a33';    // 公园挑檐木色
 
-// ── 18 阶段 X · ShapeProps（基类新增 pbrBase / pbrMid / roofPbr）────────
+/** 点缀类统一材质参数（批次 28 二轮视觉取舍：原 0.05–0.95 区间取中）。 */
+const ACCENT_ROUGH = 0.7;
+const ACCENT_METAL = 0.25;
+
+/** 玻璃类参数（门厅玻璃门 / 锯齿顶采光带；二者不同楼型不共存）。 */
+const GLASS_DOOR = { color: '#2a4e6e', opacity: 0.7, roughness: 0.1, metalness: 0.3 };
+const GLASS_SKY = { color: '#bcd9ea', opacity: 0.55, roughness: 0.2, metalness: 0.1 };
+
+// ── 18 · 阶段 X：ShapeProps（基类新增 pbrBase / pbrMid / roofPbr）────────
 
 export interface ShapeProps {
   /** 占地宽 / 深（世界单位）。 */
@@ -132,7 +164,7 @@ function hashStr(s: string): number {
   return h >>> 0;
 }
 
-// ── 6 面材质声明（boxGeometry 面序 [+X,-X,+Y,-Y,+Z,-Z]）─────────────
+// ── 6 面材质声明（面序 [+X,-X,+Y,-Y,+Z,-Z]；与原 BoxSolid 完全同源）─────────
 
 function sideMatProps(
   tex: THREE.Texture | null,
@@ -174,34 +206,136 @@ function topMatProps(
   return withPBR(base, pbr ?? { map: null, normalMap: null, roughnessMap: null, matProps: {} });
 }
 
-/**
- * box 六面材质：侧 A（±X）/ 侧 B（±Z）/ 顶（+Y）/ 底（-Y，不可见但材质完整）。
- * 必须作为 <mesh> 的直接子节点（R3F attach 到父 mesh）。
- *
- * 18-X：pbrA / pbrB / pbrTop 各自传入对应立面的 PBR；底面无 PBR（降级硬编码 roughness 0.9）。
- */
-function BoxFaces({
-  sideA, sideB, top, fallback, emissive, tint, pbrA, pbrB, pbrTop,
-}: {
-  sideA: THREE.Texture | null;
-  sideB: THREE.Texture | null;
-  top: THREE.Texture | null;
-  fallback: string;
+// ── 批次 28 二轮：墙体材质规格 → 材质数组 ──────────────────────
+
+/** 墙体 mesh 的材质规格（每 archetype 固定顺序；部件按 mat 索引挂 group）。 */
+type WallMatSpec =
+  | { kind: 'sideA' }                                    // 侧 A（±X，facadeBase）
+  | { kind: 'sideB' }                                    // 侧 B（±Z，facadeMid）
+  | { kind: 'top'; roof: boolean }                       // 顶 + 底（roof=true 用 roofMap / false 纯色兜底）
+  | { kind: 'crown' }                                    // 塔楼收分（emissive 金属）
+  | { kind: 'prism'; fallback: string; stem: SynthStem } // 坡屋顶（贴图 PBR / synth 兜底）
+  | { kind: 'deck' }                                     // 锯齿顶齿面（synth metal_deck）
+  | { kind: 'glass'; c: typeof GLASS_DOOR }              // 玻璃件
+  | { kind: 'glow'; intensity: number; rough: number; metal: number }; // 暖光灯带/广告牌
+
+/** 材质构建上下文（ShapeProps 直通 + synth 兜底 PBR）。 */
+interface WallCtx {
+  facadeBase: THREE.Texture | null;
+  facadeMid: THREE.Texture | null;
+  roofMap: THREE.Texture | null;
+  fallbackColor: string;
   emissive: number;
-  /** 16 · 阶段 R：楼宇色相分化乘子（buildingTint 产出）。 */
   tint: string;
-  pbrA?: SharedPBR;
-  pbrB?: SharedPBR;
-  pbrTop?: SharedPBR;
+  pbrBase?: SharedPBR;
+  pbrMid?: SharedPBR;
+  roofPbr?: SharedPBR;
+  /** PrismRoof synth 兜底（18-X 契约：有贴图走 roofPbr，无贴图走 synth）。 */
+  tilePbr?: SharedPBR;
+  metalPbr?: SharedPBR;
+}
+
+function buildWallMaterial(spec: WallMatSpec, ctx: WallCtx): THREE.MeshStandardMaterial {
+  switch (spec.kind) {
+    case 'sideA':
+      return new THREE.MeshStandardMaterial(sideMatProps(ctx.facadeBase, ctx.fallbackColor, ctx.emissive, ctx.tint, ctx.pbrBase));
+    case 'sideB':
+      return new THREE.MeshStandardMaterial(sideMatProps(ctx.facadeMid, ctx.fallbackColor, ctx.emissive, ctx.tint, ctx.pbrMid));
+    case 'top':
+      // roof=false 的体块（塔楼裙楼/house/shed 主体）顶面原就是纯色兜底（top={null}）
+      return new THREE.MeshStandardMaterial(
+        topMatProps(spec.roof ? ctx.roofMap : null, ctx.fallbackColor, ctx.emissive, spec.roof ? ctx.roofPbr : undefined),
+      );
+    case 'crown':
+      // 原 TowerShape 楼冠材质逐字段保留
+      return new THREE.MeshStandardMaterial({
+        color: CROWN_COLOR,
+        emissive: EMISSIVE_WINDOW,
+        emissiveIntensity: ctx.emissive * 0.8,
+        roughness: 0.4,
+        metalness: 0.6,
+        envMapIntensity: 0.9,
+      });
+    case 'prism': {
+      // 原 PrismRoof 材质逐字段保留（DoubleSide 防背面剔除；synth 兜底随 stem）
+      const synth = spec.stem === 'metal_deck' ? ctx.metalPbr : ctx.tilePbr;
+      const eff = (ctx.roofMap ? ctx.roofPbr : undefined) ?? synth;
+      const base = {
+        map: ctx.roofMap ?? undefined,
+        color: ctx.roofMap ? '#ffffff' : spec.fallback,
+        emissive: ctx.roofMap ? EMISSIVE_WINDOW : spec.fallback,
+        emissiveMap: ctx.roofMap ?? undefined,
+        emissiveIntensity: ctx.emissive * 0.5,
+        roughness: 0.85,
+        metalness: 0.05,
+        envMapIntensity: 0.35,
+      };
+      return new THREE.MeshStandardMaterial({
+        ...withPBR(base, eff ?? { map: null, normalMap: null, roughnessMap: null, matProps: {} }),
+        side: THREE.DoubleSide,
+      });
+    }
+    case 'deck':
+      // 原 SawtoothRoof 齿面材质逐字段保留（synth/metal_deck PBR）
+      return new THREE.MeshStandardMaterial({
+        ...withPBR(
+          { color: '#5a6270', roughness: 0.45, metalness: 0.5 },
+          ctx.metalPbr ?? { map: null, normalMap: null, roughnessMap: null, matProps: {} },
+        ),
+      });
+    case 'glass':
+      return new THREE.MeshStandardMaterial({
+        color: spec.c.color,
+        transparent: true,
+        opacity: spec.c.opacity,
+        roughness: spec.c.roughness,
+        metalness: spec.c.metalness,
+        envMapIntensity: 0.9,
+        side: THREE.DoubleSide,
+      });
+    case 'glow':
+      return new THREE.MeshStandardMaterial({
+        color: EMISSIVE_WINDOW,
+        emissive: EMISSIVE_WINDOW,
+        emissiveIntensity: spec.intensity,
+        roughness: spec.rough,
+        ...(spec.metal > 0 ? { metalness: spec.metal, envMapIntensity: 0.9 } : {}),
+      });
+  }
+}
+
+/** useMemo 产物的 dispose 纪律（§92a 接线纪律；几何/材质随依赖变化即释放）。 */
+function useDisposable<T extends { dispose(): void }>(obj: T): T {
+  useEffect(() => () => obj.dispose(), [obj]);
+  return obj;
+}
+
+/** 单栋楼的合并渲染（墙体多 group mesh + 点缀顶点色 mesh）。 */
+function MergedBuilding({
+  wallParts, matSpecs, ctx, accentParts,
+}: {
+  wallParts: GroupedMergePart[];
+  matSpecs: WallMatSpec[];
+  ctx: WallCtx;
+  accentParts: MergePart[];
 }) {
+  const wallGeo = useDisposable(useMemo(() => mergeGrouped(wallParts), [wallParts]));
+  const accentGeo = useDisposable(useMemo(() => mergeParts(accentParts), [accentParts]));
+  const materials = useMemo(
+    () => matSpecs.map((s) => buildWallMaterial(s, ctx)),
+    [matSpecs, ctx],
+  );
+  useEffect(() => () => materials.forEach((m) => m.dispose()), [materials]);
   return (
     <>
-      <meshStandardMaterial attach="material-0" {...sideMatProps(sideA, fallback, emissive, tint, pbrA)} />
-      <meshStandardMaterial attach="material-1" {...sideMatProps(sideA, fallback, emissive, tint, pbrA)} />
-      <meshStandardMaterial attach="material-2" {...topMatProps(top, fallback, emissive, pbrTop)} />
-      <meshStandardMaterial attach="material-3" color={fallback} roughness={0.9} />
-      <meshStandardMaterial attach="material-4" {...sideMatProps(sideB, fallback, emissive, tint, pbrB)} />
-      <meshStandardMaterial attach="material-5" {...sideMatProps(sideB, fallback, emissive, tint, pbrB)} />
+      {/* 墙体：侧A/侧B/顶/屋顶/楼冠/玻璃/发光件 分桶 group（DC = 材质组数） */}
+      <mesh geometry={wallGeo} material={materials} castShadow />
+      {/* 点缀：单材质顶点色合并（部件颜色逐件保留；投影裁剪见批次 28 报告） */}
+      {accentParts.length > 0 && (
+        <mesh geometry={accentGeo} castShadow={false} receiveShadow={false}>
+          <meshStandardMaterial vertexColors roughness={ACCENT_ROUGH} metalness={ACCENT_METAL} />
+        </mesh>
+      )}
     </>
   );
 }
@@ -248,7 +382,7 @@ export function prismGeometry(w: number, h: number, d: number): THREE.BufferGeom
   return geo;
 }
 
-// ── 18-Y · mergeBoxes（02 §3.1；纯手写顶点拼接，不引入 three/examples/jsm）────
+// ── 18-Y · mergeBoxes（02 §3.1）—— 旧导出保留（外部组件沿用该口径）────
 
 /**
  * box 描述：父组局部坐标下的中心偏移 + 尺寸。合并后共享一套简单盒式 UV（0..1 每面），
@@ -309,387 +443,140 @@ export function mergeBoxes(boxes: BoxSpec[]): THREE.BufferGeometry {
   return geo;
 }
 
-/** Hook 化的 mergeBoxes（useMemo + useEffect dispose，§92a 接线纪律）。 */
-function useMergedGeometry(boxes: BoxSpec[]): THREE.BufferGeometry {
-  const geo = useMemo(() => mergeBoxes(boxes), [boxes]);
-  useEffect(() => () => geo.dispose(), [geo]);
-  return geo;
-}
+// ── 18-Y 构造件 → 点缀部件发射器（几何与原 JSX 逐件全等）──────────────
 
-// ── 18-Y · 8 个构造件（02 §3.2 逐条几何规格）────────────────────
-
-/**
- * 女儿墙（02 §3.2 · ParapetRing）
- * 用途：tower 裙楼顶 y=pH / slab 顶 y=h / shed 檐口上 y=bH（锯齿顶时改为檐口收边）。
- * mergeBoxes 4 条：前后 [w, u(0.9), u(0.25)] @ z=±(d/2−u(0.125))；
- * 左右 [u(0.25), u(0.9), d−2·u(0.125)] @ x=±(w/2−u(0.125))。
- * 1 mesh；混凝土 PBR（synth/concrete [0.8,0.8]），无 PBR → #8a8f98。
- */
-function ParapetRing({ w, d, y }: { w: number; d: number; y: number }) {
-  const pbr = useSynthPBR('concrete', { wrap: 'repeat', repeat: [1, 1], normalScale: [0.8, 0.8] });
-  const concreteColor = '#8a8f98';
+/** 女儿墙（02 §3.2 · ParapetRing）：4 条 box @ y（原 mesh position=[0,y,0] 内 y=h/2）。 */
+function parapetAccent(w: number, d: number, y: number): MergePart[] {
   const t = u(0.25);
   const h = u(0.9);
   const half = u(0.125);
-  const boxes: BoxSpec[] = [
-    { x: 0, y: h / 2, z: +(d / 2 - half), w, h, d: t },
-    { x: 0, y: h / 2, z: -(d / 2 - half), w, h, d: t },
-    { x: +(w / 2 - half), y: h / 2, z: 0, w: t, h, d: d - 2 * half },
-    { x: -(w / 2 - half), y: h / 2, z: 0, w: t, h, d: d - 2 * half },
+  return [
+    boxPart(w, h, t, 0, y + h / 2, +(d / 2 - half), CONCRETE_COLOR),
+    boxPart(w, h, t, 0, y + h / 2, -(d / 2 - half), CONCRETE_COLOR),
+    boxPart(t, h, d - 2 * half, +(w / 2 - half), y + h / 2, 0, CONCRETE_COLOR),
+    boxPart(t, h, d - 2 * half, -(w / 2 - half), y + h / 2, 0, CONCRETE_COLOR),
   ];
-  const geo = useMergedGeometry(boxes);
-  const base = { color: concreteColor, roughness: 0.85, metalness: 0.05 };
-  return (
-    <mesh geometry={geo} position={[0, y, 0]} castShadow receiveShadow>
-      <meshStandardMaterial {...withPBR(base, pbr)} />
-    </mesh>
-  );
 }
 
-/**
- * 入口门厅（02 §3.2 · EntranceLobby）
- * 用途：tower / slab / house 底层居中（shed 卷帘门、pavilion 挑檐 不加）。
- * - 玻璃门 plane [u(1.4), u(2.4)] @ z=+d/2+0.002, y=u(1.2)（在父组底下）
- * - 门框 2 竖 1 横（mergeBoxes）
- * - 雨棚 box [u(2.2), u(0.12), u(0.9)] @ y=u(2.6), z=d/2+u(0.45)
- * 材质：门 #2a4e6e glass；框 #3a414c；雨棚 #4a5568。
- * mesh 数 3（玻璃门 / 框 / 雨棚）——比预算 2 多 1：门框与雨棚颜色不同，无法 merge。
- */
-function EntranceLobby({ w: _w, d, y }: { w: number; d: number; y: number }) {
+/** 入口门厅框 + 雨棚（02 §3.2 · EntranceLobby；玻璃门另入墙体 glass 组）。 */
+function entranceAccent(d: number): MergePart[] {
   const glassW = u(1.4);
   const glassH = u(2.4);
-  const awningW = u(2.2);
-  const awningH = u(0.12);
-  const awningD = u(0.9);
-  // 门框：2 竖 + 1 横（横向顶封）
   const frameT = u(0.06);
-  const frameBoxes: BoxSpec[] = [
-    { x: -glassW / 2 + frameT / 2, y: glassH / 2, z: d / 2 + 0.004, w: frameT, h: glassH, d: frameT },
-    { x: +glassW / 2 - frameT / 2, y: glassH / 2, z: d / 2 + 0.004, w: frameT, h: glassH, d: frameT },
-    { x: 0, y: glassH - frameT / 2, z: d / 2 + 0.004, w: glassW + 2 * frameT, h: frameT, d: frameT },
+  return [
+    boxPart(frameT, glassH, frameT, -glassW / 2 + frameT / 2, glassH / 2, d / 2 + 0.004, FRAME_COLOR),
+    boxPart(frameT, glassH, frameT, +glassW / 2 - frameT / 2, glassH / 2, d / 2 + 0.004, FRAME_COLOR),
+    boxPart(glassW + 2 * frameT, frameT, frameT, 0, glassH - frameT / 2, d / 2 + 0.004, FRAME_COLOR),
+    // 雨棚 box [u(2.2), u(0.12), u(0.9)] @ y=u(2.6)
+    boxPart(u(2.2), u(0.12), u(0.9), 0, u(2.6), d / 2 + u(0.45), AWNING_BLUE),
   ];
-  const frameGeo = useMergedGeometry(frameBoxes);
-  return (
-    <group position={[0, y, 0]}>
-      {/* 玻璃门 plane（独立 mesh） */}
-      <mesh position={[0, glassH / 2, d / 2 + 0.002]}>
-        <planeGeometry args={[glassW, glassH]} />
-        <meshStandardMaterial
-          color="#2a4e6e"
-          transparent
-          opacity={0.7}
-          roughness={0.1}
-          metalness={0.3}
-          envMapIntensity={0.9}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-      {/* 门框 mergeBoxes（1 mesh） */}
-      <mesh geometry={frameGeo}>
-        <meshStandardMaterial color="#3a414c" roughness={0.65} metalness={0.3} />
-      </mesh>
-      {/* 雨棚 box（独立 mesh，与门框颜色不同） */}
-      <mesh position={[0, u(2.6), d / 2 + u(0.45)]} castShadow>
-        <boxGeometry args={[awningW, awningH, awningD]} />
-        <meshStandardMaterial color="#4a5568" roughness={0.6} metalness={0.35} />
-      </mesh>
-    </group>
-  );
 }
 
-/**
- * 角柱（02 §3.2 · CornerQuoins）
- * 用途：house / slab（w>1.4）四角竖向凸条 [u(0.15), h, u(0.15)]。
- * 砖 PBR（synth/brick [1.0,1.0]），无 PBR → #9a8f84。
- */
-function CornerQuoins({ w, d, h }: { w: number; d: number; h: number }) {
-  const pbr = useSynthPBR('brick', { wrap: 'repeat', repeat: [1, 1], normalScale: [1.0, 1.0] });
+/** 入口玻璃门 plane（原 EntranceLobby 玻璃门，材质参数 GLASS_DOOR）。 */
+function entranceGlass(d: number): GroupedMergePart {
+  const glassW = u(1.4);
+  const glassH = u(2.4);
+  return { geo: new THREE.PlaneGeometry(glassW, glassH), x: 0, y: glassH / 2, z: d / 2 + 0.002, mat: -1 };
+}
+
+/** 角柱（02 §3.2 · CornerQuoins）：四角竖条 [u(0.15), h, u(0.15)]。 */
+function quoinAccent(w: number, d: number, h: number): MergePart[] {
   const t = u(0.15);
-  const boxes: BoxSpec[] = [
-    { x: +w / 2, y: h / 2, z: +d / 2, w: t, h, d: t },
-    { x: +w / 2, y: h / 2, z: -d / 2, w: t, h, d: t },
-    { x: -w / 2, y: h / 2, z: +d / 2, w: t, h, d: t },
-    { x: -w / 2, y: h / 2, z: -d / 2, w: t, h, d: t },
+  return [
+    boxPart(t, h, t, +w / 2, h / 2, +d / 2, QUOIN_COLOR),
+    boxPart(t, h, t, +w / 2, h / 2, -d / 2, QUOIN_COLOR),
+    boxPart(t, h, t, -w / 2, h / 2, +d / 2, QUOIN_COLOR),
+    boxPart(t, h, t, -w / 2, h / 2, -d / 2, QUOIN_COLOR),
   ];
-  const geo = useMergedGeometry(boxes);
-  const base = { color: '#9a8f84', roughness: 0.8, metalness: 0.05 };
-  return (
-    <mesh geometry={geo} castShadow receiveShadow>
-      <meshStandardMaterial {...withPBR(base, pbr)} />
-    </mesh>
-  );
 }
 
-/**
- * 空调外机（02 §3.2 · AcUnits）
- * 用途：tower 塔身 / slab 临路侧挂墙。
- * 2–3 个小盒 [u(0.5), u(0.35), u(0.25)] @ z=+d/2+u(0.12)，y 由 hashStr 确定楼层。
- * 确定性伪随机：seed = `${w.toFixed(3)}-${d.toFixed(3)}-${y.toFixed(3)}`；
- * 数量 2–3、x 偏移、y 楼层比例均由 hashStr 驱动（同楼同形，刷新稳定）。
- */
-function AcUnits({ w, d, y }: { w: number; d: number; y: number }) {
-  const seed = `${w.toFixed(3)}-${d.toFixed(3)}-${y.toFixed(3)}`;
+/** 空调外机（02 §3.2 · AcUnits）：hash 确定性 2–3 个小盒挂 +Z 墙。 */
+function acUnitsAccent(w: number, d: number, wallH: number): MergePart[] {
+  const seed = `${w.toFixed(3)}-${d.toFixed(3)}-${wallH.toFixed(3)}`;
   const cnt = 2 + (hashStr(`ac-cnt-${seed}`) % 2); // 2 或 3
-  const boxes: BoxSpec[] = [];
+  const out: MergePart[] = [];
   for (let i = 0; i < cnt; i++) {
     const h = hashStr(`ac-${seed}-${i}`);
     const fy = ((h % 1000) / 1000) * 0.6 + 0.2; // 0.20..0.80 of wall height
     const fx = (((h >>> 10) % 1000) / 1000 - 0.5) * 0.6; // ±0.30 of w
-    boxes.push({
-      x: fx * w,
-      y: fy * y,
-      z: d / 2 + u(0.12),
-      w: u(0.5),
-      h: u(0.35),
-      d: u(0.25),
-    });
+    out.push(boxPart(u(0.5), u(0.35), u(0.25), fx * w, fy * wallH, d / 2 + u(0.12), AC_COLOR));
   }
-  const geo = useMergedGeometry(boxes);
-  return (
-    <mesh geometry={geo} castShadow>
-      <meshStandardMaterial color="#c5c8ce" roughness={0.55} metalness={0.25} />
-    </mesh>
-  );
+  return out;
 }
 
-/**
- * 电梯机房 + 擦窗机轨道（02 §3.2 · LiftRoom）
- * 用途：tower（w>1.2），置于 crown 顶。
- * 2 meshes：屋 box [w*0.3, u(2.4), d*0.3] + 轨道 mergeBoxes 一圈细条。
- */
-function LiftRoom({ w, d, y }: { w: number; d: number; y: number }) {
+/** 电梯机房 + 擦窗机轨道（02 §3.2 · LiftRoom）@ y。 */
+function liftRoomAccent(w: number, d: number, y: number): MergePart[] {
   const rw = w * 0.3;
   const rh = u(2.4);
   const rd = d * 0.3;
-  // 擦窗机轨道：在屋 box 略外一圈 4 条细条
   const trackT = u(0.06);
   const margin = u(0.15);
-  const trackBoxes: BoxSpec[] = [
-    { x: 0, y: rh + trackT / 2, z: +(rd / 2 + margin + trackT / 2), w: rw + 2 * margin, h: trackT, d: trackT },
-    { x: 0, y: rh + trackT / 2, z: -(rd / 2 + margin + trackT / 2), w: rw + 2 * margin, h: trackT, d: trackT },
-    { x: +(rw / 2 + margin + trackT / 2), y: rh + trackT / 2, z: 0, w: trackT, h: trackT, d: rd + 2 * margin },
-    { x: -(rw / 2 + margin + trackT / 2), y: rh + trackT / 2, z: 0, w: trackT, h: trackT, d: rd + 2 * margin },
+  return [
+    boxPart(rw, rh, rd, 0, y + rh / 2, 0, LIFT_COLOR),
+    boxPart(rw + 2 * margin, trackT, trackT, 0, y + rh + trackT / 2, +(rd / 2 + margin + trackT / 2), FRAME_COLOR),
+    boxPart(rw + 2 * margin, trackT, trackT, 0, y + rh + trackT / 2, -(rd / 2 + margin + trackT / 2), FRAME_COLOR),
+    boxPart(trackT, trackT, rd + 2 * margin, +(rw / 2 + margin + trackT / 2), y + rh + trackT / 2, 0, FRAME_COLOR),
+    boxPart(trackT, trackT, rd + 2 * margin, -(rw / 2 + margin + trackT / 2), y + rh + trackT / 2, 0, FRAME_COLOR),
   ];
-  const trackGeo = useMergedGeometry(trackBoxes);
-  return (
-    <group position={[0, y, 0]}>
-      {/* 屋 */}
-      <mesh position={[0, rh / 2, 0]} castShadow>
-        <boxGeometry args={[rw, rh, rd]} />
-        <meshStandardMaterial color="#6b7280" roughness={0.7} metalness={0.3} />
-      </mesh>
-      {/* 轨道（4 条合并 1 mesh） */}
-      <mesh geometry={trackGeo}>
-        <meshStandardMaterial color="#3a414c" roughness={0.65} metalness={0.45} />
-      </mesh>
-    </group>
-  );
 }
 
-/**
- * 裙楼露台栏杆（02 §3.2 · PodiumRail）
- * 用途：tower 裙楼顶外缘一圈矮栏杆。
- * 1 mesh：每 u(1.5) 1 根立柱 [u(0.08), u(1.1), u(0.08)] + 顶部 4 条扶手（前后左右 4 长条围一圈）。
- */
-function PodiumRail({ w, d, y }: { w: number; d: number; y: number }) {
+/** 裙楼露台栏杆（02 §3.2 · PodiumRail）：立柱每 u(1.5) + 顶部 4 扶手 @ y。 */
+function podiumRailAccent(w: number, d: number, y: number): MergePart[] {
   const stW = u(0.08);
   const stH = u(1.1);
   const stD = u(0.08);
   const spacing = u(1.5);
   const halfW = w / 2;
   const halfD = d / 2;
-
-  const columns: BoxSpec[] = [];
-  // 前后两根横杆间距内布柱
+  const out: MergePart[] = [];
   for (let s = -halfW + spacing / 2; s <= halfW - spacing / 2; s += spacing) {
-    columns.push({ x: s, y: stH / 2, z: +halfD, w: stW, h: stH, d: stD });
-    columns.push({ x: s, y: stH / 2, z: -halfD, w: stW, h: stH, d: stD });
+    out.push(boxPart(stW, stH, stD, s, y + stH / 2, +halfD, FRAME_COLOR));
+    out.push(boxPart(stW, stH, stD, s, y + stH / 2, -halfD, FRAME_COLOR));
   }
   for (let s = -halfD + spacing / 2; s <= halfD - spacing / 2; s += spacing) {
-    columns.push({ x: +halfW, y: stH / 2, z: s, w: stW, h: stH, d: stD });
-    columns.push({ x: -halfW, y: stH / 2, z: s, w: stW, h: stH, d: stD });
+    out.push(boxPart(stW, stH, stD, +halfW, y + stH / 2, s, FRAME_COLOR));
+    out.push(boxPart(stW, stH, stD, -halfW, y + stH / 2, s, FRAME_COLOR));
   }
-  // 顶部扶手 4 条
   const handT = u(0.04);
-  const handY = stH + handT / 2;
-  const hands: BoxSpec[] = [
-    { x: 0, y: handY, z: +halfD, w, h: handT, d: handT },
-    { x: 0, y: handY, z: -halfD, w, h: handT, d: handT },
-    { x: +halfW, y: handY, z: 0, w: handT, h: handT, d },
-    { x: -halfW, y: handY, z: 0, w: handT, h: handT, d },
-  ];
-  const geo = useMergedGeometry([...columns, ...hands]);
-  return (
-    <mesh geometry={geo} position={[0, y, 0]} castShadow>
-      <meshStandardMaterial color="#3a414c" roughness={0.6} metalness={0.4} />
-    </mesh>
-  );
+  const handY = y + stH + handT / 2;
+  out.push(boxPart(w, handT, handT, 0, handY, +halfD, FRAME_COLOR));
+  out.push(boxPart(w, handT, handT, 0, handY, -halfD, FRAME_COLOR));
+  out.push(boxPart(handT, handT, d, +halfW, handY, 0, FRAME_COLOR));
+  out.push(boxPart(handT, handT, d, -halfW, handY, 0, FRAME_COLOR));
+  return out;
 }
 
-/**
- * 锯齿屋顶（02 §3.2 · SawtoothRoof）
- * 用途：shed（w>1.4）替代人字顶。
- * 3 齿：每齿 1 个 prismGeometry（齿高 u(1.2)，齿宽 w/3）+ 齿背面采光带 plane
- *   （浅蓝半透明 #bcd9ea opacity 0.55，envMapIntensity 0.9，DoubleSide）。
- * 齿面金属 PBR（synth/metal_deck [0.9,0.9]）。
- * mesh 数：3 prism + 3 glass plane = 6。
- */
-function SawtoothRoof({ w, d, y }: { w: number; d: number; y: number }) {
-  const pbr = useSynthPBR('metal_deck', { wrap: 'repeat', repeat: [1, 1], normalScale: [0.9, 0.9] });
-  const teeth = 3;
-  const toothW = w / teeth;
-  const roofH = u(1.2);
-  const half = toothW / 2; // 半基
-  const slopeLen = Math.hypot(half, roofH);
-  const slopeAngle = Math.atan2(roofH, half);
-
-  // 每齿：prism(toothW, roofH, d) + 后坡采光带 plane
-  const items: Array<{ key: number; toothX: number; geo: THREE.BufferGeometry }> = [];
-  for (let i = 0; i < teeth; i++) {
-    const toothX = (i - 1) * toothW; // -toothW, 0, +toothW
-    const g = useMemo(
-      () => prismGeometry(toothW, roofH, d),
-      [toothW, roofH, d],
-    );
-    useEffect(() => () => g.dispose(), [g]);
-    items.push({ key: i, toothX, geo: g });
-  }
-
-  const base = { color: '#5a6270', roughness: 0.45, metalness: 0.5 };
-
-  return (
-    <group position={[0, y, 0]}>
-      {items.map((it) => (
-        <group key={`tooth-${it.key}`}>
-          {/* 齿面（prism + metal_deck PBR） */}
-          <mesh geometry={it.geo} castShadow>
-            <meshStandardMaterial {...withPBR(base, pbr)} />
-          </mesh>
-          {/* 后坡采光带：先水平再绕 Z 抬起到坡角 */}
-          <group
-            position={[it.toothX - half / 2, roofH / 2, 0]}
-            rotation={[0, 0, slopeAngle]}
-          >
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-              <planeGeometry args={[slopeLen, d]} />
-              <meshStandardMaterial
-                color="#bcd9ea"
-                transparent
-                opacity={0.55}
-                roughness={0.2}
-                metalness={0.1}
-                envMapIntensity={0.9}
-                side={THREE.DoubleSide}
-              />
-            </mesh>
-          </group>
-        </group>
-      ))}
-    </group>
-  );
-}
-
-/**
- * 厂房侧高窗带（02 §3.2 · ShedWindowBands）
- * 用途：shed +Z 面 2 条横向高窗。
- * 1 mesh：mergeBoxes 2 条 [w*1.2*0.9, u(0.6), u(0.06)] @ z=+d/2+0.003，y=h*0.55 / h*0.75。
- * w 为原始楼宽（公式内部 *1.2*0.9 匹配 shed bw）；h 取 body 高度 bH。
- */
-function ShedWindowBands({ w, d, h }: { w: number; d: number; h: number }) {
-  const bandW = w * 1.2 * 0.9;
-  const bandH = u(0.6);
-  const bandT = u(0.06);
-  const zOff = d / 2 + 0.003;
-  const boxes: BoxSpec[] = [
-    { x: 0, y: h * 0.55, z: zOff, w: bandW, h: bandH, d: bandT },
-    { x: 0, y: h * 0.75, z: zOff, w: bandW, h: bandH, d: bandT },
-  ];
-  const geo = useMergedGeometry(boxes);
-  return (
-    <mesh geometry={geo}>
-      <meshStandardMaterial color="#7fa8c4" roughness={0.15} metalness={0.2} envMapIntensity={0.9} />
-    </mesh>
-  );
-}
-
-// ── 五种体块渲染器 ─────────────────────────────────────────────
-
-/**
- * 底商雨棚 + 灯带（tower 裙楼 / slab 沿街，面向 -Z，契约 02 §4.1）：
- * 雨棚挑檐 u(1.2) 深 / u(0.35) 高；灯带贴雨棚下沿 emissive #ffd9a0（上限 0.45）。
- */
-function Shopfront({ w, d, y, emissive }: { w: number; d: number; y: number; emissive: number }) {
+/** 底商雨棚（14 阶段 I · Shopfront 雨棚件；灯带另入墙体 glow 组）。 */
+function shopfrontAwningAccent(w: number, d: number, y: number): MergePart {
   const awningD = u(1.2);
-  return (
-    <>
-      {/* 雨棚 */}
-      <mesh castShadow position={[0, y, -(d / 2 + awningD * 0.5)]}>
-        <boxGeometry args={[w * 0.9, u(0.35), awningD]} />
-        <meshStandardMaterial color={AWNING_COLOR} roughness={0.8} metalness={0.05} />
-      </mesh>
-      {/* 暖光灯带 */}
-      <mesh position={[0, y - u(0.25), -(d / 2 + awningD * 0.95)]}>
-        <boxGeometry args={[w * 0.85, u(0.18), u(0.06)]} />
-        <meshStandardMaterial
-          color={EMISSIVE_WINDOW}
-          emissive={EMISSIVE_WINDOW}
-          emissiveIntensity={Math.min(0.45, emissive * 1.2)}
-          roughness={0.3}
-        />
-      </mesh>
-    </>
-  );
+  return boxPart(w * 0.9, u(0.35), awningD, 0, y, -(d / 2 + awningD * 0.5), AWNING_COLOR);
 }
 
-/**
- * 广告牌（tower 且 w>1.4 时，契约 02 §4.2）：crown 顶双杆 + 发光面板，面向 -Z。
- * 出现与否由 w 决定（同楼同形，不引 Math.random）。
- */
-function BillboardSign({ w, y }: { w: number; y: number }) {
+/** 底商暖光灯带（原 Shopfront 灯带，emissive min(0.45, e*1.2)）。 */
+function shopfrontGlow(w: number, d: number, y: number, mat: number): GroupedMergePart {
+  const awningD = u(1.2);
+  return { geo: new THREE.BoxGeometry(w * 0.85, u(0.18), u(0.06)), x: 0, y: y - u(0.25), z: -(d / 2 + awningD * 0.95), mat };
+}
+
+/** 广告牌（14 阶段 I：双杆 @ y + 发光面板；辉光 pointLight 由 Shape 组件挂）。 */
+function billboardParts(w: number, y: number, panelMat: number): { accent: MergePart[]; panel: GroupedMergePart; panelTopY: number } {
   const panelW = w * 0.5;
   const poleH = u(2.0);
-  return (
-    <group position={[0, y, 0]}>
-      {[-1, 1].map((side) => (
-        <mesh key={`bp-${side}`} castShadow position={[side * panelW * 0.35, poleH / 2, 0]}>
-          <cylinderGeometry args={[u(0.06), u(0.06), poleH, 8]} />
-          <meshStandardMaterial color={BILLBOARD_POLE} roughness={0.6} metalness={0.4} />
-        </mesh>
-      ))}
-      <mesh castShadow position={[0, poleH * 0.7, -u(0.1)]}>
-        <boxGeometry args={[panelW, u(1.4), u(0.08)]} />
-        <meshStandardMaterial
-          color={EMISSIVE_WINDOW}
-          emissive={EMISSIVE_WINDOW}
-          emissiveIntensity={0.5}
-          roughness={0.4}
-          metalness={0.4}
-          envMapIntensity={0.9}
-        />
-      </mesh>
-      {/* 阶段 P：辉光（仅 w > 1.6 时启用，避免点光源过多拖性能） */}
-      {w > 1.6 && (
-        <pointLight
-          position={[0, poleH * 0.7, -u(0.5)]}
-          color={EMISSIVE_WINDOW}
-          intensity={0.3}
-          distance={5}
-          decay={2}
-        />
-      )}
-    </group>
-  );
+  return {
+    accent: [
+      cylPart(u(0.06), u(0.06), poleH, 8, -panelW * 0.35, y + poleH / 2, 0, BILLBOARD_POLE),
+      cylPart(u(0.06), u(0.06), poleH, 8, +panelW * 0.35, y + poleH / 2, 0, BILLBOARD_POLE),
+    ],
+    panel: { geo: new THREE.BoxGeometry(panelW, u(1.4), u(0.08)), x: 0, y: y + poleH * 0.7, z: -u(0.1), mat: panelMat },
+    panelTopY: y + poleH * 0.7,
+  };
 }
 
-/**
- * 阶段 N + 18-Y：阳台线四面（02 §3.3 改造点）。
- * 现状只画 +Z → 四面（±X/±Z）都画；count 条 × 4 面 mergeBoxes 合并成 1 mesh。
- * 跳过底层 y<u(3.5) 与顶层 y>h−u(1)（02 §3.3「不变」）。
- */
-function BalconyLines({ w, d, h }: { w: number; d: number; h: number }) {
+/** 阳台线（阶段 N + 18-Y 四面）：每 u(3) 一道 × 4 面（跳过底层/顶层）。 */
+function balconyAccent(w: number, d: number, h: number): MergePart[] {
   const lineSpacing = u(3);
   const count = Math.floor(h / lineSpacing);
-  const boxes: BoxSpec[] = [];
+  const out: MergePart[] = [];
   for (let i = 0; i < count; i++) {
     const y = i * lineSpacing + lineSpacing / 2 + u(1.5);
     if (y < u(3.5)) continue;          // 跳过底层（贴底商雨棚）
@@ -697,79 +584,90 @@ function BalconyLines({ w, d, h }: { w: number; d: number; h: number }) {
     const lineT = u(0.04);
     const lineD = u(0.15);
     const off = u(0.02);
-    // +Z
-    boxes.push({ x: 0, y, z: d / 2 + off, w: w * 0.95, h: lineT, d: lineD });
-    // -Z
-    boxes.push({ x: 0, y, z: -(d / 2 + off), w: w * 0.95, h: lineT, d: lineD });
-    // +X
-    boxes.push({ x: w / 2 + off, y, z: 0, w: lineD, h: lineT, d: d * 0.95 });
-    // -X
-    boxes.push({ x: -(w / 2 + off), y, z: 0, w: lineD, h: lineT, d: d * 0.95 });
+    out.push(boxPart(w * 0.95, lineT, lineD, 0, y, d / 2 + off, BALCONY_COLOR));
+    out.push(boxPart(w * 0.95, lineT, lineD, 0, y, -(d / 2 + off), BALCONY_COLOR));
+    out.push(boxPart(lineD, lineT, d * 0.95, w / 2 + off, y, 0, BALCONY_COLOR));
+    out.push(boxPart(lineD, lineT, d * 0.95, -(w / 2 + off), y, 0, BALCONY_COLOR));
   }
-  const geo = useMergedGeometry(boxes);
-  return (
-    <mesh geometry={geo}>
-      <meshStandardMaterial color="#2a2e36" roughness={0.85} />
-    </mesh>
-  );
+  return out;
 }
 
-/** 阶段 N：屋顶设备（确定性 1-2 件；用楼栋尺寸 w/d 决定）。 */
-function RooftopEquipment({ w, d, y }: { w: number; d: number; y: number }) {
+/** 屋顶设备（阶段 N：确定性 1-2 件，w>1.5 分支）。 */
+function rooftopAccent(w: number, d: number, y: number): MergePart[] {
   const baseY = y + u(0.05);
   if (w > 1.5) {
-    return (
-      <>
-        {/* 水箱 */}
-        <mesh position={[w * 0.3, baseY + u(0.15), d * 0.3]} castShadow>
-          <cylinderGeometry args={[u(0.15), u(0.15), u(0.3), 8]} />
-          <meshStandardMaterial color="#a8a4a0" roughness={0.7} metalness={0.3} />
-        </mesh>
-        {/* 通风管 */}
-        <mesh position={[-w * 0.3, baseY + u(0.18), -d * 0.3]} castShadow>
-          <cylinderGeometry args={[u(0.08), u(0.08), u(0.35), 6]} />
-          <meshStandardMaterial color="#8a8d96" roughness={0.7} metalness={0.4} />
-        </mesh>
-      </>
-    );
+    return [
+      cylPart(u(0.15), u(0.15), u(0.3), 8, w * 0.3, baseY + u(0.15), d * 0.3, ROOFTOP_TANK),
+      cylPart(u(0.08), u(0.08), u(0.35), 6, -w * 0.3, baseY + u(0.18), -d * 0.3, ROOFTOP_VENT),
+    ];
   }
-  return (
-    <>
-      {/* 通风管（小楼 1 个） */}
-      <mesh position={[0, baseY + u(0.15), 0]} castShadow>
-        <cylinderGeometry args={[u(0.06), u(0.06), u(0.3), 6]} />
-        <meshStandardMaterial color="#8a8d96" roughness={0.7} metalness={0.4} />
-      </mesh>
-      {/* 天窗（小盒） */}
-      <mesh position={[w * 0.25, baseY + u(0.04), 0]} castShadow>
-        <boxGeometry args={[u(0.2), u(0.06), u(0.2)]} />
-        <meshStandardMaterial color="#5a6270" roughness={0.6} metalness={0.5} />
-      </mesh>
-    </>
-  );
+  return [
+    cylPart(u(0.06), u(0.06), u(0.3), 6, 0, baseY + u(0.15), 0, ROOFTOP_VENT),
+    boxPart(u(0.2), u(0.06), u(0.2), w * 0.25, baseY + u(0.04), 0, ROOFTOP_SKY),
+  ];
 }
 
-/** 阶段 N：厂房卷帘门（shed 临路侧 z=+d/2）。 */
-function ShutterDoor({ w, h }: { w: number; h: number }) {
-  return (
-    <>
-      {/* 卷帘门主体（深色 box） */}
-      <mesh position={[0, h * 0.2, 0.001]}>
-        <planeGeometry args={[w * 0.6, h * 0.4]} />
-        <meshStandardMaterial color="#3a414c" roughness={0.95} />
-      </mesh>
-      {/* 横纹装饰（4 道） */}
-      {[0.15, 0.25, 0.35, 0.45].map((t, i) => (
-        <mesh key={`stripe-${i}`} position={[0, h * t, 0.002]}>
-          <planeGeometry args={[w * 0.6, u(0.02)]} />
-          <meshStandardMaterial color="#2a2e36" roughness={0.95} />
-        </mesh>
-      ))}
-    </>
-  );
+/** 厂房卷帘门（阶段 N；批次 28 A2 横纹已并件）@ z=+d/2。 */
+function shutterAccent(w: number, h: number, d: number): MergePart[] {
+  const out: MergePart[] = [
+    // 卷帘门主体 plane（原 planeGeometry [w*0.6, h*0.4] @ z=d/2+0.001）
+    { geo: new THREE.PlaneGeometry(w * 0.6, h * 0.4), x: 0, y: h * 0.2, z: d / 2 + 0.001, color: SHUTTER_COLOR },
+  ];
+  for (const t of [0.15, 0.25, 0.35, 0.45]) {
+    out.push(boxPart(w * 0.6, u(0.02), 0.004, 0, h * t, d / 2 + 0.002, BALCONY_COLOR));
+  }
+  return out;
 }
 
-/** tower：裙楼(u(10) 高满铺) + 塔身(0.8× 占地) + 顶部收分(0.55× 占地, u(6) 高)。 */
+/** 厂房侧高窗带（02 §3.2 · ShedWindowBands）：+Z 面 2 条。 */
+function windowBandAccent(w: number, d: number, h: number): MergePart[] {
+  const bandW = w * 1.2 * 0.9;
+  return [
+    boxPart(bandW, u(0.6), u(0.06), 0, h * 0.55, d / 2 + 0.003, WINBAND_COLOR),
+    boxPart(bandW, u(0.6), u(0.06), 0, h * 0.75, d / 2 + 0.003, WINBAND_COLOR),
+  ];
+}
+
+/** 烟囱（ShedShape：1-2 根细圆柱 @ -d*0.2）。 */
+function chimneyAccent(cx: number, bH: number, chimneyH: number, d: number): MergePart {
+  return cylPart(u(0.8), u(0.9), chimneyH, 10, cx, bH + chimneyH / 2, -d * 0.2, GABLE_COLOR);
+}
+
+/** 锯齿屋顶（02 §3.2 · SawtoothRoof）：3 齿 prism（deck 组）+ 3 采光带 plane（glass 组）。 */
+function sawtoothParts(w: number, d: number, y: number, deckMat: number, glassMat: number): {
+  deck: GroupedMergePart[]; glass: GroupedMergePart[];
+} {
+  const teeth = 3;
+  const toothW = w / teeth;
+  const roofH = u(1.2);
+  const half = toothW / 2; // 半基
+  const slopeLen = Math.hypot(half, roofH);
+  const slopeAngle = Math.atan2(roofH, half);
+  const deck: GroupedMergePart[] = [];
+  const glass: GroupedMergePart[] = [];
+  for (let i = 0; i < teeth; i++) {
+    const toothX = (i - 1) * toothW; // -toothW, 0, +toothW
+    deck.push({ geo: prismGeometry(toothW, roofH, d), x: toothX, y, z: 0, mat: deckMat });
+    // 采光带：先绕 X 放平再绕 Z 抬到坡角（原嵌套 group rotation 的复合矩阵）
+    const q = new THREE.Quaternion()
+      .setFromEuler(new THREE.Euler(0, 0, slopeAngle))
+      .multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)));
+    glass.push({
+      geo: new THREE.PlaneGeometry(slopeLen, d),
+      matrix: new THREE.Matrix4().compose(
+        new THREE.Vector3(toothX - half / 2, y + roofH / 2, 0),
+        q,
+        new THREE.Vector3(1, 1, 1),
+      ),
+      mat: glassMat,
+    });
+  }
+  return { deck, glass };
+}
+
+// ── 五种体块渲染器（批次 28 二轮：每栋 2 mesh）────────────────────
+
+/** tower：裙楼 + 塔身（分桶 group）+ 楼冠/玻璃门/灯带/广告牌（group）+ 点缀件（顶点色）。 */
 export function TowerShape(props: ShapeProps) {
   const {
     w, d, h,
@@ -780,58 +678,85 @@ export function TowerShape(props: ShapeProps) {
   const pH = Math.min(u(10), h * 0.35);
   const cH = Math.min(u(6), h * 0.22);
   const bodyH = Math.max(h - pH - cH, u(3)); // 塔身至少 1 层
+  const shopY = Math.min(u(3.6), pH * 0.5);
+  const hasBillboard = w > 1.4;
+  const hasGlow = w > 1.6; // 阶段 P：辉光仅 w>1.6
+
+  // 材质表：0 裙楼侧(facadeBase) / 1 裙楼顶(纯色) / 2 塔身侧(facadeMid) / 3 塔身顶(roof) /
+  // 4 楼冠 / 5 玻璃门 / 6 灯带 / 7 广告牌面板（hasBillboard 才有）
+  const matSpecs = useMemo<WallMatSpec[]>(() => {
+    const specs: WallMatSpec[] = [
+      { kind: 'sideA' }, { kind: 'top', roof: false }, { kind: 'sideB' }, { kind: 'top', roof: true },
+      { kind: 'crown' }, { kind: 'glass', c: GLASS_DOOR },
+      { kind: 'glow', intensity: Math.min(0.45, emissive * 1.2), rough: 0.3, metal: 0 },
+    ];
+    if (hasBillboard) specs.push({ kind: 'glow', intensity: 0.5, rough: 0.4, metal: 0.4 });
+    return specs;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emissive, hasBillboard]);
+
+  const ctx = useMemo<WallCtx>(() => ({
+    facadeBase, facadeMid, roofMap, fallbackColor, emissive, tint,
+    pbrBase, pbrMid, roofPbr,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [facadeBase, facadeMid, roofMap, fallbackColor, emissive, tint, pbrBase, pbrMid, roofPbr]);
+
+  const { wallParts, accentParts, billboardLightY } = useMemo(() => {
+    const wall: GroupedMergePart[] = [
+      // 裙楼（商业基座，facadeBase 四面；几何 = 原 BoxSolid pod box 三组面）
+      { geo: boxFaces(w, pH, d, 0, pH / 2, 0, 'A'), mat: 0 },
+      { geo: boxFaces(w, pH, d, 0, pH / 2, 0, 'B'), mat: 0 },
+      { geo: boxFaces(w, pH, d, 0, pH / 2, 0, 'top'), mat: 1 },
+      // 塔身（facadeMid 四面 + roof 顶面）
+      { geo: boxFaces(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'A'), mat: 2 },
+      { geo: boxFaces(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'B'), mat: 2 },
+      { geo: boxFaces(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'top'), mat: 3 },
+      // 顶部收分（原独立 crown mesh）
+      { geo: new THREE.BoxGeometry(w * 0.55, cH, d * 0.55), x: 0, y: pH + bodyH + cH / 2, z: 0, mat: 4 },
+      // 入口玻璃门
+      { ...entranceGlass(d), mat: 5 },
+      // 底商灯带
+      shopfrontGlow(w, d, shopY, 6),
+    ];
+    const accent: MergePart[] = [
+      ...parapetAccent(w, d, pH),
+      ...acUnitsAccent(w * 0.8, d * 0.8, bodyH + pH),
+      ...podiumRailAccent(w, d, pH),
+      ...entranceAccent(d),
+      shopfrontAwningAccent(w, d, shopY),
+      ...balconyAccent(w * 0.8, d * 0.8, bodyH + pH),
+      ...rooftopAccent(w * 0.55, d * 0.55, pH + bodyH + cH),
+    ];
+    if (w > 1.2) accent.push(...liftRoomAccent(w * 0.55, d * 0.55, pH + bodyH + cH)); // 原 {w>1.2 && LiftRoom}
+    let lightY = 0;
+    if (hasBillboard) {
+      const bb = billboardParts(w, pH + bodyH + cH, 7);
+      accent.push(...bb.accent);
+      wall.push(bb.panel);
+      lightY = bb.panelTopY;
+    }
+    return { wallParts: wall, accentParts: accent, billboardLightY: lightY };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [w, d, h, pH, bodyH, cH, shopY, hasBillboard]);
+
   return (
     <>
-      {/* 裙楼（商业基座，facadeBase 四面） */}
-      <mesh castShadow position={[0, pH / 2, 0]}>
-        <boxGeometry args={[w, pH, d]} />
-        <BoxFaces
-          sideA={facadeBase} sideB={facadeBase} top={null}
-          fallback={fallbackColor} emissive={emissive} tint={tint}
-          pbrA={pbrBase} pbrB={pbrBase}
+      <MergedBuilding wallParts={wallParts} matSpecs={matSpecs} ctx={ctx} accentParts={accentParts} />
+      {/* 阶段 P：广告牌辉光（仅 w>1.6，避免点光源过多拖性能） */}
+      {hasBillboard && hasGlow && (
+        <pointLight
+          position={[0, billboardLightY, -u(0.5)]}
+          color={EMISSIVE_WINDOW}
+          intensity={0.3}
+          distance={5}
+          decay={2}
         />
-      </mesh>
-      {/* 塔身（facadeMid 四面 + roof 顶面） */}
-      <mesh castShadow position={[0, pH + bodyH / 2, 0]}>
-        <boxGeometry args={[w * 0.8, bodyH, d * 0.8]} />
-        <BoxFaces
-          sideA={facadeMid} sideB={facadeMid} top={roofMap}
-          fallback={fallbackColor} emissive={emissive} tint={tint}
-          pbrA={pbrMid} pbrB={pbrMid} pbrTop={roofPbr}
-        />
-      </mesh>
-      {/* 顶部收分（纯色金属，无贴图） */}
-      <mesh castShadow position={[0, pH + bodyH + cH / 2, 0]}>
-        <boxGeometry args={[w * 0.55, cH, d * 0.55]} />
-        <meshStandardMaterial
-          color={CROWN_COLOR}
-          emissive={EMISSIVE_WINDOW}
-          emissiveIntensity={emissive * 0.8}
-          roughness={0.4}
-          metalness={0.6}
-          envMapIntensity={0.9}
-        />
-      </mesh>
-      {/* 14-3D渲染深化：底商雨棚（裙楼沿街） */}
-      <Shopfront w={w} d={d} y={Math.min(u(3.6), pH * 0.5)} emissive={emissive} />
-      {/* 14-3D渲染深化：塔楼广告牌（w > 1.4 确定性出现） */}
-      {w > 1.4 && <BillboardSign w={w} y={pH + bodyH + cH} />}
-      {/* 15 阶段 N：阳台线（沿塔身高度每 u(3) 一道；现在四面） */}
-      <BalconyLines w={w * 0.8} d={d * 0.8} h={bodyH + pH} />
-      {/* 15 阶段 N：屋顶设备（crown 顶上） */}
-      <RooftopEquipment w={w * 0.55} d={d * 0.55} y={pH + bodyH + cH} />
-      {/* 18-Y 构造件：裙楼顶 ParapetRing(y=pH)；塔身 AcUnits；crown 顶 LiftRoom（w>1.2）；
-          裙楼顶外缘 PodiumRail；底层 EntranceLobby */}
-      <ParapetRing w={w} d={d} y={pH} />
-      <AcUnits w={w * 0.8} d={d * 0.8} y={bodyH + pH} />
-      {w > 1.2 && <LiftRoom w={w * 0.55} d={d * 0.55} y={pH + bodyH + cH} />}
-      <PodiumRail w={w} d={d} y={pH} />
-      <EntranceLobby w={w} d={d} y={0} />
+      )}
     </>
   );
 }
 
-/** slab：单 box + 顶部深色檐口条（现状 8 城区贴图逻辑原样保留）。 */
+/** slab：单 box（侧A/侧B/顶 3 group）+ 檐口/雨棚/灯带/阳台/屋顶件/构造件。 */
 export function SlabShape(props: ShapeProps) {
   const {
     w, d, h,
@@ -839,40 +764,53 @@ export function SlabShape(props: ShapeProps) {
     pbrBase, pbrMid, roofPbr,
   } = props;
   const tint = buildingTint(w, d);
-  return (
-    <>
-      <mesh castShadow position={[0, h / 2, 0]}>
-        <boxGeometry args={[w, h, d]} />
-        <BoxFaces
-          sideA={facadeBase} sideB={facadeMid} top={roofMap}
-          fallback={fallbackColor} emissive={emissive} tint={tint}
-          pbrA={pbrBase} pbrB={pbrMid} pbrTop={roofPbr}
-        />
-      </mesh>
-      {/* 檐口条（0.05 高深色压顶线，契约 §2.2） */}
-      <mesh position={[0, h + 0.025, 0]}>
-        <boxGeometry args={[w + 0.08, 0.05, d + 0.08]} />
-        <meshStandardMaterial color={CORNICE_COLOR} roughness={0.8} metalness={0.2} />
-      </mesh>
-      {/* 14-3D渲染深化：底商雨棚（板楼沿街） */}
-      <Shopfront w={w} d={d} y={Math.min(u(3.6), h * 0.3)} emissive={emissive} />
-      {/* 15 阶段 N：阳台线（四面） */}
-      <BalconyLines w={w} d={d} h={h} />
-      {/* 15 阶段 N：屋顶设备 */}
-      <RooftopEquipment w={w} d={d} y={h} />
-      {/* 18-Y 构造件：顶层 ParapetRing(y=h)；塔身 AcUnits；四角 CornerQuoins（w>1.4）；
-          底层 EntranceLobby */}
-      <ParapetRing w={w} d={d} y={h} />
-      <AcUnits w={w} d={d} y={h} />
-      {w > 1.4 && <CornerQuoins w={w} d={d} h={h} />}
-      <EntranceLobby w={w} d={d} y={0} />
-    </>
+  const shopY = Math.min(u(3.6), h * 0.3);
+  const hasQuoins = w > 1.4;
+
+  // 材质表：0 侧A(base) / 1 侧B(mid) / 2 顶(roof) / 3 玻璃门 / 4 灯带
+  const matSpecs = useMemo<WallMatSpec[]>(
+    () => [
+      { kind: 'sideA' }, { kind: 'sideB' }, { kind: 'top', roof: true },
+      { kind: 'glass', c: GLASS_DOOR },
+      { kind: 'glow', intensity: Math.min(0.45, emissive * 1.2), rough: 0.3, metal: 0 },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [emissive],
   );
+
+  const ctx = useMemo<WallCtx>(() => ({
+    facadeBase, facadeMid, roofMap, fallbackColor, emissive, tint,
+    pbrBase, pbrMid, roofPbr,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [facadeBase, facadeMid, roofMap, fallbackColor, emissive, tint, pbrBase, pbrMid, roofPbr]);
+
+  const { wallParts, accentParts } = useMemo(() => {
+    const wall: GroupedMergePart[] = [
+      { geo: boxFaces(w, h, d, 0, h / 2, 0, 'A'), mat: 0 },
+      { geo: boxFaces(w, h, d, 0, h / 2, 0, 'B'), mat: 1 },
+      { geo: boxFaces(w, h, d, 0, h / 2, 0, 'top'), mat: 2 },
+      { ...entranceGlass(d), mat: 3 },
+      shopfrontGlow(w, d, shopY, 4),
+    ];
+    const accent: MergePart[] = [
+      // 檐口条（0.05 高深色压顶线，契约 §2.2）
+      boxPart(w + 0.08, 0.05, d + 0.08, 0, h + 0.025, 0, CORNICE_COLOR),
+      shopfrontAwningAccent(w, d, shopY),
+      ...balconyAccent(w, d, h),
+      ...rooftopAccent(w, d, h),
+      ...parapetAccent(w, d, h),
+      ...acUnitsAccent(w, d, h),
+      ...entranceAccent(d),
+    ];
+    if (hasQuoins) accent.push(...quoinAccent(w, d, h));
+    return { wallParts: wall, accentParts: accent };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [w, d, h, shopY, hasQuoins]);
+
+  return <MergedBuilding wallParts={wallParts} matSpecs={matSpecs} ctx={ctx} accentParts={accentParts} />;
 }
 
-/** house：box 主体（h×0.7）+ 三棱柱坡屋顶（h×0.3，roof 贴图/红瓦兜底）。
- *  18-X：屋顶接 roofPbr；无贴图时 PrismRoof 内部兜底走 synth/tile_roof（红瓦保留）。
- *  18-Y：底层 EntranceLobby；四角 CornerQuoins（w>1.4）。 */
+/** house：box 主体 + 三棱柱坡屋顶（prism group）+ 入口/角柱（点缀）。 */
 export function HouseShape(props: ShapeProps) {
   const {
     w, d, h,
@@ -882,32 +820,47 @@ export function HouseShape(props: ShapeProps) {
   const tint = buildingTint(w, d);
   const bodyH = h * 0.7;
   const roofH = h * 0.3;
-  return (
-    <>
-      <mesh castShadow position={[0, bodyH / 2, 0]}>
-        <boxGeometry args={[w, bodyH, d]} />
-        <BoxFaces
-          sideA={facadeBase} sideB={facadeMid} top={null}
-          fallback={fallbackColor} emissive={emissive} tint={tint}
-          pbrA={pbrBase} pbrB={pbrMid}
-        />
-      </mesh>
-      <PrismRoof
-        w={w + 0.12} h={roofH} d={d + 0.12} y={bodyH}
-        tex={roofMap} fallback={ROOF_TILE_COLOR} emissive={emissive}
-        pbr={roofPbr} synthStem="tile_roof"
-      />
-      {/* 18-Y：底层 EntranceLobby；四角 CornerQuoins（w>1.4） */}
-      <EntranceLobby w={w} d={d} y={0} />
-      {w > 1.4 && <CornerQuoins w={w} d={d} h={bodyH} />}
-    </>
+  const hasQuoins = w > 1.4;
+
+  // 18-X：屋顶接 roofPbr；无贴图时 prism 材质兜底走 synth/tile_roof（红瓦保留）
+  const tilePbr = useSynthPBR('tile_roof', { wrap: 'repeat', repeat: [1, 1], normalScale: [1.0, 1.0] });
+  const metalPbr = useSynthPBR('metal_deck', { wrap: 'repeat', repeat: [1, 1], normalScale: [0.9, 0.9] });
+
+  // 材质表：0 侧A(base) / 1 侧B(mid) / 2 顶(兜底) / 3 坡屋顶 / 4 玻璃门
+  const matSpecs = useMemo<WallMatSpec[]>(
+    () => [
+      { kind: 'sideA' }, { kind: 'sideB' }, { kind: 'top', roof: false },
+      { kind: 'prism', fallback: ROOF_TILE_COLOR, stem: 'tile_roof' },
+      { kind: 'glass', c: GLASS_DOOR },
+    ],
+    [],
   );
+
+  const ctx = useMemo<WallCtx>(() => ({
+    facadeBase, facadeMid, roofMap, fallbackColor, emissive, tint,
+    pbrBase, pbrMid, roofPbr, tilePbr, metalPbr,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [facadeBase, facadeMid, roofMap, fallbackColor, emissive, tint, pbrBase, pbrMid, roofPbr, tilePbr, metalPbr]);
+
+  const { wallParts, accentParts } = useMemo(() => {
+    const wall: GroupedMergePart[] = [
+      { geo: boxFaces(w, bodyH, d, 0, bodyH / 2, 0, 'A'), mat: 0 },
+      { geo: boxFaces(w, bodyH, d, 0, bodyH / 2, 0, 'B'), mat: 1 },
+      { geo: boxFaces(w, bodyH, d, 0, bodyH / 2, 0, 'top'), mat: 2 },
+      // 坡屋顶（w+0.12 外扩，几何 = 原 PrismRoof）
+      { geo: prismGeometry(w + 0.12, roofH, d + 0.12), x: 0, y: bodyH, z: 0, mat: 3 },
+      { ...entranceGlass(d), mat: 4 },
+    ];
+    const accent: MergePart[] = [...entranceAccent(d)];
+    if (hasQuoins) accent.push(...quoinAccent(w, d, bodyH));
+    return { wallParts: wall, accentParts: accent };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [w, d, bodyH, roofH, hasQuoins]);
+
+  return <MergedBuilding wallParts={wallParts} matSpecs={matSpecs} ctx={ctx} accentParts={accentParts} />;
 }
 
-/** shed：大跨 box（h×0.8，w×1.2）+ 山墙三角 + 1-2 根烟囱（顶到 h×1.3）。
- *  18-Y：w>1.4 用 SawtoothRoof 替代 PrismRoof（北向采光带可辨）；
- *  锯齿顶时屋檐加 ParapetRing 作檐口收边（人字顶与坡屋顶几何冲突，故跳过）。
- *  18-X：屋顶接 roofPbr；人字顶无贴图时 PrismRoof 走 synth/metal_deck 兜底（厂房屋面）。 */
+/** shed：大跨 box + 卷帘门 + 高窗带 + 锯齿顶/人字顶 + 烟囱。 */
 export function ShedShape(props: ShapeProps) {
   const {
     w, d, h,
@@ -918,49 +871,59 @@ export function ShedShape(props: ShapeProps) {
   const bw = w * 1.2;
   const bH = h * 0.8;
   const chimneyH = h * 0.5;
-  // 烟囱 1-2 根：由占地宽确定性决定（不引随机源，同楼同形）
-  const chimneys = w > 1.5 ? [-bw * 0.25, bw * 0.25] : [bw * 0.25];
   const useSaw = w > 1.4;
-  return (
-    <>
-      <mesh castShadow position={[0, bH / 2, 0]}>
-        <boxGeometry args={[bw, bH, d]} />
-        <BoxFaces
-          sideA={facadeBase} sideB={facadeMid} top={null}
-          fallback={fallbackColor} emissive={emissive} tint={tint}
-          pbrA={pbrBase} pbrB={pbrMid}
-        />
-      </mesh>
-      {/* 15 阶段 N：卷帘门（临路侧 z=+d/2） */}
-      <group position={[0, 0, d / 2]}>
-        <ShutterDoor w={bw} h={bH} />
-      </group>
-      {/* 18-Y：高窗带（沿 +Z 面两条横向高窗） */}
-      <ShedWindowBands w={w} d={d} h={bH} />
-      {/* 屋面：w>1.4 锯齿（替代人字顶）；否则人字顶 + metal_deck 兜底 PBR */}
-      {useSaw ? (
-        <SawtoothRoof w={bw} d={d} y={bH} />
-      ) : (
-        <PrismRoof
-          w={bw} h={h * 0.2} d={d} y={bH}
-          tex={roofMap} fallback={GABLE_COLOR} emissive={emissive}
-          pbr={roofPbr} synthStem="metal_deck"
-        />
-      )}
-      {/* 锯齿顶时屋檐加 ParapetRing 作檐口收边（人字顶与坡屋顶几何冲突，跳过） */}
-      {useSaw && <ParapetRing w={bw} d={d} y={bH} />}
-      {/* 烟囱（细圆柱，半径 u(0.8)，顶到 1.3×总高） */}
-      {chimneys.map((cx, i) => (
-        <mesh key={i} castShadow position={[cx, bH + chimneyH / 2, -d * 0.2]}>
-          <cylinderGeometry args={[u(0.8), u(0.9), chimneyH, 10]} />
-          <meshStandardMaterial color={GABLE_COLOR} roughness={0.75} metalness={0.3} />
-        </mesh>
-      ))}
-    </>
-  );
+
+  const tilePbr = useSynthPBR('tile_roof', { wrap: 'repeat', repeat: [1, 1], normalScale: [1.0, 1.0] });
+  const metalPbr = useSynthPBR('metal_deck', { wrap: 'repeat', repeat: [1, 1], normalScale: [0.9, 0.9] });
+
+  // 材质表：0 侧A(base) / 1 侧B(mid) / 2 顶(兜底) / 3 屋面（锯齿 deck 或人字 metal_deck）/ 4 采光带(锯齿)
+  const matSpecs = useMemo<WallMatSpec[]>(() => {
+    const specs: WallMatSpec[] = [
+      { kind: 'sideA' }, { kind: 'sideB' }, { kind: 'top', roof: false },
+      useSaw ? { kind: 'deck' } : { kind: 'prism', fallback: GABLE_COLOR, stem: 'metal_deck' },
+    ];
+    if (useSaw) specs.push({ kind: 'glass', c: GLASS_SKY });
+    return specs;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useSaw]);
+
+  const ctx = useMemo<WallCtx>(() => ({
+    facadeBase, facadeMid, roofMap, fallbackColor, emissive, tint,
+    pbrBase, pbrMid, roofPbr, tilePbr, metalPbr,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [facadeBase, facadeMid, roofMap, fallbackColor, emissive, tint, pbrBase, pbrMid, roofPbr, tilePbr, metalPbr]);
+
+  const { wallParts, accentParts } = useMemo(() => {
+    const wall: GroupedMergePart[] = [
+      { geo: boxFaces(bw, bH, d, 0, bH / 2, 0, 'A'), mat: 0 },
+      { geo: boxFaces(bw, bH, d, 0, bH / 2, 0, 'B'), mat: 1 },
+      { geo: boxFaces(bw, bH, d, 0, bH / 2, 0, 'top'), mat: 2 },
+    ];
+    const accent: MergePart[] = [
+      ...shutterAccent(bw, bH, d),
+      ...windowBandAccent(w, d, bH),
+    ];
+    if (useSaw) {
+      // 锯齿顶：3 齿 deck + 3 采光带 glass
+      const saw = sawtoothParts(bw, d, bH, 3, 4);
+      wall.push(...saw.deck, ...saw.glass);
+      // 锯齿顶时屋檐加女儿墙作檐口收边（人字顶与坡屋顶几何冲突，跳过）
+      accent.push(...parapetAccent(bw, d, bH));
+    } else {
+      // 人字顶（几何 = 原 PrismRoof）
+      wall.push({ geo: prismGeometry(bw, h * 0.2, d), x: 0, y: bH, z: 0, mat: 3 });
+    }
+    // 烟囱 1-2 根：由占地宽确定性决定（不引随机源，同楼同形）
+    const chimneys = w > 1.5 ? [-bw * 0.25, bw * 0.25] : [bw * 0.25];
+    for (const cx of chimneys) accent.push(chimneyAccent(cx, bH, chimneyH, d));
+    return { wallParts: wall, accentParts: accent };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [w, bw, bH, d, h, useSaw, chimneyH]);
+
+  return <MergedBuilding wallParts={wallParts} matSpecs={matSpecs} ctx={ctx} accentParts={accentParts} />;
 }
 
-/** pavilion：低矮平顶 box（h ≤ u(9)）+ 大挑檐（顶面外扩 0.15）。 */
+/** pavilion：低矮平顶 box + 大挑檐（点缀）。 */
 export function PavilionShape(props: ShapeProps) {
   const {
     w, d, h,
@@ -969,65 +932,29 @@ export function PavilionShape(props: ShapeProps) {
   } = props;
   const tint = buildingTint(w, d);
   const bH = Math.min(h, u(9));
-  return (
-    <>
-      <mesh castShadow position={[0, bH / 2, 0]}>
-        <boxGeometry args={[w, bH, d]} />
-        <BoxFaces
-          sideA={facadeBase} sideB={facadeBase} top={roofMap}
-          fallback={fallbackColor} emissive={emissive} tint={tint}
-          pbrA={pbrBase} pbrB={pbrBase} pbrTop={roofPbr}
-        />
-      </mesh>
-      {/* 大挑檐（外扩 0.15，木色） */}
-      <mesh castShadow position={[0, bH + 0.02, 0]}>
-        <boxGeometry args={[w + 0.3, 0.04, d + 0.3]} />
-        <meshStandardMaterial color={EAVE_COLOR} roughness={0.85} metalness={0.05} />
-      </mesh>
-    </>
-  );
-}
 
-/**
- * 坡屋顶 mesh（几何 useMemo + dispose；材质 DoubleSide 防背面剔除）。
- * 18-X：合成材质兜底走 pbr/synth/tile_roof（house）或 metal_deck（shed），normalScale 1.0/0.9。
- * 有贴图时 spread roofPbr 的 matProps（窗格/瓦纹凹凸）。synth 兜底由 useSynthPBR 拼 URL，
- * building_shapes 不直接 import assets（满足 02 §3.3 stem 拼接约束）。
- */
-function PrismRoof({
-  w, h, d, y, tex, fallback, emissive, pbr, synthStem,
-}: {
-  w: number; h: number; d: number; y: number;
-  tex: THREE.Texture | null; fallback: string; emissive: number;
-  pbr?: SharedPBR;
-  synthStem: SynthStem;
-}) {
-  const geo = useMemo(() => prismGeometry(w, h, d), [w, h, d]);
-  useEffect(() => () => geo.dispose(), [geo]);
-  // 两套 synth 常驻 hook（缓存共享，零额外请求）——house 走 tile_roof，shed 走 metal_deck。
-  const tilePbr = useSynthPBR('tile_roof', { wrap: 'repeat', repeat: [1, 1], normalScale: [1.0, 1.0] });
-  const metalPbr = useSynthPBR('metal_deck', { wrap: 'repeat', repeat: [1, 1], normalScale: [0.9, 0.9] });
-  const synth = synthStem === 'metal_deck' ? metalPbr : tilePbr;
-  // 02 §2.3 行 3：有贴图时用贴图 PBR；无贴图时用 synth兜底（红瓦/压型钢板）。
-  const eff = (tex ? pbr : undefined) ?? synth;
-  const base = {
-    map: tex ?? undefined,
-    color: tex ? '#ffffff' : fallback,
-    emissive: tex ? EMISSIVE_WINDOW : fallback,
-    emissiveMap: tex ?? undefined,
-    emissiveIntensity: emissive * 0.5,
-    roughness: 0.85,
-    metalness: 0.05,
-    envMapIntensity: 0.35,
-  };
-  return (
-    <mesh castShadow geometry={geo} position={[0, y, 0]}>
-      <meshStandardMaterial
-        {...withPBR(base, eff)}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
-  );
+  // 材质表：0 侧(facadeBase 四面) / 1 顶(roof)
+  const matSpecs = useMemo<WallMatSpec[]>(() => [{ kind: 'sideA' }, { kind: 'top', roof: true }], []);
+
+  const ctx = useMemo<WallCtx>(() => ({
+    facadeBase, facadeMid: facadeBase, roofMap, fallbackColor, emissive, tint,
+    pbrBase, pbrMid: pbrBase, roofPbr,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [facadeBase, roofMap, fallbackColor, emissive, tint, pbrBase, roofPbr]);
+
+  const { wallParts, accentParts } = useMemo(() => {
+    const wall: GroupedMergePart[] = [
+      { geo: boxFaces(w, bH, d, 0, bH / 2, 0, 'A'), mat: 0 },
+      { geo: boxFaces(w, bH, d, 0, bH / 2, 0, 'B'), mat: 0 },
+      { geo: boxFaces(w, bH, d, 0, bH / 2, 0, 'top'), mat: 1 },
+    ];
+    // 大挑檐（外扩 0.15，木色）
+    const accent: MergePart[] = [boxPart(w + 0.3, 0.04, d + 0.3, 0, bH + 0.02, 0, EAVE_COLOR)];
+    return { wallParts: wall, accentParts: accent };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [w, d, bH]);
+
+  return <MergedBuilding wallParts={wallParts} matSpecs={matSpecs} ctx={ctx} accentParts={accentParts} />;
 }
 
 /** archetype → 渲染器分发表（BuildingMesh 唯一入口）。 */

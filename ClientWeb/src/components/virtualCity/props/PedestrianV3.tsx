@@ -18,12 +18,13 @@
  * 契约：lag_docs/虚拟城市/已实现/18-3D城市PBR材质与真实城市冲刺/02-架构设计 §4.1。
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { u } from '../cityScale';
 import { useSharedGLTF, blenderModelsEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 export interface PedestrianV3Props {
   /** 漫步路径折线（世界坐标 x,z；首尾不闭合，到端点折返）。 */
@@ -61,23 +62,18 @@ const GAIT_OMEGA = 12;
 /**
  * 求 path 上 t（0..1）处的位置与行进方向（forward=false 时逆序折返）。
  * 推进语义与 PedestrianV2.posAtPath 同源：按段长归一化插值。
+ * 批次 28 A4：segs/total 由调用方 useMemo 预计算（原每帧重建 segs[] 数组，
+ * 103 行人 × 60fps = GC churn），路径不变则零分配。
  */
 function samplePath(
   path: Array<[number, number]>,
+  segs: number[],
+  total: number,
   t: number,
   forward: boolean,
 ): { x: number; z: number; dx: number; dz: number } {
   if (path.length === 0) return { x: 0, z: 0, dx: 0, dz: 1 };
   if (path.length === 1) return { x: path[0][0], z: path[0][1], dx: 0, dz: 1 };
-  const segs: number[] = [];
-  let total = 0;
-  for (let i = 1; i < path.length; i++) {
-    const dx = path[i][0] - path[i - 1][0];
-    const dz = path[i][1] - path[i - 1][1];
-    const len = Math.sqrt(dx * dx + dz * dz) || 1e-6;
-    segs.push(len);
-    total += len;
-  }
   const realT = forward ? t : 1 - t;
   let acc = 0;
   for (let i = 0; i < segs.length; i++) {
@@ -108,7 +104,8 @@ function samplePath(
   return { x: last[0], z: last[1], dx: 0, dz: 1 };
 }
 
-export function PedestrianV3({ path, speed = 0.55, outfit = 0, phase = 0 }: PedestrianV3Props) {
+// 批次 28 A1：memo —— path（layout useMemo）/ speed / outfit / phase 全为稳定引用。
+export const PedestrianV3 = memo(function PedestrianV3({ path, speed = 0.55, outfit = 0, phase = 0 }: PedestrianV3Props) {
   // 19-Blender3D模型集成：.glb 模式优先级最高，绕过原 6 mesh + 摆臂逻辑
   const modelUrlStr = modelUrl('characters', 'pedestrian_walk');
   const blenderOn = blenderModelsEnabled();
@@ -164,15 +161,18 @@ export function PedestrianV3({ path, speed = 0.55, outfit = 0, phase = 0 }: Pede
   useEffect(() => () => armGeo.dispose(), [armGeo]);
   useEffect(() => () => legGeo.dispose(), [legGeo]);
 
-  // path 总长（推进归一化）
-  const totalLen = useMemo(() => {
+  // path 段长表 + 总长（批次 28 A4：useMemo 预计算，samplePath 不再逐帧重建 segs[]）
+  const { segs, totalLen } = useMemo(() => {
+    const s: number[] = [];
     let total = 0;
     for (let i = 1; i < path.length; i++) {
       const dx = path[i][0] - path[i - 1][0];
       const dz = path[i][1] - path[i - 1][1];
-      total += Math.sqrt(dx * dx + dz * dz);
+      const len = Math.sqrt(dx * dx + dz * dz) || 1e-6;
+      s.push(len);
+      total += len;
     }
-    return total || 1;
+    return { segs: s, totalLen: total || 1 };
   }, [path]);
 
   const [topColor, pantsColor, skinColor] = PEDESTRIAN_OUTFITS[outfit] ?? PEDESTRIAN_OUTFITS[0];
@@ -185,9 +185,18 @@ export function PedestrianV3({ path, speed = 0.55, outfit = 0, phase = 0 }: Pede
     if (legRRef.current) legRRef.current.rotation.x = 0;
   };
 
+  /** 批次 28 A4：动画/位移更新节流 ~30Hz（acc 合并 delta，隔帧零工作）。 */
+  const stepAccRef = useRef(0);
+
   useFrame((_state, delta) => {
+    // 批次 28 A4：节流 —— 帧间隔不足 1/30s 时累积 delta 直接返回；
+    // mixer / 位移 / 摆臂统一按合并后的 step 推进（推进量守恒，时序不变）。
+    stepAccRef.current += delta;
+    if (stepAccRef.current < 1 / 30) return;
+    const step = stepAccRef.current;
+    stepAccRef.current = 0;
     // 19-Blender3D模型集成：GLB 模式 mixer 推进 walk clip（与 path 推进 / 摆臂逻辑并行）
-    mixerRef.current?.update(delta);
+    mixerRef.current?.update(step);
     const g = groupRef.current;
     if (!g) return;
     // 全静止：吸附 path 起点 + 四肢归零（与 V2 REDUCED_MOTION 行为一致）
@@ -201,32 +210,32 @@ export function PedestrianV3({ path, speed = 0.55, outfit = 0, phase = 0 }: Pede
     }
     // 站定（中央公园看景）：位置停在相位处，不摆肢
     if (speed <= 0) {
-      const p = samplePath(path, tRef.current, forwardRef.current);
+      const p = samplePath(path, segs, totalLen, tRef.current, forwardRef.current);
       g.position.x = p.x;
       g.position.z = p.z;
       stillLimbs();
       return;
     }
-    elapsedRef.current += delta;
+    elapsedRef.current += step;
     // 端点停顿：折返前停 0.5s（站立）
     if (elapsedRef.current < pauseUntilRef.current) {
       stillLimbs();
       return;
     }
-    tRef.current += (delta * speed) / totalLen;
+    tRef.current += (step * speed) / totalLen;
     if (tRef.current >= 1) {
       tRef.current -= 1;
       forwardRef.current = !forwardRef.current;
       pauseUntilRef.current = elapsedRef.current + 0.5;
     }
-    const p = samplePath(path, tRef.current, forwardRef.current);
+    const p = samplePath(path, segs, totalLen, tRef.current, forwardRef.current);
     g.position.x = p.x;
     g.position.z = p.z;
     // 步态沉浮（沿 V2 幅度 u(0.04)）
     g.position.y = Math.abs(Math.sin(elapsedRef.current * 4)) * u(0.04);
     g.rotation.y = Math.atan2(p.dx, p.dz);
     // 摆肢反相：左臂 + 左腿反相、右半身再 +π
-    gaitRef.current += delta * GAIT_OMEGA * speed;
+    gaitRef.current += step * GAIT_OMEGA * speed;
     const s = Math.sin(gaitRef.current);
     if (armLRef.current) armLRef.current.rotation.x = s * ARM_SWING;
     if (armRRef.current) armRRef.current.rotation.x = -s * ARM_SWING;
@@ -235,9 +244,10 @@ export function PedestrianV3({ path, speed = 0.55, outfit = 0, phase = 0 }: Pede
   });
 
   const start = path[0] ?? [0, 0];
+  const info = useObjectInfoProps('actor.pedestrian', { anchorY: 2.0 });
 
   return (
-    <group ref={groupRef} position={[start[0], 0, start[1]]}>
+    <group {...info} ref={groupRef} userData={{ bucket: 'pedestrians' }} position={[start[0], 0, start[1]]}>
       {/* 19-Blender3D模型集成：GLB 模式优先级最高（GLB 自带摆臂动画） */}
       {glbCloned ? (
         <primitive object={glbCloned} />
@@ -269,6 +279,6 @@ export function PedestrianV3({ path, speed = 0.55, outfit = 0, phase = 0 }: Pede
       )}
     </group>
   );
-}
+});
 
 export default PedestrianV3;

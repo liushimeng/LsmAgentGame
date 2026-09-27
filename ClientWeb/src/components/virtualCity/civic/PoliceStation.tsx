@@ -7,6 +7,7 @@
 import { u } from '../cityScale';
 import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const BLUE = '#2a4e7a';
 const WHITE = '#e8e3dc';
@@ -14,13 +15,21 @@ const CAR_BLACK = '#2a2e36';
 
 export function PoliceStation() {
   const url = modelUrl('civic', 'police_station');
+  // 批次 28 B2：警察局信息交互。
+  const info = useObjectInfoProps('civic.police-station', { anchorY: 5 });
   if (!url || !blenderEnabled()) {
-    return <PoliceStationFallback />;
+    return (
+      <group {...info}>
+        <PoliceStationFallback />
+      </group>
+    );
   }
   return (
-    <Model url={url} position={[-5.8, 0, -8.5]} castShadow receiveShadow>
-      <PoliceStationFallback />
-    </Model>
+    <group {...info}>
+      <Model url={url} position={[-5.8, 0, -8.5]} castShadow receiveShadow>
+        <PoliceStationFallback />
+      </Model>
+    </group>
   );
 }
 

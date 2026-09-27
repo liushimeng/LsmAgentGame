@@ -10,10 +10,12 @@
  * 见 cityScale.ts。
  */
 
+import { memo } from 'react';
 import * as THREE from 'three';
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/virtualCity';
 import { useSharedTexture } from '@/engine3d';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 type RooftopVariant = 'ac' | 'tank' | 'antenna';
 
@@ -32,7 +34,8 @@ const ACC_COLORS: Record<RooftopVariant, string> = {
   antenna: '#666870',
 };
 
-export function RooftopAcc({
+// 批次 28 A1：memo —— props 稳定引用（原语 / 常量）。
+export const RooftopAcc = memo(function RooftopAcc({
   x,
   y,
   z,
@@ -41,10 +44,14 @@ export function RooftopAcc({
 }: Props) {
   // 14-3D渲染深化：共享贴图缓存
   const tex = useSharedTexture(propUrl('rooftop', variant));
+  const info = useObjectInfoProps('prop.rooftop-acc', {
+    anchorY: 0.5,
+    extra: [{ label: 'variant', value: variant }],
+  });
 
   // 简化几何按 variant 切换
   return (
-    <group position={[x, y, z]} rotation={[0, rotation, 0]}>
+    <group {...info} position={[x, y, z]} rotation={[0, rotation, 0]}>
       {tex ? (
         <Billboard position={[0, 0.15, 0]}>
           <mesh>
@@ -95,4 +102,4 @@ export function RooftopAcc({
       )}
     </group>
   );
-}
+});

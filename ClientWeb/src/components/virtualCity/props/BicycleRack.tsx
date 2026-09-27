@@ -10,7 +10,9 @@
  * 契约：lag_docs/虚拟城市/已实现/15-3D城市渲染深化/02-架构设计 §4.1。
  */
 
+import { memo } from 'react';
 import { u } from '../cityScale';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const FRAME_COLOR = '#3a3f46';     // 深灰车架
 const TIRE_COLOR = '#1a1a1d';      // 黑轮胎
@@ -22,15 +24,17 @@ interface Props {
   rotation?: number;
 }
 
-export function BicycleRack({ x, z, rotation = 0 }: Props) {
+// 批次 28 A1：memo —— props 稳定引用（原语 / 常量）。
+export const BicycleRack = memo(function BicycleRack({ x, z, rotation = 0 }: Props) {
   const WHEEL_R = u(0.28);     // 轮半径
   const WHEEL_W = u(0.05);     // 轮厚
   const WHEEL_DX = u(0.55);    // 前后轮距
   const FRAME_R = u(0.018);    // 车架管半径
   const SEAT_H = u(0.85);      // 座椅高度
+  const info = useObjectInfoProps('prop.bicycle-rack', { anchorY: 1.2 });
 
   return (
-    <group position={[x, 0, z]} rotation={[0, rotation, 0]}>
+    <group {...info} position={[x, 0, z]} rotation={[0, rotation, 0]}>
       {/* 前轮（X+ 方向） */}
       <mesh position={[+WHEEL_DX, WHEEL_R, 0]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[WHEEL_R, WHEEL_R, WHEEL_W, 16]} />
@@ -58,6 +62,6 @@ export function BicycleRack({ x, z, rotation = 0 }: Props) {
       </mesh>
     </group>
   );
-}
+});
 
 export default BicycleRack;

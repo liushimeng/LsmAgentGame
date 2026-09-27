@@ -7,6 +7,7 @@
 import { u } from '../cityScale';
 import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const TOWER_DARK = '#5a6270';
 const PANEL_WHITE = '#e8e8e8';
@@ -14,13 +15,21 @@ const LIGHT_RED = '#ff3b30';
 
 export function CommTower() {
   const url = modelUrl('civic', 'comm_tower');
+  // 批次 28 B2：通讯塔信息交互。
+  const info = useObjectInfoProps('civic.comm-tower', { anchorY: 6 });
   if (!url || !blenderEnabled()) {
-    return <CommTowerFallback />;
+    return (
+      <group {...info}>
+        <CommTowerFallback />
+      </group>
+    );
   }
   return (
-    <Model url={url} position={[-6, 0, 10]} castShadow>
-      <CommTowerFallback />
-    </Model>
+    <group {...info}>
+      <Model url={url} position={[-6, 0, 10]} castShadow>
+        <CommTowerFallback />
+      </Model>
+    </group>
   );
 }
 

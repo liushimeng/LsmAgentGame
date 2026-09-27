@@ -7,7 +7,9 @@
  * 契约：lag_docs/虚拟城市/已实现/15-3D城市渲染深化/02-架构设计 §4.1。
  */
 
+import { memo } from 'react';
 import { u } from '../cityScale';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const POST_RED = '#c8453a';
 const POST_DARK = '#9c352e';
@@ -19,21 +21,23 @@ interface Props {
   rotation?: number;
 }
 
-export function Mailbox({ x, z, rotation = 0 }: Props) {
+// 批次 28 A1/A3：memo + 街具默认不投影（阴影 pass caster 裁剪）。
+export const Mailbox = memo(function Mailbox({ x, z, rotation = 0 }: Props) {
   const R = u(0.16);
   const H = u(0.65);
   const CAP_R = R * 1.05;
   const CAP_H = u(0.06);
+  const info = useObjectInfoProps('prop.mailbox', { anchorY: 0.7 });
 
   return (
-    <group position={[x, 0, z]} rotation={[0, rotation, 0]}>
+    <group {...info} position={[x, 0, z]} rotation={[0, rotation, 0]}>
       {/* 桶身 */}
-      <mesh castShadow position={[0, H / 2, 0]}>
+      <mesh position={[0, H / 2, 0]}>
         <cylinderGeometry args={[R, R * 0.95, H, 12]} />
         <meshStandardMaterial color={POST_RED} roughness={0.5} metalness={0.3} />
       </mesh>
       {/* 圆顶盖 */}
-      <mesh castShadow position={[0, H + CAP_H / 2, 0]}>
+      <mesh position={[0, H + CAP_H / 2, 0]}>
         <cylinderGeometry args={[CAP_R, R, CAP_H, 12]} />
         <meshStandardMaterial color={POST_DARK} roughness={0.5} metalness={0.4} />
       </mesh>
@@ -44,6 +48,6 @@ export function Mailbox({ x, z, rotation = 0 }: Props) {
       </mesh>
     </group>
   );
-}
+});
 
 export default Mailbox;

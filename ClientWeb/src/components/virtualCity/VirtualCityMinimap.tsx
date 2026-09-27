@@ -6,7 +6,7 @@
  *     批次 20 后 SCALE=132/120=1.1 <1.4 → 只画色块，悬停以 canvas title 显示区名；
  *   - agent 点（职业色 4px 圆，与主地图 districtSeatOffset 同一落位公式）；
  *   - 相机视野框（主 Canvas viewRef 回传 target/distance 推算白框）；
- *   - rAF 与主 Canvas 同频重绘。
+ *   - rAF 脏标记重绘（批次 28 A4：相机/玩家/选区变化才画，静止零绘制）。
  * 交互：点击城区 → onSelectDistrict（主地图平滑聚焦 + 面板联动）。
  */
 
@@ -74,6 +74,9 @@ export function VirtualCityMinimap({ gameState, viewRef, selectedDistrict, onSel
   };
 
   // rAF 重绘循环（读 ref，避免 React 渲染节流）。
+  // 批次 28 A4：脏标记重画 —— 相机移动（>0.01 世界单位）或玩家数据 / 选区变化
+  // 才全量重绘；静止时每帧只做 3 个浮点比较，零 Canvas 绘制（原 rAF 每帧全量
+  // 重绘与 WebGL 抢主线程）。
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -83,8 +86,29 @@ export function VirtualCityMinimap({ gameState, viewRef, selectedDistrict, onSel
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     let raf = 0;
+    // 上次绘制时的脏检查签名（相机 x/z/dist + 选区 + gameState 引用）。
+    let lastX = NaN;
+    let lastZ = NaN;
+    let lastDist = NaN;
+    let lastSel: string | null | undefined;
+    let lastGs: unknown;
 
     const draw = () => {
+      raf = requestAnimationFrame(draw);
+      const v0 = viewRef.current;
+      const gs0 = stateRef.current;
+      const sel0 = selectedRef.current;
+      const moved =
+        Math.abs(v0.x - lastX) > 0.01 ||
+        Math.abs(v0.z - lastZ) > 0.01 ||
+        Math.abs(v0.dist - lastDist) > 0.01;
+      if (!moved && sel0 === lastSel && gs0 === lastGs) return;
+      lastX = v0.x;
+      lastZ = v0.z;
+      lastDist = v0.dist;
+      lastSel = sel0;
+      lastGs = gs0;
+
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, SIZE, SIZE);
       ctx.fillStyle = '#0b0f16';
@@ -148,8 +172,6 @@ export function VirtualCityMinimap({ gameState, viewRef, selectedDistrict, onSel
       ctx.strokeStyle = 'rgba(255,255,255,0.85)';
       ctx.lineWidth = 1;
       ctx.strokeRect(center.px - half, center.py - half, half * 2, half * 2);
-
-      raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);

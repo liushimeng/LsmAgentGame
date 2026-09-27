@@ -1,0 +1,126 @@
+/* virtualCity-objectinfo.css — 批次 28 物件信息悬浮卡 / 详情卡
+ *
+ * 视觉语言复用 .virtualCity-district-card（styles/virtualCity.css）：
+ * 暗底 rgba(15,20,28,0.94)、圆角 10；hover 卡 pointer-events:none 不挡射线。
+ * 对比度遵守 CLAUDE.md §26：正文 ≥4.5:1、徽章 ≥5.0:1（深底亮字，无 25% 透明底）。
+ */
+
+.virtualCity-objectinfo-card {
+  min-width: 200px;
+  max-width: 320px;
+  padding: 10px 12px;
+  background: rgba(15, 20, 28, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  color: #e8eef5;
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: left;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+/* hover 紧凑卡：绝不吃指针事件（悬浮读完即散，命中仍落在 3D 物件上） */
+.virtualCity-objectinfo-card--hover {
+  pointer-events: none;
+  max-width: 260px;
+}
+
+.virtualCity-objectinfo-card--detail {
+  max-width: 340px;
+}
+
+.virtualCity-objectinfo-card__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.virtualCity-objectinfo-card__icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.virtualCity-objectinfo-card__name {
+  font-weight: 700;
+  font-size: 13px;
+  color: #f2f6fa;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 分类徽章：#9fd0ff on #2b3a4d ≈ 7:1（≥5.0 硬阈值） */
+.virtualCity-objectinfo-card__badge {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #2b3a4d;
+  color: #9fd0ff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.virtualCity-objectinfo-card__desc {
+  color: #c3ceda; /* ≈9:1 on #0f141c */
+  font-size: 12px;
+}
+
+.virtualCity-objectinfo-card__desc--full {
+  margin-bottom: 8px;
+}
+
+.virtualCity-objectinfo-card__extras {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 6px;
+}
+
+.virtualCity-objectinfo-card__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.virtualCity-objectinfo-card__row > span {
+  color: #9aa7b5; /* ≈7:1 on #0f141c */
+  flex: none;
+}
+
+.virtualCity-objectinfo-card__row > b {
+  color: #e8eef5;
+  font-weight: 600;
+  text-align: right;
+  word-break: break-all;
+}
+
+.virtualCity-objectinfo-card__close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #e8eef5;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.virtualCity-objectinfo-card__close:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.virtualCity-objectinfo-card__close:focus-visible {
+  outline: 2px solid #9fd0ff;
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .virtualCity-objectinfo-card {
+    transition: none;
+  }
+}

@@ -16,6 +16,171 @@
 import { useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeParts } from './geoMerge';
+
+/**
+ * 批次 28 二轮：GLB 等材质归并（加载时一次性，缓存后全部实例受益）。
+ *
+ * Blender 导出的 .glb 常见「每部件一材质」——例如 sedan 18 材质中仅 7 种
+ * 视觉属性互异（4 轮胎同黑、4 轮毂同灰、4 面车窗同玻璃……）。GLTFLoader 对
+ * 多 primitive 网格产出「Group + 每 primitive 一个独立 Mesh」（非单 mesh 多 group），
+ * 视觉重复的兄弟 mesh 各自成 draw call。此处做两层归并，**渲染属性完全一致**
+ * （颜色/粗糙度/金属度/emissive/透明/side/贴图实例）才合并：
+ *
+ *   a) 兄弟 mesh 归并：Group 子级全为 Mesh → 按材质签名分桶，把桶内几何经
+ *      各自局部矩阵烘焙进合并 mesh（几何全等，像素级零回归）。
+ *   b) 多 group 单 mesh 归并：材质数组 + 连续 group 布局 → 只重排 index 段顺序
+ *      使同材质 group 连续（不透明几何三角形次序不影响 Z-buffer 结果；桶按
+ *      首次出现次序输出，跨材质透明混合次序不变）。
+ *
+ * 跳过：SkinnedMesh / morph 几何 / vertexColors（COLOR_0 顶点色无法经部件级
+ * 填充保真）/ 属性集超出 position+normal+uv 的部件（保守，本仓 GLB 均满足）。
+ */
+function materialSignature(m: THREE.Material): string {
+  const s = m as THREE.MeshStandardMaterial;
+  return JSON.stringify([
+    s.type,
+    s.color?.getHexString?.() ?? null,
+    s.roughness, s.metalness,
+    s.emissive?.getHexString?.() ?? null, s.emissiveIntensity,
+    s.transparent, s.opacity, s.alphaTest, s.side, s.flatShading, s.vertexColors,
+    s.map?.uuid ?? null,
+    s.normalMap?.uuid ?? null,
+    s.roughnessMap?.uuid ?? null,
+    s.metalnessMap?.uuid ?? null,
+    s.emissiveMap?.uuid ?? null,
+    s.aoMap?.uuid ?? null,
+  ]);
+}
+
+/** 部件可安全参与兄弟归并的判定（属性/蒙皮/morph/顶点色守卫）。 */
+function siblingMergeable(mesh: THREE.Mesh): boolean {
+  const m = mesh as unknown as { isSkinnedMesh?: boolean };
+  if (m.isSkinnedMesh) return false;
+  const g = mesh.geometry;
+  if (!g) return false;
+  if (Object.keys(g.morphAttributes ?? {}).length > 0) return false;
+  const mat = mesh.material as THREE.MeshStandardMaterial;
+  if (Array.isArray(mat) || mat.vertexColors) return false;
+  for (const name of Object.keys(g.attributes)) {
+    if (name !== 'position' && name !== 'normal' && name !== 'uv') return false;
+  }
+  return true;
+}
+
+/** a) 兄弟 mesh 按材质签名归并（GLTFLoader 多 primitive Group 的主路径）。 */
+function mergeSiblingMeshesByMaterial(group: THREE.Group): void {
+  const kids = group.children as THREE.Object3D[];
+  if (kids.length < 2) return;
+  const meshes: THREE.Mesh[] = [];
+  for (const k of kids) {
+    if (!(k as unknown as { isMesh?: boolean }).isMesh) return; // 混有非 Mesh 子级 → 整组跳过
+    meshes.push(k as THREE.Mesh);
+  }
+  // 桶：签名 → mesh 列表（保持首次出现次序）
+  const bucketOrder: string[] = [];
+  const buckets = new Map<string, THREE.Mesh[]>();
+  for (const mesh of meshes) {
+    if (!siblingMergeable(mesh)) return; // 任一部件不可并 → 整组跳过（保守）
+    const sig = materialSignature(mesh.material as THREE.Material);
+    let list = buckets.get(sig);
+    if (!list) {
+      list = [];
+      buckets.set(sig, list);
+      bucketOrder.push(sig);
+    }
+    list.push(mesh);
+  }
+  const mergeableBuckets = bucketOrder.filter((sig) => (buckets.get(sig)!.length > 1));
+  if (mergeableBuckets.length === 0) return; // 无重复材质，无可并
+
+  for (const sig of mergeableBuckets) {
+    const list = buckets.get(sig)!;
+    const parts = list.map((mesh) => ({
+      geo: mesh.geometry,
+      matrix: mesh.matrix.clone(), // 烘焙各自局部变换 → 几何全等
+    }));
+    const merged = mergeParts(parts);
+    const first = list[0];
+    const mergedMesh = new THREE.Mesh(merged, first.material);
+    mergedMesh.name = `${first.name || 'mesh'}-merged-${list.length}`;
+    // cast/receive 取「任一原部件为真」；可见性/剔除跟随原组语义
+    mergedMesh.castShadow = list.some((m) => m.castShadow);
+    mergedMesh.receiveShadow = list.some((m) => m.receiveShadow);
+    group.add(mergedMesh);
+    for (const mesh of list) {
+      group.remove(mesh);
+      mesh.geometry.dispose(); // 原几何已被合并副本取代（材质共享不 dispose）
+    }
+  }
+}
+
+/** b) 多 group 单 mesh 等材质归并（手工构造/特殊 GLB 兜底路径）。 */
+function mergeEqualMaterialGroups(root: THREE.Object3D): void {
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!(mesh as unknown as { isMesh?: boolean }).isMesh) return;
+    if ((mesh as unknown as { isSkinnedMesh?: boolean }).isSkinnedMesh) return;
+    if (!Array.isArray(mesh.material) || !mesh.geometry) return;
+    const geo = mesh.geometry;
+    const idx = geo.getIndex();
+    const groups = geo.groups;
+    if (!idx || groups.length <= 1 || (mesh.material as THREE.Material[]).length !== groups.length) return;
+    // 只处理 loader 产出的「连续无缝覆盖」group 布局，非常规布局保守跳过
+    let cursor = 0;
+    for (const g of groups) {
+      if (g.start !== cursor) return;
+      cursor += g.count;
+    }
+    if (cursor !== idx.count) return;
+
+    // 签名分桶（保持首次出现次序，跨材质透明混合次序不变）
+    const bucketOrder: string[] = [];
+    const buckets = new Map<string, Array<{ start: number; count: number; mat: THREE.Material }>>();
+    groups.forEach((g, i) => {
+      const mat = (mesh.material as THREE.Material[])[i];
+      const sig = materialSignature(mat);
+      let list = buckets.get(sig);
+      if (!list) {
+        list = [];
+        buckets.set(sig, list);
+        bucketOrder.push(sig);
+      }
+      list.push({ start: g.start, count: g.count, mat });
+    });
+    if (bucketOrder.length === groups.length) return; // 无可合并重复
+
+    // 重排 index：按桶连续拼接（顶点不动，只动三角形提交次序）
+    const src = idx.array as ArrayLike<number>;
+    const reordered = new (src instanceof Uint32Array ? Uint32Array : Uint16Array)(idx.count);
+    const newGroups: Array<{ start: number; count: number; matIndex: number }> = [];
+    const newMats: THREE.Material[] = [];
+    let w = 0;
+    for (const sig of bucketOrder) {
+      const list = buckets.get(sig)!;
+      const start = w;
+      for (const seg of list) {
+        for (let k = 0; k < seg.count; k++) reordered[w++] = src[seg.start + k];
+      }
+      newGroups.push({ start, count: w - start, matIndex: newMats.length });
+      newMats.push(list[0].mat);
+    }
+    geo.setIndex(new THREE.BufferAttribute(reordered, 1));
+    geo.clearGroups();
+    for (const g of newGroups) geo.addGroup(g.start, g.count, g.matIndex);
+    mesh.material = newMats;
+  });
+}
+
+/** 入口：a) 兄弟 mesh 归并 + b) 多 group 归并（遍历中收集待处理 Group，避免边遍历边改树）。 */
+function mergeMeshesByMaterial(root: THREE.Object3D): void {
+  const groups: THREE.Group[] = [];
+  root.traverse((o) => {
+    if ((o as THREE.Group).isGroup && o.children.length >= 2) groups.push(o as THREE.Group);
+  });
+  for (const g of groups) mergeSiblingMeshesByMaterial(g);
+  mergeEqualMaterialGroups(root);
+}
 
 export interface SharedGLTF {
   /** 场景根（共享，调用方必须 .clone(true) 后再使用） */
@@ -39,6 +204,8 @@ function startLoad(url: string): CacheEntry {
   LOADER.load(
     url,
     (g) => {
+      // 批次 28 二轮：等材质归并（一次加载一次合并，全部克隆实例共享收益）
+      mergeMeshesByMaterial(g.scene);
       // GLTFLoader 默认加载的所有 texture colorSpace 保留（不强改）
       entry.gltf = {
         scene: g.scene,

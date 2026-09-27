@@ -15,6 +15,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
+import { QUALITY_PRESETS, knownQualityTier } from './quality';
 
 export interface SharedTextureOpts {
   /** repeat = RepeatWrapping（路面/地面/水面）；clamp = ClampToEdge（立面/道具 sprite）。 */
@@ -24,8 +25,9 @@ export interface SharedTextureOpts {
   /** 默认 true（颜色贴图走 sRGB）。 */
   srgb?: boolean;
   /**
-   * 各向异性过滤等级。repeat 模式默认 8（路面/地面掠射角清晰），
-   * clamp 模式默认 1。three 上传时自动 clamp 到 GPU 上限，无需读 renderer。
+   * 各向异性过滤等级。repeat 模式默认取质量档 `QUALITY_PRESETS[].anisotropy`
+   * （批次 28 A5：high 8 / low 4），clamp 模式默认 1。
+   * three 上传时自动 clamp 到 GPU 上限，无需读 renderer。
    */
   anisotropy?: number;
 }
@@ -39,11 +41,16 @@ interface CacheEntry {
 const CACHE = new Map<string, CacheEntry>();
 const LOADER = new THREE.TextureLoader();
 
+/** repeat 模式默认 AF 等级按质量档（批次 28 A5）；clamp 模式 1。 */
+function defaultAnisotropy(wrap: 'repeat' | 'clamp' | undefined): number {
+  return wrap === 'repeat' ? QUALITY_PRESETS[knownQualityTier()].anisotropy : 1;
+}
+
 function cacheKey(url: string, opts: SharedTextureOpts): string {
   const wrap = opts.wrap ?? 'clamp';
   const [rx, ry] = opts.repeat ?? [1, 1];
   const srgb = opts.srgb !== false;
-  const aniso = opts.anisotropy ?? (opts.wrap === 'repeat' ? 8 : 1);
+  const aniso = opts.anisotropy ?? defaultAnisotropy(opts.wrap);
   return `${url}|${wrap}|${rx}|${ry}|${srgb}|${aniso}`;
 }
 
@@ -57,7 +64,7 @@ function startLoad(url: string, key: string, opts: SharedTextureOpts): CacheEntr
       loaded.magFilter = THREE.LinearFilter;
       loaded.minFilter = THREE.LinearMipmapLinearFilter;
       // 各向异性过滤（GPU 上限由 three 内部 clamp，设置值过大安全）
-      loaded.anisotropy = opts.anisotropy ?? (opts.wrap === 'repeat' ? 8 : 1);
+      loaded.anisotropy = opts.anisotropy ?? defaultAnisotropy(opts.wrap);
       if (opts.wrap === 'repeat') {
         loaded.wrapS = loaded.wrapT = THREE.RepeatWrapping;
         const [rx, ry] = opts.repeat ?? [1, 1];
@@ -184,15 +191,18 @@ export function useSharedPBR(
     return new THREE.Vector2(nx, ny);
   }, [opts?.normalScale?.[0], opts?.normalScale?.[1]]);
 
-  const matProps: SharedPBR['matProps'] = {};
-  if (map) matProps.map = map;
-  if (normalMap) {
-    matProps.normalMap = normalMap;
-    matProps.normalScale = normalScale;
-  }
-  if (roughnessMap) matProps.roughnessMap = roughnessMap;
-
-  return { map, normalMap, roughnessMap, matProps };
+  // 批次 28 A4：matProps / 返回对象按纹理实例稳定化（useMemo）——
+  // 此前每次 render 新建对象，叠加页面级 re-render 会逐帧重 diff 数千材质。
+  return useMemo(() => {
+    const matProps: SharedPBR['matProps'] = {};
+    if (map) matProps.map = map;
+    if (normalMap) {
+      matProps.normalMap = normalMap;
+      matProps.normalScale = normalScale;
+    }
+    if (roughnessMap) matProps.roughnessMap = roughnessMap;
+    return { map, normalMap, roughnessMap, matProps };
+  }, [map, normalMap, roughnessMap, normalScale]);
 }
 
 /**
@@ -205,8 +215,13 @@ export function withPBR(
   base: Record<string, unknown>,
   pbr: SharedPBR,
 ): Record<string, unknown> {
+  // 批次 28 A4：无 PBR 贴图可拼时直接返回 base —— 与原 spread 逻辑结果逐键一致
+  // （rest = base 去 roughness，再回填 base.roughness），但省掉每 render 一次
+  // 新对象分配（贴图缺失 / 加载失败的降级路径是高频路径）。
+  const mp = pbr.matProps;
+  if (!mp.map && !mp.normalMap && !mp.roughnessMap) return base;
   const { roughness: _omitRoughness, ...rest } = base;
-  const merged: Record<string, unknown> = { ...rest, ...pbr.matProps };
-  if (!pbr.matProps.roughnessMap) merged.roughness = base.roughness;
+  const merged: Record<string, unknown> = { ...rest, ...mp };
+  if (!mp.roughnessMap) merged.roughness = base.roughness;
   return merged;
 }

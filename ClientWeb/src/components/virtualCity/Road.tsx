@@ -28,6 +28,7 @@ import type { Texture } from 'three';
 import { streetTileUrl, pbrNormalUrl, pbrRoughUrl, type StreetTileName } from '@/assets/images/virtualCity';
 import type { InstancedLamp } from './props/StreetLightsInstanced';
 import { useSharedPBR, useSharedTexture, withPBR } from '@/engine3d';
+import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 
 interface Props {
   /** 道路起点世界坐标（城区中心）。 */
@@ -126,6 +127,11 @@ export function Road({ from, to, kind }: Props) {
   const angle = Math.atan2(dx, dz); // around Y
 
   const roadWidth = kind === 'main' ? ROAD_WIDTH_MAIN : ROAD_WIDTH_SIDE;
+  // 批次 28 B2：道路信息交互（主/次干道共用 road.surface 文案，kind 进动态行）。
+  const info = useObjectInfoProps('road.surface', {
+    anchorY: 0.3,
+    extra: [{ label: 'variant', value: kind }],
+  });
 
   // ── ① 路面贴图（批次 24：标线烘焙进整幅贴图；贴图覆盖 roadWidth×roadWidth，
   //    沿路长 repeat = round(len / roadWidth)。缺失 → 纯色 #1f2733 降级）。
@@ -166,7 +172,7 @@ export function Road({ from, to, kind }: Props) {
   const arrowZDistrict = stopZDistrict + STOPLINE_D / 2 + ARROW_GAP + ARROW_L / 2;
 
   return (
-    <group rotation={[0, angle, 0]} position={[from[0], 0, from[1]]}>
+    <group {...info} rotation={[0, angle, 0]} position={[from[0], 0, from[1]]}>
       {/* ① 主车道（z ∈ [-w/2, w/2]；标线烘焙贴图 / 纯色降级） */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}

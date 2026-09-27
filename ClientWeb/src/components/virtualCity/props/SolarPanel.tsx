@@ -7,7 +7,9 @@
  * 契约：lag_docs/虚拟城市/已实现/16-3D城市WebGL质感与城市补全/02-架构设计 §8.5。
  */
 
+import { memo } from 'react';
 import { u } from '../cityScale';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const PANEL_BLUE = '#1a3a6e';
 const FRAME = '#5a6270';
@@ -20,12 +22,14 @@ interface Props {
   rotation?: number;
 }
 
-export function SolarPanel({ x, y, z, rotation = 0 }: Props) {
+// 批次 28 A1/A3：memo + 街具默认不投影（阴影 pass caster 裁剪）。
+export const SolarPanel = memo(function SolarPanel({ x, y, z, rotation = 0 }: Props) {
   const tilt = -Math.PI / 9; // 20°
+  const info = useObjectInfoProps('prop.solar-panel', { anchorY: 0.5 });
   return (
-    <group position={[x, y, z]} rotation={[0, rotation, 0]}>
+    <group {...info} position={[x, y, z]} rotation={[0, rotation, 0]}>
       {/* 板体（绕 x 倾斜；box 中心抬高避免插进屋顶） */}
-      <mesh position={[0, u(0.18), 0]} rotation={[tilt, 0, 0]} castShadow>
+      <mesh position={[0, u(0.18), 0]} rotation={[tilt, 0, 0]}>
         <boxGeometry args={[u(1.0), 0.012, u(0.6)]} />
         <meshStandardMaterial color={PANEL_BLUE} roughness={0.25} metalness={0.6} envMapIntensity={1.1} />
       </mesh>
@@ -45,6 +49,6 @@ export function SolarPanel({ x, y, z, rotation = 0 }: Props) {
       ))}
     </group>
   );
-}
+});
 
 export default SolarPanel;

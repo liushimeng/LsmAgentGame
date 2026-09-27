@@ -10,9 +10,11 @@
  * 总高 ~0.28（见 cityScale.ts）。
  */
 
+import { memo } from 'react';
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/virtualCity';
 import { useSharedTexture } from '@/engine3d';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 type SignVariant = 'traffic' | 'info';
 
@@ -28,12 +30,17 @@ const PLATE_COLORS: Record<SignVariant, string> = {
   info: '#3a78c8',
 };
 
-export function Sign({ x, z, rotation = 0, variant = 'traffic' }: Props) {
+// 批次 28 A1：memo —— props 稳定引用（原语 / 常量）。
+export const Sign = memo(function Sign({ x, z, rotation = 0, variant = 'traffic' }: Props) {
   // 14-3D渲染深化：共享贴图缓存
   const tex = useSharedTexture(propUrl('sign', variant));
+  const info = useObjectInfoProps('prop.sign', {
+    anchorY: 2.4,
+    extra: [{ label: 'variant', value: variant }],
+  });
 
   return (
-    <group position={[x, 0, z]} rotation={[0, rotation, 0]}>
+    <group {...info} position={[x, 0, z]} rotation={[0, rotation, 0]}>
       {/* pole（2.2m） */}
       <mesh position={[0, 0.11, 0]}>
         <cylinderGeometry args={[0.008, 0.01, 0.22, 6]} />
@@ -55,4 +62,4 @@ export function Sign({ x, z, rotation = 0, variant = 'traffic' }: Props) {
       )}
     </group>
   );
-}
+});

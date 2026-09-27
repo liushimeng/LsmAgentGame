@@ -34,6 +34,10 @@ import { groundTileUrl } from '@/assets/images/virtualCity';
 import { u } from '../cityScale';
 import { hashStr, mulberry32 } from '../civic/rand';
 import { GlbInstanced } from './glbInstanced';
+import {
+  useObjectInfoProps,
+  instancedEventsRaycast,
+} from '../objectInfo/useObjectInfoProps';
 
 // ── 坐标带常量（方案 §2.1）─────────────────────────────────────
 /** 沙滩：z ∈ [58,64]，x ∈ [−120,+120]。 */
@@ -62,30 +66,39 @@ const REDUCED_MOTION =
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function SouthOcean() {
+  // 批次 28 B2：南海港环境带信息交互（沙滩/海面/浮标 → south-ocean；
+  // 灯塔/货轮/岸吊/帆船各自独立 id，子级 stopPropagation 覆盖父级）。
+  const oceanInfo = useObjectInfoProps('edge.south-ocean', { anchorY: 1.0 });
+  const lighthouseInfo = useObjectInfoProps('edge.lighthouse', { anchorY: 6 });
+  const sailboatInfo = useObjectInfoProps('edge.sailboat', { anchorY: 2 });
   return (
-    <group>
+    <group {...oceanInfo}>
       <Beach />
       <OceanSurface />
       <SouthPort />
       {/* 灯塔 @ 防波堤端（GLB；children fallback 红白条纹塔，§27.3 契约） */}
-      <Model url={modelUrl('ocean', 'lighthouse')} position={[75, 0, 72]}>
-        <ProceduralLighthouse />
-      </Model>
+      <group {...lighthouseInfo}>
+        <Model url={modelUrl('ocean', 'lighthouse')} position={[75, 0, 72]}>
+          <ProceduralLighthouse />
+        </Model>
+      </group>
       <CargoShip />
       {/* 帆船 ×2 静态泊位（GlbInstanced：2 实例共享子网格 draw call） */}
-      <GlbInstanced
-        url={modelUrl('ocean', 'sailboat')}
-        instances={[
-          { position: [-60, 0.02, 80], rotationY: 0.6, scale: 1 },
-          { position: [45, 0.02, 88], rotationY: -0.9, scale: 1.1 },
-        ]}
-        fallback={
-          <group>
-            <ProceduralSailboat x={-60} z={80} rotY={0.6} />
-            <ProceduralSailboat x={45} z={88} rotY={-0.9} />
-          </group>
-        }
-      />
+      <group {...sailboatInfo}>
+        <GlbInstanced
+          url={modelUrl('ocean', 'sailboat')}
+          instances={[
+            { position: [-60, 0.02, 80], rotationY: 0.6, scale: 1 },
+            { position: [45, 0.02, 88], rotationY: -0.9, scale: 1.1 },
+          ]}
+          fallback={
+            <group>
+              <ProceduralSailboat x={-60} z={80} rotY={0.6} />
+              <ProceduralSailboat x={45} z={88} rotY={-0.9} />
+            </group>
+          }
+        />
+      </group>
       <Buoys />
     </group>
   );
@@ -138,6 +151,8 @@ function OceanSurface() {
 
 /** 南港：码头面 + 岸吊 ×2 + 集装箱 + 系缆桩（照 civic/PortTerminal.tsx 模式）。 */
 function SouthPort() {
+  // 批次 28 B2：岸吊/集装箱/系缆桩共用 edge.crane 文案。
+  const craneInfo = useObjectInfoProps('edge.crane', { anchorY: 3 });
   // 岸吊 ×2：全部箱梁单位 box Instances → 1 draw call
   const boxes = useMemo(() => {
     const out: Array<{
@@ -197,7 +212,7 @@ function SouthPort() {
   }, []);
 
   return (
-    <group>
+    <group {...craneInfo}>
       {/* 码头面（混凝土色；y 高于海面 0.03，低于街区 curb） */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[QUAY.cx, 0.06, QUAY.cz]} receiveShadow>
         <planeGeometry args={[QUAY.w, QUAY.d]} />
@@ -209,7 +224,7 @@ function SouthPort() {
         <meshStandardMaterial color={STEEL_DARK} roughness={0.7} />
       </mesh>
       {/* 岸吊 ×2 全部箱梁 → 1 draw call */}
-      <Instances limit={boxes.length} range={boxes.length} castShadow>
+      <Instances {...craneInfo} raycast={instancedEventsRaycast} limit={boxes.length} range={boxes.length} castShadow>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color="#ffffff" metalness={0.5} roughness={0.45} />
         {boxes.map((b, i) => (
@@ -217,7 +232,7 @@ function SouthPort() {
         ))}
       </Instances>
       {/* 钢缆 → 1 draw call */}
-      <Instances limit={cables.length} range={cables.length}>
+      <Instances {...craneInfo} raycast={instancedEventsRaycast} limit={cables.length} range={cables.length}>
         <cylinderGeometry args={[0.008, 0.008, 1, 5]} />
         <meshStandardMaterial color="#3a3f4a" />
         {cables.map((c, i) => (
@@ -225,7 +240,7 @@ function SouthPort() {
         ))}
       </Instances>
       {/* 集装箱堆 → 1 draw call */}
-      <Instances limit={containers.length} range={containers.length} castShadow>
+      <Instances {...craneInfo} raycast={instancedEventsRaycast} limit={containers.length} range={containers.length} castShadow>
         <boxGeometry args={[u(6), u(2.6), u(2.4)]} />
         <meshStandardMaterial color="#ffffff" roughness={0.55} metalness={0.25} />
         {containers.map((c, i) => (
@@ -237,7 +252,7 @@ function SouthPort() {
         ))}
       </Instances>
       {/* 系缆桩 ×5 → 1 draw call */}
-      <Instances limit={5} range={5} castShadow>
+      <Instances {...craneInfo} raycast={instancedEventsRaycast} limit={5} range={5} castShadow>
         <cylinderGeometry args={[u(0.15), u(0.15), u(0.5), 8]} />
         <meshStandardMaterial color={STEEL_DARK} metalness={0.5} roughness={0.6} />
         {[-2, -1, 0, 1, 2].map((k, i) => (
@@ -257,8 +272,10 @@ function CargoShip() {
     const t = (state.clock.elapsedTime * SHIP_SPEED) % (SHIP_RANGE * 2);
     ref.current.position.x = t - SHIP_RANGE;
   });
+  // 批次 28 B2：货轮信息交互。
+  const info = useObjectInfoProps('edge.cargo-ship', { anchorY: 3 });
   return (
-    <group ref={ref} position={[0, 0.02, SHIP_Z]}>
+    <group {...info} ref={ref} position={[0, 0.02, SHIP_Z]}>
       {/* 船向 +x 巡航；cargo_ship.glb 船头 = +x（build_cargo_ship.py 头注释，
           与车辆 front=+Z 约定不同）→ rotationY = 0 */}
       <Model url={modelUrl('ocean', 'cargo_ship')}>
@@ -357,16 +374,18 @@ function Buoys() {
       z: 75 + (rnd() - 0.5) * 2,
     }));
   }, []);
+  // 批次 28 B2：浮标并入 south-ocean 语义（无独立 id，实例行 #实例 区分）。
+  const info = useObjectInfoProps('edge.south-ocean', { anchorY: 1.0 });
   return (
     <group>
-      <Instances limit={buoys.length} range={buoys.length}>
+      <Instances {...info} raycast={instancedEventsRaycast} limit={buoys.length} range={buoys.length}>
         <sphereGeometry args={[u(0.5), 10, 8]} />
         <meshStandardMaterial color="#c0392b" roughness={0.6} />
         {buoys.map((b, i) => (
           <Instance key={`buoy-s-${i}`} position={[b.x, u(0.3), b.z]} />
         ))}
       </Instances>
-      <Instances limit={buoys.length} range={buoys.length}>
+      <Instances {...info} raycast={instancedEventsRaycast} limit={buoys.length} range={buoys.length}>
         <cylinderGeometry args={[u(0.05), u(0.05), u(1.2), 6]} />
         <meshStandardMaterial color="#e8e3dc" roughness={0.6} />
         {buoys.map((b, i) => (

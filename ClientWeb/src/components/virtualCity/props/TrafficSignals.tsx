@@ -21,6 +21,10 @@ import { useFrame } from '@react-three/fiber';
 import { Instances, Instance } from '@react-three/drei';
 import { u } from '../cityScale';
 import type { TrafficSignalSpot } from '../StreetPropsLayer';
+import {
+  useObjectInfoProps,
+  instancedEventsRaycast,
+} from '../objectInfo/useObjectInfoProps';
 
 // ── 相位时序（§6.2：16s 周期 绿 6 → 黄 2 → 红 8；B 组 +8s）──────────
 /** 相位周期（秒）。 */
@@ -150,14 +154,24 @@ export function TrafficSignals({ signals }: Props) {
     }
   });
 
-  /** 静态件通用渲染（三段 = 3 draw call；Instance 世界位姿在布点层算好）。 */
+  /** 静态件通用渲染（三段 = 3 draw call；Instance 世界位姿在布点层算好）。
+   *  批次 28 B2：{...info} 使信号灯可 hover/click（drei Instances 需恢复
+   *  instancedEventsRaycast 才能命中；instanceId = signals 序）。 */
+  const info = useObjectInfoProps('road.traffic-signal', { anchorY: 2.2 });
+
   const renderPart = (
     key: string,
     geometry: JSX.Element,
     material: JSX.Element,
     items: Array<{ key: string; pos: [number, number, number]; rot: number }>,
   ) => (
-    <Instances key={key} limit={items.length} range={items.length}>
+    <Instances
+      {...info}
+      raycast={instancedEventsRaycast}
+      key={key}
+      limit={items.length}
+      range={items.length}
+    >
       {geometry}
       {material}
       {items.map((it) => (
@@ -215,6 +229,7 @@ export function TrafficSignals({ signals }: Props) {
       {/* ④ 三色灯泡 ×3 instancedMesh → 3 draw call（toneMapped=false 保饱和色） */}
       {BULB_ORDER.map((color, ci) => (
         <instancedMesh
+          {...info}
           key={`sig-bulb-${color}`}
           ref={bulbRefs[ci]}
           args={[undefined, undefined, signals.length]}

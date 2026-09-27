@@ -7,6 +7,7 @@
 import { u } from '../cityScale';
 import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const RED = '#c0392b';
 const WHITE = '#e8e3dc';
@@ -14,13 +15,21 @@ const DOOR_DARK = '#3a4250';
 
 export function FireStation() {
   const url = modelUrl('civic', 'fire_station');
+  // 批次 28 B2：消防站信息交互。
+  const info = useObjectInfoProps('civic.fire-station', { anchorY: 5 });
   if (!url || !blenderEnabled()) {
-    return <FireStationFallback />;
+    return (
+      <group {...info}>
+        <FireStationFallback />
+      </group>
+    );
   }
   return (
-    <Model url={url} position={[8, 0, -12]} castShadow receiveShadow>
-      <FireStationFallback />
-    </Model>
+    <group {...info}>
+      <Model url={url} position={[8, 0, -12]} castShadow receiveShadow>
+        <FireStationFallback />
+      </Model>
+    </group>
   );
 }
 

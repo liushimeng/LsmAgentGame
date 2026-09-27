@@ -126,7 +126,26 @@ export function DayNightCycle({
     };
   }, [scene, fogNear, fogFar]);
 
+  // ── 批次 28 A3：阴影降频 —— 太阳移动缓慢，按 shadowUpdateFrames（默认每 4 帧
+  //    ≈ 15Hz）更新一次阴影贴图；其余帧整个 shadow pass 跳过（autoUpdate=false）。
+  //    卸载时还原 autoUpdate=true，不影响无本组件的场景。──
+  const shadowFrameRef = useRef(0);
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true; // 首帧出阴影
+    return () => {
+      gl.shadowMap.autoUpdate = true;
+      gl.shadowMap.needsUpdate = false;
+    };
+  }, [gl]);
+
   useFrame(() => {
+    // 阴影节流：置 needsUpdate 后 three 在下一次 render 画一次阴影贴图并自动清标记。
+    const every = QUALITY_PRESETS[tier].shadowUpdateFrames;
+    if (++shadowFrameRef.current >= every) {
+      shadowFrameRef.current = 0;
+      gl.shadowMap.needsUpdate = true;
+    }
     const s = sample();
     const hours = clamp01(s.timeOfDay01) * 24;
     // 太阳轨迹角：6:00 → 0（日出东方）、12:00 → π/2（正午）、18:00 → π（日落西方）；

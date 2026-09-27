@@ -7,6 +7,7 @@
 import { u } from '../cityScale';
 import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const TANK_GREEN = '#5a7a4e';
 const TANK_LIGHT = '#7a9a6e';
@@ -14,13 +15,21 @@ const TANK_DARK = '#3a5240';
 
 export function WaterTower() {
   const url = modelUrl('civic', 'water_tower');
+  // 批次 28 B2：水塔信息交互。
+  const info = useObjectInfoProps('civic.water-tower', { anchorY: 5 });
   if (!url || !blenderEnabled()) {
-    return <WaterTowerFallback />;
+    return (
+      <group {...info}>
+        <WaterTowerFallback />
+      </group>
+    );
   }
   return (
-    <Model url={url} position={[-22, 0, 2]} castShadow>
-      <WaterTowerFallback />
-    </Model>
+    <group {...info}>
+      <Model url={url} position={[-22, 0, 2]} castShadow>
+        <WaterTowerFallback />
+      </Model>
+    </group>
   );
 }
 

@@ -38,11 +38,38 @@ export interface QualityPreset {
   shadowMapSize: number;
   /** 是否启用 PMREM 环境反射（low 档跳过，规避软件渲染器白屏）。 */
   envReflection: boolean;
+  /**
+   * 各向异性过滤等级（repeat 模式大平面：地面/道路掠射角清晰度）。
+   * 批次 28 A5：high 8 / low 4（软件光栅器上 AF 采样成本高、收益低）。
+   */
+  anisotropy: number;
+  /**
+   * 阴影贴图更新间隔（帧）。批次 28 A3：太阳移动缓慢，每 4 帧（60fps 下 ~15Hz）
+   * 更新阴影视觉无感，其余帧跳过整个 shadow pass（`shadowMap.autoUpdate = false`
+   * + `needsUpdate`，见 DayNightCycle）。
+   */
+  shadowUpdateFrames: number;
+  /** 雨/雪粒子上限（WeatherFX 读取；low 档减半）。 */
+  weatherParticles: number;
 }
 
 export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
-  high: { dpr: [1, 1.75], shadowMapSize: 2048, envReflection: true },
-  low: { dpr: [1, 1], shadowMapSize: 1024, envReflection: false },
+  high: {
+    dpr: [1, 1.75],
+    shadowMapSize: 2048,
+    envReflection: true,
+    anisotropy: 8,
+    shadowUpdateFrames: 4,
+    weatherParticles: 2000,
+  },
+  low: {
+    dpr: [1, 1],
+    shadowMapSize: 1024,
+    envReflection: false,
+    anisotropy: 4,
+    shadowUpdateFrames: 4,
+    weatherParticles: 1000,
+  },
 };
 
 /**
@@ -57,15 +84,31 @@ export function urlQualityOverride(): QualityTier | null {
   return null;
 }
 
+/** 最近一次探测结果（detectQualityTier 写入；供非 GL 上下文同步读取）。 */
+let detectedTier: QualityTier | null = null;
+
 /**
  * 质量档判定：
  *   - URL 覆盖优先（见 urlQualityOverride）；
  *   - 否则软件渲染器 → low，真机 GPU → high。
+ * 判定结果缓存进模块单例，供 knownQualityTier() 读取（贴图默认参数等
+ * 无 GL 上下文的调用点，批次 28 A5）。
  */
 export function detectQualityTier(gl: THREE.WebGLRenderer): QualityTier {
   const override = urlQualityOverride();
-  if (override) return override;
-  return isSoftwareRenderer(gl) ? 'low' : 'high';
+  const tier = override ?? (isSoftwareRenderer(gl) ? 'low' : 'high');
+  detectedTier = tier;
+  return tier;
+}
+
+/**
+ * 已知质量档（无 GL 上下文同步读取，批次 28 A5）：
+ * 已探测 → 探测值；未探测 → URL 覆盖 ?? high（与 detectQualityTier 默认一致）。
+ * ⚠️ 游戏侧策略（行人上限 / 树投影等）读此值映射，**不得**把游戏字段塞进
+ * QUALITY_PRESETS（engine3d 禁止 import 游戏私有模块，CLAUDE.md §2.1 硬约束 5）。
+ */
+export function knownQualityTier(): QualityTier {
+  return detectedTier ?? urlQualityOverride() ?? 'high';
 }
 
 /**

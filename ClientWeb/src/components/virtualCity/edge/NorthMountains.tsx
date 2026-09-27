@@ -20,6 +20,7 @@ import { u } from '../cityScale';
 import { hashStr, mulberry32 } from '../civic/rand';
 import { GlbInstanced, type GlbInstanceTRS } from './glbInstanced';
 import { ProceduralPines, type FloraSpot } from './proceduralFlora';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 /** 雪山座数（方案 §2.1：×6~8）。 */
 const MOUNTAIN_COUNT = 7;
@@ -68,8 +69,10 @@ export function NorthMountains() {
     [pines],
   );
 
+  // 批次 28 B2：北部雪山信息交互。
+  const info = useObjectInfoProps('edge.north-mountains', { anchorY: 8 });
   return (
-    <group>
+    <group {...info}>
       {/* 雪山脊线（GLB 实例化；fallback 程序化锥体山） */}
       <GlbInstanced
         url={modelUrl('nature', 'snow_mountain')}

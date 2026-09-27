@@ -18,18 +18,32 @@
  *     + 轮毂 ×4（贴轮外侧）+ 后视镜 ×2 + 雨刮 1 根——「火柴盒」→ 可读车型。
  *   - 新可选 prop `palette`：消防车 / 巡逻车复用同组件换色（body/roof/accent 三色）；
  *     提供 palette 时强制走几何体分支（贴图 sprite 是固定车型彩绘，无法换色）。
- *   - 每车 mesh 9 → 19（新增 10 件），属预期。
+ *
+ * 批次 28 二轮（DC 攻坚）：18 个附件 mesh 按材质类合并为 2 mesh（几何逐件全等，
+ * engine3d/geoMerge）：车轮/轮毂/雨刮/后视镜 → 顶点色 1 mesh；玻璃/前灯/尾灯 →
+ * 3 group 1 mesh。GLB 等材质 group 归并在 modelCache 加载期完成（sedan 18→7 组）。
+ * 每车 mesh：GLB/sprite/几何分支 1 + 附件 2 = 3。
  */
 
-import { useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/virtualCity';
 import { modelUrl } from '@/assets/models';
 import { u } from '../cityScale';
 import { useSharedTexture } from '@/engine3d';
-import { useSharedGLTF, blenderModelsEnabled } from '@/engine3d';
+import {
+  type GroupedMergePart,
+  type MergePart,
+  boxPart,
+  mergeGrouped,
+  mergeParts,
+  useSharedGLTF,
+  blenderModelsEnabled,
+  detectQualityTier,
+} from '@/engine3d';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 type VehicleVariant = 'sedan' | 'truck' | 'bus' | 'taxi';
 
@@ -131,7 +145,9 @@ function hubPositions(l: number, w: number): Array<[number, number, number]> {
   ];
 }
 
-export function Vehicle({
+// 批次 28 A1：memo —— from/to（layout useMemo 的元组）/ variant / speed / phase /
+// laneOffset / palette 全为稳定引用（palette 由调用方常量表传入）。
+export const Vehicle = memo(function Vehicle({
   from,
   to,
   variant = 'sedan',
@@ -153,6 +169,17 @@ export function Vehicle({
   void useGLB; // 标记保留：未来 v19.5 通过此 flag 控制 GLB vs sprite / palette fallback
   const { scene: glbScene } = useSharedGLTF(modelUrlStr);
   const glbCloned = useMemo(() => (glbScene ? glbScene.clone(true) : null), [glbScene]);
+  // 批次 28 A3：车辆 GLB 投影仅 high 档保留（low 档裁掉车流的阴影 pass 几何）。
+  // primitive 上的 castShadow 只落在根 Group，逐 mesh 须 traverse 设置。
+  const gl = useThree((s) => s.gl);
+  const tier = useMemo(() => detectQualityTier(gl), [gl]);
+  useEffect(() => {
+    if (!glbCloned) return;
+    const shadow = tier === 'high';
+    glbCloned.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) o.castShadow = shadow;
+    });
+  }, [glbCloned, tier]);
   const groupRef = useRef<THREE.Group>(null);
   const dims = VEHICLE_DIMS[variant];
   // 18 · 阶段 Z：涂装三色（body 车身 / roof 车顶 / accent 前后端，缺省回退 body）
@@ -192,11 +219,78 @@ export function Vehicle({
     g.position.y = 0.02;
   });
 
+  // 批次 28 B2：车型级简介（vehicle.<variant>，GLB 与 fallback 共用文案）。
+  const info = useObjectInfoProps(`vehicle.${variant}`, { anchorY: dims.h + 0.4 });
+
+  // ── 批次 28 二轮：附件按材质类合并（18 件独立 mesh → 2 mesh，几何逐件全等）──
+  // solids：车轮/轮毂/雨刮/后视镜 —— 单材质 + 顶点色（颜色逐件保留；粗糙度统一
+  //   0.65 / 金属 0.3，原 0.35–0.9 区间的视觉取舍见批次 28 报告）。
+  // glassLamps：前挡风+侧窗（玻璃）/ 前大灯 / 尾灯 3 group —— 材质逐字段与原一致。
+  const detailGeos = useMemo(() => {
+    const qX = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
+    const one = new THREE.Vector3(1, 1, 1);
+    const solids: MergePart[] = [];
+    for (const [x, y, z] of wheelPositions(dims.l, dims.w)) {
+      solids.push({
+        geo: new THREE.CylinderGeometry(WHEEL_R, WHEEL_R, WHEEL_W, 12),
+        matrix: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), qX, one),
+        color: WHEEL_COLOR,
+      });
+    }
+    for (const [x, y, z] of hubPositions(dims.l, dims.w)) {
+      solids.push({
+        geo: new THREE.CylinderGeometry(HUB_R, HUB_R, HUB_H, 10),
+        matrix: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), qX, one),
+        color: HUB_COLOR,
+      });
+    }
+    // 雨刮 1 根（前挡风下沿横铺）+ 后视镜 ×2（前舱两侧）
+    solids.push(boxPart(WIPER_X, WIPER_Y, WIPER_Z, dims.l * 0.22 + u(0.02), dims.h * 0.75 - u(0.13), 0, WIPER_COLOR));
+    for (const side of [+1, -1]) {
+      solids.push(boxPart(MIRROR_X, MIRROR_Y, MIRROR_Z, dims.l * 0.2, dims.h * 0.88, side * (dims.w / 2 + u(0.03)), MIRROR_COLOR));
+    }
+    const glassLamps: GroupedMergePart[] = [
+      // mat0 玻璃：前挡风（后倾 25°）+ 侧窗 ×2
+      { geo: new THREE.BoxGeometry(u(0.04), u(0.28), dims.w * 0.85), x: dims.l * 0.22, y: dims.h * 0.75, z: 0, rotZ: WINDSHIELD_TILT, mat: 0 },
+      { geo: new THREE.BoxGeometry(dims.l * 0.4, u(0.22), u(0.04)), x: -dims.l * 0.05, y: dims.h * 0.75, z: +(dims.w / 2 + u(0.008)), mat: 0 },
+      { geo: new THREE.BoxGeometry(dims.l * 0.4, u(0.22), u(0.04)), x: -dims.l * 0.05, y: dims.h * 0.75, z: -(dims.w / 2 + u(0.008)), mat: 0 },
+      // mat1 前大灯 ×2（+x 端暖白 emissive 0.8）
+      { geo: new THREE.BoxGeometry(LAMP_D, LAMP_H, LAMP_W), x: dims.l / 2 + u(0.01), y: dims.h * 0.5, z: +dims.w * 0.3, mat: 1 },
+      { geo: new THREE.BoxGeometry(LAMP_D, LAMP_H, LAMP_W), x: dims.l / 2 + u(0.01), y: dims.h * 0.5, z: -dims.w * 0.3, mat: 1 },
+      // mat2 尾灯 ×2（-x 端红 emissive 0.5）
+      { geo: new THREE.BoxGeometry(LAMP_D, LAMP_H, LAMP_W), x: -dims.l / 2 - u(0.01), y: dims.h * 0.5, z: +dims.w * 0.3, mat: 2 },
+      { geo: new THREE.BoxGeometry(LAMP_D, LAMP_H, LAMP_W), x: -dims.l / 2 - u(0.01), y: dims.h * 0.5, z: -dims.w * 0.3, mat: 2 },
+    ];
+    return { solids: mergeParts(solids), glassLamps: mergeGrouped(glassLamps) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dims]);
+  useEffect(() => () => {
+    detailGeos.solids.dispose();
+    detailGeos.glassLamps.dispose();
+  }, [detailGeos]);
+
+  const glassLampMaterials = useMemo(() => [
+    new THREE.MeshStandardMaterial({
+      color: GLASS_COLOR, transparent: true, opacity: 0.55, roughness: 0.1, metalness: 0.25, envMapIntensity: 0.9,
+    }),
+    new THREE.MeshStandardMaterial({ color: '#fff6d8', emissive: '#fff6d8', emissiveIntensity: 0.8, roughness: 0.3 }),
+    new THREE.MeshStandardMaterial({ color: '#ff3b30', emissive: '#ff3b30', emissiveIntensity: 0.5, roughness: 0.3 }),
+  ], []);
+  useEffect(() => () => glassLampMaterials.forEach((m) => m.dispose()), [glassLampMaterials]);
+
   return (
-    <group ref={groupRef} position={[from[0] + lane.ox, 0.02, from[1] + lane.oz]} rotation={[0, angle, 0]}>
-      {/* 19-Blender3D模型集成：.glb 优先级最高，绕过 sprite 和 palette（palette 模式 useGLB=false） */}
+    <group
+      {...info}
+      ref={groupRef}
+      userData={{ bucket: 'vehicles' }}
+      position={[from[0] + lane.ox, 0.02, from[1] + lane.oz]}
+      rotation={[0, angle, 0]}
+    >
+      {/* 19-Blender3D模型集成：.glb 优先级最高，绕过 sprite 和 palette（palette 模式 useGLB=false）；
+          批次 28 A3：castShadow 由上方 traverse 按质量档逐 mesh 设置（high 才投影）。
+          批次 28 二轮：GLB 等材质 group 已在 modelCache 加载期归并（sedan 18→7 组）。 */}
       {glbCloned ? (
-        <primitive object={glbCloned} castShadow />
+        <primitive object={glbCloned} />
       ) : useSprite ? (
         <Billboard position={[0, dims.h / 2 + 0.03, 0]}>
           <mesh>
@@ -225,92 +319,12 @@ export function Vehicle({
           )}
         </mesh>
       )}
-      {/* v2.13 阶段 D：4 车轮（轴沿车宽 z 向；贴图/几何两分支共用，地面层补体积感） */}
-      {wheelPositions(dims.l, dims.w).map((pos, i) => (
-        <mesh key={`wheel-${i}`} position={pos} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[WHEEL_R, WHEEL_R, WHEEL_W, 12]} />
-          <meshStandardMaterial color={WHEEL_COLOR} roughness={0.9} metalness={0.1} />
-        </mesh>
-      ))}
-      {/* 18 · 阶段 Z：轮毂 ×4（贴轮外侧，浅灰金属圆片） */}
-      {hubPositions(dims.l, dims.w).map((pos, i) => (
-        <mesh key={`hub-${i}`} position={pos} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[HUB_R, HUB_R, HUB_H, 10]} />
-          <meshStandardMaterial color={HUB_COLOR} roughness={0.35} metalness={0.6} />
-        </mesh>
-      ))}
-      {/* 18 · 阶段 Z：前挡风（前段上部，后倾 25°）+ 侧窗 ×2（半透明深蓝玻璃） */}
-      <mesh position={[dims.l * 0.22, dims.h * 0.75, 0]} rotation={[0, 0, WINDSHIELD_TILT]}>
-        <boxGeometry args={[u(0.04), u(0.28), dims.w * 0.85]} />
-        <meshStandardMaterial
-          color={GLASS_COLOR}
-          transparent
-          opacity={0.55}
-          roughness={0.1}
-          metalness={0.25}
-          envMapIntensity={0.9}
-        />
+      {/* 批次 28 二轮：车轮/轮毂/雨刮/后视镜 —— 顶点色合并 1 mesh */}
+      <mesh geometry={detailGeos.solids}>
+        <meshStandardMaterial vertexColors roughness={0.65} metalness={0.3} />
       </mesh>
-      {[+1, -1].map((side) => (
-        <mesh
-          key={`sidewin-${side}`}
-          position={[-dims.l * 0.05, dims.h * 0.75, side * (dims.w / 2 + u(0.008))]}
-        >
-          <boxGeometry args={[dims.l * 0.4, u(0.22), u(0.04)]} />
-          <meshStandardMaterial
-            color={GLASS_COLOR}
-            transparent
-            opacity={0.55}
-            roughness={0.1}
-            metalness={0.25}
-            envMapIntensity={0.9}
-          />
-        </mesh>
-      ))}
-      {/* 18 · 阶段 Z：雨刮 1 根（前挡风下沿横铺） */}
-      <mesh position={[dims.l * 0.22 + u(0.02), dims.h * 0.75 - u(0.13), 0]}>
-        <boxGeometry args={[WIPER_X, WIPER_Y, WIPER_Z]} />
-        <meshStandardMaterial color={WIPER_COLOR} roughness={0.7} metalness={0.2} />
-      </mesh>
-      {/* 18 · 阶段 Z：后视镜 ×2（前舱两侧） */}
-      {[+1, -1].map((side) => (
-        <mesh
-          key={`mirror-${side}`}
-          position={[dims.l * 0.2, dims.h * 0.88, side * (dims.w / 2 + u(0.03))]}
-        >
-          <boxGeometry args={[MIRROR_X, MIRROR_Y, MIRROR_Z]} />
-          <meshStandardMaterial color={MIRROR_COLOR} roughness={0.5} metalness={0.4} />
-        </mesh>
-      ))}
-      {/* 18 · 阶段 Z：前大灯 ×2（+x 端，暖白 emissive 0.8）+ 尾灯 ×2（-x 端，红 emissive 0.5） */}
-      {[+1, -1].map((side) => (
-        <mesh
-          key={`headlight-${side}`}
-          position={[dims.l / 2 + u(0.01), dims.h * 0.5, side * dims.w * 0.3]}
-        >
-          <boxGeometry args={[LAMP_D, LAMP_H, LAMP_W]} />
-          <meshStandardMaterial
-            color="#fff6d8"
-            emissive="#fff6d8"
-            emissiveIntensity={0.8}
-            roughness={0.3}
-          />
-        </mesh>
-      ))}
-      {[+1, -1].map((side) => (
-        <mesh
-          key={`taillight-${side}`}
-          position={[-dims.l / 2 - u(0.01), dims.h * 0.5, side * dims.w * 0.3]}
-        >
-          <boxGeometry args={[LAMP_D, LAMP_H, LAMP_W]} />
-          <meshStandardMaterial
-            color="#ff3b30"
-            emissive="#ff3b30"
-            emissiveIntensity={0.5}
-            roughness={0.3}
-          />
-        </mesh>
-      ))}
+      {/* 批次 28 二轮：玻璃 + 前大灯 + 尾灯 —— 3 材质组合并 1 mesh */}
+      <mesh geometry={detailGeos.glassLamps} material={glassLampMaterials} />
     </group>
   );
-}
+});

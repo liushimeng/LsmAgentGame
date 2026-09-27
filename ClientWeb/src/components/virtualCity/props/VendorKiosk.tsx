@@ -9,9 +9,11 @@
  * 契约：lag_docs/虚拟城市/已实现/15-3D城市渲染深化/02-架构设计 §4.1。
  */
 
+import { memo } from 'react';
 import { vendorUrl } from '@/assets/images/virtualCity';
 import { u } from '../cityScale';
 import { useSharedTexture } from '@/engine3d';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const WOOD = '#6b4f3a';
 const ROOF = '#c8453a';
@@ -24,18 +26,20 @@ interface Props {
   rotation?: number;
 }
 
-export function VendorKiosk({ x, z, rotation = 0 }: Props) {
+// 批次 28 A1/A3：memo + 街具默认不投影（阴影 pass caster 裁剪）。
+export const VendorKiosk = memo(function VendorKiosk({ x, z, rotation = 0 }: Props) {
   const tex = useSharedTexture(vendorUrl('vendor_kiosk'));
   // 几何参数（米制）
   const W = u(1.2);
   const D = u(0.8);
   const H = u(2.0);
   const ROOF_T = u(0.08);
+  const info = useObjectInfoProps('prop.vendor-kiosk', { anchorY: 2.2 });
 
   return (
-    <group position={[x, 0, z]} rotation={[0, rotation, 0]}>
+    <group {...info} position={[x, 0, z]} rotation={[0, rotation, 0]}>
       {/* 主体（玻璃箱） */}
-      <mesh castShadow position={[0, H / 2, 0]}>
+      <mesh position={[0, H / 2, 0]}>
         <boxGeometry args={[W, H, D]} />
         <meshStandardMaterial color={WOOD} roughness={0.7} />
       </mesh>
@@ -51,7 +55,7 @@ export function VendorKiosk({ x, z, rotation = 0 }: Props) {
         />
       </mesh>
       {/* 红色顶棚 */}
-      <mesh castShadow position={[0, H + ROOF_T / 2, 0]}>
+      <mesh position={[0, H + ROOF_T / 2, 0]}>
         <boxGeometry args={[W + u(0.15), ROOF_T, D + u(0.15)]} />
         <meshStandardMaterial color={ROOF} roughness={0.7} metalness={0.1} />
       </mesh>
@@ -69,6 +73,6 @@ export function VendorKiosk({ x, z, rotation = 0 }: Props) {
       )}
     </group>
   );
-}
+});
 
 export default VendorKiosk;

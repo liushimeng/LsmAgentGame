@@ -7,7 +7,9 @@
  * 契约：lag_docs/虚拟城市/已实现/15-3D城市渲染深化/02-架构设计 §4.1。
  */
 
+import { memo } from 'react';
 import { u } from '../cityScale';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const GLASS = '#a8d5e8';
 const FRAME = '#5a6270';
@@ -19,22 +21,24 @@ interface Props {
   variant?: 'red' | 'green';
 }
 
-export function PhoneBooth({ x, z, rotation = 0, variant = 'red' }: Props) {
+// 批次 28 A1/A3：memo + 街具默认不投影（阴影 pass caster 裁剪）。
+export const PhoneBooth = memo(function PhoneBooth({ x, z, rotation = 0, variant = 'red' }: Props) {
   const W = u(0.6);
   const D = u(0.6);
   const H = u(2.2);
   const ROOF_T = u(0.1);
   const topColor = variant === 'red' ? '#c8453a' : '#3f8a48';
+  const info = useObjectInfoProps('prop.phone-booth', { anchorY: 2.4 });
 
   return (
-    <group position={[x, 0, z]} rotation={[0, rotation, 0]}>
+    <group {...info} position={[x, 0, z]} rotation={[0, rotation, 0]}>
       {/* 底座（深灰） */}
-      <mesh castShadow position={[0, u(0.1), 0]}>
+      <mesh position={[0, u(0.1), 0]}>
         <boxGeometry args={[W + u(0.08), u(0.2), D + u(0.08)]} />
         <meshStandardMaterial color={FRAME} roughness={0.6} metalness={0.4} />
       </mesh>
       {/* 玻璃主体 */}
-      <mesh castShadow position={[0, u(0.2) + (H - u(0.2)) / 2, 0]}>
+      <mesh position={[0, u(0.2) + (H - u(0.2)) / 2, 0]}>
         <boxGeometry args={[W, H - u(0.2), D]} />
         <meshStandardMaterial
           color={GLASS}
@@ -45,7 +49,7 @@ export function PhoneBooth({ x, z, rotation = 0, variant = 'red' }: Props) {
         />
       </mesh>
       {/* 顶棚（红/绿） */}
-      <mesh castShadow position={[0, H + ROOF_T / 2, 0]}>
+      <mesh position={[0, H + ROOF_T / 2, 0]}>
         <boxGeometry args={[W + u(0.08), ROOF_T, D + u(0.08)]} />
         <meshStandardMaterial color={topColor} roughness={0.5} metalness={0.3} />
       </mesh>
@@ -63,6 +67,6 @@ export function PhoneBooth({ x, z, rotation = 0, variant = 'red' }: Props) {
       ))}
     </group>
   );
-}
+});
 
 export default PhoneBooth;

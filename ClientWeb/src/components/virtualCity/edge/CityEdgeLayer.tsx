@@ -19,6 +19,7 @@
 
 import { useSharedTexture } from '@/engine3d';
 import { groundTileUrl } from '@/assets/images/virtualCity';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 import { NorthMountains } from './NorthMountains';
 import { WestDesert } from './WestDesert';
 import { EastForest } from './EastForest';
@@ -32,20 +33,25 @@ const WEST_PATCH = { cx: -71, cz: -2, w: 18, d: 120, fallback: '#d9b36c' };
 /** 东·林地 patch：x ∈ [+62,+80]（18），z ∈ [−62,+58]（120）。 */
 const EAST_PATCH = { cx: 71, cz: -2, w: 18, d: 120, fallback: '#3d5a34' };
 
-/** 地表 patch：贴图 repeat 按 8 单位/砖（与 GROUND_TILE 同标尺）；缺失降级纯色。 */
+/** 地表 patch：贴图 repeat 按 8 单位/砖（与 GROUND_TILE 同标尺）；缺失降级纯色。
+ *  批次 28 B2：patch 本体也接物件信息（否则命中只会冒泡到 ground.city）。 */
 function EdgePatch({
   tile,
   patch,
+  infoId,
 }: {
   tile: 'rock_snow_tile' | 'sand_tile' | 'forest_floor_tile';
   patch: { cx: number; cz: number; w: number; d: number; fallback: string };
+  infoId: string;
 }) {
   const tex = useSharedTexture(groundTileUrl(tile), {
     wrap: 'repeat',
     repeat: [Math.max(1, Math.round(patch.w / 8)), Math.max(1, Math.round(patch.d / 8))],
   });
+  const info = useObjectInfoProps(infoId, { anchorY: 0.5 });
   return (
     <mesh
+      {...info}
       rotation={[-Math.PI / 2, 0, 0]}
       position={[patch.cx, 0.02, patch.cz]}
       receiveShadow
@@ -64,9 +70,9 @@ export function CityEdgeLayer() {
   return (
     <group>
       {/* 三缘地表 patch（南缘沙滩/海面在 SouthOcean 内） */}
-      <EdgePatch tile="rock_snow_tile" patch={NORTH_PATCH} />
-      <EdgePatch tile="sand_tile" patch={WEST_PATCH} />
-      <EdgePatch tile="forest_floor_tile" patch={EAST_PATCH} />
+      <EdgePatch tile="rock_snow_tile" patch={NORTH_PATCH} infoId="edge.north-mountains" />
+      <EdgePatch tile="sand_tile" patch={WEST_PATCH} infoId="edge.west-desert" />
+      <EdgePatch tile="forest_floor_tile" patch={EAST_PATCH} infoId="edge.east-forest" />
       {/* 四缘环境带 */}
       <NorthMountains />
       <WestDesert />

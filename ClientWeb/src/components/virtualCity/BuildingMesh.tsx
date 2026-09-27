@@ -18,6 +18,9 @@
  * 有贴图时 emissiveMap 复用立面贴图（夜景窗灯近似），无贴图回退城区主色。
  */
 
+import { memo } from 'react';
+import { useT } from '@/hooks/useT';
+import type { TKey } from '@/i18n';
 import {
   districtFacadeUrl,
   districtRoofUrl,
@@ -29,6 +32,7 @@ import type { VirtualCityDistrictDef } from '@/types/virtualCity';
 import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
 import { BuildingShape, DISTRICT_ARCHETYPE } from './building_shapes';
 import { useSharedTexture, useSharedPBR } from '@/engine3d';
+import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 
 export interface BuildingSpec {
   /** 相对区中心偏移（x, z）。 */
@@ -39,6 +43,8 @@ export interface BuildingSpec {
   d: number;
   /** 楼高系数 0.6–1.0。 */
   factor: number;
+  /** buildingsFor() 种子序（批次 28 B2：稳定编号 b-<districtId>-<idx>）。 */
+  idx?: number;
 }
 
 interface Props {
@@ -48,7 +54,9 @@ interface Props {
   prosperity: number;
 }
 
-export function BuildingMesh({ spec, def, prosperity }: Props) {
+// 批次 28 A1：memo —— spec（useMemo 布局）/ def（常量表）/ prosperity（原语）
+// 均为稳定引用，price_index 未变时整栋楼不重渲染。
+export const BuildingMesh = memo(function BuildingMesh({ spec, def, prosperity }: Props) {
   // 14-3D渲染深化：共享贴图缓存（区数 × 楼数同源贴图只上传一次 GPU）
   // 批次 20 §3.5：先查贴图别名再取 def.id（16 新区复用旧 stem，零新增图片）。
   const stem = districtTextureStem(def.id);
@@ -87,10 +95,24 @@ export function BuildingMesh({ spec, def, prosperity }: Props) {
 
   const archetype = DISTRICT_ARCHETYPE[def.id] ?? 'slab';
 
+  // 批次 28 B2：楼栋信息交互 —— catalog id 按体块类型（building.<archetype>），
+  // 稳定实例编号 b-<districtId>-<idx> 与所属城区/楼层走动态 extra 行。
+  const t = useT();
+  const floors = Math.round(minF + (maxF - minF) * prosperity);
+  const info = useObjectInfoProps(`building.${archetype}`, {
+    anchorY: 0.6,
+    extra: [
+      { label: 'district', value: t(`virtualCity.district.${def.id}` as TKey) },
+      { label: 'floors', value: String(floors) },
+      { label: 'serial', value: `b-${def.id}-${spec.idx ?? 0}` },
+    ],
+  });
+
   // 注意 facadeBase/Mid/roofTex 与 pbrBase/Mid/roofPbr.map 指向同一缓存纹理（cacheKey 一致），
   // 这里复用 .map 即可——避免双重 load 与状态不一致。
+  // 批次 28 二轮：userData.bucket 供 ?debug=1 的 __cityBreakdown() 分桶归因。
   return (
-    <group position={[spec.x, 0, spec.z]}>
+    <group {...info} userData={{ bucket: 'buildings' }} position={[spec.x, 0, spec.z]}>
       <BuildingShape
         archetype={archetype}
         w={spec.w}
@@ -107,4 +129,4 @@ export function BuildingMesh({ spec, def, prosperity }: Props) {
       />
     </group>
   );
-}
+});

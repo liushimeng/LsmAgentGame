@@ -15,7 +15,7 @@
  * 夏 grass_tile / 春秋冬季节贴图，缺失回退 grass_tile），低频订阅不抖动布局。
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { Html } from '@react-three/drei';
 import { useT } from '@/hooks/useT';
@@ -27,6 +27,7 @@ import { useSharedPBR, useSharedTexture, withPBR } from '@/engine3d';
 import { currentSeason, subscribeSeason } from './cityTimeStore';
 import type { CitySeason } from './cityTimeStore';
 import { seasonGrassTileUrl } from './seasonAssets';
+import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 import {
   VIRTUAL_CITY_DISTRICTS,
   formatCny,
@@ -73,7 +74,7 @@ function buildingsFor(def: VirtualCityDistrictDef): BuildingSpec[] {
     const gz = (row - 0.5) * 2.6 + (rnd() - 0.5) * 0.7;
     const w = 1.1 + rnd() * 0.8;
     const d = 1.1 + rnd() * 0.8;
-    out.push({ x: gx, z: gz, w, d, factor: 0.6 + rnd() * 0.4 });
+    out.push({ x: gx, z: gz, w, d, factor: 0.6 + rnd() * 0.4, idx: i });
   }
   return out;
 }
@@ -89,7 +90,9 @@ interface Props {
   onSelect: (id: VirtualCityDistrictId) => void;
 }
 
-export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect }: Props) {
+// 批次 28 A1：memo —— props 全为稳定引用（def 常量表 / 原语 / useCallback），
+// 静止时父层 re-render 直接 bail out，消除 4Hz 全树 reconcile 的逐块开销。
+export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect }: Props) {
   const t = useT();
   const [hovered, setHovered] = useState(false);
   const texUrl = districtTexture(def.id);
@@ -148,18 +151,42 @@ export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect
 
   const idx = VIRTUAL_CITY_DISTRICTS.findIndex((d) => d.id === def.id);
 
+  // 批次 28 B2：保留既有 hover 卡（房价/租金/β 不动），只补 click 详情卡
+  // （hover:false = 不写全局悬浮卡，避免与本卡叠卡）。extra 动态行注入行情快照。
+  const info = useObjectInfoProps(`district.${def.id}`, {
+    anchorY: heightBase + 1.0,
+    hover: false,
+    onSelected: () => onSelect(def.id),
+    extra: [
+      { label: 'housePrice', value: `${housePriceWan} 万` },
+      { label: 'rent', value: `${formatCny(rentCny)}/月` },
+      { label: 'beta', value: def.houseBeta.toFixed(2) },
+      { label: 'players', value: String(playerCount) },
+      { label: 'serial', value: `#${idx + 1}` },
+    ],
+  });
+  // hover 卡 + 描边金环的本地态（既有行为），叠加 hook 的 cursor/stopPropagation。
+  const handleOver = useCallback(
+    (e: Parameters<typeof info.onPointerOver>[0]) => {
+      info.onPointerOver(e);
+      setHovered(true);
+    },
+    [info],
+  );
+  const handleOut = useCallback(
+    (e: Parameters<typeof info.onPointerOut>[0]) => {
+      info.onPointerOut(e);
+      setHovered(false);
+    },
+    [info],
+  );
+
   return (
     <group
       position={[def.x, 0, def.z]}
-      onPointerOver={(e) => {
-        e.stopPropagation();
-        setHovered(true);
-      }}
-      onPointerOut={() => setHovered(false)}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect(def.id);
-      }}
+      onPointerOver={handleOver}
+      onPointerOut={handleOut}
+      onClick={info.onClick}
     >
       {/* 底板 8×8（纹理缺失降级主色） */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} receiveShadow>
@@ -260,4 +287,4 @@ export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect
       )}
     </group>
   );
-}
+});

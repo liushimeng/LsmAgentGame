@@ -16,9 +16,10 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 import type { MutableRefObject } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { QualityTier } from './quality';
+import { QUALITY_PRESETS, detectQualityTier } from './quality';
 
 /** 采样契约（每帧调用）。 */
 export interface WeatherSample {
@@ -33,7 +34,7 @@ export interface WeatherSample {
 export interface WeatherFXProps {
   /** 天气采样（每帧调用，必须廉价）。 */
   sample: () => WeatherSample;
-  /** 渲染质量档（low → 粒子上限减半；缺省 high）。 */
+  /** 渲染质量档（low → 粒子上限减半；缺省自动探测，批次 28 A5）。 */
   quality?: QualityTier;
   /** 粒子盒尺寸 [w, h, d]（世界单位）。 */
   area?: [number, number, number];
@@ -45,8 +46,8 @@ export interface WeatherFXProps {
   snowSprite?: string;
 }
 
-const MAX_COUNT_HIGH = 2000;
-const MAX_COUNT_LOW = 1000;
+// 粒子上限按质量档（批次 28 A5：收敛进 QUALITY_PRESETS.weatherParticles，
+// high 2000 / low 1000；原 MAX_COUNT_HIGH/LOW 常量删除）。
 
 /** 引擎自绘雨滴竖条（16×64 canvas，上下渐隐）。 */
 function makeRainTexture(): THREE.Texture | null {
@@ -113,13 +114,18 @@ function useOptionalSprite(
 
 export function WeatherFX({
   sample,
-  quality = 'high',
+  quality,
   area = [150, 55, 150],
   center = [0, 26, 0],
   sprite,
   snowSprite,
 }: WeatherFXProps) {
-  const maxCount = quality === 'low' ? MAX_COUNT_LOW : MAX_COUNT_HIGH;
+  // 批次 28 A5：质量档缺省时自动探测（与 DayNightCycle 口径一致）；
+  // 粒子上限读 QUALITY_PRESETS[tier].weatherParticles（high 2000 / low 1000）。
+  const gl = useThree((s) => s.gl);
+  const autoTier = useMemo(() => detectQualityTier(gl), [gl]);
+  const tier: QualityTier = quality ?? autoTier;
+  const maxCount = QUALITY_PRESETS[tier].weatherParticles;
 
   // 粒子预分配：位置 + 逐粒子速度系数 / 摆动相位（确定性无需——纯装饰随机即可）。
   const { geometry, material, speeds, phases } = useMemo(() => {
@@ -216,7 +222,7 @@ export function WeatherFX({
 
     // 数量三档：600 / 1200 / 上限（low 减半），setDrawRange 切换。
     let count = inten < 0.4 ? 600 : inten < 0.75 ? 1200 : maxCount;
-    if (quality === 'low') count = Math.floor(count / 2);
+    if (tier === 'low') count = Math.floor(count / 2);
     if (count !== lastCountRef.current) {
       lastCountRef.current = count;
       geometry.setDrawRange(0, count);

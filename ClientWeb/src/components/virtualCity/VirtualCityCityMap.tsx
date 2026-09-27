@@ -59,7 +59,7 @@
  *     正午基准常量保留在文件顶部（昼夜沿此基准摆动）。
  */
 
-import { useMemo, useRef, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { OrbitControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import {
@@ -93,6 +93,10 @@ import { CanalBridges } from './CanalBridge';
 import { LandmarksLayer } from './LandmarksLayer';
 import { CloudLayer } from './props/CloudLayer';
 import { CivicLayer } from './CivicLayer';
+import { PerfHud } from './PerfHud';
+import { SceneDebugProbe } from './SceneDebugProbe';
+import { ObjectInfoOverlay } from './objectInfo/ObjectInfoOverlay';
+import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 import { groundTileUrl, streetTileUrl } from '@/assets/images/virtualCity';
 import {
   VIRTUAL_CITY_DISTRICTS,
@@ -187,9 +191,11 @@ function Ground() {
     repeat: [GROUND_REPEAT, GROUND_REPEAT], // 80 / 8 = 10
   });
   const tex = urbanTex ?? asphaltTex;
+  // 批次 28 B2：城市地面信息交互（click 空白处也走详情卡，不穿到下层）。
+  const info = useObjectInfoProps('ground.city', { anchorY: 0.3 });
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+    <mesh {...info} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
       <planeGeometry args={[WORLD_GROUND_SIZE, WORLD_GROUND_SIZE]} />
       <meshStandardMaterial
         map={tex ?? undefined}
@@ -271,15 +277,18 @@ function WaterLayer() {
     repeat: [16, 1],
   });
   const canalLen = CANAL_HALF_X * 2;
+  // 批次 28 B2：两岸草皮收边并入 water.canal 语义（运河岸线的一部分）。
+  const bankInfo = useObjectInfoProps('water.canal', { anchorY: 0.3 });
   return (
     <>
       {/* 城市运河（96×3，横贯 x ∈ [-48, 48]；批次 20 东延） */}
       <WaterPlane x={0} z={CANAL_Z} w={canalLen} d={3} />
       {/* 物流港港池（6×8） */}
-      <WaterPlane x={-30} z={-4} w={6} d={8} />
+      <WaterPlane x={-30} z={-4} w={6} d={8} infoId="water.harbour" />
       {/* 两岸草皮收边（窄条，色 #3f7a3a 与中央公园草地呼应） */}
       {[-1, 1].map((side) => (
         <mesh
+          {...bankInfo}
           key={`bank-${side}`}
           rotation={[-Math.PI / 2, 0, 0]}
           position={[0, 0.024, CANAL_Z + side * 1.85]}
@@ -321,7 +330,10 @@ function tokenLayout(gameState: VirtualCityGameState | null) {
   return { players, byDistrict, counts };
 }
 
-export function VirtualCityCityMap({
+// 批次 28 A1：memo —— props 收敛为稳定引用（viewRef/focusRef 是 ref、
+// selectedDistrict 原语、onSelectDistrict 为 useCallback），页面级 state
+// （面板 Tab / 弹窗 / 4Hz 时钟）不再打进 R3F 场景树；仅 WS gameState 推送才重渲染。
+export const VirtualCityCityMap = memo(function VirtualCityCityMap({
   gameState,
   viewRef,
   focusRef,
@@ -391,19 +403,30 @@ export function VirtualCityCityMap({
           shadowCameraFar={WORLD_SIZE * 2}
         />
         <Ground />
+        {/* 批次 28 二轮：userData.bucket 供 ?debug=1 的 __cityBreakdown() 分桶归因
+            （identity group，零 transform，零视觉影响）。楼栋/车辆/行人桶在各自
+            组件根 group 上自标（BuildingMesh / Vehicle / PedestrianV3）。 */}
         {/* 14-3D渲染深化：城市水系（运河 + 港池 + 岸草皮） */}
-        <WaterLayer />
+        <group userData={{ bucket: 'water' }}>
+          <WaterLayer />
+        </group>
         {/* 15-3D渲染深化：氛围层（公园落叶 Sparkles；批次 26 起远景剪影移除） */}
         <AtmosphereLayer />
         {/* 批次 26：四缘环境带（北雪山 / 西沙漠 / 东森林 / 南海洋+南港，方案 §2.1） */}
-        <CityEdgeLayer />
+        <group userData={{ bucket: 'edge' }}>
+          <CityEdgeLayer />
+        </group>
         {/* 16 · 阶段 U：天空云层（6 团 Billboard 云，慢速漂移；y=60-80 在相机
             轨道最高点之上，任何缩放都不会遮盖城市——视觉验收三轮回归结论） */}
         <CloudLayer />
         {/* 16 · 阶段 T：功能地标（喷泉 / 园路花坛 / 塔吊工地 / 停车场） */}
-        <LandmarksLayer />
+        <group userData={{ bucket: 'landmarks' }}>
+          <LandmarksLayer />
+        </group>
         {/* 18 · 阶段 AA：市政补全（码头 / 操场 / 轻轨 / 停机坪 / 加油站 / 生命线 / 外围腹地 / 路口信号灯） */}
-        <CivicLayer />
+        <group userData={{ bucket: 'civic' }}>
+          <CivicLayer />
+        </group>
         {VIRTUAL_CITY_DISTRICTS.map((d) => (
           <DistrictBlock
             key={d.id}
@@ -414,14 +437,19 @@ export function VirtualCityCityMap({
             onSelect={onSelectDistrict}
           />
         ))}
-        {/* P1-A：单 plane → 分层 <Road /> 道路（含路灯阵列） */}
-        <RoadsLayer />
-        {/* 16 · 阶段 S：CBD 环形路 + 运河跨河桥 */}
-        <RingRoad />
-        <CanalBridges />
+        {/* P1-A：单 plane → 分层 <Road /> 道路（含路灯阵列）；16 · 阶段 S：CBD 环形路 + 运河跨河桥 */}
+        <group userData={{ bucket: 'roads' }}>
+          <RoadsLayer />
+          <RingRoad />
+          <CanalBridges />
+        </group>
         {/* P1-C：街道道具层（树 / 车辆 / 行人 / 标识 / 屋顶杂物）；
             v2.12 阶段 2：districts 由父层注入（props 化，适配 16 城区） */}
-        <StreetPropsLayer districts={VIRTUAL_CITY_DISTRICTS} />
+        <group userData={{ bucket: 'street-props' }}>
+          <StreetPropsLayer districts={VIRTUAL_CITY_DISTRICTS} />
+        </group>
+        {/* 批次 28 二轮：?debug=1 场景归因探针（__cityScene/__cityRenderer/__cityBreakdown） */}
+        <SceneDebugProbe />
         {players.map((p, i) => {
           const inDistrict = byDistrict.get(p.district) ?? [];
           const index = inDistrict.indexOf(i);
@@ -476,6 +504,9 @@ export function VirtualCityCityMap({
           fallbackToCamera={viewMode === 'walk'}
           viewRef={viewRef}
         />
+        {/* 批次 28 B1：全场景唯一物件信息卡（hover 悬浮卡 + click 详情卡；
+            zIndexRange [30,0] 不压 minimap/error/modal，见方案 §5.1） */}
+        <ObjectInfoOverlay />
       </EngineCanvas>
       {/* 批次 22：俯瞰 / 街景漫游切换（§26 对比度：显式白字 + ≥45% 不透明底） */}
       <button
@@ -497,7 +528,9 @@ export function VirtualCityCityMap({
       >
         {viewMode === 'orbit' ? '🚶 街景漫游' : '🗺️ 返回俯瞰'}
       </button>
+      {/* 批次 28 A5：?debug=1 轻量性能浮层（DOM，不进 R3F 树；非 debug 零渲染） */}
+      <PerfHud />
       {/* 小地图由 VirtualCityGamePage 以绝对定位叠加（左上角） */}
     </div>
   );
-}
+});

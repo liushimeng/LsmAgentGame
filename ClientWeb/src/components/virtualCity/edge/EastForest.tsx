@@ -24,6 +24,7 @@ import type { CitySeason } from '../cityTimeStore';
 import { seasonOakModelUrl } from '../seasonAssets';
 import { GlbInstanced, type GlbInstanceTRS } from './glbInstanced';
 import { ProceduralOaks, ProceduralPines, type FloraSpot } from './proceduralFlora';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 /** 混种林总棵数（方案 §2.1：×~140；过渡带 10% 密度裁剪后实际略少）。 */
 const FOREST_COUNT = 150;
@@ -69,8 +70,10 @@ export function EastForest() {
     [pines],
   );
 
+  // 批次 28 B2：东部森林信息交互。
+  const info = useObjectInfoProps('edge.east-forest', { anchorY: 4 });
   return (
-    <group>
+    <group {...info}>
       {/* 阔叶树（oak_tree GLB 实例化，批次 27 按季节切变体；fallback 程序化球冠树） */}
       <GlbInstanced
         url={seasonOakModelUrl(season)}

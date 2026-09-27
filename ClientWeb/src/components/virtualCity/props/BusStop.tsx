@@ -6,7 +6,9 @@
  *   柱 r=u(0.08) h=u(2.8)；顶棚 u(2.4)×u(0.12)×u(1.0)；灯箱 u(1.6)×u(1.0)×u(0.08)。
  */
 
+import { memo } from 'react';
 import { u } from '../cityScale';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const POLE_R = u(0.08);
 const POLE_H = u(2.8);
@@ -27,14 +29,15 @@ interface Props {
   rotation?: number;
 }
 
-export function BusStop({ x, z, rotation = 0 }: Props) {
+// 批次 28 A1/A3：memo + 街具默认不投影（阴影 pass caster 裁剪）。
+export const BusStop = memo(function BusStop({ x, z, rotation = 0 }: Props) {
+  const info = useObjectInfoProps('prop.bus-stop', { anchorY: 2.6 });
   return (
-    <group position={[x, 0, z]} rotation={[0, rotation, 0]}>
+    <group {...info} position={[x, 0, z]} rotation={[0, rotation, 0]}>
       {/* 双柱 */}
       {[-1, 1].map((side) => (
         <mesh
           key={`pole-${side}`}
-          castShadow
           position={[side * SHELTER_W * 0.42, POLE_H / 2, -SHELTER_D * 0.35]}
         >
           <cylinderGeometry args={[POLE_R, POLE_R, POLE_H, 8]} />
@@ -42,7 +45,7 @@ export function BusStop({ x, z, rotation = 0 }: Props) {
         </mesh>
       ))}
       {/* 顶棚 */}
-      <mesh castShadow position={[0, POLE_H + SHELTER_T / 2, 0]}>
+      <mesh position={[0, POLE_H + SHELTER_T / 2, 0]}>
         <boxGeometry args={[SHELTER_W, SHELTER_T, SHELTER_D]} />
         <meshStandardMaterial color={ROOF_COLOR} roughness={0.8} metalness={0.2} />
       </mesh>
@@ -59,4 +62,4 @@ export function BusStop({ x, z, rotation = 0 }: Props) {
       </mesh>
     </group>
   );
-}
+});

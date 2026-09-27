@@ -14,8 +14,10 @@
  * 冬 #cfd8dc），cityTimeStore.subscribeSeason 低频订阅（仅季节变化才重渲染）。
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Instances, Instance } from '@react-three/drei';
+import { useThree } from '@react-three/fiber';
+import { detectQualityTier } from '@/engine3d';
 import { useSynthPBR } from '../cityPbr';
 import { u } from '../cityScale';
 import { currentSeason, subscribeSeason } from '../cityTimeStore';
@@ -26,11 +28,14 @@ import {
   treeSeed,
   treeShape,
 } from './TreeV3';
+import { useObjectInfoProps, instancedEventsRaycast } from '../objectInfo/useObjectInfoProps';
 
 export interface InstanceTree {
   x: number;
   z: number;
   scale: number;
+  /** 批次 28 B2：行道树 / 区内园林树（catalog tree.road / tree.park 按实例区分）。 */
+  kind?: 'road' | 'park';
 }
 
 /** 主干几何参数（= TreeV3Fallback 主干）。 */
@@ -41,7 +46,7 @@ const BRANCH_GEOM: [number, number, number, number] = [u(0.04), u(0.06), u(0.6),
 const BRANCH_Y = u(1.4);
 const BRANCH_R = u(0.3);
 
-interface InstTrunk { key: string; x: number; y: number; z: number; s: number }
+interface InstTrunk { key: string; ti: number; x: number; y: number; z: number; s: number }
 interface InstBranch extends InstTrunk { rotY: number }
 interface InstCrown extends InstTrunk { r: number; color: string }
 
@@ -66,7 +71,8 @@ const SEASON_CROWN_TINT: Record<CitySeason, string> = {
   winter: '#cfd8dc',
 };
 
-export function TreesInstanced({
+// 批次 28 A1：memo —— trees（useMemo 布局）/ totalCap（常量）稳定，父层不重渲染。
+export const TreesInstanced = memo(function TreesInstanced({
   trees,
   totalCap,
 }: {
@@ -76,6 +82,12 @@ export function TreesInstanced({
 }) {
   const effective = useMemo(() => stableTruncate(trees, totalCap), [trees, totalCap]);
 
+  // 批次 28 A3 caster 裁剪：树冠/树枝不投影（保留树干投影）；low 档树全不投影。
+  // 游戏侧策略映射（engine3d 不含 pedestrianCap/treeShadows 类游戏字段，§2.1 硬约束 5）。
+  const gl = useThree((s) => s.gl);
+  const tier = useMemo(() => detectQualityTier(gl), [gl]);
+  const trunkShadow = tier === 'high';
+
   const { trunks, branches, crowns } = useMemo(() => {
     const tr: InstTrunk[] = [];
     const br: InstBranch[] = [];
@@ -84,11 +96,12 @@ export function TreesInstanced({
       const s = t.scale;
       const seed = treeSeed(t.x, t.z);
       const { branchCount, crowns: cs } = treeShape(seed);
-      tr.push({ key: `trunk-${ti}`, x: t.x, y: TRUNK_Y * s, z: t.z, s });
+      tr.push({ key: `trunk-${ti}`, ti, x: t.x, y: TRUNK_Y * s, z: t.z, s });
       for (let i = 0; i < branchCount; i++) {
         const a = (i / Math.max(1, branchCount)) * Math.PI * 2 + seed * 0.0001;
         br.push({
           key: `branch-${ti}-${i}`,
+          ti,
           x: t.x + Math.cos(a) * BRANCH_R * s,
           y: BRANCH_Y * s,
           z: t.z + Math.sin(a) * BRANCH_R * s,
@@ -99,6 +112,7 @@ export function TreesInstanced({
       cs.forEach((c, ci) => {
         cr.push({
           key: `crown-${ti}-${ci}`,
+          ti,
           x: t.x + c.x * s,
           y: c.y * s,
           z: t.z + c.z * s,
@@ -111,6 +125,23 @@ export function TreesInstanced({
     return { trunks: tr, branches: br, crowns: cr };
   }, [effective]);
 
+  // 批次 28 B2：树信息交互。三个实例层各自映射回树序 ti → tree.road / tree.park
+  // （行道树 / 区内园林树），instanceId 自动进 `#实例` 动态行。
+  const idForTree = (ti: number | undefined): string =>
+    (ti !== undefined && effective[ti]?.kind === 'park') ? 'tree.park' : 'tree.road';
+  const trunkInfo = useObjectInfoProps('tree.road', {
+    anchorY: 1.6,
+    idFor: (e) => idForTree(trunks[e.instanceId ?? -1]?.ti),
+  });
+  const branchInfo = useObjectInfoProps('tree.road', {
+    anchorY: 1.6,
+    idFor: (e) => idForTree(branches[e.instanceId ?? -1]?.ti),
+  });
+  const crownInfo = useObjectInfoProps('tree.road', {
+    anchorY: 1.6,
+    idFor: (e) => idForTree(crowns[e.instanceId ?? -1]?.ti),
+  });
+
   // 批次 27：季节低频订阅（仅 season 变化 setState；无变化时 React 直接 bail out）。
   const [season, setSeason] = useState<CitySeason>(currentSeason);
   useEffect(() => subscribeSeason(setSeason), []);
@@ -122,16 +153,28 @@ export function TreesInstanced({
 
   return (
     <group>
-      {/* ① 主干 ×N → 1 draw call */}
-      <Instances limit={Math.max(1, trunks.length)} range={trunks.length} castShadow>
+      {/* ① 主干 ×N → 1 draw call（批次 28 A3：仅 high 档投影） */}
+      <Instances
+        {...trunkInfo}
+        raycast={instancedEventsRaycast}
+        limit={Math.max(1, trunks.length)}
+        range={trunks.length}
+        castShadow={trunkShadow}
+      >
         <cylinderGeometry args={TRUNK_GEOM} />
         <meshStandardMaterial color={TRUNK_COLOR} roughness={0.9} />
         {trunks.map((t) => (
           <Instance key={t.key} position={[t.x, t.y, t.z]} scale={t.s} />
         ))}
       </Instances>
-      {/* ② 分枝 ×N → 1 draw call */}
-      <Instances limit={Math.max(1, branches.length)} range={branches.length} castShadow>
+      {/* ② 分枝 ×N → 1 draw call（批次 28 A3：不投影，阴影由树干承担） */}
+      <Instances
+        {...branchInfo}
+        raycast={instancedEventsRaycast}
+        limit={Math.max(1, branches.length)}
+        range={branches.length}
+        castShadow={false}
+      >
         <cylinderGeometry args={BRANCH_GEOM} />
         <meshStandardMaterial color={TRUNK_COLOR} roughness={0.9} />
         {branches.map((b) => (
@@ -143,8 +186,15 @@ export function TreesInstanced({
           />
         ))}
       </Instances>
-      {/* ③ 树冠 3 球 ×N → 1 draw call（单位 icosahedron + 逐实例半径/色；基色随季节 tint） */}
-      <Instances limit={Math.max(1, crowns.length)} range={crowns.length} castShadow>
+      {/* ③ 树冠 3 球 ×N → 1 draw call（单位 icosahedron + 逐实例半径/色；基色随季节 tint；
+          批次 28 A3：不投影 —— 1506 个 icosahedron 是阴影 pass 大户，树干投影足够） */}
+      <Instances
+        {...crownInfo}
+        raycast={instancedEventsRaycast}
+        limit={Math.max(1, crowns.length)}
+        range={crowns.length}
+        castShadow={false}
+      >
         <icosahedronGeometry args={[1, 1]} />
         <meshStandardMaterial
           color={SEASON_CROWN_TINT[season]}
@@ -158,4 +208,4 @@ export function TreesInstanced({
       </Instances>
     </group>
   );
-}
+});

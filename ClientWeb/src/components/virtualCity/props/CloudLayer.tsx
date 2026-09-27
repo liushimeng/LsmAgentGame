@@ -21,6 +21,7 @@ import { Billboard } from '@react-three/drei';
 import { skyUrl } from '@/assets/images/virtualCity';
 import { useSharedTexture } from '@/engine3d';
 import { sample, weatherVisual } from '../cityTimeStore';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const REDUCED_MOTION =
   typeof window !== 'undefined' &&
@@ -149,8 +150,10 @@ export function CloudLayer() {
   // 贴图加载一次；缺失返回 null → 全层走白色扁球兜底
   const tex = useSharedTexture(skyUrl('cloud_puff'));
   const clouds = useMemo(() => cloudsFor('clouds-v1'), []);
+  // 批次 28 B2：云层信息交互（根组承接子云事件冒泡）。
+  const info = useObjectInfoProps('sky.cloud', { anchorY: 0 });
   return (
-    <group>
+    <group {...info}>
       {clouds.map((c, i) => (
         <Cloud key={`cloud-${i}`} spec={c} tex={tex} />
       ))}

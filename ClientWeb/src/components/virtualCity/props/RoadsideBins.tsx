@@ -15,17 +15,26 @@
  * 公交站台旁），本组件只负责渲染，不含布点逻辑。
  */
 
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef  } from 'react';
 import * as THREE from 'three';
 import { modelUrl } from '@/assets/models';
 import { blenderModelsEnabled, useSharedGLTF } from '@/engine3d';
+import { useI18nStore } from '@/store/i18n.store';
+import type { Lang } from '@/i18n';
 import type { RoadsideBinSpot } from '../StreetPropsLayer';
 import { TrashCan } from './TrashCan';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 /** GLB 内两变体对象名（与 3d_script/build_trash_can.py join_objects 命名对齐）。 */
 const VARIANT_OBJECT_NAMES: Record<RoadsideBinSpot['variant'], string> = {
   green: 'TrashCan_Green',
   blue: 'TrashCan_Blue',
+};
+
+/** 路侧桶分类行（三语与 catalog 同策略不进 i18n/Dict）。 */
+const ROADSIDE_CATEGORY: Record<RoadsideBinSpot['variant'], Record<Lang, string>> = {
+  green: { 'zh-CN': '厨余垃圾（绿）', en: 'Kitchen waste (green)', ja: '生ごみ（緑）' },
+  blue: { 'zh-CN': '可回收物（蓝）', en: 'Recyclable (blue)', ja: 'リサイクル（青）' },
 };
 
 /** GLB 子树内抽出的一个 (geometry, material) 渲染对。 */
@@ -107,7 +116,6 @@ function BinPairMesh({
     <instancedMesh
       ref={ref}
       args={[pair.geometry, pair.material, Math.max(1, worldMatrices.length)]}
-      castShadow
     />
   );
 }
@@ -117,7 +125,8 @@ interface Props {
   bins: RoadsideBinSpot[];
 }
 
-export function RoadsideBins({ bins }: Props) {
+// 批次 28 A1/A3：memo + 街具默认不投影（阴影 pass caster 裁剪）。
+export const RoadsideBins = memo(function RoadsideBins({ bins }: Props) {
   const url = modelUrl('road', 'trash_can');
   const { scene } = useSharedGLTF(url);
   // feature flag 一次性判定（CLAUDE.md §27.5：disable-blender-models=1 强制回退）。
@@ -141,10 +150,25 @@ export function RoadsideBins({ bins }: Props) {
     };
   }, [blenderOn, scene, bins]);
 
+  // 批次 28 B2：路侧垃圾桶信息交互（GLB instancedMesh 路径按绿/蓝变体分组挂接，
+  // 各自带「分类」动态行——厨余（绿）/可回收（蓝）；
+  // 降级路径里 TrashCan 自带同 id 接线，子级 stopPropagation 不会双触发）。
+  const lang = useI18nStore((s) => s.lang);
+  const greenInfo = useObjectInfoProps('prop.trash-can', {
+    anchorY: 0.8,
+    extra: [{ label: 'category', value: ROADSIDE_CATEGORY.green[lang] }],
+  });
+  const blueInfo = useObjectInfoProps('prop.trash-can', {
+    anchorY: 0.8,
+    extra: [{ label: 'category', value: ROADSIDE_CATEGORY.blue[lang] }],
+  });
+  // 降级路径包裹组：绿蓝混布（程序化桶无绿变体），不挂「分类」行以免误导。
+  const fallbackInfo = useObjectInfoProps('prop.trash-can', { anchorY: 0.8 });
+
   // 降级：程序化 TrashCan，密度减半（隔一取一）。
   if (!glbData) {
     return (
-      <group>
+      <group {...fallbackInfo}>
         {bins
           .filter((_, i) => i % 2 === 0)
           .map((b, i) => (
@@ -162,17 +186,21 @@ export function RoadsideBins({ bins }: Props) {
   }
 
   return (
-    <group>
-      {glbData.greenPairs.map((pair, i) =>
-        glbData.greenMatrices.length ? (
-          <BinPairMesh key={`bin-green-${i}`} pair={pair} worldMatrices={glbData.greenMatrices} />
-        ) : null,
-      )}
-      {glbData.bluePairs.map((pair, i) =>
-        glbData.blueMatrices.length ? (
-          <BinPairMesh key={`bin-blue-${i}`} pair={pair} worldMatrices={glbData.blueMatrices} />
-        ) : null,
-      )}
-    </group>
+    <>
+      <group {...greenInfo}>
+        {glbData.greenPairs.map((pair, i) =>
+          glbData.greenMatrices.length ? (
+            <BinPairMesh key={`bin-green-${i}`} pair={pair} worldMatrices={glbData.greenMatrices} />
+          ) : null,
+        )}
+      </group>
+      <group {...blueInfo}>
+        {glbData.bluePairs.map((pair, i) =>
+          glbData.blueMatrices.length ? (
+            <BinPairMesh key={`bin-blue-${i}`} pair={pair} worldMatrices={glbData.blueMatrices} />
+          ) : null,
+        )}
+      </group>
+    </>
   );
-}
+});

@@ -12,6 +12,7 @@
 import { useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const REDUCED_MOTION =
   typeof window !== 'undefined' &&
@@ -32,6 +33,8 @@ interface Props {
 }
 
 export function WaterMist({ x, z, w, d, rotation = 0, opacity = 0.18 }: Props) {
+  // 批次 28 B2：具名水雾物件接线（方案 §9-4 保守项：接上，id water.mist）。
+  const info = useObjectInfoProps('water.mist', { anchorY: 0.3 });
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
 
   useFrame(() => {
@@ -44,7 +47,7 @@ export function WaterMist({ x, z, w, d, rotation = 0, opacity = 0.18 }: Props) {
   });
 
   return (
-    <group position={[x, 0, z]} rotation={[0, rotation, 0]}>
+    <group {...info} position={[x, 0, z]} rotation={[0, rotation, 0]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
         <planeGeometry args={[w, d]} />
         <meshStandardMaterial

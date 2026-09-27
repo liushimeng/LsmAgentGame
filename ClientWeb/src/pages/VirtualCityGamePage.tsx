@@ -30,6 +30,7 @@ import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import { districtCenter, formatPct, timeRatioPresetKey, type VirtualCityDistrictId } from '@/types/virtualCity';
 import { resetCityTime, setCityClockAnchor, setCityEnv } from '@/components/virtualCity/cityTimeStore';
+import { CityClockText, type CityClockAnchor } from '@/components/virtualCity/CityClockText';
 import {
   VirtualCityCityMap,
   type VirtualCityCameraView,
@@ -58,38 +59,9 @@ const CYCLE_CLASS: Record<string, string> = {
   depression: 'virtualCity-cycle--depression',
 };
 
-// 现实运行时长 HH:MM:SS —— 批次 25 §3.4 起仅作 city_clock_ms 缺失（旧帧/旧后端）时的兜底显示。
-function fmtElapsed(startedAtSec: number, nowMs: number): string {
-  if (!startedAtSec) return '--:--';
-  const s = Math.max(0, Math.floor(nowMs / 1000) - startedAtSec);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  const p = (n: number) => String(n).padStart(2, '0');
-  return h > 0 ? `${h}:${p(m)}:${p(sec)}` : `${p(m)}:${p(sec)}`;
-}
-
-/** 批次 25 §3.4 城市时钟：时段文案键（6–9 清晨 / 9–17 白天 / 17–20 傍晚 / 20–6 夜晚）。 */
-function cityPhaseKey(hour: number): TKey {
-  if (hour >= 6 && hour < 9) return 'virtualCity.cityClockPhaseDawn' as TKey;
-  if (hour >= 9 && hour < 17) return 'virtualCity.cityClockPhaseDay' as TKey;
-  if (hour >= 17 && hour < 20) return 'virtualCity.cityClockPhaseDusk' as TKey;
-  return 'virtualCity.cityClockPhaseNight' as TKey;
-}
-
-type TranslateFn = (key: TKey, vars?: Record<string, string | number>) => string;
-
-/** 批次 25 §3.4：城市时间 epoch 毫秒 →「M月D日 HH:MM（时段）」（本地月日时分，不用秒）。 */
-function fmtCityClock(cityMs: number, t: TranslateFn): string {
-  const d = new Date(cityMs);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return t('virtualCity.cityClockDisplay' as TKey, {
-    month: d.getMonth() + 1,
-    day: d.getDate(),
-    time: `${p(d.getHours())}:${p(d.getMinutes())}`,
-    phase: t(cityPhaseKey(d.getHours())),
-  });
-}
+// 时钟格式化（fmtElapsed / fmtCityClock / cityPhaseKey）与 250ms tick 已随
+// <CityClockText> 拆到 components/virtualCity/CityClockText.tsx（批次 28 A1：
+// 页面组件不再持有 now state，消除 4Hz 全树 re-render）。
 
 /**
  * 阶段 Q：经济 Tab 内含调研入口 —— EconomyPanel + 顶部「📋 调研」小按钮，
@@ -182,19 +154,12 @@ export function VirtualCityGamePage() {
   useVirtualCitySpeech(roomId ?? '');
 
   const [leavePromptOpen, setLeavePromptOpen] = useState(false);
-  const [now, setNow] = useState(Date.now());
   const viewRef = useRef<VirtualCityCameraView>({ x: 0, z: 0, dist: 34 });
   const focusRef = useRef<VirtualCityFocusTarget | null>(null);
   // 批次 25 §3.4 城市时钟帧锚点：帧内 city_clock_ms + 帧到达时刻；
   // 显示 = 锚点 + (now − 到达) × speed（运行 60×，暂停 0）。
-  const cityClockRef = useRef<{ cityMs: number; at: number; speed: number } | null>(null);
-
-  // 运行时钟（game_started_at，RoomRunningClock 同源语义）。
-  // 批次 25 §3.4：250ms 步进，同时驱动城市时钟插值（与 MonthTicker 同节奏）。
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 250);
-    return () => window.clearInterval(timer);
-  }, []);
+  // 批次 28 A1：now 的 250ms tick 下沉到 <CityClockText>，页面不再定时 setState。
+  const cityClockRef = useRef<CityClockAnchor | null>(null);
 
   // 批次 25 §3.4：帧到达时重锚定城市时钟。连续帧 city_clock_ms 不变 ⇒
   // 后端暂停冻结（speed=0 保持显示），避免暂停期随插值漂移出锯齿回跳。
@@ -312,19 +277,8 @@ export function VirtualCityGamePage() {
   // 津贴停发徽标：已改由 CivicElectionBanner 直接消费 public_services.stipend_stopped
   // （旧「当月 policy 事件中文文本探测」best-effort 逻辑已删除）。
 
-  // ── 批次 25 §3.4 城市时钟（60× 叙事层）：帧锚点 + (now − 帧到达) × speed 插值。
-  //    city_clock_ms 缺失（旧帧/旧后端）→ 兜底回退现实运行时长（fmtElapsed）。──
-  const cityClock = cityClockRef.current;
-  const hasCityClock =
-    cityClock !== null &&
-    typeof gameState?.city_clock_ms === 'number' &&
-    gameState.city_clock_ms > 0;
-  const clockTitle = hasCityClock
-    ? t('virtualCity.cityClock' as TKey)
-    : t('virtualCity.runningTime' as TKey);
-  const clockText = hasCityClock
-    ? `🏙 ${fmtCityClock(cityClock.cityMs + (now - cityClock.at) * cityClock.speed, t)}`
-    : `⏱ ${fmtElapsed(gameState?.game_started_at ?? 0, now)}`;
+  // 城市时钟/运行时长显示已下沉 <CityClockText>（批次 28 A1）：250ms tick 只更新
+  // 该文本块自身，不再重渲染本页与 <VirtualCityCityMap> 场景树。
 
   // ── 批次 27 §3.4：季节/天气/时间比例徽章（旧帧无字段整条隐藏，不显示 undefined）。──
   const envBadge = [
@@ -368,10 +322,13 @@ export function VirtualCityGamePage() {
                 {t('virtualCity.phase.settling' as TKey)}
               </span>
             )}
-            {/* 批次 25 §3.4：城市时钟（60× 叙事层）；旧帧无 city_clock_ms 时兜底现实运行时长。 */}
-            <span className="virtualCity-topbar__item" title={clockTitle}>
-              {clockText}
-            </span>
+            {/* 批次 25 §3.4：城市时钟（60× 叙事层）；旧帧无 city_clock_ms 时兜底现实运行时长。
+                批次 28 A1：<CityClockText> 自带 250ms tick，页面不再定时 setState。 */}
+            <CityClockText
+              cityClockRef={cityClockRef}
+              startedAt={gameState?.game_started_at ?? 0}
+              cityClockMs={gameState?.city_clock_ms}
+            />
             {/* 批次 27：季节 · 天气 + 时间比例徽章（旧帧无字段整条隐藏）。 */}
             {envBadge && (
               <span className="virtualCity-topbar__item" data-testid="virtualCity-env-badge">

@@ -18,6 +18,16 @@ export { Model } from './Model';
 export { useSharedGLTF, clearModelCache } from './modelCache';
 export type { SharedGLTF } from './modelCache';
 
+// 批次 28 二轮：通用几何合并（DC 攻坚；引擎层只依赖 three）
+export {
+  mergeGrouped,
+  mergeParts,
+  boxFaces,
+  boxPart,
+  cylPart,
+} from './geoMerge';
+export type { MergePart, GroupedMergePart } from './geoMerge';
+
 export {
   useSharedTexture,
   clearTextureCache,
@@ -46,6 +56,7 @@ export type { WeatherFXProps, WeatherSample } from './WeatherFX';
 export {
   isSoftwareRenderer,
   detectQualityTier,
+  knownQualityTier,
   urlQualityOverride,
   blenderModelsEnabled,
   QUALITY_PRESETS,

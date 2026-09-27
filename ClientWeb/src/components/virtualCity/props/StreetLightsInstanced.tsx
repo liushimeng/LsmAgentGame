@@ -20,6 +20,10 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Instances, Instance } from '@react-three/drei';
 import { getDayNight } from '../cityTimeStore';
+import {
+  useObjectInfoProps,
+  instancedEventsRaycast,
+} from '../objectInfo/useObjectInfoProps';
 
 export interface InstancedLamp {
   x: number;
@@ -54,6 +58,9 @@ export function StreetLightsInstanced({ lamps }: { lamps: InstancedLamp[] }) {
     m.emissiveIntensity += (target - m.emissiveIntensity) * Math.min(1, delta * 2);
   });
 
+  // 批次 28 B2：路灯信息交互（三段实例层共享 lamps 序 → instanceId 一致）。
+  const info = useObjectInfoProps('road.street-light', { anchorY: 1.2 });
+
   const renderPart = (
     key: string,
     geometry: JSX.Element,
@@ -61,7 +68,13 @@ export function StreetLightsInstanced({ lamps }: { lamps: InstancedLamp[] }) {
     list: InstancedLamp[],
     yOf: (s: number) => number,
   ) => (
-    <Instances key={key} limit={Math.max(1, list.length)} range={list.length}>
+    <Instances
+      {...info}
+      raycast={instancedEventsRaycast}
+      key={key}
+      limit={Math.max(1, list.length)}
+      range={list.length}
+    >
       {geometry}
       {material}
       {list.map((l, i) => {

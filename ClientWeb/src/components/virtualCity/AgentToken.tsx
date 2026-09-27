@@ -16,6 +16,7 @@ import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import { professionAvatar } from '@/assets/images/virtualCity';
 import { useSharedTexture } from '@/engine3d';
+import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 import {
   formatCny,
   professionColor,
@@ -120,13 +121,25 @@ export function AgentToken({ player, cx, cz, index, total, isMe, speech }: Props
     return () => window.clearTimeout(timer);
   }, [speech]);
 
+  // 批次 28 B2：玩家代币信息交互（extra：昵称/职业/净资产；名牌 Html 保持
+  // pointer-events:none 不吃点击 —— 命中落在 token 圆柱/头像 sprite 上）。
+  const info = useObjectInfoProps('actor.player', {
+    anchorY: 0.9,
+    extra: [
+      { label: 'name', value: player.nickname || player.account },
+      { label: 'profession', value: player.profession.title },
+      { label: 'netWorth', value: formatCny(player.net_worth) },
+      { label: 'seat', value: String(player.seat + 1) },
+    ],
+  });
+
   if (!player.alive) {
     // 出局 token 移出地图（§9.1：players[].alive=false 不渲染）。
     return null;
   }
 
   return (
-    <group ref={groupRef} position={[targetX, 0, targetZ]}>
+    <group {...info} ref={groupRef} position={[targetX, 0, targetZ]}>
       {/* 圆柱 token（职业色；观战/他人浅色描边区分）。高 0.25 / 半径 0.12 ≈ 2.5m 标记物 */}
       <mesh castShadow position={[0, 0.125, 0]}>
         <cylinderGeometry args={[0.12, 0.12, 0.25, 24]} />

@@ -7,9 +7,11 @@
  * 契约：lag_docs/虚拟城市/已实现/15-3D城市渲染深化/02-架构设计 §4.1。
  */
 
+import { memo } from 'react';
 import { signUrlExt } from '@/assets/images/virtualCity';
 import { u } from '../cityScale';
 import { useSharedTexture } from '@/engine3d';
+import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 const POLE = '#5a6270';
 const HEAD_BLUE = '#3a78c8';
@@ -21,7 +23,8 @@ interface Props {
   rotation?: number;
 }
 
-export function ParkingMeter({ x, z, rotation = 0 }: Props) {
+// 批次 28 A1/A3：memo + 街具默认不投影（阴影 pass caster 裁剪）。
+export const ParkingMeter = memo(function ParkingMeter({ x, z, rotation = 0 }: Props) {
   const POLE_R = u(0.04);
   const POLE_H = u(1.4);
   const HEAD_W = u(0.3);
@@ -29,16 +32,17 @@ export function ParkingMeter({ x, z, rotation = 0 }: Props) {
 
   // 可选贴图 sprite（缺失跳过）
   const tex = useSharedTexture(signUrlExt('parking_sign'));
+  const info = useObjectInfoProps('prop.parking-meter', { anchorY: 1.8 });
 
   return (
-    <group position={[x, 0, z]} rotation={[0, rotation, 0]}>
+    <group {...info} position={[x, 0, z]} rotation={[0, rotation, 0]}>
       {/* 立柱 */}
-      <mesh castShadow position={[0, POLE_H / 2, 0]}>
+      <mesh position={[0, POLE_H / 2, 0]}>
         <cylinderGeometry args={[POLE_R, POLE_R, POLE_H, 6]} />
         <meshStandardMaterial color={POLE} roughness={0.5} metalness={0.5} />
       </mesh>
       {/* 顶部表盘（蓝底盒） */}
-      <mesh castShadow position={[0, POLE_H + HEAD_H / 2, 0]}>
+      <mesh position={[0, POLE_H + HEAD_H / 2, 0]}>
         <boxGeometry args={[HEAD_W, HEAD_H, u(0.06)]} />
         <meshStandardMaterial color={HEAD_BLUE} roughness={0.5} metalness={0.2} />
       </mesh>
@@ -56,6 +60,6 @@ export function ParkingMeter({ x, z, rotation = 0 }: Props) {
       )}
     </group>
   );
-}
+});
 
 export default ParkingMeter;

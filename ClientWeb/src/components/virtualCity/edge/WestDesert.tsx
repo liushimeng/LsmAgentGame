@@ -19,6 +19,10 @@ import { u } from '../cityScale';
 import { hashStr, mulberry32 } from '../civic/rand';
 import { GlbInstanced, type GlbInstanceTRS } from './glbInstanced';
 import { ProceduralCacti, type FloraSpot } from './proceduralFlora';
+import {
+  useObjectInfoProps,
+  instancedEventsRaycast,
+} from '../objectInfo/useObjectInfoProps';
 
 const SAND_COLOR = '#d9b36c';
 const DEADWOOD_COLOR = '#6b5a45';
@@ -98,10 +102,13 @@ export function WestDesert() {
     return out;
   }, []);
 
+  // 批次 28 B2：西部沙漠信息交互（沙丘/仙人掌/枯木共用；drei Instances 恢复命中）。
+  const info = useObjectInfoProps('edge.west-desert', { anchorY: 1.5 });
+
   return (
-    <group>
+    <group {...info}>
       {/* 沙丘 ×5（单位 sphere 压扁 → 1 draw call） */}
-      <Instances limit={DUNE_COUNT} range={DUNE_COUNT}>
+      <Instances {...info} raycast={instancedEventsRaycast} limit={DUNE_COUNT} range={DUNE_COUNT}>
         <sphereGeometry args={[1, 16, 10]} />
         <meshStandardMaterial color={SAND_COLOR} roughness={0.95} />
         {dunes.map((d, i) => (
@@ -120,7 +127,7 @@ export function WestDesert() {
         fallback={<ProceduralCacti spots={cacti} />}
       />
       {/* 枯木 ×3（主干 + 枝，全部单位 cylinder 实例 → 1 draw call） */}
-      <Instances limit={deadwood.length * 2} range={deadwood.length * 2}>
+      <Instances {...info} raycast={instancedEventsRaycast} limit={deadwood.length * 2} range={deadwood.length * 2}>
         <cylinderGeometry args={[u(0.05), u(0.09), 1, 6]} />
         <meshStandardMaterial color={DEADWOOD_COLOR} roughness={0.95} />
         {deadwood.flatMap((w, i) => {

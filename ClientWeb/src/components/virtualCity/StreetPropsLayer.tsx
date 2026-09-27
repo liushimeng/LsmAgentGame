@@ -42,10 +42,12 @@
  */
 
 import { useMemo } from 'react';
+import { useThree } from '@react-three/fiber';
 import {
   districtCenter,
   type VirtualCityDistrictDef,
 } from '@/types/virtualCity';
+import { detectQualityTier } from '@/engine3d';
 import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
 import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
 import { TreesInstanced } from './props/TreesInstanced'; // 批次 20 §3.3：TreeV3 逐实例 → 全局 InstancedMesh（形态同源）
@@ -170,12 +172,16 @@ const ROOFTOP_VARIANTS: Array<'ac' | 'tank' | 'antenna'> = ['ac', 'tank', 'anten
 const VEHICLE_VARIANTS: Array<'sedan' | 'truck' | 'bus' | 'taxi'> = ['sedan', 'truck', 'bus', 'taxi'];
 
 /**
- * 全城行人总量上限。批次 20（文档 1 §2.3）：56 → **110**（实例化只覆盖树/灯，
+ * 全城行人总量上限（high 质量档）。批次 20（文档 1 §2.3）：56 → **110**（实例化只覆盖树/灯，
  * 行人仍逐体 V3 mixer，上限受动画帧耗时约束）。前 16 区合计 56 + 新 16 区 47
  * （§2.3 PEDESTRIAN_DENSITY 列合计，契约文中「新 51」与其表列差 4，按表列为准）
  * = 103 < 110，截断守卫不触发但保留（超出时按表序裁尾部新区）。
+ * 批次 28 A4/A5：按质量档取值 —— low 60（软件渲染器/低配，行人 mixer 是 CPU 大户；
+ * 游戏侧策略映射，engine3d 不持有行人字段）。
  */
 export const PEDESTRIAN_TOTAL_CAP = 110;
+/** low 质量档行人上限（批次 28 A4：超出按表序裁尾部新区）。 */
+export const PEDESTRIAN_TOTAL_CAP_LOW = 60;
 /** 全城树（行道 + 区内）实例总量上限（超出按 hash 种子稳定截断，§3.3）。 */
 export const TREE_TOTAL_CAP = 550;
 
@@ -696,16 +702,16 @@ interface StreetPropsLayerProps {
 }
 
 /**
- * 全城行人总上限守卫（批次 20：PEDESTRIAN_TOTAL_CAP=110）。
+ * 全城行人总上限守卫（批次 20：high 110 / 批次 28 A4：low 60）。
  * 超出时按卡池表序裁尾部（新区先减，前 16 区满编）；确定性，无随机。
  */
-function capPedestrians(districtProps: DistrictProps[]): void {
+function capPedestrians(districtProps: DistrictProps[], cap: number): void {
   let total = 0;
   for (const dp of districtProps) total += dp.pedestrians.length;
-  if (total <= PEDESTRIAN_TOTAL_CAP) return;
-  for (let i = districtProps.length - 1; i >= 0 && total > PEDESTRIAN_TOTAL_CAP; i--) {
+  if (total <= cap) return;
+  for (let i = districtProps.length - 1; i >= 0 && total > cap; i--) {
     const dp = districtProps[i];
-    const excess = Math.min(dp.pedestrians.length, total - PEDESTRIAN_TOTAL_CAP);
+    const excess = Math.min(dp.pedestrians.length, total - cap);
     if (excess > 0) {
       dp.pedestrians.splice(dp.pedestrians.length - excess, excess);
       total -= excess;
@@ -714,20 +720,29 @@ function capPedestrians(districtProps: DistrictProps[]): void {
 }
 
 export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
+  // 批次 28 A4/A5：行人上限按质量档映射（high 110 / low 60，游戏侧策略；
+  // detectQualityTier 读 GL 上下文，engine3d 不持有游戏字段）。
+  const gl = useThree((s) => s.gl);
+  const tier = useMemo(() => detectQualityTier(gl), [gl]);
+  const pedCap = tier === 'low' ? PEDESTRIAN_TOTAL_CAP_LOW : PEDESTRIAN_TOTAL_CAP;
+
   const layout = useMemo<Layout>(() => {
     const districtProps = districts.map((d, idx) => propsForDistrict(d, idx));
-    capPedestrians(districtProps);
+    capPedestrians(districtProps, pedCap);
     const roadVehicles = vehiclesForRoads(districts);
     const roadTrees = roadTreesForRoads(districts);
     const busStops = busStopsForCity(districts);
     return { districtProps, roadVehicles, roadTrees, busStops };
-  }, [districts]);
+  }, [districts, pedCap]);
 
   // 批次 20 §3.3：区内树 + 行道树合并单一 InstancedMesh 集合（3 draw call）。
+  // 批次 28 B2：kind 标记 —— 区内树 tree.park / 行道树 tree.road（物件信息按实例区分）。
   const allTrees = useMemo(
     () => [
-      ...layout.districtProps.flatMap((dp) => dp.trees.map((t) => ({ x: t.x, z: t.z, scale: t.scale }))),
-      ...layout.roadTrees.map((t) => ({ x: t.x, z: t.z, scale: t.scale })),
+      ...layout.districtProps.flatMap((dp) =>
+        dp.trees.map((t) => ({ x: t.x, z: t.z, scale: t.scale, kind: 'park' as const })),
+      ),
+      ...layout.roadTrees.map((t) => ({ x: t.x, z: t.z, scale: t.scale, kind: 'road' as const })),
     ],
     [layout],
   );
