@@ -14,7 +14,8 @@
  *   根因不是"没测试"，而是 GLB 的**单位口径 / 轴向 / 原点 / 变换规矩**只写在实施记录里，
  *   没有可执行的规约 —— 消费端只能"猜"美术产出，错了也没人报。
  *
- * 本模块补这个洞：**GLB 载入后立刻量三样东西**并比对调用方注册的目标尺寸：
+ * 本模块补这个洞：**GLB 载入后立刻量三样东西**并比对调用方注册的目标尺寸
+ * （⑤/⑥ 为本批（遗留 L11）新增的**轴向**断言，见下方判据对照表）：
  *   ① 量测包围盒（= **被测节点局部系**下的 `Box3`，逐 mesh 用相对矩阵 `rootInv × matrixWorld`
  *      烘焙）→ 尺寸 + 落地（minY）。**刻意不用 `Box3.setFromObject(sceneRoot)`**：
  *      后者含变体根节点自身的变换，而 `RoadsideBins.collectPairs()` 正是用 rootInv 把它
@@ -39,13 +40,29 @@
  * （游戏侧从自己的尺寸表取，如 `components/virtualCity/cityScale.ts` 的
  * `REAL_DIMS_M` → `sizeTargetFor()`）；engine3d 不得反向 import 游戏私有模块。
  *
+ *   ⑤ 直立（`upright`）：声明「竖直轴 = +Y」⇒ 要求 Y 为主导轴（抓"模型侧躺"）；
+ *   ⑥ 向前轴（`forward`）：声明「水平长轴 = 消费端 yaw 公式假设的向前轴」（抓"横着
+ *      开 90°"）—— 把"资产轴向 ↔ 消费端 yaw 公式"这条原本只在注释里的契约变成断言。
+ *
  * 使用（游戏侧）：
- *   const TARGET = sizeTargetFor('sedan', 'vehicles/sedan');   // 模块级常量，引用稳定
+ *   const TARGET = sizeTargetFor('sedan', { label: 'vehicles/sedan' });   // 模块级常量，引用稳定
  *   useSharedGLTF(url, TARGET);                                 // Vehicle / PedestrianV3
  *   <Model url={url} sizeTarget={TARGET}>…</Model>              // civic / TreeV3
  *   <GlbInstanced url={url} sizeTarget={TARGET} … />            // 边缘带实例化
+ *   `upright` / `forward` 由 `cityScale.ts::MODEL_AXIS_CONVENTIONS` 按表键声明（也可经
+ *   `sizeTargetFor(key, { upright, forward })` 逐调用点覆盖）。
  *
  * 已知边界（不影响本护栏用途，勿据此放宽判定）：
+ *   - ⑤/⑥（直立 / 向前轴）是**尺寸主导性**判定（离散、无容差），只在物件"确实沿该轴
+ *     拉长"时才有判别力，因此**只对能确证的物件声明**：
+ *       · 扁平物件（车辆 长>宽>高、低层站房 宽>高）主导轴**本来就不是 Y**，且它们
+ *         本就该扁平 ⇒ **不得声明 `upright`**：该断言语义下会把"正确"判成"侧躺"
+ *         （轿车 4.6×1.45×1.82 中 Y 最小），而"车尾立起"（长轴竖直）反倒能通过 ——
+ *         方向是反的。此类物件的轴向错误由 ① 兜住（三轴目标互异 ⇒ 任意 90° 置换
+ *         都会让某一轴偏差超容差）；
+ *       · `forward` 同理是"水平长轴"判定，只对**沿行进轴拉长**的物件有效（车辆）；
+ *         行人宽 0.55 > 深 0.35 并不沿行进轴拉长，其" +Z 向前"约定无法由包围盒自证
+ *         ⇒ 不声明（消费端 yaw 公式是该约定的唯一载体，见 PedestrianV3.tsx）。
  *   - 蒙皮网格（行人 walk）量测的是**绑定姿态**包围盒，非动画任意帧的姿态；
  *   - `Bone`（蒙皮关节）与**被动画剪辑驱动的节点**（`animatedNodeNames(animations)`）
  *     允许 rotation —— 前者是 rig 组成，后者姿态由 clip 决定（行人四肢的 π 翻转下垂）；
@@ -57,13 +74,22 @@
  *     指定单个变体节点量测，否则量到的是两变体的并集（GLB 内 Green 居中、
  *     Blue 平移摆放，场景盒比单桶宽 3.4 倍）。
  *
- * 判据对照（已在批次 29 用合成场景逐条验证）：
+ * 判据对照（①②③④ 已在批次 29 用合成场景逐条验证；⑤⑥ 为本批新增，见下）：
  *   | 场景                                    | 命中判据 |
  *   | 单位几何 + 变体根 scale 0.0375（旧桶）   | ①(20 m/0.5 m=40×) + ③ |
  *   | 子节点 scale 承载尺寸                    | ② + ③ |
  *   | 变体根 rotation 90°（横躺）              | ③ |
  *   | 尺寸烘焙进顶点 + 子节点位移（合法）      | 无（静默） |
  *   | 变体根位移（合法，消费端已归一化）       | 无（静默） |
+ *   | 合成：顶点级烘焙 90°（模型横躺）+ upright | ⑤ |
+ *   | 声明 forward 与实测水平长轴不符          | ⑥ |
+ *
+ * ⑤/⑥ 的动机（遗留 L11，批次 29 真实漏网缺陷）：批次 29 修正前 `Vehicle.tsx` 的 yaw 取
+ * `atan2(dz, dx)` 令**全城 50 辆车横着开 90°**；它逃过护栏的原因是该错在**消费端 yaw
+ * 公式**（GLB 与程序化 fallback 一致地错）⇒ "两路径包围盒一致"这条不变量**反而掩盖**了它。
+ * ⑤/⑥ 把"资产轴向 ↔ 消费端 yaw 公式"这条**只在代码注释里存在的契约**变成可执行断言：
+ * 声明 `forward: 'x'` 即声明"消费端用 atan2(-dz, dx)（+X 向前）"，资产一旦被改成沿 Z 拉长
+ * 就会立刻报出"会被摆成与行进方向垂直 90°"。
  */
 
 import * as THREE from 'three';
@@ -87,6 +113,28 @@ export interface ModelSizeTarget {
   tol?: number;
   /** 日志标签（模型识别名，如 `civic/city_hall`）。 */
   label: string;
+  /**
+   * 直立约定（可选，缺省 = 不校验）：声明「该模型竖直轴 = +Y」。
+   * 判据 ⑤：要求 Y 为**主导轴**（Y 尺寸 > X 尺寸 且 Y 尺寸 > Z 尺寸，严格、无容差）。
+   * 违反的典型症状 = 模型**侧躺**（批次 19 那批把高度摆在 Z 上）。
+   *
+   * ⚠️ **适用前提（硬约束）**：`upright` 仅用于**高 > 长/宽**的**竖向物件**
+   * （塔、楼、树、行人、桶）；**扁平物件（车辆 长>宽>高、低层站房 宽>高）不得声明** ——
+   * 它们本来 Y 最小，声明即反向误报，而"车尾立起"（长轴竖直）反倒能通过（方向是反的）；
+   * 这类物件的轴向错误由 ① 兜住（三轴目标两两互异 ⇒ 任意 90° 轴置换都超 ±5%）。
+   * 声明与表值矛盾（表值 y 非最大却声明 upright）由游戏侧的**声明层自校验**在注册时拦下
+   * （见 `cityScale.ts::axisConventionIssue`），无需载入模型。
+   */
+  upright?: boolean;
+  /**
+   * 向前轴约定（可选，缺省 = 不校验）：声明「该模型在水平面内的**长轴** = 消费端 yaw
+   * 公式所假设的向前轴」。判据 ⑥：`'x'` ⇒ X 尺寸 > Z 尺寸；`'z'` ⇒ Z 尺寸 > X 尺寸。
+   * 违反 ⇒ 模型会被摆成与行进方向**垂直 90°**（消费端 yaw 公式见下方告警文案）。
+   *
+   * ⚠️ **适用前提**：只对**沿行进方向拉长**的物件声明（车辆）；行人等不沿行进轴拉长的
+   * 物件无法由包围盒自证"朝向"（其 +Z 向前由消费端 yaw 公式承载）⇒ 不得声明。
+   */
+  forward?: 'x' | 'z';
 }
 
 const DEV = import.meta.env.DEV;
@@ -292,6 +340,27 @@ const AXES = ['x', 'y', 'z'] as const;
 const f = (v: number): string => (Math.abs(v) < 0.0005 ? '0.000' : v.toFixed(3));
 const fmtVec = (v: THREE.Vector3): string => `[${f(v.x)},${f(v.y)},${f(v.z)}]`;
 
+type Axis = (typeof AXES)[number];
+
+/**
+ * 主导轴（尺寸最大的轴；并列 ⇒ 返回 `'tie'`）。⑤/⑥ 的判定基元。
+ * 刻意**无容差**：这是"谁最大"的离散判定，不是尺寸测量 —— 容差留给 ①。
+ */
+function dominantAxis(size: THREE.Vector3): Axis | 'tie' {
+  const max = Math.max(size.x, size.y, size.z);
+  const hits = AXES.filter((ax) => size[ax] === max);
+  return hits.length === 1 ? hits[0] : 'tie';
+}
+
+/** 水平面（XZ）内的长轴（严格比较；并列 ⇒ `'tie'`）。 */
+function horizontalLongAxis(size: THREE.Vector3): Axis | 'tie' {
+  if (size.x === size.z) return 'tie';
+  return size.x > size.z ? 'x' : 'z';
+}
+
+/** 轴名大写（日志用）。 */
+const up = (a: Axis | 'tie'): string => (a === 'tie' ? '并列（无主导轴）' : a.toUpperCase());
+
 /**
  * 校验某 url 的 GLB 场景（由 modelCache 在加载成功回调里调用）。
  * `animations` 用于把"被 clip 驱动的节点"从 rotation 检查中豁免（rig 姿态）。
@@ -351,6 +420,40 @@ export function checkModelSize(
     }
   }
 
+  // ⑤ 直立：声明「竖直轴 = +Y」⇒ Y 必须为主导轴（严格、无容差）
+  // 量测口径同 ①②③：**被测节点局部系**（= 消费端 post-rootInv 所见）。
+  const dominant = dominantAxis(probe.worldSize);
+  if (target.upright && dominant !== 'y') {
+    const s = probe.worldSize;
+    lines.push(
+      `· 直立不符（⑤ upright）：声明「竖直轴 = +Y」，实测主导轴 = ${up(dominant)}；` +
+        `Y ${f(s.y)} 未同时大于 X ${f(s.x)} 与 Z ${f(s.z)}。` +
+        '⇒ 模型**侧躺**（批次 19 症状：把高度摆在 Z 上）。消费端 `<Model>` 零旋转直挂，' +
+        '竖直轴只能是 +Y；请核对 3d_script/build_*.py 的导出轴向。' +
+        '（若该物件本就扁平 —— 如车辆 长>宽>高、低层站房 宽>高 —— 请勿声明 upright：' +
+        '该断言语义下它们必然报红，其轴向错误由 ① 兜住，见文件头「已知边界」。）',
+    );
+  }
+
+  // ⑥ 向前轴：声明「水平长轴 = 消费端 yaw 公式所假设的向前轴」
+  if (target.forward) {
+    const longAxis = horizontalLongAxis(probe.worldSize);
+    const ok = longAxis === target.forward;
+    if (!ok) {
+      const s = probe.worldSize;
+      lines.push(
+        `· 向前轴不符（⑥ forward）：声明 forward='${target.forward}'（= 消费端 yaw 公式假设的` +
+          `向前轴），实测水平长轴 = ${up(longAxis)}（X ${f(s.x)} vs Z ${f(s.z)}）。` +
+          '⇒ **因果**：`Vehicle.tsx` 用 `atan2(-dz, dx)` 假设模型 **+X 向前**、' +
+          '`PedestrianV3.tsx` 用 `atan2(dx, dz)` 假设模型 **+Z 向前**；' +
+          '声明与实际不符 ⇒ 该模型会被摆成与行进方向**垂直 90°**' +
+          '（批次 29 修正前「全城 50 辆车横着开」正是此失效模式，' +
+          '当时因 GLB 与程序化 fallback 一致地错而被"两路径包围盒一致"掩盖）。' +
+          `请把反向轴改为 '${longAxis === 'x' ? 'x' : 'z'}'，或按新轴重导模型 + 同步消费端 yaw 公式。`,
+      );
+    }
+  }
+
   if (lines.length === 0 && geomWorldDiff.length === 0 && probe.transformIssues.length === 0) {
     return true;
   }
@@ -379,6 +482,8 @@ export function checkModelSize(
       `  → 目标：世界尺寸 ${fmtVec(
         new THREE.Vector3(target.x ?? NaN, target.y ?? NaN, target.z ?? NaN),
       )}${target.minY !== undefined ? ` / minY ${f(target.minY)}` : ''}` +
+      (target.upright ? ' / 竖直轴 +Y（主导轴）' : '') +
+      (target.forward ? ` / 向前轴 +${target.forward.toUpperCase()}` : '') +
       '（= 游戏侧尺寸表 REAL_DIMS_M）。GLB 应自带正确尺寸/轴向/原点，' +
       '消费端零旋转零 scale；请核对 3d_script/build_*.py 并用 verify 脚本复核。',
   );
