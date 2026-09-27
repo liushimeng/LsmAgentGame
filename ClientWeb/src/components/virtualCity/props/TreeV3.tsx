@@ -12,9 +12,12 @@
  */
 import { useMemo } from 'react';
 import { useSynthPBR } from '../cityPbr';
-import { u } from '../cityScale';
+import { u, sizeTargetFor } from '../cityScale';
 import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
+
+/** 阔叶树 GLB 尺寸/落地校验目标（批次 29，dev 态；表值 4.5 × 10.1 m）。 */
+const OAK_SIZE_TARGET = sizeTargetFor('oakTree', { label: 'nature/oak_tree' });
 
 export const TRUNK_COLOR = '#5a4634';
 export const CROWN_COLORS = ['#2f7a3a', '#3a8a45', '#4a9a55'];
@@ -78,7 +81,13 @@ export function TreeV3({ x, z, seed, scale = 1, castShadow = true }: TreeV3Props
     return <TreeV3Fallback x={x} z={z} seed={seed} scale={scale} castShadow={castShadow} />;
   }
   return (
-    <Model url={url} position={[x, 0, z]} scale={scale} castShadow={castShadow}>
+    <Model
+      url={url}
+      sizeTarget={OAK_SIZE_TARGET}
+      position={[x, 0, z]}
+      scale={scale}
+      castShadow={castShadow}
+    >
       <TreeV3Fallback x={x} z={z} seed={seed} scale={scale} castShadow={castShadow} />
     </Model>
   );

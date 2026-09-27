@@ -22,12 +22,25 @@ import { hashStr, mulberry32 } from '../civic/rand';
 import { currentSeason, subscribeSeason } from '../cityTimeStore';
 import type { CitySeason } from '../cityTimeStore';
 import { seasonOakModelUrl } from '../seasonAssets';
+import { sizeTargetFor } from '../cityScale';
 import { GlbInstanced, type GlbInstanceTRS } from './glbInstanced';
 import { ProceduralOaks, ProceduralPines, type FloraSpot } from './proceduralFlora';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
 /** 混种林总棵数（方案 §2.1：×~140；过渡带 10% 密度裁剪后实际略少）。 */
 const FOREST_COUNT = 150;
+
+/**
+ * 尺寸/落地校验目标（批次 29；与 proceduralFlora 的 fallback 同表值、与 season 同步）：
+ * 夏/春/秋 → oakTree（10.1×4.5），冬 → oakTreeWinter（落叶 ⇒ 9.55×4.12，单列一行）。
+ */
+const OAK_SIZE_TARGETS: Record<CitySeason, ReturnType<typeof sizeTargetFor>> = {
+  spring: sizeTargetFor('oakTree', { label: 'nature/oak_tree_spring' }),
+  summer: sizeTargetFor('oakTree', { label: 'nature/oak_tree' }),
+  autumn: sizeTargetFor('oakTree', { label: 'nature/oak_tree_autumn' }),
+  winter: sizeTargetFor('oakTreeWinter', { label: 'nature/oak_tree_winter' }),
+};
+const PINE_SIZE_TARGET = sizeTargetFor('pineTree', { label: 'nature/pine_tree' });
 /** 阔叶 : 针叶 配比阈值（rnd < 0.55 → 阔叶）。 */
 const OAK_RATIO = 0.55;
 /** 过渡带 x ∈ [62,66] 的保留概率（10% 密度渐变）。 */
@@ -74,17 +87,20 @@ export function EastForest() {
   const info = useObjectInfoProps('edge.east-forest', { anchorY: 4 });
   return (
     <group {...info}>
-      {/* 阔叶树（oak_tree GLB 实例化，批次 27 按季节切变体；fallback 程序化球冠树） */}
+      {/* 阔叶树（oak_tree GLB 实例化，批次 27 按季节切变体；fallback 程序化球冠树，
+          批次 29：按 season 同步取表值 —— 冬 oakTreeWinter / 其余 oakTree） */}
       <GlbInstanced
         url={seasonOakModelUrl(season)}
         instances={oakInstances}
-        fallback={<ProceduralOaks spots={oaks} />}
+        fallback={<ProceduralOaks spots={oaks} season={season} />}
+        sizeTarget={OAK_SIZE_TARGETS[season]}
       />
       {/* 针叶树（pine_tree GLB 实例化；fallback 程序化圆锥树） */}
       <GlbInstanced
         url={modelUrl('nature', 'pine_tree')}
         instances={pineInstances}
         fallback={<ProceduralPines spots={pines} />}
+        sizeTarget={PINE_SIZE_TARGET}
       />
     </group>
   );

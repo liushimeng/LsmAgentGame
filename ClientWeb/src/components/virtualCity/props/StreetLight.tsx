@@ -8,13 +8,15 @@
  *
  * 默认 castShadow=false（性能预算；路灯阴影非必要）。
  *
- * 2026-09-21 高度系统：新增 kind 分档 —— 主干道总高 ~1.10（真实 11m），
- * 次干道 ~0.70（真实 7m），基座 / 灯杆 / 灯头尺寸按比例参数化（见 cityScale.ts）。
+ * 2026-09-21 高度系统：新增 kind 分档 —— 主干道 / 次干道（基座 / 灯杆 / 灯头参数化）。
+ * 批次 29 度量衡统一：总高改由 cityScale.REAL_DIMS_M 提供 —— 主干道 12.00 m
+ * （= road/road_props.glb 灯杆目标高度；原 11 m），次干道 7.00 m（不变）。
  */
 
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/virtualCity';
 import { useSharedTexture } from '@/engine3d';
+import { worldDims } from '../cityScale';
 
 interface Props {
   x: number;
@@ -22,21 +24,28 @@ interface Props {
   /** 朝向（弧度，绕 Y 轴）；通常与所在道路方向一致。 */
   rotation?: number;
   variant?: 'a' | 'b' | 'c';
-  /** 'main' = 主干道（11m）；'side' = 次干道（7m）。默认 'main'。 */
+  /** 'main' = 主干道（12 m）；'side' = 次干道（7 m）。默认 'main'。 */
   kind?: 'main' | 'side';
 }
 
-/** 分档尺寸（世界单位，1 单位 = 10m）。总高 = 基座 + 灯杆 + 灯头。 */
+/**
+ * 分档尺寸（世界单位）。总高 = 基座 + 灯杆 + 灯头，**总高取自
+ * cityScale.REAL_DIMS_M**（streetLight 12.00 m / streetLightSide 7.00 m，唯一事实来源）；
+ * 基座/灯头高度与各半径是构图常量（装饰），灯杆高度由总高反推。
+ */
+const MAIN_TOTAL = worldDims('streetLight').y;
+const SIDE_TOTAL = worldDims('streetLightSide').y;
+
 const KIND_DIMS = {
   main: {
     baseH: 0.06, baseRTop: 0.07, baseRBot: 0.10,
-    poleH: 0.96, poleRTop: 0.035, poleRBot: 0.05,
+    poleH: MAIN_TOTAL - 0.06 - 0.08, poleRTop: 0.035, poleRBot: 0.05,
     headW: 0.16, headH: 0.08,
     spriteW: 0.30, spriteH: 0.55,
   },
   side: {
     baseH: 0.05, baseRTop: 0.055, baseRBot: 0.08,
-    poleH: 0.60, poleRTop: 0.025, poleRBot: 0.04,
+    poleH: SIDE_TOTAL - 0.05 - 0.05, poleRTop: 0.025, poleRBot: 0.04,
     headW: 0.12, headH: 0.05,
     spriteW: 0.20, spriteH: 0.38,
   },

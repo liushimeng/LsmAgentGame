@@ -18,6 +18,19 @@ export { Model } from './Model';
 export { useSharedGLTF, clearModelCache } from './modelCache';
 export type { SharedGLTF } from './modelCache';
 
+// 批次 29：GLB 尺寸/落地/变换规约校验器（dev-only 护栏；目标尺寸由游戏侧注册）
+export {
+  registerModelSizeTarget,
+  clearModelSizeTargets,
+  registeredModelSizeTargets,
+  checkModelSize,
+  probeModelSize,
+  animatedNodeNames,
+  measureModelBox,
+  measureModelSize,
+} from './glbSizeGuard';
+export type { ModelSizeTarget, ModelSizeReport, ModelSizeProbe } from './glbSizeGuard';
+
 // 批次 28 二轮：通用几何合并（DC 攻坚；引擎层只依赖 three）
 export {
   mergeGrouped,

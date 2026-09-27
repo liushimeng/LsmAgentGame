@@ -28,6 +28,7 @@ import type { Texture } from 'three';
 import { streetTileUrl, pbrNormalUrl, pbrRoughUrl, type StreetTileName } from '@/assets/images/virtualCity';
 import type { InstancedLamp } from './props/StreetLightsInstanced';
 import { useSharedPBR, useSharedTexture, withPBR } from '@/engine3d';
+import { ROAD_SURFACE_Y } from './cityScale';
 import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 
 interface Props {
@@ -63,10 +64,11 @@ const SIDEWALK_TILE = 0.25;
 const LAMP_SPACING_MAIN = 2.5;
 /** 次干道路灯间距（更稀）。 */
 const LAMP_SPACING_SIDE = 5.0;
-/** 路面 y 抬高（避免 z-fighting with ground）。 */
-const ROAD_Y = 0.015;
+/** 路面 y 抬高（避免 z-fighting with ground）；唯一事实来源在 cityScale.ROAD_SURFACE_Y
+ *  （车辆/行人落地基准与之同源）。 */
+const ROAD_Y = ROAD_SURFACE_Y;
 /** 人行道 y 抬高（再高一点点）。 */
-const SIDEWALK_Y = 0.035;
+const SIDEWALK_Y = ROAD_Y + 0.02;
 
 // ── 批次 24 标线几何常量（文档 24 §4 / §6.1）─────────────────────
 /** 双端斑马线中心 t（0=城区端，1=原点端）。 */

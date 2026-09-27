@@ -4,7 +4,7 @@
  *
  * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
  */
-import { u } from '../cityScale';
+import { u, worldDims, sizeTargetFor } from '../cityScale';
 import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
@@ -12,6 +12,17 @@ import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 const TANK_GREEN = '#5a7a4e';
 const TANK_LIGHT = '#7a9a6e';
 const TANK_DARK = '#3a5240';
+
+/**
+ * 水塔尺寸（批次 29）：取 cityScale.REAL_DIMS_M.waterTower = ⌀3.60（占地）× 13.3（总高）。
+ * 罐体球半径 = 表值 ⌀/2（3.6 m ⇒ ⌀ 恰好 3.60）；罐顶圆盖顶面 = 表值总高 13.3 m。
+ */
+const TOWER = worldDims('waterTower');
+const TANK_R = TOWER.x / 2;
+/** 罐顶圆盖（厚 0.3 m）——顶面接总高。 */
+const CAP_H = u(0.3);
+/** GLB 尺寸/落地校验目标（dev 态）。 */
+const WATER_TOWER_SIZE_TARGET = sizeTargetFor('waterTower', { label: 'civic/water_tower' });
 
 export function WaterTower() {
   const url = modelUrl('civic', 'water_tower');
@@ -26,7 +37,7 @@ export function WaterTower() {
   }
   return (
     <group {...info}>
-      <Model url={url} position={[-22, 0, 2]} castShadow>
+      <Model url={url} sizeTarget={WATER_TOWER_SIZE_TARGET} position={[-22, 0, 2]} castShadow>
         <WaterTowerFallback />
       </Model>
     </group>
@@ -51,14 +62,14 @@ function WaterTowerFallback() {
           </mesh>
         )),
       )}
-      {/* 罐体：球形储水罐 + 顶盖 */}
+      {/* 罐体：球形储水罐（半径 = 表值 ⌀/2 ⇒ 占地恰为 3.60 × 3.60） */}
       <mesh position={[0, u(11), 0]} castShadow>
-        <sphereGeometry args={[u(1.8), 16, 12]} />
+        <sphereGeometry args={[TANK_R, 16, 12]} />
         <meshStandardMaterial color={TANK_GREEN} roughness={0.7} metalness={0.2} />
       </mesh>
-      {/* 罐顶小圆盖 */}
-      <mesh position={[0, u(13), 0]} castShadow>
-        <cylinderGeometry args={[u(0.4), u(0.5), u(0.3), 12]} />
+      {/* 罐顶小圆盖：顶面 = 表值总高 13.3 m */}
+      <mesh position={[0, TOWER.y - CAP_H / 2, 0]} castShadow>
+        <cylinderGeometry args={[u(0.4), u(0.5), CAP_H, 12]} />
         <meshStandardMaterial color={TANK_DARK} roughness={0.7} />
       </mesh>
       {/* 字样带：浅色环带 */}

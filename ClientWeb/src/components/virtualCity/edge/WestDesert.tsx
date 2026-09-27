@@ -15,7 +15,7 @@
 import { useMemo } from 'react';
 import { Instances, Instance } from '@react-three/drei';
 import { modelUrl } from '@/assets/models';
-import { u } from '../cityScale';
+import { u, sizeTargetFor } from '../cityScale';
 import { hashStr, mulberry32 } from '../civic/rand';
 import { GlbInstanced, type GlbInstanceTRS } from './glbInstanced';
 import { ProceduralCacti, type FloraSpot } from './proceduralFlora';
@@ -31,6 +31,9 @@ const DEADWOOD_COLOR = '#6b5a45';
 const DUNE_COUNT = 5;
 /** 仙人掌数（方案 §2.1：×~24）。 */
 const CACTUS_COUNT = 24;
+
+/** 仙人掌尺寸/落地校验目标（批次 29；与 proceduralFlora fallback 同表值）。 */
+const CACTUS_SIZE_TARGET = sizeTargetFor('cactus', { label: 'nature/cactus' });
 
 interface Dune {
   x: number;
@@ -125,6 +128,7 @@ export function WestDesert() {
         url={modelUrl('nature', 'cactus')}
         instances={cactusInstances}
         fallback={<ProceduralCacti spots={cacti} />}
+        sizeTarget={CACTUS_SIZE_TARGET}
       />
       {/* 枯木 ×3（主干 + 枝，全部单位 cylinder 实例 → 1 draw call） */}
       <Instances {...info} raycast={instancedEventsRaycast} limit={deadwood.length * 2} range={deadwood.length * 2}>

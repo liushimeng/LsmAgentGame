@@ -23,6 +23,7 @@ import type { ReactNode } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { useSharedGLTF } from './modelCache';
+import type { ModelSizeTarget } from './glbSizeGuard';
 
 interface Props {
   /** .glb URL；空字符串 = 走 fallback（不发起网络请求） */
@@ -33,6 +34,12 @@ interface Props {
   scale?: number | [number, number, number];
   /** 是否播放 animations[0]（如人物行走 clip） */
   playAnimation?: boolean;
+  /**
+   * 该 GLB 的期望尺寸 / 落地声明（批次 29 dev-only 校验；见 engine3d/glbSizeGuard.ts）。
+   * 游戏侧从自己的尺寸表取（如 `sizeTargetFor('cityHall', 'civic/city_hall')`），
+   * 须传稳定引用（模块级常量）。**仅告警，不参与渲染**。
+   */
+  sizeTarget?: ModelSizeTarget;
   /** 加载中 / 失败 / url 缺失 时渲染的 fallback 几何（必传；url 为 '' 时原行为即 children） */
   children?: ReactNode;
   castShadow?: boolean;
@@ -50,11 +57,12 @@ export function Model({
   rotation,
   scale,
   playAnimation = false,
+  sizeTarget,
   children,
   castShadow = false,
   receiveShadow = false,
 }: Props) {
-  const { scene, animations } = useSharedGLTF(url);
+  const { scene, animations } = useSharedGLTF(url, sizeTarget);
 
   // 必须 .clone(true) —— 共享 scene 会让多组件 transform 互相覆盖
   const cloned = useMemo(() => (scene ? scene.clone(true) : null), [scene]);

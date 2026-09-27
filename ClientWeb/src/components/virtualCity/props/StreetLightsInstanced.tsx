@@ -5,8 +5,9 @@
  * drei <Instances>（底座 / 主杆 / 灯头三段各自实例化，逐实例矩阵）→
  * 全部路灯总计 **3 个 draw call**（改造前每盏 3-4 mesh 挂在 Road 旋转组内）。
  *
- * 尺寸与 props/StreetLight KIND_DIMS.main 同源；次干道按总高比例
- * （0.70/1.10）整体缩放。原 variant a/b/c 贴图 Billboard 灯片在实例化下
+ * 尺寸与 props/StreetLight KIND_DIMS.main 同源；批次 29 起总高改由
+ * cityScale.REAL_DIMS_M 提供（主干道 12.00 m / 次干道 7.00 m，按总高比整体缩放）。
+ * 原 variant a/b/c 贴图 Billboard 灯片在实例化下
  * 移除（灯头保留 emissive 暖光），StreetLight.tsx 文件保留可回退。
  * 路灯本就不投影阴影（castShadow=false 预算不变）。
  *
@@ -20,6 +21,7 @@ import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Instances, Instance } from '@react-three/drei';
 import { getDayNight } from '../cityTimeStore';
+import { worldDims } from '../cityScale';
 import {
   useObjectInfoProps,
   instancedEventsRaycast,
@@ -33,18 +35,24 @@ export interface InstancedLamp {
   kind: 'main' | 'side';
 }
 
-/** 主干道灯尺寸（= StreetLight KIND_DIMS.main，世界单位）。 */
+/**
+ * 主干道灯尺寸（= StreetLight KIND_DIMS.main，世界单位）。
+ * 批次 29：**总高取自 cityScale.REAL_DIMS_M.streetLight（12.00 m）**，
+ * 灯杆高 = 总高 − 基座 − 灯头（基座/灯头为构图常量，与 StreetLight.tsx 同源）；
+ * 次干道按总高比（streetLightSide 7.00 / streetLight 12.00）整体缩放。
+ */
 const BASE_H = 0.06;
-const POLE_H = 0.96;
 const HEAD_H = 0.08;
+const MAIN_TOTAL = worldDims('streetLight').y;
+const POLE_H = MAIN_TOTAL - BASE_H - HEAD_H;
 const BASE_GEOM: [number, number, number, number] = [0.07, 0.1, BASE_H, 8];
 const POLE_GEOM: [number, number, number, number] = [0.035, 0.05, POLE_H, 6];
 const HEAD_GEOM: [number, number, number] = [0.16, HEAD_H, 0.16];
 const BASE_Y = BASE_H / 2;
 const POLE_Y = BASE_H + POLE_H / 2;
 const HEAD_Y = BASE_H + POLE_H + HEAD_H / 2;
-/** 次干道整体缩放（StreetLight 总高 side 0.70 / main 1.10）。 */
-const SIDE_SCALE = 0.7 / 1.1;
+/** 次干道整体缩放（表值总高 side / main）。 */
+const SIDE_SCALE = worldDims('streetLightSide').y / MAIN_TOTAL;
 
 export function StreetLightsInstanced({ lamps }: { lamps: InstancedLamp[] }) {
   // 批次 27：灯头材质 ref（emissiveIntensity 逐帧随 dayFactor01 渐变）。

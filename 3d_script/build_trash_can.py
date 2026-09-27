@@ -36,8 +36,13 @@ from __common__ import (  # noqa: E402
     make_material, join_objects, export_glb,
 )
 
-BODY_R, BODY_H = 0.035, 0.09
-LID_R, LID_H = 0.039, 0.012
+# ── 桶径/桶高（2026-09-27 修正：真实分类桶 ⌀0.5 m × 1.0 m）──────────────
+#   旧值 BODY_R 0.035 / BODY_H 0.09 / LID_R 0.039 ⇒ 单桶 ⌀0.78 m × 高 1.11 m，
+#   比旁边 1 m 长的玩具车还大（用户反馈"垃圾桶与汽车比例不正常"）。
+#   现按 ⌀0.050 × 高 0.100（世界单位）收敛：径向 ×0.64、垂向 ×0.90。
+BODY_R, BODY_H = 0.0225, 0.0825    # 桶身（r_top；r_bot 见下 = 0.024，微锥度）
+LID_R, LID_H = 0.025, 0.012        # 桶盖半径 = 单桶 ⌀/2 = 0.025 ⇒ ⌀ 0.050
+DOME_SQUASH = 0.22                 # 盖顶扁球压扁比（总高 = BODY_H+LID_H+DOME_SQUASH·LID_R = 0.100）
 SLOT = '#161616'   # 投放口暗槽近黑
 
 
@@ -47,12 +52,12 @@ def build_one_trash_can(name: str, body_hex: str, lid_hex: str, x_offset: float)
     base = f'{name}_'
 
     # 桶身（微锥度：上略收，重心稳；圆柱默认轴 = Z = 直立）
-    body = make_cylinder(f'{base}Body', BODY_R, 0.0375, BODY_H, 20,
+    body = make_cylinder(f'{base}Body', BODY_R, 0.024, BODY_H, 20,
                          (x_offset, 0, BODY_H / 2))
     apply_pbr(body, body_hex, rough=0.55, metal=0.05)
     objs.append(body)
 
-    # 桶盖（略大短圆柱）+ 盖顶微凸（扁球，总高 ≈ 0.11）共用同一盖材质（每变体 ≤3 材质）
+    # 桶盖（略大短圆柱）+ 盖顶微凸（扁球）共用同一盖材质（每变体 ≤3 材质）
     lid_mat = make_material(f'{name}_Lid_Mat', lid_hex, rough=0.50, metal=0.05)
     lid = make_cylinder(f'{base}Lid', LID_R, LID_R, LID_H, 20,
                         (x_offset, 0, BODY_H + LID_H / 2))
@@ -60,13 +65,14 @@ def build_one_trash_can(name: str, body_hex: str, lid_hex: str, x_offset: float)
     objs.append(lid)
 
     dome = make_sphere(f'{base}Dome', LID_R, 20, (x_offset, 0, BODY_H + LID_H))
-    dome.scale = (1.0, 1.0, 0.22)   # 沿 Z 压扁 → 顶部微凸
+    dome.scale = (1.0, 1.0, DOME_SQUASH)   # 沿 Z 压扁 → 顶部微凸
     assign_material(dome, lid_mat)
     objs.append(dome)
 
     # 投放口暗槽（深色 box 嵌于盖前侧；glTF +Z 前 = Blender -Y 侧，内缩呈凹槽观感）
-    slot = make_box(f'{base}Slot', (0.026, 0.013, 0.006),
-                    (x_offset, -(LID_R - 0.0065), BODY_H + LID_H / 2 + 0.0015))
+    # 尺寸随桶径等比收缩（径向 ×0.64 / 垂向 ×0.90），保持"槽宽 ≈ 1/3 盖径"的观感
+    slot = make_box(f'{base}Slot', (0.0167, 0.0083, 0.0054),
+                    (x_offset, -(LID_R - 0.0042), BODY_H + LID_H / 2 + 0.0014))
     apply_pbr(slot, SLOT, rough=0.9, metal=0.0)
     objs.append(slot)
 
@@ -85,5 +91,14 @@ def build_trash_can():
 
 if __name__ == '__main__':
     build_trash_can()
+    # 烘焙 join 残留 object transform（__common__.make_* 用 obj.scale 表达尺寸）
+    # ⇒ 导出节点 identity（<Model>/instancedMesh 零旋转零 scale 直挂）。几何/尺寸不变。
+    # 注：__common__.export_glb 自 2026-09-27 起亦统一 bake_transforms()（同一目的）；
+    # 此处显式保留，既让脚本自证，也防 __common__ 行为回退时静默复发。
+    for ob in bpy.context.scene.objects:
+        bpy.ops.object.select_all(action='DESELECT')
+        ob.select_set(True)
+        bpy.context.view_layer.objects.active = ob
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     out_path = sys.argv[sys.argv.index('--') + 1] if '--' in sys.argv else '/tmp/trash_can.glb'
     export_glb(out_path)

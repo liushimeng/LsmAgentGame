@@ -19,7 +19,7 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import * as THREE from 'three';
-import { useSharedGLTF } from '@/engine3d';
+import { useSharedGLTF, type ModelSizeTarget } from '@/engine3d';
 
 /** GLB 单个子网格的可实例化描述。 */
 export interface GlbMeshPart {
@@ -60,10 +60,15 @@ interface Props {
   instances: GlbInstanceTRS[];
   /** GLB 缺失 / 加载中 / 失败时的程序化 fallback（必传）。 */
   fallback: ReactNode;
+  /**
+   * 该 GLB 的期望尺寸 / 落地声明（批次 29 dev-only 校验，见 engine3d/glbSizeGuard.ts）。
+   * 调用方用 `sizeTargetFor(...)`（返回缓存对象，引用稳定）传入；缺省 = 不校验。
+   */
+  sizeTarget?: ModelSizeTarget;
 }
 
-export function GlbInstanced({ url, instances, fallback }: Props) {
-  const { scene } = useSharedGLTF(url);
+export function GlbInstanced({ url, instances, fallback, sizeTarget }: Props) {
+  const { scene } = useSharedGLTF(url, sizeTarget);
   const parts = useMemo(() => (scene ? collectGlbMeshParts(scene) : null), [scene]);
 
   // 实例 TRS → Matrix4 列表（HOOK 必须在条件 return 之前，见 hook-after-return 教训）

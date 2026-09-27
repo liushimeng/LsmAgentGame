@@ -17,6 +17,11 @@ import { useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeParts } from './geoMerge';
+import {
+  checkModelSize,
+  registerModelSizeTarget,
+  type ModelSizeTarget,
+} from './glbSizeGuard';
 
 /**
  * 批次 28 二轮：GLB 等材质归并（加载时一次性，缓存后全部实例受益）。
@@ -206,6 +211,10 @@ function startLoad(url: string): CacheEntry {
     (g) => {
       // 批次 28 二轮：等材质归并（一次加载一次合并，全部克隆实例共享收益）
       mergeMeshesByMaterial(g.scene);
+      // 批次 29：尺寸/落地/变换规约校验（dev-only，只告警不改几何；目标尺寸由调用方注册）。
+      // 置于归并之后：合并只重排/烘焙几何，不改包围盒，量测口径与渲染一致。
+      // animations 传入以豁免"被 clip 驱动的节点"的 rotation（rig 姿态，如行人四肢翻转）。
+      checkModelSize(g.scene, url, g.animations ?? []);
       // GLTFLoader 默认加载的所有 texture colorSpace 保留（不强改）
       entry.gltf = {
         scene: g.scene,
@@ -230,10 +239,15 @@ function startLoad(url: string): CacheEntry {
  * 共享 GLTF hook：同 url 多组件只发一次网络请求 / 只占一份 GPU 几何 + 材质。
  * 未加载完成或失败返回 { scene: null, animations: [] }；url 为空直接返回 null scene。
  *
+ * `sizeTarget`（可选，批次 29）：本 url 的**期望尺寸 / 落地**声明，用于 dev 态
+ * glbSizeGuard 校验（见 engine3d/glbSizeGuard.ts）。在起加载的同一个 effect 里注册，
+ * 故首次加载成功回调前注册必已完成；加载完成的缓存命中路径无需重注册。
+ * ⚠️ 调用方应传**稳定引用**（模块级常量 / useMemo），否则每次渲染重跑 effect。
+ *
  * ⚠️ 调用方拿到的 scene 必须 .clone(true) 后再挂载，否则多实例 transform 会互相污染。
  * 详见 engine3d/Model.tsx 的 useMemo clone 模式。
  */
-export function useSharedGLTF(url: string): SharedGLTF {
+export function useSharedGLTF(url: string, sizeTarget?: ModelSizeTarget): SharedGLTF {
   const [gltf, setGltf] = useState<SharedGLTF | null>(() => {
     if (!url) return null;
     const hit = CACHE.get(url);
@@ -245,6 +259,8 @@ export function useSharedGLTF(url: string): SharedGLTF {
       setGltf(null);
       return;
     }
+    // 批次 29：目标尺寸贴近加载点注册（dev-only；生产构建静态折叠为 no-op）
+    if (sizeTarget) registerModelSizeTarget(url, sizeTarget);
     let entry = CACHE.get(url);
     if (!entry) entry = startLoad(url);
     if (entry.done) {
@@ -256,7 +272,7 @@ export function useSharedGLTF(url: string): SharedGLTF {
     return () => {
       entry?.listeners.delete(listener);
     };
-  }, [url]);
+  }, [url, sizeTarget]);
 
   // 始终返回对象结构（即便空），调用方写 { scene, animations } 不需要空判
   if (!gltf) return { scene: null, animations: [] };

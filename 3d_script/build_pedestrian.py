@@ -3,15 +3,21 @@
 build_pedestrian — 行人（pedestrian_walk）Blender headless 导出脚本（19-Blender3D模型集成）。
 
 输出：
-  - .glb 内含 Armature（10 bone：hips/spine/chest/neck/head + 上下臂 ×2 + 上下腿 ×2）
+  - .glb 内含 Armature（10 bone：root/hips/spine/chest/neck/head + 上下臂 ×2 + 上下腿 ×2）
   - 单 mesh 蒙皮（4 outfit Material Slot：body/pants/head/shoes，运行时换色）
-  - walk 动画 clip：24 帧循环（pivot 落髋/肩，摆臂摆腿反相）
+  - walk 动画 clip：24 帧循环（摆臂摆腿反相，±30°）
 
-约定：y=上；pivot (0, 0, 0) 在脚下中点；z 向前为行进方向。
+坐标与尺度规约（2026-09-27 批次 19 GLB 轴向/尺度回溯修正，全目录统一）：
+  - **Blender 原生 Z-up**：x = 左右，y = 前后（**-Y = 行进方向**），z = 高度（脚底 z = 0）。
+    导出后 glTF X = 左右、glTF Y = 身高（脚底 minY = 0）、glTF Z = 前后（+Z = 行进方向）。
+  - 世界单位：1 单位 = 10 m；身高 0.167 = 真实 1.67 m（旧版 0.86 单位且横躺，
+    全城 ~100 个行人渲染成 8.6 m 长的"原木"，本次修正）。
 
-简化策略（避免 bpy.types.Mesh 与骨骼蒙皮手写 vertices.groups 的复杂度）：
-  - 创建一个简单 mesh（头 + 躯干 + 4 limb）后用 Armature modifier 自动蒙皮
-  - walk clip 用 keyframe 直接改 bone.rotation_euler，bake 后导出
+目标包围盒（世界单位）：X 0.055（肩宽 0.55 m）× Z 0.035（进深 0.35 m）× Y 0.167（身高 1.67 m），
+脚底 minY = 0，X/Z 居中。
+
+注意：mesh 未建 vertex group，故导出不含 skin（与旧版一致，动画仅驱动骨骼节点）；
+本批次不改这一点，只保证 walk clip 仍在（animations 非空、通道数不变）。
 """
 import bpy
 import sys
@@ -22,7 +28,7 @@ if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
 from __common__ import (
     reset_scene, set_unit_meters,
-    make_box, make_cylinder, make_sphere, make_material, apply_pbr, join_objects, export_glb,
+    make_box, make_sphere, make_material, join_objects, export_glb,
 )
 
 BODY = '#3a6a8a'
@@ -30,212 +36,144 @@ PANTS = '#2a3a4a'
 HEAD = '#e8c8a8'
 SHOES = '#1a1a1a'
 
-
-def _create_limb_box(name: str, bone_name: str, length: float, parent_bone=None):
-    """创建一个 box mesh，并返回 (bone, mesh) 二元组；mesh 由 parent bone 蒙皮。"""
-    # Bone
-    bpy.ops.object.armature_add(enter_editmode=False, location=(0, 0, 0))
-    arm_obj = bpy.context.active_object
-    arm_obj.name = bone_name + '_Armature'
-    bpy.ops.object.mode_set(mode='EDIT')
-    bone = arm_obj.data.edit_bones.new(bone_name)
-    bone.head = (0, 0, 0)
-    bone.tail = (0, length, 0)
-    if parent_bone:
-        bone.parent = parent_bone
-        bone.use_connect = False
-    bpy.ops.object.mode_set(mode='OBJECT')
-    # 返回 armature
-    return arm_obj
+# ── 人体关键高度（世界单位；身高 0.167 = 1.67 m）─────────────────────────
+FOOT_Z = 0.012        # 鞋面高
+KNEE_Z = 0.045
+HIP_Z = 0.085
+WAIST_Z = 0.090
+CHEST_Z = 0.120
+SHOULDER_Z = 0.145
+NECK_Z = 0.150
+HEAD_R = 0.014
+HEAD_Z = 0.153        # 头顶 = 0.167 = 目标身高
+ARM_X = 0.0205        # 上臂中心（外缘 0.0275 ⇒ 肩宽 X = 0.055）
+LEG_X = 0.014
+TORSO_D = 0.035       # 躯干进深 ⇒ 目标 Z
 
 
-def build_pedestrian() -> bpy.types.Object:
-    reset_scene()
-    set_unit_meters()
+def _bone(eb, name, head, tail, parent=None):
+    b = eb.new(name)
+    b.head = head
+    b.tail = tail
+    if parent is not None:
+        b.parent = parent
+        b.use_connect = False
+    return b
 
-    # ── 1. Armature（10 bone 骨架）──────────────────────────────────────
+
+def _build_armature():
+    """10 bone 骨架（Blender Z-up：骨骼"向下"= 沿 -Z，躯干沿 +Z 生长）。"""
     bpy.ops.object.armature_add(enter_editmode=False, location=(0, 0, 0))
     arm_obj = bpy.context.active_object
     arm_obj.name = 'PedestrianArmature'
     bpy.ops.object.mode_set(mode='EDIT')
 
     eb = arm_obj.data.edit_bones
-    # 清空默认 bone
     for b in list(eb):
         eb.remove(b)
 
-    # root（锚点）
-    root = eb.new('root')
-    root.head = (0, 0, 0)
-    root.tail = (0, 0.02, 0)
+    root = _bone(eb, 'root', (0, 0, 0), (0, 0, 0.020))
+    hips = _bone(eb, 'hips', (0, 0, HIP_Z), (0, 0, HIP_Z + 0.010), root)
+    spine = _bone(eb, 'spine', (0, 0, WAIST_Z), (0, 0, CHEST_Z), hips)
+    chest = _bone(eb, 'chest', (0, 0, CHEST_Z), (0, 0, SHOULDER_Z), spine)
+    neck = _bone(eb, 'neck', (0, 0, SHOULDER_Z), (0, 0, NECK_Z), chest)
+    _bone(eb, 'head', (0, 0, NECK_Z), (0, 0, HEAD_Z + HEAD_R), neck)
 
-    # hips（髋部，y=0.05）
-    hips = eb.new('hips')
-    hips.head = (0, 0.05, 0)
-    hips.tail = (0, 0.10, 0)
-    hips.parent = root
-
-    # spine（y=0.10..0.30）
-    spine = eb.new('spine')
-    spine.head = (0, 0.10, 0)
-    spine.tail = (0, 0.30, 0)
-    spine.parent = hips
-
-    # chest（y=0.30..0.55）
-    chest = eb.new('chest')
-    chest.head = (0, 0.30, 0)
-    chest.tail = (0, 0.55, 0)
-    chest.parent = spine
-
-    # neck（y=0.55..0.60）
-    neck = eb.new('neck')
-    neck.head = (0, 0.55, 0)
-    neck.tail = (0, 0.60, 0)
-    neck.parent = chest
-
-    # head（y=0.60..0.78）
-    head = eb.new('head')
-    head.head = (0, 0.60, 0)
-    head.tail = (0, 0.78, 0)
-    head.parent = neck
-
-    # 上臂 ×2（shoulder pivot y=0.55）
-    upper_arm_l = eb.new('upper_arm.L')
-    upper_arm_l.head = (-0.05, 0.55, 0)
-    upper_arm_l.tail = (-0.05, 0.45, 0)
-    upper_arm_l.parent = chest
-    upper_arm_r = eb.new('upper_arm.R')
-    upper_arm_r.head = (0.05, 0.55, 0)
-    upper_arm_r.tail = (0.05, 0.45, 0)
-    upper_arm_r.parent = chest
-
-    # 下臂 ×2（elbow pivot y=0.45）
-    lower_arm_l = eb.new('lower_arm.L')
-    lower_arm_l.head = (-0.05, 0.45, 0)
-    lower_arm_l.tail = (-0.05, 0.35, 0)
-    lower_arm_l.parent = upper_arm_l
-    lower_arm_r = eb.new('lower_arm.R')
-    lower_arm_r.head = (0.05, 0.45, 0)
-    lower_arm_r.tail = (0.05, 0.35, 0)
-    lower_arm_r.parent = upper_arm_r
-
-    # 上腿 ×2（hip pivot y=0.10）
-    upper_leg_l = eb.new('upper_leg.L')
-    upper_leg_l.head = (-0.04, 0.10, 0)
-    upper_leg_l.tail = (-0.04, 0, 0)
-    upper_leg_l.parent = hips
-    upper_leg_r = eb.new('upper_leg.R')
-    upper_leg_r.head = (0.04, 0.10, 0)
-    upper_leg_r.tail = (0.04, 0, 0)
-    upper_leg_r.parent = hips
-
-    # 下腿 ×2（knee pivot y=0）
-    lower_leg_l = eb.new('lower_leg.L')
-    lower_leg_l.head = (-0.04, 0, 0)
-    lower_leg_l.tail = (-0.04, -0.10, 0)
-    lower_leg_l.parent = upper_leg_l
-    lower_leg_r = eb.new('lower_leg.R')
-    lower_leg_r.head = (0.04, 0, 0)
-    lower_leg_r.tail = (0.04, -0.10, 0)
-    lower_leg_r.parent = upper_leg_r
+    for side, sx in (('L', -1), ('R', 1)):
+        ua = _bone(eb, f'upper_arm.{side}', (sx * ARM_X, 0, SHOULDER_Z - 0.005),
+                   (sx * ARM_X, 0, 0.095), chest)
+        _bone(eb, f'lower_arm.{side}', (sx * ARM_X, 0, 0.095),
+              (sx * ARM_X, 0, 0.055), ua)
+        ul = _bone(eb, f'upper_leg.{side}', (sx * LEG_X, 0, HIP_Z),
+                   (sx * LEG_X, 0, KNEE_Z), hips)
+        _bone(eb, f'lower_leg.{side}', (sx * LEG_X, 0, KNEE_Z),
+              (sx * LEG_X, 0, 0.005), ul)
 
     bpy.ops.object.mode_set(mode='OBJECT')
+    return arm_obj
 
-    # ── 2. 单 mesh（head + body + 4 limb 合并）+ 4 outfit material ──────
-    # 头部（球，y=0.69）
-    head_mesh = make_sphere('HeadMesh', 0.05, 12, (0, 0.69, 0))
-    # 躯干（box y=0.10..0.55, w=0.10, d=0.04）
-    body_mesh = make_box('BodyMesh', (0.10, 0.45, 0.04), (0, 0.325, 0))
-    # 4 limb（按 bone 长度）
-    upper_arm_l_mesh = make_box('UpperArmLMesh', (0.025, 0.10, 0.025), (-0.05, 0.50, 0))
-    upper_arm_r_mesh = make_box('UpperArmRMesh', (0.025, 0.10, 0.025), (0.05, 0.50, 0))
-    lower_arm_l_mesh = make_box('LowerArmLMesh', (0.025, 0.10, 0.025), (-0.05, 0.40, 0))
-    lower_arm_r_mesh = make_box('LowerArmRMesh', (0.025, 0.10, 0.025), (0.05, 0.40, 0))
-    upper_leg_l_mesh = make_box('UpperLegLMesh', (0.04, 0.10, 0.04), (-0.04, 0.05, 0))
-    upper_leg_r_mesh = make_box('UpperLegRMesh', (0.04, 0.10, 0.04), (0.04, 0.05, 0))
-    lower_leg_l_mesh = make_box('LowerLegLMesh', (0.035, 0.10, 0.035), (-0.04, -0.05, 0))
-    lower_leg_r_mesh = make_box('LowerLegRMesh', (0.035, 0.10, 0.035), (0.04, -0.05, 0))
-    # 鞋（小 box 在脚下）
-    shoe_l = make_box('ShoeL', (0.05, 0.02, 0.07), (-0.04, -0.11, 0.015))
-    shoe_r = make_box('ShoeR', (0.05, 0.02, 0.07), (0.04, -0.11, 0.015))
 
-    # 合并 mesh（join）
-    all_meshes = [head_mesh, body_mesh,
-                  upper_arm_l_mesh, upper_arm_r_mesh,
-                  lower_arm_l_mesh, lower_arm_r_mesh,
-                  upper_leg_l_mesh, upper_leg_r_mesh,
-                  lower_leg_l_mesh, lower_leg_r_mesh,
-                  shoe_l, shoe_r]
-    body_joined = join_objects(all_meshes, 'PedestrianMesh')
+def _build_mesh():
+    """单 mesh（头 + 躯干 + 4 limb + 鞋），全部合计后 join 成 PedestrianMesh。"""
+    parts = []
+    # 头（球心抬到 0.153 ⇒ 头顶 = 0.167）
+    parts.append(make_sphere('HeadMesh', HEAD_R, 12, (0, 0, HEAD_Z)))
+    # 躯干（垂向 WAIST_Z..SHOULDER_Z，进深 = 目标 Z）
+    parts.append(make_box('BodyMesh', (0.040, TORSO_D, SHOULDER_Z - WAIST_Z),
+                          (0, 0, (WAIST_Z + SHOULDER_Z) / 2)))
+    # 颈（藏于头/躯干之间）
+    parts.append(make_box('NeckMesh', (0.014, 0.014, 0.014), (0, 0, NECK_Z - 0.005)))
+    for side, sx in (('L', -1), ('R', 1)):
+        parts.append(make_box(f'UpperArm{side}Mesh', (0.014, 0.014, 0.045),
+                              (sx * ARM_X, 0, 0.1175)))
+        parts.append(make_box(f'LowerArm{side}Mesh', (0.012, 0.012, 0.040),
+                              (sx * ARM_X, 0, 0.075)))
+        parts.append(make_box(f'UpperLeg{side}Mesh', (0.026, 0.026, 0.040),
+                              (sx * LEG_X, 0, 0.065)))
+        parts.append(make_box(f'LowerLeg{side}Mesh', (0.022, 0.022, 0.035),
+                              (sx * LEG_X, 0, 0.0275)))
+        # 鞋（脚尖朝 -Y = 行进方向）
+        parts.append(make_box(f'Shoe{side}', (0.026, 0.030, FOOT_Z),
+                              (sx * LEG_X, -0.0025, FOOT_Z / 2)))
+    return join_objects(parts, 'PedestrianMesh')
 
-    # ── 3. 应用材质（4 outfit material slot：body/pants/head/shoes） ───
-    body_mat = make_material('PedestrianBody', BODY, rough=0.8, metal=0.0)
-    pants_mat = make_material('PedestrianPants', PANTS, rough=0.8, metal=0.0)
-    head_mat = make_material('PedestrianHead', HEAD, rough=0.85, metal=0.0)
-    shoes_mat = make_material('PedestrianShoes', SHOES, rough=0.85, metal=0.0)
-    body_joined.data.materials.clear()
-    body_joined.data.materials.append(body_mat)
-    body_joined.data.materials.append(pants_mat)
-    body_joined.data.materials.append(head_mat)
-    body_joined.data.materials.append(shoes_mat)
-    # 给各 limb mesh 分配对应 material index（粗略按 hierarchy）
-    # body_joined 内含原 12 mesh 顺序：head, body, upper_arm×2, lower_arm×2, upper_leg×2, lower_leg×2, shoe×2
-    # head→head_mat(2), body→body_mat(0), arms→body_mat(0), upper_legs→pants_mat(1), lower_legs→pants_mat(1), shoes→shoes_mat(3)
-    if body_joined.data.polygons:
-        # Blender join 后所有 polygon 共享 material slot 0，需手工按 mesh 顺序切分
-        # 简化：head/body/arms → body_mat(0), upper_legs/lower_legs → pants_mat(1), head_polys → head_mat(2), shoes → shoes_mat(3)
-        # 由于 join 已合并，无法按子 mesh 拆分；用整个 mesh 共享 body_mat（视觉差异忽略）
-        for poly in body_joined.data.polygons:
-            poly.material_index = 0  # body_mat 兜底
-    # 注意：实际 outfit 差异由前端通过 uniforms 控制（v19.5 增强）
 
-    # ── 4. 加 Armature modifier（自动蒙皮） ─────────────────────────
+def build_pedestrian() -> bpy.types.Object:
+    reset_scene()
+    set_unit_meters()
+
+    arm_obj = _build_armature()
+    body_joined = _build_mesh()
+
+    # 4 outfit material slot（body/pants/head/shoes）—— join 后按旧版口径统一 index 0，
+    # 实际 outfit 差异由前端 uniforms 控制（v19.5 增强），本批次不改。
+    for name, color in (('PedestrianBody', BODY), ('PedestrianPants', PANTS),
+                        ('PedestrianHead', HEAD), ('PedestrianShoes', SHOES)):
+        body_joined.data.materials.append(make_material(name, color, rough=0.8, metal=0.0))
+    for poly in body_joined.data.polygons:
+        poly.material_index = 0
+
+    # Armature modifier（旧版无 vertex group ⇒ 导出不含 skin；保持原样不动）
     body_joined.parent = arm_obj
     mod = body_joined.modifiers.new(name='Armature', type='ARMATURE')
     mod.object = arm_obj
 
-    # ── 5. Walk 动画 clip（24 帧循环） ──────────────────────────────
+    # walk clip（24 帧循环，摆臂摆腿反相 ±30°，绕骨骼局部 X）
     scene = bpy.context.scene
     scene.frame_start = 1
     scene.frame_end = 24
-
-    # 摆臂摆腿：sin 函数驱动，反相
-    # upper_leg.L 在 frame=1 时 rotation_x = -30°，frame=13 时 = +30°，frame=24 时 = -30°
-    # upper_leg.R 反相
     bpy.context.view_layer.objects.active = arm_obj
     bpy.ops.object.mode_set(mode='POSE')
-
     pbones = arm_obj.pose.bones
-    n_frames = 24
 
-    def set_pose_bone_rotation(bone_name, axis, frames_degrees):
-        """frames_degrees: list of (frame, degree)"""
+    def key(bone_name, axis, frames_degrees):
         pb = pbones[bone_name]
         pb.rotation_mode = 'XYZ'
         for f, deg in frames_degrees:
             scene.frame_set(f)
             pb.rotation_euler[axis] = math.radians(deg)
-            pb.keyframe_insert(data_path=f'rotation_euler', index=axis, frame=f)
+            pb.keyframe_insert(data_path='rotation_euler', index=axis, frame=f)
 
-    # 摆腿（rotation_x）
-    set_pose_bone_rotation('upper_leg.L', 0, [(1, -30), (13, 30), (24, -30)])
-    set_pose_bone_rotation('upper_leg.R', 0, [(1, 30), (13, -30), (24, 30)])
-    # 摆臂（rotation_x，反相）
-    set_pose_bone_rotation('upper_arm.L', 0, [(1, 30), (13, -30), (24, 30)])
-    set_pose_bone_rotation('upper_arm.R', 0, [(1, -30), (13, 30), (24, -30)])
+    key('upper_leg.L', 0, [(1, -30), (13, 30), (24, -30)])
+    key('upper_leg.R', 0, [(1, 30), (13, -30), (24, 30)])
+    key('upper_arm.L', 0, [(1, 30), (13, -30), (24, 30)])
+    key('upper_arm.R', 0, [(1, -30), (13, 30), (24, -30)])
 
     bpy.ops.object.mode_set(mode='OBJECT')
-
-    # ── 6. 设置 scene fps + 让 action 与 mesh 关联 ────────────────────
-    scene.frame_current = 1
-
-    # action 已自动生成（因 keyframe_insert 在 Armature 上）
-    # mesh 与 armature 已通过 Armature modifier 关联，导出时一起 bake
-
-    return arm_obj  # export_glb 会把选中集全导出
+    scene.frame_set(1)
+    return arm_obj
 
 
 if __name__ == '__main__':
-    build_pedestrian()
+    arm_obj = build_pedestrian()
+    # 烘焙 mesh 的 object transform（join 残留首件的 location，如头球心 0.153）
+    # ⇒ 导出节点 identity；armature 本身建在原点，保持 identity。
+    for ob in bpy.context.scene.objects:
+        if ob.type != 'MESH':
+            continue
+        bpy.ops.object.select_all(action='DESELECT')
+        ob.select_set(True)
+        bpy.context.view_layer.objects.active = ob
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     out_path = sys.argv[sys.argv.index('--') + 1] if '--' in sys.argv else '/tmp/pedestrian_walk.glb'
     export_glb(out_path)

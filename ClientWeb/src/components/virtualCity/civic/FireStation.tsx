@@ -4,7 +4,7 @@
  *
  * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
  */
-import { u } from '../cityScale';
+import { u, worldDims, sizeTargetFor } from '../cityScale';
 import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
@@ -12,6 +12,24 @@ import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 const RED = '#c0392b';
 const WHITE = '#e8e3dc';
 const DOOR_DARK = '#3a4250';
+
+/**
+ * 建筑尺寸（批次 29）：取 cityScale.REAL_DIMS_M.fireStation = 18.1 × 8.0（占地）× 8.5（总高）。
+ * 主体轮廓 = 顶部白色腰线（18.1 宽，比主屋每边外挑 0.05）；主屋高 7.0 m 为构图常量
+ * （4.4 m 车库门 + 门楣），总高由滑杆塔顶警灯顶面接表 8.5 m。
+ */
+const FIRE = worldDims('fireStation');
+/** 腰线外挑（单侧 0.05 m）。 */
+const BELT_EAVE = u(0.05);
+/** 主屋高 / 车库门高（构图常量，均 ≤ 表值总高）。 */
+const BODY_H = u(7);
+const DOOR_H = u(4.4);
+/** 滑杆塔高（独立小塔）。 */
+const SLIDE_TOWER_H = u(8);
+/** 站顶警灯半径。 */
+const BEACON_R = u(0.15);
+/** GLB 尺寸/落地校验目标（dev 态）。 */
+const FIRE_SIZE_TARGET = sizeTargetFor('fireStation', { label: 'civic/fire_station' });
 
 export function FireStation() {
   const url = modelUrl('civic', 'fire_station');
@@ -26,7 +44,13 @@ export function FireStation() {
   }
   return (
     <group {...info}>
-      <Model url={url} position={[8, 0, -12]} castShadow receiveShadow>
+      <Model
+        url={url}
+        sizeTarget={FIRE_SIZE_TARGET}
+        position={[8, 0, -12]}
+        castShadow
+        receiveShadow
+      >
         <FireStationFallback />
       </Model>
     </group>
@@ -37,21 +61,21 @@ export function FireStation() {
 function FireStationFallback() {
   return (
     <group position={[8, 0, -12]}>
-      {/* 主屋：u(18) × u(7) × u(8) */}
-      <mesh position={[0, u(3.5), 0]} castShadow receiveShadow>
-        <boxGeometry args={[u(18), u(7), u(8)]} />
+      {/* 主屋：占地 = 表值轮廓 − 腰线外挑，高 = 构图常量 7 m（车库层） */}
+      <mesh position={[0, BODY_H / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[FIRE.x - BELT_EAVE * 2, BODY_H, FIRE.z]} />
         <meshStandardMaterial color={RED} roughness={0.85} />
       </mesh>
-      {/* 顶部白色腰线 */}
-      <mesh position={[0, u(5.5), u(4.05)]}>
-        <boxGeometry args={[u(18.1), u(0.8), u(0.05)]} />
+      {/* 顶部白色腰线（= 表值轮廓 18.1 宽） */}
+      <mesh position={[0, u(5.5), FIRE.z / 2 + BELT_EAVE]}>
+        <boxGeometry args={[FIRE.x, u(0.8), u(0.05)]} />
         <meshStandardMaterial color={WHITE} />
       </mesh>
       {/* 车库门 ×2：面向 +z */}
       {[-u(4), u(4)].map((dx, i) => (
-        <group key={`door-${i}`} position={[dx, 0, u(4.05)]}>
-          <mesh position={[0, u(2.2), 0.01]} castShadow>
-            <boxGeometry args={[u(5), u(4.4), u(0.05)]} />
+        <group key={`door-${i}`} position={[dx, 0, FIRE.z / 2 + BELT_EAVE]}>
+          <mesh position={[0, DOOR_H / 2, 0.01]} castShadow>
+            <boxGeometry args={[u(5), DOOR_H, u(0.05)]} />
             <meshStandardMaterial color={DOOR_DARK} roughness={0.7} />
           </mesh>
           {/* 4 道横纹装饰 */}
@@ -64,17 +88,17 @@ function FireStationFallback() {
         </group>
       ))}
       {/* 滑杆塔（独立小塔）：box + 杆 */}
-      <mesh position={[u(7), u(4), -u(3.5)]} castShadow>
-        <boxGeometry args={[u(0.8), u(8), u(0.8)]} />
+      <mesh position={[u(7), SLIDE_TOWER_H / 2, -u(3.5)]} castShadow>
+        <boxGeometry args={[u(0.8), SLIDE_TOWER_H, u(0.8)]} />
         <meshStandardMaterial color={RED} />
       </mesh>
-      <mesh position={[u(7), u(4), -u(3.2)]}>
-        <cylinderGeometry args={[u(0.06), u(0.06), u(8), 6]} />
+      <mesh position={[u(7), SLIDE_TOWER_H / 2, -u(3.2)]}>
+        <cylinderGeometry args={[u(0.06), u(0.06), SLIDE_TOWER_H, 6]} />
         <meshStandardMaterial color="#3a3f4a" metalness={0.6} />
       </mesh>
-      {/* 站顶警灯（蓝白闪烁感，单色静态） */}
-      <mesh position={[u(7), u(8.3), -u(3.5)]}>
-        <sphereGeometry args={[u(0.15), 8, 8]} />
+      {/* 站顶警灯（蓝白闪烁感，单色静态）：顶面 = 表值总高 8.5 m */}
+      <mesh position={[u(7), FIRE.y - BEACON_R, -u(3.5)]}>
+        <sphereGeometry args={[BEACON_R, 8, 8]} />
         <meshStandardMaterial color="#5a86b8" emissive="#5a86b8" emissiveIntensity={0.5} />
       </mesh>
       {/* 红色消防车（用 box 简化）—— 实车在 StreetPropsLayer 里 */}

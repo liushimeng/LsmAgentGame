@@ -5,8 +5,15 @@
  * 加载 props/vehicle/<variant>_vehicle.png 后：Billboard 朝相机 sprite。
  *
  * 沿 from→to 路径循环移动：useFrame 内 lerp t += speed * dt，过 t ≥ 1 → 重置。
- * y=0.02（贴路面之上）；rotation 始终朝向运动方向（与 Billboard 不冲突，
- * sprite 始终朝相机，几何盒子朝向运动方向）。
+ * y = VEHICLE_GROUND_Y（路面 +5cm，轮底贴路面）；rotation 始终朝向运动方向
+ * （与 Billboard 不冲突，sprite 始终朝相机，几何盒子朝向运动方向）。
+ * 批次 29：车身尺寸与 GLB 目标尺寸同取 cityScale.REAL_DIMS_M（唯一事实来源）。
+ *
+ * ⚠️ 朝向约定（批次 29 修正 —— 修正前 yaw 取 `atan2(dx,dz)`，令**全城车辆横着开**）：
+ *   **车辆模型长轴 = 局部 +X**（GLB 与 fallback 同口径）；yaw 取 `Math.atan2(-dz, dx)`
+ *   使 +X 对齐行进方向。
+ *   ⚠️ 与 `PedestrianV3.tsx` 的约定不同（行人模型 +Z 向前，故用 `atan2(dx, dz)`）——
+ *   两者各自自洽，勿互相"对齐"。改朝向公式前务必先确认模型的向前轴是 +X 还是 +Z。
  *
  * v2.13 阶段 D（13-3D城市渲染优化 02-架构 §3.3）：
  *   - 车身下 4 个车轮（黑色扁圆柱 r=u(0.35)，轴沿车宽 z 向），
@@ -31,7 +38,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/virtualCity';
 import { modelUrl } from '@/assets/models';
-import { u } from '../cityScale';
+import { u, worldDims, sizeTargetFor, VEHICLE_GROUND_Y } from '../cityScale';
 import { useSharedTexture } from '@/engine3d';
 import {
   type GroupedMergePart,
@@ -80,14 +87,29 @@ const VEHICLE_COLORS: Record<VehicleVariant, string> = {
 };
 
 /**
- * 车身尺寸 长×高×宽（世界单位，1 单位 = 10m；2026-09-21 高度系统）：
- * 轿车 4.5×1.5×1.8 m；bus/truck 略高（×1.5 高）并加长。
+ * 车身尺寸 长×高×宽（世界单位）—— **取自 cityScale.REAL_DIMS_M**（唯一事实来源，
+ * 批次 29 起：与 `vehicles/<variant>.glb` 共用同一行表值，两条渲染路径包围盒一致）：
+ * 轿车 4.6×1.45×1.82 m / 出租车 4.7×1.50×1.85 m / 公交 12.0×3.20×2.55 m
+ * / 卡车 8.5×3.40×2.50 m（此前组件内硬编码的 4.5×1.5×1.8 等值已删除）。
  */
+function vehicleDims(v: VehicleVariant): { l: number; h: number; w: number } {
+  const d = worldDims(v);
+  return { l: d.x, h: d.y, w: d.z };
+}
+
 const VEHICLE_DIMS: Record<VehicleVariant, { l: number; h: number; w: number }> = {
-  sedan: { l: 0.45, h: 0.15, w: 0.18 },
-  taxi:  { l: 0.45, h: 0.15, w: 0.18 },
-  truck: { l: 0.60, h: 0.23, w: 0.20 },
-  bus:   { l: 0.75, h: 0.23, w: 0.20 },
+  sedan: vehicleDims('sedan'),
+  taxi:  vehicleDims('taxi'),
+  truck: vehicleDims('truck'),
+  bus:   vehicleDims('bus'),
+};
+
+/** GLB 尺寸/落地校验目标（dev 态；见 engine3d/glbSizeGuard）——与 fallback 同表值。 */
+const VEHICLE_SIZE_TARGETS: Record<VehicleVariant, ReturnType<typeof sizeTargetFor>> = {
+  sedan: sizeTargetFor('sedan', { label: 'vehicles/sedan' }),
+  taxi:  sizeTargetFor('taxi',  { label: 'vehicles/taxi' }),
+  truck: sizeTargetFor('truck', { label: 'vehicles/truck' }),
+  bus:   sizeTargetFor('bus',   { label: 'vehicles/bus' }),
 };
 
 const REDUCED_MOTION =
@@ -167,7 +189,8 @@ export const Vehicle = memo(function Vehicle({
   const blenderOn = blenderModelsEnabled();
   const useGLB = !palette && blenderOn && !!modelUrlStr;
   void useGLB; // 标记保留：未来 v19.5 通过此 flag 控制 GLB vs sprite / palette fallback
-  const { scene: glbScene } = useSharedGLTF(modelUrlStr);
+  // 批次 29：注册本车型目标尺寸（dev 态 glbSizeGuard 量测 GLB 包围盒/落地并比对表值）
+  const { scene: glbScene } = useSharedGLTF(modelUrlStr, VEHICLE_SIZE_TARGETS[variant]);
   const glbCloned = useMemo(() => (glbScene ? glbScene.clone(true) : null), [glbScene]);
   // 批次 28 A3：车辆 GLB 投影仅 high 档保留（low 档裁掉车流的阴影 pass 几何）。
   // primitive 上的 castShadow 只落在根 Group，逐 mesh 须 traverse 设置。
@@ -190,10 +213,21 @@ export const Vehicle = memo(function Vehicle({
   const useSprite = !!tex && !palette && !glbCloned;
 
   // 路径向量
+  //
+  // ⚠️ 朝向约定（批次 29 修正，改前为 Math.atan2(dx, dz) —— 车辆"横着开"的缺陷根因）：
+  //   **车辆模型的长轴 = 局部 +X**（GLB 与 fallback 同口径：`sedan.glb` 几何 [0.460, 0.145, 0.182]
+  //   的 X 为车长；fallback 也是 `boxGeometry args={[dims.l, dims.h, dims.w]}`，l 在 X；
+  //   车灯/挡风/侧窗/轮位等细节件同样以 X 为车长轴）。
+  //   three.js 绕 Y 旋转 θ：局部 +X = (cosθ, 0, −sinθ)。欲令 +X 对齐行进方向 (dx, dz)/L
+  //   ⇒ cosθ = dx/L 且 sinθ = −dz/L ⇒ **θ = Math.atan2(−dz, dx)**。
+  //   取 atan2(dx, dz) 会把局部 +Z 对齐行进方向，而 +Z 是车宽轴 ⇒ 车长轴与行进方向垂直 90°。
+  //
+  // ⚠️ 与 `PedestrianV3.tsx` 的约定**不同**（行人模型 +Z 向前，故行人用 `atan2(dx, dz)`）——
+  //   两者各自自洽，勿互相"对齐"。
   const { dx, dz, angle } = useMemo(() => {
     const dx = to[0] - from[0];
     const dz = to[1] - from[1];
-    return { dx, dz, angle: Math.atan2(dx, dz) };
+    return { dx, dz, angle: Math.atan2(-dz, dx) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from[0], from[1], to[0], to[1]]);
 
@@ -216,7 +250,7 @@ export const Vehicle = memo(function Vehicle({
     const t = tRef.current;
     g.position.x = from[0] + dx * t + lane.ox;
     g.position.z = from[1] + dz * t + lane.oz;
-    g.position.y = 0.02;
+    g.position.y = VEHICLE_GROUND_Y;
   });
 
   // 批次 28 B2：车型级简介（vehicle.<variant>，GLB 与 fallback 共用文案）。
@@ -283,15 +317,18 @@ export const Vehicle = memo(function Vehicle({
       {...info}
       ref={groupRef}
       userData={{ bucket: 'vehicles' }}
-      position={[from[0] + lane.ox, 0.02, from[1] + lane.oz]}
+      position={[from[0] + lane.ox, VEHICLE_GROUND_Y, from[1] + lane.oz]}
       rotation={[0, angle, 0]}
     >
       {/* 19-Blender3D模型集成：.glb 优先级最高，绕过 sprite 和 palette（palette 模式 useGLB=false）；
           批次 28 A3：castShadow 由上方 traverse 按质量档逐 mesh 设置（high 才投影）。
-          批次 28 二轮：GLB 等材质 group 已在 modelCache 加载期归并（sedan 18→7 组）。 */}
+          批次 28 二轮：GLB 等材质 group 已在 modelCache 加载期归并（sedan 18→7 组）。
+          批次 29 落地契约：GLB 原点在**轮底**（minY=0，与 REAL_DIMS_M 的 minY 同行），
+          故 group 置于 VEHICLE_GROUND_Y（路面 +5cm）即轮子贴路面，**不得再加半高补偿**。 */}
       {glbCloned ? (
         <primitive object={glbCloned} />
       ) : useSprite ? (
+        // 贴图 sprite：平面按车身尺寸，上下各留 3cm 余量（sprite 底边略入路面，既有行为）
         <Billboard position={[0, dims.h / 2 + 0.03, 0]}>
           <mesh>
             {/* 贴图平面与车身尺寸同步（含车底轮子余量） */}
@@ -300,7 +337,7 @@ export const Vehicle = memo(function Vehicle({
           </mesh>
         </Billboard>
       ) : (
-        // 几何车身（缺贴图 / 自定义涂装）：盒子底部贴地
+        // 几何车身（缺贴图 / 自定义涂装）：盒子底面贴地（y=0 起，轮子在 group 原点之上）
         <mesh castShadow={false} position={[0, dims.h / 2, 0]}>
           <boxGeometry args={[dims.l, dims.h, dims.w]} />
           {palette ? (

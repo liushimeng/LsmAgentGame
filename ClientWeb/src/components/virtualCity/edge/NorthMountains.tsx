@@ -16,11 +16,15 @@
 
 import { useMemo } from 'react';
 import { modelUrl } from '@/assets/models';
-import { u } from '../cityScale';
+import { u, sizeTargetFor } from '../cityScale';
 import { hashStr, mulberry32 } from '../civic/rand';
 import { GlbInstanced, type GlbInstanceTRS } from './glbInstanced';
 import { ProceduralPines, type FloraSpot } from './proceduralFlora';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+
+/** 针叶树尺寸/落地校验目标（批次 29；与 proceduralFlora fallback 同表值）。
+ *  雪山（snow_mountain，基准 25 m 地形）不在 REAL_DIMS_M 表内，不注册校验。 */
+const PINE_SIZE_TARGET = sizeTargetFor('pineTree', { label: 'nature/pine_tree' });
 
 /** 雪山座数（方案 §2.1：×6~8）。 */
 const MOUNTAIN_COUNT = 7;
@@ -84,6 +88,7 @@ export function NorthMountains() {
         url={modelUrl('nature', 'pine_tree')}
         instances={pineInstances}
         fallback={<ProceduralPines spots={pines} />}
+        sizeTarget={PINE_SIZE_TARGET}
       />
     </group>
   );
