@@ -30,6 +30,12 @@ type GameContext struct {
 	// TimeRemainingSec 本月窗口剩余秒(watchdog / prompt 渲染用)。
 	TimeRemainingSec int
 
+	// 批次 27(§3.4 Agent 感知):城市日历时间/季节/天气(中文标签,UserPrompt
+	// 直接渲染;引擎侧 BuildContextForAgent 持锁现算填入,空串 = 未开局省略)。
+	CityDate string // "2006-01-02 15:04"(城市时区)
+	Season   string // 春季|夏季|秋季|冬季
+	Weather  string // 晴|多云|雾|小雨|雨|暴雨雷暴|雪|暴雪
+
 	// 市场快照
 	Cycle  CycleBrief
 	Market MarketBrief

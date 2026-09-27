@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime/debug"
+	"time"
 
 	"LsmAgentGame/game/virtual_city/city"
 	"LsmAgentGame/game/virtual_city/profession"
@@ -135,6 +136,9 @@ func (r *VirtualCityRoom) startCityLocked() {
 		}
 		r.cityDriver = city.NewResidentDriver(cfg, r.linePoolSource)
 		r.cityDriver.SetAmbianceSource(r.cityAmbianceSource)
+		// 批次 27(§3.4):城市时间源 —— contextText 首行「■ 城市时间:… ·
+		// 季节 · 天气」(与 ambiance 同款锁外薄包装纪律)。
+		r.cityDriver.SetTimeSource(r.cityTimeSource)
 		// 批次 25 可观测性:驱动条目 LLM 调用计数。
 		r.cityDriver.SetLLMCallHook(r.noteDriverLLMCall)
 		r.City.SetDriver(r.cityDriver)
@@ -193,6 +197,16 @@ func (r *VirtualCityRoom) cityAmbianceSource() map[string]city.AmbianceTags {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.cityAmbianceLocked()
+}
+
+// cityTimeSource 驱动层城市时间来源(批次 27;自取房间锁的薄包装,与
+// cityAmbianceSource 同款纪律 —— driver worker 在任何锁外调用,无嵌套)。
+// 返回 (城市时钟 ms, 房间 seed):时间用锁内变体 cityClockMsLocked 现算
+// (TimeRatio 倍率),seed 供 city 包显示侧天气推导。
+func (r *VirtualCityRoom) cityTimeSource() (int64, int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cityClockMsLocked(time.Now()), r.seed
 }
 
 // anchorCityProfiles 档案锚定流水线(后台 goroutine 锁外执行;契约 §5)。

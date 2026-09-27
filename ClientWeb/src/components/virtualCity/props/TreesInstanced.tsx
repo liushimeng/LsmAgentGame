@@ -9,12 +9,17 @@
  * 复用导出版，逐树确定性形态与改造前一致；oak_tree.glb 逐实例 clone 路径由
  * 实例化程序几何替代（车辆 / 行人 / 建筑不受影响，仍走各自链路）。
  * 数量超过 TREE_TOTAL_CAP 时按 hash 种子稳定截断（与随机无关、可复现）。
+ *
+ * 批次 27 §4.3：冠材质基色按季节 tint（春 #bde3c0 / 夏 #ffffff / 秋 #e8c99a /
+ * 冬 #cfd8dc），cityTimeStore.subscribeSeason 低频订阅（仅季节变化才重渲染）。
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Instances, Instance } from '@react-three/drei';
 import { useSynthPBR } from '../cityPbr';
 import { u } from '../cityScale';
+import { currentSeason, subscribeSeason } from '../cityTimeStore';
+import type { CitySeason } from '../cityTimeStore';
 import {
   TRUNK_COLOR,
   CROWN_COLORS,
@@ -52,6 +57,14 @@ function stableTruncate(trees: InstanceTree[], cap: number): InstanceTree[] {
   const kept = scored.slice(0, cap).sort((a, b) => a.i - b.i);
   return kept.map((k) => k.t);
 }
+
+/** 批次 27 §4.3 季节树冠 tint（与逐实例 color 相乘；夏 #ffffff = 旧版观感）。 */
+const SEASON_CROWN_TINT: Record<CitySeason, string> = {
+  spring: '#bde3c0',
+  summer: '#ffffff',
+  autumn: '#e8c99a',
+  winter: '#cfd8dc',
+};
 
 export function TreesInstanced({
   trees,
@@ -98,8 +111,12 @@ export function TreesInstanced({
     return { trunks: tr, branches: br, crowns: cr };
   }, [effective]);
 
+  // 批次 27：季节低频订阅（仅 season 变化 setState；无变化时 React 直接 bail out）。
+  const [season, setSeason] = useState<CitySeason>(currentSeason);
+  useEffect(() => subscribeSeason(setSeason), []);
+
   // 树冠材质与 TreeV3Fallback 同源（foliage 法线/粗糙 PBR）；逐实例 color
-  // 与材质基色相乘，故基色置白。
+  // 与材质基色相乘，基色 = 季节 tint（夏 #ffffff = 旧版观感）。
   const foliage = useSynthPBR('foliage', { normalScale: [1.2, 1.2] });
   const fp = foliage.matProps;
 
@@ -126,11 +143,11 @@ export function TreesInstanced({
           />
         ))}
       </Instances>
-      {/* ③ 树冠 3 球 ×N → 1 draw call（单位 icosahedron + 逐实例半径/色） */}
+      {/* ③ 树冠 3 球 ×N → 1 draw call（单位 icosahedron + 逐实例半径/色；基色随季节 tint） */}
       <Instances limit={Math.max(1, crowns.length)} range={crowns.length} castShadow>
         <icosahedronGeometry args={[1, 1]} />
         <meshStandardMaterial
-          color="#ffffff"
+          color={SEASON_CROWN_TINT[season]}
           {...fp}
           roughness={fp.roughnessMap ? undefined : 0.85}
           metalness={0.05}

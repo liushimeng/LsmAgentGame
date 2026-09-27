@@ -36,7 +36,11 @@ type VirtualCityRoomOptions = service.VirtualCityRoomOptions
 
 // Config 是 Manager 装配参数(避免直接 import config 包;ws 层转换传入)。
 type Config struct {
-	MonthMs                 int
+	MonthMs int
+	// TimeRatio 批次 27(§3.1):时间比例(城市秒/现实秒)。NewManager 归一
+	// (<=0 → 60,clamp [60,864000]);CreateRoom 接线到房间(建房载荷的
+	// 房间级 time_ratio 经 applyOpts 再覆盖)。
+	TimeRatio               int
 	AgentEnabled            bool
 	AgentDecisionTimeoutSec int
 	BotMaxActionsPerMonth   int
@@ -105,6 +109,24 @@ func NewManager(cfg Config, reg LLMRegistry) *Manager {
 	}
 	if cfg.AgentDecisionTimeoutSec <= 0 {
 		cfg.AgentDecisionTimeoutSec = 20
+	}
+	// 批次 27(§3.1):时间比例归一 + 月节拍推导。优先级钉死:
+	//	显式 month_ms > 显式 time_ratio 推导 > 缺省 8000
+	// 即仅当 cfg.MonthMs 为 0/缺省时才按 MonthMsForRatio(time_ratio) 推导,
+	// 避免覆盖显式月节拍配置;time_ratio 未显式配置(<=0)一律归 60、不推导
+	// (旧缺省行为零回归)。
+	if cfg.TimeRatio <= 0 {
+		cfg.TimeRatio = 60
+	} else {
+		if cfg.TimeRatio < 60 {
+			cfg.TimeRatio = 60
+		}
+		if cfg.TimeRatio > 864000 {
+			cfg.TimeRatio = 864000
+		}
+		if cfg.MonthMs == 0 {
+			cfg.MonthMs = MonthMsForRatio(cfg.TimeRatio)
+		}
 	}
 	if cfg.MonthMs <= 0 {
 		cfg.MonthMs = 8000
@@ -254,6 +276,12 @@ func (m *Manager) CreateRoom(roomID string) *VirtualCityRoom {
 		return r
 	}
 	r = NewVirtualCityRoom(roomID, m.cfg.MonthMs, m.cfg.Seed, m.cfg.AgentConcurrency)
+	// 批次 27(§3.1):时间比例接线(构造函数内置缺省 60;config 显式值
+	// 覆盖;建房载荷的房间级 time_ratio 在下方 pendingOptsApply → applyOpts
+	// 再覆盖一次)。此时房间尚未登记进 m.rooms,直写字段无锁竞争。
+	if m.cfg.TimeRatio > 0 {
+		r.TimeRatio = clampInt(m.cfg.TimeRatio, 60, 864000)
+	}
 	// P1(§6.5):economy/survey 房间级开关接线(Start 前回写)。
 	r.SetEconomyFlags(m.cfg.EconomyEnabled, m.cfg.SurveyEnabled)
 	// P1-4(§财商流P1-4 §11):保险引擎开关接线(Start 前回写)。

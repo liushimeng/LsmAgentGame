@@ -17,6 +17,9 @@ const (
 	// EventCityProfiles 居民人物卡档案锚定终态(2026-09-21 §档案锚定契约 §5:
 	// 仅终态发一条 —— hydrating 中间态走 Snapshot 轮询,不发事件)。
 	EventCityProfiles = "city_profiles"
+	// EventCityWeather 城市天气播报(批次 27 §3.3:月结时城市天气类型变化
+	// 即播报;文案 = 「城市天气:<天气> · <季节>」中文标签)。
+	EventCityWeather = "city_weather"
 )
 
 // negativeGuard 负面事件认知折扣:×(1 − min(0.05×K, 0.30))。

@@ -64,8 +64,13 @@ type TexasTableConfig struct {
 // wealth.pool 载荷变 400,违反契约 03 §6「静默忽略」;保留空壳字段使旧载荷
 // 继续解码成功,applyOpts 不再消费(已实测 nested unknown field → 400)。
 type VirtualCityRoomOptions struct {
-	MonthMs int   `json:"month_ms,omitempty"`
-	Seed    int64 `json:"seed,omitempty"`
+	MonthMs int `json:"month_ms,omitempty"`
+	// TimeRatio 批次 27(§3.1)— 时间比例 = 每现实秒推进的城市秒数
+	// (城市时钟/昼夜/季节/天气驱动源)。clamp [60,864000] 在 game 层
+	// applyOpts 完成;与 month_ms 同传时 **time_ratio 优先**(月节拍按
+	// MonthMsForRatio 推导);仅 month_ms(旧客户端载荷)时 ratio 保持 60。
+	TimeRatio int   `json:"time_ratio,omitempty"`
+	Seed      int64 `json:"seed,omitempty"`
 	// Pool Deprecated(2026-09-22 §17-CityHuman):原 "curated"|"docs" 卡池
 	// 选择已退役;字段仅为旧客户端载荷兼容保留,**任何值都被忽略**。
 	Pool string `json:"pool,omitempty"`

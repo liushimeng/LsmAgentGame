@@ -2,25 +2,34 @@
  * CloudLayer — 天空云层（16-3D城市WebGL质感与城市补全 · 阶段 U）：
  *
  * 6 团云，每团 3-4 片 Billboard 云朵（sky/cloud_puff.png 贴图；缺失 →
- * 白色扁球 opacity 0.30 depthWrite=false 兜底）。高度 y=14-20，沿 +x
+ * 白色扁球 opacity 0.12 depthWrite=false 兜底）。高度 y=60-80，沿 +x
  * 慢速漂移（0.15-0.3 单位/s），x > 42 回绕 -42；prefers-reduced-motion 静止。
  *
  * 布点确定性：mulberry32('clouds-v1')，避开地图中心正上（不遮 CBD 顶视）。
  *
+ * 批次 27 §4.3：云 opacity 基准（贴图 0.35 / 兜底 0.12）× §3.3 镜像表
+ * cloudOpacity 系数（晴 0.10 → 暴雪 0.90），useFrame 读 cityTimeStore，
+ * ~1.2s 时间常数渐变（无天气数据 = 系数 1 → 视觉零回归）。
+ *
  * 契约：lag_docs/虚拟城市/已实现/16-3D城市WebGL质感与城市补全/02-架构设计 §9。
  */
 
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import { skyUrl } from '@/assets/images/virtualCity';
 import { useSharedTexture } from '@/engine3d';
+import { sample, weatherVisual } from '../cityTimeStore';
 
 const REDUCED_MOTION =
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** 批次 27：云 opacity 基准（贴图 / 白球兜底两链路各自的旧版值）。 */
+const CLOUD_BASE_TEX = 0.35;
+const CLOUD_BASE_FALLBACK = 0.12;
 
 /** 确定性伪随机（同源 StreetPropsLayer）。 */
 function mulberry32(seed: number): () => number {
@@ -79,36 +88,56 @@ function cloudsFor(seedStr: string): CloudSpec[] {
   return out;
 }
 
-/** 单团云（贴图 billboard 或白色扁球兜底）。 */
+/** 单团云（贴图 billboard 或白色扁球兜底；材质共享于本团 puff，opacity 随天气渐变）。 */
 function Cloud({ spec, tex }: { spec: CloudSpec; tex: THREE.Texture | null }) {
   const groupRef = useRef<THREE.Group>(null);
+  // 批次 27：一团一材质（puff 共享），useFrame 只改 opacity —— 免逐 puff 材质 ref 收集。
+  const material = useMemo(() => {
+    const m = new THREE.MeshBasicMaterial({
+      transparent: true,
+      depthWrite: false,
+      fog: false,
+    });
+    if (tex) {
+      m.map = tex;
+      m.alphaTest = 0.01;
+      m.opacity = CLOUD_BASE_TEX;
+    } else {
+      m.color = new THREE.Color('#f4f6f9');
+      m.opacity = CLOUD_BASE_FALLBACK;
+    }
+    return m;
+  }, [tex]);
+  useEffect(() => () => material.dispose(), [material]);
+  const baseOpacity = tex ? CLOUD_BASE_TEX : CLOUD_BASE_FALLBACK;
+
   useFrame((_state, delta) => {
     const g = groupRef.current;
-    if (!g || REDUCED_MOTION) return;
-    g.position.x += spec.speed * delta;
-    if (g.position.x > 42) g.position.x = -42;
+    if (g && !REDUCED_MOTION) {
+      g.position.x += spec.speed * delta;
+      if (g.position.x > 42) g.position.x = -42;
+    }
+    // 批次 27：云量 × 天气系数（§3.3 镜像表；无天气数据 = 1）。指数平滑 ≈1.2s 渐变。
+    const target = baseOpacity * weatherVisual(sample().weather).cloudOpacity;
+    material.opacity += (target - material.opacity) * Math.min(1, delta * 0.8);
   });
   return (
     <group ref={groupRef} position={[spec.x, spec.y, spec.z]}>
       {spec.puffs.map((p, i) =>
         tex ? (
           <Billboard key={`puff-${i}`} position={[p.dx, p.dy, p.dz]}>
-            <mesh>
+            <mesh material={material}>
               <planeGeometry args={[p.w, p.h]} />
-              <meshBasicMaterial
-                map={tex}
-                transparent
-                opacity={0.35}
-                depthWrite={false}
-                fog={false}
-                alphaTest={0.01}
-              />
             </mesh>
           </Billboard>
         ) : (
-          <mesh key={`puff-${i}`} position={[p.dx, p.dy, p.dz]} scale={[p.w * 0.4, p.h * 0.4, p.w * 0.4]}>
+          <mesh
+            key={`puff-${i}`}
+            material={material}
+            position={[p.dx, p.dy, p.dz]}
+            scale={[p.w * 0.4, p.h * 0.4, p.w * 0.4]}
+          >
             <sphereGeometry args={[1, 8, 6]} />
-            <meshBasicMaterial color="#f4f6f9" transparent opacity={0.12} depthWrite={false} fog={false} />
           </mesh>
         ),
       )}

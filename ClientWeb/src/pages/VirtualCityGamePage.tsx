@@ -11,6 +11,10 @@
  *
  * 断线恢复：mount 时 game.join/game.spectate（重试直至 WS OPEN）+ 8s 轮询
  * game.state（仿 DoudizhuGamePage）；观战路由 useSpectatorMode() 隐藏动作条。
+ *
+ * 批次 27「时间比例与昼夜季节天气」：帧到达时把 city_clock_ms 锚点
+ * （speed = time_ratio，旧帧缺省 60）+ season/weather 写入 cityTimeStore
+ * （3D 昼夜/粒子/路灯/换季渲染数据源）；顶栏追加「季节 · 天气」与比例徽章。
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -24,7 +28,8 @@ import { wsClient } from '@/services/ws';
 import { roomService } from '@/services/auth.service';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
-import { districtCenter, formatPct, type VirtualCityDistrictId } from '@/types/virtualCity';
+import { districtCenter, formatPct, timeRatioPresetKey, type VirtualCityDistrictId } from '@/types/virtualCity';
+import { resetCityTime, setCityClockAnchor, setCityEnv } from '@/components/virtualCity/cityTimeStore';
 import {
   VirtualCityCityMap,
   type VirtualCityCameraView,
@@ -194,20 +199,30 @@ export function VirtualCityGamePage() {
   // 批次 25 §3.4：帧到达时重锚定城市时钟。连续帧 city_clock_ms 不变 ⇒
   // 后端暂停冻结（speed=0 保持显示），避免暂停期随插值漂移出锯齿回跳。
   // c <= 0（未开局旧帧占位）视为缺失，不锚定（纪元 2025-01-01 起恒为正）。
+  // 批次 27 §3.1：speed 硬编码 60 → time_ratio（旧帧缺省 60，行为逐分不差）；
+  // 同时把锚点/季节/天气写入 cityTimeStore（昼夜/粒子/路灯渲染数据源）。
+  const timeRatio =
+    typeof gameState?.time_ratio === 'number' && gameState.time_ratio > 0
+      ? gameState.time_ratio
+      : 60;
   useEffect(() => {
     const c = gameState?.city_clock_ms;
     if (typeof c !== 'number' || c <= 0) return;
     const prev = cityClockRef.current;
-    cityClockRef.current =
-      prev && prev.cityMs === c
-        ? { cityMs: c, at: prev.at, speed: 0 }
-        : { cityMs: c, at: Date.now(), speed: 60 };
-  }, [gameState]);
+    const frozen = prev !== null && prev.cityMs === c;
+    const at = frozen ? prev.at : Date.now();
+    const speed = frozen ? 0 : timeRatio;
+    cityClockRef.current = { cityMs: c, at, speed };
+    setCityClockAnchor(c, at, speed);
+    setCityEnv(gameState?.season, gameState?.weather, gameState?.weather_intensity);
+  }, [gameState, timeRatio]);
 
   // 入场：join / spectate（WS 未 OPEN 时 500ms 重试）+ 8s 轮询全量快照。
   useEffect(() => {
     if (!roomId) return;
     reset();
+    // 批次 27：清城市时间单例（避免跨房残留旧锚点/季节/天气）。
+    resetCityTime();
     let retries = 0;
     const tryHook = () => {
       if (retries++ > 10) return;
@@ -311,6 +326,23 @@ export function VirtualCityGamePage() {
     ? `🏙 ${fmtCityClock(cityClock.cityMs + (now - cityClock.at) * cityClock.speed, t)}`
     : `⏱ ${fmtElapsed(gameState?.game_started_at ?? 0, now)}`;
 
+  // ── 批次 27 §3.4：季节/天气/时间比例徽章（旧帧无字段整条隐藏，不显示 undefined）。──
+  const envBadge = [
+    gameState?.season && t(`virtualCity.season.${gameState.season}` as TKey),
+    gameState?.weather && t(`virtualCity.weather.${gameState.weather}` as TKey),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const ratioKey =
+    typeof gameState?.time_ratio === 'number' && gameState.time_ratio > 0
+      ? timeRatioPresetKey(gameState.time_ratio)
+      : null;
+  const ratioBadge = ratioKey
+    ? t(ratioKey)
+    : typeof gameState?.time_ratio === 'number' && gameState.time_ratio > 0
+      ? t('virtualCity.timeRatioBadge' as TKey, { label: `${gameState.time_ratio}×` })
+      : '';
+
   return (
     <div className="virtualCity-root virtualCity-game">
       {/* 顶部信息栏 */}
@@ -340,6 +372,17 @@ export function VirtualCityGamePage() {
             <span className="virtualCity-topbar__item" title={clockTitle}>
               {clockText}
             </span>
+            {/* 批次 27：季节 · 天气 + 时间比例徽章（旧帧无字段整条隐藏）。 */}
+            {envBadge && (
+              <span className="virtualCity-topbar__item" data-testid="virtualCity-env-badge">
+                🌦 {envBadge}
+              </span>
+            )}
+            {ratioBadge && (
+              <span className="virtualCity-badge" data-testid="virtualCity-ratio-badge">
+                ⏩ {ratioBadge}
+              </span>
+            )}
             <span
               className="virtualCity-topbar__item"
               title={t('virtualCity.seatsCount' as TKey, { n: seatedCount, max: seatCapacity })}

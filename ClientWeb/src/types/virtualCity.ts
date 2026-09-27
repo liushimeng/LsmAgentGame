@@ -34,6 +34,16 @@ export type VirtualCityStatus = 'open' | 'playing' | 'over';
 /** 全 Agent 模式标志(2026-09-19 §全Agent模式): true = 全 Agent 房间,人类不能加入对局。 */
 export type VirtualCityFullAgentMode = boolean;
 
+// ── 批次 27 §3.2/§3.3：季节 / 天气（game.state 新字段；旧帧 omit）──────────
+
+/** 城市日历季节（北半球温带：3-5 春 / 6-8 夏 / 9-11 秋 / 12-2 冬）。 */
+export type VirtualCitySeason = 'spring' | 'summer' | 'autumn' | 'winter';
+
+/** 8 种天气类型（§3.3 服务端确定性纯函数产出）。 */
+export type VirtualCityWeatherKind =
+  | 'clear' | 'cloudy' | 'fog' | 'drizzle'
+  | 'rain' | 'storm' | 'snow' | 'blizzard';
+
 
 /** 月总收入档（《规则》§5.3）。 */
 export type VirtualCityIncomeBand = 'low' | 'mid' | 'high' | 'top';
@@ -536,8 +546,17 @@ export interface VirtualCityGameState {
   game_started_at: number;
   /** 城市时钟 epoch 毫秒（批次 25 §3.4：60× 叙事层，现实 1 分钟 = 城市 1 小时；
    *  暂停时冻结；纪元起点映射 2025-01-01 08:00）。旧帧/旧后端 omit → 前端兜底
-   *  回退显示现实运行时长（fmtElapsed）。 */
+   *  回退显示现实运行时长（fmtElapsed）。批次 27 起倍率由 time_ratio 决定。 */
   city_clock_ms?: number;
+  /** 批次 27 §3.4：城市秒/现实秒（time_ratio，clamp [60,864000]）。
+   *  旧帧 omit → 前端缺省 60（与批次 25 行为逐分不差）。 */
+  time_ratio?: number;
+  /** 批次 27 §3.2：季节（旧帧 omit → 渲染层按夏季基准，视觉零回归）。 */
+  season?: VirtualCitySeason;
+  /** 批次 27 §3.3：8 种天气（旧帧 omit → 中性视觉参数 = 批次 26 观感）。 */
+  weather?: VirtualCityWeatherKind;
+  /** 批次 27 §3.3：天气强度 [0,1] 两位小数（clear=0 / cloudy=0.35）。 */
+  weather_intensity?: number;
   players: VirtualCityPlayer[];
   /** -1 = 观战。 */
   my_seat: number;
@@ -1242,13 +1261,62 @@ export const WEALTH_MICRO_ERR = {
 
 /** POST /api/games/virtual-city/rooms 的 virtualCity 段（协议 §6）。 */
 export interface VirtualCityRoomOptions {
-  /** 1 游戏月时长 ms，3000–30000，缺省 8000。 */
+  /** 批次 27 §3.1：时间比例（城市秒/现实秒），clamp [60,864000]，缺省 60；
+   *  经济月节拍由后端按 §3.1 推导（month_ms = clamp(2_592_000_000/ratio, 3000, 60000)）。 */
+  time_ratio?: number;
+  /** 兼容字段（批次 27 前旧客户端）：1 游戏月时长 ms，3000–60000；
+   *  仅 time_ratio 缺席时后端反推 ratio 使用，两字段同传 time_ratio 优先。 */
   month_ms?: number;
   /** 可选随机种子（测试确定性复现）。 */
   seed?: number;
   /** 2026-09-25 §LLM线路池配额 — 本房 Agent 并发线路数 [1,64]；
    *  0/缺省 = 不指定（后端按池总量运行）。 */
   llm_lines?: number;
+}
+
+// ── 批次 27 §3.1：时间比例 13 档预设（UI 顺序即此序，默认第 1 档 60）──────
+
+export interface VirtualCityTimeRatioPreset {
+  /** 城市秒/现实秒。 */
+  ratio: number;
+  /** 档位标签 i18n 键。 */
+  key: TKey;
+  /** 建房下拉 optgroup 分组。 */
+  group: 'hours' | 'days' | 'months' | 'years';
+}
+
+/** 13 档预设表（方案 §3.1 逐行照抄；h=小时 d=天 m=月 y=年）。 */
+export const VIRTUAL_CITY_TIME_RATIOS: VirtualCityTimeRatioPreset[] = [
+  { ratio: 60, key: 'virtualCity.timeRatio.h1', group: 'hours' },
+  { ratio: 120, key: 'virtualCity.timeRatio.h2', group: 'hours' },
+  { ratio: 240, key: 'virtualCity.timeRatio.h4', group: 'hours' },
+  { ratio: 480, key: 'virtualCity.timeRatio.h8', group: 'hours' },
+  { ratio: 1440, key: 'virtualCity.timeRatio.d1', group: 'days' },
+  { ratio: 2880, key: 'virtualCity.timeRatio.d2', group: 'days' },
+  { ratio: 5760, key: 'virtualCity.timeRatio.d4', group: 'days' },
+  { ratio: 11520, key: 'virtualCity.timeRatio.d8', group: 'days' },
+  { ratio: 43200, key: 'virtualCity.timeRatio.m1', group: 'months' },
+  { ratio: 86400, key: 'virtualCity.timeRatio.m2', group: 'months' },
+  { ratio: 172800, key: 'virtualCity.timeRatio.m4', group: 'months' },
+  { ratio: 345600, key: 'virtualCity.timeRatio.m8', group: 'months' },
+  { ratio: 525600, key: 'virtualCity.timeRatio.y1', group: 'years' },
+];
+
+/** §3.1 推导（后端权威，前端仅作 hint 展示）：30 天城市月换算 + clamp [3000,60000]。 */
+export function monthMsForTimeRatio(ratio: number): number {
+  if (!Number.isFinite(ratio) || ratio <= 0) return 60000;
+  return Math.round(Math.min(60000, Math.max(3000, 2_592_000_000 / ratio)));
+}
+
+/** 模拟周期 420 月 × 推导月节拍 = 全周期现实时长（ms；hint 展示用）。 */
+export function fullCycleMsForTimeRatio(ratio: number): number {
+  return 420 * monthMsForTimeRatio(ratio);
+}
+
+/** 档位标签键查找（HUD 比例徽章；非 13 档返回 null）。 */
+export function timeRatioPresetKey(ratio: number): TKey | null {
+  const hit = VIRTUAL_CITY_TIME_RATIOS.find((p) => p.ratio === ratio);
+  return hit ? hit.key : null;
 }
 
 // ── 静态表 ────────────────────────────────────────────────────────────

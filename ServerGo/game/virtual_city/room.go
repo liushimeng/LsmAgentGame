@@ -101,7 +101,12 @@ type VirtualCityRoom struct {
 	Status string // open | playing | over
 	Phase  string // acting | settling
 
-	MonthMs     int
+	MonthMs int
+	// TimeRatio 批次 27(§3.1):时间比例 = 每现实秒推进的城市秒数,
+	// 城市时钟/昼夜/季节/天气全部由它驱动(clamp [60,864000],缺省 60 =
+	// 批次 25 的 60× 行为)。经济月节拍 MonthMs 在 applyOpts 按
+	// MonthMsForRatio 推导;仅显式 month_ms 的旧载荷不反推,保持 60。
+	TimeRatio   int
 	NextMonthAt time.Time
 	Paused      bool
 
@@ -200,6 +205,9 @@ type VirtualCityRoom struct {
 	cityEpochBaseMs int64
 	pausedAccumMs   int64
 	pauseStartAtMs  int64
+	// lastWeatherKind 批次 27(§3.3 月结天气播报):上一次播报的城市天气
+	// 类型("" = 尚未播报 → 首月也播报)。纯内存态,不进存档(§9)。
+	lastWeatherKind string
 
 	done     chan struct{}
 	settleCh chan struct{}
@@ -212,8 +220,10 @@ func NewVirtualCityRoom(roomID string, monthMs int, seed int64, llmConcurrency i
 	if monthMs < 3000 {
 		monthMs = 3000
 	}
-	if monthMs > 30000 {
-		monthMs = 30000
+	// 批次 27(§3.1):月节拍 clamp 上限 30000 → 60000(快档 time_ratio
+	// 推导需要;慢档沿用旧值不受影响)。
+	if monthMs > 60000 {
+		monthMs = 60000
 	}
 	if llmConcurrency <= 0 {
 		// 2026-09-16 §12 座扩容:默认 4 → DefaultAgentConcurrency(8),让 10+ bot
@@ -229,6 +239,7 @@ func NewVirtualCityRoom(roomID string, monthMs int, seed int64, llmConcurrency i
 		Status:     StatusOpen,
 		Phase:      PhaseActing,
 		MonthMs:    monthMs,
+		TimeRatio:  60, // 批次 27(§3.1):缺省时间比例(60 = 1分钟比1小时)。
 		seed:       seedVal,
 		rng:        rand.New(rand.NewSource(seedVal)),
 		Spectators: map[string]struct{}{},
@@ -352,8 +363,16 @@ func (r *VirtualCityRoom) SetChatSender(cs ChatSender) {
 func (r *VirtualCityRoom) applyOpts(opts *service.VirtualCityRoomOptions) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if opts.MonthMs > 0 {
-		r.MonthMs = clampInt(opts.MonthMs, 3000, 30000)
+	// 批次 27(§3.1 优先级):time_ratio 显式(>0)→ 双字段按比例落位
+	// (Ratio clamp [60,864000],MonthMs = MonthMsForRatio 推导);仅 month_ms
+	// (旧客户端载荷)→ MonthMs 原样 clamp 使用,**不反推 ratio、保持 60**,
+	// 保证旧载荷的时钟倍率与月节拍均与批次 25 逐分不差。两字段同传时
+	// time_ratio 优先(月节拍按推导公式)。
+	if opts.TimeRatio > 0 {
+		r.TimeRatio = clampInt(opts.TimeRatio, 60, 864000)
+		r.MonthMs = MonthMsForRatio(r.TimeRatio)
+	} else if opts.MonthMs > 0 {
+		r.MonthMs = clampInt(opts.MonthMs, 3000, 60000)
 	}
 	if opts.Seed != 0 {
 		r.seed = opts.Seed
@@ -621,7 +640,12 @@ func (r *VirtualCityRoom) Start(loader *profession.Loader) *errcode.Error {
 	// 批次 25(问题 3):城市时钟暂停累计归零(重开/再开局不复用旧暂停)。
 	r.pausedAccumMs = 0
 	r.pauseStartAtMs = 0
-	r.MonthMs = clampInt(r.MonthMs, 3000, 30000)
+	// 批次 27:月节拍 clamp 上限 60000;时钟倍率防御归一(<=0 → 60,
+	// cityClockMsLocked / TimeEnv 同款兜底,直构房间零值安全)。
+	r.MonthMs = clampInt(r.MonthMs, 3000, 60000)
+	if r.TimeRatio <= 0 {
+		r.TimeRatio = 60
+	}
 	r.NextMonthAt = time.Now().Add(time.Duration(r.MonthMs) * time.Millisecond)
 	r.resetMonthFlagsLocked()
 	openings := r.openingHooksLocked()
@@ -839,6 +863,15 @@ func (r *VirtualCityRoom) trySettle(onFinish func(roomID string)) bool {
 	}
 	prevEvents := len(r.World.Events)
 	finished, res := r.World.SettleMonth()
+	// 批次 27(§3.3 月结天气播报 P1):本月城市天气类型 ≠ 上月 → city_weather
+	// 事件(首月 lastWeatherKind=="" 恒播报)。锁内现算(WeatherAt 纯函数),
+	// emitEvent 仅追加 World.Events,广播随下方 newEvents 锁外回调(§92a)。
+	weatherClockMs := r.cityClockMsLocked(time.Now())
+	if weatherKind := weatherKindAt(r.seed, weatherClockMs); weatherKind != r.lastWeatherKind {
+		r.lastWeatherKind = weatherKind
+		r.World.emitEvent(EventCityWeather, -1, fmt.Sprintf(
+			"城市天气:%s · %s", weatherLabelZH[weatherKind], seasonLabelZH[SeasonAt(weatherClockMs)]))
+	}
 	newEvents := append([]EventRecord(nil), r.World.Events[prevEvents:]...)
 	// 2026-09-21 §虚拟城市(契约 03 §6):月结顺序 SettleMonth() → City.TickMonth
 	// → 广播。城市 tick 在锁内(与引擎结算同互斥域),cpi 取引擎月环比通胀。
@@ -997,10 +1030,11 @@ func (r *VirtualCityRoom) Pause(userID string, pause bool) *errcode.Error {
 	return nil
 }
 
-// CityClockMs 城市时钟(2026-09-26 §批次25 问题 3):现实 1 分钟 = 城市 1 小时
-// (60× 加速),与月结 tick 解耦,纯叙事/展示层。
+// CityClockMs 城市时钟(2026-09-26 §批次25 问题 3;批次 27 §3.1 起倍率可变):
+// TimeRatio = 每现实秒推进的城市秒数(缺省 60 = 现实 1 分钟比城市 1 小时),
+// 与月结 tick 解耦,昼夜/季节/天气的统一驱动源。
 //
-//	CityClockMs = cityEpochBaseMs + (now - gameStartedAt - pausedAccumMs) × 60
+//	CityClockMs = cityEpochBaseMs + (now - gameStartedAt - pausedAccumMs) × TimeRatio
 //
 // 未开局(gameStartedAt==0)返回 0;暂停期间冻结(进行中的暂停段即时扣除)。
 func (r *VirtualCityRoom) CityClockMs() int64 {
@@ -1010,6 +1044,8 @@ func (r *VirtualCityRoom) CityClockMs() int64 {
 }
 
 // cityClockMsLocked 锁内变体(view 广播路径在锁内构造快照时复用)。
+// 批次 27(§3.1):批次 25 的常数 60 → 房间字段 TimeRatio;<=0 防御按 60
+// (直构房间零值安全,与旧行为逐分一致)。
 func (r *VirtualCityRoom) cityClockMsLocked(now time.Time) int64 {
 	if r.gameStartedAt == 0 {
 		return 0
@@ -1023,7 +1059,11 @@ func (r *VirtualCityRoom) cityClockMsLocked(now time.Time) int64 {
 	if elapsedMs < 0 {
 		elapsedMs = 0
 	}
-	return r.cityEpochBaseMs + elapsedMs*60
+	ratio := r.TimeRatio
+	if ratio <= 0 {
+		ratio = 60
+	}
+	return r.cityEpochBaseMs + elapsedMs*int64(ratio)
 }
 
 // Close 停止 loop(房间删除/终局清理)。
@@ -1089,11 +1129,35 @@ func (r *VirtualCityRoom) EngineLocked() *World {
 func (r *VirtualCityRoom) MuLock()   { r.mu.Lock() }
 func (r *VirtualCityRoom) MuUnlock() { r.mu.Unlock() }
 
-// SeedView 返回房间种子(锁内读)。ws 层用于 PlaceholderWorld。
+// SeedView 返回房间种子(锁内读)。ws 层用于 PlaceholderWorld;批次 27 起
+// 兼作天气派生 seed 透出(等价于契约中的 SeedValue(),不另设重复 getter)。
 func (r *VirtualCityRoom) SeedView() int64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.seed
+}
+
+// TimeRatioValue 返回时间比例(锁内;<=0 防御 60)。ws 广播用。
+func (r *VirtualCityRoom) TimeRatioValue() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.timeRatioLocked()
+}
+
+// TimeEnv 批次 27:BuildClientState 时间环境快照(锁内;ws 广播路径在
+// broadcastVirtualCityState 构造后传入 BuildClientState)。
+func (r *VirtualCityRoom) TimeEnv() TimeEnv {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return TimeEnv{Ratio: r.timeRatioLocked(), Seed: r.seed}
+}
+
+// timeRatioLocked 锁内读取时间比例(<=0 防御 60)。
+func (r *VirtualCityRoom) timeRatioLocked() int {
+	if r.TimeRatio <= 0 {
+		return 60
+	}
+	return r.TimeRatio
 }
 
 // SubmitMonthLocked 提交单座位(锁内,§92a)。

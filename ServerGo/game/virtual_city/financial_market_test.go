@@ -507,7 +507,7 @@ func TestFinancialMarket_WiredIntoSettleMonth(t *testing.T) {
 	}
 	// view 接线:game.state 载荷含 fin_market。
 	cs := BuildClientState("fin-test", 0, w, [MaxSeats]string{}, [MaxSeats]string{},
-		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, 0, nil)
+		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, 0, nil, nil)
 	if cs.FinMarket == nil {
 		t.Fatalf("cs.FinMarket should be wired into view snapshot")
 	}

@@ -52,20 +52,25 @@
  *     南海洋+南港 四缘真实环境带（z/x ∈ ±[62,80] 带域，海面延至 z=150）；
  *   - 罗盘契约确立：北 = −Z / 南 = +Z / 东 = +X / 西 = −X（小地图固定朝上=北）；
  *   - 四缘 FarBuildingSilhouette 灰盒剪影移除（真实环境带取代），文件删除。
+ *
+ * 批次 27「时间比例与昼夜季节天气」（lag_docs/虚拟城市/已实现/27-时间比例与昼夜季节天气/01-方案设计-v1.md）：
+ *   - 静态正午光 rig（Sky/fog/四灯/EnvBinder）整段替换为 <CityEnvironmentLayer />
+ *     （DayNightCycle 昼夜循环 + WeatherFX 雨/雪 + EnvBinder 正午 PMREM）；
+ *     正午基准常量保留在文件顶部（昼夜沿此基准摆动）。
  */
 
 import { useMemo, useRef, useState } from 'react';
-import { OrbitControls, Sky } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import {
   EngineCanvas,
-  EnvBinder,
   useSharedTexture,
   CameraViewReporter,
   FocusLerpController,
   WalkControls,
 } from '@/engine3d';
 import type { CameraView, FocusTarget } from '@/engine3d';
+import { CityEnvironmentLayer } from './CityEnvironmentLayer';
 import { DistrictBlock } from './DistrictBlock';
 import { AgentToken } from './AgentToken';
 import { CityVoiceBubbleLayer } from './CityVoiceBubbleLayer';
@@ -128,17 +133,17 @@ export const ORBIT_MAX_DISTANCE = WORLD_SIZE;
 /** 批次 20（文档 1 §3.1）：最近距离 8 写死 → W×0.1=12，防大地图穿地视角。 */
 export const ORBIT_MIN_DISTANCE = WORLD_SIZE * 0.1;
 
-// ── v2.13 阶段 C 光照/天空常量 ────────────────────────────────
-/** 主方向光位置（世界坐标）。批次 20：[20,32,16] ×1.5 等比 → [30,48,24]（阴影方向不变）。 */
-const SUN_POSITION: [number, number, number] = [30, 48, 24];
-/** Sky 太阳方向：与主方向光同向归一化 ×100（SUN [30,48,24] 与旧 [20,32,16] 同射线，
- *  归一化值 [0.516,0.826,0.413] 不变）。 */
+// ── v2.13 阶段 C 光照/天空常量（批次 27 起为「正午基准」：静态光 rig 已整体
+//    替换为 <CityEnvironmentLayer> → engine3d DayNightCycle 动态驱动，昼夜沿
+//    此基准摆动；雾色 #aeb8c6 ↔ 夜 #0a0e18 的插值见 DayNightCycle 常量）──
+/** 主方向光轨道半径（= 正午基准方向 [30,48,24] 模长；批次 20 [20,32,16] ×1.5 等比）。 */
+const SUN_DISTANCE = Math.hypot(30, 48, 24);
+/** Sky 太阳方向（正午基准；EnvBinder PMREM 烘焙同源。原 [30,48,24] 与
+ *  旧 [20,32,16] 同射线，归一化值 [0.516,0.826,0.413] 不变）。 */
 const SKY_SUN_POSITION: [number, number, number] = [51.6, 82.6, 41.3];
 /** 方向光阴影相机半宽：批次 20 采纳批次 15 §9.3 建议 W×0.6→W×0.5=60
- *  （shadow map 保持 2048；默认 ±5 只能罩住原点一小块）。 */
+ *  （shadow map 保持 2048，low 质量档 1024 由 DayNightCycle 按质量档定）。 */
 const SHADOW_CAMERA_HALF = WORLD_SIZE * 0.5;
-/** 雾色（与 Sky 地平线色接近，远景自然消隐）。 */
-const FOG_COLOR = '#aeb8c6';
 
 // ── 批次 22：3D 世界相机常量 ─────────────────────────────────
 /** 批次 22：俯仰角上限 1.2（≈69°，2.5D 锁定俯视）→ 1.54（≈88°，可压到近街面视角，
@@ -374,34 +379,16 @@ export function VirtualCityCityMap({
         camera={{ position: CAMERA_START, fov: 45 }}
         debugGlobalName="__cityRenderInfo"
       >
-        {/* v2.13 阶段 C：Sky 天空穹顶接管背景（删除纯色 <color>），太阳方向与主方向光一致 */}
-        <Sky sunPosition={SKY_SUN_POSITION} turbidity={6} rayleigh={1.2} />
-        {/* P1-A 新增：远景雾化（v2.12 随 80×80 地图等比 ×2；v2.13 雾色随天际线） */}
-        <fog attach="fog" args={[FOG_COLOR, FOG_NEAR, FOG_FAR]} />
-        <ambientLight intensity={0.45} />
-        {/* P1-A 新增：天/地反弹 */}
-        <hemisphereLight args={['#7a93b8', '#1a1f2a', 0.5]} />
-        {/* 16 · 阶段 R：环境反射（PMREM 烘焙 Sky → scene.environment，一次性）；
-            批次 22：EnvBinder 迁入 engine3d 并参数化（显式传参，与主天空同 uniforms） */}
-        <EnvBinder sunPosition={SKY_SUN_POSITION} turbidity={6} rayleigh={1.2} intensity={0.35} />
-        {/* 16 · 阶段 R：冷色填充光（背光面抬亮，不投影） */}
-        <directionalLight position={[-24, 20, -18]} color="#b8cce8" intensity={0.3} />
-        {/* v2.12 阶段 2：光位随世界边长等比 ×2（方向向量不变，阴影形态不变）；
-            v2.13 阶段 C：2048 shadow map + bias/normalBias + 显式阴影相机覆盖全城 + 暖白日光 */}
-        <directionalLight
-          castShadow
-          position={SUN_POSITION}
-          color="#fff2e0"
-          intensity={1.15}
-          shadow-mapSize-width={2048}
-          shadow-mapSize-height={2048}
-          shadow-bias={-0.0002}
-          shadow-normalBias={0.02}
-          shadow-camera-left={-SHADOW_CAMERA_HALF}
-          shadow-camera-right={SHADOW_CAMERA_HALF}
-          shadow-camera-top={SHADOW_CAMERA_HALF}
-          shadow-camera-bottom={-SHADOW_CAMERA_HALF}
-          shadow-camera-far={WORLD_SIZE * 2}
+        {/* 批次 27 §4.3：整段静态正午光 rig（Sky/fog/ambient/hemisphere/填充光/
+            主方向光/EnvBinder）替换为城市环境层 —— DayNightCycle 昼夜循环 +
+            WeatherFX 雨/雪粒子 + EnvBinder 正午 PMREM（正午基准常量见上方注释块） */}
+        <CityEnvironmentLayer
+          fogNear={FOG_NEAR}
+          fogFar={FOG_FAR}
+          sunDistance={SUN_DISTANCE}
+          skySunPosition={SKY_SUN_POSITION}
+          shadowCameraHalf={SHADOW_CAMERA_HALF}
+          shadowCameraFar={WORLD_SIZE * 2}
         />
         <Ground />
         {/* 14-3D渲染深化：城市水系（运河 + 港池 + 岸草皮） */}

@@ -33,6 +33,16 @@ export type {
 export { EnvBinder } from './EnvBinder';
 export type { EnvBinderProps } from './EnvBinder';
 
+// 批次 27：昼夜循环光 rig + 雨/雪粒子（游戏无关，虚拟城市首次消费）
+export { DayNightCycle } from './DayNightCycle';
+export type {
+  DayNightCycleProps,
+  DayNightSample,
+  DayNightSnapshot,
+} from './DayNightCycle';
+export { WeatherFX } from './WeatherFX';
+export type { WeatherFXProps, WeatherSample } from './WeatherFX';
+
 export {
   isSoftwareRenderer,
   detectQualityTier,

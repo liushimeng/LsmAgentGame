@@ -104,6 +104,10 @@ type ResidentDriver struct {
 	// ambiance 单城区气味/声响来源(room 注入,锁外调用;nil = 无氛围段)。
 	ambiance func() map[string]AmbianceTags
 
+	// timeSource 批次 27:城市时钟/天气种子来源(room 注入薄包装,worker 在
+	// 任何锁外调用;nil = contextText 省略「■ 城市时间」行,零回归)。
+	timeSource func() (cityClockMs int64, seed int64)
+
 	// llmCallHook LLM 调用计数钩子(2026-09-26 §批次25 可观测性;room 侧
 	// 注入,每次真实发起前回调;nil-safe,不持锁 —— 钩子实现自带互斥)。
 	llmCallHook func(modelKey string)
@@ -150,6 +154,36 @@ func (d *ResidentDriver) SetAmbianceSource(fn func() map[string]AmbianceTags) {
 		return
 	}
 	d.ambiance = fn
+}
+
+// SetTimeSource 注入城市时间来源(批次 27;room 层 cityTimeSource 锁外薄
+// 包装,nil 安全)。返回 (城市时钟 ms, 房间 seed)—— 季节/天气在 city 包内
+// 按 time_weather.go 显示侧副本现算(协议侧唯一事实来源为
+// game/virtual_city/time_weather.go,两份口径由跨包一致性测试钉死)。
+func (d *ResidentDriver) SetTimeSource(fn func() (cityClockMs int64, seed int64)) {
+	if d == nil {
+		return
+	}
+	d.timeSource = fn
+}
+
+// cityTimeLine 渲染 contextText 首行「■ 城市时间:2006-01-02 15:04 · 冬季 ·
+// 小雨」。timeSource 未注入(nil)或未开局(ms<=0)→ 返回 ""(整行省略,
+// 零回归);任何锁外调用(room 注入的 source 自取房间锁,与 ambiance 同款
+// 纪律)。
+func (d *ResidentDriver) cityTimeLine() string {
+	if d == nil || d.timeSource == nil {
+		return ""
+	}
+	ms, seed := d.timeSource()
+	if ms <= 0 {
+		return ""
+	}
+	season := SeasonAt(ms)
+	kind, _ := WeatherAt(seed, ms)
+	return fmt.Sprintf("■ 城市时间:%s · %s · %s",
+		time.UnixMilli(ms).In(cityEpochTZ).Format("2006-01-02 15:04"),
+		seasonLabelZH[season], weatherLabelZH[kind])
 }
 
 // SetLLMCallHook 注入 LLM 调用计数钩子(2026-09-26 §批次25;room 注入,nil 安全)。
@@ -278,7 +312,7 @@ func (d *ResidentDriver) runOne(b *Backdrop, pool *llm.LinePool, month, idx int,
 		AgentClassName: string(agentroot.AgentClassCityHuman),
 		System:         personaBlocks(brief),
 		Messages: []llm.Message{
-			{Role: "user", Content: []llmtypes.ContentBlock{{Type: "text", Text: contextText(brief, month, d.ambianceFor(brief.DistrictID))}}},
+			{Role: "user", Content: []llmtypes.ContentBlock{{Type: "text", Text: contextText(brief, month, d.ambianceFor(brief.DistrictID), d.cityTimeLine())}}},
 		},
 		Tools:     commonToolDefs(),
 		MaxTokens: driverMaxTokens,
@@ -358,8 +392,12 @@ func personaBlocks(brief DriverBrief) []llm.SystemBlock {
 
 // contextText User Context = 月度状态(契约 §3.2):收入/支出/储蓄/可支撑
 // 月数/压力位 + 所在城区与氛围 + 附近居民 ≤3 + 行动指引。
-func contextText(brief DriverBrief, month int, amb AmbianceTags) string {
+// timeLine(批次 27):城市时间首行(cityTimeLine 产出;"" = 省略,零回归)。
+func contextText(brief DriverBrief, month int, amb AmbianceTags, timeLine string) string {
 	var sb strings.Builder
+	if timeLine != "" {
+		sb.WriteString(timeLine + "\n")
+	}
 	fmt.Fprintf(&sb, "■ 本月状态(第 %d 月)\n", month)
 	employ := "就业中"
 	if !brief.Employed {

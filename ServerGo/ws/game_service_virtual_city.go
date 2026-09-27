@@ -258,6 +258,11 @@ func (s *GameService) handleVirtualCityPause(c *Client, env Envelope) {
 	}))
 }
 
+// ptrTimeEnv 把 TimeEnv 值转为指针(BuildClientState 新参;批次 27 §3.4)。
+func ptrTimeEnv(env virtual_city.TimeEnv) *virtual_city.TimeEnv {
+	return &env
+}
+
 // broadcastVirtualCityState 逐座位单发(脱敏)+ 观战者推送(协议 §3,§7)。
 func (s *GameService) broadcastVirtualCityState(roomID string) {
 	r := s.vcMgr.Get(roomID)
@@ -274,17 +279,20 @@ func (s *GameService) broadcastVirtualCityState(roomID string) {
 	nextMonth := r.NextMonthAtUnix()
 	citySnap := r.CitySnapshotView() // 2026-09-21 §虚拟城市:城市背景层快照(未建城 nil)
 	cityClock := r.CityClockMs()     // 2026-09-26 §批次25:城市时钟(60× 叙事层)
+	// 批次 27(§3.4):时间环境(比例 + 天气种子)—— BuildClientState 现算
+	// time_ratio/season/weather/weather_intensity 四字段。
+	env := r.TimeEnv()
 	// 玩家座位单发。
 	for seat := 0; seat < virtual_city.MaxSeats; seat++ {
 		uid := seats[seat]
 		if uid == "" {
 			continue
 		}
-		cs := virtual_city.BuildClientState(roomID, seat, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, cityClock, citySnap)
+		cs := virtual_city.BuildClientState(roomID, seat, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, cityClock, citySnap, &env)
 		s.hub.BroadcastTo(uid, wsEnvelope("game.state", 0, cs))
 	}
 	// 观战者(viewer = -1)。
-	cs := virtual_city.BuildClientState(roomID, -1, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, cityClock, citySnap)
+	cs := virtual_city.BuildClientState(roomID, -1, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, cityClock, citySnap, &env)
 	for _, uid := range s.hub.connectedSpectatorUserIDs(roomID) {
 		s.hub.BroadcastTo(uid, wsEnvelope("game.state", 0, cs))
 	}

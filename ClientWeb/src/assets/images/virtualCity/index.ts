@@ -22,6 +22,10 @@
  *   ground/{grass_tile,plaza_tile,water_tile,urban_base}.png      512×512 可平铺（14-3D渲染深化地表环境）
  *   ground/{sand_tile,rock_snow_tile,forest_floor_tile,ocean_tile}.png
  *     1024×1024 无缝平铺（批次 26 四缘环境带：西沙漠/北雪山山脚/东森林/南海洋）
+ *   ground/{grass_spring_tile,grass_autumn_tile,snow_cover_tile}.png
+ *     1024×1024 无缝平铺（批次 27 季节地表：春嫩绿小花/秋黄褐落叶/冬雪覆）
+ *   weather/{rain_drop,snow_flake}.png
+ *     256×256 透明底（批次 27 天气粒子 sprite：雨滴/雪花）
  *   props/{streetlamp,tree,vehicle,pedestrian,sign,rooftop}/<variant>_<category>.png
  *     街景道具贴图（P1-C 街道道具层）
  */
@@ -34,6 +38,7 @@ const facadeImgs = import.meta.glob<string>('./facades/*.png', { eager: true, im
 const roofImgs = import.meta.glob<string>('./roofs/*.png', { eager: true, import: 'default' });
 const streetImgs = import.meta.glob<string>('./streets/*.png', { eager: true, import: 'default' });
 const groundImgs = import.meta.glob<string>('./ground/*.png', { eager: true, import: 'default' });
+const weatherImgs = import.meta.glob<string>('./weather/*.png', { eager: true, import: 'default' });
 const propImgs = import.meta.glob<string>('./props/**/*.png', { eager: true, import: 'default' });
 
 /** 大厅 banner（缺失 = ''，VirtualCityLobbyPage 回落 CSS 渐变）。 */
@@ -137,7 +142,10 @@ export function streetTileUrl(name: StreetTileName): string {
 
 /** 地表环境贴图字面量（与 3d_script/procedural_city_textures.py::ground 对齐，14-3D渲染深化；
  *  批次 26 追加 sand_tile / rock_snow_tile / forest_floor_tile / ocean_tile，
- *  与 python-generate-image-tool/generate_virtual_city_edge_assets.py::TILES 对齐）。 */
+ *  与 python-generate-image-tool/generate_virtual_city_edge_assets.py::TILES 对齐；
+ *  批次 27 追加季节地表 grass_spring_tile / grass_autumn_tile / snow_cover_tile，
+ *  与 python-generate-image-tool/generate_virtual_city_season_assets.py::JOBS 对齐
+ *  ——键名沿用既有「= 文件 stem（含 _tile 后缀）」惯例）。 */
 export type GroundTileName =
   | 'grass_tile'
   | 'plaza_tile'
@@ -146,14 +154,31 @@ export type GroundTileName =
   | 'sand_tile'
   | 'rock_snow_tile'
   | 'forest_floor_tile'
-  | 'ocean_tile';
+  | 'ocean_tile'
+  | 'grass_spring_tile'
+  | 'grass_autumn_tile'
+  | 'snow_cover_tile';
 
 /**
  * 地表环境贴图 URL（缺失 = ''，组件回退纯色：grass #3f7a3a / plaza #9aa1ab / water #1a3a52）。
  * 草地/广场/水面均 RepeatWrapping 可平铺；水面沿 v 方向滚动。
+ * 批次 27 季节消费：夏 = 既有 grass_tile；春/秋/冬 = grass_spring_tile /
+ * grass_autumn_tile / snow_cover_tile（缺失时调用方降级回 grass_tile）。
  */
 export function groundTileUrl(name: GroundTileName): string {
   return groundImgs[`./ground/${name}.png`] ?? '';
+}
+
+/** 天气粒子 sprite 字面量（与 python-generate-image-tool/
+ *  generate_virtual_city_season_assets.py::JOBS 的 sprite 项对齐，批次 27）。 */
+export type WeatherSpriteName = 'rain_drop' | 'snow_flake';
+
+/**
+ * 天气粒子 sprite URL（256×256 透明底；缺失 = ''，WeatherFX 降级内置几何点/着色）。
+ * 消费方：engine3d/WeatherFX（雨=细长条 sprite，雪=柔光点 sprite）。
+ */
+export function weatherSpriteUrl(name: WeatherSpriteName): string {
+  return weatherImgs[`./weather/${name}.png`] ?? '';
 }
 
 /** 街景道具类别字面量（与 python-generate-image-tool 子模块道具分类常量对齐）。 */

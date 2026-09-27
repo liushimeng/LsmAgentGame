@@ -785,6 +785,9 @@
 /* 原生 <select> 下拉弹层：Chrome 用控件自身计算色渲染 option 面板，
    暗底若不显式声明，部分平台回落系统浅色 → 浅底浅字（2026-09-19 F5）。 */
 .virtualCity-create-form__seatrow select option { background: #0f141c; color: var(--virtualCity-text); }
+/* 批次 27：时间比例 13 档下拉（.virtualCity-create-form__row 布局的 select）
+   同款 option 面板暗底声明（§26 对比度；optgroup 标签继承 option 面板色）。 */
+.virtualCity-create-form__row select option { background: #0f141c; color: var(--virtualCity-text); }
 /* 滑杆主题色 —— 原先沿用 UA 默认蓝，与金色主题不一致。 */
 .virtualCity-create-form__row input[type="range"] { accent-color: var(--virtualCity-accent-strong); }
 /* placeholder 默认 UA 灰 #757575 在 #0f141c 上仅 ≈4.05:1，

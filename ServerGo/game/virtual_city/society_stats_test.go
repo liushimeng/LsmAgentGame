@@ -224,7 +224,7 @@ func TestSocietyWiredIntoSettleMonth(t *testing.T) {
 	}
 	// view 下发:当前快照字段 + 趋势首点对齐。
 	cs := BuildClientState("room-r7", 0, w, [MaxSeats]string{"u:0"}, [MaxSeats]string{"玩家0"},
-		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, 0, nil)
+		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, 0, nil, nil)
 	snap := w.SocietyHist.Snapshots[0]
 	if len(cs.Society.Trend) != 1 || cs.Society.Trend[0].Month != 1 {
 		t.Fatalf("view trend: got %+v, want single M1 point", cs.Society.Trend)

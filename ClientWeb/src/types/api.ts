@@ -452,7 +452,9 @@ export interface CreateRoomOptions {
   start_stack?: number;
   // 2026-09-14 §财商流 P0 — virtualCity only。建房可选段（协议契约 §6:
   // createRoomRequest 新增字段 virtual_city *VirtualCityRoomOptions,DisallowUnknownFields
-  // 严格校验)。month_ms clamp 3000–30000。
+  // 严格校验)。批次 27 §3.1 起主字段为 time_ratio（城市秒/现实秒，clamp
+  // [60,864000]，缺省 60）；month_ms 为兼容旧客户端保留（clamp 3000–60000，
+  // 仅 time_ratio 缺席时生效）。
   // 2026-09-25 §建房400修复 — 属性名 virtualCity → virtual_city 对齐后端 json tag
   //（camelCase 经 JSON.stringify 原样发出，DisallowUnknownFields 报 unknown field）。
   // 2026-09-22 §CityHuman全民驱动 — virtual_city 建房不再发送 agent_seats/pool

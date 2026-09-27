@@ -264,7 +264,7 @@ func TestPublicServices_WiredIntoSettleMonth(t *testing.T) {
 	}
 
 	cs := BuildClientState("room-s8", 0, w, [MaxSeats]string{"u:0"}, [MaxSeats]string{"玩家0"},
-		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, 0, nil)
+		[MaxSeats]bool{}, [MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, 0, nil, nil)
 	if cs.PublicSvc == nil {
 		t.Fatalf("view public_services nil after SettleMonth (wired)")
 	}

@@ -3,7 +3,7 @@
  *
  * 与既有 6 款 Lobby 页同构：banner 头图（PNG 缺失回落 CSS 渐变）+ 房间列表
  * （RoomListTable 复用 + 5s HTTP 轮询 + useLobbyLiveUpdate room.state WS 实时更新）
- * + 建房弹窗（VirtualCityCreateRoomModal：resident_count / month_ms / seed）
+ * + 建房弹窗（VirtualCityCreateRoomModal：resident_count / time_ratio / seed）
  * + 观战入口。加入 / 观战错误处理对齐 WerewolfLobbyPage（30001/30003/30012）。
  */
 
@@ -93,7 +93,8 @@ export function VirtualCityLobbyPage() {
           resident_count: req.resident_count,
           // 2026-09-25 §建房400修复 — 键名 virtualCity → virtual_city 对齐后端
           // json tag（DisallowUnknownFields 严格校验，camelCase 会 400）。
-          virtual_city: { month_ms: req.month_ms, ...(req.seed ? { seed: req.seed } : {}) },
+          // 批次 27 §3.1：month_ms → time_ratio（经济月节拍由后端按方案推导）。
+          virtual_city: { time_ratio: req.time_ratio, ...(req.seed ? { seed: req.seed } : {}) },
           full_agent: req.full_agent === true,
           // 批次 20 文档 3 A2：市长选举启用（顶层字段，仅 virtualCity 生效）。
           civic_election_enabled: req.civic_election_enabled === true,

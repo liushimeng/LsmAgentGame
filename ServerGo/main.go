@@ -942,7 +942,10 @@ func main() {
 	// 2026-09-14 §财商流P0 — 构造 wealth 管理器 + 文档池加载器。
 	vcLoader := virtual_city.NewLoader(cfg.VirtualCity.ProfessionDocsPath)
 	vcMgr := virtual_city.NewManager(virtual_city.Config{
-		MonthMs:                 cfg.VirtualCity.MonthMs,
+		MonthMs: cfg.VirtualCity.MonthMs,
+		// 批次 27(§3.1):时间比例(config normalize 已 clamp [60,864000],
+		// 缺省 60 = 1分钟比1小时;显式 month_ms 优先于推导)。
+		TimeRatio:               cfg.VirtualCity.TimeRatio,
 		AgentEnabled:            cfg.VirtualCity.AgentEnabled,
 		AgentDecisionTimeoutSec: cfg.VirtualCity.AgentDecisionTimeoutSec,
 		BotMaxActionsPerMonth:   cfg.VirtualCity.BotMaxActionsPerMonth,

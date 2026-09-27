@@ -9,12 +9,19 @@
  * 林地地表 patch 由 CityEdgeLayer 统一铺设（forest_floor_tile 贴图，缺失降级纯色）。
  * 布点确定性（hashStr + mulberry32）。罗盘契约：东 = +X（方案文档 §1.1）。
  *
+ * 批次 27 §4.3：阔叶树按季节切 GLB 变体（seasonAssets：夏 oak_tree / 春秋冬
+ * oak_tree_<season>，缺失回退 oak_tree → 程序化 fallback，§27.3 降级链不变）；
+ * subscribeSeason 低频触发，GlbInstanced 的 InstancedMesh 几何源随 url 重建。
+ *
  * 契约：lag_docs/虚拟城市/已实现/26-坐标系统与城市边缘环境/01-现状分析与方案设计.md §2.4。
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { modelUrl } from '@/assets/models';
 import { hashStr, mulberry32 } from '../civic/rand';
+import { currentSeason, subscribeSeason } from '../cityTimeStore';
+import type { CitySeason } from '../cityTimeStore';
+import { seasonOakModelUrl } from '../seasonAssets';
 import { GlbInstanced, type GlbInstanceTRS } from './glbInstanced';
 import { ProceduralOaks, ProceduralPines, type FloraSpot } from './proceduralFlora';
 
@@ -26,6 +33,10 @@ const OAK_RATIO = 0.55;
 const TRANSITION_KEEP = 0.1;
 
 export function EastForest() {
+  // 批次 27：季节低频订阅（仅 season 变化 setState）。
+  const [season, setSeason] = useState<CitySeason>(currentSeason);
+  useEffect(() => subscribeSeason(setSeason), []);
+
   const { oaks, pines } = useMemo(() => {
     const rnd = mulberry32(hashStr('edge26:east:forest'));
     const oaks: FloraSpot[] = [];
@@ -60,9 +71,9 @@ export function EastForest() {
 
   return (
     <group>
-      {/* 阔叶树（oak_tree GLB 实例化；fallback 程序化球冠树） */}
+      {/* 阔叶树（oak_tree GLB 实例化，批次 27 按季节切变体；fallback 程序化球冠树） */}
       <GlbInstanced
-        url={modelUrl('nature', 'oak_tree')}
+        url={seasonOakModelUrl(season)}
         instances={oakInstances}
         fallback={<ProceduralOaks spots={oaks} />}
       />

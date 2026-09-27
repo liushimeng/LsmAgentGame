@@ -10,9 +10,12 @@
  * 见 cityScale.ts DISTRICT_FLOORS）：繁荣期楼变高、萧条期变矮
  * = 可视化市场周期（前端架构文档 §3）。伪随机 **不用 Math.random**——seed 由
  * district id hash，重渲染布局稳定。
+ *
+ * 批次 27 §4.3：中央公园草地覆盖层按季节换贴图（seasonAssets 适配：
+ * 夏 grass_tile / 春秋冬季节贴图，缺失回退 grass_tile），低频订阅不抖动布局。
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { Html } from '@react-three/drei';
 import { useT } from '@/hooks/useT';
@@ -21,6 +24,9 @@ import { districtTexture, districtTextureStem, groundTileUrl, pbrNormalUrl, pbrR
 import { BuildingMesh, type BuildingSpec } from './BuildingMesh';
 import { DISTRICT_FLOORS, buildingHeight, u } from './cityScale';
 import { useSharedPBR, useSharedTexture, withPBR } from '@/engine3d';
+import { currentSeason, subscribeSeason } from './cityTimeStore';
+import type { CitySeason } from './cityTimeStore';
+import { seasonGrassTileUrl } from './seasonAssets';
 import {
   VIRTUAL_CITY_DISTRICTS,
   formatCny,
@@ -104,12 +110,17 @@ export function DistrictBlock({ def, priceIndex, playerCount, selected, onSelect
   // 地表覆盖层：中央公园草地 / 交通枢纽+金融广场（缺失降级纯色）
   const isPark = def.id === 'central_park';
   const isPlaza = def.id === 'transport_hub' || def.id === 'finance';
-  const grassTex = useSharedTexture(isPark ? groundTileUrl('grass_tile') : '', {
+  // 批次 27：草地贴图随季节（seasonAssets 缺键回退 grass_tile；非公园城区传 '' 不加载）。
+  const [season, setSeason] = useState<CitySeason>(currentSeason);
+  useEffect(() => subscribeSeason(setSeason), []);
+  const grassTileUrl = isPark ? seasonGrassTileUrl(season) : '';
+  const grassTex = useSharedTexture(grassTileUrl, {
     wrap: 'repeat', repeat: [4, 4],
   });
-  // 18-X：草地 PBR（02 §2.3 行 5：ground/grass_tile，normalScale [0.7,0.7]）。
+  // 18-X：草地 PBR（02 §2.3 行 5：ground/grass_tile，normalScale [0.7,0.7]；
+  // 季节色图沿用夏季法线/粗糙度——法线不带色相，视觉无损）。
   const grassPbr = useSharedPBR(
-    isPark ? groundTileUrl('grass_tile') : '',
+    grassTileUrl,
     pbrNormalUrl('ground', 'grass_tile'),
     pbrRoughUrl('ground', 'grass_tile'),
     { wrap: 'repeat', repeat: [4, 4], normalScale: [0.7, 0.7] },

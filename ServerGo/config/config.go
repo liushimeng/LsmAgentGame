@@ -345,8 +345,14 @@ type TexasHoldemConfig struct {
 // VirtualCityConfig 控制虚拟城市(game_kind=virtual_city)的月度节奏与 Agent(P0 v1)。
 // 契约: lag_docs/虚拟城市/已实现/02-架构设计/虚拟城市-后端架构与经济引擎-v1.md §3。
 type VirtualCityConfig struct {
-	// MonthMs 1 游戏月的窗口毫秒数(默认 8000,clamp [3000,30000])。
+	// MonthMs 1 游戏月的窗口毫秒数(默认 8000,clamp [3000,60000];批次 27
+	// 起上限 30000 → 60000,配合 time_ratio 快档的月节拍推导)。
 	MonthMs int `json:"month_ms"`
+	// TimeRatio 时间比例:每现实秒推进的城市秒数(批次 27 §3.1;默认 60 =
+	// 1分钟比1小时,clamp [60,864000])。城市时钟/昼夜/季节/天气由它驱动;
+	// 经济月节拍在 game 层(Manager.NewManager / room.applyOpts)按
+	// MonthMsForRatio 推导 —— 显式 month_ms 优先,推导仅补 month_ms 缺省。
+	TimeRatio int `json:"time_ratio"`
 	// ProfessionDocsPath 文档池(75k 人物卡)磁盘根,默认
 	// "./lag_docs/虚拟城市/玩家职业设计"。
 	ProfessionDocsPath string `json:"profession_docs_path"`
@@ -1195,8 +1201,21 @@ func applyDefaults(c *Config) {
 	if c.VirtualCity.MonthMs < 3000 {
 		c.VirtualCity.MonthMs = 3000
 	}
-	if c.VirtualCity.MonthMs > 30000 {
-		c.VirtualCity.MonthMs = 30000
+	// 批次 27(§3.1):月节拍 clamp 上限 30000 → 60000。
+	if c.VirtualCity.MonthMs > 60000 {
+		c.VirtualCity.MonthMs = 60000
+	}
+	// 批次 27(§3.1):时间比例归一(0/缺省 → 60;<60 → 60;>864000 →
+	// 864000)。月节拍推导不在本包做(config 不 import game 层,防循环依赖)
+	// —— 由 Manager.NewManager / room.applyOpts 按 MonthMsForRatio 完成。
+	if c.VirtualCity.TimeRatio == 0 {
+		c.VirtualCity.TimeRatio = 60
+	}
+	if c.VirtualCity.TimeRatio < 60 {
+		c.VirtualCity.TimeRatio = 60
+	}
+	if c.VirtualCity.TimeRatio > 864000 {
+		c.VirtualCity.TimeRatio = 864000
 	}
 	if c.VirtualCity.ProfessionDocsPath == "" {
 		c.VirtualCity.ProfessionDocsPath = "./lag_docs/虚拟城市/玩家职业设计"

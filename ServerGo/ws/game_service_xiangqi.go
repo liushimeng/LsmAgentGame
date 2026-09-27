@@ -644,7 +644,8 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 			cs := virtual_city.BuildClientState(req.RoomID, -1, r.Engine(),
 				r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
 				r.SnapshotModelKeys(), r.SnapshotTranscripts(),
-				r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CityClockMs(), r.CitySnapshotView())
+				r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CityClockMs(), r.CitySnapshotView(),
+				ptrTimeEnv(r.TimeEnv()))
 			s.sendOK(c, env.Seq, "game.state", cs)
 			return
 		}
@@ -766,7 +767,8 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 		cs := virtual_city.BuildClientState(req.RoomID, seat, eng,
 			r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
 			r.SnapshotModelKeys(), r.SnapshotTranscripts(),
-			r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CityClockMs(), r.CitySnapshotView())
+			r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CityClockMs(), r.CitySnapshotView(),
+			ptrTimeEnv(r.TimeEnv()))
 		s.sendOK(c, env.Seq, "game.state", cs)
 	}
 }

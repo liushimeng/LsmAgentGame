@@ -5,6 +5,7 @@ import virtualCityResidents from './virtualCityResidents-zh';
 import virtualCityBatch20 from './virtualCityBatch20-zh';
 import virtualCityLinePool from './virtualCityLinePool-zh';
 import virtualCityCityClock from './virtualCityCityClock-zh';
+import virtualCityTimeWeather from './virtualCityTimeWeather-zh';
 
 // 中文 (默认) — zh-CN
 const zhCN: Dict = {
@@ -1386,10 +1387,6 @@ const zhCN: Dict = {
   'virtualCity.subtitle': '全 Agent 真实城市模拟器 · 居民自主生活的人生沙盘',
   'virtualCity.createRoom': '创建城市',
   'virtualCity.roomName': '城市名称',
-  'virtualCity.monthMs': '模拟月节拍（毫秒）',
-  'virtualCity.monthMs.fast': '3s 快进',
-  'virtualCity.monthMs.normal': '8s 标准',
-  'virtualCity.monthMs.slow': '15s 慢速',
   'virtualCity.seed': '随机种子',
   'virtualCity.join': '进入城市',
   'virtualCity.spectate': '观察',
@@ -1731,7 +1728,7 @@ const zhCN: Dict = {
 
 
   // ── virtualCity 拆分文件（≤1800 行约束）：P2 交易 / P1-4 保险 / 居民档案 / 批次20 / 线路池 ──
-  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock,
+  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather,
 
   // ── P1 明斯基引擎 + LPR 重定价 + 提前还款 ──
   'minsky.title': '明斯基融资状态',

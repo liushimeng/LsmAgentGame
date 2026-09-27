@@ -38,14 +38,20 @@ type ClientGameState struct {
 	// CityClockMs 城市时钟(2026-09-26 §批次25 问题 3):城市时间 epoch 毫秒
 	// (现实 1 分钟 = 城市 1 小时,60× 加速,与月结解耦;暂停期间冻结;
 	// 未开局为 0)。与 next_month_at 同频下发。
-	CityClockMs  int64          `json:"city_clock_ms"`
-	Players      []PlayerJSON   `json:"players"`
-	MySeat       int            `json:"my_seat"`
-	My           *MyJSON        `json:"my"` // nil = 观战者
-	BotContexts  []BotCtxJSON   `json:"bot_contexts"`
-	LedgerRecent []LedgerJSON   `json:"ledger_recent"`
-	EventsRecent []EventJSON    `json:"events_recent"`
-	Minsky       MinskyOverview `json:"minsky_overview"`
+	CityClockMs int64 `json:"city_clock_ms"`
+	// 批次 27(§3.4):时间比例/季节/天气 —— 全部由 city_clock_ms + 房间
+	// seed 现算(确定性纯函数,见 time_weather.go),无额外房间状态。
+	TimeRatio        int            `json:"time_ratio"`        // 城市秒/现实秒(缺省 60)
+	Season           string         `json:"season"`            // spring|summer|autumn|winter
+	Weather          string         `json:"weather"`           // 8 类型 §3.3(clear|cloudy|fog|drizzle|rain|storm|snow|blizzard)
+	WeatherIntensity float64        `json:"weather_intensity"` // [0,1] 两位小数
+	Players          []PlayerJSON   `json:"players"`
+	MySeat           int            `json:"my_seat"`
+	My               *MyJSON        `json:"my"` // nil = 观战者
+	BotContexts      []BotCtxJSON   `json:"bot_contexts"`
+	LedgerRecent     []LedgerJSON   `json:"ledger_recent"`
+	EventsRecent     []EventJSON    `json:"events_recent"`
+	Minsky           MinskyOverview `json:"minsky_overview"`
 	// P1(§财商流P1-2 §6.1):economy_enabled=false 时为零值/空数组下发。
 	ConsumerMarket ConsumerMarketJSON `json:"consumer_market"`
 	LaborMarket    LaborMarketJSON    `json:"labor_market"`
@@ -744,7 +750,18 @@ type EventJSON struct {
 //
 // worldSnapshot / ages 来自房间;此函数无锁;调用方应持房间锁构造 World 快照。
 // citySnap(2026-09-21 §虚拟城市):城市背景层快照,nil = 未建城(omitempty)。
-func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]string, nicknames [MaxSeats]string, botSeats [MaxSeats]bool, modelKeys [MaxSeats]string, transcripts [MaxSeats]BotTranscript, gameStartedAt, nextMonthAtUnixMs, cityClockMs int64, citySnap *city.Snapshot) *ClientGameState {
+// env(批次 27 §3.4):时间环境 {Ratio, Seed}(ws 层经 r.TimeEnv() 构造);
+// nil 安全 —— ratio 回退 60、seed 回退 0(测试/旧调用方),季节/天气仍按
+// cityClockMs 现算填入。
+func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]string, nicknames [MaxSeats]string, botSeats [MaxSeats]bool, modelKeys [MaxSeats]string, transcripts [MaxSeats]BotTranscript, gameStartedAt, nextMonthAtUnixMs, cityClockMs int64, citySnap *city.Snapshot, env *TimeEnv) *ClientGameState {
+	ratio := 60
+	var envSeed int64
+	if env != nil {
+		if env.Ratio > 0 {
+			ratio = env.Ratio
+		}
+		envSeed = env.Seed
+	}
 	cs := &ClientGameState{
 		RoomID: roomID, GameKind: "virtual_city",
 		Status: StatusOpen, MaxSeat: MaxSeats,
@@ -759,6 +776,11 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		LedgerRecent: make([]LedgerJSON, 0),
 		EventsRecent: make([]EventJSON, 0),
 	}
+	// 批次 27(§3.4):时间比例/季节/天气现算。置于 world==nil 早退分支之前
+	// —— 未开局房同样下发纪元附近的占位值(前端仅渲染,无业务分支)。
+	cs.TimeRatio = ratio
+	cs.Season = SeasonAt(cityClockMs)
+	cs.Weather, cs.WeatherIntensity = WeatherAt(envSeed, cityClockMs)
 	if world == nil {
 		cs.Phase = PhaseActing
 		// 城市快照独立于引擎 World(未开局也可有城;当前实现建城在 Start,

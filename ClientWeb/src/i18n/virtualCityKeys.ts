@@ -13,10 +13,6 @@ export interface VirtualCityDict {
   'virtualCity.subtitle': string;
   'virtualCity.createRoom': string;
   'virtualCity.roomName': string;
-  'virtualCity.monthMs': string;
-  'virtualCity.monthMs.fast': string;
-  'virtualCity.monthMs.normal': string;
-  'virtualCity.monthMs.slow': string;
   'virtualCity.seed': string;
   'virtualCity.join': string;
   'virtualCity.spectate': string;
@@ -39,6 +35,49 @@ export interface VirtualCityDict {
   'virtualCity.cityClockPhaseDay': string;
   'virtualCity.cityClockPhaseDusk': string;
   'virtualCity.cityClockPhaseNight': string;
+  // ── 批次 27：时间比例 13 档 + 季节 4 + 天气 8（值表拆到
+  //    locales/virtualCityTimeWeather-{zh,en,ja}.ts，≤1800 行约束）──
+  /** 建房下拉行标签（HUD 比例徽章语义同源）。 */
+  'virtualCity.timeRatio': string;
+  /** 13 档预设（§3.1；h=小时 d=天 m=月 y=年）。 */
+  'virtualCity.timeRatio.h1': string;
+  'virtualCity.timeRatio.h2': string;
+  'virtualCity.timeRatio.h4': string;
+  'virtualCity.timeRatio.h8': string;
+  'virtualCity.timeRatio.d1': string;
+  'virtualCity.timeRatio.d2': string;
+  'virtualCity.timeRatio.d4': string;
+  'virtualCity.timeRatio.d8': string;
+  'virtualCity.timeRatio.m1': string;
+  'virtualCity.timeRatio.m2': string;
+  'virtualCity.timeRatio.m4': string;
+  'virtualCity.timeRatio.m8': string;
+  'virtualCity.timeRatio.y1': string;
+  /** 下拉 optgroup 四组。 */
+  'virtualCity.timeRatioGroup.hours': string;
+  'virtualCity.timeRatioGroup.days': string;
+  'virtualCity.timeRatioGroup.months': string;
+  'virtualCity.timeRatioGroup.years': string;
+  /** 建房 hint：{month}/{total} = 紧凑时长（60s / 105min / 7h）。 */
+  'virtualCity.timeRatioHint': string;
+  /** 慢档（≤1分钟比2小时）季节观感提示。 */
+  'virtualCity.timeRatioSeasonTip': string;
+  /** HUD 比例徽章（非 13 档自定义 ratio 兜底）：{label} = 如 1440×。 */
+  'virtualCity.timeRatioBadge': string;
+  /** 季节四键（§3.2）。 */
+  'virtualCity.season.spring': string;
+  'virtualCity.season.summer': string;
+  'virtualCity.season.autumn': string;
+  'virtualCity.season.winter': string;
+  /** 天气 8 键（§3.3）。 */
+  'virtualCity.weather.clear': string;
+  'virtualCity.weather.cloudy': string;
+  'virtualCity.weather.fog': string;
+  'virtualCity.weather.drizzle': string;
+  'virtualCity.weather.rain': string;
+  'virtualCity.weather.storm': string;
+  'virtualCity.weather.snow': string;
+  'virtualCity.weather.blizzard': string;
   'virtualCity.mySeat': string;
   'virtualCity.waiting': string;
   'virtualCity.spectating': string;

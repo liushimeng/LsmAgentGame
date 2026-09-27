@@ -11,7 +11,9 @@
  *     max=min(listModels() Σ concurrency_lines, 64)，缺省 = 池上限，
  *     随 body.llm_lines 顶层字段提交；下方信息行 {n} = 池总量，
  *     N=0 黄色警示且提交拦截（与居民数无关）。
- *   - 模拟月节拍（3000 / 8000 / 15000ms 预设 + 3000–30000 滑杆）
+ *   - 时间比例（批次 27 §4.4，取代「模拟月节拍」预设+滑杆）：13 档下拉
+ *     （小时/天/月/年四组 optgroup，默认 1分钟比1小时 = ratio 60）+
+ *     hint 信息行（1 模拟月 ≈ … · 全周期 420 月 ≈ …；慢档附加季节观感提示）。
  *   - 随机种子（可选，确定性复现）
  *
  * §7.1：提交失败 / 校验不通过内联红条（formError）、弹窗不关闭
@@ -25,12 +27,18 @@ import { listModels, type ModelInfo } from '@/api/llm';
 import { reportGlobalError } from '@/services/globalError';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
+import {
+  VIRTUAL_CITY_TIME_RATIOS,
+  fullCycleMsForTimeRatio,
+  monthMsForTimeRatio,
+} from '@/types/virtualCity';
 
 export interface VirtualCityCreateRequest {
   name?: string;
   /** 背景居民规模（10..100000；前端 clamp，后端缺省 10000 / <10 归 10）。 */
   resident_count: number;
-  month_ms: number;
+  /** 批次 27 §3.1：时间比例（城市秒/现实秒，13 档之一；后端 clamp [60,864000]）。 */
+  time_ratio: number;
   seed?: number;
   /** 2026-09-19 §全Agent模式: 是否全 Agent 模式(默认 true)。 */
   full_agent?: boolean;
@@ -48,15 +56,26 @@ interface Props {
   submitting?: boolean;
 }
 
-const MONTH_MS_PRESETS = [
-  { ms: 3000, key: 'virtualCity.monthMs.fast' },
-  { ms: 8000, key: 'virtualCity.monthMs.normal' },
-  { ms: 15000, key: 'virtualCity.monthMs.slow' },
-] as const;
+/** optgroup 分组顺序（小时 → 天 → 月 → 年）。 */
+const RATIO_GROUPS = ['hours', 'days', 'months', 'years'] as const;
+/** 批次 27 §3.1 默认档：1分钟比1小时（ratio 60，与批次 25 行为一致）。 */
+const TIME_RATIO_DEFAULT = 60;
+/** 季节观感提示阈值：慢于（含）1分钟比2小时 的档位显示（h1/h2 两档）。 */
+const SEASON_TIP_MAX_RATIO = 120;
 
 const RESIDENT_MIN = 10;
 const RESIDENT_MAX = 100000;
 const RESIDENT_DEFAULT = 10;
+
+/** hint 时长紧凑格式（60s / 105min / 3.5h；三语通用缩写，不另立 i18n 键）。 */
+function fmtCompactDuration(ms: number): string {
+  const s = ms / 1000;
+  if (s < 60) return `${s < 10 ? s.toFixed(1) : Math.round(s)}s`;
+  const m = s / 60;
+  if (m < 60) return `${m < 10 ? Number(m.toFixed(1)) : Math.round(m)}min`;
+  const h = m / 60;
+  return `${h < 10 ? Number(h.toFixed(1)) : Math.round(h)}h`;
+}
 
 /** clamp 居民数到 [10, 100000]（非法输入回落默认值）。 */
 function clampResidents(v: number): number {
@@ -133,7 +152,8 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
   const [modelsError, setModelsError] = useState<string | null>(null);
   // §CityHuman全民驱动 — 背景居民规模（缺省 1 万，clamp 10..100000）。
   const [residentCount, setResidentCount] = useState(RESIDENT_DEFAULT);
-  const [monthMs, setMonthMs] = useState(8000);
+  // 批次 27 §3.1：时间比例（13 档，默认 1分钟比1小时）。
+  const [timeRatio, setTimeRatio] = useState(TIME_RATIO_DEFAULT);
   const [seed, setSeed] = useState('');
   // 批次 20 文档 3 A4：市长选举启用（默认关，随 body.civic_election_enabled 提交）。
   const [election, setElection] = useState(false);
@@ -196,7 +216,7 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
       const ok = await onSubmit({
         name: name.trim() || undefined,
         resident_count: clampResidents(residentCount),
-        month_ms: monthMs,
+        time_ratio: timeRatio,
         ...(seedNum > 0 ? { seed: seedNum } : {}),
         full_agent: true, // 2026-09-19 §全Agent模式: 虚拟城市默认全 Agent
         // 批次 20 文档 3 A2：仅勾选时置 true（后端零值=false，勿做归一化）。
@@ -299,35 +319,40 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
           </p>
         )}
 
-        {/* 模拟月节拍 */}
-        <div className="virtualCity-create-form__row">
-          <span>{t('virtualCity.monthMs' as TKey)}</span>
-          <div className="virtualCity-create-form__seatcount">
-            {MONTH_MS_PRESETS.map((p) => (
-              <button
-                key={p.ms}
-                type="button"
-                className={'virtualCity-tier-btn' + (monthMs === p.ms ? ' virtualCity-tier-btn--active' : '')}
-                onClick={() => setMonthMs(p.ms)}
-                disabled={busy}
-              >
-                {t(p.key as TKey)}
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* 批次 27 §4.4：时间比例 13 档下拉（小时/天/月/年四组；取代月节拍预设+滑杆）。 */}
         <label className="virtualCity-create-form__row">
-          <span>{monthMs >= 1000 ? `${(monthMs / 1000).toFixed(1)}s` : `${monthMs}ms`}</span>
-          <input
-            type="range"
-            min={3000}
-            max={30000}
-            step={1000}
-            value={monthMs}
-            onChange={(e) => setMonthMs(Number(e.target.value))}
+          <span>{t('virtualCity.timeRatio' as TKey)}</span>
+          <select
+            value={timeRatio}
+            onChange={(e) => setTimeRatio(Number(e.target.value))}
             disabled={busy}
-          />
+            data-testid="virtualCity-create-time-ratio"
+          >
+            {RATIO_GROUPS.map((g) => (
+              <optgroup key={g} label={t(`virtualCity.timeRatioGroup.${g}` as TKey)}>
+                {VIRTUAL_CITY_TIME_RATIOS.filter((p) => p.group === g).map((p) => (
+                  <option key={p.ratio} value={p.ratio}>
+                    {t(p.key)}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
         </label>
+        <p
+          className="virtualCity-create-form__hint"
+          data-testid="virtualCity-create-time-ratio-hint"
+        >
+          ⏱ {t('virtualCity.timeRatioHint' as TKey, {
+            month: fmtCompactDuration(monthMsForTimeRatio(timeRatio)),
+            total: fmtCompactDuration(fullCycleMsForTimeRatio(timeRatio)),
+          })}
+          {timeRatio <= SEASON_TIP_MAX_RATIO && (
+            <>
+              <br />🍂 {t('virtualCity.timeRatioSeasonTip' as TKey)}
+            </>
+          )}
+        </p>
 
         {/* 随机种子 */}
         <label className="virtualCity-create-form__row">

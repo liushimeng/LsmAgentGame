@@ -5,6 +5,7 @@ import virtualCityResidents from './virtualCityResidents-en';
 import virtualCityBatch20 from './virtualCityBatch20-en';
 import virtualCityLinePool from './virtualCityLinePool-en';
 import virtualCityCityClock from './virtualCityCityClock-en';
+import virtualCityTimeWeather from './virtualCityTimeWeather-en';
 
 // English — en
 const en: Dict = {
@@ -1386,10 +1387,6 @@ const en: Dict = {
   'virtualCity.subtitle': 'Fully-agentic real-city simulator · residents live autonomously',
   'virtualCity.createRoom': 'Create City',
   'virtualCity.roomName': 'City Name',
-  'virtualCity.monthMs': 'Simulated month tick (ms)',
-  'virtualCity.monthMs.fast': '3s fast',
-  'virtualCity.monthMs.normal': '8s normal',
-  'virtualCity.monthMs.slow': '15s slow',
   'virtualCity.seed': 'Random seed',
   'virtualCity.join': 'Join',
   'virtualCity.spectate': 'Spectate',
@@ -1731,7 +1728,7 @@ const en: Dict = {
   'virtualCity.consumption.invalid': 'Invalid consumption level (must be 0-3)',
 
   // ── virtualCity split files (≤1800 line cap): P2 trading / P1-4 insurance / residents / batch20 / line pool ──
-  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock,
+  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather,
 
   // ── P1 Minsky Engine + LPR Reprice + Early Repayment ──
   'minsky.title': 'Minsky Financing Status',

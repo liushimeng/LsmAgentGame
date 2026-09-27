@@ -9,9 +9,17 @@
  * （0.70/1.10）整体缩放。原 variant a/b/c 贴图 Billboard 灯片在实例化下
  * 移除（灯头保留 emissive 暖光），StreetLight.tsx 文件保留可回退。
  * 路灯本就不投影阴影（castShadow=false 预算不变）。
+ *
+ * 批次 27 §4.3：灯头 emissiveIntensity 由 useFrame 读 cityTimeStore 的
+ * dayFactor01 联动（昼 0.15 → 夜 2.2 平滑渐变，~0.5s 时间常数）；
+ * 快照由 CityEnvironmentLayer 每帧转存，无快照（旧帧/挂载初期）= 白昼基准。
  */
 
+import { useRef } from 'react';
+import * as THREE from 'three';
+import { useFrame } from '@react-three/fiber';
 import { Instances, Instance } from '@react-three/drei';
+import { getDayNight } from '../cityTimeStore';
 
 export interface InstancedLamp {
   x: number;
@@ -35,6 +43,17 @@ const HEAD_Y = BASE_H + POLE_H + HEAD_H / 2;
 const SIDE_SCALE = 0.7 / 1.1;
 
 export function StreetLightsInstanced({ lamps }: { lamps: InstancedLamp[] }) {
+  // 批次 27：灯头材质 ref（emissiveIntensity 逐帧随 dayFactor01 渐变）。
+  const headMatRef = useRef<THREE.MeshStandardMaterial>(null);
+  useFrame((_state, delta) => {
+    const m = headMatRef.current;
+    if (!m) return;
+    const day = getDayNight()?.dayFactor01 ?? 1;
+    // 昼 0.15 → 夜 2.2（指数平滑逼近，避免天气/晨昏突变跳变）。
+    const target = 0.15 + (2.2 - 0.15) * (1 - day);
+    m.emissiveIntensity += (target - m.emissiveIntensity) * Math.min(1, delta * 2);
+  });
+
   const renderPart = (
     key: string,
     geometry: JSX.Element,
@@ -77,11 +96,12 @@ export function StreetLightsInstanced({ lamps }: { lamps: InstancedLamp[] }) {
         lamps,
         (s) => POLE_Y * s,
       )}
-      {/* ③ 灯头 ×N → 1 draw call（emissive 暖光，与 StreetLight 灯头一致） */}
+      {/* ③ 灯头 ×N → 1 draw call（emissive 暖光随昼夜：昼 0.15 → 夜 2.2，批次 27） */}
       {renderPart(
         'lamp-head',
         <boxGeometry args={HEAD_GEOM} />,
         <meshStandardMaterial
+          ref={headMatRef}
           color="#aaa9a0"
           emissive="#fff5b8"
           emissiveIntensity={0.55}

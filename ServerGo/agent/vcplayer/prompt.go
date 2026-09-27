@@ -147,9 +147,17 @@ func SystemPromptBlocks(card vctypes.CardBrief) []llmtypes.SystemBlock {
 // UserPrompt 渲染月度 user 消息(Agent 设计文档 §5 模板全文)。
 func UserPrompt(ctx *vctypes.GameContext, memText string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "【第 %d 个月 ｜ %d 岁 ｜ 周期:%s(LPR %.1f%%,CPI %.1f%%,预计还剩 %d 个月)】\n\n",
+	fmt.Fprintf(&b, "【第 %d 个月 ｜ %d 岁 ｜ 周期:%s(LPR %.1f%%,CPI %.1f%%,预计还剩 %d 个月)",
 		ctx.Month, ctx.Age, cyclePhaseCN(ctx.Cycle.Phase),
 		ctx.Cycle.LPR*100, ctx.Cycle.CPI*100, ctx.Cycle.MonthsLeft)
+	// 批次 27(§3.4):季节/天气样式信息(中文标签;空串省略,零回归)。
+	if ctx.Season != "" {
+		b.WriteString(" · " + ctx.Season)
+	}
+	if ctx.Weather != "" {
+		b.WriteString(" · " + ctx.Weather)
+	}
+	b.WriteString("】\n\n")
 
 	b.WriteString("■ 市场行情\n")
 	fmt.Fprintf(&b, "股票指数 %.2f 元/份;黄金 %d 元/克;新购债券年化 %.1f%%。\n",

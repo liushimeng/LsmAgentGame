@@ -50,7 +50,17 @@ export function modelUrl(category: ModelCategory, name: string): string {
 export const MODEL_NAMES = {
   civic: ['city_hall', 'comm_tower', 'water_tower', 'fire_station', 'police_station'] as const,
   vehicles: ['sedan', 'truck', 'bus', 'taxi'] as const,
-  nature: ['oak_tree', 'snow_mountain', 'pine_tree', 'cactus'] as const,
+  nature: [
+    'oak_tree',
+    'snow_mountain',
+    'pine_tree',
+    'cactus',
+    // 批次 27 季节橡树（3d_script/build_oak_tree_season.py，Z-up 直立贴地；
+    // EastForest 按 season 切换，缺失降级回 oak_tree）
+    'oak_tree_spring',
+    'oak_tree_autumn',
+    'oak_tree_winter',
+  ] as const,
   characters: ['pedestrian_walk'] as const,
   road: ['road_props'] as const,
   ocean: ['lighthouse', 'cargo_ship', 'sailboat'] as const,

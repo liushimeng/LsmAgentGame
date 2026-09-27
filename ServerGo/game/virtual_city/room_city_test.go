@@ -122,7 +122,7 @@ func TestStart_CityBackdropCreatedAndViewExposed(t *testing.T) {
 	// view 透出 + 池驱动座位 model_display。
 	cs := BuildClientState("room-city", 0, r.Engine(), r.SnapshotSeats(), r.SnapshotNicknames(),
 		r.SnapshotBotSeats(), r.SnapshotModelKeys(), r.SnapshotTranscripts(),
-		r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CityClockMs(), snap)
+		r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CityClockMs(), snap, nil)
 	if cs.City == nil || cs.City.ResidentCount != 5000 {
 		t.Fatalf("game.state.city missing: %+v", cs.City)
 	}
@@ -133,7 +133,7 @@ func TestStart_CityBackdropCreatedAndViewExposed(t *testing.T) {
 	}
 	cs2 := BuildClientState("room-nocity", 0, r2.Engine(), r2.SnapshotSeats(), r2.SnapshotNicknames(),
 		r2.SnapshotBotSeats(), r2.SnapshotModelKeys(), r2.SnapshotTranscripts(),
-		r2.GameStartedAtUnix(), r2.NextMonthAtUnix(), r2.CityClockMs(), r2.CitySnapshotView())
+		r2.GameStartedAtUnix(), r2.NextMonthAtUnix(), r2.CityClockMs(), r2.CitySnapshotView(), nil)
 	if cs2.City != nil {
 		t.Fatalf("resident_count=0 room must omit city block, got %+v", cs2.City)
 	}

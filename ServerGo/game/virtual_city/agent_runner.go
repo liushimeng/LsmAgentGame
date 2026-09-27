@@ -1104,6 +1104,15 @@ func BuildContextForAgent(r *VirtualCityRoom, seat int) (*vctypes.GameContext, b
 		openSurveyOpts = append([]string(nil), sv.Options...)
 	}
 
+	// 批次 27(§3.4):城市时间/季节/天气感知(中文标签)。本方法已持 r.mu,
+	// 直接用锁内变体 cityClockMsLocked 现算 —— §92a 禁止在此再取锁。
+	cityDate, seasonCN, weatherCN := "", "", ""
+	if clockMs := r.cityClockMsLocked(time.Now()); clockMs > 0 {
+		cityDate = time.UnixMilli(clockMs).In(cityEpochTZ).Format("2006-01-02 15:04")
+		seasonCN = seasonLabelZH[SeasonAt(clockMs)]
+		weatherCN = weatherLabelZH[weatherKindAt(r.seed, clockMs)]
+	}
+
 	return &vctypes.GameContext{
 		// 批次20(文档2 §4.3 / 文档3 A5/B4):三块预渲染小节(无信息 → "")。
 		SideMarketBrief: sideMarketBriefLocked(r, seat),
@@ -1129,6 +1138,8 @@ func BuildContextForAgent(r *VirtualCityRoom, seat int) (*vctypes.GameContext, b
 		OpenSurveyQuestion: openSurveyQ,
 		OpenSurveyOptions:  openSurveyOpts,
 		EconomyBrief:       ecoBrief,
+		// 批次 27(§3.4):城市时间/季节/天气感知。
+		CityDate: cityDate, Season: seasonCN, Weather: weatherCN,
 	}, true
 }
 

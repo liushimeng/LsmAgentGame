@@ -39,7 +39,7 @@ func TestBuildClientState_Desensitization(t *testing.T) {
 		[MaxSeats]string{"", "", "", "", "", "", "", ""},
 		[MaxSeats]BotTranscript{},
 		0, 0, 0,
-		nil,
+		nil, nil,
 	)
 	if cs == nil {
 		t.Fatalf("nil state")
@@ -67,7 +67,7 @@ func TestBuildClientState_SpectatorView(t *testing.T) {
 		[MaxSeats]string{"MeiTuan-model"},
 		[MaxSeats]BotTranscript{},
 		0, 0, 0,
-		nil,
+		nil, nil,
 	)
 	if cs.My != nil {
 		t.Errorf("spectator my should be nil")
@@ -98,7 +98,7 @@ func TestBuildClientState_NonViewerBotFiltered(t *testing.T) {
 		[MaxSeats]bool{true, true},
 		[MaxSeats]string{"model1", "model2"},
 		transcripts, 0, 0, 0,
-		nil,
+		nil, nil,
 	)
 	if len(cs.BotContexts) != 1 {
 		t.Errorf("non-spectator viewer 0 should see 1 bot ctx, got %d", len(cs.BotContexts))
@@ -121,7 +121,7 @@ func TestBuildClientState_JSONEncodable(t *testing.T) {
 		[MaxSeats]string{""},
 		[MaxSeats]BotTranscript{},
 		0, 0, 0,
-		nil,
+		nil, nil,
 	)
 	if _, err := json.Marshal(cs); err != nil {
 		t.Errorf("json marshal: %v", err)
@@ -158,7 +158,7 @@ func viewBatch20World(t *testing.T) *World {
 func viewBatch20State(w *World, viewer int) *ClientGameState {
 	return BuildClientState("room-b20", viewer, w, [MaxSeats]string{"u0", "u1", "u2"},
 		[MaxSeats]string{"", "", ""}, [MaxSeats]bool{}, [MaxSeats]string{},
-		[MaxSeats]BotTranscript{}, 0, 0, 0, nil)
+		[MaxSeats]BotTranscript{}, 0, 0, 0, nil, nil)
 }
 
 // TestView_SideMarket 顶层 side_market:仅含有经营者品类;seat 升序;份额归一。
