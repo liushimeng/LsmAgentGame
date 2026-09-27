@@ -468,12 +468,34 @@ ServerGo/static/assets/<name>-<hash8>.glb (Go embed.FS)
 | characters | pedestrian_walk (含 walk 动画 clip) | `3d_script/build_pedestrian.py` | 38 KB |
 | road | road_props (StreetLight_A/B/C 合并) | `3d_script/build_road_props.py` | 42 KB |
 
-### 27.3 三条硬约束
+### 27.3 硬约束
 
 1. **`.blend` 源文件不入库** —— `.gitignore` 已加 `*.blend` / `*.blend1`；本地美术保留 `.blend`，git 只入 `.py` + `.glb`
 2. **单 .glb ≤ 500 KB** —— 验收硬约束（CI 跑 `find ClientWeb/src/assets/models -name "*.glb" -size +500k`）
 3. **保留原程序化几何为 fallback** —— 每个接入组件必须包一层 `<Model url={...}>{原程序化几何}</Model>`，
    `.glb` 缺失/加载失败自动降级，零代码分支
+4. **单位 = 世界单位（1 单位 = 10 m）** —— GLB 一律按 `cityScale.METERS_PER_UNIT` 口径授权，
+   **禁止按"真实米"直接导出**（批次 26 的 10× 巨型雪山即此错）。
+5. **Blender 侧按 Z-up 摆放** —— 高度落在 Blender 的 Z 轴，经导出 Yup 转换后 three.js 里直立。
+   按"Y-up 摆放"写的老脚本导出后会**整体侧躺**（批次 19 的 11 个 GLB 即此错，2026-09-27 批次 29 修正）。
+6. **节点变换必须 identity —— 尺寸只能烘焙进顶点** —— `.glb` 内所有节点的 `scale` / `rotation` 须为默认值
+   （骨骼 / 蒙皮节点按规范豁免），原点 `minY = 0` 贴地、X/Z 居中。
+   ⚠️ 尺寸一旦挂在节点 `scale` 上，消费端 `RoadsideBins.collectPairs()` 的 `rootInv` 会**静默抵消**它
+   —— 批次 29 的"20 m 巨型垃圾桶"即此错，且**只量 `Box3.setFromObject`（含节点变换）判不出来**。
+   生产源在 `3d_script/__common__.py`（`make_box/make_cylinder` 用 `obj.scale` 表达尺寸、
+   `join_objects` 把首件 scale 留在结果节点上）；`export_glb()` 内已统一 `bake_transforms()` 兜住。
+   ⚠️ `export_apply=True` 是 **Apply Modifiers**，**不烘焙** object transform —— 脚本需自行 `transform_apply`。
+7. **GLB ≡ 程序化 fallback 同尺寸** —— 同一物件的两条渲染路径包围盒必须一致（可测不变量）。
+   尺寸唯一事实来源 = `ClientWeb/src/components/virtualCity/cityScale.ts::REAL_DIMS_M`（**真实米制**）。
+   改该表 = 同时改「Blender 脚本 + `.glb` + 前端两条路径」，**改动须三侧同步**。
+
+> **两个可执行护栏**（批次 29 起，把上述约定从"只写在实施记录里"变成门禁）：
+> - `3d_script/verify_glb_aabb.py` —— 22 个 GLB 全量校验（**世界 / 几何双口径** + 节点 scale identity
+>   + 直立 / 贴地），非零退出码即失败；**新增或重导资产后必跑**。
+> - `ClientWeb/src/engine3d/glbSizeGuard.ts` —— dev 态载入即校验，刻意在**被测节点局部系**量测
+>   （= 消费端 `rootInv` 后所见口径；这是唯一拦得住上述"挂节点"错法的量法），**只告警、绝不改几何**。
+>
+> 完整规约 + 两次事故复盘见 [`lag_docs/虚拟城市/已实现/29-统一度量衡/01-方案设计.md`](lag_docs/虚拟城市/已实现/29-统一度量衡/01-方案设计.md)。
 
 ### 27.4 命令模板（art-designer 工作流）
 
