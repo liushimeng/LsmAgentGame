@@ -23,7 +23,7 @@
  * 批次 24「真实马路与交通设施」（文档 24 §6）：
  *   - 红绿灯渲染职责移出本层：trafficSignalsForCity()（双端 + 环岛对角布点、
  *     A/B 相位组）交 VirtualCityCityMap → <TrafficSignals> 全局实例化 + 相位动画；
- *   - 新增 roadsideBinsForCity()（主干道 ≈6u 两侧交替 + 公交站台旁）；
+ *   - 新增 roadsideBinsForNetwork()（主干道 ≈6u 两侧交替 + 公交站台旁）；
  *   - busStopsForRoads 更名导出 busStopsForCity（站台旁垃圾桶布点复用）。
  *
  * 总 mesh 预算核算（批次 20 InstancedMesh 改造后结构实测口径）：
@@ -51,6 +51,7 @@ import { detectQualityTier } from '@/engine3d';
 import { DISTRICT_FLOORS, buildingHeight, spacing, u } from './cityScale';
 import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
 import { ROAD_WIDTH_MAIN } from './Road';
+import { FIRST_RING_RADIUS, type RoadSegment } from './roadNetwork';
 import { buildingsFor } from './building_layout';
 import { TreesInstanced } from './props/TreesInstanced'; // 批次 20 §3.3：TreeV3 逐实例 → 全局 InstancedMesh（形态同源）
 import { Vehicle } from './props/Vehicle';
@@ -440,51 +441,77 @@ function propsForDistrict(def: VirtualCityDistrictDef, idx: number): DistrictPro
 }
 
 /**
- * 16 · 阶段 S：双向车流编排。
- * 每条主干道正向 1 辆（district→origin，右行 +0.32/+0.36）；
- * len > 15 的再追加反向 1 辆（origin→district，laneOffset 取负，variant 错开）。
+ * 批次 31：全路网双向车流编排（设计文档 31 §4.5）。
+ *   - spoke（main）：正向 1 辆（district→origin，右行 +0.32/+0.36）；len > 15 追加反向 1 辆；
+ *   - connector：1 辆/条，仅 withExtra（high 档），上限 20；
+ *   - arterial：双向各 1 辆；edgeLink：外向 1 辆（区→高速）；均仅 withExtra（low 档
+ *     只保留 spoke 车流，控 draw call —— 实施记录二轮）。
+ * 速度口径照批次 30 P1-12：真实米/秒经 u() 换算 ÷ 路径长（市区 32~43 km/h）。
  */
-function vehiclesForRoads(districts: VirtualCityDistrictDef[]): RoadVehicle[] {
+function vehiclesForNetwork(segments: RoadSegment[], withExtra: boolean): RoadVehicle[] {
   const roads: RoadVehicle[] = [];
-  districts
-    .filter((d) => d.id !== 'finance')
-    .forEach((d, i) => {
-      const c = districtCenter(d.id);
-      const dx = -c.x;
-      const dz = -c.z;
-      const len = Math.sqrt(dx * dx + dz * dz);
-      if (len < MAIN_ROAD_MIN_LEN) return;
+  const speedMapMs = { sedan: 11, truck: 9, bus: 9, taxi: 12 };
+  let i = 0;
+  let connectorCount = 0;
+  for (const seg of segments) {
+    const [fx, fz] = seg.from;
+    const [tx, tz] = seg.to;
+    const dx = tx - fx;
+    const dz = tz - fz;
+    const len = Math.sqrt(dx * dx + dz * dz);
+
+    if (seg.cls === 'connector') {
+      if (!withExtra || connectorCount >= 20 || len < 1) continue;
+      connectorCount++;
       const variant = VEHICLE_VARIANTS[i % VEHICLE_VARIANTS.length];
-      // 批次 30 P1-12：speed 原是归一化 t/秒（外圈车道实测 123~140 km/h）——
-      // 改为「真实米/秒」经 u() 换算再除以路径长：市区 32~43 km/h。
-      const speedMapMs = { sedan: 11, truck: 9, bus: 9, taxi: 12 };
-      const speed = u(speedMapMs[variant]) / Math.max(1, len);
-      // 右行偏移：bus/truck 更宽，偏移略大
       const fwdOffset = variant === 'bus' || variant === 'truck' ? 0.36 : 0.32;
       roads.push({
-        from: [c.x, c.z],
-        to: [0, 0],
+        from: [fx, fz],
+        to: [tx, tz],
         variant,
-        speed,
+        speed: u(speedMapMs[variant]) / Math.max(1, len),
         phase: (i * 0.37) % 1,
         laneOffset: fwdOffset,
       });
-      // 对向车流（较长主干道才有，控制总量 ~20 辆）。
-      // 注意：laneOffset 取「行进方向右侧」语义，方向反转后世界侧自动翻转，
-      // 因此对向车传同样的正值（取负会落到同侧 → 对撞）。
-      if (len > 15) {
-        const backVariant = VEHICLE_VARIANTS[(i + 2) % VEHICLE_VARIANTS.length];
-        const backOffset = backVariant === 'bus' || backVariant === 'truck' ? 0.36 : 0.32;
-        roads.push({
-          from: [0, 0],
-          to: [c.x, c.z],
-          variant: backVariant,
-          speed: u(speedMapMs[backVariant]) / Math.max(1, len),
-          phase: ((i * 0.37) + 0.5) % 1,
-          laneOffset: backOffset,
-        });
-      }
+      i++;
+      continue;
+    }
+
+    // side 级 spoke（短放射路）不放车（现状口径：len < MAIN_ROAD_MIN_LEN 不放）
+    if (seg.kind !== 'main') continue;
+
+    // 批次 31 二轮：arterial / edgeLink 车流仅 high 档（low 档控 draw call）
+    if ((seg.cls === 'arterial' || seg.cls === 'edgeLink') && !withExtra) continue;
+
+    const variant = VEHICLE_VARIANTS[i % VEHICLE_VARIANTS.length];
+    // 右行偏移：bus/truck 更宽，偏移略大
+    const fwdOffset = variant === 'bus' || variant === 'truck' ? 0.36 : 0.32;
+    roads.push({
+      from: [fx, fz],
+      to: [tx, tz],
+      variant,
+      speed: u(speedMapMs[variant]) / Math.max(1, len),
+      phase: (i * 0.37) % 1,
+      laneOffset: fwdOffset,
     });
+    i++;
+    // 对向车流：spoke len > 15 追加 1 辆；arterial 双向各 1（对向即本条）。
+    // 注意：laneOffset 取「行进方向右侧」语义，方向反转后世界侧自动翻转，
+    // 因此对向车传同样的正值（取负会落到同侧 → 对撞）。
+    if ((seg.cls === 'spoke' && len > 15) || seg.cls === 'arterial') {
+      const backVariant = VEHICLE_VARIANTS[(i + 2) % VEHICLE_VARIANTS.length];
+      const backOffset = backVariant === 'bus' || backVariant === 'truck' ? 0.36 : 0.32;
+      roads.push({
+        from: [tx, tz],
+        to: [fx, fz],
+        variant: backVariant,
+        speed: u(speedMapMs[backVariant]) / Math.max(1, len),
+        phase: ((i * 0.37) + 0.5) % 1,
+        laneOffset: backOffset,
+      });
+      i++;
+    }
+  }
   return roads;
 }
 
@@ -492,8 +519,10 @@ function vehiclesForRoads(districts: VirtualCityDistrictDef[]): RoadVehicle[] {
  * 阶段 L 行道树：沿主干道等距布点（与路灯错相位 π/2 避免冲突）。
  * 批次 30 A5：株距 25 m（2.5u）→ 真实 9 m（REAL_SPACING_M.streetTree），
  * 道路两侧交替；scale 收敛 0.85~1.05（树形基准已归一 streetTree 9 m）。
+ * 批次 31：扩展到全路网 main 段（spoke + arterial + edgeLink；connector 为
+ * 9m 窄路不布树，防与对路树/楼群过密）。
  */
-function roadTreesForRoads(districts: VirtualCityDistrictDef[]): RoadTree[] {
+function roadTreesForNetwork(segments: RoadSegment[]): RoadTree[] {
   const trees: RoadTree[] = [];
   let a = hashStr('road-trees-v2') >>> 0;
   const rnd = () => {
@@ -503,14 +532,14 @@ function roadTreesForRoads(districts: VirtualCityDistrictDef[]): RoadTree[] {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 
-  districts
-    .filter((d) => d.id !== 'finance')
-    .forEach((d) => {
-      const c = districtCenter(d.id);
-      const dx = -c.x;
-      const dz = -c.z;
+  segments
+    .filter((s) => s.kind === 'main')
+    .forEach((s) => {
+      const [fx, fz] = s.from;
+      const [tx, tz] = s.to;
+      const dx = tx - fx;
+      const dz = tz - fz;
       const len = Math.sqrt(dx * dx + dz * dz);
-      if (len < MAIN_ROAD_MIN_LEN) return; // 仅主干道
       const treeSpacing = spacing('streetTree');
       const count = Math.max(2, Math.floor(len / treeSpacing));
       const nx = -dz / len;
@@ -520,8 +549,8 @@ function roadTreesForRoads(districts: VirtualCityDistrictDef[]): RoadTree[] {
         const t = i / (count + 1) + 0.25; // 错相位 π/2（路灯在 0.25 t 起步）
         if (t >= 1) continue;
         const side = i % 2 === 0 ? 1 : -1; // 两侧交替
-        const x = c.x + dx * t + nx * sideOffset * side;
-        const z = c.z + dz * t + nz * sideOffset * side;
+        const x = fx + dx * t + nx * sideOffset * side;
+        const z = fz + dz * t + nz * sideOffset * side;
         trees.push({
           x,
           z,
@@ -556,16 +585,21 @@ const SIGNAL_RING_RADIUS = 5.6;
 const SIGNAL_SIDE_OFFSET = ROAD_WIDTH_MAIN / 2 + 0.25;
 
 /**
- * 全城红绿灯布点（批次 24 §6.2）：
+ * 全城红绿灯布点（批次 24 §6.2 + 批次 31 一环路口扩展）：
  *   - 主干道（len ≥ MAIN_ROAD_MIN_LEN）双端 t=0.90 / t=0.10 各 1 座，立于受控
  *     车道行进方向右侧路缘（右行侧 = 行进向量 (dx,dz) 的 (dz,-dx)/len 侧，
  *     与 Vehicle laneOffset 同一右行语义），灯面朝来车；
  *   - 环岛路口：主干道放射线与 RING_RADIUS 圆交点对角 2 座（面向放射来车 = A 组、
  *     面向环岛来车 = B 组；环道按逆时针切向）；替代原 IntersectionSignals 的
  *     len<=12 硬编码（顺带修正其交点被镜像到环对侧的坐标 bug）；
- *   - 相位组：道路索引奇偶定 A / B；环岛 2 座固定 A/B 对置。
+ *   - 一环路路口（批次 31）：放射主路与一环路（FIRST_RING_RADIUS）交点，对角 2 座，
+ *     几何推导同环岛公式（半径换 R=20）；
+ *   - 相位组：道路索引奇偶定 A / B；环岛 / 一环路口 2 座固定 A/B 对置。
  */
-export function trafficSignalsForCity(districts: VirtualCityDistrictDef[]): TrafficSignalSpot[] {
+export function trafficSignalsForCity(
+  districts: VirtualCityDistrictDef[],
+  firstRingJunctionAngles: number[] = [],
+): TrafficSignalSpot[] {
   const out: TrafficSignalSpot[] = [];
   let mainIdx = 0;
   districts
@@ -620,6 +654,32 @@ export function trafficSignalsForCity(districts: VirtualCityDistrictDef[]): Traf
         phase: 'B',
       });
     });
+
+  // ④ 一环路路口（批次 31 §4.3）：放射主路与一环交点对角 2 座。
+  //  (ox,oz) = 径向外单位向量（交点角 atan2(z,x) 口径直接取 cos/sin）；
+  //  环道逆时针切向 t = (−oz, ox)，与环岛公式同构。
+  for (const ang of firstRingJunctionAngles) {
+    const ox = Math.cos(ang);
+    const oz = Math.sin(ang);
+    const jx = ox * FIRST_RING_RADIUS;
+    const jz = oz * FIRST_RING_RADIUS;
+    const tx = -oz;
+    const tz = ox;
+    // 面向放射来车（A 组）：位于放射正向车右行侧（junction − t·off），灯面朝径向外 o
+    out.push({
+      x: jx - tx * SIGNAL_SIDE_OFFSET,
+      z: jz - tz * SIGNAL_SIDE_OFFSET,
+      rotation: Math.atan2(ox, oz),
+      phase: 'A',
+    });
+    // 面向环道来车（B 组）：位于环道车右行侧（junction + o·off），灯面朝 −t
+    out.push({
+      x: jx + ox * SIGNAL_SIDE_OFFSET,
+      z: jz + oz * SIGNAL_SIDE_OFFSET,
+      rotation: Math.atan2(-tx, -tz),
+      phase: 'B',
+    });
+  }
   return out;
 }
 
@@ -638,38 +698,48 @@ const BIN_SPACING = spacing('trashCan');
 /** 垃圾桶横向偏移（主干道半宽 + 0.16，人行道外缘附近；§130 消重复）。 */
 const BIN_SIDE_OFFSET = ROAD_WIDTH_MAIN / 2 + 0.16;
 
+/** 线段长度（from→to）。 */
+function lenOf(s: { from: [number, number]; to: [number, number] }): number {
+  const dx = s.to[0] - s.from[0];
+  const dz = s.to[1] - s.from[1];
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
 /**
- * 全城路侧垃圾桶布点（批次 24 §5/§6）：
- *   - 主干道每 ≈6u 沿线、道路两侧交替（sideOffset = roadWidth/2 + 0.16），
+ * 全城路侧垃圾桶布点（批次 24 §5/§6 + 批次 31 全路网扩展）：
+ *   - 全部 main 段（spoke + arterial + edgeLink；connector 为 9m 窄路不布）
+ *     每 ≈6u 沿线、道路两侧交替（sideOffset = roadWidth/2 + 0.16），
  *     t 起点与路灯（2.5u 网格、起点 2.5）错开半格（起点 3.75）；
- *   - 每个公交站台旁（沿路向 +0.45）追加 1 个；
+ *   - 每个公交站台旁（沿路向 +0.45）追加 1 个（站台只在 spoke 上，不重复计入）；
  *   - variant 按布点顺序 green / blue 交替（确定性，无随机）。
  */
-export function roadsideBinsForCity(districts: VirtualCityDistrictDef[]): RoadsideBinSpot[] {
+export function roadsideBinsForNetwork(
+  segments: RoadSegment[],
+  busStops: Layout['busStops'],
+): RoadsideBinSpot[] {
   const out: RoadsideBinSpot[] = [];
   let seq = 0;
   const nextVariant = (): RoadsideBinSpot['variant'] => (seq++ % 2 === 0 ? 'green' : 'blue');
-  districts
-    .filter((d) => d.id !== 'finance')
-    .forEach((d) => {
-      const c = districtCenter(d.id);
-      const dx = -c.x;
-      const dz = -c.z;
-      const len = Math.sqrt(dx * dx + dz * dz);
+  segments
+    .filter((s) => s.kind === 'main')
+    .forEach((s) => {
+      const [fx, fz] = s.from;
+      const [tx, tz] = s.to;
+      const len = lenOf(s);
       if (len < MAIN_ROAD_MIN_LEN) return;
-      const ux = dx / len;
-      const uz = dz / len;
+      const ux = (tx - fx) / len;
+      const uz = (tz - fz) / len;
       const rx = uz; // 右行侧单位向量
       const rz = -ux;
       // 沿线：s = 3.75 + i·6（与路灯 2.5 网格错开 1.25 = 半格）；两端各留 ≥3u 给路口标线
       const count = Math.max(0, Math.floor((len - 3 - 3.75) / BIN_SPACING) + 1);
       for (let i = 0; i < count; i++) {
-        const s = 3.75 + i * BIN_SPACING;
-        if (s > len - 3) break;
+        const sAlong = 3.75 + i * BIN_SPACING;
+        if (sAlong > len - 3) break;
         const side = i % 2 === 0 ? 1 : -1; // 两侧交替
         out.push({
-          x: c.x + ux * s + rx * BIN_SIDE_OFFSET * side,
-          z: c.z + uz * s + rz * BIN_SIDE_OFFSET * side,
+          x: fx + ux * sAlong + rx * BIN_SIDE_OFFSET * side,
+          z: fz + uz * sAlong + rz * BIN_SIDE_OFFSET * side,
           rotation: Math.atan2(rx * side, rz * side),
           variant: nextVariant(),
         });
@@ -677,7 +747,7 @@ export function roadsideBinsForCity(districts: VirtualCityDistrictDef[]): Roadsi
     });
   // 每个公交站台旁追加 1 个（站台 rotation = atan2(dx,dz)，可还原路向 u=(sin,cos)；
   // 桶沿路向 +0.45 错开雨棚，站台本身只布在主干道上，无重复计入问题）
-  for (const bs of busStopsForCity(districts)) {
+  for (const bs of busStops) {
     out.push({
       x: bs.x + Math.sin(bs.rotation) * 0.45,
       z: bs.z + Math.cos(bs.rotation) * 0.45,
@@ -688,7 +758,7 @@ export function roadsideBinsForCity(districts: VirtualCityDistrictDef[]): Roadsi
   return out;
 }
 
-/** 主干道路侧公交站台（批次 24 起导出：roadsideBinsForCity 站台旁布桶复用）。 */
+/** 主干道路侧公交站台（批次 24 起导出：roadsideBinsForNetwork 站台旁布桶复用）。 */
 export function busStopsForCity(districts: VirtualCityDistrictDef[]): Layout['busStops'] {
   const out: Layout['busStops'] = [];
   districts
@@ -715,6 +785,8 @@ export function busStopsForCity(districts: VirtualCityDistrictDef[]): Layout['bu
 interface StreetPropsLayerProps {
   /** 城区静态表（v2.12 阶段 2 props 化；由 VirtualCityCityMap 注入 VIRTUAL_CITY_DISTRICTS）。 */
   districts: VirtualCityDistrictDef[];
+  /** 批次 31：全城道路网线段（roadNetwork.buildRoadNetwork 产出；车辆/行道树沿路网布点）。 */
+  segments: RoadSegment[];
 }
 
 /**
@@ -735,7 +807,7 @@ function capPedestrians(districtProps: DistrictProps[], cap: number): void {
   }
 }
 
-export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
+export function StreetPropsLayer({ districts, segments }: StreetPropsLayerProps) {
   // 批次 28 A4/A5：行人上限按质量档映射（high 110 / low 60，游戏侧策略；
   // detectQualityTier 读 GL 上下文，engine3d 不持有游戏字段）。
   const gl = useThree((s) => s.gl);
@@ -745,11 +817,12 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
   const layout = useMemo<Layout>(() => {
     const districtProps = districts.map((d, idx) => propsForDistrict(d, idx));
     capPedestrians(districtProps, pedCap);
-    const roadVehicles = vehiclesForRoads(districts);
-    const roadTrees = roadTreesForRoads(districts);
+    // 批次 31：车辆/行道树改沿全路网（connector 车流仅 high 档，上限 20）
+    const roadVehicles = vehiclesForNetwork(segments, tier === 'high');
+    const roadTrees = roadTreesForNetwork(segments);
     const busStops = busStopsForCity(districts);
     return { districtProps, roadVehicles, roadTrees, busStops };
-  }, [districts, pedCap]);
+  }, [districts, segments, pedCap]);
 
   // 批次 20 §3.3：区内树 + 行道树合并单一 InstancedMesh 集合（3 draw call）。
   // 批次 28 B2：kind 标记 —— 区内树 tree.park / 行道树 tree.road（物件信息按实例区分）。

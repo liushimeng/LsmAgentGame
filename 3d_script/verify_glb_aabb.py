@@ -80,10 +80,9 @@ TARGETS = {
     'civic/water_tower.glb':  dict(x=0.360, y=1.330, z=0.360, pivot='地面中心 minY=0'),
     'civic/police_station.glb': dict(x=1.210, y=0.660, z=0.700, pivot='地面中心 minY=0'),
     'civic/fire_station.glb': dict(x=1.810, y=0.850, z=0.800, pivot='地面中心 minY=0'),
-    # road_props.glb 一文件 3 盏路灯沿 X 排开 ⇒ 整体长轴 = X 属正确；直立性逐件判：
-    # 至少 3 个「主包围轴 = Y 且落地」的立体件（= 3 根竖杆），横臂/灯头不计。
-    'road/road_props.glb':    dict(x=3.130, y=1.200, z=None, axis='per_part_y', min_parts=3,
-                                   pivot='3 路灯沿 X 总跨；每盏杆竖直、地面 minY=0'),
+    # road_props.glb 原在此有判据（一文件 3 盏路灯沿 X 排开 ⇒ 整体长轴 = X 属正确；
+    # 直立性逐件判：至少 3 个「主包围轴 = Y 且落地」的立体件，横臂/灯头不计）。
+    # 批次 31：文件已删除（零消费点清理，设计 31 §4.2），判据随之移除。
     # trash_can.glb 一个文件含 2 只独立桶（x=0 / +0.12），目标值是**单桶**尺寸，
     # 故用 per_part 模式：对每个节点各求 AABB，取各轴最大值（而非整体包围盒）。
     'road/trash_can.glb':     dict(x=0.050, y=0.100, z=0.050, per_part=True, axis='per_part_y',

@@ -56,6 +56,8 @@ export const SCENE_TYPE_IDS: string[] = [
   'road.traffic-signal',
   'road.surface',
   'road.ring',
+  'road.first-ring',
+  'road.gate',
   'road.bridge',
   // 水系
   'water.canal',

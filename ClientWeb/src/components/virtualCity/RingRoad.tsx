@@ -5,15 +5,20 @@
  * 沥青贴图（缺失 → 纯色）+ 每段中央白色虚线条；与 len>MAIN_ROAD_MIN_LEN
  * 放射主干道交点外侧画停止线（批次 20 §3.2：阈值从写死 12 改为派生常量）。
  *
- * 分层：RING_Y = 0.017（主干道 0.015 之上），交叉处不 z-fighting。
+ * 分层：RING_Y = ROAD_SURFACE_Y + 0.002（主干道 0.015 之上），交叉处不 z-fighting。
+ *
+ * 批次 31 二轮（draw call 攻坚）：16 段路面 + 16 虚线 + 交点停止线合并为
+ * 3 个 mesh（mergeParts；UV u×2 平铺烘焙进几何，替代旧 texture.repeat [2,1]；
+ * 虚线/停止线白色走顶点色单材质）。原 ~66 mesh → 3 draw call。
  *
  * 契约：lag_docs/虚拟城市/已实现/16-3D城市WebGL质感与城市补全/02-架构设计 §5。
  */
 
 import { useMemo } from 'react';
+import * as THREE from 'three';
 import { streetTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/virtualCity';
 import { districtCenter, VIRTUAL_CITY_DISTRICTS } from '@/types/virtualCity';
-import { useSharedTexture, useSharedPBR, withPBR } from '@/engine3d';
+import { useSharedTexture, useSharedPBR, withPBR, mergeParts, type MergePart } from '@/engine3d';
 import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 import { ROAD_SURFACE_Y } from './cityScale';
 import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
@@ -22,8 +27,8 @@ import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
 const RING_RADIUS = 5.6;
 /** 环路宽度。 */
 const RING_WIDTH = 1.0;
-/** 环路 y（主干道 ROAD_Y=0.015 之上）。 */
-const RING_Y = ROAD_SURFACE_Y + 0.002; // 批次 30：不再硬编码 0.017，随路面基准派生
+/** 环路 y（主干道 ROAD_SURFACE_Y 之上；批次 30 随路面基准派生）。 */
+const RING_Y = ROAD_SURFACE_Y + 0.002;
 /** 边数（16 边形在该尺度下读作圆）。 */
 const SEGMENTS = 16;
 /** 每段搭接系数（防缝）。 */
@@ -34,43 +39,81 @@ interface Props {
   fallbackColor?: string;
 }
 
+/** 环段 matrix（照 FirstRingRoad 同构）。 */
+function segMatrix(cx: number, cz: number, y: number, theta: number): THREE.Matrix4 {
+  const m = new THREE.Matrix4().makeTranslation(cx, y, cz);
+  m.multiply(new THREE.Matrix4().makeRotationY(theta));
+  m.multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
+  return m;
+}
+
+function uTiledPlane(w: number, len: number, uvScaleX: number): THREE.BufferGeometry {
+  const g = new THREE.PlaneGeometry(w, len);
+  const uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * uvScaleX);
+  return g;
+}
+
+function mergeAndDispose(parts: MergePart[]): THREE.BufferGeometry | null {
+  if (!parts.length) return null;
+  const out = mergeParts(parts);
+  for (const p of parts) p.geo.dispose();
+  return out;
+}
+
 export function RingRoad({ fallbackColor = '#232b38' }: Props) {
+  // UV u×2 平铺已烘焙进合并几何 → 贴图 repeat 恒 [1,1]（防 ×2 叠加）
   const asphalt = useSharedTexture(streetTileUrl('asphalt_main'), {
     wrap: 'repeat',
-    repeat: [2, 1],
+    repeat: [1, 1],
   });
   // 18-X：路面 PBR（02 §2.3 行 8：asphalt_main，normalScale [0.5,0.5]）。
   const asphaltPbr = useSharedPBR(
     streetTileUrl('asphalt_main'),
     pbrNormalUrl('streets', 'asphalt_main'),
     pbrRoughUrl('streets', 'asphalt_main'),
-    { wrap: 'repeat', repeat: [2, 1], normalScale: [0.5, 0.5] },
+    { wrap: 'repeat', repeat: [1, 1], normalScale: [0.5, 0.5] },
   );
 
-
-  // 段参数：θ 取段中心角；segLen 加 8% 搭接
-  const segs = useMemo(() => {
-    const segLen = (2 * Math.PI * RING_RADIUS) / SEGMENTS * OVERLAP;
-    return Array.from({ length: SEGMENTS }, (_, i) => {
+  // ── 合并几何：16 路面（UV u×2 烘焙）+ 16 虚线 + 交点停止线（顶点色白）──
+  const merged = useMemo(() => {
+    const segLen = ((2 * Math.PI * RING_RADIUS) / SEGMENTS) * OVERLAP;
+    const pavements: MergePart[] = [];
+    const dashes: MergePart[] = [];
+    for (let i = 0; i < SEGMENTS; i++) {
       const theta = ((i + 0.5) / SEGMENTS) * Math.PI * 2;
-      return {
-        key: i,
-        cx: Math.cos(theta) * RING_RADIUS,
-        cz: Math.sin(theta) * RING_RADIUS,
-        rotY: theta,
-        len: segLen,
-      };
-    });
-  }, []);
-
-  // 放射主干道（len > MAIN_ROAD_MIN_LEN，批次 20 §3.2 派生化）与环的交点角
-  // （确定性；交点停止线）
-  const junctionAngles = useMemo(() => {
-    return VIRTUAL_CITY_DISTRICTS
+      const cx = Math.cos(theta) * RING_RADIUS;
+      const cz = Math.sin(theta) * RING_RADIUS;
+      pavements.push({
+        geo: uTiledPlane(RING_WIDTH, segLen, 2),
+        matrix: segMatrix(cx, cz, RING_Y, theta),
+      });
+      dashes.push({
+        geo: new THREE.PlaneGeometry(0.08, segLen * 0.5),
+        matrix: segMatrix(cx, cz, RING_Y + 0.001, theta),
+        color: '#e8eaee',
+      });
+    }
+    // 放射主干道（len > MAIN_ROAD_MIN_LEN，批次 20 §3.2 派生化）与环的交点角
+    // （确定性；交点停止线）
+    const stoplines: MergePart[] = VIRTUAL_CITY_DISTRICTS
       .filter((d) => d.id !== 'finance')
       .map((d) => districtCenter(d.id))
       .filter((c) => Math.sqrt(c.x * c.x + c.z * c.z) > MAIN_ROAD_MIN_LEN)
-      .map((c) => Math.atan2(c.z, c.x));
+      .map((c) => {
+        const ang = Math.atan2(c.z, c.x);
+        const r = RING_RADIUS + RING_WIDTH / 2 + 0.15;
+        return {
+          geo: new THREE.PlaneGeometry(0.9, 0.14),
+          matrix: segMatrix(Math.cos(ang) * r, Math.sin(ang) * r, RING_Y + 0.002, ang),
+          color: '#ffffff',
+        };
+      });
+    return {
+      pavements: mergeAndDispose(pavements),
+      dashes: mergeAndDispose(dashes),
+      stoplines: mergeAndDispose(stoplines),
+    };
   }, []);
 
   const roadMat = (
@@ -91,32 +134,24 @@ export function RingRoad({ fallbackColor = '#232b38' }: Props) {
 
   return (
     <group {...info}>
-      {segs.map((s) => (
-        <group key={`ring-seg-${s.key}`} position={[s.cx, 0, s.cz]} rotation={[0, s.rotY, 0]}>
-          {/* 路面（plane X=宽，Y=长 → rotation.x=-π/2 后长沿局部 Z） */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, RING_Y, 0]} receiveShadow>
-            <planeGeometry args={[RING_WIDTH, s.len]} />
-            {roadMat}
-          </mesh>
-          {/* 中央虚线（每段 1 条，全环成虚线环） */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, RING_Y + 0.001, 0]}>
-            <planeGeometry args={[0.08, s.len * 0.5]} />
-            <meshStandardMaterial color="#e8eaee" roughness={0.85} />
-          </mesh>
-        </group>
-      ))}
-      {/* 交点停止线（道路外侧：半径 R + RING_WIDTH/2 + 0.15） */}
-      {junctionAngles.map((ang, i) => {
-        const r = RING_RADIUS + RING_WIDTH / 2 + 0.15;
-        return (
-          <group key={`ring-stop-${i}`} position={[Math.cos(ang) * r, 0, Math.sin(ang) * r]} rotation={[0, ang, 0]}>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, RING_Y + 0.002, 0]}>
-              <planeGeometry args={[0.9, 0.14]} />
-              <meshStandardMaterial color="#ffffff" roughness={0.85} />
-            </mesh>
-          </group>
-        );
-      })}
+      {/* ① 环路面（16 段合并）→ 1 draw call */}
+      {merged.pavements && (
+        <mesh geometry={merged.pavements} receiveShadow>
+          {roadMat}
+        </mesh>
+      )}
+      {/* ② 中央虚线（16 段合并，顶点色白）→ 1 draw call */}
+      {merged.dashes && (
+        <mesh geometry={merged.dashes}>
+          <meshStandardMaterial vertexColors roughness={0.85} />
+        </mesh>
+      )}
+      {/* ③ 交点停止线（合并，顶点色白）→ 1 draw call */}
+      {merged.stoplines && (
+        <mesh geometry={merged.stoplines}>
+          <meshStandardMaterial vertexColors roughness={0.85} />
+        </mesh>
+      )}
     </group>
   );
 }

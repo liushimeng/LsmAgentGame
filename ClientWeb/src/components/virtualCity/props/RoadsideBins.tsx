@@ -19,7 +19,7 @@
  *   节点 scale 0.0375」，于是 instancedMesh 按单位几何渲染（全城桶放大 20 倍，
  *   用户所述"垃圾桶比汽车还大"的真因）。尺寸必须烘焙进顶点。
  *
- * 布点在 StreetPropsLayer::roadsideBinsForCity（主干道 ≈6u 两侧交替 +
+ * 布点在 StreetPropsLayer::roadsideBinsForNetwork（主干道 ≈6u 两侧交替 +
  * 公交站台旁），本组件只负责渲染，不含布点逻辑。
  */
 
@@ -155,7 +155,7 @@ function BinPairMesh({
 }
 
 interface Props {
-  /** 布点（StreetPropsLayer::roadsideBinsForCity 产出）。 */
+  /** 布点（StreetPropsLayer::roadsideBinsForNetwork 产出）。 */
   bins: RoadsideBinSpot[];
 }
 

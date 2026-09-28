@@ -80,7 +80,7 @@ export const REAL_DIMS_M = {
   trashCan: { x: 0.5, y: 1.0, z: 0.5, minY: 0 },
   /** 主干道路灯：杆高 12.00（含基座与灯头）。 */
   streetLight: { y: 12.0, minY: 0 },
-  /** 次干道路灯总高 7.00（road_props.glb 仅含主干道灯，此行为项目现行值）。 */
+  /** 次干道路灯总高 7.00（项目现行值；road_props.glb 已随批次 31 删除）。 */
   streetLightSide: { y: 7.0, minY: 0 },
 
   // ── 批次 30 新增（只增不改：旧值不动 ⇒ 无需重导 GLB）──
@@ -231,7 +231,8 @@ export const MODEL_AXIS_CONVENTIONS: Readonly<Partial<Record<RealDimKey, ModelAx
   // 下列 4 项均经 `<Model url={modelUrl(...)}>` **不带 sizeTarget** 直挂
   //（SouthOcean.tsx / NorthMountains.tsx）⇒ 护栏本就看不到它们；此处留档的是
   //「**即便**将来接入校验也不得声明 upright」的理由。
-  // streetLight / streetLightSide：`road/road_props.glb` 是**多物件合成 GLB**
+  // streetLight / streetLightSide：原 `road/road_props.glb` 是**多物件合成 GLB**
+  //   （批次 31 已删文件，此处留档豁免理由）
   //   （3 盏路灯沿 X 排布 ⇒ 场景盒 31.3×12.0×5.05，主导轴 = X 是"排布"而非"侧躺"）
   //   ⇒ 声明 upright 必然误报；判据 ⑤ 不可用于多物件合成 GLB（勿为迁就改断言语义）。
   // ocean/cargo_ship (68.2×14.2×10.4) · ocean/sailboat：长轴 X 即**正确摆放**

@@ -43,7 +43,7 @@
  * 批次 24「真实马路与交通设施」（文档 24 §6）：
  *   - RoadsLayer 追加 <TrafficSignals>（trafficSignalsForCity 布点：主干道双端 +
  *     环岛对角，全城实例化 ≈6 draw call + 16s 相位动画）与 <RoadsideBins>
- *     （roadsideBinsForCity 布点：主干道两侧 + 公交站台旁，GLB 实例化）；
+ *     （roadsideBinsForNetwork 布点：主干道两侧 + 公交站台旁，GLB 实例化）；
  *   - 旧 <TrafficLight>（StreetPropsLayer）与 <IntersectionSignals>（CivicLayer）
  *     渲染移除，两文件删除。
  *
@@ -80,15 +80,20 @@ import { StreetLightsInstanced } from './props/StreetLightsInstanced';
 import {
   StreetPropsLayer,
   trafficSignalsForCity,
-  roadsideBinsForCity,
+  roadsideBinsForNetwork,
+  busStopsForCity,
 } from './StreetPropsLayer';
 import { TrafficSignals } from './props/TrafficSignals';
 import { RoadsideBins } from './props/RoadsideBins';
+import { HighwayGates } from './props/HighwayGates';
 import { WaterPlane } from './props/WaterPlane';
 import { WaterMist } from './props/WaterMist';
 import { AtmosphereLayer } from './AtmosphereLayer';
 import { CityEdgeLayer } from './edge/CityEdgeLayer';
 import { RingRoad } from './RingRoad';
+import { FirstRingRoad } from './FirstRingRoad';
+import { RoadMarkings } from './RoadMarkings';
+import { buildRoadNetwork } from './roadNetwork';
 import { CanalBridges } from './CanalBridge';
 import { LandmarksLayer } from './LandmarksLayer';
 import { CloudLayer } from './props/CloudLayer';
@@ -209,46 +214,49 @@ function Ground() {
 }
 
 /**
- * 道路层：从每个非 finance 城区中心辐射到原点（金融 CBD）。
- * 主干道 vs 次干道按 from→to 距离判：len > MAIN_ROAD_MIN_LEN → main，否则 side
- * （批次 20 §3.2 派生化：80 时代写死 12 → W×0.15）。
+ * 道路层：批次 31「混合式路网」——放射主干道 + 邻接次干道 + 方格骨干 +
+ * 高速联络线（ROAD_NETWORK 单一事实来源，模块级一次性计算），
+ * 另挂一环路（FirstRingRoad r=20）与高速收费站（HighwayGates）。
+ * 主干道 vs 次干道按 kind 字段（批次 20 §3.2 派生阈值在 buildRoadNetwork 内应用）。
  */
+const ROAD_NETWORK = buildRoadNetwork(VIRTUAL_CITY_DISTRICTS, MAIN_ROAD_MIN_LEN);
+
 function RoadsLayer() {
-  const { roads, lamps, signals, bins } = useMemo(() => {
-    const list = VIRTUAL_CITY_DISTRICTS
-      .filter((d) => d.id !== 'finance')
-      .map((d) => {
-        const c = districtCenter(d.id);
-        const dx = 0 - c.x;
-        const dz = 0 - c.z;
-        const len = Math.sqrt(dx * dx + dz * dz);
-        return {
-          key: d.id,
-          from: [c.x, c.z] as [number, number],
-          to: [0, 0] as [number, number],
-          len,
-        };
-      });
-    const rs = list.map((r) => ({ ...r, kind: (r.len > MAIN_ROAD_MIN_LEN ? 'main' : 'side') as 'main' | 'side' }));
+  const { lamps, signals, bins } = useMemo(() => {
     // 批次 20 §3.3：全部道路的路灯点位汇总 → 全局 InstancedMesh（3 draw call）
-    const lampList = rs.flatMap((r) => lampsForRoad(r.from, r.to, r.kind));
-    // 批次 24：红绿灯（双端 + 环岛对角，A/B 相位组）与路侧垃圾桶布点汇总，
-    // 交 <TrafficSignals> / <RoadsideBins> 全局实例化渲染（风格照 lampsForRoad）。
-    const signalList = trafficSignalsForCity(VIRTUAL_CITY_DISTRICTS);
-    const binList = roadsideBinsForCity(VIRTUAL_CITY_DISTRICTS);
-    return { roads: rs, lamps: lampList, signals: signalList, bins: binList };
+    const lampList = ROAD_NETWORK.segments.flatMap((r) =>
+      lampsForRoad(r.from, r.to, r.kind),
+    );
+    // 批次 24：红绿灯（双端 + 环岛对角，A/B 相位组）+ 批次 31 一环路口；
+    // 路侧垃圾桶布点汇总，交 <TrafficSignals> / <RoadsideBins> 全局实例化渲染。
+    const signalList = trafficSignalsForCity(
+      VIRTUAL_CITY_DISTRICTS,
+      ROAD_NETWORK.firstRingJunctionAngles,
+    );
+    const binList = roadsideBinsForNetwork(
+      ROAD_NETWORK.segments,
+      busStopsForCity(VIRTUAL_CITY_DISTRICTS),
+    );
+    return { lamps: lampList, signals: signalList, bins: binList };
   }, []);
 
   return (
     <>
-      {roads.map((r) => (
+      {ROAD_NETWORK.segments.map((r) => (
         <Road
           key={r.key}
           from={r.from}
           to={r.to}
           kind={r.kind}
+          yOffset={r.yOffset}
         />
       ))}
+      {/* 批次 31：一环路（r=20 主路环 + 放射主路交点停止线，段合并 3 mesh） */}
+      <FirstRingRoad junctionAngles={ROAD_NETWORK.firstRingJunctionAngles} />
+      {/* 批次 31：全路网标线/人行道合并层（5 draw call，见 RoadMarkings） */}
+      <RoadMarkings segments={ROAD_NETWORK.segments} />
+      {/* 批次 31：高速联络线收费站（17 座龙门架 + 双亭，实例化 ≈5 draw call） */}
+      <HighwayGates gates={ROAD_NETWORK.gates} />
       <StreetLightsInstanced lamps={lamps} />
       {/* 批次 24：全城红绿灯（≈6 draw call，16s 相位：绿 6/黄 2/红 8，A/B 组错半周期） */}
       <TrafficSignals signals={signals} />
@@ -449,7 +457,7 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
         {/* P1-C：街道道具层（树 / 车辆 / 行人 / 标识 / 屋顶杂物）；
             v2.12 阶段 2：districts 由父层注入（props 化，适配 16 城区） */}
         <group userData={{ bucket: 'street-props' }}>
-          <StreetPropsLayer districts={VIRTUAL_CITY_DISTRICTS} />
+          <StreetPropsLayer districts={VIRTUAL_CITY_DISTRICTS} segments={ROAD_NETWORK.segments} />
         </group>
         {/* 批次 28 二轮：?debug=1 场景归因探针（__cityScene/__cityRenderer/__cityBreakdown） */}
         <SceneDebugProbe />

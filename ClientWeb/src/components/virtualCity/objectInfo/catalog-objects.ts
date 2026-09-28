@@ -293,6 +293,28 @@ export const OBJECT_ENTRIES: ObjectInfoEntry[] = [
     },
   },
   {
+    id: 'road.first-ring',
+    category: 'road',
+    icon: '🛞',
+    name: { 'zh-CN': '一环路', en: 'First Ring Road', ja: '一環路' },
+    desc: {
+      'zh-CN': '城市核心区的一环路，环绕内城各区，与放射主干道互通并设信号灯控，是城区的交通骨架。',
+      en: 'The First Ring Road encircling the inner city, interchanging with radial arterials under signal control — the backbone of urban traffic.',
+      ja: '内城を取り巻く一環路。放射主道と信号連動で接続され、市街交通の基幹を成す。',
+    },
+  },
+  {
+    id: 'road.gate',
+    category: 'road',
+    icon: '🚧',
+    name: { 'zh-CN': '高速收费站', en: 'Highway Toll Gate', ja: '高速料金所' },
+    desc: {
+      'zh-CN': '城市出入口的高速收费站，龙门架横跨联络线，右侧双收费亭，连通城区与环城高速。',
+      en: 'Toll gates at the city entrances: a gantry spans each connector road with twin booths, linking the city to the ring expressway.',
+      ja: '都市の出入り口にある高速料金所。ゲートが連絡線を跨ぎ、右側に二つの料金ブースが並び、市街と環状高速を結ぶ。',
+    },
+  },
+  {
     id: 'road.bridge',
     category: 'road',
     icon: '🌉',
