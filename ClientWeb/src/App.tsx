@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { AuthModal } from './components/auth/AuthModal';
@@ -31,6 +32,28 @@ import { ModelGameLogPage } from './pages/ModelGameLogPage';
 export default function App() {
   const isAuthenticated = useAuth((s) => s.isAuthenticated);
   const hasHydrated = useAuth((s) => s.hasHydrated);
+
+  // lsm.auth 损坏（非 JSON，如 '[object Object]'）超时兜底防黑屏 —— 主修复：
+  // zustand 4.5.7 persist 在 lsm.auth 非 JSON 时链尾 .catch 吞错且 hasHydrated 永不
+  // 置位（node 实测真实 4.5.7：即便 deserialize 返回 null 走成功路径，后置回调虽
+  // 执行、setHasHydrated(true) 虽被调用，deprecated options shim 双重包装下该 set
+  // 写入仍被覆盖，闸门照旧卡死）。此处 mount 后 ~1.5s 检查一次：正常路径 persist
+  // 同步 rehydrate 在模块加载时即完成，远早于此，不会误触发；仅当闸门被卡死时才
+  // 清坏 key 并强制抬闸，保证应用按未登录正常启动。必须放在下方 early return
+  // 之前（hooks 规则：无条件执行，否则闸门关闭的渲染会少调 hook 直接崩）。
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (useAuth.getState().hasHydrated) return; // 正常路径：persist 早已抬闸
+      try {
+        JSON.parse(localStorage.getItem('lsm.auth') || '');
+      } catch {
+        console.warn('[auth] lsm.auth 损坏且 hydration 卡死，清除坏 key 并强制抬闸');
+        localStorage.removeItem('lsm.auth');
+      }
+      useAuth.getState().setHasHydrated(true);
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // Avoid rendering the auth-modal/layout mismatch during Zustand persist
   // rehydration. Without this guard, the first paint after F5 can briefly

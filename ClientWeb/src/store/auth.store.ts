@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, type StorageValue } from 'zustand/middleware';
 import { authService } from '@/services/auth.service';
 import { setAuthToken } from '@/services/http';
 import { useI18nStore } from '@/store/i18n.store';
@@ -41,6 +41,19 @@ export interface AuthState {
   ) => Promise<void>;
   logout: () => Promise<void>;
   hydrateFromStorage: () => void;
+}
+
+/**
+ * auth persist 落盘字段形状（与下方 partialize 一一对应；persist 泛型 U 的锚点，
+ * 供自定义 deserialize 的返回类型引用）。
+ */
+interface AuthPersistedShape {
+  userId: string | null;
+  token: string | null;
+  expiresAt: number | null;
+  isAuthenticated: boolean;
+  userType: number | null;
+  myInviteCode: string | null;
 }
 
 /**
@@ -163,7 +176,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'lsm.auth',
-      partialize: (s) => ({
+      partialize: (s): AuthPersistedShape => ({
         userId: s.userId,
         token: s.token,
         expiresAt: s.expiresAt,
@@ -171,6 +184,30 @@ export const useAuthStore = create<AuthState>()(
         userType: s.userType,
         myInviteCode: s.myInviteCode,
       }),
+      // 健壮性安全网（lsm.auth 损坏防黑屏）：persist 默认 deserialize 就是
+      // JSON.parse，localStorage 被写成非 JSON（如 '[object Object]'）时抛错。
+      // zustand 4.5.7 persistImpl（esm/middleware.mjs）此时走链尾
+      // .catch((e) => postRehydrationCallback(undefined, e))：回调首参 state
+      // 为 undefined，下方 state?.setHasHydrated(true) 静默空转，且 .catch
+      // 吞错不打日志 → hasHydrated 永假 → App.tsx 的 hydration 闸门
+      //（if (!hasHydrated) return <div className="app-shell" />）永久卡住黑屏。
+      // 改为损坏时返回 null：4.5.7 对 falsy 反序列化值走「无持久化状态」成功路径
+      //（merge(undefined, 当前 state) 原样保留默认值，链尾 setItem() 还会用
+      // 干净默认值覆盖损坏的 lsm.auth 自愈）。
+      // ⚠️ 实测结论（node 同构真实 zustand 4.5.7）：此路径下后置回调虽执行、
+      // setHasHydrated(true) 虽被调用，但 deprecated options shim 双重包装下该 set
+      // 写入被后续覆盖，getState().hasHydrated 仍永假 —— 本 deserialize 的价值
+      // 仅是 console.warn + 触发 setItem 自愈覆盖坏 key；真正抬闸依赖 App.tsx 的
+      // 超时兜底（见 App.tsx mount 副作用）。null 不在声明返回类型内，按运行时
+      // 行为断言（依据 4.5.7 源码，见上）。
+      deserialize: (str) => {
+        try {
+          return JSON.parse(str) as StorageValue<AuthPersistedShape>;
+        } catch {
+          console.warn('[auth] lsm.auth 内容损坏（非 JSON），忽略持久化状态按未登录启动');
+          return null as unknown as StorageValue<AuthPersistedShape>;
+        }
+      },
       onRehydrateStorage: () => (state) => {
         // Mark hydration complete once persist has read storage.
         state?.setHasHydrated(true);
