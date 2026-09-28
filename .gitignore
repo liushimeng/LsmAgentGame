@@ -94,3 +94,5 @@ go-web-debug-tool/GoWebDebugTool
 *.blend
 *.blend1
 *.blend2
+# verify_glb_aabb --emit-json 量测产物（一次性，勿入库；留档写 lag_docs 文档）
+3d_script/glb_measured_dims.json

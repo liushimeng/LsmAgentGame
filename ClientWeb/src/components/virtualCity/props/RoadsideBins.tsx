@@ -196,15 +196,15 @@ export const RoadsideBins = memo(function RoadsideBins({ bins }: Props) {
   // 降级路径里 TrashCan 自带同 id 接线，子级 stopPropagation 不会双触发）。
   const lang = useI18nStore((s) => s.lang);
   const greenInfo = useObjectInfoProps('prop.trash-can', {
-    anchorY: 0.8,
+    anchorY: 0.2,
     extra: [{ label: 'category', value: ROADSIDE_CATEGORY.green[lang] }],
   });
   const blueInfo = useObjectInfoProps('prop.trash-can', {
-    anchorY: 0.8,
+    anchorY: 0.2,
     extra: [{ label: 'category', value: ROADSIDE_CATEGORY.blue[lang] }],
   });
   // 降级路径包裹组：绿蓝混布（程序化桶无绿变体），不挂「分类」行以免误导。
-  const fallbackInfo = useObjectInfoProps('prop.trash-can', { anchorY: 0.8 });
+  const fallbackInfo = useObjectInfoProps('prop.trash-can', { anchorY: 0.2 });
 
   // 降级：程序化 TrashCan，密度减半（隔一取一）。
   if (!glbData) {
@@ -218,8 +218,8 @@ export const RoadsideBins = memo(function RoadsideBins({ bins }: Props) {
               x={b.x}
               z={b.z}
               rotation={b.rotation}
-              // 程序化桶无绿变体：green→灰(1) / blue→蓝(0) 就近映射
-              variant={b.variant === 'blue' ? 0 : 1}
+              // 批次 30 P1-14 语义统一：green→绿·厨余(2) / blue→蓝·可回收(0)
+              variant={b.variant === 'blue' ? 0 : 2}
             />
           ))}
       </group>

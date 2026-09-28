@@ -155,8 +155,9 @@ const SHADOW_CAMERA_HALF = WORLD_SIZE * 0.5;
 const ORBIT_MAX_POLAR_ANGLE = 1.54;
 /** 街景漫游眼高：1.7m（u(1.7)，cityScale 世界标尺 1 单位 = 10 米）。 */
 const WALK_EYE_HEIGHT = u(1.7);
-/** 街景漫游移速：3 单位/秒 = 30 m/s（观光速度；Shift ×3 加速）。 */
-const WALK_SPEED = 3;
+/** 街景漫游移速：批次 30 P0-5 —— 原 3 单位/秒 = 30 m/s（108 km/h，比步行快 21×）
+ *  ⇒ 真实步速 u(1.5) = 1.5 m/s；Shift ×3 = 4.5 m/s 小跑（WalkControls 内置）。 */
+const WALK_SPEED = u(1.5);
 
 /** 小地图 / 面板 → 主场景的聚焦目标（null = 无聚焦请求）。 */
 export type VirtualCityFocusTarget = FocusTarget;
@@ -387,8 +388,10 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
 
   return (
     <div className="virtualCity-map-host">
+      {/* 批次 30 C：显式 near/far（three 缺省 1m/20km —— 1.7 m 眼高漫游下 1 m 内被裁、
+          far/near=20000 让路面 1~4 cm 分层偏置远距吃紧）。 */}
       <EngineCanvas
-        camera={{ position: CAMERA_START, fov: 45 }}
+        camera={{ position: CAMERA_START, fov: 45, near: 0.05, far: 800 }}
         debugGlobalName="__cityRenderInfo"
       >
         {/* 批次 27 §4.3：整段静态正午光 rig（Sky/fog/ambient/hemisphere/填充光/

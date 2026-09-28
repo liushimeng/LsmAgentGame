@@ -62,27 +62,29 @@ const OFF_COLOR: Record<SignalColor, THREE.Color> = {
   green: ON_COLOR.green.clone().multiplyScalar(0.15),
 };
 
-// ── 几何尺寸（米制经 u()；灯头中心高 ≈ u(5.5)）─────────────────────
-/** 立杆：半径 / 高。 */
-const POLE_GEOM: [number, number, number, number] = [u(0.14), u(0.14), u(7.0), 8];
-const POLE_Y = u(3.5);
+// ── 几何尺寸（米制经 u()；批次 30 P1-8 收紧：原灯箱 1.0×2.6×0.5 m + ⌀0.56 m 灯泡
+//    配 7 m 真实杆 ⇒ 头部 2.6× 过大；改真实 0.35×1.0×0.25 / ⌀0.30 @ 0.35、
+//    杆 ⌀0.15，总高取 cityScale.REAL_DIMS_M.trafficSignalPole = 5.5 m）─────
+/** 立杆：⌀0.15 × 高 5.50（= 表值总高，灯头不再越出）。 */
+const POLE_GEOM: [number, number, number, number] = [u(0.075), u(0.075), u(5.5), 8];
+const POLE_Y = u(2.75);
 /** 灯箱背板：宽 × 高 × 深（近黑箱体，挂杆前侧 local +z 偏移 FACE_OFF）。 */
-const HOUSING_GEOM: [number, number, number] = [u(1.0), u(2.6), u(0.5)];
-const HOUSING_Y = u(5.5);
+const HOUSING_GEOM: [number, number, number] = [u(0.35), u(1.0), u(0.25)];
+const HOUSING_Y = u(4.7);
 /** 出檐小檐口（灯箱顶沿微前出）。 */
-const VISOR_GEOM: [number, number, number] = [u(1.1), u(0.1), u(0.7)];
-const VISOR_Y = u(6.85);
+const VISOR_GEOM: [number, number, number] = [u(0.4), u(0.05), u(0.32)];
+const VISOR_Y = u(5.26);
 /** 灯箱/檐口 local +z 偏移（杆前侧，灯面朝 local +z）。 */
-const FACE_OFF = u(0.28);
-/** 灯泡半径 + 三灯竖排 y 偏移（红上 +0.8 / 黄中 0 / 绿下 −0.8，间隔 u(0.8)）。 */
-const BULB_R = u(0.28);
+const FACE_OFF = u(0.2);
+/** 灯泡半径 + 三灯竖排 y 偏移（红上 +0.35 / 黄中 0 / 绿下 −0.35，间隔 u(0.35)）。 */
+const BULB_R = u(0.15);
 const BULB_Y: Record<SignalColor, number> = {
-  red: HOUSING_Y + u(0.8),
+  red: HOUSING_Y + u(0.35),
   yellow: HOUSING_Y,
-  green: HOUSING_Y - u(0.8),
+  green: HOUSING_Y - u(0.35),
 };
-/** 灯泡 local +z 偏移（灯箱前面 u(0.53) 之外微凸）。 */
-const BULB_Z_OFF = u(0.59);
+/** 灯泡 local +z 偏移（灯箱前面 u(0.125) 之外微凸）。 */
+const BULB_Z_OFF = u(0.345);
 
 /** 信号（x, z, rotation=灯面朝向）→ 任意 local +z 偏移件的落点世界坐标。 */
 function facePoint(s: TrafficSignalSpot, zOff: number): [number, number] {

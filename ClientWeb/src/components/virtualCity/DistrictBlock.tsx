@@ -1,11 +1,14 @@
 /**
- * DistrictBlock — 单城区：8×8 底板（纹理缺失降级主色）+ 确定性伪随机楼群
- * （central_park 1-2 栋 pavilion，其余城区 4–6 栋）+ hover 信息卡（区名 / 房价 / 租金 / beta / 在区玩家数）。
+ * DistrictBlock — 单城区：8×8 底板（纹理缺失降级主色）+ 街墙楼群 + hover 信息卡
+ * （区名 / 房价 / 租金 / beta / 在区玩家数）。
  *
  * P1-B 改造：楼群渲染段由 inline boxGeometry 改为 <BuildingMesh />；
  * 13-3D优化 阶段 B：BuildingMesh 内部按 DISTRICT_ARCHETYPE 分发体块组合
  * （tower/slab/house/shed/pavilion，见 building_shapes.tsx），缺失 → 退色。
  *
+ * 批次 30 A2：楼群布局升格「街墙」（building_layout.buildingsFor：每区 8~14 栋、
+ * 贴街区边界留 3.5~6 m 退线），渲染改 <DistrictBuildings> **区级合并**
+ * （每区 1 墙体 mesh 多 group + 1 点缀 mesh，逐栋 hover 由不可见代理盒保留）。
  * 楼群高度映射 price_index（0.8–1.6 → 繁荣度 0–1，在城区楼层区间内插值，
  * 见 cityScale.ts DISTRICT_FLOORS）：繁荣期楼变高、萧条期变矮
  * = 可视化市场周期（前端架构文档 §3）。伪随机 **不用 Math.random**——seed 由
@@ -13,6 +16,8 @@
  *
  * 批次 27 §4.3：中央公园草地覆盖层按季节换贴图（seasonAssets 适配：
  * 夏 grass_tile / 春秋冬季节贴图，缺失回退 grass_tile），低频订阅不抖动布局。
+ * 批次 30 A3/P1-10：马路牙子 u(0.5)=50cm「黑框」→ 真实 15 cm 浅色路缘，
+ * 且 4 条经 building_shapes.mergeBoxes 合为 1 mesh（每区省 3 draw call）。
  */
 
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -21,7 +26,9 @@ import { Html } from '@react-three/drei';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import { districtTexture, districtTextureStem, groundTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/virtualCity';
-import { BuildingMesh, type BuildingSpec } from './BuildingMesh';
+import { buildingsFor } from './building_layout';
+import { DistrictBuildings } from './DistrictBuildings';
+import { mergeBoxes, type BoxSpec } from './building_shapes';
 import { DISTRICT_FLOORS, buildingHeight, u } from './cityScale';
 import { useSharedPBR, useSharedTexture, withPBR } from '@/engine3d';
 import { currentSeason, subscribeSeason } from './cityTimeStore';
@@ -34,50 +41,6 @@ import {
   type VirtualCityDistrictDef,
   type VirtualCityDistrictId,
 } from '@/types/virtualCity';
-
-// ── 确定性伪随机（FNV-1a hash + mulberry32；重渲染布局稳定）──────
-
-function hashStr(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// BuildingSpec 由 ./BuildingMesh 统一导出，此处不再重复定义
-
-/** 楼群布局（seed = district id；与 price_index 无关，仅高度随行情缩放）。
- *  13-3D优化 阶段 B：central_park 楼数 1-2 栋（pavilion 景观建筑，
- *  绿化交给 StreetPropsLayer 树群），其余城区不变 4-6 栋。 */
-function buildingsFor(def: VirtualCityDistrictDef): BuildingSpec[] {
-  const rnd = mulberry32(hashStr(def.id));
-  const isPark = def.id === 'central_park';
-  const count = isPark ? 1 + (rnd() < 0.5 ? 1 : 0) : 4 + Math.floor(rnd() * 3);
-  const out: BuildingSpec[] = [];
-  for (let i = 0; i < count; i++) {
-    // 3×2 网格 + 抖动，保证楼间留缝不重叠。
-    const col = i % 3;
-    const row = Math.floor(i / 3);
-    const gx = (col - 1) * 2.4 + (rnd() - 0.5) * 0.7;
-    const gz = (row - 0.5) * 2.6 + (rnd() - 0.5) * 0.7;
-    const w = 1.1 + rnd() * 0.8;
-    const d = 1.1 + rnd() * 0.8;
-    out.push({ x: gx, z: gz, w, d, factor: 0.6 + rnd() * 0.4, idx: i });
-  }
-  return out;
-}
 
 interface Props {
   def: VirtualCityDistrictDef;
@@ -97,6 +60,17 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
   const [hovered, setHovered] = useState(false);
   const texUrl = districtTexture(def.id);
   const buildings = useMemo(() => buildingsFor(def), [def]);
+  // 批次 30 A3/P1-10：四边路缘 mergeBoxes 合 1 mesh（真实 15 cm 高浅色路缘）。
+  const curbGeo = useMemo(() => {
+    const specs: BoxSpec[] = [
+      { x: 0, y: u(0.075), z: -3.95, w: 8.1, h: u(0.15), d: 0.18 },
+      { x: 0, y: u(0.075), z: 3.95, w: 8.1, h: u(0.15), d: 0.18 },
+      { x: -3.95, y: u(0.075), z: 0, w: 0.18, h: u(0.15), d: 8.1 },
+      { x: 3.95, y: u(0.075), z: 0, w: 0.18, h: u(0.15), d: 8.1 },
+    ];
+    return mergeBoxes(specs);
+  }, []);
+  useEffect(() => () => curbGeo.dispose(), [curbGeo]);
 
   // 14-3D渲染深化：共享贴图缓存（失败静默降级主色底板 —— 降级策略 §9）。
   const texture = useSharedTexture(texUrl);
@@ -225,18 +199,12 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
           />
         </mesh>
       )}
-      {/* 14-3D渲染深化：马路牙子 curb（底板四边窄条，模拟真实城区路缘） */}
-      {([
-        [0, -3.95, 8.1, 0.18],
-        [0, 3.95, 8.1, 0.18],
-        [-3.95, 0, 0.18, 8.1],
-        [3.95, 0, 0.18, 8.1],
-      ] as Array<[number, number, number, number]>).map(([cx, cz, cw, cd], i) => (
-        <mesh key={`curb-${i}`} position={[cx, 0.03, cz]}>
-          <boxGeometry args={[cw, u(0.5), cd]} />
-          <meshStandardMaterial color="#3a414c" roughness={0.9} />
-        </mesh>
-      ))}
+      {/* 14-3D渲染深化：马路牙子 curb（底板四边窄条）。
+          批次 30 A3/P1-10：原 u(0.5)=50 cm 高深色条读作「黑框棋盘格」⇒
+          真实路缘 15 cm + 浅色；4 条经 mergeBoxes 合 1 mesh（×32 区省 3 DC/区）。 */}
+      <mesh geometry={curbGeo} position={[0, 0.03, 0]}>
+        <meshStandardMaterial color="#7a828e" roughness={0.9} />
+      </mesh>
       {/* 选中 / 悬停描边 */}
       {(selected || hovered) && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
@@ -249,15 +217,8 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
           />
         </mesh>
       )}
-      {/* 楼群（P1-B：BuildingMesh 接管，单 box → 4 侧面 + 顶面） */}
-      {buildings.map((b, i) => (
-        <BuildingMesh
-          key={i}
-          spec={b}
-          def={def}
-          prosperity={prosperity}
-        />
-      ))}
+      {/* 楼群（批次 30 A2：街墙 8~14 栋 + DistrictBuildings 区级合并） */}
+      <DistrictBuildings specs={buildings} def={def} prosperity={prosperity} />
       {/* hover 信息卡（阶段 E：zIndexRange [30,0] 封顶 —— 不盖小地图 z40 /
           error banner z50；默认 16777271 会压住一切，契约 04 文档 §4） */}
       {hovered && (

@@ -14,7 +14,12 @@ import type { Lang } from '@/i18n';
 import { u, worldDims } from '../cityScale';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
-const BIN_COLORS = ['#3a78c8', '#8a8d96', '#c8453a']; // 蓝 / 灰 / 红（3 分类）
+/**
+ * 分类三色（批次 30 P1-14 语义统一）：0=蓝·可回收 / 1=灰·其他 / 2=绿·厨余
+ * —— 与 RoadsideBins 的 GLB 绿/蓝两变体同语义（绿=厨余 / 蓝=可回收），
+ * 程序化回退不再出现"同屏红桶 vs GLB 绿桶"两套口径。
+ */
+const BIN_COLORS = ['#3a78c8', '#8a8d96', '#4a9a55']; // 蓝 / 灰 / 绿
 
 /**
  * 桶尺寸取自 cityScale.REAL_DIMS_M.trashCan（⌀0.50 × H1.00 含盖，唯一事实来源；
@@ -32,7 +37,7 @@ const BIN_BODY_H = BIN.y - CAP_T;
 const BIN_CATEGORY: Record<0 | 1 | 2, Record<Lang, string>> = {
   0: { 'zh-CN': '可回收物（蓝）', en: 'Recyclable (blue)', ja: 'リサイクル（青）' },
   1: { 'zh-CN': '其他垃圾（灰）', en: 'General waste (grey)', ja: 'その他（灰）' },
-  2: { 'zh-CN': '有害垃圾（红）', en: 'Hazardous (red)', ja: '有害ゴミ（赤）' },
+  2: { 'zh-CN': '厨余垃圾（绿）', en: 'Kitchen waste (green)', ja: '生ごみ（緑）' },
 };
 
 interface Props {
@@ -49,9 +54,10 @@ export const TrashCan = memo(function TrashCan({ x, z, rotation = 0, variant = 0
   const H = BIN_BODY_H;
   const color = BIN_COLORS[variant];
   const lang = useI18nStore((s) => s.lang);
-  // anchorY：悬浮卡相对命中点的上浮（世界单位；≈ 桶高 × 6，与街具同量级）
+  // anchorY：悬浮卡相对命中点的上浮（批次 30 P1-14：原 0.6=6 m 对 1 m 高桶偏高 6×
+  // ⇒ 0.2=2 m 量级；与 RoadsideBins 同值）
   const info = useObjectInfoProps('prop.trash-can', {
-    anchorY: 0.6,
+    anchorY: 0.2,
     extra: [{ label: 'category', value: BIN_CATEGORY[variant][lang] }],
   });
 
@@ -63,9 +69,9 @@ export const TrashCan = memo(function TrashCan({ x, z, rotation = 0, variant = 0
         <cylinderGeometry args={[R, R * 0.92, H, 12]} />
         <meshStandardMaterial color={color} roughness={0.6} metalness={0.2} />
       </mesh>
-      {/* 顶盖（略外扩，色深一档） */}
+      {/* 顶盖（批次 30 P1-14：原 R*1.05 使 fallback ⌀0.525 超表值 +5.0% ⇒ 齐平 R） */}
       <mesh position={[0, H + CAP_T / 2, 0]}>
-        <cylinderGeometry args={[R * 1.05, R * 1.05, CAP_T, 6]} />
+        <cylinderGeometry args={[R, R, CAP_T, 6]} />
         <meshStandardMaterial color={color} roughness={0.5} metalness={0.3} />
       </mesh>
       {/* 投口标识：白色小条（前面） */}

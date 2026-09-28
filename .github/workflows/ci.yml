@@ -35,6 +35,11 @@
 # 编译与测试的硬约束依据 CLAUDE.md §4:
 #   - 涉及 ServerGo/ 的提交,go test ./... 必须通过;
 #   - 涉及 ClientWeb/ 的提交,tsc --noEmit 与 npm run build 必须成功。
+#
+# 2026-09-28 §批次30 护栏补接:
+#   - 恢复 scripts/ci/check_line_limit.sh(被 59336dfd6e 误删,§4 护栏自此失效);
+#   - 新增「GLB 资产度量衡护栏」:3d_script/verify_glb_aabb.py 全量 + .glb ≤500KB
+#     硬线(CLAUDE.md §27.3 一直写「必跑」,但 CI 从未跑过)。
 
 name: CI
 
@@ -188,5 +193,29 @@ jobs:
           fi
 
       # CLAUDE.md §4:单文件 ≤ 1800 行(带 baseline 棘轮,见脚本头注释)。
+      # ⚠️ 2026-09-28 批次 30 补回:scripts/ci/check_line_limit.sh 曾在
+      #   59336dfd6e「清理 scripts/ 目录冗余脚本」中被整体删除,而本步骤一直
+      #   引用它 ⇒ 自那时起 §4 护栏在 CI 上必然 `bash: 不存在` 报错(=护栏失效)。
+      #   现按 §27.3「护栏必须可执行」的精神恢复脚本本体,与本步骤重新接线。
       - name: 单文件行数上限 (§4)
         run: bash scripts/ci/check_line_limit.sh
+
+      # CLAUDE.md §27.3 两个可执行护栏:资产侧 AABB/节点变换校验 + 单件体积 ≤500KB。
+      # 批次 30 补接 —— 此前只写在 CLAUDE.md「必跑」,CI 从未跑过一次。
+      # verify_glb_aabb.py 为纯 stdlib(无需 Blender / 第三方依赖),退出码非 0 即失败。
+      - name: GLB 资产度量衡护栏 (§27.3)
+        run: |
+          python3 3d_script/verify_glb_aabb.py
+          over=$(find ClientWeb/src/assets/models -name '*.glb' -size +500k)
+          if [ -n "$over" ]; then
+            echo "❌ 超过 500KB 硬线的 .glb:"
+            echo "$over"
+            exit 1
+          fi
+          echo "✅ GLB 单件体积均 ≤ 500KB"
+
+      # 批次 30 新增:「前端尺寸表 ↔ 资产真值」交叉校验(批次 29 方案 §3.7 的欠账)。
+      # 此前同一个尺寸数字存在三处人工同步副本(cityScale.REAL_DIMS_M / build_*.py /
+      # verify_glb_aabb.py TARGETS),任一处漂移都不会有人发现 —— 本步把它们钉死。
+      - name: 尺寸表 ↔ 资产真值交叉校验 (§27.3)
+        run: python3 scripts/ci/crosscheck_glb_dims.py

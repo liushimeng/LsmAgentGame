@@ -62,6 +62,11 @@ export const MODEL_NAMES = {
     'oak_tree_winter',
   ] as const,
   characters: ['pedestrian_walk'] as const,
-  road: ['road_props'] as const,
+  // 批次 30：`road_props` 注销（§130「声明了却从不接线」）—— 全仓零消费点：
+  // 该 GLB 是 3 盏灯沿 X 排布的**合成 mesh**（单节点 RoadProps/单 mesh Cylinder，
+  // 无逐灯命名节点），无法做单灯实例化（measureNode 无从指定）；路灯实际由
+  // props/StreetLightsInstanced.tsx 程序化实例化。重生为逐灯命名节点后再注册。
+  // trash_can.glb 不在本清单（MODEL_NAMES 仅文档/类型用，glob 才是取 URL 的事实来源）。
+  road: [] as const,
   ocean: ['lighthouse', 'cargo_ship', 'sailboat'] as const,
 } as const;

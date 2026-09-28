@@ -28,7 +28,7 @@ import type { Texture } from 'three';
 import { streetTileUrl, pbrNormalUrl, pbrRoughUrl, type StreetTileName } from '@/assets/images/virtualCity';
 import type { InstancedLamp } from './props/StreetLightsInstanced';
 import { useSharedPBR, useSharedTexture, withPBR } from '@/engine3d';
-import { ROAD_SURFACE_Y } from './cityScale';
+import { ROAD_SURFACE_Y, spacing, u } from './cityScale';
 import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 
 interface Props {
@@ -53,45 +53,46 @@ function useStreetTile(
 }
 
 /** 主干道路面宽度（世界单位）。 */
-const ROAD_WIDTH_MAIN = 1.4;
+export const ROAD_WIDTH_MAIN = 1.4;
 /** 次干道路面宽度。 */
-const ROAD_WIDTH_SIDE = 0.9;
+export const ROAD_WIDTH_SIDE = 0.9;
 /** 人行道宽度（每侧）。 */
 const SIDEWALK_WIDTH = 0.25;
 /** 人行道砖纹贴图覆盖边长（0.25×0.25u 一块砖区）。 */
 const SIDEWALK_TILE = 0.25;
-/** 主干道路灯间距。 */
-const LAMP_SPACING_MAIN = 2.5;
-/** 次干道路灯间距（更稀）。 */
-const LAMP_SPACING_SIDE = 5.0;
+/** 主干道路灯间距（批次 30 A4：cityScale.REAL_SPACING_M.lampMain = 37 m，两侧交替）。 */
+const LAMP_SPACING_MAIN = spacing('lampMain');
+/** 次干道路灯间距（REAL_SPACING_M.lampSide = 50 m，两侧交替）。 */
+const LAMP_SPACING_SIDE = spacing('lampSide');
 /** 路面 y 抬高（避免 z-fighting with ground）；唯一事实来源在 cityScale.ROAD_SURFACE_Y
  *  （车辆/行人落地基准与之同源）。 */
 const ROAD_Y = ROAD_SURFACE_Y;
-/** 人行道 y 抬高（再高一点点）。 */
-const SIDEWALK_Y = ROAD_Y + 0.02;
+/** 人行道 y 抬高（批次 30 P1-10：+0.02=20cm 过高 → +0.012=12cm 真实路缘）。 */
+export const SIDEWALK_Y = ROAD_Y + 0.012;
 
 // ── 批次 24 标线几何常量（文档 24 §4 / §6.1）─────────────────────
 /** 双端斑马线中心 t（0=城区端，1=原点端）。 */
 const CROSSWALK_T = [0.08, 0.92] as const;
-/** 斑马线深度（沿路向，= crosswalk.png 覆盖 1.4×0.5）。 */
-const CROSSWALK_DEPTH = 0.5;
+/** 斑马线深度（沿路向；批次 30 P1-9：5 m 偏宽 → 真实 3.5 m）。 */
+const CROSSWALK_DEPTH = u(3.5);
 /** 停止线与斑马线内边缘间距。 */
 const STOPLINE_GAP = 0.04;
-/** 停止线尺寸（= stopline.png 覆盖 0.6×0.08）。 */
+/** 停止线尺寸（= stopline.png 覆盖 0.6×0.08；横跨半幅 ≈6 m 属真实量级，保留）。 */
 const STOPLINE_W = 0.6;
 const STOPLINE_D = 0.08;
 /** 停止线中心横向偏移（半幅中心：|x|=0.35，覆盖 [0.05,0.65] 半幅）。 */
 const STOPLINE_X = 0.35;
-/** 直行箭头尺寸（= arrow_straight.png 覆盖 0.28×0.56）。 */
-const ARROW_W = 0.28;
-const ARROW_L = 0.56;
+/** 直行箭头尺寸（批次 30 P1-9：2.8×5.6 m 过大占满车道 → 真实 ≈1.0×3.0 m）。 */
+const ARROW_W = u(1.0);
+const ARROW_L = u(3.0);
 /** 箭头与停止线后沿间距。 */
 const ARROW_GAP = 0.1;
 
 /**
  * 路灯阵列点位（批次 20 §3.3 从 Road 组件抽出为纯函数，世界坐标；
  * 由 VirtualCityCityMap 汇总全部道路后交给 <StreetLightsInstanced> 实例化渲染）。
- * 规则不变：沿 from→to 等距 lampSpacing，道路右侧 sideOffset 摆放；
+ * 批次 30 A4：间距取 cityScale.REAL_SPACING_M（主 37 m / 次 50 m），**两侧交替**
+ * （side = ±1 随 i 奇偶翻转，灯臂朝路面），消除旧「25 m 单侧密排」杆林；
  * 次干道 len < 8 不画。
  */
 export function lampsForRoad(
@@ -116,7 +117,8 @@ export function lampsForRoad(
     const nx = -dz / len; // normalized perpendicular
     const nz = dx / len;
     const sideOffset = roadWidth / 2 + 0.08;
-    out.push({ x: x + nx * sideOffset, z: z + nz * sideOffset, rot: angle, kind });
+    const side: 1 | -1 = i % 2 === 0 ? 1 : -1; // 两侧交替
+    out.push({ x: x + nx * sideOffset * side, z: z + nz * sideOffset * side, rot: angle, kind, side });
   }
   return out;
 }

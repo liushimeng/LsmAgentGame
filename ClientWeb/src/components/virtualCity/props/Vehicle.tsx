@@ -39,6 +39,7 @@ import { Billboard } from '@react-three/drei';
 import { propUrl } from '@/assets/images/virtualCity';
 import { modelUrl } from '@/assets/models';
 import { u, worldDims, sizeTargetFor, VEHICLE_GROUND_Y } from '../cityScale';
+import { getDayNight } from '../cityTimeStore';
 import { useSharedTexture } from '@/engine3d';
 import {
   type GroupedMergePart,
@@ -118,17 +119,30 @@ const REDUCED_MOTION =
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ── v2.13 阶段 D：车轮常量（米制经 cityScale.u() 换算）──────────
-/** 车轮半径 u(0.35) ≈ 0.35m，胎宽 u(0.2)。 */
-const WHEEL_R = u(0.35);
+/**
+ * 批次 30 P0-7：轮径/离地按车型走真实米制（原统一 r=u(0.35)=⌀0.70 m 对 bus/truck
+ * 过小、对 sedan 偏大，且轮/毂/镜外凸出车宽 ⇒ fallback 包围盒 Z 超表值 +14%）。
+ * 轿车 ⌀0.65 m / 离地 0.15 m；公交 ⌀1.0 m / 地板 0.35 m；卡车 ⌀1.0 m / 车架 1.1 m。
+ */
+const WHEEL_SPEC: Record<VehicleVariant, { r: number; clearance: number }> = {
+  sedan: { r: u(0.325), clearance: u(0.15) },
+  taxi:  { r: u(0.325), clearance: u(0.15) },
+  truck: { r: u(0.5),   clearance: u(1.1) },
+  bus:   { r: u(0.5),   clearance: u(0.35) },
+};
 const WHEEL_W = u(0.2);
 const WHEEL_COLOR = '#17191d';
-/** 车轮落位（相对车身中心）：车长 ±0.32×、车宽 ±0.5×。 */
-function wheelPositions(l: number, w: number): Array<[number, number, number]> {
+/**
+ * 车轮落位（相对车身中心）：车长 ±0.32×；z 向**内收**使轮外缘恰 = 车宽半
+ * （批次 30 P0-7：旧 z=±w/2 让胎宽探出车身 ⇒ 包围盒 Z = 2.08 vs 表值 1.82）。
+ */
+function wheelPositions(l: number, w: number, r: number): Array<[number, number, number]> {
+  const z = w / 2 - WHEEL_W / 2;
   return [
-    [+l * 0.32, WHEEL_R, +w / 2],
-    [+l * 0.32, WHEEL_R, -w / 2],
-    [-l * 0.32, WHEEL_R, +w / 2],
-    [-l * 0.32, WHEEL_R, -w / 2],
+    [+l * 0.32, r, +z],
+    [+l * 0.32, r, -z],
+    [-l * 0.32, r, +z],
+    [-l * 0.32, r, -z],
   ];
 }
 
@@ -156,14 +170,14 @@ const WIPER_COLOR = '#1f2733';
 /** 前挡风后倾角（rad，25°）。 */
 const WINDSHIELD_TILT = (25 * Math.PI) / 180;
 
-/** 轮毂落位：与车轮同 x/y，z 贴轮外侧（轮宽一半 + 毂片自身半厚）。 */
-function hubPositions(l: number, w: number): Array<[number, number, number]> {
-  const z = w / 2 + WHEEL_W / 2 + HUB_H / 2;
+/** 轮毂落位：与车轮同 x/y，z 贴轮外侧但**不越出车宽**（批次 30 P0-7）。 */
+function hubPositions(l: number, w: number, r: number): Array<[number, number, number]> {
+  const z = w / 2 - HUB_H / 2;
   return [
-    [+l * 0.32, WHEEL_R, +z],
-    [+l * 0.32, WHEEL_R, -z],
-    [-l * 0.32, WHEEL_R, +z],
-    [-l * 0.32, WHEEL_R, -z],
+    [+l * 0.32, r, +z],
+    [+l * 0.32, r, -z],
+    [-l * 0.32, r, +z],
+    [-l * 0.32, r, -z],
   ];
 }
 
@@ -242,6 +256,15 @@ export const Vehicle = memo(function Vehicle({
   const tRef = useRef(phase);
 
   useFrame((_state, delta) => {
+    // 批次 30 B2：车灯随昼夜（昼 0.25/0.35 → 夜 1.6/0.9；读 cityTimeStore 同源快照）。
+    const day = getDayNight()?.dayFactor01 ?? 1;
+    const nightK = 1 - day;
+    if (glassLampMaterials[1]) {
+      glassLampMaterials[1].emissiveIntensity = 0.25 + 1.35 * nightK;
+    }
+    if (glassLampMaterials[2]) {
+      glassLampMaterials[2].emissiveIntensity = 0.35 + 0.55 * nightK;
+    }
     const g = groupRef.current;
     if (!g) return;
     if (REDUCED_MOTION) return;
@@ -264,24 +287,25 @@ export const Vehicle = memo(function Vehicle({
     const qX = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
     const one = new THREE.Vector3(1, 1, 1);
     const solids: MergePart[] = [];
-    for (const [x, y, z] of wheelPositions(dims.l, dims.w)) {
+    const wheelR = WHEEL_SPEC[variant].r;
+    for (const [x, y, z] of wheelPositions(dims.l, dims.w, wheelR)) {
       solids.push({
-        geo: new THREE.CylinderGeometry(WHEEL_R, WHEEL_R, WHEEL_W, 12),
+        geo: new THREE.CylinderGeometry(wheelR, wheelR, WHEEL_W, 12),
         matrix: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), qX, one),
         color: WHEEL_COLOR,
       });
     }
-    for (const [x, y, z] of hubPositions(dims.l, dims.w)) {
+    for (const [x, y, z] of hubPositions(dims.l, dims.w, wheelR)) {
       solids.push({
         geo: new THREE.CylinderGeometry(HUB_R, HUB_R, HUB_H, 10),
         matrix: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), qX, one),
         color: HUB_COLOR,
       });
     }
-    // 雨刮 1 根（前挡风下沿横铺）+ 后视镜 ×2（前舱两侧）
+    // 雨刮 1 根（前挡风下沿横铺）+ 后视镜 ×2（前舱两侧，z 内收不越出车宽，P0-7）
     solids.push(boxPart(WIPER_X, WIPER_Y, WIPER_Z, dims.l * 0.22 + u(0.02), dims.h * 0.75 - u(0.13), 0, WIPER_COLOR));
     for (const side of [+1, -1]) {
-      solids.push(boxPart(MIRROR_X, MIRROR_Y, MIRROR_Z, dims.l * 0.2, dims.h * 0.88, side * (dims.w / 2 + u(0.03)), MIRROR_COLOR));
+      solids.push(boxPart(MIRROR_X, MIRROR_Y, MIRROR_Z, dims.l * 0.2, dims.h * 0.88, side * (dims.w / 2 - MIRROR_Z / 2), MIRROR_COLOR));
     }
     const glassLamps: GroupedMergePart[] = [
       // mat0 玻璃：前挡风（后倾 25°）+ 侧窗 ×2
@@ -297,7 +321,7 @@ export const Vehicle = memo(function Vehicle({
     ];
     return { solids: mergeParts(solids), glassLamps: mergeGrouped(glassLamps) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dims]);
+  }, [dims, variant]);
   useEffect(() => () => {
     detailGeos.solids.dispose();
     detailGeos.glassLamps.dispose();
@@ -328,18 +352,20 @@ export const Vehicle = memo(function Vehicle({
       {glbCloned ? (
         <primitive object={glbCloned} />
       ) : useSprite ? (
-        // 贴图 sprite：平面按车身尺寸，上下各留 3cm 余量（sprite 底边略入路面，既有行为）
-        <Billboard position={[0, dims.h / 2 + 0.03, 0]}>
+        // 贴图 sprite：平面按车身尺寸，上下各留 3 cm 余量（批次 30 P0-4：原 0.03/0.06
+        // 是**世界单位** = 30/60 cm，sprite 高 2.05 vs 车高 1.45（+41%）⇒ u() 归一）
+        <Billboard position={[0, dims.h / 2 + u(0.03), 0]}>
           <mesh>
             {/* 贴图平面与车身尺寸同步（含车底轮子余量） */}
-            <planeGeometry args={[dims.l, dims.h + 0.06]} />
+            <planeGeometry args={[dims.l, dims.h + u(0.06)]} />
             <meshBasicMaterial map={tex} transparent alphaTest={0.05} />
           </mesh>
         </Billboard>
       ) : (
-        // 几何车身（缺贴图 / 自定义涂装）：盒子底面贴地（y=0 起，轮子在 group 原点之上）
-        <mesh castShadow={false} position={[0, dims.h / 2, 0]}>
-          <boxGeometry args={[dims.l, dims.h, dims.w]} />
+        // 几何车身（缺贴图 / 自定义涂装）：车体底面 = 离地间隙（批次 30 P0-7：
+        // 轿车 0.15 m / 卡车车架 1.1 m），轮子露在间隙内，总高仍 = 表值 dims.h。
+        <mesh castShadow={false} position={[0, (dims.h + WHEEL_SPEC[variant].clearance) / 2, 0]}>
+          <boxGeometry args={[dims.l, dims.h - WHEEL_SPEC[variant].clearance, dims.w]} />
           {palette ? (
             // 六面材质：[+X 前, -X 后, +Y 顶, -Y 底, +Z, -Z]（同 building_shapes 口径）
             // roof → 车顶面；accent → 前后端；其余 body

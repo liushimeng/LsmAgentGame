@@ -86,8 +86,10 @@ function WaterTowerFallback() {
         <cylinderGeometry args={[u(0.04), u(0.04), u(8), 6]} />
         <meshStandardMaterial color="#5a6270" metalness={0.5} roughness={0.5} />
       </mesh>
+      {/* 批次 30 P0-1：横档 y 原为裸数字 2..7（世界单位 ⇒ 20~70 m 高空，包围盒 Y 超表值
+          5.3×）——与 CommTower.tsx 同类缺陷，经 u(y) 归一到米制（横档 2~7 m 沿梯）。 */}
       {[2, 3, 4, 5, 6, 7].map((y) => (
-        <mesh key={`rung-${y}`} position={[u(1.82), y, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <mesh key={`rung-${y}`} position={[u(1.82), u(y), 0]} rotation={[Math.PI / 2, 0, 0]}>
           <cylinderGeometry args={[u(0.025), u(0.025), u(0.14), 6]} />
           <meshStandardMaterial color="#5a6270" />
         </mesh>

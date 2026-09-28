@@ -23,7 +23,7 @@ import { DayNightCycle, EnvBinder, WeatherFX } from '@/engine3d';
 import type { DayNightSnapshot } from '@/engine3d';
 import { weatherSpriteUrl } from '@/assets/images/virtualCity';
 import { sample, setDayNight, weatherVisual } from './cityTimeStore';
-import type { CityWeatherKind } from './cityTimeStore';
+import type { CityWeatherKind, CitySeason } from './cityTimeStore';
 
 /** 分天气水平风力（世界单位/秒；雪受风最明显，暴雨/暴雪整体平推）。 */
 const WIND_BY_KIND: Partial<Record<CityWeatherKind, number>> = {
@@ -32,6 +32,14 @@ const WIND_BY_KIND: Partial<Record<CityWeatherKind, number>> = {
   storm: 5,
   snow: 1.5,
   blizzard: 7,
+};
+
+/** 批次 30 B4：季节 → 天空暖度（DayNightSample.warmth01；引擎只认暖度不认季节）。 */
+const SEASON_WARMTH: Record<CitySeason, number> = {
+  spring: 0.55,
+  summer: 0.65,
+  autumn: 0.8,
+  winter: 0.3,
 };
 
 function clamp01(v: number): number {
@@ -72,6 +80,8 @@ export function CityEnvironmentLayer({
       cloudiness01: s.weather === null ? 0 : vis.cloudOpacity,
       sunScale01: vis.sunScale,
       fogDensity01: vis.fogScale,
+      // 批次 30 B4：季节暖度驱动天穹色调（秋暖 / 冬冷）。
+      warmth01: SEASON_WARMTH[s.season] ?? 0.5,
     };
   }, []);
 

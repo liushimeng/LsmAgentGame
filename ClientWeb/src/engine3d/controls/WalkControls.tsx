@@ -51,9 +51,11 @@ function isTextEditingTarget(): boolean {
 }
 
 export function WalkControls({
-  eyeHeight = 0.17,
+  // 批次 30 结构清理：缺省值原为 0.17（= 游戏侧 u(1.7) 眼高，游戏度量渗入引擎层
+  // 违反 §2.1 硬约束 5）——改中立缺省 1.0，真实眼高由调用方显式传入。
+  eyeHeight = 1.0,
   bounds = 58,
-  speed = 3,
+  speed = 1,
   start = [0, 0],
   startYaw = 0,
 }: WalkControlsProps) {

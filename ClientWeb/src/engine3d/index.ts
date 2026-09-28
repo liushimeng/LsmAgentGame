@@ -63,6 +63,9 @@ export type {
   DayNightSample,
   DayNightSnapshot,
 } from './DayNightCycle';
+// 批次 30 B1：自写渐变天穹（四段色带 + 星 + 月；替代夜间恒白的 drei Sky）
+export { DayNightSky } from './DayNightSky';
+export type { DayNightSkyProps, DayNightSkyState } from './DayNightSky';
 export { WeatherFX } from './WeatherFX';
 export type { WeatherFXProps, WeatherSample } from './WeatherFX';
 

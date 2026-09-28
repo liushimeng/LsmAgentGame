@@ -48,8 +48,10 @@ import {
   type VirtualCityDistrictDef,
 } from '@/types/virtualCity';
 import { detectQualityTier } from '@/engine3d';
-import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
+import { DISTRICT_FLOORS, buildingHeight, spacing, u } from './cityScale';
 import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
+import { ROAD_WIDTH_MAIN } from './Road';
+import { buildingsFor } from './building_layout';
 import { TreesInstanced } from './props/TreesInstanced'; // 批次 20 §3.3：TreeV3 逐实例 → 全局 InstancedMesh（形态同源）
 import { Vehicle } from './props/Vehicle';
 import { PedestrianV3, type PedestrianV3Props } from './props/PedestrianV3';
@@ -182,8 +184,10 @@ const VEHICLE_VARIANTS: Array<'sedan' | 'truck' | 'bus' | 'taxi'> = ['sedan', 't
 export const PEDESTRIAN_TOTAL_CAP = 110;
 /** low 质量档行人上限（批次 28 A4：超出按表序裁尾部新区）。 */
 export const PEDESTRIAN_TOTAL_CAP_LOW = 60;
-/** 全城树（行道 + 区内）实例总量上限（超出按 hash 种子稳定截断，§3.3）。 */
-export const TREE_TOTAL_CAP = 550;
+/** 全城树（行道 + 区内）实例总量上限（超出按 hash 种子稳定截断，§3.3）。
+ *  批次 30 A5：行道树株距 25 m → 真实 9 m（REAL_SPACING_M.streetTree），
+ *  总量 550 → 1800（实例化 3+2 draw call 不变，仅实例数增加）。 */
+export const TREE_TOTAL_CAP = 1800;
 
 /**
  * 城区行人密度档位（按城区属性分档：核心 5-6 / 一般 3-4 / 郊区 2）。
@@ -295,19 +299,22 @@ function propsForDistrict(def: VirtualCityDistrictDef, idx: number): DistrictPro
       x: c.x + Math.cos(angle) * radius,
       z: c.z + Math.sin(angle) * radius,
       variant: TREE_VARIANTS[Math.floor(rnd() * TREE_VARIANTS.length)],
-      scale: isPark ? 0.8 + rnd() * 0.4 : 0.5 + rnd() * 0.5,
+      // 批次 30 P0-3：scale 0.5~1.2 × 旧 3.4 m 基准树 = 1.7~4.4 m「棒棒糖」——
+      // treeShape 基准已归一到 REAL_DIMS_M.streetTree（9 m），scale 收敛到 0.85~1.15。
+      scale: isPark ? 0.9 + rnd() * 0.25 : 0.85 + rnd() * 0.2,
     };
   });
 
-  // 1-2 个楼顶杂物
+  // 1-2 个楼顶杂物（批次 30 A2：锚点改挂街墙楼栋槽位 —— 旧「区中心半径 0.8~2.4」
+  // 在街墙布局下会悬在庭院半空；y 仍取楼层区间中值 ×0.9 的近似屋顶高）。
   const [minF, maxF] = DISTRICT_FLOORS[def.id];
   const roofY = buildingHeight((minF + maxF) / 2) * 0.9;
-  const rooftop: RooftopSpec[] = [0, 1].slice(0, 1 + (rnd() < 0.5 ? 1 : 0)).map(() => {
-    const angle = rnd() * Math.PI * 2;
-    const radius = 0.8 + rnd() * 1.6;
+  const bSpecs = buildingsFor(def);
+  const rooftop: RooftopSpec[] = [0, 1].slice(0, 1 + (rnd() < 0.5 ? 1 : 0)).map((k) => {
+    const anchor = bSpecs[(k + Math.floor(rnd() * bSpecs.length)) % bSpecs.length];
     return {
-      x: c.x + Math.cos(angle) * radius,
-      z: c.z + Math.sin(angle) * radius,
+      x: c.x + anchor.x + (rnd() - 0.5) * 0.6,
+      z: c.z + anchor.z + (rnd() - 0.5) * 0.6,
       variant: ROOFTOP_VARIANTS[Math.floor(rnd() * ROOFTOP_VARIANTS.length)],
       rotation: rnd() * Math.PI * 2,
       yOffset: roofY,
@@ -319,11 +326,11 @@ function propsForDistrict(def: VirtualCityDistrictDef, idx: number): DistrictPro
   if (def.id === 'suburb' || def.id === 'oldtown') {
     const panelCount = 1 + (rnd() < 0.5 ? 1 : 0);
     for (let i = 0; i < panelCount; i++) {
-      const angle = rnd() * Math.PI * 2;
-      const radius = 1.2 + i * 1.1;
+      // 批次 30 A2：同屋顶杂物，锚到街墙楼栋（防庭院悬空）
+      const anchor = bSpecs[(i + Math.floor(rnd() * bSpecs.length)) % bSpecs.length];
       solar.push({
-        x: c.x + Math.cos(angle) * radius,
-        z: c.z + Math.sin(angle) * radius,
+        x: c.x + anchor.x + (rnd() - 0.5) * 0.5,
+        z: c.z + anchor.z + (rnd() - 0.5) * 0.5,
         y: roofY * 0.72, // house 主体高 = 总高 ×0.7（坡顶下方贴合）
         rotation: rnd() * Math.PI * 2,
       });
@@ -340,7 +347,9 @@ function propsForDistrict(def: VirtualCityDistrictDef, idx: number): DistrictPro
     return {
       path,
       outfit: outfitPool[i % outfitPool.length],
-      speed: 0.3 + rnd() * 0.2,
+      // 批次 30 P1-12：speed 是世界单位/秒（= m/s × u()）——原 0.3~0.5 ⇒ 3~5.5 m/s
+      // 「滑步」，改真实步速 1.2~1.5 m/s。
+      speed: u(1.2) + rnd() * u(0.3),
       phase: (i + rnd()) / pedCount,
       stationary: isStationary,
     };
@@ -446,14 +455,17 @@ function vehiclesForRoads(districts: VirtualCityDistrictDef[]): RoadVehicle[] {
       const len = Math.sqrt(dx * dx + dz * dz);
       if (len < MAIN_ROAD_MIN_LEN) return;
       const variant = VEHICLE_VARIANTS[i % VEHICLE_VARIANTS.length];
-      const speedMap = { sedan: 0.07, truck: 0.04, bus: 0.05, taxi: 0.08 };
+      // 批次 30 P1-12：speed 原是归一化 t/秒（外圈车道实测 123~140 km/h）——
+      // 改为「真实米/秒」经 u() 换算再除以路径长：市区 32~43 km/h。
+      const speedMapMs = { sedan: 11, truck: 9, bus: 9, taxi: 12 };
+      const speed = u(speedMapMs[variant]) / Math.max(1, len);
       // 右行偏移：bus/truck 更宽，偏移略大
       const fwdOffset = variant === 'bus' || variant === 'truck' ? 0.36 : 0.32;
       roads.push({
         from: [c.x, c.z],
         to: [0, 0],
         variant,
-        speed: speedMap[variant],
+        speed,
         phase: (i * 0.37) % 1,
         laneOffset: fwdOffset,
       });
@@ -467,7 +479,7 @@ function vehiclesForRoads(districts: VirtualCityDistrictDef[]): RoadVehicle[] {
           from: [0, 0],
           to: [c.x, c.z],
           variant: backVariant,
-          speed: speedMap[backVariant],
+          speed: u(speedMapMs[backVariant]) / Math.max(1, len),
           phase: ((i * 0.37) + 0.5) % 1,
           laneOffset: backOffset,
         });
@@ -478,7 +490,8 @@ function vehiclesForRoads(districts: VirtualCityDistrictDef[]): RoadVehicle[] {
 
 /**
  * 阶段 L 行道树：沿主干道等距布点（与路灯错相位 π/2 避免冲突）。
- * 每 2.5 单位 1 棵；道路两侧交替（t 错开 0.5 间距）。
+ * 批次 30 A5：株距 25 m（2.5u）→ 真实 9 m（REAL_SPACING_M.streetTree），
+ * 道路两侧交替；scale 收敛 0.85~1.05（树形基准已归一 streetTree 9 m）。
  */
 function roadTreesForRoads(districts: VirtualCityDistrictDef[]): RoadTree[] {
   const trees: RoadTree[] = [];
@@ -498,10 +511,11 @@ function roadTreesForRoads(districts: VirtualCityDistrictDef[]): RoadTree[] {
       const dz = -c.z;
       const len = Math.sqrt(dx * dx + dz * dz);
       if (len < MAIN_ROAD_MIN_LEN) return; // 仅主干道
-      const count = Math.max(2, Math.floor(len / 2.5));
+      const treeSpacing = spacing('streetTree');
+      const count = Math.max(2, Math.floor(len / treeSpacing));
       const nx = -dz / len;
       const nz = dx / len;
-      const sideOffset = 1.4 / 2 + 0.35 + 0.3; // 道路外 + 路灯偏移 + 树位
+      const sideOffset = ROAD_WIDTH_MAIN / 2 + 0.35 + 0.3; // 道路外 + 路灯偏移 + 树位
       for (let i = 1; i <= count; i++) {
         const t = i / (count + 1) + 0.25; // 错相位 π/2（路灯在 0.25 t 起步）
         if (t >= 1) continue;
@@ -512,7 +526,7 @@ function roadTreesForRoads(districts: VirtualCityDistrictDef[]): RoadTree[] {
           x,
           z,
           variant: TREE_VARIANTS[Math.floor(rnd() * TREE_VARIANTS.length)],
-          scale: 0.6 + rnd() * 0.3,
+          scale: 0.85 + rnd() * 0.2,
           rotation: rnd() * Math.PI * 2,
         });
       }
@@ -537,8 +551,9 @@ export interface TrafficSignalSpot {
 
 /** 环岛半径（与 RingRoad RING_RADIUS 同标尺；IntersectionSignals 退役后此处为布点权威）。 */
 const SIGNAL_RING_RADIUS = 5.6;
-/** 灯杆离受控车道中心线的侧向距离（主干道半宽 0.7 + 路缘余量，立于右侧路缘）。 */
-const SIGNAL_SIDE_OFFSET = 0.95;
+/** 灯杆离受控车道中心线的侧向距离（主干道半宽 + 路缘余量，立于右侧路缘；
+ *  批次 30：半宽魔数改引 Road.ROAD_WIDTH_MAIN，§130 消重复）。 */
+const SIGNAL_SIDE_OFFSET = ROAD_WIDTH_MAIN / 2 + 0.25;
 
 /**
  * 全城红绿灯布点（批次 24 §6.2）：
@@ -617,10 +632,11 @@ export interface RoadsideBinSpot {
   variant: 'green' | 'blue';
 }
 
-/** 路侧垃圾桶间距（沿主干道 ≈6u 一对，两侧交替 → 单侧 ≈12u）。 */
-const BIN_SPACING = 6;
-/** 垃圾桶横向偏移（主干道半宽 0.7 + 0.16，人行道外缘附近）。 */
-const BIN_SIDE_OFFSET = 1.4 / 2 + 0.16;
+/** 路侧垃圾桶间距（沿主干道 ≈6u 一对，两侧交替 → 单侧 ≈12u；
+ *  批次 30 A1：值入 REAL_SPACING_M.trashCan = 60 m）。 */
+const BIN_SPACING = spacing('trashCan');
+/** 垃圾桶横向偏移（主干道半宽 + 0.16，人行道外缘附近；§130 消重复）。 */
+const BIN_SIDE_OFFSET = ROAD_WIDTH_MAIN / 2 + 0.16;
 
 /**
  * 全城路侧垃圾桶布点（批次 24 §5/§6）：
@@ -686,7 +702,7 @@ export function busStopsForCity(districts: VirtualCityDistrictDef[]): Layout['bu
       const t = 0.35;
       const nx = -dz / len;
       const nz = dx / len;
-      const sideOffset = 1.4 / 2 + 0.35;
+      const sideOffset = ROAD_WIDTH_MAIN / 2 + 0.35;
       out.push({
         x: c.x + dx * t + nx * sideOffset,
         z: c.z + dz * t + nz * sideOffset,
@@ -834,9 +850,10 @@ export function StreetPropsLayer({ districts }: StreetPropsLayerProps) {
   );
 }
 
-// 注：V1 Pedestrian / PedestrianV2 / Tree / TreeV2 / TreeV3 / StreetLight 组件文件仍保留在
-// props/ 目录（契约要求保留，未来如需回退可 import）。
+// 注（批次 30 死文件清理）：V1 Pedestrian / PedestrianV2 / Tree / TreeV2 /
+// StreetFurniture / StreetLight 六个零引用组件文件已删除（git grep 确认后 rm，
+// tsc + npm run build 通过）；TreeV3.tsx 保留 —— 其 treeSeed/treeShape/TRUNK_GEOM
+// 等是 TreesInstanced 的形态同源导出（组件本体不渲染）。
 // 行人：V3（PedestrianV3）逐体动画 mixer，批次 20 不实例化（总上限 110）。
 // 树：批次 20 §3.3 起改走 TreesInstanced（形态与 TreeV3Fallback 同源 treeSeed/treeShape）。
 // 路灯：批次 20 §3.3 起由 VirtualCityCityMap 汇总点位走 StreetLightsInstanced。
-// V1 Pedestrian 仍由原 props/Pedestrian.tsx 导出，本层不再引用。

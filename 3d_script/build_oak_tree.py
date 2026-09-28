@@ -2,7 +2,22 @@
 """
 build_oak_tree — 橡树（oak_tree）Blender headless 导出脚本（19-Blender3D模型集成）。
 
-约定：y=上；pivot 在 (0, 0, 0) 地面中心。
+⚠️ **已废弃（勿用于重导）**：本脚本按「作者自定 Y-up」建模（约定 y=上），经 glTF Yup
+  转换 (x,y,z)_b → (x,z,-y)_g 后导出的 GLB **侧躺**（树体横躺在 -Z，实测 y∈[-0.25,0.25]）。
+  仓库里的 nature/oak_tree.glb 已由 build_oak_tree_season.py（stem=oak_tree 的「夏」变体）
+  重导修正；四季橡树（oak_tree / _spring / _autumn / _winter）一律走 build_oak_tree_season.py。
+  保留本文件仅为历史对照（批次 19 原版）；若要复活它，先读 CLAUDE.md §27.3 第 5 条
+  （Blender 侧必须 Z-up 摆放，Y-up 老脚本导出即侧躺）。
+
+⚠ 单位契约（CLAUDE.md §27.3，与 build_cactus.py 一致）：
+  - **米 → 世界单位 = ×0.1**（1 世界单位 = 10 m）。
+  - 唯一事实来源 = 前端 `ClientWeb/src/components/virtualCity/cityScale.ts::METERS_PER_UNIT`。
+  - **尺寸必须烘焙进顶点**，不得挂在 object transform 上（`__common__.export_glb` 已统一
+    `bake_transforms()`）。
+  - **导出节点 scale 必须 identity**——消费端 `<Model>` 零旋转零 scale 直挂。
+  （本脚本常量量级即世界单位：整树 ~1.0 世界单位 ≈ 10 m，与 build_oak_tree_season.py 同量级。）
+
+约定：y=上（**旧约定，已废弃**，见上）；pivot 在 (0, 0, 0) 地面中心。
 """
 import bpy
 import sys

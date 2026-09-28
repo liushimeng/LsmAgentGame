@@ -25,7 +25,7 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { u, worldDims, sizeTargetFor } from '../cityScale';
+import { u, worldDims, sizeTargetFor, DISTRICT_SURFACE_Y } from '../cityScale';
 import { useSharedGLTF, blenderModelsEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
@@ -33,7 +33,8 @@ import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 export interface PedestrianV3Props {
   /** 漫步路径折线（世界坐标 x,z；首尾不闭合，到端点折返）。 */
   path: Array<[number, number]>;
-  /** 步速（世界单位/秒，默认 0.55）；0 = 站定（中央公园看景）。 */
+  /** 步速（世界单位/秒；批次 30 P1-12 真实步速 1.2~1.5 m/s ⇒ 0.12~0.15，默认 1.4 m/s）；
+   *  0 = 站定（中央公园看景）。 */
   speed?: number;
   /** 0..3 四套服装色（商务蓝 / 休闲灰 / 亮色红 / 卡其）。 */
   outfit?: 0 | 1 | 2 | 3;
@@ -88,8 +89,13 @@ const LEG_X = u(0.07);
 /** 摆臂/摆腿振幅（rad）。 */
 const ARM_SWING = 0.35;
 const LEG_SWING = 0.45;
-/** 步态角频率系数（rad/s per 单位步速）：正常步速 ≈ 1.2 步频。 */
-const GAIT_OMEGA = 12;
+/**
+ * 步态角频率系数（rad/s per 单位步速）：ω = GAIT_OMEGA × speed。
+ * 批次 30 P1-12：speed 切到真实 1.4 m/s（0.14 世界单位/s）后，原 12 ⇒ 0.27 Hz
+ * 「慢动作踏步」——按步幅 ≈1.4 m/周期 反推 ω = speed×2π/1.4 ⇒ 系数 45，
+ * 正常步速 ≈ 1 Hz 周期（2 步/秒）。
+ */
+const GAIT_OMEGA = 45;
 
 /**
  * 求 path 上 t（0..1）处的位置与行进方向（forward=false 时逆序折返）。
@@ -137,7 +143,7 @@ function samplePath(
 }
 
 // 批次 28 A1：memo —— path（layout useMemo）/ speed / outfit / phase 全为稳定引用。
-export const PedestrianV3 = memo(function PedestrianV3({ path, speed = 0.55, outfit = 0, phase = 0 }: PedestrianV3Props) {
+export const PedestrianV3 = memo(function PedestrianV3({ path, speed = u(1.4), outfit = 0, phase = 0 }: PedestrianV3Props) {
   // 19-Blender3D模型集成：.glb 模式优先级最高，绕过原 6 mesh + 摆臂逻辑
   const modelUrlStr = modelUrl('characters', 'pedestrian_walk');
   const blenderOn = blenderModelsEnabled();
@@ -238,7 +244,7 @@ export const PedestrianV3 = memo(function PedestrianV3({ path, speed = 0.55, out
       const start = path[0] ?? [0, 0];
       g.position.x = start[0];
       g.position.z = start[1];
-      g.position.y = 0;
+      g.position.y = DISTRICT_SURFACE_Y;
       stillLimbs();
       return;
     }
@@ -265,11 +271,12 @@ export const PedestrianV3 = memo(function PedestrianV3({ path, speed = 0.55, out
     const p = samplePath(path, segs, totalLen, tRef.current, forwardRef.current);
     g.position.x = p.x;
     g.position.z = p.z;
-    // 步态沉浮（沿 V2 幅度 u(0.04)）
-    g.position.y = Math.abs(Math.sin(elapsedRef.current * 4)) * u(0.04);
+    // 步态沉浮（沿 V2 幅度 u(0.04)；批次 30 P0-6：基线从 y=0 → DISTRICT_SURFACE_Y
+    // —— 旧基线把行人脚底压进路面 15~35 cm）
+    gaitRef.current += step * GAIT_OMEGA * speed;
+    g.position.y = DISTRICT_SURFACE_Y + Math.abs(Math.sin(gaitRef.current * 2)) * u(0.04);
     g.rotation.y = Math.atan2(p.dx, p.dz);
     // 摆肢反相：左臂 + 左腿反相、右半身再 +π
-    gaitRef.current += step * GAIT_OMEGA * speed;
     const s = Math.sin(gaitRef.current);
     if (armLRef.current) armLRef.current.rotation.x = s * ARM_SWING;
     if (armRRef.current) armRRef.current.rotation.x = -s * ARM_SWING;
@@ -282,7 +289,7 @@ export const PedestrianV3 = memo(function PedestrianV3({ path, speed = 0.55, out
   const info = useObjectInfoProps('actor.pedestrian', { anchorY: PED_H + 0.4 });
 
   return (
-    <group {...info} ref={groupRef} userData={{ bucket: 'pedestrians' }} position={[start[0], 0, start[1]]}>
+    <group {...info} ref={groupRef} userData={{ bucket: 'pedestrians' }} position={[start[0], DISTRICT_SURFACE_Y, start[1]]}>
       {/* 19-Blender3D模型集成：GLB 模式优先级最高（GLB 自带摆臂动画） */}
       {glbCloned ? (
         <primitive object={glbCloned} />

@@ -15,6 +15,7 @@ import { streetTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/virtua
 import { districtCenter, VIRTUAL_CITY_DISTRICTS } from '@/types/virtualCity';
 import { useSharedTexture, useSharedPBR, withPBR } from '@/engine3d';
 import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
+import { ROAD_SURFACE_Y } from './cityScale';
 import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
 
 /** 环路半径（世界单位；CBD 8×8 底板半宽 4.05 + curb，环内缘 5.1 不压底板）。 */
@@ -22,7 +23,7 @@ const RING_RADIUS = 5.6;
 /** 环路宽度。 */
 const RING_WIDTH = 1.0;
 /** 环路 y（主干道 ROAD_Y=0.015 之上）。 */
-const RING_Y = 0.017;
+const RING_Y = ROAD_SURFACE_Y + 0.002; // 批次 30：不再硬编码 0.017，随路面基准派生
 /** 边数（16 边形在该尺度下读作圆）。 */
 const SEGMENTS = 16;
 /** 每段搭接系数（防缝）。 */

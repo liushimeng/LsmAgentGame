@@ -19,12 +19,16 @@ import { Instances, Instance } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
 import { detectQualityTier } from '@/engine3d';
 import { useSynthPBR } from '../cityPbr';
-import { u } from '../cityScale';
 import { currentSeason, subscribeSeason } from '../cityTimeStore';
 import type { CitySeason } from '../cityTimeStore';
 import {
   TRUNK_COLOR,
   CROWN_COLORS,
+  TRUNK_GEOM,
+  TRUNK_Y,
+  BRANCH_GEOM,
+  BRANCH_Y,
+  BRANCH_R,
   treeSeed,
   treeShape,
 } from './TreeV3';
@@ -37,14 +41,6 @@ export interface InstanceTree {
   /** 批次 28 B2：行道树 / 区内园林树（catalog tree.road / tree.park 按实例区分）。 */
   kind?: 'road' | 'park';
 }
-
-/** 主干几何参数（= TreeV3Fallback 主干）。 */
-const TRUNK_GEOM: [number, number, number, number] = [u(0.09), u(0.13), u(1.6), 8];
-const TRUNK_Y = u(0.8);
-/** 分枝几何参数（= TreeV3Fallback 分枝）。 */
-const BRANCH_GEOM: [number, number, number, number] = [u(0.04), u(0.06), u(0.6), 6];
-const BRANCH_Y = u(1.4);
-const BRANCH_R = u(0.3);
 
 interface InstTrunk { key: string; ti: number; x: number; y: number; z: number; s: number }
 interface InstBranch extends InstTrunk { rotY: number }
@@ -63,13 +59,18 @@ function stableTruncate(trees: InstanceTree[], cap: number): InstanceTree[] {
   return kept.map((k) => k.t);
 }
 
-/** 批次 27 §4.3 季节树冠 tint（与逐实例 color 相乘；夏 #ffffff = 旧版观感）。 */
+/**
+ * 批次 27 §4.3 季节树冠 tint（与逐实例 color 相乘；夏 #ffffff = 旧版观感）。
+ * 批次 30 B4：秋/冬口径加深（秋金黄/赭橙、冬灰白），与 EastForest 季节橡树观感对齐。
+ */
 const SEASON_CROWN_TINT: Record<CitySeason, string> = {
   spring: '#bde3c0',
   summer: '#ffffff',
-  autumn: '#e8c99a',
-  winter: '#cfd8dc',
+  autumn: '#e0b060',
+  winter: '#d8dee4',
 };
+/** 冬季落叶冠幅收缩系数（疏冠观感）。 */
+const WINTER_CROWN_SHRINK = 0.72;
 
 // 批次 28 A1：memo —— trees（useMemo 布局）/ totalCap（常量）稳定，父层不重渲染。
 export const TreesInstanced = memo(function TreesInstanced({
@@ -203,7 +204,12 @@ export const TreesInstanced = memo(function TreesInstanced({
           metalness={0.05}
         />
         {crowns.map((c) => (
-          <Instance key={c.key} position={[c.x, c.y, c.z]} scale={c.r} color={c.color} />
+          <Instance
+            key={c.key}
+            position={[c.x, c.y, c.z]}
+            scale={c.r * (season === 'winter' ? WINTER_CROWN_SHRINK : 1)}
+            color={c.color}
+          />
         ))}
       </Instances>
     </group>

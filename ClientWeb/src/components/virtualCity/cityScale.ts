@@ -45,6 +45,14 @@ export const ROAD_SURFACE_Y = 0.015;
 export const VEHICLE_GROUND_Y = ROAD_SURFACE_Y + 0.005;
 
 /**
+ * 地块表面标高（世界单位）= DistrictBlock 底板顶面（y=0.02）。
+ * 批次 30 P0-6「落地基准三源统一」：站在**地块**上的物件（行人 / 街具）以此为
+ * 落位 y；路面系物件用 ROAD_SURFACE_Y / VEHICLE_GROUND_Y，人行道用
+ * SIDEWALK_Y（Road.tsx = ROAD_SURFACE_Y + 0.012）。禁止再出现第四个 0/0.02/0.035。
+ */
+export const DISTRICT_SURFACE_Y = 0.02;
+
+/**
  * 真实米制尺寸表（单位 = 米）—— **虚拟城市 3D 物件尺寸的唯一事实来源**。
  *
  * 与 art-designer 重导出 GLB 时使用的同一张表；`satisfies` 保证字段名受约束。
@@ -64,12 +72,25 @@ export interface RealDimsM {
 
 export const REAL_DIMS_M = {
   // ── 街具 ──
-  /** 分类垃圾桶：⌀0.50 × H1.00（含盖）。 */
+  /** 分类垃圾桶：⌀0.50 × H1.00（含盖）—— 批次 30 复核维持原值。
+   *  二进制级证据（raw accessor 顶点解析 + 3d_script/verify_glb_aabb.py）：
+   *  TrashCan_Green/Blue 节点跨度恰 0.050×0.100×0.050 world、minY=0、节点 scale
+   *  全 1 ⇒ GLB 路径 ⌀0.50；程序化 fallback 经 worldDims 同行表值，双路径一致。
+   *  （批次 30 曾误判 0.68 —— 系把改表后的 fallback 桶当成 GLB 实测，已回退。） */
   trashCan: { x: 0.5, y: 1.0, z: 0.5, minY: 0 },
   /** 主干道路灯：杆高 12.00（含基座与灯头）。 */
   streetLight: { y: 12.0, minY: 0 },
   /** 次干道路灯总高 7.00（road_props.glb 仅含主干道灯，此行为项目现行值）。 */
   streetLightSide: { y: 7.0, minY: 0 },
+
+  // ── 批次 30 新增（只增不改：旧值不动 ⇒ 无需重导 GLB）──
+  /**
+   * 城内行道树/园林树（程序化 fallback 归一目标；森林橡树 oakTree 10.1 m 同量级，
+   * 行道树取 9.0 m 高 / 4.5 m 冠幅 —— 批次 30 P0-3 修复「城内树 1.7~4.4 m 棒棒糖」）。
+   */
+  streetTree: { x: 4.5, y: 9.0, z: 4.5, minY: 0 },
+  /** 交通信号杆（杆 + 灯头总高 5.50；灯头尺寸见 TrafficSignals 消费点）。 */
+  trafficSignalPole: { y: 5.5, minY: 0 },
 
   // ── 车辆（长 X × 高 Y × 宽 Z）──
   sedan: { x: 4.6, y: 1.45, z: 1.82, minY: 0 },
@@ -103,6 +124,32 @@ export const REAL_DIMS_M = {
   policeStation: { x: 12.1, y: 6.6, z: 7.0, minY: 0 },
   fireStation: { x: 18.1, y: 8.5, z: 8.0, minY: 0 },
 } as const satisfies Record<string, RealDimsM>;
+
+/**
+ * 真实米制**间距**表（单位 = 米；批次 30 A1）。
+ *
+ * 与 REAL_DIMS_M 平行：尺寸表管"物件多大"，本表管"物件摆多密"。
+ * 消费端经 `spacing(key)` 换算世界单位；禁止组件内硬编码间距魔数。
+ */
+export const REAL_SPACING_M = {
+  /** 主干道路灯间距（单侧）；两侧交替布置 ⇒ 同侧实际 2×。 */
+  lampMain: 37,
+  /** 次干道路灯间距（单侧；两侧交替）。 */
+  lampSide: 50,
+  /** 行道树株距（两侧交替 ⇒ 同侧 2×；真实行道树 8~10 m，取 9）。 */
+  streetTree: 9,
+  /** 路侧垃圾桶沿线间距（两侧交替 ⇒ 单侧 120 m；公交站台旁另补 1 个）。 */
+  trashCan: 60,
+  /** 公交站台间距（主干道沿线）。 */
+  busStop: 500,
+} as const;
+
+export type RealSpacingKey = keyof typeof REAL_SPACING_M;
+
+/** 间距表值 → 世界单位。 */
+export function spacing(key: RealSpacingKey): number {
+  return u(REAL_SPACING_M[key]);
+}
 
 /** 尺寸表键（= 虚拟城市 3D 物件类别）。 */
 export type RealDimKey = keyof typeof REAL_DIMS_M;

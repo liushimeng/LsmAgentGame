@@ -20,7 +20,7 @@ import { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Sky as SkyImpl } from 'three-stdlib';
-import { isSoftwareRenderer } from './quality';
+import { isSoftwareRenderer, detectQualityTier, QUALITY_PRESETS } from './quality';
 
 export interface EnvBinderProps {
   /** Sky 太阳方向（归一化 ×100 量级，与场景主方向光同向观感最佳）。 */
@@ -53,8 +53,10 @@ export function EnvBinder({
     /** 统一释放（组件卸载时才调用——见文件头生命周期契约）。 */
     let cleanup: (() => void) | undefined;
     try {
-      if (isSoftwareRenderer(gl)) {
-        // 软件渲染器：跳过 PMREM（见 quality.ts），仅保留 scene 清理语义
+      if (isSoftwareRenderer(gl) || !QUALITY_PRESETS[detectQualityTier(gl)].envReflection) {
+        // 软件渲染器 / low 档（envReflection=false）：跳过 PMREM（批次 30 P1-11 接线
+        // quality.ts::envReflection —— 此前该开关声明了却从不接线，low 档关不掉 PMREM），
+        // 仅保留 scene 清理语义
         cleanup = () => {
           scene.environment = null;
           scene.environmentIntensity = 1.0;

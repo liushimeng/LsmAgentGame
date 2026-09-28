@@ -11,14 +11,45 @@ verify_glb_aabb — 虚拟城市 GLB 轴向 / 贴地 / 尺度 / 节点 identity 
   1. 直立   —— 主包围轴 = Y（唯一例外：ocean/cargo_ship 与 ocean/sailboat 长轴 = X 属正确
                摆放；nature/snow_mountain 为地形基准尺度，只报不判）。
   2. 贴地   —— minY = 0（cargo_ship / sailboat 为吃水线，允许 < 0）。
-  3. 尺寸   —— 对上表中的 12 个目标件，三条边逐一比对（容差 ±5%）。
+  3. 尺寸   —— 对 TARGETS 中的 18 个目标件，三条边逐一比对（容差 ±5%）。
+               余下 4 件（nature/snow_mountain + ocean/cargo_ship|sailboat|lighthouse）
+               为地形 / 船体 / 海洋 edge 层基准，尺寸**只报不判**（见 REPORT_ONLY_SIZE）。
   4. 节点   —— 无节点携带非 identity 的 scale / rotation（蒙皮 mesh 顶点受 bind matrix 支配、
                骨骼节点天然带旋转，故 joint 节点与带 skin 的 mesh 节点豁免）；平移只允许出现在
                上述两类节点上。消费端 <Model> 零旋转零 scale 直挂，靠的就是这条。
 
 用法：
-  python3 3d_script/verify_glb_aabb.py                # 扫 ClientWeb/src/assets/models/**.glb
-  python3 3d_script/verify_glb_aabb.py path/to.glb    # 只看指定文件
+  python3 3d_script/verify_glb_aabb.py                     # 全量 22 件，非零退出即失败
+  python3 3d_script/verify_glb_aabb.py path/to.glb         # 只看指定文件
+  python3 3d_script/verify_glb_aabb.py --emit-json         # 追加打印实测 AABB JSON（stdout）
+  python3 3d_script/verify_glb_aabb.py --emit-json /tmp/glb_dims.json
+  python3 3d_script/verify_glb_aabb.py --check-table 表.json   # 实测 vs 表值逐边比对（±5%）
+
+CI 门禁（批次 30 起；主 Agent 可直接接 .github/workflows/ci.yml）：
+  python3 3d_script/verify_glb_aabb.py                     # 全量 22 件，非零退出即失败
+  python3 3d_script/verify_glb_aabb.py --emit-json /tmp/glb_dims.json
+  find ClientWeb/src/assets/models -name '*.glb' -size +500k | grep . && exit 1   # 500KB 硬线
+
+--emit-json 输出（世界单位；键 = `<类别>/<名>`，无 .glb 后缀）：
+  { "<类别>/<名>": {
+      "world": [x,y,z],            # 判据口径（per_part 文件 = 单件最大尺寸）
+      "geo":   [x,y,z],            # 几何 accessor 口径（不施加节点变换）
+      "minY":  n,
+      "nodeScaleIssues": [...],    # 节点 scale ≠ 1 的告警（应恒为 []）
+      "per_part": { "<节点名>": {"world":[x,y,z], "geo":[x,y,z], "minY":n} } } }
+  ⚠ 该 json 是**一次性量测产物，不入库**（.gitignore 已含 3d_script/glb_measured_dims.json）；
+    需要留档时写进 lag_docs 文档，不要提交 json 本身。
+
+--check-table <json> 表格式（供前端 cityScale.ts::REAL_DIMS_M 等表做交叉校验，批次 29 方案 §3.7）：
+  {
+    "__unit__": "world",                      # 或 "m"（米制，比对前自动 ÷10）；默认 world
+    "nature/oak_tree": {"world": [0.450, 1.010, 0.470]},   # 或直接 [x,y,z] / {"x":..,"y":..,"z":..}
+    "nature/cactus":   [0.170, 0.290, 0.070]
+  }
+  键 = `<类别>/<名>`（推荐）、唯一 basename（如 `cactus`）、可带/不带 .glb 后缀；
+  某轴写 null 表示该轴不参与比对。任一轴偏差 > ±5% 或表项查无实测/有歧义 ⇒ 非零退出。
+  ⚠ 前端 REAL_DIMS_M 的 camelCase 键（oakTree/trashCan…）请先由前端侧改名为资产名再喂
+  （本工具不建第二份名字表，防两表漂移；对照表见 lag_docs 批次 30 的 03 文档）。
 """
 import glob
 import json
@@ -57,6 +88,18 @@ TARGETS = {
     # 故用 per_part 模式：对每个节点各求 AABB，取各轴最大值（而非整体包围盒）。
     'road/trash_can.glb':     dict(x=0.050, y=0.100, z=0.050, per_part=True, axis='per_part_y',
                                    min_parts=2, pivot='单桶 桶底 minY=0（两桶各自 minY=0）'),
+    # ── 植被（nature）—— 批次 30 补齐（原 12 件无尺寸判据，只过直立/贴地/节点 identity）──
+    # 表值来源：cityScale.ts::REAL_DIMS_M（米制）÷ 10 ≡ 批次 29 方案 §3.4-E。
+    # oak_tree 与 _spring / _autumn 三变体同尺寸；_winter 单列（落叶冠幅本就细，表值 = 资产真值）。
+    'nature/oak_tree.glb':        dict(x=0.450, y=1.010, z=0.470,
+                                       pivot='地面中心 minY=0（与 _spring/_autumn 同尺寸）'),
+    'nature/oak_tree_spring.glb': dict(x=0.450, y=1.010, z=0.470, pivot='地面中心 minY=0（三季变体同尺寸）'),
+    'nature/oak_tree_autumn.glb': dict(x=0.450, y=1.010, z=0.470, pivot='地面中心 minY=0（三季变体同尺寸）'),
+    'nature/oak_tree_winter.glb': dict(x=0.412, y=0.955, z=0.382,
+                                       pivot='冬季落叶冠幅细；表值 = 资产真值（批次 29 §3.4-E 单列）'),
+    # pine_tree 表值 = **资产现值**（5.4 m），非「真实云杉 8~12 m」拟值（批次 29 遗留 L3 已裁决）
+    'nature/pine_tree.glb':       dict(x=0.340, y=0.540, z=0.340, pivot='地面中心 minY=0；表值 = 资产现值'),
+    'nature/cactus.glb':          dict(x=0.170, y=0.290, z=0.070, pivot='地面中心 minY=0'),
 }
 
 # 直立判据的例外：长轴落在水平轴属正确摆放。
@@ -65,6 +108,20 @@ DOMINANT_AXIS_EXEMPT = {'ocean/cargo_ship.glb': 'X', 'ocean/sailboat.glb': 'X'}
 TERRAIN_BASELINE = {'nature/snow_mountain.glb'}
 # 吃水线：minY < 0 属正确。
 WATERLINE = {'ocean/cargo_ship.glb', 'ocean/sailboat.glb'}
+
+# ── 尺寸只报不判（批次 30 口径）────────────────────────────────────────────
+# 地形 / 船体 / 海洋 edge 层基准：有独立的浮沉、吃水、display-scale 约定，
+# 不是「物件」尺寸契约的适用对象（CLAUDE.md §27.3 判据 7「GLB ≡ fallback 同尺寸」
+# 只覆盖 REAL_DIMS_M 里的物件）。这 4 件仍跑几何≡世界、节点 identity、体积
+# 硬线；直立/贴地按**现状**保留（snow_mountain 走 TERRAIN_BASELINE 豁免、
+# cargo_ship/sailboat 走 x_flat + 吃水线、lighthouse 直立贴地照常判），
+# 尺寸不设目标值，只把实测值打出来留档（详见 lag_docs 批次 30 的 03 文档）。
+REPORT_ONLY_SIZE = {
+    'nature/snow_mountain.glb': '地形基准（批次 26）：前端 scale 6~10 出 150~250 m 变化，尺寸刻意非真实',
+    'ocean/cargo_ship.glb': '船体基准：吃水线 + 长轴 X；未入 REAL_DIMS_M（消费端 edge 层 display scale）',
+    'ocean/sailboat.glb': '船体基准：同 cargo_ship；未入 REAL_DIMS_M（批次 29 §3.4-F 冻结现状）',
+    'ocean/lighthouse.glb': '海洋 edge 层 display scale，未入 REAL_DIMS_M（批次 29 §3.4-F 冻结现状）',
+}
 
 SIZE_TOL = 0.05        # ±5%
 EPS = 1e-4
@@ -260,6 +317,7 @@ def check(path, rel):
     target = TARGETS.get(rel)
     exempt_axis = DOMINANT_AXIS_EXEMPT.get(rel)
     terrain = rel in TERRAIN_BASELINE
+    report_only = REPORT_ONLY_SIZE.get(rel)
 
     # 判据 (b)：几何（accessor）口径 —— 不加任何节点变换直接量顶点。
     # 世界的世界口径必须与它逐轴一致，否则说明「尺寸挂在节点变换上」
@@ -349,6 +407,9 @@ def check(path, rel):
             if abs(size_geo[i] - want) / want > SIZE_TOL:
                 problems.append('FAIL  几何口径尺寸 %s：%.4f 目标 %.3f'
                                 % (key.upper(), size_geo[i], want))
+    elif report_only:
+        notes.append('尺寸只报不判：%s（实测 X %.4f / Y %.4f / Z %.4f，见 --emit-json 可留档）'
+                     % (report_only, size[0], size[1], size[2]))
 
     # 4. 节点 identity（硬判据 = scale；软判据 = 非骨骼节点的 rotation/translation）
     if bad:
@@ -365,20 +426,170 @@ def check(path, rel):
         notes.append('动画 clip：%s（%d channels）'
                      % (', '.join(a.get('name', '?') for a in anims),
                         sum(len(a['channels']) for a in anims)))
+    # 逐节点明细（--emit-json 的 per_part）：world / geom_node_boxes 按构建顺序一一对应；
+    # 同名节点（road_props 的 3 盏灯都叫 RoadProps）加 #n 后缀消歧。
+    parts, seen = {}, {}
+    for (name, nlo, nhi), (_gname, gnlo, gnhi) in zip(node_boxes, box['geom_node_boxes']):
+        seen[name] = seen.get(name, 0) + 1
+        key = name if seen[name] == 1 else '%s#%d' % (name, seen[name])
+        parts[key] = dict(world=[nhi[i] - nlo[i] for i in range(3)],
+                          geo=[gnhi[i] - gnlo[i] for i in range(3)],
+                          minY=nlo[1])
     return problems, dict(size=size, lo=lo, hi=hi, notes=notes, details=details,
                           geom_lo=geo_lo, geom_hi=g_hi, size_geo=size_geo,
-                          kb=os.path.getsize(path) / 1024.0, target=target, rel=rel)
+                          kb=os.path.getsize(path) / 1024.0, target=target, rel=rel,
+                          parts=parts, node_scale_issues=list(bad))
+
+
+# ── --emit-json / --check-table ──────────────────────────────────────────
+def measured_payload(infos):
+    """infos（rel → check 结果）→ 任务书规定的 JSON 形状（世界单位）。"""
+    out = {}
+    for rel in sorted(infos):
+        info = infos[rel]
+        if not info:
+            continue
+        key = rel[:-4] if rel.endswith('.glb') else rel
+        out[key] = dict(
+            world=[round(v, 6) for v in info['size']],
+            geo=[round(v, 6) for v in info['size_geo']],
+            minY=round(info['lo'][1], 6),
+            nodeScaleIssues=list(info['node_scale_issues']),
+            per_part={k: dict(world=[round(v, 6) for v in p['world']],
+                              geo=[round(v, 6) for v in p['geo']],
+                              minY=round(p['minY'], 6))
+                      for k, p in info['parts'].items()},
+        )
+    return out
+
+
+def _lookup_info(key, infos):
+    """表键 → 实测结果。接受 `cat/name`、`cat/name.glb`、唯一 basename（如 `cactus`）。
+
+    注：前端 `REAL_DIMS_M` 的 camelCase 键（oakTree / trashCan …）不在映射范围——
+    本工具刻意**不建第二份名字表**（防两表漂移，批次 30 立项动机之一）；
+    前端侧 diff 脚本把键重命名为资产名（见 03 文档的对照表）后再喂进来。
+    """
+    rel = key if key.endswith('.glb') else key + '.glb'
+    if rel in infos:
+        return infos[rel], None
+    base = rel.split('/')[-1]
+    hits = [r for r in infos if r.split('/')[-1] == base]
+    if len(hits) == 1:
+        return infos[hits[0]], None
+    if len(hits) > 1:
+        return None, '表项 %s 有歧义（%d 个同名资产：%s），请写全 <类别>/<名>' % (
+            key, len(hits), ', '.join(sorted(hits)))
+    return None, '表项 %s 查无实测（键应为 <类别>/<名> 或唯一 basename，可带 .glb）' % key
+
+
+def _table_entry_xyz(raw):
+    """表值 → [x, y, z]（None = 该轴不比对）。接受 [x,y,z] / {"world":[..]} / {"x","y","z"}。"""
+    if isinstance(raw, (list, tuple)) and len(raw) == 3:
+        return list(raw)
+    if isinstance(raw, dict):
+        if 'world' in raw:
+            return list(raw['world'])
+        return [raw.get('x'), raw.get('y'), raw.get('z')]
+    return None
+
+
+def check_table(table_path, infos):
+    """实测 vs 外部表值逐边比对（±5%）。返回 problem 列表（空 = 通过）。
+
+    这就是批次 29 方案 §3.7 想要的交叉校验：把前端 cityScale.ts::REAL_DIMS_M
+    （米制，`__unit__: "m"`）或任何副本表丢进来，即可自动 diff「表值 vs 资产真值」。
+    """
+    with open(table_path, 'r', encoding='utf-8') as fh:
+        table = json.load(fh)
+    if not isinstance(table, dict):
+        return ['--check-table：%s 顶层必须是 JSON 对象' % table_path]
+    unit = str(table.get('__unit__', 'world')).lower()
+    div = 10.0 if unit in ('m', 'meter', 'meters', '米') else 1.0
+    problems, rows = [], []
+    for key in sorted(table):
+        if key.startswith('__') or key.startswith('//'):
+            continue
+        want = _table_entry_xyz(table[key])
+        if want is None:
+            problems.append('表项 %s 的值无法解析：%r' % (key, table[key]))
+            continue
+        want = [None if w is None else w / div for w in want]
+        info, err = _lookup_info(key, infos)
+        if not info:
+            problems.append(err or ('表项 %s 查无实测' % key))
+            continue
+        got = info['size']
+        for i, axis in enumerate('xyz'):
+            w = want[i]
+            if w is None:
+                rows.append('%-32s %s 轴不比对（实测 %.4f）' % (key, axis.upper(), got[i]))
+                continue
+            if w == 0:
+                rows.append('%-32s %s 轴表值 0，跳过（实测 %.4f）' % (key, axis.upper(), got[i]))
+                continue
+            rel_dev = abs(got[i] - w) / abs(w)
+            tag = 'ok  ' if rel_dev <= SIZE_TOL else 'FAIL'
+            rows.append('%-32s %s 实测 %.4f / 表值 %.4f  偏差 %+.2f%%  %s'
+                        % (key, axis.upper(), got[i], w, (got[i] - w) / abs(w) * 100, tag))
+            if rel_dev > SIZE_TOL:
+                problems.append('表值比对 %s %s：实测 %.4f 表值 %.4f（偏差 %+.2f%%）'
+                                % (key, axis.upper(), got[i], w, (got[i] - w) / abs(w) * 100))
+    print('\n' + '=' * 108)
+    print('--check-table %s（单位：%s，容差 ±%d%%）' % (table_path, unit, int(SIZE_TOL * 100)))
+    print('=' * 108)
+    for r in rows:
+        print('    · %s' % r)
+    return problems
+
+
+def parse_cli(argv):
+    """极简 CLI（零第三方依赖）：返回 (files, emit_path, table_path)。
+
+    --emit-json 后若下一个 token 以 .glb 结尾则视为文件实参（省略路径 ⇒ 打 stdout）。
+    """
+    args = list(argv)
+    files, emit_path, table_path = [], None, None
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == '--emit-json':
+            nxt = args[i + 1] if i + 1 < len(args) else None
+            if nxt is not None and not nxt.endswith('.glb') and not nxt.startswith('--'):
+                emit_path, i = nxt, i + 2
+            else:
+                emit_path, i = '-', i + 1
+        elif a.startswith('--emit-json='):
+            emit_path, i = a.split('=', 1)[1] or '-', i + 1
+        elif a == '--check-table':
+            if i + 1 >= len(args):
+                raise SystemExit('--check-table 需要一个 JSON 表路径参数')
+            table_path, i = args[i + 1], i + 2
+        elif a.startswith('--check-table='):
+            table_path, i = a.split('=', 1)[1], i + 1
+        elif a in ('-h', '--help'):
+            print(__doc__)
+            raise SystemExit(0)
+        else:
+            files.append(a)
+            i += 1
+    return files, emit_path, table_path
 
 
 def main(argv):
-    if argv:
-        files = sorted(os.path.abspath(p) for p in argv)
+    try:
+        cli_files, emit_path, table_path = parse_cli(argv)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 2
+    if cli_files:
+        files = sorted(os.path.abspath(p) for p in cli_files)
     else:
         files = sorted(glob.glob(os.path.join(MODELS_DIR, '*', '*.glb')))
     if not files:
         print('no .glb found')
         return 2
     total_fail = 0
+    infos = {}
     print('=' * 108)
     print('verify_glb_aabb — GLB 轴线 / 贴地 / 尺度 / 节点 identity 自检（1 世界单位 = 10 m）')
     print('判据：(a) 世界包围盒 = 目标 ±5%  (b) 几何 accessor 包围盒 = 目标（≡(a) 才说明'
@@ -392,6 +603,7 @@ def main(argv):
             print('\n### %-34s 解析失败：%s' % (rel, exc))
             total_fail += 1
             continue
+        infos[rel] = info
         mark = 'PASS' if not problems else 'FAIL'
         if info is None:
             print('\n### %-34s %s' % (rel, mark))
@@ -420,6 +632,23 @@ def main(argv):
             for name, nlo, nhi in info['details']:
                 print('      └ %-28s X %.3f..%.3f  Y %.3f..%.3f  Z %.3f..%.3f'
                       % (name, nlo[0], nhi[0], nlo[1], nhi[1], nlo[2], nhi[2]))
+    if emit_path is not None:
+        payload = json.dumps(measured_payload(infos), ensure_ascii=False, indent=2, sort_keys=True)
+        if emit_path == '-':
+            print('\n' + '=' * 108)
+            print('--emit-json（世界单位；一次性量测产物，勿入库）')
+            print('=' * 108)
+            print(payload)
+        else:
+            with open(emit_path, 'w', encoding='utf-8') as fh:
+                fh.write(payload + '\n')
+            print('\n--emit-json 已写入 %s（%d 件；一次性量测产物，勿入库）'
+                  % (os.path.abspath(emit_path), len(measured_payload(infos))))
+    if table_path is not None:
+        t_problems = check_table(table_path, infos)
+        for p in t_problems:
+            print('    ✗ %s' % p)
+        total_fail += len(t_problems)
     print('\n' + '=' * 108)
     print('扫描 %d 个 GLB，%s' % (len(files), '全部通过 ✓' if not total_fail else '%d 项不符合 ✗' % total_fail))
     return 1 if total_fail else 0
