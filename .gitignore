@@ -90,9 +90,17 @@ go-web-debug-tool/debug-tool
 go-web-debug-tool/GoWebDebugTool
 
 # ============ Blender 3D 工作流（v19 §27）============
-# .blend 源文件不入库（本地美术保留，git 仅入 .py 导出脚本 + .glb 产物）
+# 2026-09-28 §20260928-01：**3d_script 的 .py 生产源全部入库**，
+# git 只跟脚本 + .glb 产物；脚本即唯一可复现的建模源码，必须可回溯、可 review。
+#   入库：3d_script/*.py（含 build_*.py / __common__.py / verify_glb_aabb.py / render_preview.py）
+#   不入：__pycache__/（Python 中间产物，已由顶层 `__pycache__/` 通配规则覆盖，此处显式重述）
+#   不入：*.blend 源文件（本地美术保留）
+3d_script/__pycache__/
 *.blend
 *.blend1
 *.blend2
 # verify_glb_aabb --emit-json 量测产物（一次性，勿入库；留档写 lag_docs 文档）
 3d_script/glb_measured_dims.json
+# render_preview.py 预览图（一次性质检产物，不入库）
+3d_script/preview/
+3d_script/*.preview.png

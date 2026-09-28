@@ -435,7 +435,25 @@ AI Agent 在本地开发环境跑自动化登录、回归或 e2e 时,可使用
 
 > 2026-09-23 §20260923-01：把虚拟城市 12 个高视觉冲击组件（5 建筑 + 4 车 + 1 树 + 1 行人 + 1 路面）
 > 从"程序化几何 + PNG sprite"升级为 Blender headless 导出的真实 `.glb` 模型。
-> 完整规约见 [`lag_docs/虚拟城市/已实现/19-Blender3D模型集成/02-架构设计.md`](lag_docs/虚拟城市/已实现/19-Blender3D模型集成/02-架构设计.md)。
+> 完整规约见 [`lag_docs/虚拟城市/已实现/19-Blender3D模型集成/02-架构设计.md`](lag_docs/虚拟城市/已实现/19-Blender3D模型集成/02-架构设计.md)；
+> §27.0 六纪律的展开（工序 / 检查清单 / 判读表）见 [`03-建模生产线规范.md`](lag_docs/虚拟城市/已实现/19-Blender3D模型集成/03-建模生产线规范.md)。
+
+### 27.0 建模生产线纪律（2026-09-28 §20260928-01 确立，最高优先级）
+
+> 本机已装 `/usr/local/bin/blender`（5.2.1 LTS，见 §27.6），**建模可直接调 Blender，无需人工外部资产**。
+> 以下 6 条为**硬性要求**，优先于 §27.1-§27.7 的其余约定；冲突时以本节为准。
+
+| # | 纪律 | 落地判据 |
+|---|------|---------|
+| 1 | **开工前先检索真实参考** | 建模任何建筑/物品/高层结构/路面设施**之前**，先检索该类物件的真实结构比例与常见材质参考（WebSearch 或既有资产），把结论写进脚本注释再动手。不允许凭想象开建 |
+| 2 | **禁止一次性完成整个复杂模型** | 按**资产逐个创建**（建筑→路灯→自动售货机→路面→电线…），一次只交付一个 `build_<name>.py` + 其 `.glb`。不许「一口气把整座城市建完」 |
+| 3 | **统一色调 + 经年磨损** | 颜色一律取自 `__common__.py::CITY_PALETTE` 色板（禁裸写 hex），表面用 `weathered_pbr()` 做污渍/脏化。目标是**可直接用于镜头的写实品质**，不是「能渲染出来的示意图」。⚠️ **glTF 无 Noise Texture 对应物，程序化磨损不经导出** —— `weathered_pbr()` 目前只作用于 Blender 内预览/打光评估与后续烘焙源；要游戏内可见须另烘 basecolor+roughness 贴图（**尚未实现**），详见 [`03-建模生产线规范.md §5`](lag_docs/虚拟城市/已实现/19-Blender3D模型集成/03-建模生产线规范.md) |
+| 4 | **可拉 SubAgent 分工** | 结构调研 / 建模 / 材质 / 灯光渲染四条工序可并行派 SubAgent（见 §27.8），主 Agent 只收口合批与门禁 |
+| 5 | **质量优先于时间与 credit** | 不以「赶进度 / 省 token」为理由降质。返工到达标为止 |
+| 6 | **每完成一批资产就渲染检查，不通过就返工** | 走 §27.4 的 `render_preview.py` 出图 → **人/Agent 真的看一眼图** → 不达标（穿模/比例错/糊/脏/色不统一）即返工，**禁止只导出不验收** |
+
+> 门禁顺序不可跳：**调研 → 单资产建模 → 出图验收 → 跑 `verify_glb_aabb.py` → 合批入 git**。
+> 导出成功 ≠ 合格；**没看过渲染图的 `.glb` 视为未交付**。
 
 ### 27.1 三层架构（数据流）
 
@@ -488,6 +506,9 @@ ServerGo/static/assets/<name>-<hash8>.glb (Go embed.FS)
 7. **GLB ≡ 程序化 fallback 同尺寸** —— 同一物件的两条渲染路径包围盒必须一致（可测不变量）。
    尺寸唯一事实来源 = `ClientWeb/src/components/virtualCity/cityScale.ts::REAL_DIMS_M`（**真实米制**）。
    改该表 = 同时改「Blender 脚本 + `.glb` + 前端两条路径」，**改动须三侧同步**。
+8. **`.py` 生产源全部入库，`.blend` 不入库**（§20260928-01）—— `3d_script/*.py` 是建模的唯一
+   可复现源码，**必须入 git 可 review 可回滚**；`.gitignore` 只挡 `*.blend` / `__pycache__/` /
+   量测与预览产物。
 
 > **两个可执行护栏**（批次 29 起，把上述约定从"只写在实施记录里"变成门禁）：
 > - `3d_script/verify_glb_aabb.py` —— 22 个 GLB 全量校验（**世界 / 几何双口径** + 节点 scale identity
@@ -512,6 +533,18 @@ for s in build_*.py; do
 done
 ```
 
+**渲染检查（§27.0-6 门禁，不可省）**：
+
+```bash
+# 读 .glb、按包围盒自适应摆相机、三点布光，渲染成 PNG
+blender --background --python 3d_script/render_preview.py -- \
+  ClientWeb/src/assets/models/civic/city_hall.glb /tmp/prev_city_hall.png --view iso
+# --view front|side|top|iso（默认 iso）；--width/--height 控制出图尺寸
+# 退出码 0 = 成功；stdout 打印包围盒摘要便于核对比例
+```
+
+出图后**用 Read 工具真的看一眼**，再决定是否返工 —— 工具不会替你判断「丑」。
+
 ### 27.5 缓存与降级契约
 
 - **缓存 key = url**（与 `textureCache.ts` 不同：GLB 不像贴图有 wrap/repeat 参数）
@@ -535,3 +568,18 @@ done
 |--------|-----------|--------|
 | Blender / .glb / 3D 模型 / 几何 | art-designer | 3d_script/build_*.py + ClientWeb/src/assets/models/ |
 | GLTFLoader / useSharedGLTF / modelUrl | frontend-dev | ClientWeb/src/engine3d/{modelCache,Model}.tsx + 游戏侧接入组件（批次 22 起迁入引擎层） |
+
+### 27.8 建模四工序 SubAgent 分工（§27.0-4）
+
+单件复杂资产允许**拆成四条工序并行派 SubAgent**，主 Agent 只做合批与门禁收口：
+
+| 工序 | 职责 | 产出 |
+|------|------|------|
+| **结构调研** | 检索真实物件的比例/结构/常见材质，产出结论 | 调研笔记（写进 `build_<name>.py` 头部注释） |
+| **建模** | 按调研结论搭几何 + 尺寸（`REAL_DIMS_M` 口径、Z-up、烘焙变换） | `3d_script/build_<name>.py` + `.glb` |
+| **材质** | 走 `CITY_PALETTE` + `weathered_pbr()` 做统一色调与经年磨损 | 材质调用（同一脚本内） |
+| **灯光渲染** | 出预览图、判读画面、列出不达标项 | `render_preview.py` 出图 + 验收结论 |
+
+> 工序间**串行依赖**（调研 → 建模 → 材质 → 渲染），并行只对**多件资产之间**成立；
+> 同一件资产内部不要拆给多个 Agent 改同一个脚本。
+
