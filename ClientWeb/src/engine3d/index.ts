@@ -81,7 +81,43 @@ export type { QualityTier, QualityPreset } from './quality';
 
 export { CameraViewReporter } from './controls/CameraViewReporter';
 export type { CameraView, TargetLike } from './controls/CameraViewReporter';
-export { FocusLerpController } from './controls/FocusLerpController';
-export type { FocusTarget } from './controls/FocusLerpController';
-export { WalkControls } from './controls/WalkControls';
-export type { WalkControlsProps } from './controls/WalkControls';
+
+// 批次 32：自由视角系统（轨道 / 全自由六自由度 / 街景漫游 三态统一控制器，
+// 替代批次 22 的 OrbitControls + WalkControls 双挂载）。
+export { FreeViewControls } from './controls/FreeViewControls';
+export type {
+  FreeViewControlsProps,
+  FreeViewTargetRef,
+  FreeViewAim,
+  FocusTarget,
+} from './controls/FreeViewControls';
+export { FreeViewHud } from './controls/FreeViewHud';
+export type { FreeViewHudProps, FreeViewLabels } from './controls/FreeViewHud';
+export {
+  useFreeView,
+  freeViewApi,
+  FREE_VIEW_MODES,
+  FREE_VIEW_TIERS,
+} from './controls/freeViewStore';
+export type {
+  FreeViewMode,
+  FreeViewState,
+  FreeViewTierIndex,
+} from './controls/freeViewStore';
+export { resolveCameraCollision, boxFromCenter } from './controls/cameraCollision';
+export type {
+  CameraBox,
+  CameraBounds,
+  CollisionOptions,
+  CollisionResult,
+} from './controls/cameraCollision';
+export {
+  clamp,
+  damp,
+  dampVec3,
+  dampFactor,
+  easeInOutCubic,
+  isTextEditingTarget,
+  shouldCaptureKey,
+} from './controls/cameraMath';
+export type { PoseLerpMode, Spherical } from './controls/cameraMath';

@@ -34,7 +34,7 @@ import {
   pbrRoughUrl,
 } from '@/assets/images/virtualCity';
 import type { VirtualCityDistrictDef } from '@/types/virtualCity';
-import { DISTRICT_FLOORS, buildingHeight } from './cityScale';
+import { DISTRICT_FLOORS, buildingTopY } from './cityScale';
 import {
   buildBuildingParts,
   buildWallMaterial,
@@ -175,7 +175,8 @@ export const DistrictBuildings = memo(function DistrictBuildings({ specs, def, p
     const accents: MergePart[] = [];
     const proxyData: Array<{ spec: BuildingSpec; h: number; floors: number }> = [];
     for (const spec of specs) {
-      const h = buildingHeight(minF + (maxF - minF) * prosperity) * (0.85 + spec.factor * 0.15);
+      // 批次 32：改走 cityScale.buildingTopY（渲染与相机碰撞体共用单一事实来源）。
+      const h = buildingTopY(def.id, prosperity, spec.factor);
       const parts = buildBuildingParts(archetype, spec.w, spec.d, h, emissive);
       const sig = specsSignature(parts.matSpecs);
       let g = groups.get(sig);

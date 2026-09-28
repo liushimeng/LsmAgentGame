@@ -165,13 +165,37 @@ export function VirtualCityMinimap({ gameState, viewRef, selectedDistrict, onSel
         }
       }
 
-      // 相机视野框（target + distance；~0.6 投影系数近似透视范围）。
+      // 相机视野。批次 32：orbit（无 yaw/fov）画轴对齐方框，观感与批次 22 一致；
+      // fly/walk（有 yaw/fov）改画真实视锥扇形 —— 自由视角下方位信息才有意义。
       const v = viewRef.current;
       const center = worldToPx(v.x, v.z);
       const half = Math.max(6, (v.dist * 0.6 * SCALE) / 2);
       ctx.strokeStyle = 'rgba(255,255,255,0.85)';
       ctx.lineWidth = 1;
-      ctx.strokeRect(center.px - half, center.py - half, half * 2, half * 2);
+      if (v.yaw === undefined) {
+        ctx.strokeRect(center.px - half, center.py - half, half * 2, half * 2);
+      } else {
+        // 扇形：世界 -Z 为「正前方」（与 three 欧拉 yaw 约定一致），
+        // 屏幕上「正上方」为北（罗盘契约 §批次 26），故 yaw=0 → 扇形朝上。
+        const fovRad = ((v.fov ?? 45) * Math.PI) / 180;
+        const reach = Math.max(8, v.dist * 0.9 * SCALE);
+        const a0 = -v.yaw - fovRad / 2;
+        const a1 = -v.yaw + fovRad / 2;
+        ctx.beginPath();
+        ctx.moveTo(center.px, center.py);
+        ctx.arc(center.px, center.py, reach, a0 - Math.PI / 2, a1 - Math.PI / 2);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.globalAlpha = 0.16;
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        // 相机点（区别于 agent 点）
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.beginPath();
+        ctx.arc(center.px, center.py, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);

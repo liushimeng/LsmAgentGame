@@ -65,7 +65,9 @@ export function PerfHud() {
       data-perfhud="virtualCity"
       style={{
         position: 'absolute',
-        left: 12,
+        // 批次 32：右下角。原先与 <FreeViewHud /> 同占左下角（left:12/bottom:12），
+        // 两个状态条叠在一起 —— HUD 内容窄，PerfHud 右侧会从旁边露出来，调试时读数串行。
+        right: 12,
         bottom: 12,
         zIndex: 10,
         padding: '4px 8px',

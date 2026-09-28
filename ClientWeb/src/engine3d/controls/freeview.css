@@ -1,0 +1,204 @@
+/**
+ * engine3d/controls/freeview.css — 自由视角 HUD 样式（组件本地，引擎层自持）。
+ *
+ * 批次 32 新增。本文件**不进** `styles/globals.css` 的 @import 链 —— 由
+ * `FreeViewHud.tsx` 直接 import，规避 CLAUDE.md §2.1 硬约束 4（@import 顺序不可调整）。
+ *
+ * 对比度（CLAUDE.md §26）：
+ *   - 正文/标签白字 `#e6edf3` on `rgba(10,14,20,0.86)` ≈ 13:1（远超 AA 4.5:1）；
+ *   - 选中态用 `box-shadow` 光晕而非单纯底色差，规避「夜间 brightness 衰减后对比塌陷」；
+ *   - 禁用态（控制器未挂载）用独立灰底 + `cursor: not-allowed`，不用 `opacity: .4`
+ *     污染选中态判定（§26.2 反模式 5）。
+ */
+
+.freeview-hud {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  /* 高于物件信息 Html（zIndexRange 上限 30），低于小地图（40） */
+  z-index: 32;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  /* 容器不吃指针事件：只让控件本体接收，避免挡住 3D 视口的点选 */
+  pointer-events: none;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #e6edf3;
+  user-select: none;
+}
+
+/* ── 模式分段控件 ─────────────────────────────────────────────── */
+.freeview-hud__bar {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(10, 14, 20, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+}
+
+.freeview-hud__mode,
+.freeview-hud__help-toggle {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #e6edf3;
+  font: inherit;
+  font-weight: 500;
+  padding: 5px 12px;
+  min-height: 28px;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+  white-space: nowrap;
+}
+
+.freeview-hud__mode:hover,
+.freeview-hud__help-toggle:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* 选中态：显式白字 + ≥45% 不透明底 + 光晕（§26.1 selected/active 阈值 6:1） */
+.freeview-hud__mode[data-active='1'] {
+  background: rgba(56, 139, 253, 0.62);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35), 0 0 10px rgba(88, 166, 255, 0.5);
+}
+
+.freeview-hud__mode:focus-visible,
+.freeview-hud__help-toggle:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 1px;
+}
+
+.freeview-hud__help-toggle {
+  margin-left: 2px;
+  padding: 5px 10px;
+  font-weight: 700;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0 6px 6px 0;
+}
+
+/* 控制器尚未挂载：整体置灰但仍可点（点了会等挂载后生效），用独立灰底而非 opacity */
+.freeview-hud[data-ready='0'] .freeview-hud__bar {
+  background: rgba(28, 32, 40, 0.86);
+  border-color: rgba(255, 255, 255, 0.14);
+  cursor: not-allowed;
+}
+
+/* ── 状态行：速度档 + 碰撞指示灯 ─────────────────────────────── */
+.freeview-hud__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: rgba(10, 14, 20, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  pointer-events: auto;
+}
+
+.freeview-hud__tier {
+  color: #c9d5e1;
+  font-variant-numeric: tabular-nums;
+}
+
+.freeview-hud__probe {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #a7f3d0;
+}
+
+.freeview-hud__probe-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.7);
+}
+
+/* 碰撞态：琥珀灯 —— 把「相机被场景挡住」从隐形反馈变成可感知反馈（R3） */
+.freeview-hud__probe[data-hit='1'] {
+  color: #fcd34d;
+}
+
+.freeview-hud__probe[data-hit='1'] .freeview-hud__probe-dot {
+  background: #fbbf24;
+  box-shadow: 0 0 9px rgba(251, 191, 36, 0.9);
+  animation: freeview-probe-pulse 900ms ease-in-out infinite;
+}
+
+@keyframes freeview-probe-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* ── 键位帮助面板 ─────────────────────────────────────────────── */
+.freeview-hud__help {
+  margin: 0;
+  padding: 8px 11px;
+  border-radius: 9px;
+  background: rgba(10, 14, 20, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  /* 列优先：先按行填满第一列（dt/dd 交替），再流到第二列。
+     --fv-help-rows 由 FreeViewHud 按键位数算出（行数 = ⌈n/2⌉）。 */
+  display: grid;
+  grid-template-rows: repeat(var(--fv-help-rows, 6), auto);
+  grid-auto-flow: column;
+  grid-auto-columns: max-content minmax(0, 1fr);
+  gap: 4px 14px;
+  max-height: 46vh;
+  overflow-y: auto;
+  animation: freeview-help-in 160ms ease-out;
+}
+
+@keyframes freeview-help-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.freeview-hud__help-row {
+  display: contents;
+}
+
+.freeview-hud__help dt {
+  margin: 0;
+}
+
+.freeview-hud__help dd {
+  margin: 0;
+  color: #c9d5e1;
+}
+
+.freeview-hud__help kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+/* 动效可访问性兜底（CLAUDE.md §26.3 + WCAG 2.3.3） */
+@media (prefers-reduced-motion: reduce) {
+  .freeview-hud__help { animation: none; }
+  .freeview-hud__probe[data-hit='1'] .freeview-hud__probe-dot { animation: none; }
+  .freeview-hud__mode,
+  .freeview-hud__help-toggle { transition: none; }
+}
+
+/* 窄屏：状态行折行，避免遮挡视口中心 */
+@media (max-width: 720px) {
+  .freeview-hud { font-size: 11px; }
+  .freeview-hud__mode { padding: 5px 8px; }
+}

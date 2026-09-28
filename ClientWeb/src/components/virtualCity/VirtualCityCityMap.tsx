@@ -57,19 +57,34 @@
  *   - 静态正午光 rig（Sky/fog/四灯/EnvBinder）整段替换为 <CityEnvironmentLayer />
  *     （DayNightCycle 昼夜循环 + WeatherFX 雨/雪 + EnvBinder 正午 PMREM）；
  *     正午基准常量保留在文件顶部（昼夜沿此基准摆动）。
+ *
+ * 批次 32「自由视角系统」（lag_docs/虚拟城市/已实现/32-自由视角系统/01-方案设计.md）：
+ *   - 相机从「drei OrbitControls + engine3d WalkControls 二选一重挂载」换成
+ *     engine3d FreeViewControls 单控制器三态（俯瞰 orbit / 全自由六自由度 fly /
+ *     街景漫游 walk），切换走 600 ms 位姿过渡（球面/线性插值 + slerp），零跳变；
+ *   - 新增场景碰撞（32 区全部建筑 AABB，装配见 freeViewColliders.ts）+
+ *     地图边界钳制（±88 / z→155，覆盖四缘带与南海洋）+ 地面钳制 ⇒ 相机不穿楼不出界；
+ *   - 新增 Web 端操作界面 <FreeViewHud />（模式分段控件 / 速度档 / 碰撞指示灯 /
+ *     键位帮助）与快捷键（V 循环、1·2·3 直达、F 往返、R 复位、H 帮助、[ ] 档位）；
+ *   - 小地图视野框在自由视角下改画真实视锥扇形（viewRef 新增可选 yaw / fov）；
+ *   - 相机拖拽后松开不再误触城区选中（捕获阶段吞 click）。
  */
 
-import { memo, useMemo, useRef, useState } from 'react';
-import { OrbitControls } from '@react-three/drei';
-import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import { memo, useMemo, useRef } from 'react';
 import {
   EngineCanvas,
   useSharedTexture,
   CameraViewReporter,
-  FocusLerpController,
-  WalkControls,
+  FreeViewControls,
+  FreeViewHud,
 } from '@/engine3d';
-import type { CameraView, FocusTarget } from '@/engine3d';
+import type { CameraView, FocusTarget, FreeViewAim, TargetLike } from '@/engine3d';
+import {
+  buildCityCameraColliders,
+  FREE_VIEW_BOUNDS,
+  FREE_VIEW_COLLISION_RADIUS,
+  FREE_VIEW_GROUND_Y,
+} from './freeViewColliders';
 import { CityEnvironmentLayer } from './CityEnvironmentLayer';
 import { DistrictBlock } from './DistrictBlock';
 import { AgentToken } from './AgentToken';
@@ -161,14 +176,25 @@ const ORBIT_MAX_POLAR_ANGLE = 1.54;
 /** 街景漫游眼高：1.7m（u(1.7)，cityScale 世界标尺 1 单位 = 10 米）。 */
 const WALK_EYE_HEIGHT = u(1.7);
 /** 街景漫游移速：批次 30 P0-5 —— 原 3 单位/秒 = 30 m/s（108 km/h，比步行快 21×）
- *  ⇒ 真实步速 u(1.5) = 1.5 m/s；Shift ×3 = 4.5 m/s 小跑（WalkControls 内置）。 */
+ *  ⇒ 真实步速 u(1.5) = 1.5 m/s；Shift ×4 加速 = 6 m/s 小跑（FreeViewControls 内置）。
+ *  批次 32：FreeViewControls 的 `speed` 是**三态共用**的基础移速，故拆成两个口径 ——
+ *  街景按真实步速、飞行按观察者巡航速度。 */
 const WALK_SPEED = u(1.5);
+/** 自由飞行基础移速：20 m/s（无人机巡航量级；Shift ×4 = 80 m/s，
+ *  配合 `[` `]` 档位最高 320 m/s 用来俯瞰全城）。 */
+const FLY_SPEED = u(20);
+/** 轨道模式下平移聚焦点的移速：10 m/s（俯瞰时小幅挪移足够）。 */
+const ORBIT_PAN_SPEED = u(10);
+/** 从贴地切入俯瞰时的默认半径：W*0.25 = 30 单位 = 300 m（城市尺度上的舒适视距）。 */
+const FREE_VIEW_DEFAULT_RADIUS = WORLD_SIZE * 0.25;
+/** 相机初始俯仰角（弧度，从 +Y 轴起算）—— 由 CAMERA_START 反解，保证批次 32 换用
+ *  FreeViewControls 后**首帧观感与批次 22 的 drei OrbitControls 完全一致**（零回归）。 */
+const CAMERA_INITIAL_PHI = Math.acos(
+  CAMERA_START[1] / Math.hypot(CAMERA_START[0], CAMERA_START[1], CAMERA_START[2]),
+);
 
 /** 小地图 / 面板 → 主场景的聚焦目标（null = 无聚焦请求）。 */
 export type VirtualCityFocusTarget = FocusTarget;
-
-/** 视角模式：orbit = 轨道俯瞰（默认）；walk = 街景漫游（批次 22 新增）。 */
-type ViewMode = 'orbit' | 'walk';
 
 interface Props {
   gameState: VirtualCityGameState | null;
@@ -349,7 +375,8 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
   selectedDistrict,
   onSelectDistrict,
 }: Props) {
-  const controlsRef = useRef<OrbitControlsImpl | null>(null);
+  /** FreeViewControls 在 orbit 模式下填充的聚焦点（TargetLike 形状）。 */
+  const controlsRef = useRef<TargetLike | null>(null);
   const { players, byDistrict, counts } = useMemo(() => tokenLayout(gameState), [gameState]);
   const mySeat = gameState?.my_seat ?? -1;
   // 批次 23：座位居民语音气泡（useVirtualCitySpeech 写入；key = seat）。
@@ -363,36 +390,12 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
     return m;
   }, [gameState]);
 
-  // ── 批次 22：俯瞰 / 街景漫游双模式（互斥挂载，切换时衔接位姿）────────
-  const [viewMode, setViewMode] = useState<ViewMode>('orbit');
-  /** 漫游落点与初始朝向（orbit → walk 切换时从当前轨道位姿推导）。 */
-  const [walkStart, setWalkStart] = useState<{ x: number; z: number; yaw: number }>({ x: 0, z: 8, yaw: 0 });
-  /** walk → orbit 恢复轨道聚焦点；epoch 递增强制 OrbitControls 重挂载应用新 target。 */
-  const [orbitResume, setOrbitResume] = useState<{ target: [number, number, number]; epoch: number }>({
-    target: [0, 0, 0],
-    epoch: 0,
-  });
-
-  const switchToWalk = () => {
-    const c = controlsRef.current;
-    if (c) {
-      // 落点 = 当前轨道聚焦点；初始朝向 = 从相机位置看向聚焦点的水平方向
-      const cam = c.object.position;
-      const dx = c.target.x - cam.x;
-      const dz = c.target.z - cam.z;
-      setWalkStart({ x: c.target.x, z: c.target.z, yaw: Math.atan2(-dx, -dz) });
-    }
-    setViewMode('walk');
-  };
-
-  const switchToOrbit = () => {
-    // 聚焦点 = 漫游最后所在位置（viewRef 在漫游模式上报相机自身 x/z）
-    setOrbitResume((prev) => ({
-      target: [viewRef.current.x, 0, viewRef.current.z],
-      epoch: prev.epoch + 1,
-    }));
-    setViewMode('orbit');
-  };
+  // ── 批次 32：自由视角（俯瞰 / 全自由飞行 / 街景漫游 三态）。模式存于 engine3d
+  //    store，Canvas 内的控制器与 Canvas 外的 <FreeViewHud /> 经同一 store 通信。────
+  /** 相机碰撞体（32 区全部建筑 AABB）：随房价指数重装配，见 freeViewColliders.ts。 */
+  const cameraColliders = useMemo(() => buildCityCameraColliders(marketById), [marketById]);
+  /** 自由视角的相机朝向 / FOV 读回源（fly/walk 才有意义），供小地图画真实视锥。 */
+  const aimRefs = useRef<FreeViewAim>({ yaw: null, fov: null });
 
   return (
     <div className="virtualCity-map-host">
@@ -480,65 +483,71 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
         })}
         {/* 批次 23：市民之声气泡层（市政厅上空，eventFeed city_voice 驱动，不依赖座位） */}
         <CityVoiceBubbleLayer />
-        {/* 批次 22：俯瞰 / 漫游互斥挂载（切换时经 walkStart / orbitResume 衔接位姿）；
-            相机俯仰角上限 1.2 → 1.54（2.5D 锁定俯视 → 3D 自由视角） */}
-        {viewMode === 'orbit' ? (
-          <>
-            <OrbitControls
-              key={`orbit-${orbitResume.epoch}`}
-              ref={controlsRef}
-              enablePan
-              enableZoom
-              enableRotate
-              enableDamping
-              dampingFactor={0.08}
-              maxPolarAngle={ORBIT_MAX_POLAR_ANGLE}
-              minDistance={ORBIT_MIN_DISTANCE}
-              maxDistance={ORBIT_MAX_DISTANCE}
-              target={orbitResume.target}
-            />
-            <FocusLerpController controlsRef={controlsRef} focusRef={focusRef} />
-          </>
-        ) : (
-          <WalkControls
-            eyeHeight={WALK_EYE_HEIGHT}
-            bounds={WORLD_SIZE * 0.5}
-            speed={WALK_SPEED}
-            start={[walkStart.x, walkStart.z]}
-            startYaw={walkStart.yaw}
-          />
-        )}
-        {/* 批次 22：原内联 CameraReporter → engine3d CameraViewReporter；
-            漫游模式无 orbit target → fallbackToCamera 上报相机自身位置 */}
+        {/* 批次 32：自由视角控制器（替代批次 22 的 OrbitControls/WalkControls 双挂载）。
+            三态共用一套积分器：俯瞰 orbit / 全自由六自由度 fly / 街景漫游 walk；
+            切换走 600 ms 位姿过渡（球面·线性插值 + 四元数 slerp），无画面跳变。
+            碰撞（建筑 AABB）+ 边界（±88 / z→155）+ 地面钳制在此一并生效。 */}
+        <FreeViewControls
+          targetRef={controlsRef}
+          focusRef={focusRef}
+          aimRefs={aimRefs}
+          initialTarget={[0, 0, 0]}
+          initialPhi={CAMERA_INITIAL_PHI}
+          defaultRadius={FREE_VIEW_DEFAULT_RADIUS}
+          speed={FLY_SPEED}
+          orbitPanSpeed={ORBIT_PAN_SPEED}
+          walkSpeed={WALK_SPEED}
+          eyeHeight={WALK_EYE_HEIGHT}
+          minDistance={ORBIT_MIN_DISTANCE * 0.6}
+          maxDistance={ORBIT_MAX_DISTANCE * 1.5}
+          maxPolar={ORBIT_MAX_POLAR_ANGLE}
+          fov={45}
+          colliders={cameraColliders}
+          collisionRadius={FREE_VIEW_COLLISION_RADIUS}
+          bounds={FREE_VIEW_BOUNDS}
+          groundY={FREE_VIEW_GROUND_Y}
+        />
+        {/* 批次 22 → 32：视野快照上报。orbit 走 targetRef 分支（聚焦点），
+            fly/walk 时 targetRef 为 null → 回落上报相机自身，并附 yaw/fov
+            供小地图画真实视锥扇形。 */}
         <CameraViewReporter
           targetRef={controlsRef}
-          fallbackToCamera={viewMode === 'walk'}
+          fallbackToCamera
+          aimRefs={aimRefs}
           viewRef={viewRef}
         />
         {/* 批次 28 B1：全场景唯一物件信息卡（hover 悬浮卡 + click 详情卡；
             zIndexRange [30,0] 不压 minimap/error/modal，见方案 §5.1） */}
         <ObjectInfoOverlay />
       </EngineCanvas>
-      {/* 批次 22：俯瞰 / 街景漫游切换（§26 对比度：显式白字 + ≥45% 不透明底） */}
-      <button
-        type="button"
-        onClick={viewMode === 'orbit' ? switchToWalk : switchToOrbit}
-        style={{
-          position: 'absolute',
-          top: 12,
-          right: 12,
-          zIndex: 10,
-          padding: '6px 12px',
-          background: 'rgba(10, 14, 20, 0.78)',
-          color: '#e6edf3',
-          border: '1px solid rgba(255, 255, 255, 0.28)',
-          borderRadius: 8,
-          fontSize: 13,
-          cursor: 'pointer',
+      {/* 批次 32：自由视角 Web 操作界面（模式分段控件 / 速度档 / 碰撞指示灯 /
+          键位帮助）。z-index 32 —— 高于物件信息 Html(≤30)，低于小地图(40)。
+          文案在此注入中文包，引擎层的 FreeViewHud 不写死语种。 */}
+      <FreeViewHud
+        labels={{
+          title: '相机视角',
+          modes: ['俯瞰', '自由飞行', '街景漫游'],
+          help: '键位说明',
+          speed: '速度',
+          tiers: ['慢速', '常速', '快速'],
+          clear: '视野畅通',
+          colliding: '被场景阻挡',
+          shortcuts: [
+            ['V', '循环切换视角'],
+            ['1 / 2 / 3', '直达 俯瞰 / 自由 / 漫游'],
+            ['F', '俯瞰 ⇄ 自由 快速往返'],
+            ['WASD', '前后左右移动'],
+            ['空格 / E / Q', '上升 / 上升 / 下降'],
+            ['Shift', '加速 ×4'],
+            ['右键拖拽', '自由视角下转向（俯瞰为平移）'],
+            ['中键拖拽', '自由视角下视口平移'],
+            ['滚轮', '俯瞰缩放视距 / 自由视角变焦'],
+            ['[ / ]', '速度档位 慢 / 常 / 快'],
+            ['R', '复位视角'],
+            ['H', '展开 / 收起本说明'],
+          ],
         }}
-      >
-        {viewMode === 'orbit' ? '🚶 街景漫游' : '🗺️ 返回俯瞰'}
-      </button>
+      />
       {/* 批次 28 A5：?debug=1 轻量性能浮层（DOM，不进 R3F 树；非 debug 零渲染） */}
       <PerfHud />
       {/* 小地图由 VirtualCityGamePage 以绝对定位叠加（左上角） */}

@@ -391,3 +391,31 @@ export const DISTRICT_FLOORS: Record<VirtualCityDistrictId, [number, number]> = 
 
 /** 楼层数 → 世界单位楼高。 */
 export const buildingHeight = (floors: number): number => u(FLOOR_HEIGHT_M) * floors;
+
+/**
+ * 批次 32：房价指数（0.8–1.6）→ prosperity（0–1）。
+ *
+ * **单一事实来源**：`DistrictBlock` 渲染与 `freeViewColliders` 相机碰撞体装配
+ * 必须共用此函数，否则改了渲染公式而漏改碰撞公式 ⇒ 相机穿楼 / 被空气挡住
+ * （CLAUDE.md §130「声明了却从不接线」在数据侧的等价形态）。
+ */
+export const prosperityOf = (priceIndex: number): number =>
+  Math.min(1, Math.max(0, (priceIndex - 0.8) / 0.8));
+
+/**
+ * 批次 32：单栋楼的**顶面 y**（世界单位）。
+ * 与 `DistrictBuildings` 的渲染楼高公式逐字节同源，碰撞体直接复用。
+ *
+ * @param districtId 城区 id（取 DISTRICT_FLOORS 的楼层区间）
+ * @param prosperity 0–1，由 `prosperityOf(price_index)` 得到
+ * @param factor 布局系数 0.6–1.0（`buildingsFor` 产出）
+ */
+export const buildingTopY = (
+  districtId: VirtualCityDistrictId,
+  prosperity: number,
+  factor: number,
+): number => {
+  const [minF, maxF] = DISTRICT_FLOORS[districtId];
+  const floors = minF + (maxF - minF) * prosperity;
+  return buildingHeight(floors) * (0.85 + factor * 0.15);
+};

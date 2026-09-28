@@ -29,7 +29,7 @@ import { districtTexture, districtTextureStem, groundTileUrl, pbrNormalUrl, pbrR
 import { buildingsFor } from './building_layout';
 import { DistrictBuildings } from './DistrictBuildings';
 import { mergeBoxes, type BoxSpec } from './building_shapes';
-import { DISTRICT_FLOORS, buildingHeight, u } from './cityScale';
+import { DISTRICT_FLOORS, buildingHeight, prosperityOf, u } from './cityScale';
 import { useSharedPBR, useSharedTexture, withPBR } from '@/engine3d';
 import { currentSeason, subscribeSeason } from './cityTimeStore';
 import type { CitySeason } from './cityTimeStore';
@@ -115,7 +115,8 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
 
   // 繁荣度 → 楼高（price_index 0.8–1.6 → 0–1；实际楼高公式在 BuildingMesh，
   // 按 cityScale.DISTRICT_FLOORS 分城区楼层区间插值）。
-  const prosperity = Math.min(1, Math.max(0, (priceIndex - 0.8) / 0.8));
+  // 批次 32：公式上提到 cityScale.prosperityOf（渲染与相机碰撞体共用单一事实来源）。
+  const prosperity = prosperityOf(priceIndex);
   // hover 卡定位基准：本城区最高楼层对应的世界单位楼高（2026-09-21 高度系统）。
   const heightBase = buildingHeight(DISTRICT_FLOORS[def.id][1]);
 
