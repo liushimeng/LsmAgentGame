@@ -81,7 +81,7 @@ import {
   StreetPropsLayer,
   trafficSignalsForCity,
   roadsideBinsForNetwork,
-  busStopsForCity,
+  busStopsForNetwork,
 } from './StreetPropsLayer';
 import { TrafficSignals } from './props/TrafficSignals';
 import { RoadsideBins } from './props/RoadsideBins';
@@ -214,9 +214,9 @@ function Ground() {
 }
 
 /**
- * 道路层：批次 31「混合式路网」——放射主干道 + 邻接次干道 + 方格骨干 +
- * 高速联络线（ROAD_NETWORK 单一事实来源，模块级一次性计算），
- * 另挂一环路（FirstRingRoad r=20）与高速收费站（HighwayGates）。
+ * 道路层：批次 31「混合式路网」（三轮：CBD 放射路已删）——邻接次干道 +
+ * 方格骨干 + 高速联络线（ROAD_NETWORK 单一事实来源，模块级一次性计算），
+ * 另挂 CBD 环路（RingRoad）、一环路（FirstRingRoad r=20）与高速收费站（HighwayGates）。
  * 主干道 vs 次干道按 kind 字段（批次 20 §3.2 派生阈值在 buildRoadNetwork 内应用）。
  */
 const ROAD_NETWORK = buildRoadNetwork(VIRTUAL_CITY_DISTRICTS, MAIN_ROAD_MIN_LEN);
@@ -230,12 +230,12 @@ function RoadsLayer() {
     // 批次 24：红绿灯（双端 + 环岛对角，A/B 相位组）+ 批次 31 一环路口；
     // 路侧垃圾桶布点汇总，交 <TrafficSignals> / <RoadsideBins> 全局实例化渲染。
     const signalList = trafficSignalsForCity(
-      VIRTUAL_CITY_DISTRICTS,
       ROAD_NETWORK.firstRingJunctionAngles,
+      ROAD_NETWORK.arterialIntersections,
     );
     const binList = roadsideBinsForNetwork(
       ROAD_NETWORK.segments,
-      busStopsForCity(VIRTUAL_CITY_DISTRICTS),
+      busStopsForNetwork(ROAD_NETWORK.segments),
     );
     return { lamps: lampList, signals: signalList, bins: binList };
   }, []);
@@ -451,7 +451,7 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
         {/* P1-A：单 plane → 分层 <Road /> 道路（含路灯阵列）；16 · 阶段 S：CBD 环形路 + 运河跨河桥 */}
         <group userData={{ bucket: 'roads' }}>
           <RoadsLayer />
-          <RingRoad />
+          <RingRoad junctionAngles={ROAD_NETWORK.cbdRingJunctionAngles} />
           <CanalBridges />
         </group>
         {/* P1-C：街道道具层（树 / 车辆 / 行人 / 标识 / 屋顶杂物）；

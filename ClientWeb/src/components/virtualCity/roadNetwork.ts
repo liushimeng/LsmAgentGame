@@ -3,18 +3,23 @@
  *
  * 设计文档：lag_docs/虚拟城市/已实现/31-混合式路网与一环路/01-方案设计.md
  *
- * 五层混合路网（环形放射式 + 方格网式 + 鱼骨式）：
- *   1. spoke     放射主干道 ×31：城区中心 → CBD 原点（批次 24 语义保留，len > mainRoadMinLen → main）
- *   2. connector 邻接次干道 ×≤36：每区连 2 最近邻（8u ≤ len ≤ 34u），居民区互联互通（方格/鱼骨感）
- *   3. arterial  方格骨干 ×4：x=±18 / z=±26 贯穿 ±48（选线已核对 32 区底板重叠 ≤1 块/条）
- *   4. edgeLink  高速联络线 ×≤16：中心 r>30 的区，放射路向外延长至高速环内缘 r=57.2
- *   5. gates     收费站 ×≤16：联络线 r=55 径向（龙门架 + 双收费亭，props/HighwayGates 渲染）
+ * 四层混合路网（方格网式 + 鱼骨式 + 环形；2026-09-28 用户反馈删 CBD 星型放射后）：
+ *   1. connector 邻接次干道 ×≤36：每区连 2 最近邻（8u ≤ len ≤ 34u），居民区互联互通（方格/鱼骨感）
+ *   2. arterial  方格骨干 ×4：x=±18 / z=±26 贯穿 ±48（选线已核对 32 区底板重叠 ≤1 块/条）
+ *   3. edgeLink  高速联络线 ×≤17：中心 r>30 的区，向外延长至高速环内缘 r=57.2
+ *   4. gates     收费站 ×≤17：联络线 r=55 径向（龙门架 + 双收费亭，props/HighwayGates 渲染）
+ *
+ * ~~spoke 放射主干道 ×31~~：**已删除**（2026-09-28 用户反馈：CBD 向外星型辐射路
+ * 与建筑 3D 模型重叠、不符合真实路网——放射语义整体移除，CBD 经一环路/方格骨干/
+ * 邻接次干道接入全网；后端无道路逻辑，grep 实证零改动）。
  *
  * 平面交叉 z-fighting 分层（设计 §2.4，非立交）：
- *   spoke/edgeLink +0；connector +0.002；arterial +0.004；一环路（FirstRingRoad）+0.007。
+ *   edgeLink +0；connector +0.002；arterial +0.004；一环路（FirstRingRoad）+0.007。
  *
- * 一环路（FIRST_RING r=20）为曲线环，不走本模块线段列表，由 FirstRingRoad 组件渲染；
- * firstRingJunctionAngles 提供放射主路与环交点角（停止线 + 红绿灯布点）。
+ * 一环路（FIRST_RING r=20）与 CBD 环路（r=5.6）为曲线环，不走本模块线段列表，
+ * 由 FirstRingRoad / RingRoad 组件渲染；cbdRingJunctionAngles /
+ * firstRingJunctionAngles = **线段与环圆的真实交点角**（通用 segment-圆求交），
+ * arterialIntersections = 方格骨干互交点（红绿灯布点用）。
  */
 
 import { districtCenter, type VirtualCityDistrictDef } from '@/types/virtualCity';
@@ -42,6 +47,19 @@ export const CONNECTOR_MAX_LEN = 34;
 export const CONNECTOR_NEIGHBORS = 2;
 /** 邻接次干道总上限（防 draw call / 道具爆炸，超出按表序截断）。 */
 export const CONNECTOR_CAP = 36;
+/** CBD 建筑区禁入半径（世界单位）：connector 线段距原点小于此值即拒绝——
+ *  穿金融 CBD 底板（半宽 4.05）的路与建筑 3D 模型重叠（2026-09-28 用户反馈）。 */
+export const CONNECTOR_CBD_KEEP_OUT = 5.0;
+
+/** 点 (px,pz) 到线段 a→b 的最短距离。 */
+function pointSegDist(px: number, pz: number, a: [number, number], b: [number, number]): number {
+  const dx = b[0] - a[0];
+  const dz = b[1] - a[1];
+  const A = dx * dx + dz * dz;
+  if (A < 1e-9) return len2(a, [px, pz]);
+  const t = Math.max(0, Math.min(1, ((px - a[0]) * dx + (pz - a[1]) * dz) / A));
+  return len2([a[0] + dx * t, a[1] + dz * t], [px, pz]);
+}
 /** 方格骨干横线 z 坐标 / 纵线 x 坐标（选线核对见设计 §4.1）。 */
 export const ARTERIAL_LINES = [
   { axis: 'x' as const, at: -18 },
@@ -61,7 +79,7 @@ export interface RoadSegment {
   from: [number, number];
   to: [number, number];
   kind: 'main' | 'side';
-  cls: 'spoke' | 'connector' | 'arterial' | 'edgeLink';
+  cls: 'connector' | 'arterial' | 'edgeLink';
   /** 平面交叉微抬（§2.4）。 */
   yOffset: number;
 }
@@ -74,12 +92,23 @@ export interface GateSpot {
   rotation: number;
 }
 
+/** 干道交叉点（红绿灯布点用）。 */
+export interface RoadJunction {
+  x: number;
+  z: number;
+  /** 交叉角（atan2(z,x) 口径；环交点 = 交点角）。 */
+  angle: number;
+}
+
 export interface RoadNetwork {
   segments: RoadSegment[];
   gates: GateSpot[];
-  /** 放射主路与一环路交点角（弧度，atan2(z, x) 口径；FirstRingRoad 停止线 +
-   *  红绿灯布点用）。 */
+  /** CBD 环路（r=5.6）与线段的交点角（RingRoad 停止线 + 信号灯）。 */
+  cbdRingJunctionAngles: number[];
+  /** 一环路（r=20）与线段的交点角（FirstRingRoad 停止线 + 信号灯）。 */
   firstRingJunctionAngles: number[];
+  /** 方格骨干互交点（arterial × arterial，信号灯布点）。 */
+  arterialIntersections: RoadJunction[];
 }
 
 function len2(a: [number, number], b: [number, number]): number {
@@ -91,31 +120,18 @@ function len2(a: [number, number], b: [number, number]): number {
 /**
  * 生成全城道路网（确定性：城区表序 + 几何距离，无随机）。
  * @param districts    城区静态表（VIRTUAL_CITY_DISTRICTS）
- * @param mainRoadMinLen 主干道判定阈值（VirtualCityCityMap.MAIN_ROAD_MIN_LEN，单一事实来源在调用方）
+ * @param _mainRoadMinLen 保留兼容（放射路删除后不再使用主干道阈值；调用方仍传
+ *   VirtualCityCityMap.MAIN_ROAD_MIN_LEN，后续批次若复用可唤醒）
  */
 export function buildRoadNetwork(
   districts: VirtualCityDistrictDef[],
-  mainRoadMinLen: number,
+  _mainRoadMinLen: number,
 ): RoadNetwork {
   const nonCbd = districts.filter((d) => d.id !== 'finance');
   const segments: RoadSegment[] = [];
   const gates: GateSpot[] = [];
 
-  // ── ① 放射主干道（现状语义保留）──
-  for (const d of nonCbd) {
-    const c = districtCenter(d.id);
-    const len = len2([c.x, c.z], [0, 0]);
-    segments.push({
-      key: `spoke-${d.id}`,
-      from: [c.x, c.z],
-      to: [0, 0],
-      kind: len > mainRoadMinLen ? 'main' : 'side',
-      cls: 'spoke',
-      yOffset: 0,
-    });
-  }
-
-  // ── ② 邻接次干道（k 近邻互通；去重；长度/总量双上限）──
+  // ── ① 邻接次干道（k 近邻互通；去重；长度/总量双上限）──
   const centers = nonCbd.map((d) => ({ id: d.id, c: districtCenter(d.id) }));
   const seen = new Set<string>();
   for (const { id, c } of centers) {
@@ -129,8 +145,10 @@ export function buildRoadNetwork(
     for (const n of neighbors) {
       const pair = [id, n.id].sort().join('~');
       if (seen.has(pair)) continue;
-      seen.add(pair);
       const nc = centers.find((o) => o.id === n.id)!.c;
+      // CBD 禁入：穿金融 CBD 建筑区的邻接路拒绝（防 3D 重叠，用户反馈 2026-09-28）
+      if (pointSegDist(0, 0, [c.x, c.z], [nc.x, nc.z]) < CONNECTOR_CBD_KEEP_OUT) continue;
+      seen.add(pair);
       segments.push({
         key: `conn-${pair}`,
         from: [c.x, c.z],
@@ -142,7 +160,7 @@ export function buildRoadNetwork(
     }
   }
 
-  // ── ③ 方格骨干（x=±18 / z=±26，贯穿 ±48）──
+  // ── ② 方格骨干（x=±18 / z=±26，贯穿 ±48）──
   for (const line of ARTERIAL_LINES) {
     const from: [number, number] =
       line.axis === 'x' ? [-ARTERIAL_HALF, line.at] : [line.at, -ARTERIAL_HALF];
@@ -158,7 +176,7 @@ export function buildRoadNetwork(
     });
   }
 
-  // ── ④ 高速联络线（中心 r>30 的区：放射路向外延长到高速内缘）+ ⑤ 收费站 ──
+  // ── ③ 高速联络线（中心 r>30 的区：向外延长到高速内缘）+ ④ 收费站 ──
   for (const { id, c } of centers) {
     const r = Math.sqrt(c.x * c.x + c.z * c.z);
     if (r <= 30) continue;
@@ -180,12 +198,63 @@ export function buildRoadNetwork(
     });
   }
 
-  // ── 一环路交点角：放射主路（len > 环半径）与环的交点（atan2(z,x) 口径）──
-  const firstRingJunctionAngles = nonCbd
-    .map((d) => districtCenter(d.id))
-    .filter((c) => Math.sqrt(c.x * c.x + c.z * c.z) > FIRST_RING_RADIUS)
-    .map((c) => Math.atan2(c.z, c.x))
-    .sort((a, b) => a - b);
+  // ── 环交点角：线段与环圆的真实交点（通用求交；无放射路后由 connector /
+  //    arterial 与环的真实穿越构成，CBD 环可能零交点 = 纯环岛，符合真实语义）──
+  const ringJunctionAngles = (radius: number): number[] => {
+    const angles: number[] = [];
+    for (const seg of segments) {
+      const ax = seg.from[0];
+      const az = seg.from[1];
+      const bx = seg.to[0];
+      const bz = seg.to[1];
+      const dx = bx - ax;
+      const dz = bz - az;
+      const A = dx * dx + dz * dz;
+      if (A < 1e-9) continue;
+      const B = 2 * (ax * dx + az * dz);
+      const C = ax * ax + az * az - radius * radius;
+      const disc = B * B - 4 * A * C;
+      if (disc < 0) continue;
+      const sq = Math.sqrt(disc);
+      for (const t of [(-B - sq) / (2 * A), (-B + sq) / (2 * A)]) {
+        if (t <= 0.001 || t >= 0.999) continue; // 端点在环外/环上不生成交点（路口段不算）
+        angles.push(Math.atan2(az + dz * t, ax + dx * t));
+      }
+    }
+    // 角度去重（多线近乎同点穿越时合并，0.05 rad ≈ 1u @ r=20）
+    angles.sort((a, b) => a - b);
+    const out: number[] = [];
+    for (const a of angles) {
+      if (!out.length || Math.abs(a - out[out.length - 1]) > 0.05) out.push(a);
+    }
+    return out;
+  };
+  const cbdRingJunctionAngles = ringJunctionAngles(5.6);
+  const firstRingJunctionAngles = ringJunctionAngles(FIRST_RING_RADIUS);
 
-  return { segments, gates, firstRingJunctionAngles };
+  // ── 方格骨干互交点（arterial × arterial；x=±18 × z=±26 中 r<20 的城内交叉）──
+  const arterialIntersections: RoadJunction[] = [];
+  const arterials = segments.filter((s) => s.cls === 'arterial');
+  for (let i = 0; i < arterials.length; i++) {
+    for (let j = i + 1; j < arterials.length; j++) {
+      const A = arterials[i];
+      const B = arterials[j];
+      // 仅横×纵相交（同向平行无交点）
+      const aDx = A.to[0] - A.from[0];
+      const aDz = A.to[1] - A.from[1];
+      const bDx = B.to[0] - B.from[0];
+      const bDz = B.to[1] - B.from[1];
+      const denom = aDx * bDz - aDz * bDx;
+      if (Math.abs(denom) < 1e-9) continue;
+      const t = ((B.from[0] - A.from[0]) * bDz - (B.from[1] - A.from[1]) * bDx) / denom;
+      const u = ((B.from[0] - A.from[0]) * aDz - (B.from[1] - A.from[1]) * aDx) / denom;
+      if (t < 0.01 || t > 0.99 || u < 0.01 || u > 0.99) continue;
+      const x = A.from[0] + aDx * t;
+      const z = A.from[1] + aDz * t;
+      arterialIntersections.push({ x, z, angle: Math.atan2(z, x) });
+    }
+  }
+  arterialIntersections.sort((a, b) => a.angle - b.angle);
+
+  return { segments, gates, cbdRingJunctionAngles, firstRingJunctionAngles, arterialIntersections };
 }

@@ -17,11 +17,9 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { streetTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/virtualCity';
-import { districtCenter, VIRTUAL_CITY_DISTRICTS } from '@/types/virtualCity';
 import { useSharedTexture, useSharedPBR, withPBR, mergeParts, type MergePart } from '@/engine3d';
 import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 import { ROAD_SURFACE_Y } from './cityScale';
-import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
 
 /** 环路半径（世界单位；CBD 8×8 底板半宽 4.05 + curb，环内缘 5.1 不压底板）。 */
 const RING_RADIUS = 5.6;
@@ -35,6 +33,9 @@ const SEGMENTS = 16;
 const OVERLAP = 1.08;
 
 interface Props {
+  /** 环与线段的交点角（atan2(z,x) 口径；roadNetwork.buildRoadNetwork 下发。
+   *  放射路删除后 CBD 环通常零交点 = 纯环岛，无交点停止线）。 */
+  junctionAngles: number[];
   /** 贴图缺失时的兜底色。 */
   fallbackColor?: string;
 }
@@ -61,7 +62,7 @@ function mergeAndDispose(parts: MergePart[]): THREE.BufferGeometry | null {
   return out;
 }
 
-export function RingRoad({ fallbackColor = '#232b38' }: Props) {
+export function RingRoad({ junctionAngles, fallbackColor = '#232b38' }: Props) {
   // UV u×2 平铺已烘焙进合并几何 → 贴图 repeat 恒 [1,1]（防 ×2 叠加）
   const asphalt = useSharedTexture(streetTileUrl('asphalt_main'), {
     wrap: 'repeat',
@@ -94,27 +95,22 @@ export function RingRoad({ fallbackColor = '#232b38' }: Props) {
         color: '#e8eaee',
       });
     }
-    // 放射主干道（len > MAIN_ROAD_MIN_LEN，批次 20 §3.2 派生化）与环的交点角
-    // （确定性；交点停止线）
-    const stoplines: MergePart[] = VIRTUAL_CITY_DISTRICTS
-      .filter((d) => d.id !== 'finance')
-      .map((d) => districtCenter(d.id))
-      .filter((c) => Math.sqrt(c.x * c.x + c.z * c.z) > MAIN_ROAD_MIN_LEN)
-      .map((c) => {
-        const ang = Math.atan2(c.z, c.x);
-        const r = RING_RADIUS + RING_WIDTH / 2 + 0.15;
-        return {
-          geo: new THREE.PlaneGeometry(0.9, 0.14),
-          matrix: segMatrix(Math.cos(ang) * r, Math.sin(ang) * r, RING_Y + 0.002, ang),
-          color: '#ffffff',
-        };
-      });
+    // 交点停止线：线段与环圆的真实交点（roadNetwork 求交下发；放射路删除后
+    // 通常为空数组 = 纯环岛无停止线，符合真实语义）
+    const stoplines: MergePart[] = junctionAngles.map((ang) => {
+      const r = RING_RADIUS + RING_WIDTH / 2 + 0.15;
+      return {
+        geo: new THREE.PlaneGeometry(0.9, 0.14),
+        matrix: segMatrix(Math.cos(ang) * r, Math.sin(ang) * r, RING_Y + 0.002, ang),
+        color: '#ffffff',
+      };
+    });
     return {
       pavements: mergeAndDispose(pavements),
       dashes: mergeAndDispose(dashes),
       stoplines: mergeAndDispose(stoplines),
     };
-  }, []);
+  }, [junctionAngles]);
 
   const roadMat = (
     <meshStandardMaterial

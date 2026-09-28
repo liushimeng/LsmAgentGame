@@ -276,9 +276,9 @@ export const OBJECT_ENTRIES: ObjectInfoEntry[] = [
     icon: '🛣️',
     name: { 'zh-CN': '城市道路', en: 'City Road', ja: '都市道路' },
     desc: {
-      'zh-CN': '沥青铺装的城市道路，划有行车标线，从各区中心辐射连通全城路网。',
-      en: 'Asphalt roads with painted lane markings, radiating from each district centre into the city-wide network.',
-      ja: 'アスファルト舗装の都市道路。車線標線を引き、各区中心から放射状に全都市を結ぶ。',
+      'zh-CN': '沥青铺装的城市道路，划有行车标线，由一环路、方格骨干与邻接次干道连通全城路网。',
+      en: 'Asphalt roads with painted lane markings, linked city-wide by the ring road, grid arterials and district connectors.',
+      ja: 'アスファルト舗装の都市道路。車線標線を引き、環状路・格子幹線・区内連絡路で全市を結ぶ。',
     },
   },
   {
@@ -287,7 +287,7 @@ export const OBJECT_ENTRIES: ObjectInfoEntry[] = [
     icon: '⭕',
     name: { 'zh-CN': '环形路', en: 'Ring Road', ja: '環状道路' },
     desc: {
-      'zh-CN': '金融 CBD 外围的环形道路，分流中心区车流，串联周边街区。',
+      'zh-CN': '金融 CBD 外围的环形道路，环绕中央商务区，分流核心区车流。',
       en: 'The ring road around the financial CBD, diverting through-traffic and linking surrounding blocks.',
       ja: '金融CBDを囲む環状道路。中心部の車流を分散させ、周辺街区をつなぐ。',
     },
