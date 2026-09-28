@@ -1,0 +1,82 @@
+/**
+ * 虚拟城市 · 对局页布局满铺 + 分辨率自适应
+ * （2026-09-28 方案 tmpPlan/虚拟城市-主界面布局满铺与分辨率自适应方案-20260928.md）
+ *
+ * 背景（P1/P2/P3）：
+ *   - P1：`.content` 默认 max-width:1280 + padding:24 + overflow:auto（base.css），
+ *     全库仅 werewolf / texas 有 `:has(.xxx-game)` 满铺覆写，虚拟城市缺失 →
+ *     2K/4K 下内容被压在 1280px 居中且四周留白。
+ *   - P2：`.app-shell` 仅 min-height:100vh，`.virtualCity-root{height:100%}` 的百分比
+ *     对无确定高度父级解析为 auto → 页面级滚动条 + 底部留白 + canvas 高度不随视口。
+ *   - P3：右侧栏固定 380px，不随分辨率缩放（1080p 偏挤 / 4K 偏窄）。
+ *
+ * 级联约定（CLAUDE.md §2.1 约束 4 + §4）：
+ *   - virtualCity.css 已 1740 行，逼近 §4 的 1800 行硬上限，故全部新增规则独立到
+ *     本文件，在 globals.css 链尾（virtualCity-objectinfo.css 之后）@import。
+ *   - 本文件对 `.content` / `.virtualCity-root` / `.virtualCity-main` /
+ *     `.virtualCity-sidebar` 的覆写与 virtualCity.css 同特异度，**靠链尾源码顺序
+ *     取胜**；不调整 globals.css 既有 @import 顺序。
+ *   - 本文件不引入任何 color/background 覆盖（CLAUDE.md §26，本次只动布局尺寸）。
+ */
+
+/* ① 对局页满铺：覆写 .content 默认 max-width:1280 + padding:24 + overflow:auto
+   （同 werewolf.css .content:has(.werewolf-game) 套路）。用 :has() 精确锁定对局页，
+   大厅 .virtualCity-lobby 不受影响（仍走默认限宽+整页滚动）。 */
+.content:has(.virtualCity-game) {
+  padding: 0;
+  max-width: none;
+  height: calc(100dvh - var(--header-h));
+  max-height: calc(100dvh - var(--header-h));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ② 顶栏折叠（.app-header--collapsed，--header-h 56→44）时同步收高度，避免底部 12px 空隙。
+   特异度 (0,4,0) > ① 的 (0,2,0)，同时命中时本规则取胜。 */
+.app-shell:has(.app-header--collapsed) .content:has(.virtualCity-game) {
+  height: calc(100dvh - var(--header-h-collapsed));
+  max-height: calc(100dvh - var(--header-h-collapsed));
+}
+
+/* ③ 全屏模式（app-shell--fullscreen：顶栏/侧栏/聊天均卸载，.app-shell 自身
+   height:100vh）下不能再减 --header-h。特异度 (0,3,0) > ① 的 (0,2,0)。 */
+.app-shell--fullscreen .content:has(.virtualCity-game) {
+  height: 100%;
+  max-height: 100%;
+}
+
+/* ④ 高度收缩链补强：.virtualCity-root 已有 height:100%（virtualCity.css:35），
+   这里补 max-height + overflow:hidden（同特异度靠源码顺序：本文件 @import 在链尾）。
+   仅对局页挂载 .virtualCity-root（大厅根是 .virtualCity-lobby，无此类）；
+   AppModal 经 createPortal 渲染到 body，不受本 overflow 裁剪。 */
+.virtualCity-root {
+  max-height: 100%;
+  overflow: hidden;
+}
+
+/* ⑤ 主区弹性：virtualCity.css 的 .virtualCity-main 是 flex:1（= basis:0%）min-height:0，
+   改为 flex:1 1 auto 确保吃满剩余高度（同特异度后写覆盖）。 */
+.virtualCity-main {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* ⑥ 右侧栏分辨率阶梯（基线 380px 不回归；断点集中在本文件末尾，避免与
+   virtualCity.css 既有 @media (max-width:1279px)→320px / (max-width:767px)→整栏
+   混淆。级联结论：
+   - ≤767px：既有移动端整栏规则保持生效（本段全部断点带 (min-width:768px) 下界）；
+   - 768–1279px：既有 320px（virtualCity.css:923）/ 300px（virtualCity-city3d.css:157）
+     被本文件 340px 以同特异度 + 链尾源码顺序取代 —— 即方案 §2.2 规定的四档阶梯
+     「窄屏 340」覆盖旧 320/300 档，属预期行为；
+   - 1440–2399px：基线 380px（virtualCity.css:218）不动；
+   - ≥2400px / ≥3400px：本文件 460 / 540 阶梯。 */
+@media (min-width: 768px) and (max-width: 1439px) {
+  .virtualCity-sidebar { width: 340px; flex: 0 0 340px; }
+}
+@media (min-width: 2400px) {
+  .virtualCity-sidebar { width: 460px; flex: 0 0 460px; }
+}
+@media (min-width: 3400px) {
+  .virtualCity-sidebar { width: 540px; flex: 0 0 540px; }
+}
