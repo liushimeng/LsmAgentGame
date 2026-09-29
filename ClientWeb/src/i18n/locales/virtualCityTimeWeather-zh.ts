@@ -44,6 +44,15 @@ const virtualCityTimeWeather = {
   'virtualCity.weather.storm': '暴雨',
   'virtualCity.weather.snow': '雪',
   'virtualCity.weather.blizzard': '暴雪',
+  // ── 批次 33：真实城市（建房下拉 + 主界面日出日落徽章；方案 33 §3.1/§3.4）──
+  'virtualCity.city': '城市',
+  'virtualCity.cityDefault': '默认虚拟城市',
+  'virtualCity.cityRandom': '🎲 随机（世界前20大城市）',
+  'virtualCity.cityRandomHint': '进房时按随机种子确定性抽取一座真实城市 —— 时钟/日出日落按该城市时区与纬度呈现',
+  // 选中真实城市 hint：{name}/{country}/{lat}/{lng}
+  'virtualCity.cityHint': '{name}（{country}）· 纬度 {lat}，经度 {lng} —— 城市时钟与日出日落按当地时区呈现',
+  // 主界面日出日落徽章：{rise}/{set} = HH:MM
+  'virtualCity.citySunTimes': '🌅 {rise} · 🌇 {set}',
 };
 
 export default virtualCityTimeWeather;

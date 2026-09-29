@@ -78,6 +78,19 @@ export interface VirtualCityDict {
   'virtualCity.weather.storm': string;
   'virtualCity.weather.snow': string;
   'virtualCity.weather.blizzard': string;
+  // ── 批次 33：真实城市（建房下拉 + 主界面日出日落徽章；方案 33 §3.1/§3.4）──
+  /** 建房下拉行标签（城市）。 */
+  'virtualCity.city': string;
+  /** 下拉首项：默认虚拟城市（""。 */
+  'virtualCity.cityDefault': string;
+  /** 下拉末项：随机世界前 20 大城市（"random"）。 */
+  'virtualCity.cityRandom': string;
+  /** 随机项 hint：按种子确定性抽取、进房后揭晓。 */
+  'virtualCity.cityRandomHint': string;
+  /** 选中真实城市 hint：{name}/{country}/{lat}/{lng}。 */
+  'virtualCity.cityHint': string;
+  /** 主界面日出日落徽章：{rise}/{set} = HH:MM。 */
+  'virtualCity.citySunTimes': string;
   'virtualCity.mySeat': string;
   'virtualCity.waiting': string;
   'virtualCity.spectating': string;

@@ -35,6 +35,15 @@ const virtualCityTimeWeather = {
   'virtualCity.weather.storm': 'Storm',
   'virtualCity.weather.snow': 'Snow',
   'virtualCity.weather.blizzard': 'Blizzard',
+  // ── 批次 33：真实城市（建房下拉 + 主界面日出日落徽章；方案 33 §3.1/§3.4）──
+  'virtualCity.city': 'City',
+  'virtualCity.cityDefault': 'Default Virtual City',
+  'virtualCity.cityRandom': '🎲 Random (Top-20 World City)',
+  'virtualCity.cityRandomHint': 'A real city is picked deterministically by the room seed on entry — clock and sunrise/sunset follow that city\'s timezone and latitude',
+  // 选中真实城市 hint：{name}/{country}/{lat}/{lng}
+  'virtualCity.cityHint': '{name} ({country}) · lat {lat}, lng {lng} — city clock and sunrise/sunset follow the local timezone',
+  // 主界面日出日落徽章：{rise}/{set} = HH:MM
+  'virtualCity.citySunTimes': '🌅 {rise} · 🌇 {set}',
 };
 
 export default virtualCityTimeWeather;

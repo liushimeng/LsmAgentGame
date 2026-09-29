@@ -52,6 +52,13 @@ export interface DayNightSample {
    * 批次 30 B4：天空季节色调的唯一入口（引擎不感知"季节"概念）。
    */
   warmth01?: number;
+  /**
+   * 日出时刻（当地日分数 0..1；缺省 0.25 = 6:00）。批次 33：真实城市
+   * 逐月日出日落表驱动（虚拟城市）；缺省保持批次 27 固定 6:00/18:00。
+   */
+  sunrise01?: number;
+  /** 日落时刻（当地日分数 0..1；缺省 0.75 = 18:00）。 */
+  sunset01?: number;
 }
 
 /** 逐帧输出快照（供路灯 / 窗灯等游戏组件 useFrame 读取）。 */
@@ -187,10 +194,13 @@ export function DayNightCycle({
       gl.shadowMap.needsUpdate = true;
     }
     const s = sample();
-    const hours = clamp01(s.timeOfDay01) * 24;
-    // 太阳轨迹角：6:00 → 0（日出东方）、12:00 → π/2（正午）、18:00 → π（日落西方）；
-    // 夜间 θ 越界 → sin 为负 = 太阳在地平线下。
-    const theta = (Math.PI * (hours - 6)) / 12;
+    // 批次 33：太阳轨迹角按调用方给定的日出/日落时刻映射（缺省 6:00/18:00 =
+    // 批次 27 行为逐分不差）：日出 → 0（东方）、正午 → π/2、日落 → π（西方）；
+    // 夜间 t 越界 → sin 为负 = 太阳在地平线下。
+    const rise = clamp01(s.sunrise01 ?? 0.25);
+    const set = Math.max(rise + 0.02, clamp01(s.sunset01 ?? 0.75));
+    const tDay = (clamp01(s.timeOfDay01) - rise) / (set - rise);
+    const theta = Math.PI * tDay;
     const cosT = Math.cos(theta);
     const sunElev = Math.sin(theta);
     const dayFactor = smoothstep(-0.06, 0.25, sunElev);

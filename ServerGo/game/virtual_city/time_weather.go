@@ -136,9 +136,11 @@ func MonthMsForRatio(ratio int) int {
 
 // TimeEnv 批次 27:BuildClientState 的时间环境参数(seed 是房间私有小写
 // 字段,ws 层经 VirtualCityRoom.TimeEnv() 锁内快照透出)。
+// 批次 33:CityGeo 真实城市档案(可能 nil = 默认城市)。
 type TimeEnv struct {
-	Ratio int   // 城市秒/现实秒(clamp [60,864000];缺省 60)
-	Seed  int64 // 房间 seed(天气派生)
+	Ratio   int      // 城市秒/现实秒(clamp [60,864000];缺省 60)
+	Seed    int64    // 房间 seed(天气派生)
+	CityGeo *CityGeo // 真实城市档案(批次 33;nil = 默认城市)
 }
 
 // weatherLabelZH / seasonLabelZH 中文标签(月结 city_weather 播报与 Agent

@@ -14,6 +14,8 @@
  *   - 时间比例（批次 27 §4.4，取代「模拟月节拍」预设+滑杆）：13 档下拉
  *     （小时/天/月/年四组 optgroup，默认 1分钟比1小时 = ratio 60）+
  *     hint 信息行（1 模拟月 ≈ … · 全周期 420 月 ≈ …；慢档附加季节观感提示）。
+ *   - 城市（批次 33 §3.1）：默认虚拟城市 / 世界前 20 大城市 / 🎲 随机
+ *     （random = 按 seed 确定性抽取）；选中真实城市时 hint 追加城市摘要。
  *   - 随机种子（可选，确定性复现）
  *
  * §7.1：提交失败 / 校验不通过内联红条（formError）、弹窗不关闭
@@ -28,6 +30,7 @@ import { reportGlobalError } from '@/services/globalError';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import {
+  VIRTUAL_CITY_CITIES,
   VIRTUAL_CITY_TIME_RATIOS,
   fullCycleMsForTimeRatio,
   monthMsForTimeRatio,
@@ -40,6 +43,9 @@ export interface VirtualCityCreateRequest {
   /** 批次 27 §3.1：时间比例（城市秒/现实秒，13 档之一；后端 clamp [60,864000]）。 */
   time_ratio: number;
   seed?: number;
+  /** 批次 33 §3.1：真实城市（"" = 默认城市；"random" = 随机世界前 20 大城市；
+   *  其余 = 城市键）。缺省不发送。 */
+  city_key?: string;
   /** 2026-09-19 §全Agent模式: 是否全 Agent 模式(默认 true)。 */
   full_agent?: boolean;
   /** 批次 20 文档 3 A2/A4：市长选举启用开关（缺省 false = 关闭，R8-2 语义）。 */
@@ -154,6 +160,8 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
   const [residentCount, setResidentCount] = useState(RESIDENT_DEFAULT);
   // 批次 27 §3.1：时间比例（13 档，默认 1分钟比1小时）。
   const [timeRatio, setTimeRatio] = useState(TIME_RATIO_DEFAULT);
+  // 批次 33 §3.1：真实城市（"" = 默认城市，"random" = 随机世界前 20 大城市）。
+  const [cityKey, setCityKey] = useState('');
   const [seed, setSeed] = useState('');
   // 批次 20 文档 3 A4：市长选举启用（默认关，随 body.civic_election_enabled 提交）。
   const [election, setElection] = useState(false);
@@ -217,6 +225,8 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
         name: name.trim() || undefined,
         resident_count: clampResidents(residentCount),
         time_ratio: timeRatio,
+        // 批次 33：仅非默认城市发送（"" 缺省 = 默认城市，后端零值语义）。
+        ...(cityKey ? { city_key: cityKey } : {}),
         ...(seedNum > 0 ? { seed: seedNum } : {}),
         full_agent: true, // 2026-09-19 §全Agent模式: 虚拟城市默认全 Agent
         // 批次 20 文档 3 A2：仅勾选时置 true（后端零值=false，勿做归一化）。
@@ -316,6 +326,41 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
         ) : (
           <p className="virtualCity-create-form__hint virtualCity-create-form__hint--ok" data-testid="virtualCity-create-linepool-info">
             🔌 {t('virtualCity.linePoolInfo' as TKey, { n: linePoolTotal })}
+          </p>
+        )}
+
+        {/* 批次 33 §3.1：真实城市下拉（默认 / 20 城 / 随机）。显示名直取中文
+            （如既有「📋 调研」硬编码先例）；选中真实城市时 hint 追加城市摘要。 */}
+        <label className="virtualCity-create-form__row">
+          <span>{t('virtualCity.city' as TKey)}</span>
+          <select
+            value={cityKey}
+            onChange={(e) => setCityKey(e.target.value)}
+            disabled={busy}
+            data-testid="virtualCity-create-city"
+          >
+            <option value="">{t('virtualCity.cityDefault' as TKey)}</option>
+            {VIRTUAL_CITY_CITIES.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.nameZh}（{c.countryZh}）
+              </option>
+            ))}
+            <option value="random">{t('virtualCity.cityRandom' as TKey)}</option>
+          </select>
+        </label>
+        {cityKey && cityKey !== 'random' && (
+          <p className="virtualCity-create-form__hint" data-testid="virtualCity-create-city-hint">
+            🏙 {(() => {
+              const c = VIRTUAL_CITY_CITIES.find((x) => x.key === cityKey);
+              return c ? t('virtualCity.cityHint' as TKey, {
+                name: c.nameZh, country: c.countryZh, lat: c.lat, lng: c.lng,
+              }) : '';
+            })()}
+          </p>
+        )}
+        {cityKey === 'random' && (
+          <p className="virtualCity-create-form__hint" data-testid="virtualCity-create-city-random-hint">
+            🎲 {t('virtualCity.cityRandomHint' as TKey)}
           </p>
         )}
 

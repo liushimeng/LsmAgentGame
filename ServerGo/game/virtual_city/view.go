@@ -45,6 +45,10 @@ type ClientGameState struct {
 	Season           string         `json:"season"`            // spring|summer|autumn|winter
 	Weather          string         `json:"weather"`           // 8 类型 §3.3(clear|cloudy|fog|drizzle|rain|storm|snow|blizzard)
 	WeatherIntensity float64        `json:"weather_intensity"` // [0,1] 两位小数
+	// 批次 33:真实城市(方案 §2.3)。选中城市才下发(omitempty);默认城市
+	// 两字段恒空 —— 前端完全旁路,批次 27 行为逐分不差。
+	CityName string         `json:"city_name,omitempty"` // 选中城市中文名(顶栏标题)
+	CityInfo *CityGeoJSON   `json:"city_info,omitempty"` // 城市档案 + 当日日出日落(插值)
 	Players          []PlayerJSON   `json:"players"`
 	MySeat           int            `json:"my_seat"`
 	My               *MyJSON        `json:"my"` // nil = 观战者
@@ -781,6 +785,12 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 	cs.TimeRatio = ratio
 	cs.Season = SeasonAt(cityClockMs)
 	cs.Weather, cs.WeatherIntensity = WeatherAt(envSeed, cityClockMs)
+	// 批次 33:真实城市档案 + 当日日出日落(SunTimesAt 纯函数现算;默认城市
+	// env.CityGeo==nil → 两字段零值,omitempty 不下发,旧客户端零感知)。
+	if env != nil && env.CityGeo != nil {
+		cs.CityName = env.CityGeo.NameZH
+		cs.CityInfo = CityGeoJSONAt(env.CityGeo, cityClockMs)
+	}
 	if world == nil {
 		cs.Phase = PhaseActing
 		// 城市快照独立于引擎 World(未开局也可有城;当前实现建城在 Start,

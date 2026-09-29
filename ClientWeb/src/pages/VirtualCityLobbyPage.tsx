@@ -94,7 +94,12 @@ export function VirtualCityLobbyPage() {
           // 2026-09-25 §建房400修复 — 键名 virtualCity → virtual_city 对齐后端
           // json tag（DisallowUnknownFields 严格校验，camelCase 会 400）。
           // 批次 27 §3.1：month_ms → time_ratio（经济月节拍由后端按方案推导）。
-          virtual_city: { time_ratio: req.time_ratio, ...(req.seed ? { seed: req.seed } : {}) },
+          // 批次 33 §3.1：city_key 真实城市（undefined 不发送 = 默认城市）。
+          virtual_city: {
+            time_ratio: req.time_ratio,
+            ...(req.seed ? { seed: req.seed } : {}),
+            ...(req.city_key ? { city_key: req.city_key } : {}),
+          },
           full_agent: req.full_agent === true,
           // 批次 20 文档 3 A2：市长选举启用（顶层字段，仅 virtualCity 生效）。
           civic_election_enabled: req.civic_election_enabled === true,

@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useVirtualCityStore } from '@/store/virtualCity.store';
 import { selectSeatedCount, selectSeatCapacity, selectSeatsReady } from '@/store/virtualCity.store';
+import { useI18nStore } from '@/store/i18n.store';
 import { useVirtualCity } from '@/hooks/useVirtualCity';
 import { useVirtualCitySpeech } from '@/hooks/useVirtualCitySpeech';
 import { useSpectatorMode } from '@/hooks/useSpectatorMode';
@@ -29,7 +30,7 @@ import { roomService } from '@/services/auth.service';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import { districtCenter, formatPct, timeRatioPresetKey, type VirtualCityDistrictId } from '@/types/virtualCity';
-import { resetCityTime, setCityClockAnchor, setCityEnv } from '@/components/virtualCity/cityTimeStore';
+import { resetCityTime, setCityClockAnchor, setCityEnv, setCityGeo } from '@/components/virtualCity/cityTimeStore';
 import { CityClockText, type CityClockAnchor } from '@/components/virtualCity/CityClockText';
 import {
   VirtualCityCityMap,
@@ -146,6 +147,8 @@ export function VirtualCityGamePage() {
   const seatedCount = useVirtualCityStore(selectSeatedCount);
   const seatCapacity = useVirtualCityStore(selectSeatCapacity);
   const seatsReady = useVirtualCityStore(selectSeatsReady);
+  // 批次 33：当前语言（真实城市三语名选择 —— 必须在任何 early-return 之前）。
+  const lang = useI18nStore((s) => s.lang);
 
   const {
     spectate, unspectate, leaveGame, requestState, sendAction, sendTrade, startEarly,
@@ -180,6 +183,9 @@ export function VirtualCityGamePage() {
     cityClockRef.current = { cityMs: c, at, speed };
     setCityClockAnchor(c, at, speed);
     setCityEnv(gameState?.season, gameState?.weather, gameState?.weather_intensity);
+    // 批次 33：真实城市档案（时区 + 当日日出日落）写入渲染单例；未选城市
+    // 传 null → 复位 tz=0 / 6:00-18:00（批次 27 行为零回归）。
+    setCityGeo(gameState?.city_info ?? null);
   }, [gameState, timeRatio]);
 
   // 入场：join / spectate（WS 未 OPEN 时 500ms 重试）+ 8s 轮询全量快照。
@@ -280,7 +286,28 @@ export function VirtualCityGamePage() {
   // 城市时钟/运行时长显示已下沉 <CityClockText>（批次 28 A1）：250ms tick 只更新
   // 该文本块自身，不再重渲染本页与 <VirtualCityCityMap> 场景树。
 
-  // ── 批次 27 §3.4：季节/天气/时间比例徽章（旧帧无字段整条隐藏，不显示 undefined）。──
+  // ── 批次 33：真实城市 —— 标题替换 + 日出日落徽章（旧帧/默认城市整条旁路）。
+  //    lang 已在上方 hooks 区取用（勿在此重复 useI18nStore —— 位于 early-return 后）。──
+  const cityInfo = gameState?.city_info ?? null;
+  const cityDisplayName = cityInfo
+    ? lang === 'en'
+      ? cityInfo.name_en
+      : lang === 'ja'
+        ? cityInfo.name_ja
+        : cityInfo.name
+    : null;
+  const cityCountry = cityInfo
+    ? lang === 'en'
+      ? cityInfo.country_en
+      : lang === 'ja'
+        ? cityInfo.country_ja
+        : cityInfo.country
+    : null;
+  const citySunBadge = cityInfo
+    ? t('virtualCity.citySunTimes' as TKey, { rise: cityInfo.sunrise, set: cityInfo.sunset })
+    : '';
+
+  // ── 批次 27 §3.4：季节/天气徽章（旧帧无字段整条隐藏，不显示 undefined）。──
   const envBadge = [
     gameState?.season && t(`virtualCity.season.${gameState.season}` as TKey),
     gameState?.weather && t(`virtualCity.weather.${gameState.weather}` as TKey),
@@ -302,7 +329,8 @@ export function VirtualCityGamePage() {
       {/* 顶部信息栏 */}
       <header className="virtualCity-topbar">
         <div className="virtualCity-topbar__title">
-          🏙 {t('virtualCity.title' as TKey)}
+          {/* 批次 33：选中真实城市时标题换为城市名（按当前语言取三语字段）。 */}
+          🏙 {cityDisplayName ?? t('virtualCity.title' as TKey)}
           <small className="virtualCity-topbar__room">#{roomId.slice(0, 8)}</small>
           {spectator && <span className="virtualCity-badge virtualCity-badge--spectator">👁 {t('virtualCity.spectate' as TKey)}</span>}
         </div>
@@ -333,6 +361,16 @@ export function VirtualCityGamePage() {
             {envBadge && (
               <span className="virtualCity-topbar__item" data-testid="virtualCity-env-badge">
                 🌦 {envBadge}
+              </span>
+            )}
+            {/* 批次 33：城市日出日落徽章（选中真实城市才渲染；tooltip 带国家/经纬度）。 */}
+            {citySunBadge && (
+              <span
+                className="virtualCity-topbar__item"
+                title={`${cityCountry} · ${cityInfo?.lat}, ${cityInfo?.lng}`}
+                data-testid="virtualCity-city-sun-badge"
+              >
+                {citySunBadge}
               </span>
             )}
             {ratioBadge && (

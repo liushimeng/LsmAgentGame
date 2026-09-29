@@ -29,13 +29,17 @@ const WEATHER_HYSTERESIS_MS = 3000;
 export interface CityTimeSample {
   /** 城市时钟毫秒（锚点 + (now − at) × ratio 外推；无锚点 = 0）。 */
   cityMs: number;
-  /** 当日时刻 0..1（0.5 = 正午；无锚点 = 0.5 静态正午，视觉零回归）。 */
+  /** 当日时刻 0..1（0.5 = 正午；无锚点 = 0.5 静态正午，视觉零回归）。
+   *  批次 33：选中真实城市时为**城市当地**时刻（UTC + tzOffsetMin）。 */
   timeOfDay01: number;
   /** 城市日序号（自纪元起）。 */
   dayIndex: number;
   season: CitySeason;
   weather: CityWeatherKind | null;
   intensity: number;
+  /** 批次 33：当日日出/日落（当地 0..1；无城市 = 0.25/0.75 = 批次 27 的 6:00/18:00）。 */
+  sunrise01: number;
+  sunset01: number;
 }
 
 /** §3.3 视觉参数镜像表行（8 类型逐值照抄方案）。 */
@@ -102,6 +106,11 @@ let weather: CityWeatherKind | null = null;
 let intensity = 0;
 let lastWeatherAt = 0;
 let dayNight: DayNightSnapshot | null = null;
+// 批次 33：真实城市时区（分钟，东正西负；0 = 默认城市/旧帧，UTC 口径）。
+let tzOffsetMin = 0;
+// 批次 33：当日日出/日落（当地日分数；缺省 6:00/18:00 = 批次 27 语义）。
+let sunrise01 = 0.25;
+let sunset01 = 0.75;
 const seasonSubs = new Set<(s: CitySeason) => void>();
 
 /**
@@ -164,17 +173,47 @@ export function sample(): CityTimeSample {
   const cityMs = a ? a.cityMs + Math.max(0, Date.now() - a.at) * a.ratio : 0;
   if (cityMs <= 0) {
     // 无锚点（占位帧/旧后端）：静态正午（timeOfDay01 = 0.5）= 旧版观感。
-    return { cityMs: 0, timeOfDay01: 0.5, dayIndex: 0, season, weather, intensity };
+    return { cityMs: 0, timeOfDay01: 0.5, dayIndex: 0, season, weather, intensity, sunrise01, sunset01 };
   }
-  const dayMs = cityMs - CITY_EPOCH_MS;
+  // 批次 33：timeOfDay01 用城市当地时间（UTC ms + 时区偏移；tz=0 时与批次 27 逐分不差）。
+  const localMs = cityMs + tzOffsetMin * 60_000;
+  const dayMs = localMs - CITY_EPOCH_MS;
   return {
     cityMs,
     timeOfDay01: (((dayMs % DAY_MS) + DAY_MS) % DAY_MS) / DAY_MS,
-    dayIndex: Math.floor(dayMs / DAY_MS),
+    dayIndex: Math.floor((cityMs - CITY_EPOCH_MS) / DAY_MS),
     season,
     weather,
     intensity,
+    sunrise01,
+    sunset01,
   };
+}
+
+/**
+ * 批次 33：真实城市档案写入（帧到达时由 GamePage 调用；frame==null =
+ * 默认城市 → 复位 tz=0 与 6:00/18:00，批次 27 行为零回归）。
+ * 日出/日落换算为当地日分数（分钟/1440），驱动 DayNightCycle 太阳升落。
+ */
+export function setCityGeo(frame: {
+  tz_offset_min: number;
+  sunrise_min: number;
+  sunset_min: number;
+} | null): void {
+  if (!frame || !Number.isFinite(frame.tz_offset_min)) {
+    tzOffsetMin = 0;
+    sunrise01 = 0.25;
+    sunset01 = 0.75;
+    return;
+  }
+  tzOffsetMin = Math.round(frame.tz_offset_min);
+  sunrise01 = Math.min(0.45, Math.max(0.02, frame.sunrise_min / 1440));
+  sunset01 = Math.min(0.98, Math.max(0.55, frame.sunset_min / 1440));
+}
+
+/** 当前城市时区偏移（分钟；CityClockText 城市当地时间格式化用）。 */
+export function currentTzOffsetMin(): number {
+  return tzOffsetMin;
 }
 
 /** 天气视觉参数查表（null/未知 → 中性参数 = 批次 26 观感）。 */
@@ -199,6 +238,9 @@ export function resetCityTime(): void {
   intensity = 0;
   lastWeatherAt = 0;
   dayNight = null;
+  tzOffsetMin = 0;
+  sunrise01 = 0.25;
+  sunset01 = 0.75;
 }
 
 // ?debug=1：暴露最小注入面（§7.4/§7.5 CDP 视觉验收——强制 weather='rain'/'snow'

@@ -557,6 +557,12 @@ export interface VirtualCityGameState {
   weather?: VirtualCityWeatherKind;
   /** 批次 27 §3.3：天气强度 [0,1] 两位小数（clear=0 / cloudy=0.35）。 */
   weather_intensity?: number;
+  /** 批次 33 §2.3：选中真实城市的中文名（顶栏标题；未选城市 omit）。
+   *  按当前语言从 city_info 三语字段取名的优先度：本字段为 zh 兜底。 */
+  city_name?: string;
+  /** 批次 33 §2.3：真实城市档案 + 当日日出日落（未选城市 omit →
+   *  前端完全旁路，批次 27 行为逐分不差）。 */
+  city_info?: VirtualCityCityInfo;
   players: VirtualCityPlayer[];
   /** -1 = 观战。 */
   my_seat: number;
@@ -1269,6 +1275,9 @@ export interface VirtualCityRoomOptions {
   month_ms?: number;
   /** 可选随机种子（测试确定性复现）。 */
   seed?: number;
+  /** 批次 33 §2.3：真实城市选择（"" / 缺省 = 默认城市；"random" = 按 seed
+   *  确定性抽取世界前 20 大城市之一；其余 = 城市键 tokyo/delhi/.../new_york）。 */
+  city_key?: string;
   /** 2026-09-25 §LLM线路池配额 — 本房 Agent 并发线路数 [1,64]；
    *  0/缺省 = 不指定（后端按池总量运行）。 */
   llm_lines?: number;
@@ -1318,6 +1327,62 @@ export function timeRatioPresetKey(ratio: number): TKey | null {
   const hit = VIRTUAL_CITY_TIME_RATIOS.find((p) => p.ratio === ratio);
   return hit ? hit.key : null;
 }
+
+// ── 批次 33 §2.1/§3.1：世界前 20 大城市（建房下拉；与服务端 city_geo.go
+//    表键序一致，显示名直取中文名 —— 如既有「📋 调研」硬编码先例）────────
+
+/** 服务端 city_info 下发结构（BuildClientState 现算日出日落）。 */
+export interface VirtualCityCityInfo {
+  key: string;
+  name: string;
+  name_en: string;
+  name_ja: string;
+  country: string;
+  country_en: string;
+  country_ja: string;
+  lat: number;
+  lng: number;
+  /** 标准时区偏移（分钟，东正西负）。 */
+  tz_offset_min: number;
+  /** 城市当日日出/日落 HH:MM（月内插值，数据文档口径）。 */
+  sunrise: string;
+  sunset: string;
+  sunrise_min: number;
+  sunset_min: number;
+}
+
+/** 建房下拉城市行（key 对齐后端 city_key；"" = 默认城市，"random" = 随机）。 */
+export interface VirtualCityCityOption {
+  key: string;
+  nameZh: string;
+  countryZh: string;
+  lat: number;
+  lng: number;
+}
+
+/** 世界前 20 大城市静态表（数据文档排名序；服务端 city_geo.go 双端同序）。 */
+export const VIRTUAL_CITY_CITIES: VirtualCityCityOption[] = [
+  { key: 'tokyo', nameZh: '东京', countryZh: '日本', lat: 35.6762, lng: 139.6503 },
+  { key: 'delhi', nameZh: '德里', countryZh: '印度', lat: 28.6139, lng: 77.2090 },
+  { key: 'shanghai', nameZh: '上海', countryZh: '中国', lat: 31.2304, lng: 121.4737 },
+  { key: 'dhaka', nameZh: '达卡', countryZh: '孟加拉国', lat: 23.8103, lng: 90.4125 },
+  { key: 'sao_paulo', nameZh: '圣保罗', countryZh: '巴西', lat: -23.5505, lng: -46.6333 },
+  { key: 'mexico_city', nameZh: '墨西哥城', countryZh: '墨西哥', lat: 19.4326, lng: -99.1332 },
+  { key: 'cairo', nameZh: '开罗', countryZh: '埃及', lat: 30.0444, lng: 31.2357 },
+  { key: 'mumbai', nameZh: '孟买', countryZh: '印度', lat: 19.0760, lng: 72.8777 },
+  { key: 'beijing', nameZh: '北京', countryZh: '中国', lat: 39.9042, lng: 116.4074 },
+  { key: 'dar_es_salaam', nameZh: '达累斯萨拉姆', countryZh: '坦桑尼亚', lat: -6.7924, lng: 39.2083 },
+  { key: 'osaka', nameZh: '大阪', countryZh: '日本', lat: 34.6762, lng: 135.5019 },
+  { key: 'kolkata', nameZh: '加尔各答', countryZh: '印度', lat: 22.5726, lng: 88.3639 },
+  { key: 'buenos_aires', nameZh: '布宜诺斯艾利斯', countryZh: '阿根廷', lat: -34.6037, lng: -58.3816 },
+  { key: 'karachi', nameZh: '卡拉奇', countryZh: '巴基斯坦', lat: 24.8607, lng: 67.0110 },
+  { key: 'istanbul', nameZh: '伊斯坦布尔', countryZh: '土耳其', lat: 41.0082, lng: 28.9784 },
+  { key: 'lagos', nameZh: '拉各斯', countryZh: '尼日利亚', lat: 6.5244, lng: 3.3792 },
+  { key: 'rio_de_janeiro', nameZh: '里约热内卢', countryZh: '巴西', lat: -22.9068, lng: -43.1729 },
+  { key: 'chennai', nameZh: '金奈', countryZh: '印度', lat: 13.0827, lng: 80.2707 },
+  { key: 'bangkok', nameZh: '曼谷', countryZh: '泰国', lat: 13.7563, lng: 100.5018 },
+  { key: 'new_york', nameZh: '纽约', countryZh: '美国', lat: 40.7128, lng: -74.0060 },
+];
 
 // ── 静态表 ────────────────────────────────────────────────────────────
 

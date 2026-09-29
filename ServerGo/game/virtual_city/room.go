@@ -200,14 +200,22 @@ type VirtualCityRoom struct {
 	// llmStats 批次 25 可观测性:房间级 LLM 调用计数(seat/driver/voice)。
 	llmStats roomLLMStats
 
-	// 城市时钟(批次 25 问题 3):cityEpochBaseMs 固定纪元(2025-01-01 08:00
-	// +0800);pausedAccumMs 累计暂停时长;pauseStartAtMs 当前暂停起点(0=未暂停)。
+	// 城市时钟(批次 25 问题 3):cityEpochBaseMs 纪元毫秒。构造期 = 固定纪元
+	// (2025-01-01 08:00 +0800,未开局占位显示);批次 33 开局重锚为服务器当前
+	// UTC 时间(方案 §2.2)。pausedAccumMs 累计暂停时长;pauseStartAtMs 当前
+	// 暂停起点(0=未暂停)。
 	cityEpochBaseMs int64
 	pausedAccumMs   int64
 	pauseStartAtMs  int64
 	// lastWeatherKind 批次 27(§3.3 月结天气播报):上一次播报的城市天气
 	// 类型("" = 尚未播报 → 首月也播报)。纯内存态,不进存档(§9)。
 	lastWeatherKind string
+
+	// 批次 33:真实城市档案(city_geo.go)。"",=默认城市(cityGeo nil,批次 27
+	// 行为逐分不差);applyOpts 解析(在 Seed 落位后,random 用最终 seed)。
+	// 纯内存态,不进存档(与 pendingOpts 现状一致,批次 27 §9 同款)。
+	cityKey  string
+	cityGeo  *CityGeo
 
 	done     chan struct{}
 	settleCh chan struct{}
@@ -376,6 +384,13 @@ func (r *VirtualCityRoom) applyOpts(opts *service.VirtualCityRoomOptions) {
 	}
 	if opts.Seed != 0 {
 		r.seed = opts.Seed
+	}
+	// 批次 33(方案 §2.2):真实城市选择。必须在 Seed 落位之后解析 ——
+	// "random" 按最终 seed 确定性抽取(同 seed 复现同一座城);未命中/空串
+	// = 默认城市(cityGeo=nil,全部城市逻辑旁路,批次 27 行为零偏移)。
+	if opts.CityKey != "" {
+		r.cityKey = opts.CityKey
+		r.cityGeo = resolveCityGeo(opts.CityKey, r.seed)
 	}
 	// 2026-09-21 §虚拟城市:resident_count(service 层已 clamp MaxResidents;
 	// 此处再防御负数)。仅 Start 前生效(城市在 Start 一次性合成)。
@@ -640,6 +655,10 @@ func (r *VirtualCityRoom) Start(loader *profession.Loader) *errcode.Error {
 	// 批次 25(问题 3):城市时钟暂停累计归零(重开/再开局不复用旧暂停)。
 	r.pausedAccumMs = 0
 	r.pauseStartAtMs = 0
+	// 批次 33(方案 §2.2):城市时钟纪元重锚 —— 开局时刻 = 服务器当前 UTC
+	// 时间(季节/月相与现实同步),随后仍按 ×TimeRatio 推进(cityClockMsLocked
+	// 公式不动);未开局房的构造期固定纪元(2025-01-01)仅作占位显示。
+	r.cityEpochBaseMs = time.Now().UnixMilli()
 	// 批次 27:月节拍 clamp 上限 60000;时钟倍率防御归一(<=0 → 60,
 	// cityClockMsLocked / TimeEnv 同款兜底,直构房间零值安全)。
 	r.MonthMs = clampInt(r.MonthMs, 3000, 60000)
@@ -1146,10 +1165,11 @@ func (r *VirtualCityRoom) TimeRatioValue() int {
 
 // TimeEnv 批次 27:BuildClientState 时间环境快照(锁内;ws 广播路径在
 // broadcastVirtualCityState 构造后传入 BuildClientState)。
+// 批次 33:追加 CityGeo(真实城市档案;nil = 默认城市,城市字段不下发)。
 func (r *VirtualCityRoom) TimeEnv() TimeEnv {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return TimeEnv{Ratio: r.timeRatioLocked(), Seed: r.seed}
+	return TimeEnv{Ratio: r.timeRatioLocked(), Seed: r.seed, CityGeo: r.cityGeo}
 }
 
 // timeRatioLocked 锁内读取时间比例(<=0 防御 60)。

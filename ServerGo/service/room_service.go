@@ -91,6 +91,10 @@ type VirtualCityRoomOptions struct {
 	// 显式 false = 允许人类加入空位(FullAgentMode=false,JoinGame 不再返回 35036)。
 	// 建房 body 顶层 full_agent 由 API 层并入本字段。
 	FullAgent *bool `json:"full_agent,omitempty"`
+	// CityKey 批次 33(方案 §2.3)— 真实城市选择(仅 virtual_city 生效):
+	// "" / 缺省 = 默认城市(批次 27 行为);"random" = 按房间 seed 确定性抽取
+	// 世界前 20 大城市之一;其余 = 城市键(tokyo/delhi/.../new_york)。
+	CityKey string `json:"city_key,omitempty"`
 }
 
 // GameJoiner is the callback RoomService invokes after a successful CreateRoom

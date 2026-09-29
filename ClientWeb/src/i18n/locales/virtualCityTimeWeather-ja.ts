@@ -35,6 +35,15 @@ const virtualCityTimeWeather = {
   'virtualCity.weather.storm': '暴雨',
   'virtualCity.weather.snow': '雪',
   'virtualCity.weather.blizzard': '猛吹雪',
+  // ── 批次 33：真实城市（建房下拉 + 主界面日出日落徽章；方案 33 §3.1/§3.4）──
+  'virtualCity.city': '都市',
+  'virtualCity.cityDefault': 'デフォルト仮想都市',
+  'virtualCity.cityRandom': '🎲 ランダム（世界トップ20都市）',
+  'virtualCity.cityRandomHint': '入室時にルーム seed で決定的に 1 都市を抽選 —— 時計と日の出/日の入りはその都市のタイムゾーンと緯度に従います',
+  // 选中真实城市 hint：{name}/{country}/{lat}/{lng}
+  'virtualCity.cityHint': '{name}（{country}）· 緯度 {lat}、経度 {lng} —— 都市時計と日の出/日の入りは現地タイムゾーンで表示',
+  // 主界面日出日落徽章：{rise}/{set} = HH:MM
+  'virtualCity.citySunTimes': '🌅 {rise} · 🌇 {set}',
 };
 
 export default virtualCityTimeWeather;

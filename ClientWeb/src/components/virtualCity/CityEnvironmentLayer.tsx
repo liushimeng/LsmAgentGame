@@ -72,6 +72,7 @@ export function CityEnvironmentLayer({
   const snapRef = useRef<DayNightSnapshot | null>(null);
 
   // 昼夜采样：timeOfDay01 + §3.3 镜像表折算（无天气数据 = 中性参数零衰减）。
+  // 批次 33：日出/日落（sunrise01/sunset01）随采样直传 —— 真实城市太阳升落。
   const dnSample = useCallback(() => {
     const s = sample();
     const vis = weatherVisual(s.weather);
@@ -82,6 +83,8 @@ export function CityEnvironmentLayer({
       fogDensity01: vis.fogScale,
       // 批次 30 B4：季节暖度驱动天穹色调（秋暖 / 冬冷）。
       warmth01: SEASON_WARMTH[s.season] ?? 0.5,
+      sunrise01: s.sunrise01,
+      sunset01: s.sunset01,
     };
   }, []);
 

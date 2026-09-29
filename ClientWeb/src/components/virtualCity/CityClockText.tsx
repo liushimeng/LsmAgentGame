@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
+import { currentTzOffsetMin } from './cityTimeStore';
 
 /** 帧锚点（页面在帧到达时写入，本组件只读外推）。 */
 export interface CityClockAnchor {
@@ -53,15 +54,21 @@ function cityPhaseKey(hour: number): TKey {
 
 type TranslateFn = (key: TKey, vars?: Record<string, string | number>) => string;
 
-/** 批次 25 §3.4：城市时间 epoch 毫秒 →「M月D日 HH:MM（时段）」（本地月日时分，不用秒）。 */
-function fmtCityClock(cityMs: number, t: TranslateFn): string {
-  const d = new Date(cityMs);
+/** 批次 25 §3.4：城市时间 epoch 毫秒 →「M月D日 HH:MM（时段）」。
+ *  批次 33：选中真实城市时按城市时区格式化（ms + tzMin 走 UTC getters）；
+ *  默认城市（tz=0）沿用浏览器本地格式（与批次 25 逐分不差）。 */
+function fmtCityClock(cityMs: number, tzOffsetMin: number, t: TranslateFn): string {
+  const d = tzOffsetMin !== 0 ? new Date(cityMs + tzOffsetMin * 60_000) : new Date(cityMs);
   const p = (n: number) => String(n).padStart(2, '0');
+  const month = tzOffsetMin !== 0 ? d.getUTCMonth() + 1 : d.getMonth() + 1;
+  const day = tzOffsetMin !== 0 ? d.getUTCDate() : d.getDate();
+  const hour = tzOffsetMin !== 0 ? d.getUTCHours() : d.getHours();
+  const min = tzOffsetMin !== 0 ? d.getUTCMinutes() : d.getMinutes();
   return t('virtualCity.cityClockDisplay' as TKey, {
-    month: d.getMonth() + 1,
-    day: d.getDate(),
-    time: `${p(d.getHours())}:${p(d.getMinutes())}`,
-    phase: t(cityPhaseKey(d.getHours())),
+    month,
+    day,
+    time: `${p(hour)}:${p(min)}`,
+    phase: t(cityPhaseKey(hour)),
   });
 }
 
@@ -84,7 +91,7 @@ export function CityClockText({ cityClockRef, startedAt, cityClockMs }: Props) {
     ? t('virtualCity.cityClock' as TKey)
     : t('virtualCity.runningTime' as TKey);
   const clockText = hasCityClock
-    ? `🏙 ${fmtCityClock(cityClock.cityMs + (now - cityClock.at) * cityClock.speed, t)}`
+    ? `🏙 ${fmtCityClock(cityClock.cityMs + (now - cityClock.at) * cityClock.speed, currentTzOffsetMin(), t)}`
     : `⏱ ${fmtElapsed(startedAt, now)}`;
   return (
     <span className="virtualCity-topbar__item" title={clockTitle}>
