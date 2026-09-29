@@ -43,7 +43,7 @@
  * + 批次 20 文档 1 §2.3 / §3.2 / §3.3。
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import type { VirtualCityCrowdSnapshot, VirtualCityDistrictDef } from '@/types/virtualCity';
 import { detectQualityTier } from '@/engine3d';
@@ -54,6 +54,7 @@ import { FIRST_RING_RADIUS, type RoadJunction, type RoadSegment } from './roadNe
 import { buildingsFor } from './building_layout';
 import { outdoorCount, crowdCapFor, synthCrowdEntry } from './crowdFormula';
 import { layoutCrowd, type CrowdPedestrian } from './crowdLayout';
+import { clearCrowdPositions } from './crowdRegistry';
 import { TreesInstanced } from './props/TreesInstanced'; // 批次 20 §3.3：TreeV3 逐实例 → 全局 InstancedMesh（形态同源）
 import { Vehicle } from './props/Vehicle';
 import { PedestrianV3, type PedestrianV3Props } from './props/PedestrianV3';
@@ -824,6 +825,12 @@ export function StreetPropsLayer({ districts, segments, crowd, residentCount, ro
     }).slice(0, pedCap);
   }, [crowdActive, crowd, residentCount, districts, segments, tier, roomSeed, pedCap]);
 
+  // 批次 35 §5.3：换班 / 换代（crowdPeds 重算）时清空 live 位置注册表 ——
+  // 旧代居民不再渲染、坐标停止刷新，残留会让市民之声气泡锚定到错误位置。
+  useEffect(() => {
+    clearCrowdPositions();
+  }, [crowdPeds]);
+
   // 批次 20 §3.3：区内树 + 行道树合并单一 InstancedMesh 集合（3 draw call）。
   // 批次 28 B2：kind 标记 —— 区内树 tree.park / 行道树 tree.road（物件信息按实例区分）。
   const allTrees = useMemo(
@@ -897,7 +904,8 @@ export function StreetPropsLayer({ districts, segments, crowd, residentCount, ro
       ))}
 
       {/* 批次 34 §6：真实居民行人（身份/外观/换班来自 game.state.city.crowd）。
-          与街区装饰行人**互斥**（crowdActive 时后者已清空），故 DC 与 mixer 数不叠加。 */}
+          与街区装饰行人**互斥**（crowdActive 时后者已清空），故 DC 与 mixer 数不叠加。
+          批次 35 §5.3：trackIndex 注册 live 位置，市民之声气泡据此锚定本人。 */}
       {crowdPeds.map((p) => (
         <PedestrianV3
           key={`crowd-${p.residentIndex}`}
@@ -905,6 +913,7 @@ export function StreetPropsLayer({ districts, segments, crowd, residentCount, ro
           speed={p.stationary ? 0 : p.speed}
           phase={p.phase}
           appearance={p.appearance}
+          trackIndex={p.residentIndex}
         />
       ))}
 

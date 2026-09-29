@@ -184,6 +184,30 @@ export interface VirtualCityPlayer {
   consumption_level?: number;
   /** Active 保单险种列表（P1-4 商业保险；是否投保是公开信息，全座位下发）。 */
   insured_kinds?: string[];
+  /**
+   * 区内归一化坐标 [x,y] 各 0..1（批次 35 §4.1；位置是公开信息，全座位下发）。
+   * 旧房 / 旧后端 omit → 前端回落城区中心环形落位（districtSeatOffset）。
+   */
+  local_pos?: [number, number];
+  /** 3D 人物外观投影（批次 35 §4.1；缺失 → 前端 char_casual + 职业色兜底）。 */
+  avatar?: VirtualCityPlayerAvatar;
+}
+
+/**
+ * 座位居民 3D 人物外观投影（批次 35 §4.1 `game.state.players[].avatar`，
+ * 与后端 AvatarJSON 逐字对齐；推导口径与批次 34 crowd 同源 —— 原型整局稳定）。
+ */
+export interface VirtualCityPlayerAvatar {
+  /** 3D 人物原型（city.ArchetypeFor 推导，char_business | …）。 */
+  archetype: VirtualCityArchetype;
+  /** m | f | u。 */
+  gender: string;
+  /** 开局年龄（原型判据用，整局稳定）。 */
+  age: number;
+  /** 0..25 L1 行业域（-1 未知）。 */
+  domain: number;
+  /** 0..3 财富档。 */
+  wealth: number;
 }
 
 export interface VirtualCityMonthlyDetail {
@@ -1152,7 +1176,10 @@ export type VirtualCityEventType =
   // §20260921 城市背景层 — 居民之声事件（走既有事件流 UI，无需新组件）。
   | 'city_voice'
   // 档案锚定设计 §5 — 档案锚定终态事件（hydrating 中间态不发，走 Snapshot 轮询）。
-  | 'city_profiles';
+  | 'city_profiles'
+  // 批次 35 §5.1 — 感知事件（see/hear/smell 摘要，seat≥0；仅广播不入月度事件流，
+  // 不参与 myActionsUsed 计数）。AgentHuman 头顶动作气泡消费。
+  | 'sense';
 
 /** game.event。 */
 export interface VirtualCityEventFrame {

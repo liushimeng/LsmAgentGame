@@ -161,6 +161,11 @@ type Player struct {
 
 	Card profession.Card // 职业卡(结构见 profession/card.go;引擎内仅读字段)
 
+	// Domain 开局发卡时携带的 L1 行业域名(如 "A-农林牧渔";合成兜底卡 = "")。
+	// 批次35 §4.1 座位居民外观推导用:city.DomainIndexOf(Domain) → avatar.domain
+	// / ArchetypeFor 原型判据(开局卡面 ⇒ 整局稳定,不随运行时净资产闪变)。
+	Domain string
+
 	Age int // 个人年龄(展示;主时钟在 World)
 
 	Cash int64

@@ -29,6 +29,7 @@ import { u, worldDims, sizeTargetFor, DISTRICT_SURFACE_Y } from '../cityScale';
 import { useSharedGLTF, blenderModelsEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+import { setCrowdPosition } from '../crowdRegistry';
 import type { CrowdAppearance } from '../crowdFormula';
 
 export interface PedestrianV3Props {
@@ -47,6 +48,13 @@ export interface PedestrianV3Props {
    * 缺省则回落到 `outfit` 四套服装色 + 程序化几何。
    */
   appearance?: CrowdAppearance;
+  /**
+   * 批次 35 §5.3：live 位置注册下标（crowd 渲染传 residentIndex）。
+   * useFrame 节流块内把自身位置写进 crowdRegistry（纯 Map 写零分配），
+   * CityVoiceBubbleLayer 据此把「市民之声」气泡锚定到发声居民本人头顶。
+   * 原始值 prop，memo 安全；缺省（装饰行人）不注册。
+   */
+  trackIndex?: number;
 }
 
 /**
@@ -156,6 +164,7 @@ export const PedestrianV3 = memo(function PedestrianV3({
   outfit = 0,
   phase = 0,
   appearance,
+  trackIndex,
 }: PedestrianV3Props) {
   // 19-Blender3D模型集成：.glb 模式优先级最高，绕过原 6 mesh + 摆臂逻辑。
   // 批次 34 §5.3：有 appearance 时取对应原型 GLB；原型 GLB 缺失 → 退回 pedestrian_walk
@@ -303,6 +312,9 @@ export const PedestrianV3 = memo(function PedestrianV3({
     mixerRef.current?.update(step);
     const g = groupRef.current;
     if (!g) return;
+    // 批次 35 §5.3：live 位置注册（此处 g.position = 上一节流帧更新后的位置；
+    // 纯 Map 写零分配，供 CityVoiceBubbleLayer 锚定本人）。
+    if (trackIndex !== undefined) setCrowdPosition(trackIndex, g.position.x, g.position.z);
     // 全静止：吸附 path 起点 + 四肢归零（与 V2 REDUCED_MOTION 行为一致）
     if (REDUCED_MOTION) {
       const start = path[0] ?? [0, 0];

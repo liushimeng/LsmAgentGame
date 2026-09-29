@@ -549,6 +549,20 @@
   font-weight: 600;
   color: #7fd8f2; /* 对 rgba(16,20,28,.85) 底 ≈ 9:1，≥ 4.5:1 */
 }
+/* ── 批次 35 §5.1：座位居民动作气泡（💭 action / 🚶 move / 👀 sense，8s TTL）──
+   底色/文字与既有气泡同族（白字 #fff 对 rgba(16,20,28,0.85) ≈ 15:1，§26 AA）；
+   左侧 2px #5ac8fa 竖条 = 「正在做的事」语义色条（装饰性非文字，不参与对比度阈值）；
+   不新增 keyframes —— 复用基类 virtualCity-speech-pop，reduced-motion 由基类兜底。 */
+.virtualCity-speech-bubble--action {
+  border-color: rgba(90, 200, 250, 0.55);
+  border-left: 2px solid #5ac8fa;
+}
+.virtualCity-speech-bubble--action::after {
+  border-top-color: rgba(16, 20, 28, 0.85);
+}
+.virtualCity-speech-bubble__icon {
+  margin-right: 4px;
+}
 @keyframes virtualCity-speech-pop {
   from {
     opacity: 0;

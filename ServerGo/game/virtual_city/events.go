@@ -20,6 +20,10 @@ const (
 	// EventCityWeather 城市天气播报(批次 27 §3.3:月结时城市天气类型变化
 	// 即播报;文案 = 「城市天气:<天气> · <季节>」中文标签)。
 	EventCityWeather = "city_weather"
+	// EventAgentSense 座位 Agent 感知动作气泡(批次35 §5.1):See/Hear/Smell
+	// 成功后仅广播一条(seat + 感知摘要文本),**不写入 World.Events** ——
+	// 不污染月度事件流与 see 感知回读;前端动作气泡数据源(💭/🚶/👀)。
+	EventAgentSense = "sense"
 )
 
 // negativeGuard 负面事件认知折扣:×(1 − min(0.05×K, 0.30))。

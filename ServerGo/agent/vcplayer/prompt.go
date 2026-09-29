@@ -76,9 +76,9 @@ func SystemPromptBlocks(card vctypes.CardBrief) []llmtypes.SystemBlock {
 	seg4 := `【第 4 段 · 规则摘要】
 - 市场周期四阶段:复苏(股+15%/房+5%/金-5%/LPR3.5%)、繁荣(+30%/+15%/-10%/4.5%)、
   衰退(-25%/-5%/+10%/5.8%)、萧条(-40%/-15%/+25%/2.8%)。每月有小幅随机漂移。
-- 每月月初你最多执行 3 个动作工具(buy_asset / sell_asset / buy_house / take_loan / repay_loan /
-  start_side_business / stop_side_business / study / socialize / rest / work_overtime / move /
-  consume / donate),外加最多 2 次 speak(公开放话 + 私聊合计)。动作要付真实成本:
+- 每月月初你最多执行 3 个动作工具(asset_trade 买/卖资产 / bank_loan 借还贷 / side_business 副业 /
+  activity 生活动作(kind=study|socialize|rest|work_overtime|consume|donate) / move 移动),
+  外加最多 2 次 speak(公开放话 + 私聊合计)。动作要付真实成本:
   study=2000元/精力-1/认知+1;socialize=1000元/人脉+1;rest=精力+2;work_overtime=精力-2/当月工资×0.3 奖金;
   move 跨城区:公交500元/精力-2、地铁1500元/精力-1、出租车3000元/精力-1(随 CPI 浮动);
   区内步行/跑步免费(精力-1/-2);副业月入约 2000–6000 元但耗精力 2/月;
@@ -108,10 +108,10 @@ func SystemPromptBlocks(card vctypes.CardBrief) []llmtypes.SystemBlock {
 
 	seg5 := `【第 5 段 · 明斯基风险与 LPR(v2.60)】
 - 明斯基三阶段融资:对冲(月供≤收入 40%)、投机(40%-70%)、庞氏(>70%)。投机 +0.5% 利率,庞氏 -0.5%(诱人陷阱)。
-- 用 query_minsky 可查全局:庞氏占比 >30% 时触发明斯基时刻——全场杠杆资产(股票/副业/投资房)价格立即腰斩;
+- 用 query_finance(scope=minsky) 可查全局:庞氏占比 >30% 时触发明斯基时刻——全场杠杆资产(股票/副业/投资房)价格立即腰斩;
   庞氏玩家被强制平仓所有杠杆资产,投机玩家损失 50%,对冲玩家不受影响。进入 12 月冷却期。
 - LPR 重定价:每年 1 月所有浮动房贷按最新 5Y LPR 重算月供(= 最新 5Y LPR + 银行加点 + 您的信用加点)。
-  若理财收益率 < 房贷利率,建议用 early_repay 提前还款减少利息;1 年内提前还款罚息 1-3%(线性)。
+  若理财收益率 < 房贷利率,建议用 bank_loan(op=early_repay) 提前还款减少利息;1 年内提前还款罚息 1-3%(线性)。
 - 防御明斯基:保持月供 < 月收入 70%;现金过剩(>房贷余额 × 2)或利率倒挂时优先提前还款降杠杆。`
 
 	seg6 := `【第 6 段 · 输出纪律】
@@ -123,13 +123,15 @@ func SystemPromptBlocks(card vctypes.CardBrief) []llmtypes.SystemBlock {
 6. 回答调研时按你的人设与真实财务处境作答,理由说人话(≤50 字),不要中立和稀泥。`
 
 	// P2(2026-09-16 §财商流P2):玩家间交易与财富流动系统。
+	// 批次35 §3.4:工具名同步为合并后新名(market_listing/negotiate/
+	// p2p_lending/auction_bid/info_market),规则数值一字未改。
 	seg7 := `【第 7 段 · 居民间交易与财富流动(P2)】
 你现在可以直接与其他居民交易,这是真实财富循环的核心:
-- 资产挂牌(list_asset):出售房产/商铺/副业/金融资产,设要价与底价(保密);其他居民可见并可议价。
-- 议价(start_negotiate / respond_negotiate):自由议价,一轮或多轮;达成一致即成交(资金+资产过户)。
-- 居民间借贷(create_loan_listing / accept_loan):直接借贷,利率双方约定(0.3%-3.6%/月);可请第三方担保(add_guarantor,降 0.3%/月)。
-- 拍卖(bid_auction):英式公开叫价,连续无人加价时最高价者得;赢家诅咒——不要为情绪溢价。
-- 信息交易(sell_info / bid_info):密封暗标出售/竞购情报(市场内幕/居民情报/个人概况);信息不对称是利润来源,也是风险。
+- 资产挂牌(market_listing,op=list):出售房产/商铺/副业/金融资产,设要价与底价(保密);其他居民可见并可议价。
+- 议价(negotiate,op=start / op=respond):自由议价,一轮或多轮;达成一致即成交(资金+资产过户)。
+- 居民间借贷(p2p_lending,op=create / op=accept):直接借贷,利率双方约定(0.3%-3.6%/月);可请第三方担保(p2p_lending,op=guarantee,降 0.3%/月)。
+- 拍卖(auction_bid):英式公开叫价,连续无人加价时最高价者得;赢家诅咒——不要为情绪溢价。
+- 信息交易(info_market,op=sell / op=bid):密封暗标出售/竞购情报(市场内幕/居民情报/个人概况);信息不对称是利润来源,也是风险。
 - 交易纪律:每座位最多 3 笔 open 挂单;不可自交易;挂单 3 月未成交自动过期;利率超限(>3.6%%/月)违法。
 - 决策启发:现金充裕(>2×月支出)时主动寻找低估资产或放贷吃息;现金紧张(<0.5×月支出)时挂牌变现或发起借款;认知≥5可出售情报;人脉≥5可担保赚利差。`
 
@@ -178,8 +180,9 @@ func UserPrompt(ctx *vctypes.GameContext, memText string) string {
 	b.WriteString("\n\n")
 
 	// 批次20 文档2 §4.3:副业定价市场小节(≤350B;无副业不注入)。
+	// 批次35 §3.4:改档工具名随收敛更新为 side_business(op=set_price)。
 	if ctx.SideMarketBrief != "" {
-		b.WriteString("■ 副业定价市场(可用 set_side_price 改档,每月限 1 次)\n")
+		b.WriteString("■ 副业定价市场(可用 side_business(op=set_price) 改档,每月限 1 次)\n")
 		b.WriteString(ctx.SideMarketBrief)
 		b.WriteString("\n\n")
 	}

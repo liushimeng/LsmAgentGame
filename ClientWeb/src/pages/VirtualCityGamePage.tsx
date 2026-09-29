@@ -24,6 +24,7 @@ import { selectSeatedCount, selectSeatCapacity, selectSeatsReady } from '@/store
 import { useI18nStore } from '@/store/i18n.store';
 import { useVirtualCity } from '@/hooks/useVirtualCity';
 import { useVirtualCitySpeech } from '@/hooks/useVirtualCitySpeech';
+import { useVirtualCityActionBubbles } from '@/hooks/useVirtualCityActionBubbles';
 import { useSpectatorMode } from '@/hooks/useSpectatorMode';
 import { wsClient } from '@/services/ws';
 import { roomService } from '@/services/auth.service';
@@ -155,6 +156,8 @@ export function VirtualCityGamePage() {
   } = useVirtualCity(roomId ?? '');
   // 批次 23：房间聊天面板已删除，居民公开发话改在 3D 地图头顶冒泡（store.speechBubbles）。
   useVirtualCitySpeech(roomId ?? '');
+  // 批次 35 §5.1：动作/移动/感知事件 → store.actionBubbles → AgentHuman 头顶 8s 冒泡。
+  useVirtualCityActionBubbles(roomId ?? '');
 
   const [leavePromptOpen, setLeavePromptOpen] = useState(false);
   const viewRef = useRef<VirtualCityCameraView>({ x: 0, z: 0, dist: 34 });

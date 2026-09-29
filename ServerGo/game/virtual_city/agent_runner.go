@@ -101,93 +101,95 @@ func (a *AgentRunner) CheckState(seat int) string {
 }
 
 func (a *AgentRunner) BuyAsset(seat int, asset string, amountCNY int64) error {
-	return a.apply(seat, vcplayer.ToolBuyAsset, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolAssetTrade, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActBuyAsset, Asset: asset, AmountCNY: amountCNY})
 	})
 }
 
 func (a *AgentRunner) SellAsset(seat int, asset string, units float64) error {
-	return a.apply(seat, vcplayer.ToolSellAsset, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolAssetTrade, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActSellAsset, Asset: asset, Units: units})
 	})
 }
 
 func (a *AgentRunner) BuyHouse(seat int, district string, downpayRatio float64, asset string) error {
-	return a.apply(seat, vcplayer.ToolBuyHouse, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolAssetTrade, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActBuyHouse, District: district, DownpayRatio: downpayRatio, Asset: asset})
 	})
 }
 
 func (a *AgentRunner) TakeLoan(seat int, kind string, amountCNY int64) error {
-	return a.apply(seat, vcplayer.ToolTakeLoan, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolBankLoan, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActTakeLoan, Kind: kind, AmountCNY: amountCNY})
 	})
 }
 
 func (a *AgentRunner) RepayLoan(seat int, loanID string, amountCNY int64) error {
-	return a.apply(seat, vcplayer.ToolRepayLoan, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolBankLoan, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActRepayLoan, LoanID: loanID, AmountCNY: amountCNY})
 	})
 }
 
 // StartSideBusiness 批次20(文档2 §3)增 tier:0=中价(缺省旧行为)/1=低价/2=高价。
 func (a *AgentRunner) StartSideBusiness(seat int, kind string, tier int) error {
-	return a.apply(seat, vcplayer.ToolStartSide, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolSideBusiness, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActStartSide, Kind: kind, Tier: tier})
 	})
 }
 
 func (a *AgentRunner) StopSideBusiness(seat int) error {
-	return a.apply(seat, vcplayer.ToolStopSide, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolSideBusiness, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActStopSide})
 	})
 }
 
 // SetSidePrice 副业改价(批次20 文档2 §3;走 ApplyAction 与人类同一路径)。
 func (a *AgentRunner) SetSidePrice(seat int, tier int) error {
-	return a.apply(seat, vcplayer.ToolSetSidePrice, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolSideBusiness, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActSetSidePrice, Tier: tier})
 	})
 }
 
 func (a *AgentRunner) Study(seat int) error {
-	return a.apply(seat, vcplayer.ToolStudy, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolActivity, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActStudy})
 	})
 }
 
 func (a *AgentRunner) Socialize(seat int) error {
-	return a.apply(seat, vcplayer.ToolSocialize, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolActivity, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActSocialize})
 	})
 }
 
 func (a *AgentRunner) Rest(seat int) error {
-	return a.apply(seat, vcplayer.ToolRest, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolActivity, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActRest})
 	})
 }
 
 func (a *AgentRunner) WorkOvertime(seat int) error {
-	return a.apply(seat, vcplayer.ToolWorkOvertime, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolActivity, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActWorkOvertime})
 	})
 }
 
 func (a *AgentRunner) MoveDistrict(seat int, district string) error {
-	return a.apply(seat, vcplayer.ToolMoveDistrict, "", func() (string, error) {
+	// 批次35:move_district LLM 工具已删除,但 ToolRunner 接口方法保留
+	// (引擎零改动约束);事件标签统一记 move(人类迁区动作语义)。
+	return a.apply(seat, vcplayer.ToolMove, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActMoveDistrict, District: district})
 	})
 }
 
 func (a *AgentRunner) Consume(seat int, amountCNY int64, reason string) error {
-	return a.apply(seat, vcplayer.ToolConsume, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolActivity, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActConsume, AmountCNY: amountCNY, Reason: reason})
 	})
 }
 
 func (a *AgentRunner) Donate(seat int, amountCNY int64) error {
-	return a.apply(seat, vcplayer.ToolDonate, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolActivity, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActDonate, AmountCNY: amountCNY})
 	})
 }
@@ -268,14 +270,14 @@ func (a *AgentRunner) ApplyLoanWithCredit(seat int, kind string, amountCNY int64
 
 // DepositSavings 活期→定期(不耗动作预算)。
 func (a *AgentRunner) DepositSavings(seat int, amountCNY int64) error {
-	return a.apply(seat, vcplayer.ToolDepositSavings, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolSavings, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActDeposit, AmountCNY: amountCNY})
 	})
 }
 
 // WithdrawSavings 定期→活期(不耗动作预算)。
 func (a *AgentRunner) WithdrawSavings(seat int, amountCNY int64) error {
-	return a.apply(seat, vcplayer.ToolWithdrawSavings, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolSavings, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActWithdraw, AmountCNY: amountCNY})
 	})
 }
@@ -348,7 +350,7 @@ func (a *AgentRunner) QueryMinsky(seat int) (string, error) {
 
 // EarlyRepay 提前还款(仅房贷,v2.60 N12-5)。
 func (a *AgentRunner) EarlyRepay(seat int, loanID string, amountCNY int64) error {
-	return a.apply(seat, vcplayer.ToolEarlyRepay, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolBankLoan, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActEarlyRepay, LoanID: loanID, AmountCNY: amountCNY})
 	})
 }
@@ -465,14 +467,14 @@ func (a *AgentRunner) QueryEconomy(seat int) (string, error) {
 
 // BuyInsurance 投保(耗 1 次动作预算;走 ApplyAction 与人类同一路径)。
 func (a *AgentRunner) BuyInsurance(seat int, kind string) error {
-	return a.apply(seat, vcplayer.ToolBuyInsurance, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolInsurance, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActBuyInsurance, Kind: kind})
 	})
 }
 
 // CancelInsurance 退保(耗 1 次动作预算;消费型零现金价值)。
 func (a *AgentRunner) CancelInsurance(seat int, kind string) error {
-	return a.apply(seat, vcplayer.ToolCancelInsurance, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolInsurance, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActCancelInsurance, Kind: kind})
 	})
 }
@@ -657,7 +659,7 @@ func (a *AgentRunner) checkActing(seat int) error {
 
 // ListAsset 挂牌出售资产:从玩家持仓中按 asset_index 取出快照,创建挂单。
 func (a *AgentRunner) ListAsset(seat int, assetIndex int, askCNY, minCNY int64) error {
-	return a.apply(seat, vcplayer.ToolListAsset, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolMarketListing, "", func() (string, error) {
 		w := a.room.World
 		p := w.Players[seat]
 		if p == nil || !p.Alive {
@@ -680,7 +682,7 @@ func (a *AgentRunner) ListAsset(seat int, assetIndex int, askCNY, minCNY int64) 
 
 // CancelListing 取消自己的 open 挂单。
 func (a *AgentRunner) CancelListing(seat int, listingID string) error {
-	return a.apply(seat, vcplayer.ToolCancelListing, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolMarketListing, "", func() (string, error) {
 		if err := a.room.World.CancelListing(seat, listingID); err != nil {
 			return "", err
 		}
@@ -720,7 +722,7 @@ func (a *AgentRunner) ViewListings(seat int, typeFilter string) (string, error) 
 
 // StartNegotiate 对 open 挂单发起议价。
 func (a *AgentRunner) StartNegotiate(seat int, listingID string, offerCNY int64) error {
-	return a.apply(seat, vcplayer.ToolNegotiateStart, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolNegotiate, "", func() (string, error) {
 		neg, err := a.room.World.NegotiateStart(seat, listingID, offerCNY)
 		if err != nil {
 			return "", err
@@ -731,7 +733,7 @@ func (a *AgentRunner) StartNegotiate(seat int, listingID string, offerCNY int64)
 
 // RespondNegotiate 响应议价(还价/接受/拒绝)。
 func (a *AgentRunner) RespondNegotiate(seat int, negID string, action string, offerCNY int64, comment string) error {
-	return a.apply(seat, vcplayer.ToolRespondNegotiate, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolNegotiate, "", func() (string, error) {
 		text, err := a.room.World.NegotiateRespond(seat, negID, action, offerCNY, comment)
 		if err != nil {
 			return "", err
@@ -742,7 +744,7 @@ func (a *AgentRunner) RespondNegotiate(seat int, negID string, action string, of
 
 // CreateLoanListing 创建借贷挂单。
 func (a *AgentRunner) CreateLoanListing(seat int, direction string, principal int64, rate float64, term int, needGuarantee bool) error {
-	return a.apply(seat, vcplayer.ToolCreateLoanListing, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolP2PLending, "", func() (string, error) {
 		l, err := a.room.World.CreateLoanListing(seat, direction, principal, rate, term, needGuarantee)
 		if err != nil {
 			return "", err
@@ -753,7 +755,7 @@ func (a *AgentRunner) CreateLoanListing(seat int, direction string, principal in
 
 // AcceptLoan 接受借贷要约(匹配成交)。
 func (a *AgentRunner) AcceptLoan(seat int, listingID string) error {
-	return a.apply(seat, vcplayer.ToolAcceptLoan, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolP2PLending, "", func() (string, error) {
 		loan, err := a.room.World.AcceptLoan(seat, listingID)
 		if err != nil {
 			return "", err
@@ -764,7 +766,7 @@ func (a *AgentRunner) AcceptLoan(seat int, listingID string) error {
 
 // RepayP2PLoan 偿还 P2P 借贷(部分或全额)。
 func (a *AgentRunner) RepayP2PLoan(seat int, loanID string, amountCNY int64) error {
-	return a.apply(seat, vcplayer.ToolRepayLoanP2P, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolP2PLending, "", func() (string, error) {
 		text, err := a.room.World.RepayLoan(seat, loanID, amountCNY)
 		if err != nil {
 			return "", err
@@ -775,7 +777,7 @@ func (a *AgentRunner) RepayP2PLoan(seat int, loanID string, amountCNY int64) err
 
 // AddGuarantor 为 P2P 借贷提供担保。
 func (a *AgentRunner) AddGuarantor(seat int, loanID string) error {
-	return a.apply(seat, vcplayer.ToolAddGuarantor, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolP2PLending, "", func() (string, error) {
 		if err := a.room.World.AddGuarantor(loanID, seat); err != nil {
 			return "", err
 		}
@@ -785,7 +787,7 @@ func (a *AgentRunner) AddGuarantor(seat int, loanID string) error {
 
 // BidAuction 参与拍卖出价(区分公开/密封)。
 func (a *AgentRunner) BidAuction(seat int, auctionID string, amountCNY int64) error {
-	return a.apply(seat, vcplayer.ToolBidAuction, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolAuctionBid, "", func() (string, error) {
 		w := a.room.World
 		ta := TradeAction{
 			Type:      ActionBidAuction,
@@ -802,7 +804,7 @@ func (a *AgentRunner) BidAuction(seat int, auctionID string, amountCNY int64) er
 
 // SellInfo 出售信息(密封暗标)。
 func (a *AgentRunner) SellInfo(seat int, category string, title string, detail string, minBid int64) error {
-	return a.apply(seat, vcplayer.ToolSellInfo, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolInfoMarket, "", func() (string, error) {
 		l, err := a.room.World.SellInfo(seat, category, title, detail, minBid)
 		if err != nil {
 			return "", err
@@ -813,7 +815,7 @@ func (a *AgentRunner) SellInfo(seat int, category string, title string, detail s
 
 // BidInfo 暗标信息。
 func (a *AgentRunner) BidInfo(seat int, listingID string, bidCNY int64) error {
-	return a.apply(seat, vcplayer.ToolBidInfo, "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolInfoMarket, "", func() (string, error) {
 		if err := a.room.World.BidInfo(seat, listingID, bidCNY); err != nil {
 			return "", err
 		}
@@ -907,12 +909,19 @@ func (a *AgentRunner) apply(seat int, toolName, toolID string, fn func() (string
 	a.room.mu.Unlock()
 	if hooks.OnEvent != nil {
 		eventType := "action"
-		if toolName == vcplayer.ToolMoveDistrict || toolName == vcplayer.ToolMove {
+		if toolName == vcplayer.ToolMove {
 			eventType = "move"
 		}
 		hooks.OnEvent(roomID, EventRecord{
 			Month: monthAfter, Type: eventType, Seat: seat, Text: text,
 		})
+	}
+	// 批次35 §4.2:bot 动作成功后实时广播 game.state —— local_pos / district
+	// 变更即刻可见(3D 人物位置同步),与人类动作路径(ws 层
+	// broadcastVirtualCityState)对齐;频度 ≤12 bot × ≤3 动作/月,与既有
+	// see/hear/smell 各自触发的 OnState 同量级,无性能风险。
+	if hooks.OnState != nil {
+		hooks.OnState(roomID)
 	}
 	// 2026-09-26 §批次25(§3.3 月节拍回归):动作后「全员提交即推 settleCh」
 	// 快路径已删除 —— 月结固定发生在 NextMonthAt。

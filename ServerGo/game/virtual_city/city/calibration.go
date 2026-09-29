@@ -59,6 +59,11 @@ func domainIndex(name string) int {
 	return int(name[0] - 'A')
 }
 
+// DomainIndexOf 域名 → 0..25 的导出包装(批次35 §4.1:座位居民 avatar 外观
+// 推导需要跨包取域下标 —— Player.Domain 存域名文本,view 层经本函数换算
+// avatar.domain / ArchetypeFor 判据;domainIndex 为本包私有,语义不变)。
+func DomainIndexOf(name string) int { return domainIndex(name) }
+
 // districtIDIndex 卡 HomeDistrict id → 城区索引(profession.DistrictIDs 顺序,
 // 与 game/virtual_city DistrictDefs 顺序对齐;两处同步由 loader_test 覆盖)。
 var districtIDIndex = func() map[string]int {

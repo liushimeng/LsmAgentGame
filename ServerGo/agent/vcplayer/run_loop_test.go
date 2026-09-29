@@ -16,7 +16,8 @@ import (
 	llmtypes "LsmAgentGame/llm/types"
 )
 
-// loopFakeProvider 每轮返回一个 budget 动作 tool_use(rest);记录每次请求的
+// loopFakeProvider 每轮返回一个 budget 动作 tool_use(activity kind=rest;
+// 批次35 工具收敛后 rest 并入 activity);记录每次请求的
 // messages 快照(用于断言无重复 assistant/tool_result 入流)。
 type loopFakeProvider struct {
 	mu       sync.Mutex
@@ -34,7 +35,7 @@ func (f *loopFakeProvider) Chat(ctx context.Context, key string, req llmtypes.LL
 		StopReason: "tool_use",
 		Content: []llmtypes.ContentBlock{{
 			Type: "tool_use", ID: fmt.Sprintf("tu-%d", n),
-			Name: ToolRest, Input: map[string]any{},
+			Name: ToolActivity, Input: map[string]any{"kind": "rest"},
 		}},
 	}, nil
 }

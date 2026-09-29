@@ -228,8 +228,10 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *vctypes.GameContext) {
 		overBudget := false
 		for _, tu := range tus {
 			res := a.DispatchTool(tu.Name, tu.Input)
-			// 累计动作计数。
-			if isBudgetAction(tu.Name) {
+			// 累计动作计数。批次35 §3.3:预算判定由 dispatch 结果驱动
+			// (dispatchToolResult.Budget 按(工具,op)置位),不再按工具名
+			// 静态查表 —— 合并工具同名不同 op 预算不同。
+			if res.Budget {
 				actionsUsed++
 			}
 			if tu.Name == ToolSpeak {
@@ -246,7 +248,7 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *vctypes.GameContext) {
 			results = append(results, toolResultContentBlock(tu.ID, res.Text, res.IsErr))
 			lastToolInput = res.Input
 			lastToolResult = res.Text
-			if actionsUsed >= actionsLimit && isBudgetAction(tu.Name) {
+			if actionsUsed >= actionsLimit && res.Budget {
 				// 超预算:本工具被拒;直接给 submit 提示,下一轮结束。
 				a.finalizeTranscript(lastSummary, lastToolInput, lastToolResult)
 				// 2026-09-26 §批次25 修复双重追加 bug:此处不再调用
@@ -278,15 +280,6 @@ func (a *Agent) OnMonthStart(parent context.Context, ctx *vctypes.GameContext) {
 	// 3. 默认 submit(超时 / LLM 失败 / 全程无 tool_use / 预算耗尽)。
 	a.finalizeTranscript(lastSummary, lastToolInput, lastToolResult)
 	_ = a.runner.SubmitMonth(a.MySeat)
-}
-
-// isBudgetAction 是否耗动作预算(check_state / submit_month / view_listings 不耗)。
-func isBudgetAction(name string) bool {
-	switch name {
-	case ToolCheckState, ToolSubmitMonth, ToolViewListings:
-		return false
-	}
-	return true
 }
 
 // appendMessages 把 assistant + tool_result 回合追加到消息流。

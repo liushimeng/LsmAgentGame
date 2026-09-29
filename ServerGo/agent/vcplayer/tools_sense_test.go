@@ -62,16 +62,22 @@ func newSenseAgent(f *fakeTradeRunner) *Agent {
 }
 
 // TestDispatchSenseTools_SeeHearSmell 感知三件套派发路由 + 结果 JSON 序列化。
+// 批次35:fake.lastTool 统一记 ToolRunner 方法名("See"/"Hear"/"Smell")。
 func TestDispatchSenseTools_SeeHearSmell(t *testing.T) {
 	f := &fakeTradeRunner{}
 	a := newSenseAgent(f)
-	for _, name := range []string{ToolSee, ToolHear, ToolSmell} {
+	for name, method := range map[string]string{
+		ToolSee: "See", ToolHear: "Hear", ToolSmell: "Smell",
+	} {
 		res := a.DispatchTool(name, map[string]any{})
 		if res.IsErr {
 			t.Fatalf("%s dispatch failed: %s", name, res.Text)
 		}
-		if f.lastTool != name || f.lastSeat != 0 {
+		if f.lastTool != method || f.lastSeat != 0 {
 			t.Errorf("%s: lastTool=%q lastSeat=%d", name, f.lastTool, f.lastSeat)
+		}
+		if res.Budget {
+			t.Errorf("%s must NOT consume budget", name)
 		}
 		if !strings.Contains(res.Text, `"district"`) {
 			t.Errorf("%s: result not SenseResult JSON: %s", name, res.Text)
@@ -106,7 +112,7 @@ func TestDispatchSenseTools_MonthlyLimit(t *testing.T) {
 	}
 }
 
-// TestDispatchSenseTool_Move move 参数透传(destination + mode)。
+// TestDispatchSenseTool_Move move 参数透传(destination + mode)+ 耗预算。
 func TestDispatchSenseTool_Move(t *testing.T) {
 	f := &fakeTradeRunner{}
 	a := newSenseAgent(f)
@@ -114,8 +120,11 @@ func TestDispatchSenseTool_Move(t *testing.T) {
 	if res.IsErr {
 		t.Fatalf("move dispatch failed: %s", res.Text)
 	}
-	if f.moveDestination != "riverside" || f.moveMode != "taxi" {
-		t.Errorf("move args: got (%q,%q), want (riverside,taxi)", f.moveDestination, f.moveMode)
+	if f.lastTool != "Move" || f.moveDestination != "riverside" || f.moveMode != "taxi" {
+		t.Errorf("move args: got tool=%q (%q,%q), want Move/(riverside,taxi)", f.lastTool, f.moveDestination, f.moveMode)
+	}
+	if !res.Budget {
+		t.Error("move must consume budget")
 	}
 	// 区内步行。
 	res = a.DispatchTool(ToolMove, map[string]any{"mode": "walk"})
@@ -145,20 +154,6 @@ func TestDispatchSpeak_Private(t *testing.T) {
 	res = a.DispatchTool(ToolSpeak, map[string]any{"text": "大家好"})
 	if res.IsErr {
 		t.Fatalf("area speak failed: %s", res.Text)
-	}
-}
-
-// TestMoveDistrictAlias move_district 兼容别名改写为 move+bus(设计 §4.2)。
-func TestMoveDistrictAlias(t *testing.T) {
-	f := &fakeTradeRunner{}
-	a := newSenseAgent(f)
-	res := a.DispatchTool(ToolMoveDistrict, map[string]any{"district": "suburb"})
-	if res.IsErr {
-		t.Fatalf("move_district alias failed: %s", res.Text)
-	}
-	if f.lastTool != ToolMove || f.moveDestination != "suburb" || f.moveMode != "bus" {
-		t.Errorf("alias rewrite: got tool=%q dest=%q mode=%q, want move/suburb/bus",
-			f.lastTool, f.moveDestination, f.moveMode)
 	}
 }
 

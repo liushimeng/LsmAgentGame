@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	"LsmAgentGame/agent/vcplayer"
 	"LsmAgentGame/agent/vctypes"
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/game/virtual_city/city"
@@ -223,9 +224,15 @@ func (a *AgentRunner) See(seat int) (*vctypes.SenseResult, error) {
 	text := fmt.Sprintf("环顾%s:看见 %d 人(%s 等),%d 处景物/挂牌,%d 起本月事件",
 		DistrictCN(district), len(res.People), firstNeighborName(res.People), len(res.Things), len(res.Events))
 	a.recordSenseLocked(seat, "see", text)
+	month := w.Month
 	hooks := a.room.hooks
 	roomID := a.room.RoomID
 	a.room.mu.Unlock()
+	// 批次35 §5.1:感知成功后广播一条 sense 事件(仅广播,不写入 World.Events/
+	// utterances —— 不污染月度事件流与 see 感知回读;前端人物动作气泡数据源)。
+	if hooks.OnEvent != nil {
+		hooks.OnEvent(roomID, EventRecord{Month: month, Type: EventAgentSense, Seat: seat, Text: text})
+	}
 	if hooks.OnState != nil {
 		hooks.OnState(roomID)
 	}
@@ -258,9 +265,14 @@ func (a *AgentRunner) Hear(seat int) (*vctypes.SenseResult, error) {
 	text := fmt.Sprintf("在%s听见 %d 条议论,%d 起动静;环境声:%v",
 		DistrictCN(district), len(res.Utterances), len(res.Events), res.Sounds)
 	a.recordSenseLocked(seat, "hear", text)
+	month := a.room.World.Month
 	hooks := a.room.hooks
 	roomID := a.room.RoomID
 	a.room.mu.Unlock()
+	// 批次35 §5.1:同 See —— sense 事件仅广播,不入月度事件流。
+	if hooks.OnEvent != nil {
+		hooks.OnEvent(roomID, EventRecord{Month: month, Type: EventAgentSense, Seat: seat, Text: text})
+	}
 	if hooks.OnState != nil {
 		hooks.OnState(roomID)
 	}
@@ -281,9 +293,14 @@ func (a *AgentRunner) Smell(seat int) (*vctypes.SenseResult, error) {
 
 	text := fmt.Sprintf("%s的空气里飘着:%v", DistrictCN(district), res.Smells)
 	a.recordSenseLocked(seat, "smell", text)
+	month := a.room.World.Month
 	hooks := a.room.hooks
 	roomID := a.room.RoomID
 	a.room.mu.Unlock()
+	// 批次35 §5.1:同 See —— sense 事件仅广播,不入月度事件流。
+	if hooks.OnEvent != nil {
+		hooks.OnEvent(roomID, EventRecord{Month: month, Type: EventAgentSense, Seat: seat, Text: text})
+	}
 	if hooks.OnState != nil {
 		hooks.OnState(roomID)
 	}
@@ -318,7 +335,7 @@ func firstNeighborName(people []vctypes.NeighborBrief) string {
 // Move 统一移动(耗 1 次动作预算):walk/run 区内移动;bus/metro/taxi 跨城区。
 // 结算走 ApplyAction(ActMove)单一代码路径,与人类 WS 动作无分叉。
 func (a *AgentRunner) Move(seat int, destination string, mode string) error {
-	return a.apply(seat, "move", "", func() (string, error) {
+	return a.apply(seat, vcplayer.ToolMove, "", func() (string, error) {
 		return a.room.World.ApplyAction(seat, Action{Type: ActMove, District: destination, Mode: mode})
 	})
 }

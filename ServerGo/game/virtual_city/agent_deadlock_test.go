@@ -11,8 +11,9 @@ import (
 	llmtypes "LsmAgentGame/llm/types"
 )
 
-// fakeBuyProvider 第一轮返回 buy_asset tool_use,之后返回纯文本(结束)。
-// 用于复现 2026-09-14 P0 死锁: apply 持 r.mu 后闭包内 Engine() 二次加锁。
+// fakeBuyProvider 第一轮返回 asset_trade(op=buy) tool_use,之后返回纯文本(结束)。
+// 批次35:buy_asset 已收敛进 asset_trade。用于复现 2026-09-14 P0 死锁:
+// apply 持 r.mu 后闭包内 Engine() 二次加锁。
 type fakeBuyProvider struct{ calls *int32 }
 
 func (f fakeBuyProvider) Chat(ctx context.Context, key string, req llmtypes.LLMRequest) (llmtypes.LLMResponse, error) {
@@ -22,7 +23,7 @@ func (f fakeBuyProvider) Chat(ctx context.Context, key string, req llmtypes.LLMR
 			StopReason: "tool_use",
 			Content: []llmtypes.ContentBlock{
 				{Type: "text", Text: "本月买入指数基金"},
-				{Type: "tool_use", ID: "call_test_1", Name: "buy_asset", Input: map[string]any{"asset": "stock_index", "amount_cny": 1000}},
+				{Type: "tool_use", ID: "call_test_1", Name: "asset_trade", Input: map[string]any{"op": "buy", "asset": "stock_index", "amount_cny": 1000}},
 			},
 		}, nil
 	}

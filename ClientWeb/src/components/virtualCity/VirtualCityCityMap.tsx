@@ -95,7 +95,9 @@ if (typeof window !== 'undefined' && window.location.search.includes('debug=1'))
 }
 import { CityEnvironmentLayer } from './CityEnvironmentLayer';
 import { DistrictBlock } from './DistrictBlock';
-import { AgentToken } from './AgentToken';
+// 批次 35 §4.3：座位居民从圆柱 token 升级为真实 3D 人物（AgentHuman 替换 AgentToken；
+// AgentToken.tsx 保留 —— 小地图仍用 districtSeatOffset 落位公式）。
+import { AgentHuman } from './AgentHuman';
 import { CityVoiceBubbleLayer } from './CityVoiceBubbleLayer';
 import { useVirtualCityStore } from '@/store/virtualCity.store';
 import { Road, lampsForRoad } from './Road';
@@ -389,6 +391,10 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
   const mySeat = gameState?.my_seat ?? -1;
   // 批次 23：座位居民语音气泡（useVirtualCitySpeech 写入；key = seat）。
   const speechBubbles = useVirtualCityStore((s) => s.speechBubbles);
+  // 批次 35 §5.1：座位居民动作气泡（useVirtualCityActionBubbles 写入；key = seat）。
+  // 刻意不订阅 eventFeed（WS 事件全量打进 R3F 树违背批次 28 A1 的 memo 隔离）——
+  // actionBubbles 仅在命中座位动作帧时变化（低频安全）。
+  const actionBubbles = useVirtualCityStore((s) => s.actionBubbles);
   const marketById = useMemo(() => {
     const m = new Map<string, number>();
     // 2026-09-14 §财商流P0-bugfix: 半截可选链 `?.market.districts` 在
@@ -507,12 +513,14 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
         </group>
         {/* 批次 28 二轮：?debug=1 场景归因探针（__cityScene/__cityRenderer/__cityBreakdown） */}
         <SceneDebugProbe />
+        {/* 批次 35 §4.3：座位居民 3D 人物（AgentHuman 替换 AgentToken 圆柱；
+            local_pos 存在时站区内归一化坐标，缺失时组件内回落环形落位） */}
         {players.map((p, i) => {
           const inDistrict = byDistrict.get(p.district) ?? [];
           const index = inDistrict.indexOf(i);
           const c = districtCenter(p.district);
           return (
-            <AgentToken
+            <AgentHuman
               key={`${p.seat}-${p.account}`}
               player={p}
               cx={c.x}
@@ -521,6 +529,7 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
               total={inDistrict.length}
               isMe={p.seat === mySeat}
               speech={speechBubbles[p.seat] ?? null}
+              action={actionBubbles[p.seat] ?? null}
             />
           );
         })}

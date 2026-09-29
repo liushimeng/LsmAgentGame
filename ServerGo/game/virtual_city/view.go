@@ -575,6 +575,23 @@ type PlayerJSON struct {
 	ConsumptionLevel int `json:"consumption_level"`
 	// P1-4(§财商流P1-4 §8.2):该座位 Active 保单险种列表(是否投保是公开信息)。
 	InsuredKinds []string `json:"insured_kinds,omitempty"`
+	// 批次35 §4.1:区内归一化坐标 [0,1]²(全座位公开;与 my.local_pos /
+	// bot_contexts[].local_pos 同源)。3D 人物站位用;空座位也给 [0,0]
+	// 非 nil 数组(项目惯例:防 JSON null 崩前端 .map)。
+	LocalPos []float64 `json:"local_pos"`
+	// 批次35 §4.1:3D 人物外观投影(批次 34 crowd 同款推导;nil = 未知 →
+	// 前端兜底 char_casual)。
+	Avatar *AvatarJSON `json:"avatar,omitempty"`
+}
+
+// AvatarJSON 是座位居民 3D 人物外观投影(批次35 §4.1;复用批次 34 原型体系,
+// city.ArchetypeFor / WealthTierFor 推导,与背景行人观感连续)。
+type AvatarJSON struct {
+	Archetype string `json:"archetype"` // char_business|char_worker|...(开局卡面推导,整局稳定)
+	Gender    string `json:"gender"`    // m|f|u
+	Age       int    `json:"age"`       // 开局年龄(原型判据用,整局稳定)
+	Domain    int    `json:"domain"`    // 0..25 L1 行业域下标(-1 未知)
+	Wealth    int    `json:"wealth"`    // 0..3 财富档(开局卡面口径)
 }
 
 // InsuranceJSON 是 my.insurance 子结构(P1-4 §8.2;insurance_enabled=false 时 omit)。
@@ -899,7 +916,7 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 	// Players(全公开)。
 	for s, pp := range world.Players {
 		if pp == nil {
-			pj := PlayerJSON{Seat: s}
+			pj := PlayerJSON{Seat: s, LocalPos: []float64{0, 0}}
 			cs.Players[s] = pj
 			continue
 		}
@@ -946,6 +963,19 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 			// P1-4 §8.2:insurance_enabled=false 时 insured_kinds 恒空(与
 			// my.insurance omit 同口径,防中途关开关后冻结保单泄漏公开字段)。
 			InsuredKinds: world.insuredKindsOf(pp),
+			// 批次35 §4.1:区内坐标 + 3D 人物外观(开局卡面推导 ⇒ 整局稳定,
+			// 不随运行时净资产闪变;与 crowd 背景行人同源口径)。
+			LocalPos: []float64{pp.LocalPos[0], pp.LocalPos[1]},
+			Avatar: &AvatarJSON{
+				Archetype: city.ArchetypeFor(pp.Card.StartAge,
+					city.DomainIndexOf(pp.Domain),
+					city.WealthTierFor(float64(pp.Card.Salary), float64(pp.Card.Savings)),
+					pp.Card.Gender, pp.Card.Employment, pp.Card.ChildrenCount),
+				Gender: pp.Card.Gender,
+				Age:    pp.Card.StartAge,
+				Domain: city.DomainIndexOf(pp.Domain),
+				Wealth: city.WealthTierFor(float64(pp.Card.Salary), float64(pp.Card.Savings)),
+			},
 		}
 		cs.Players[s] = pj
 	}

@@ -1,7 +1,8 @@
-// Package vcplayer — tools_sense.go: 感知与行动工具(2026-09-22 §CityHuman重构)。
+// Package vcplayer — tools_sense.go: 感知与行动工具(2026-09-22 §CityHuman重构;
+// 批次35 §3.3 预算接线:dispatchToolResult.Budget 由本文件置位)。
 //
 // 契约: lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md §4。
-// 5 个工具:see(视觉≈500m)/hear(听觉≈100m)/smell(嗅觉≈50m) 不耗动作预算、
+// 4 个工具:see(视觉≈500m)/hear(听觉≈100m)/smell(嗅觉≈50m) 不耗动作预算、
 // 每月各限 2 次(Agent 侧计数);move(walk|run 区内 / bus|metro|taxi 跨城区)
 // 耗 1 次动作预算;speak scope=private 的派发在 tools.go(与 area 合一)。
 package vcplayer
@@ -46,7 +47,7 @@ func SenseToolDefinitions() []llmtypes.ToolDef {
 			Name: ToolMove,
 			Description: "移动(耗 1 次动作预算):destination 为空或当前城区时为区内移动(walk 步行精力−1 / run 跑步精力−2);" +
 				"destination 为其他城区 id 时乘坐交通工具跨城区:bus 公交¥500精力−2 / metro 地铁¥1500精力−1 / taxi 出租车¥3000精力−1(价格随 CPI 浮动)," +
-				"跨城区语义等同原 move_district(迁区后若目标区有自有住宅自动自住)。",
+				"跨城区即迁区(迁区后若目标区有自有住宅自动自住)。",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -61,6 +62,8 @@ func SenseToolDefinitions() []llmtypes.ToolDef {
 
 // dispatchSenseTool 派发感知与行动工具(DispatchTool default 分支调用)。
 // getStr/getInt 复用 tools.go 的入参解包闭包。
+// 批次35 §3.3:Budget 置位 —— see/hear/smell 不耗预算(零值 false),
+// move 耗 1 点预算(true)。
 func (a *Agent) dispatchSenseTool(name string, inputJSON json.RawMessage, getStr func(string) string, getInt func(string) int64) dispatchToolResult {
 	res := dispatchToolResult{Name: name, Input: string(inputJSON)}
 	fail := func(err error) dispatchToolResult {
@@ -69,7 +72,8 @@ func (a *Agent) dispatchSenseTool(name string, inputJSON json.RawMessage, getStr
 		return res
 	}
 
-	// 感知三件套:每月各限 2 次(Agent 侧计数,随 OnMonthStart 重置)。
+	// 感知三件套:每月各限 2 次(Agent 侧计数,随 OnMonthStart 重置);
+	// 不耗动作预算(res.Budget 保持 false)。
 	if name == ToolSee || name == ToolHear || name == ToolSmell {
 		a.mu.Lock()
 		used := a.senseUsed[name]
@@ -108,8 +112,9 @@ func (a *Agent) dispatchSenseTool(name string, inputJSON json.RawMessage, getStr
 		return res
 	}
 
-	// move:耗 1 次动作预算(引擎侧校验)。
+	// move:耗 1 次动作预算(引擎侧校验 + Agent 侧计数同源)。
 	if name == ToolMove {
+		res.Budget = true
 		return failOr(a.runner.Move(a.MySeat, getStr("destination"), getStr("mode")), "移动完成", res)
 	}
 

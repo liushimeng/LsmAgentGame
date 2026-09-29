@@ -132,7 +132,11 @@ type VirtualCityRoom struct {
 	// cardPoolPaths 批次 25 persona 统一:与 cardPool 按序对应的卡来源相对路径
 	// (文档池卡 = 真实路径;合成兜底卡 = "")。N≤12 时档案锚定复用同一批路径,
 	// 使背景居民 i 的人物卡 = 座位 i 的人物卡(消掉双 rng 流)。
-	cardPoolPaths    []string
+	cardPoolPaths []string
+	// cardPoolDomains 批次35 §4.1:与 cardPool/cardPoolIdx 同步递增的 L1 域名
+	// 列表(DomainCard.Domain;合成兜底卡 = "")。发卡时随卡带出存入
+	// Player.Domain,供座位居民 avatar 外观推导(开局定档,整局稳定)。
+	cardPoolDomains  []string
 	cardPoolIdx      int
 	openingHooksSent bool
 
@@ -499,8 +503,9 @@ func (r *VirtualCityRoom) JoinGame(userID, nickname string) (int, bool, *errcode
 	}
 	if r.World != nil {
 		// 中途加入:发卡 + 本月不参与(B7:当月不补结,下月正式参与)。
-		card := r.drawCardLocked()
+		card, domain := r.drawCardLocked()
 		p := newPlayerFromCard(seat, card)
+		p.Domain = domain // 批次35 §4.1:avatar 外观推导用。
 		p.Submitted = true
 		p.ActionBudget = 0
 		r.World.Players[seat] = p
@@ -552,14 +557,20 @@ func (r *VirtualCityRoom) RegisterBotSeats(seatUsers map[int]string, seatModels 
 }
 
 // drawCardLocked 从房间卡池抽下一张(池尽循环 curated;确定性:房间 rng)。
-func (r *VirtualCityRoom) drawCardLocked() profession.Card {
+// 批次35 §4.1:同时带出该卡的 L1 域名(cardPoolDomains 与 cardPool 同序,
+// 合成兜底卡域名为空串),供发卡处写入 Player.Domain。
+func (r *VirtualCityRoom) drawCardLocked() (profession.Card, string) {
 	if len(r.cardPool) == 0 || r.cardPoolIdx >= len(r.cardPool) {
 		r.cardPool = r.buildCardPoolLocked()
 		r.cardPoolIdx = 0
 	}
 	card := r.cardPool[r.cardPoolIdx]
+	domain := ""
+	if r.cardPoolIdx < len(r.cardPoolDomains) {
+		domain = r.cardPoolDomains[r.cardPoolIdx]
+	}
 	r.cardPoolIdx++
-	return card
+	return card, domain
 }
 
 // buildCardPoolLocked 构建洗牌后的开局卡池(2026-09-22 §17-CityHuman 契约
@@ -571,20 +582,26 @@ func (r *VirtualCityRoom) drawCardLocked() profession.Card {
 // anchorCityProfiles 的 sharedPaths 参数)。
 func (r *VirtualCityRoom) buildCardPoolLocked() []profession.Card {
 	r.cardPoolPaths = nil
+	r.cardPoolDomains = nil
 	if r.docLoader != nil {
 		if pairs := r.docLoader.DrawWithDomain(MaxSeats, r.rng); len(pairs) > 0 {
 			cards := make([]profession.Card, len(pairs))
 			paths := make([]string, len(pairs))
+			domains := make([]string, len(pairs))
 			for i := range pairs {
 				cards[i] = pairs[i].Card
 				paths[i] = pairs[i].SourcePath
+				domains[i] = pairs[i].Domain
 			}
 			r.cardPoolPaths = paths
+			r.cardPoolDomains = domains
 			return cards
 		}
 	}
 	cards := profession.SyntheticCards(MaxSeats, r.rng)
 	r.rng.Shuffle(len(cards), func(i, j int) { cards[i], cards[j] = cards[j], cards[i] })
+	// 合成兜底卡无 L1 域名(批次35 §4.1:域名列表与卡同长,全空串)。
+	r.cardPoolDomains = make([]string, len(cards))
 	return cards
 }
 
@@ -609,12 +626,15 @@ func (r *VirtualCityRoom) Start(loader *profession.Loader) *errcode.Error {
 
 	// 发卡:座位序抽取(2026-09-22 §17-CityHuman:座位职业偏好死路径随精选
 	// 层退役删除,契约 03 §1.4;恒 docs 池 + synthetic 兜底)。
+	// 批次35 §4.1:drawCardLocked 同时带出 L1 域名(合成兜底卡 = ""),
+	// NewWorld 建好 Players 后回写 Player.Domain(avatar 外观推导用)。
 	var cards [MaxSeats]profession.Card
+	var cardDomains [MaxSeats]string
 	for seat := 0; seat < MaxSeats; seat++ {
 		if r.Seats[seat] == "" {
 			continue
 		}
-		cards[seat] = r.drawCardLocked()
+		cards[seat], cardDomains[seat] = r.drawCardLocked()
 	}
 
 	// 2026-09-21 §虚拟城市(契约 04 §1.4):池驱动座位(model_key=="")抽卡后
@@ -634,6 +654,12 @@ func (r *VirtualCityRoom) Start(loader *profession.Loader) *errcode.Error {
 
 	seed := r.seed
 	r.World = NewWorld(seed, cards)
+	// 批次35 §4.1:发卡域名回写(NewWorld 按 cards 建 Players,域名单独存)。
+	for seat := 0; seat < MaxSeats; seat++ {
+		if p := r.World.Players[seat]; p != nil {
+			p.Domain = cardDomains[seat]
+		}
+	}
 	// P1(§6.5):NewWorld 恒置 EconomyEnabled=true,此处按房间级开关回写。
 	r.World.EconomyEnabled = r.economyEnabled
 	// P1-4(§财商流P1-4 §11):NewWorld 恒置 InsuranceEnabled=true,此处按开关回写。
