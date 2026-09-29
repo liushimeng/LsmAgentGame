@@ -17,10 +17,11 @@
 
 import { create } from 'zustand';
 
-/** 三种视角模式。顺序即 `V` 键循环顺序。 */
-export type FreeViewMode = 'orbit' | 'fly' | 'walk';
+/** 两种视角模式。顺序即 `V` 键循环顺序。
+ *  批次 32 v2（修订）：按需求删去 'walk' 街景漫游 —— 默认即自由飞行。 */
+export type FreeViewMode = 'orbit' | 'fly';
 
-export const FREE_VIEW_MODES: readonly FreeViewMode[] = ['orbit', 'fly', 'walk'];
+export const FREE_VIEW_MODES: readonly FreeViewMode[] = ['orbit', 'fly'];
 
 /** 速度档位倍率（与 `Shift` 加速正交：档位是基线，Shift 在其上再乘）。 */
 export const FREE_VIEW_TIERS = [0.25, 1, 4] as const;
@@ -63,6 +64,7 @@ export interface FreeViewState {
   mode: FreeViewMode;
   /** 进入当前模式之前的模式（`F` 键在 orbit ↔ fly 间往返用）。 */
   prevMode: FreeViewMode;
+
   /** 键位帮助面板是否展开。 */
   helpOpen: boolean;
   /** 速度档位下标。 */

@@ -21,17 +21,30 @@ export interface ObjectInfoTarget {
 export interface ObjectInfoState {
   /** 悬停目标（null = 无悬浮卡）。 */
   hovered: ObjectInfoTarget | null;
-  /** 点选目标（null = 无详情卡）。 */
+  /** 点选目标（null = 无选中 / 无详情卡）。 */
   selected: ObjectInfoTarget | null;
   setHovered: (t: ObjectInfoTarget | null) => void;
+  /**
+   * 点选目标（批次 32 v2 改 **toggle** 语义）：
+   * 传入 null = 取消；传入与当前 selected **同 catalog id** 的目标 = 取消（再点同一物体）；
+   * 否则 = 选中该目标。
+   */
   setSelected: (t: ObjectInfoTarget | null) => void;
   clearSelected: () => void;
 }
 
-export const useObjectInfoStore = create<ObjectInfoState>()((set) => ({
+export const useObjectInfoStore = create<ObjectInfoState>()((set, get) => ({
   hovered: null,
   selected: null,
   setHovered: (t) => set({ hovered: t }),
-  setSelected: (t) => set({ selected: t }),
+  setSelected: (t) => {
+    const cur = get().selected;
+    // toggle：再点同一物体（同 catalog id）= 取消选中。
+    if (!t || (cur && cur.id === t.id)) {
+      set({ selected: null });
+      return;
+    }
+    set({ selected: t });
+  },
   clearSelected: () => set({ selected: null }),
 }));

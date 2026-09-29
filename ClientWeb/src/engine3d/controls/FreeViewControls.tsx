@@ -65,6 +65,9 @@ export interface FreeViewControlsProps {
   initialTarget?: [number, number, number];
   /** 初始轨道半径。缺省 = 当前相机到 initialTarget 的距离。 */
   initialRadius?: number;
+  /** 俯瞰归零点固定 theta（弧度）。传了它，进入 orbit = 固定 [target, radius, phi, theta]，
+   *  不再从当前位置反解 —— 用于「只有一个固定落点」的俯瞰归零点语义。缺省 = 从相机反解。 */
+  orbitFixedTheta?: number;
   /** 初始轨道俯仰角（弧度，从 +Y 轴起算）。缺省 0.95（约 55°，标准 3/4 俯瞰）。 */
   initialPhi?: number;
   /** 从贴地模式切入轨道时的默认半径（站在原地向上「拉起」的舒适视距）。 */
@@ -80,10 +83,13 @@ export interface FreeViewControlsProps {
   speed?: number;
   /** 轨道模式平移聚焦点的移速。缺省同 `speed`。 */
   orbitPanSpeed?: number;
-  /** 街景漫游移速（真实步速量级）。缺省同 `speed`。 */
-  walkSpeed?: number;
-  /** 街景漫游眼高（世界单位）。 */
-  eyeHeight?: number;
+  /**
+   * 选中物体的聚焦点（世界坐标 + 环绕半径）。非空时 fly 进入「选中环绕」子状态：
+   * W/S = 拉远/拉近（半径），A/D = 水平环绕，朝向 lookAt(focus)；仍支持垂直升降。
+   * null（或未传）= 自由飞行（WASD 沿视线移动）。
+   */
+  selectedFocus?: { x: number; y: number; z: number; radius: number } | null;
+  // 街景漫游（walk）已按需求删除，眼高不再需要。
   /** 轨道半径上下限。 */
   minDistance?: number;
   maxDistance?: number;
@@ -110,7 +116,9 @@ export interface FreeViewControlsProps {
   targetRef?: FreeViewTargetRef;
   /** 聚焦请求（小地图 / 面板点击 → 平滑移焦），到位自动清空。 */
   focusRef?: React.MutableRefObject<FocusTarget | null>;
-  /** 视锥上报源（fly/walk 时的相机朝向与 FOV，供小地图画扇形）。 */
+  /** 选中物体的聚焦点（ref，游戏侧薄适配层写入；null/未传 = 未选中 → 自由飞行）。 */
+  selectedFocusRef?: React.MutableRefObject<SelectedFocus | null>;
+  /** 视锥上报源（fly 时的相机朝向与 FOV，供小地图画扇形）。 */
   aimRefs?: React.MutableRefObject<FreeViewAim>;
   /** 命中此 URL 片段时把运行时诊断挂到 window（CDP 验收用）。 */
   debugGlobalName?: string;
@@ -260,8 +268,8 @@ function createRig(camera: THREE.PerspectiveCamera, pr: FreeViewControlsProps): 
     radiusGoal: clamp(homeDist, pr.minDistance ?? 2, pr.maxDistance ?? 100),
     phi,
     phiGoal: phi,
-    theta: sph.theta,
-    thetaGoal: sph.theta,
+    theta: pr.orbitFixedTheta ?? sph.theta,
+    thetaGoal: pr.orbitFixedTheta ?? sph.theta,
     pos: camera.position.clone(),
     yaw: _euler.y,
     yawGoal: _euler.y,
@@ -360,7 +368,6 @@ function moveSpeed(
 function baseSpeed(pr: FreeViewControlsProps, mode: FreeViewMode): number {
   const base = pr.speed ?? 1;
   if (mode === 'orbit') return pr.orbitPanSpeed ?? base;
-  if (mode === 'walk') return pr.walkSpeed ?? base;
   return base;
 }
 
@@ -422,7 +429,21 @@ function dampFactorOf(lambda: number, dt: number): number {
   return 1 - Math.exp(-lambda * Math.min(dt, 0.1));
 }
 
-/** 全自由六自由度一步。 */
+/** 选中物体的聚焦点（世界坐标 + 环绕半径）。null = 未选中（自由飞行）。 */
+export interface SelectedFocus {
+  x: number;
+  y: number;
+  z: number;
+  radius: number;
+}
+
+/** 全自由六自由度一步。
+ *
+ *  批次 32 v2：按需求分两种子状态 ——
+ *    focus == null（未选中物体）：WASD 沿视线前后左右 + 垂直升降，可穿水平面任意位置；
+ *    focus != null（选中物体）：WASD 变成围绕物体移动 —— W/S = 半径减小/增大（拉近/拉远），
+ *      A/D = 水平环绕（绕 focus.y 轴公转），朝向 lookAt(focus)。垂直升降仍可用。
+ */
 function stepFly(
   s: RigState,
   dt: number,
@@ -430,13 +451,62 @@ function stepFly(
   camera: THREE.PerspectiveCamera,
   keySet: Set<string>,
   tier: number,
+  focus: SelectedFocus | null,
 ): void {
+  const mag = moveSpeed(baseSpeed(pr, 'fly'), keySet, tier);
+  const vkeys = pr.verticalKeys ?? { up: ['Space', 'KeyE'], down: ['KeyQ'] };
+
+  if (focus) {
+    // ── 选中环绕子状态 ──
+    // 把当前 pos 投影到「以 focus 为中心、保持到 focus 距离」的球坐标（无跳变）。
+    _v1.copy(s.pos).sub(_v2.set(focus.x, focus.y, focus.z));
+    const sph = new THREE.Spherical().setFromVector3(_v1);
+    let radius = sph.radius;
+    let theta = sph.theta;
+    let phi = sph.phi;
+    // W/S 改变半径（拉近/拉远），A/D 环绕（水平公转），垂直升降由 Space/E/Q 直接改 pos.y
+    if (keySet.has('KeyW') || keySet.has('ArrowUp')) radius -= mag * dt;
+    if (keySet.has('KeyS') || keySet.has('ArrowDown')) radius += mag * dt;
+    if (keySet.has('KeyD') || keySet.has('ArrowRight')) theta -= mag * dt / Math.max(radius, 1);
+    if (keySet.has('KeyA') || keySet.has('ArrowLeft')) theta += mag * dt / Math.max(radius, 1);
+    radius = clamp(radius, (pr.collisionRadius ?? 0) + 0.5, pr.maxDistance ?? 100);
+    phi = clamp(phi, pr.minPolar ?? 0.02, pr.maxPolar ?? 1.545);
+    // 垂直升降（仍可任意高度，不受水平面限制）
+    let y = focus.y + radius * Math.cos(phi);
+    for (const k of vkeys.up) if (keySet.has(k)) y += mag * dt;
+    for (const k of vkeys.down) if (keySet.has(k)) y -= mag * dt;
+
+    const sinPhi = Math.sin(phi);
+    s.pos.set(
+      focus.x + radius * sinPhi * Math.sin(theta),
+      y,
+      focus.z + radius * sinPhi * Math.cos(theta),
+    );
+
+    camera.position.copy(s.pos);
+    s.collisionHit = collide(camera.position, pr);
+    s.pos.copy(camera.position);
+    // 朝向聚焦点（环绕语义）；右键拖拽 yaw/pitch 仍在改 goal，但每帧被 lookAt 覆盖 ——
+    // 想脱离 lookAt 环绕就取消选中（左键点空白）。
+    _mat.lookAt(camera.position, _v2.set(focus.x, focus.y, focus.z), UP);
+    camera.quaternion.setFromRotationMatrix(_mat);
+    // 同步 yaw/pitch 供 HUD / 后续切回自由飞行时无缝
+    _euler.setFromQuaternion(camera.quaternion, 'YXZ');
+    s.yaw = _euler.y;
+    s.yawGoal = _euler.y;
+    s.pitch = _euler.x;
+    s.pitchGoal = _euler.x;
+    // vel ≈ 0（环绕是位置直接赋值，不是速度积分），自适应 FOV 不额外张开
+    s.vel.set(0, 0, 0);
+    return;
+  }
+
+  // ── 自由飞行（未选中）──
   s.yaw = wrapAngle(s.yaw + wrapAngle(s.yawGoal - s.yaw) * dampFactorOf(LAMBDA_ROT, dt));
   const lim = pr.pitchLimit ?? 1.553;
   s.pitch = clamp(damp(s.pitch, s.pitchGoal, LAMBDA_ROT, dt), -lim, lim);
 
-  const mag = moveSpeed(baseSpeed(pr, 'fly'), keySet, tier);
-  inputVelocity(_velGoal, keySet, s.yaw, s.pitch, mag, pr.verticalKeys ?? { up: ['Space', 'KeyE'], down: ['KeyQ'] }, true);
+  inputVelocity(_velGoal, keySet, s.yaw, s.pitch, mag, vkeys, true);
   // 对「目标速度」做阻尼 ⇒ 松手有惯性滑行而非生硬停住（R4）
   dampVec3(s.vel, _velGoal, LAMBDA_MOVE, dt);
   s.pos.addScaledVector(s.vel, dt);
@@ -447,38 +517,8 @@ function stepFly(
   quatFromYawPitch(camera.quaternion, s.yaw, s.pitch);
 }
 
-/** 街景漫游一步（贴地，眼高恒定）。 */
-function stepWalk(
-  s: RigState,
-  dt: number,
-  pr: FreeViewControlsProps,
-  camera: THREE.PerspectiveCamera,
-  keySet: Set<string>,
-  tier: number,
-): void {
-  s.yaw = wrapAngle(s.yaw + wrapAngle(s.yawGoal - s.yaw) * dampFactorOf(LAMBDA_ROT, dt));
-  // 俯仰限制比自由视角更紧（±83°，沿用批次 22 既有口径）
-  const lim = Math.min(pr.pitchLimit ?? 1.553, 1.45);
-  s.pitch = clamp(damp(s.pitch, s.pitchGoal, LAMBDA_ROT, dt), -lim, lim);
-
-  const mag = moveSpeed(baseSpeed(pr, 'walk'), keySet, tier);
-  inputVelocity(_velGoal, keySet, s.yaw, 0, mag, pr.verticalKeys ?? { up: [], down: [] }, false);
-  _velGoal.y = 0;
-  dampVec3(s.vel, _velGoal, LAMBDA_MOVE, dt);
-  s.vel.y = 0;
-  s.pos.addScaledVector(s.vel, dt);
-
-  camera.position.copy(s.pos);
-  s.collisionHit = collide(camera.position, pr);
-  s.pos.copy(camera.position);
-  // 贴地：碰撞解算之后仍强制眼高（保证「走在地面上」而不是被楼体顶上去）
-  s.pos.y = Math.max(pr.groundY ?? 0, pr.eyeHeight ?? 1);
-  camera.position.y = s.pos.y;
-  quatFromYawPitch(camera.quaternion, s.yaw, s.pitch);
-}
-
 /** 按当前目标量算出「稳态位姿」（过渡终点 / 复位共用）。 */
-function poseFromGoals(s: RigState, mode: FreeViewMode, pr: FreeViewControlsProps): void {
+function poseFromGoals(s: RigState, mode: FreeViewMode, _pr: FreeViewControlsProps): void {
   if (mode === 'orbit') {
     sphOffset(_v1, s.radiusGoal, s.phiGoal, s.thetaGoal);
     s.toPos.copy(s.targetGoal).add(_v1);
@@ -486,7 +526,6 @@ function poseFromGoals(s: RigState, mode: FreeViewMode, pr: FreeViewControlsProp
     s.toQuat.setFromRotationMatrix(_mat);
   } else {
     s.toPos.copy(s.pos);
-    if (mode === 'walk') s.toPos.y = Math.max(pr.groundY ?? 0, pr.eyeHeight ?? 1);
     quatFromYawPitch(s.toQuat, s.yawGoal, s.pitchGoal);
   }
   s.toFov = s.userFovGoal;
@@ -530,22 +569,21 @@ function beginTransition(
 
   if (to === 'orbit') {
     if (from !== 'orbit') {
-      // 从贴地/自由切入俯瞰：聚焦点落在脚下，半径用 defaultRadius（向上「拉起」）
-      const def = pr.defaultRadius
-        ?? clamp(camera.position.y * 2.5 + 10, pr.minDistance ?? 2, pr.maxDistance ?? 100);
-      s.targetGoal.set(camera.position.x, pr.groundY ?? 0, camera.position.z);
-      clampTarget(s.targetGoal, pr);
-      s.radiusGoal = clamp(def, pr.minDistance ?? 2, pr.maxDistance ?? 100);
-      s.phiGoal = clamp(1.0, pr.minPolar ?? 0.02, pr.maxPolar ?? 1.545);
-      s.thetaGoal = Math.atan2(
-        camera.position.x - s.targetGoal.x,
-        camera.position.z - s.targetGoal.z,
+      // 批次 32 v2：「俯瞰归零点」= 固定落点。用 props 里给定的
+      // [initialTarget, initialRadius, initialPhi, orbitFixedTheta] 作为唯一目标，
+      // 不再从当前相机位置反解（反解会让「归零点」随当前位置漂移，违背语义）。
+      s.targetGoal.fromArray(pr.initialTarget ?? [0, 0, 0]);
+      s.radiusGoal = clamp(
+        pr.initialRadius ?? 42,
+        pr.minDistance ?? 2,
+        pr.maxDistance ?? 100,
       );
+      s.phiGoal = clamp(pr.initialPhi ?? 0.85, pr.minPolar ?? 0.02, pr.maxPolar ?? 1.545);
+      s.thetaGoal = pr.orbitFixedTheta ?? Math.PI / 4;
     }
   } else {
-    // 从俯瞰/另一模式切入自由视角：保留相机位置与朝向，只换约束方式
+    // 从俯瞰切入自由视角：保留相机位置与朝向，只换约束方式
     s.pos.copy(camera.position);
-    if (to === 'walk') s.pos.y = Math.max(pr.groundY ?? 0, pr.eyeHeight ?? 1);
     _euler.setFromQuaternion(camera.quaternion, 'YXZ');
     s.yawGoal = _euler.y;
     s.pitchGoal = clamp(_euler.x, -(pr.pitchLimit ?? 1.553), pr.pitchLimit ?? 1.553);
@@ -617,6 +655,7 @@ export function FreeViewControls(props: FreeViewControlsProps) {
     fovMax = 80,
     targetRef,
     focusRef,
+    selectedFocusRef,
     aimRefs,
     debugGlobalName = '__freeViewDebug',
     zoomSpeed = 0.0072,
@@ -681,6 +720,7 @@ export function FreeViewControls(props: FreeViewControlsProps) {
         /** 内部状态引用：仅 ?debug=1 时挂出，供 CDP 验收直接驱动（碰撞/边界复测）。 */
         _rig: rig,
         /** 当前生效的碰撞体与边界：CDP 验收据此核对「碰撞体数据 == 渲染楼体」。 */
+        get selectedFocus() { return pr.current.selectedFocusRef?.current ?? null; },
         get colliders() { return pr.current.colliders ?? []; },
         get bounds() { return pr.current.bounds ?? null; },
         get groundY() { return pr.current.groundY ?? null; },
@@ -777,7 +817,6 @@ export function FreeViewControls(props: FreeViewControlsProps) {
         }
         case 'Digit1': setModeIfAllowed('orbit'); break;
         case 'Digit2': setModeIfAllowed('fly'); break;
-        case 'Digit3': setModeIfAllowed('walk'); break;
         // 「俯瞰 ↔ 自由」是最高频往返
         case 'KeyF': setModeIfAllowed(modeRef.current === 'fly' ? 'orbit' : 'fly'); break;
         case 'KeyR': resetHome(); break;
@@ -940,8 +979,7 @@ export function FreeViewControls(props: FreeViewControlsProps) {
     s.tier = tierRef.current;
     const keys = keySet.current;
     if (s.mode === 'orbit') stepOrbit(s, dt, p, camera, keys, s.tier);
-    else if (s.mode === 'fly') stepFly(s, dt, p, camera, keys, s.tier);
-    else stepWalk(s, dt, p, camera, keys, s.tier);
+    else stepFly(s, dt, p, camera, keys, s.tier, selectedFocusRef?.current ?? null);
 
     // 动态 FOV（R5）
     const appliedFov = computeFov(s, dt, p, s.mode);

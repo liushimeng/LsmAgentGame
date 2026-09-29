@@ -46,6 +46,9 @@ export interface UseObjectInfoPropsOpts {
   hover?: boolean;
   /** true = 整体禁用（handler 变 no-op，也不置手型）。 */
   disabled?: boolean;
+  /** true = 仅禁用 click 选中（hover 信息卡保留）。批次 32 v2：地面/天空用 —
+   *  点空白不应选中它们，但悬停看信息仍然合理。 */
+  selectDisabled?: boolean;
   /** click 成功置 selected 后回调。 */
   onSelected?: () => void;
 }
@@ -123,7 +126,7 @@ export function useObjectInfoProps(
   const onClick = useCallback((e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     const o = optsRef.current;
-    if (o?.disabled) return;
+    if (o?.disabled || o?.selectDisabled) return;
     const targetId = o?.idFor ? o.idFor(e) : idRef.current;
     const target = buildTarget(e, targetId, o?.anchorY ?? DEFAULT_ANCHOR_Y, o?.extra);
     useObjectInfoStore.getState().setSelected(target);

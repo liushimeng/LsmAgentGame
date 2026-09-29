@@ -151,7 +151,8 @@ export function CloudLayer() {
   const tex = useSharedTexture(skyUrl('cloud_puff'));
   const clouds = useMemo(() => cloudsFor('clouds-v1'), []);
   // 批次 28 B2：云层信息交互（根组承接子云事件冒泡）。
-  const info = useObjectInfoProps('sky.cloud', { anchorY: 0 });
+  // 批次 32 v2：天空不参与「选中」（点空白 = 不选中）。
+  const info = useObjectInfoProps('sky.cloud', { anchorY: 0, selectDisabled: true });
   return (
     <group {...info}>
       {clouds.map((c, i) => (

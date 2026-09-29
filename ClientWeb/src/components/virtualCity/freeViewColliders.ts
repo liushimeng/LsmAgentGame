@@ -86,3 +86,32 @@ export function districtPlateBox(def: VirtualCityDistrictId): CameraBox | null {
     minZ: d.z - h, maxZ: d.z + h,
   };
 }
+
+/**
+ * 批次 32 v2：选中物体的聚焦点检索。
+ *
+ * 从命中点反查「这是哪一栋建筑」：遍历 colliders，找 XZ 投影包含命中点、且
+ * 命中点高度 ≤ 楼顶的那栋楼 ⇒ 取其 XZ 中心 + 半径（半宽/半深的较大者 + 碰撞余量）。
+ *
+ * 未命中（点中了树/路灯/水面等非建筑物体，或点在楼顶上方）⇒ 退化：
+ *   focus = 命中点本身 + fallbackRadius（调用方按物体类别给默认值）。
+ *
+ * 这样「选中特效的环」和「楼体的实际投影」严丝合缝（同一份 colliders 数据）。
+ */
+export function selectedTargetFor(
+  colliders: readonly CameraBox[],
+  pos: [number, number, number],
+  fallbackRadius: number,
+): { x: number; y: number; z: number; radius: number } {
+  const [px, py, pz] = pos;
+  for (const b of colliders) {
+    if (px >= b.minX && px <= b.maxX && pz >= b.minZ && pz <= b.maxZ && py <= b.maxY) {
+      const cx = (b.minX + b.maxX) / 2;
+      const cz = (b.minZ + b.maxZ) / 2;
+      const cy = (b.minY + b.maxY) / 2;
+      const r = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) / 2 + FREE_VIEW_COLLISION_RADIUS;
+      return { x: cx, y: cy, z: cz, radius: r };
+    }
+  }
+  return { x: px, y: py, z: pz, radius: fallbackRadius };
+}

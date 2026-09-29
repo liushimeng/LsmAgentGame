@@ -84,7 +84,15 @@ import {
   FREE_VIEW_BOUNDS,
   FREE_VIEW_COLLISION_RADIUS,
   FREE_VIEW_GROUND_Y,
+  selectedTargetFor,
 } from './freeViewColliders';
+import { SelectionMarker } from './SelectionMarker';
+import { useObjectInfoStore } from './objectInfo/objectInfoStore';
+
+// 批次 32 v2：CDP 验收可直接读写 objectInfo selected 状态。
+if (typeof window !== 'undefined' && window.location.search.includes('debug=1')) {
+  (window as unknown as Record<string, unknown>).__objectInfoStore = useObjectInfoStore;
+}
 import { CityEnvironmentLayer } from './CityEnvironmentLayer';
 import { DistrictBlock } from './DistrictBlock';
 import { AgentToken } from './AgentToken';
@@ -173,25 +181,23 @@ const SHADOW_CAMERA_HALF = WORLD_SIZE * 0.5;
 /** 批次 22：俯仰角上限 1.2（≈69°，2.5D 锁定俯视）→ 1.54（≈88°，可压到近街面视角，
  *  仍留约 2° 余量防止完全平视时地平线穿帮）。 */
 const ORBIT_MAX_POLAR_ANGLE = 1.54;
-/** 街景漫游眼高：1.7m（u(1.7)，cityScale 世界标尺 1 单位 = 10 米）。 */
-const WALK_EYE_HEIGHT = u(1.7);
-/** 街景漫游移速：批次 30 P0-5 —— 原 3 单位/秒 = 30 m/s（108 km/h，比步行快 21×）
- *  ⇒ 真实步速 u(1.5) = 1.5 m/s；Shift ×4 加速 = 6 m/s 小跑（FreeViewControls 内置）。
- *  批次 32：FreeViewControls 的 `speed` 是**三态共用**的基础移速，故拆成两个口径 ——
- *  街景按真实步速、飞行按观察者巡航速度。 */
-const WALK_SPEED = u(1.5);
 /** 自由飞行基础移速：20 m/s（无人机巡航量级；Shift ×4 = 80 m/s，
  *  配合 `[` `]` 档位最高 320 m/s 用来俯瞰全城）。 */
 const FLY_SPEED = u(20);
 /** 轨道模式下平移聚焦点的移速：10 m/s（俯瞰时小幅挪移足够）。 */
 const ORBIT_PAN_SPEED = u(10);
-/** 从贴地切入俯瞰时的默认半径：W*0.25 = 30 单位 = 300 m（城市尺度上的舒适视距）。 */
-const FREE_VIEW_DEFAULT_RADIUS = WORLD_SIZE * 0.25;
-/** 相机初始俯仰角（弧度，从 +Y 轴起算）—— 由 CAMERA_START 反解，保证批次 32 换用
- *  FreeViewControls 后**首帧观感与批次 22 的 drei OrbitControls 完全一致**（零回归）。 */
-const CAMERA_INITIAL_PHI = Math.acos(
-  CAMERA_START[1] / Math.hypot(CAMERA_START[0], CAMERA_START[1], CAMERA_START[2]),
-);
+/** 俯瞰归零点固定落点（批次 32 v2）：城市中心 [0,0,0] 上空、视觉朝下。
+ *  「俯瞰」不再是任意时刻的轨道相机，而是**只有一个固定落点** ——
+ *  按 orbit / 俯瞰归零点按钮 = 飞到并停在这个点。坐标与批次 22 的 CAMERA_START 一致
+ *  （[42,36,42]），首帧观感零回归。 */
+const FOCUS_TARGET: [number, number, number] = [0, 0, 0];
+const FOCUS_RADIUS = WORLD_SIZE * 0.35;       // 42 单位 = 420 m
+const FOCUS_PHI = 0.85;                        // ≈ 49°，标准 3/4 俯瞰
+const FOCUS_THETA = Math.PI / 4;               // 朝向城市中心的对角
+/** 「俯瞰归零点」用 fixedRadius 覆盖初始半径（非 CAMERA_START 反解距离），
+ *  保证按按钮回到的是**固定点**而不是「从当前位置拉一个轨道」。 */
+const ORBIT_FIXED_RADIUS = FOCUS_RADIUS;
+
 
 /** 小地图 / 面板 → 主场景的聚焦目标（null = 无聚焦请求）。 */
 export type VirtualCityFocusTarget = FocusTarget;
@@ -224,7 +230,9 @@ function Ground() {
   });
   const tex = urbanTex ?? asphaltTex;
   // 批次 28 B2：城市地面信息交互（click 空白处也走详情卡，不穿到下层）。
-  const info = useObjectInfoProps('ground.city', { anchorY: 0.3 });
+  // 批次 32 v2：地面不参与「选中」（点空白 = 不选中任何物体，只关当前选中）。
+  // hover 信息卡保留。
+  const info = useObjectInfoProps('ground.city', { anchorY: 0.3, selectDisabled: true });
 
   return (
     <mesh {...info} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
@@ -394,8 +402,22 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
   //    store，Canvas 内的控制器与 Canvas 外的 <FreeViewHud /> 经同一 store 通信。────
   /** 相机碰撞体（32 区全部建筑 AABB）：随房价指数重装配，见 freeViewColliders.ts。 */
   const cameraColliders = useMemo(() => buildCityCameraColliders(marketById), [marketById]);
-  /** 自由视角的相机朝向 / FOV 读回源（fly/walk 才有意义），供小地图画真实视锥。 */
+  /** 自由视角的相机朝向 / FOV 读回源（fly 才有意义），供小地图画真实视锥。 */
   const aimRefs = useRef<FreeViewAim>({ yaw: null, fov: null });
+  /** 批次 32 v2：选中物体的聚焦点（世界坐标 + 半径），由 selectedTargetFor 检索得出。 */
+  const selected = useObjectInfoStore((s) => s.selected);
+  const selectedFocus = useMemo(() => {
+    if (!selected) return null;
+    // 不同类别的物体给不同的 fallback 半径（地面/水系大，街具/树小）
+    const cat = selected.id.split('.')[0];
+    const fallback = cat === 'ground' || cat === 'water' || cat === 'road' ? 6
+      : cat === 'edge' || cat === 'sky' ? 12
+      : cat === 'district' ? 8
+      : 3;
+    return selectedTargetFor(cameraColliders, selected.pos, fallback);
+  }, [selected, cameraColliders]);
+  const selectedFocusRef = useRef(selectedFocus);
+  selectedFocusRef.current = selectedFocus;
 
   return (
     <div className="virtualCity-map-host">
@@ -491,13 +513,12 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
           targetRef={controlsRef}
           focusRef={focusRef}
           aimRefs={aimRefs}
-          initialTarget={[0, 0, 0]}
-          initialPhi={CAMERA_INITIAL_PHI}
-          defaultRadius={FREE_VIEW_DEFAULT_RADIUS}
+          initialTarget={FOCUS_TARGET}
+          initialPhi={FOCUS_PHI}
+          initialRadius={ORBIT_FIXED_RADIUS}
+          orbitFixedTheta={FOCUS_THETA}
           speed={FLY_SPEED}
           orbitPanSpeed={ORBIT_PAN_SPEED}
-          walkSpeed={WALK_SPEED}
-          eyeHeight={WALK_EYE_HEIGHT}
           minDistance={ORBIT_MIN_DISTANCE * 0.6}
           maxDistance={ORBIT_MAX_DISTANCE * 1.5}
           maxPolar={ORBIT_MAX_POLAR_ANGLE}
@@ -506,7 +527,11 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
           collisionRadius={FREE_VIEW_COLLISION_RADIUS}
           bounds={FREE_VIEW_BOUNDS}
           groundY={FREE_VIEW_GROUND_Y}
+          selectedFocusRef={selectedFocusRef}
         />
+        {/* 批次 32 v2：选中特效（地面环 + 竖环 + 呼吸脉动）。通用 ——
+            所有 objectInfo 接线的物体选中后都出现，半径由 selectedTargetFor 检索。 */}
+        <SelectionMarker focus={selectedFocus} groundY={FREE_VIEW_GROUND_Y} />
         {/* 批次 22 → 32：视野快照上报。orbit 走 targetRef 分支（聚焦点），
             fly/walk 时 targetRef 为 null → 回落上报相机自身，并附 yaw/fov
             供小地图画真实视锥扇形。 */}
@@ -526,21 +551,20 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
       <FreeViewHud
         labels={{
           title: '相机视角',
-          modes: ['俯瞰', '自由飞行', '街景漫游'],
+          modes: ['俯瞰归零点', '自由飞行'],
           help: '键位说明',
           speed: '速度',
           tiers: ['慢速', '常速', '快速'],
           clear: '视野畅通',
           colliding: '被场景阻挡',
           shortcuts: [
-            ['V', '循环切换视角'],
-            ['1 / 2 / 3', '直达 俯瞰 / 自由 / 漫游'],
-            ['F', '俯瞰 ⇄ 自由 快速往返'],
-            ['WASD', '前后左右移动'],
+            ['V / F', '俯瞰 ⇄ 自由 往返'],
+            ['1 / 2', '直达 俯瞰归零点 / 自由飞行'],
+            ['WASD', '自由移动 / 选中时环绕物体'],
             ['空格 / E / Q', '上升 / 上升 / 下降'],
             ['Shift', '加速 ×4'],
-            ['右键拖拽', '自由视角下转向（俯瞰为平移）'],
-            ['中键拖拽', '自由视角下视口平移'],
+            ['右键拖拽', '自由飞行下转向（俯瞰为平移）'],
+            ['中键拖拽', '自由飞行下视口平移'],
             ['滚轮', '俯瞰缩放视距 / 自由视角变焦'],
             ['[ / ]', '速度档位 慢 / 常 / 快'],
             ['R', '复位视角'],

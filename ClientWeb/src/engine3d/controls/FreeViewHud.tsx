@@ -22,8 +22,8 @@ import './freeview.css';
 export interface FreeViewLabels {
   /** 分组标题（读屏用）。 */
   title?: string;
-  /** 三个模式的短标签，按 `orbit / fly / walk` 顺序。 */
-  modes: [string, string, string];
+  /** 模式短标签。长度须与 FREE_VIEW_MODES 一致（当前两态：orbit / fly）。 */
+  modes: string[];
   /** 帮助按钮的无障碍名。 */
   help: string;
   /** 速度档位前缀。 */
@@ -39,23 +39,22 @@ export interface FreeViewLabels {
 
 const DEFAULT_LABELS: FreeViewLabels = {
   title: 'Camera view',
-  modes: ['Orbit', 'Free', 'Walk'],
+  modes: ['Orbit', 'Free'],
   help: 'Shortcuts',
   speed: 'Speed',
   tiers: ['Slow', 'Normal', 'Fast'],
   clear: 'Clear',
   colliding: 'Blocked',
   shortcuts: [
-    ['V', 'Cycle view mode'],
-    ['1 / 2 / 3', 'Orbit / Free / Walk'],
-    ['F', 'Toggle orbit ⇄ free'],
+    ['V / F', 'Toggle orbit ⇄ free'],
+    ['1 / 2', 'Orbit / Free'],
     ['R', 'Reset pose'],
     ['[ / ]', 'Speed tier'],
     ['H', 'This panel'],
   ],
 };
 
-const MODE_ORDER: FreeViewMode[] = ['orbit', 'fly', 'walk'];
+const MODE_ORDER: FreeViewMode[] = ['orbit', 'fly'];
 
 export interface FreeViewHudProps {
   /** 文案包；缺省英文（引擎层不假设宿主语种）。 */
