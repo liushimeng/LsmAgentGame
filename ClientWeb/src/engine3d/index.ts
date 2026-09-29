@@ -98,6 +98,7 @@ export {
   freeViewApi,
   FREE_VIEW_MODES,
   FREE_VIEW_TIERS,
+  FREE_VIEW_TIER_COUNT,
 } from './controls/freeViewStore';
 export type {
   FreeViewMode,

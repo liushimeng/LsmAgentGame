@@ -28,8 +28,11 @@ export interface FreeViewLabels {
   help: string;
   /** 速度档位前缀。 */
   speed: string;
-  /** 三个档位的短标签。 */
-  tiers: [string, string, string];
+  /**
+   * 各档位短标签（长度须与 `FREE_VIEW_TIERS` 一致，当前 5 档：X1/X2/X4/X8/X16）。
+   * 仅用于帮助表与读屏；状态栏始终直接显示数值倍率 `×N`（批次 34）。
+   */
+  tiers: string[];
   /** 畅通 / 碰撞 两态文案（碰撞指示灯）。 */
   clear: string;
   colliding: string;
@@ -42,14 +45,15 @@ const DEFAULT_LABELS: FreeViewLabels = {
   modes: ['Orbit', 'Free'],
   help: 'Shortcuts',
   speed: 'Speed',
-  tiers: ['Slow', 'Normal', 'Fast'],
+  tiers: ['×1', '×2', '×4', '×8', '×16'],
   clear: 'Clear',
   colliding: 'Blocked',
   shortcuts: [
     ['V / F', 'Toggle orbit ⇄ free'],
     ['1 / 2', 'Orbit / Free'],
     ['R', 'Reset pose'],
-    ['[ / ]', 'Speed tier'],
+    ['Shift', 'Speed ×1→×16 cycle'],
+    ['[ / ]', 'Speed step down / up'],
     ['H', 'This panel'],
   ],
 };
@@ -104,7 +108,15 @@ export function FreeViewHud({ labels, allowedModes }: FreeViewHudProps) {
       </div>
 
       <div className="freeview-hud__status">
-        <span className="freeview-hud__tier">
+        {/* 批次 34：速度信息随档位**实时同步**（store 低频量，切档才重渲染）。
+            `data-tier` / `data-mul` 给 CDP 验收直接读，不用解析文案。 */}
+        <span
+          className="freeview-hud__tier"
+          data-testid="freeview-speed"
+          data-tier={tier}
+          data-mul={FREE_VIEW_TIERS[tier]}
+          title={L.tiers[tier] ?? `×${FREE_VIEW_TIERS[tier]}`}
+        >
           {L.speed} ×{FREE_VIEW_TIERS[tier]}
         </span>
         <span

@@ -50,7 +50,12 @@ type ResidentProfile struct {
 	Goal        string  `json:"goal"`         // goals[0](5 年目标)
 	Marital     string  `json:"marital"`      // single|married
 	HealthGrade string  `json:"health_grade"` // A|B|C
-	SourceFile  string  `json:"source_file"`  // 相对路径(审计:可回溯源 md)
+	Gender      string  `json:"gender"`       // m|f|u(批次34 §5.4)
+	// Employment 就业形态原文(批次34 §5.1:char_service 的「平台就业/灵活就业」判据)。
+	Employment string `json:"employment"`
+	// ChildrenCount 子女数(批次34 §5.1:char_parent 的 age∈[30,54] && children>0 判据)。
+	ChildrenCount int    `json:"children_count"`
+	SourceFile    string `json:"source_file"` // 相对路径(审计:可回溯源 md)
 }
 
 // ProfileProgress 档案锚定进度(随 game.state.city.profiles 下发 + REST
@@ -149,24 +154,27 @@ func (b *Backdrop) AnchorProfiles(cards []profession.DomainCard, sourceFiles []s
 			src = sourceFiles[i]
 		}
 		b.profiles[i] = ResidentProfile{
-			Index:       i,
-			CardID:      c.ID,
-			Name:        c.Name,
-			Occupation:  c.Title,
-			DomainName:  domainName,
-			District:    districtName,
-			Age:         age,
-			Income:      income,
-			Expense:     expense,
-			Savings:     savings,
-			Employed:    employed,
-			Stressed:    stressed,
-			Personality: strings.Join(c.Personality, "、"),
-			OpeningHook: c.OpeningHook,
-			Goal:        goal,
-			Marital:     c.Marital,
-			HealthGrade: c.HealthGrade,
-			SourceFile:  src,
+			Index:         i,
+			CardID:        c.ID,
+			Name:          c.Name,
+			Occupation:    c.Title,
+			DomainName:    domainName,
+			District:      districtName,
+			Age:           age,
+			Income:        income,
+			Expense:       expense,
+			Savings:       savings,
+			Employed:      employed,
+			Stressed:      stressed,
+			Personality:   strings.Join(c.Personality, "、"),
+			OpeningHook:   c.OpeningHook,
+			Goal:          goal,
+			Marital:       c.Marital,
+			HealthGrade:   c.HealthGrade,
+			Gender:        genderOrU(c.Gender),
+			Employment:    c.Employment,
+			ChildrenCount: c.ChildrenCount,
+			SourceFile:    src,
 		}
 	}
 	b.profAnchored = n
@@ -240,6 +248,16 @@ func profileMatches(p *ResidentProfile, needle string) bool {
 	return strings.Contains(strings.ToLower(p.Name), needle) ||
 		strings.Contains(strings.ToLower(p.Occupation), needle) ||
 		strings.Contains(strings.ToLower(p.CardID), needle)
+}
+
+// genderOrU 性别码归一(批次34 §5.4):合法 "m"|"f" 原样,其余(含空/脏值)
+// 一律 "u"(未知)。档案层与 crowd 投影共用,保证 wire 值域恒为 m|f|u。
+func genderOrU(g string) string {
+	switch g {
+	case "m", "f":
+		return g
+	}
+	return "u"
 }
 
 // ProfileProgress 返回当前锚定进度(锁内快照)。

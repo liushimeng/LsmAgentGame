@@ -106,7 +106,11 @@ export interface FreeViewControlsProps {
   bounds?: CameraBounds;
   /** 地面/水面安全高度。 */
   groundY?: number;
-  /** 升降键位（R9；`Shift` 恒为加速键，见方案 §4.4 冲突裁决）。 */
+  /**
+   * 升降键位（R9）。
+   * 批次 34 起 `Shift` 不再是「按住加速键」，而是**速度倍率档切换键**
+   * （X1→X2→X4→X8→X16→X1 回绕），不再参与升降/移动的组合判定。
+   */
   verticalKeys?: { up: readonly string[]; down: readonly string[] };
   /** 视角切换过渡时长（秒）。0 = 关闭过渡（硬切）。 */
   transitionDuration?: number;
@@ -143,7 +147,11 @@ const DRAG_THRESHOLD_PX = 4;
 /** 拖拽结束后多久内吞掉 click（毫秒）。 */
 const CLICK_SUPPRESS_MS = 250;
 
-/** 键盘捕获的移动键（按 KeyboardEvent.code）。 */
+/**
+ * 键盘捕获的移动键（按 KeyboardEvent.code）。
+ * `Shift*` 保留在集合内：它虽已改为「速度档切换」，仍需参与 `shouldCaptureKey`
+ * 之后的按键登记，避免落下时被浏览器默认行为（如文本选区扩展）抢走。
+ */
 const MOVE_KEYS = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD',
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
@@ -354,14 +362,14 @@ function inputVelocity(
   return out;
 }
 
-/** 当前有效移速（三态各有基速，再乘档位 × Shift 加速）。 */
-function moveSpeed(
-  base: number,
-  keySet: Set<string>,
-  tier: number,
-): number {
-  const boost = keySet.has('ShiftLeft') || keySet.has('ShiftRight') ? 4 : 1;
-  return base * (FREE_VIEW_TIERS[tier] ?? 1) * boost;
+/**
+ * 当前有效移速（三态各有基速，再乘速度倍率档）。
+ *
+ * 批次 34：**Shift 不再是按住 ×4 加速**，而是切换倍率档（X1/X2/X4/X8/X16）。
+ * 档位本身就是全部倍率来源 ⇒ 本函数不再读 `keySet` 的 Shift 位。
+ */
+function moveSpeed(base: number, tier: number): number {
+  return base * (FREE_VIEW_TIERS[tier] ?? 1);
 }
 
 /** 按模式取基速。 */
@@ -403,7 +411,7 @@ function stepOrbit(
 ): void {
   // WASD 平移聚焦点（水平面），E/Q 升降 —— R7「前后左右平面平移」在轨道态的落点。
   const vkeys = pr.verticalKeys ?? { up: ['Space', 'KeyE'], down: ['KeyQ'] };
-  const mag = moveSpeed(baseSpeed(pr, 'orbit'), keySet, tier);
+  const mag = moveSpeed(baseSpeed(pr, 'orbit'), tier);
   _velGoal.set(0, 0, 0);
   inputVelocity(_velGoal, keySet, s.theta, 0, mag, vkeys, false);
   if (_velGoal.lengthSq() > 1e-9) {
@@ -453,7 +461,7 @@ function stepFly(
   tier: number,
   focus: SelectedFocus | null,
 ): void {
-  const mag = moveSpeed(baseSpeed(pr, 'fly'), keySet, tier);
+  const mag = moveSpeed(baseSpeed(pr, 'fly'), tier);
   const vkeys = pr.verticalKeys ?? { up: ['Space', 'KeyE'], down: ['KeyQ'] };
 
   if (focus) {
@@ -633,13 +641,20 @@ function stepTransition(
   if (t >= 1) settle(s);
 }
 
-/** 速度自适应 FOV（R5）：越快视野越广 → 像素流速被摊薄，外周运动失配减小。 */
+/**
+ * 速度自适应 FOV（R5）：越快视野越广 → 像素流速被摊薄，外周运动失配减小。
+ *
+ * 批次 34：`fast` 的归一化基准改为「×1 基速 × 最大档位」。旧式 `base*tier*4` 是
+ * 拿当前档的移速当分母 —— 在多档位下恒等于 ~1（自己除以自己），FOV 增益就失效了；
+ * 改为固定分母后，X1 几乎不涨、X16 顶满 `gain`，五档之间才有梯度。
+ */
 function computeFov(s: RigState, dt: number, pr: FreeViewControlsProps, mode: FreeViewMode): number {
   let goal = s.userFovGoal;
   const gain = pr.fovSpeedGain ?? DEFAULT_FOV_SPEED_GAIN;
   if (mode !== 'orbit' && gain > 0) {
-    const base = Math.max(1e-6, baseSpeed(pr, 'fly') * (FREE_VIEW_TIERS[s.tier] ?? 1));
-    const fast = Math.min(1, s.vel.length() / (base * 4));
+    const rawBase = Math.max(1e-6, baseSpeed(pr, 'fly'));
+    const topTier = FREE_VIEW_TIERS[FREE_VIEW_TIERS.length - 1] ?? 1;
+    const fast = Math.min(1, s.vel.length() / (rawBase * topTier));
     goal += fast * gain;
   }
   s.userFov = damp(s.userFov, goal, LAMBDA_FOV, dt);
@@ -824,6 +839,12 @@ export function FreeViewControls(props: FreeViewControlsProps) {
         case 'Slash': store.getState().toggleHelp(); break;
         case 'BracketLeft': store.getState().stepTier(-1); break;
         case 'BracketRight': store.getState().stepTier(1); break;
+        // 批次 34：Shift = 切换速度倍率档（X1→X2→X4→X8→X16→X1 回绕），
+        // 不是「按住加速」。`e.repeat` 已在上方挡掉 ⇒ 按住只走一档。
+        case 'ShiftLeft':
+        case 'ShiftRight':
+          store.getState().stepTier(1);
+          break;
         case 'Escape': store.getState().setHelpOpen(false); break;
         default: break;
       }

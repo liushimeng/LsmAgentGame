@@ -45,13 +45,15 @@
 
 import { useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
-import type { VirtualCityDistrictDef } from '@/types/virtualCity';
+import type { VirtualCityCrowdSnapshot, VirtualCityDistrictDef } from '@/types/virtualCity';
 import { detectQualityTier } from '@/engine3d';
 import { DISTRICT_FLOORS, buildingHeight, spacing, u } from './cityScale';
 import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
 import { ROAD_WIDTH_MAIN } from './Road';
 import { FIRST_RING_RADIUS, type RoadJunction, type RoadSegment } from './roadNetwork';
 import { buildingsFor } from './building_layout';
+import { outdoorCount, crowdCapFor, synthCrowdEntry } from './crowdFormula';
+import { layoutCrowd, type CrowdPedestrian } from './crowdLayout';
 import { TreesInstanced } from './props/TreesInstanced'; // 批次 20 §3.3：TreeV3 逐实例 → 全局 InstancedMesh（形态同源）
 import { Vehicle } from './props/Vehicle';
 import { PedestrianV3, type PedestrianV3Props } from './props/PedestrianV3';
@@ -738,6 +740,16 @@ interface StreetPropsLayerProps {
   districts: VirtualCityDistrictDef[];
   /** 批次 31：全城道路网线段（roadNetwork.buildRoadNetwork 产出；车辆/行道树沿路网布点）。 */
   segments: RoadSegment[];
+  /**
+   * 批次 34 §6.4：城市人流快照（`game.state.city.crowd`）。
+   * 有值时行人改由**真实居民**驱动（外观/位置/换班）；缺省时回落到
+   * `PEDESTRIAN_DENSITY` 装饰性布点（旧房零回归）。
+   */
+  crowd?: VirtualCityCrowdSnapshot;
+  /** 房间 resident_count（crowd 缺失时用于自算 V(N) 兜底）。 */
+  residentCount?: number;
+  /** 房间随机种子（确定性布点；缺省 0）。 */
+  roomSeed?: number;
 }
 
 /**
@@ -758,22 +770,59 @@ function capPedestrians(districtProps: DistrictProps[], cap: number): void {
   }
 }
 
-export function StreetPropsLayer({ districts, segments }: StreetPropsLayerProps) {
+export function StreetPropsLayer({ districts, segments, crowd, residentCount, roomSeed }: StreetPropsLayerProps) {
   // 批次 28 A4/A5：行人上限按质量档映射（high 110 / low 60，游戏侧策略；
   // detectQualityTier 读 GL 上下文，engine3d 不持有游戏字段）。
   const gl = useThree((s) => s.gl);
   const tier = useMemo(() => detectQualityTier(gl), [gl]);
   const pedCap = tier === 'low' ? PEDESTRIAN_TOTAL_CAP_LOW : PEDESTRIAN_TOTAL_CAP;
 
+  /**
+   * 批次 34 §6：人流改由**真实居民**驱动。
+   * crowdActive 时街区装饰行人整体停用，改由 `crowdPeds`（真人身份 + 外观 + 换班）
+   * 独立渲染 —— 两条路径互斥，保证 DC 与 AnimationMixer 数不叠加。
+   */
+  const crowdActive = !!crowd || (typeof residentCount === 'number' && residentCount > 0);
+
   const layout = useMemo<Layout>(() => {
     const districtProps = districts.map((d, idx) => propsForDistrict(d, idx));
-    capPedestrians(districtProps, pedCap);
+    if (crowdActive) {
+      // 真实居民模式：清空装饰行人（由 crowdPeds 接管），其余街具照旧
+      for (const dp of districtProps) dp.pedestrians = [];
+    } else {
+      capPedestrians(districtProps, pedCap);
+    }
     // 批次 31：车辆/行道树改沿全路网（connector 车流仅 high 档，上限 20）
     const roadVehicles = vehiclesForNetwork(segments, tier === 'high');
     const roadTrees = roadTreesForNetwork(segments);
     const busStops = busStopsForNetwork(segments);
     return { districtProps, roadVehicles, roadTrees, busStops };
-  }, [districts, segments, pedCap]);
+  }, [districts, segments, pedCap, crowdActive]);
+
+  /**
+   * 批次 34 §6.1/§6.2：上街居民集合 + 布点。
+   * 优先用后端 `crowd.entries`（含外观/身份）；缺失时按 `outdoorCount()` 兜底合成
+   * （旧房 / 未建城房也能看到「人少全上街、人多有人在楼里」的观感）。
+   */
+  const crowdPeds = useMemo<CrowdPedestrian[]>(() => {
+    if (!crowdActive) return [];
+    const cap = crowdCapFor(tier !== 'low');
+    const churn = crowd?.churn ?? 0;
+    const seed = roomSeed ?? 0;
+    let entries = crowd?.entries;
+    if (!entries || entries.length === 0) {
+      const n = Math.max(0, Math.floor(residentCount ?? 0));
+      const visible = outdoorCount(n, cap);
+      entries = Array.from({ length: visible }, (_, i) => synthCrowdEntry(i, seed, districts.length));
+    }
+    return layoutCrowd({
+      entries,
+      districts,
+      roomSeed: seed,
+      churn,
+      segments,
+    }).slice(0, pedCap);
+  }, [crowdActive, crowd, residentCount, districts, segments, tier, roomSeed, pedCap]);
 
   // 批次 20 §3.3：区内树 + 行道树合并单一 InstancedMesh 集合（3 draw call）。
   // 批次 28 B2：kind 标记 —— 区内树 tree.park / 行道树 tree.road（物件信息按实例区分）。
@@ -845,6 +894,18 @@ export function StreetPropsLayer({ districts, segments }: StreetPropsLayerProps)
             variant={dp.sign.variant}
           />
         </group>
+      ))}
+
+      {/* 批次 34 §6：真实居民行人（身份/外观/换班来自 game.state.city.crowd）。
+          与街区装饰行人**互斥**（crowdActive 时后者已清空），故 DC 与 mixer 数不叠加。 */}
+      {crowdPeds.map((p) => (
+        <PedestrianV3
+          key={`crowd-${p.residentIndex}`}
+          path={p.path}
+          speed={p.stationary ? 0 : p.speed}
+          phase={p.phase}
+          appearance={p.appearance}
+        />
       ))}
 
       {/* 批次 20 §3.3：区内树 + 行道树 → 单一全局 InstancedMesh 集合（3 draw call） */}

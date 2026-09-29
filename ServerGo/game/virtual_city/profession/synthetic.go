@@ -10,7 +10,9 @@ package profession
 
 import (
 	"fmt"
+	"hash/fnv"
 	"math/rand"
+	"strings"
 )
 
 // syntheticTemplate 合成卡模板(收入档为月薪基数,抖动由 rng 现场派生)。
@@ -61,6 +63,39 @@ var syntheticTemplates = [28]syntheticTemplate{
 	{"TOD招商专员", 12000, "highspeed_rail_town", "balanced", []string{"进取心强", "外向社交"}, "高铁站旁做招商,见过太多起落,我信慢慢攒才睡得安稳。"},
 }
 
+// syntheticGender 合成卡性别派生(批次34 §5.4):由卡 ID 的 FNV-1a 哈希奇偶
+// 决定 "m"/"f" —— 确定性、同 ID 恒同值,不消耗 rng 流(禁 Math.random;
+// 取 rng 会破坏「同 rng 序 → 同卡集」的其它字段稳定性)。
+func syntheticGender(id string) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(id))
+	if h.Sum32()&1 == 0 {
+		return "m"
+	}
+	return "f"
+}
+
+// syntheticEmployment 合成卡的就业形态(批次34 §5.1)。
+// 由模板职业名确定性派生 —— 让 char_service(平台就业/灵活就业)与
+// char_parent 这两路原型判据在合成兜底路径上也能命中,避免「声明了却从不接线」
+// (CLAUDE.md §130)。取值域与文档池 frontmatter 的 employment 一致。
+func syntheticEmployment(title string) string {
+	switch {
+	case strings.Contains(title, "骑手"), strings.Contains(title, "外卖"),
+		strings.Contains(title, "跑腿"), strings.Contains(title, "网约车"),
+		strings.Contains(title, "司机"):
+		return "平台就业"
+	case strings.Contains(title, "保安"), strings.Contains(title, "护工"),
+		strings.Contains(title, "技工"), strings.Contains(title, "店"),
+		strings.Contains(title, "博主"):
+		return "灵活就业"
+	case strings.Contains(title, "退休"), strings.Contains(title, "返聘"):
+		return "退休返聘"
+	default:
+		return "全职"
+	}
+}
+
 // SyntheticCards 确定性合成 n 张职业卡(文档池不可用时的兜底,替代原精选
 // 14 卡;契约 03 §2.2)。由 rng 派生:模板职业表 × 收入档 ± 抖动 × 数值
 // 档位抽样;StartAge clamp [20,55];Source 标注 "synthetic"。同 rng 序 →
@@ -77,18 +112,19 @@ func SyntheticCards(n int, rng *rand.Rand) []Card {
 		tpl := &syntheticTemplates[i%len(syntheticTemplates)]
 		salary := int64(float64(tpl.Salary) * (0.85 + 0.3*rng.Float64()))
 		expense := int64(float64(salary) * (0.55 + 0.2*rng.Float64()))
-		savings := salary * int64(3+rng.Intn(4))  // 3..6 个月开支
-		age := 20 + rng.Intn(36)                  // clamp [20,55]
-		energy := 5 + rng.Intn(4)                 // 5..8
-		network := 2 + rng.Intn(5)                // 2..6
-		cognition := 2 + rng.Intn(6)              // 2..7
-		credit := 550 + 50*rng.Intn(4)            // 550..700
-		health := "A"                             // 健康档按收入档位(低档 B)
+		savings := salary * int64(3+rng.Intn(4)) // 3..6 个月开支
+		age := 20 + rng.Intn(36)                 // clamp [20,55]
+		energy := 5 + rng.Intn(4)                // 5..8
+		network := 2 + rng.Intn(5)               // 2..6
+		cognition := 2 + rng.Intn(6)             // 2..7
+		credit := 550 + 50*rng.Intn(4)           // 550..700
+		health := "A"                            // 健康档按收入档位(低档 B)
 		if salary < 8000 {
 			health = "B"
 		}
+		id := fmt.Sprintf("S%04d", i+1)
 		out = append(out, Card{
-			ID:             fmt.Sprintf("S%04d", i+1),
+			ID:             id,
 			Title:          tpl.Title,
 			Salary:         salary,
 			Expense:        expense,
@@ -103,6 +139,8 @@ func SyntheticCards(n int, rng *rand.Rand) []Card {
 			Personality:    append([]string(nil), tpl.Personality...),
 			BehaviorTraits: []string{"精打细算"},
 			HealthGrade:    health,
+			Gender:         syntheticGender(id),
+			Employment:     syntheticEmployment(tpl.Title),
 			Marital:        "single",
 			OpeningHook:    tpl.Hook,
 			Goals:          []string{"5 年内把储蓄翻一番,并攒够 6 个月生活费的安全垫。"},

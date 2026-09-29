@@ -359,6 +359,7 @@ type docCard struct {
 	MonthlyExpense  flexInt           `yaml:"monthly_expense"`
 	SavingsStock    flexInt           `yaml:"savings_stock"`
 	Age             flexInt           `yaml:"age"`
+	Gender          flexText          `yaml:"gender"` // 男|女|其它(缺失 → "u";批次34 §5.4)
 	WorkIntensity   workIntensitySpec `yaml:"work_intensity"`
 	HealthGrade     flexText          `yaml:"health_grade"`
 	Personality     flexTextList      `yaml:"personality"`
@@ -389,6 +390,24 @@ func (d docCard) nameText() string {
 		return s
 	}
 	return strings.TrimSpace(d.LegacyName.Text)
+}
+
+// genderCode 性别归一(批次34 §5.4):男→"m"、女→"f"、缺失/其它→"u"。
+// shape-tolerant:任意异常形状(flexText 已兜)都不得让整卡解析失败。
+func (d docCard) genderCode() string {
+	return normalizeGender(d.Gender.Text)
+}
+
+// normalizeGender 把 frontmatter 性别文本归一到 "m"|"f"|"u"(值域 男/女/其它;
+// 兼容 male/female 等少量英文写法,未命中一律 "u")。
+func normalizeGender(s string) string {
+	switch strings.TrimSpace(s) {
+	case "男", "male", "M", "m":
+		return "m"
+	case "女", "female", "F", "f":
+		return "f"
+	}
+	return "u"
 }
 
 // salaryFallback 月薪兜底链:income_monthly → income_range 均值 → 0(不可用)。
@@ -641,34 +660,34 @@ func parseDocCard(fm []byte) (docCard, error) {
 // 整组换到新区。目标:16 个批次20 新区全部可获得 doc 卡出生地(N/O/V 一域多向
 // 拆分即契约 row3/4/10/11/13 的「等/含」语义)。
 var industryDistrictMap = map[string][]string{
-	"A": {"agri_park"},    // 农林牧渔 → 现代农业园(§2.4 改派,原 suburb)
-	"B": {"steel_town"},   // 采矿与冶金(黑色金属/冶炼)→ 特钢镇(§2.4 改派,原 industry)
-	"C": {"industry"},     // 食品饮料与烟草
-	"D": {"industry"},     // 纺织服装与鞋帽
-	"E": {"industry"},     // 木材家具与造纸印刷
-	"F": {"tech"},         // 医药与生物制造
-	"G": {"chem_park"},    // 化工与新材料 → 化工园区(§2.4 改派,原 industry)
-	"H": {"industry"},     // 金属制品与通用机械
-	"I": {"tech"},         // 电子半导体与仪器仪表
-	"J": {"auto_city"},    // 汽车与交通装备 → 汽车城(§2.4 改派,原 industry)
-	"K": {"industry"},     // 能源与电力
-	"L": {"commerce"},     // 建筑与房地产
-	"M": {"commerce"},     // 批发零售与商贸流通
+	"A": {"agri_park"},  // 农林牧渔 → 现代农业园(§2.4 改派,原 suburb)
+	"B": {"steel_town"}, // 采矿与冶金(黑色金属/冶炼)→ 特钢镇(§2.4 改派,原 industry)
+	"C": {"industry"},   // 食品饮料与烟草
+	"D": {"industry"},   // 纺织服装与鞋帽
+	"E": {"industry"},   // 木材家具与造纸印刷
+	"F": {"tech"},       // 医药与生物制造
+	"G": {"chem_park"},  // 化工与新材料 → 化工园区(§2.4 改派,原 industry)
+	"H": {"industry"},   // 金属制品与通用机械
+	"I": {"tech"},       // 电子半导体与仪器仪表
+	"J": {"auto_city"},  // 汽车与交通装备 → 汽车城(§2.4 改派,原 industry)
+	"K": {"industry"},   // 能源与电力
+	"L": {"commerce"},   // 建筑与房地产
+	"M": {"commerce"},   // 批发零售与商贸流通
 	// 交通运输/仓储/航空(§2.4 row3+row4):航空物流园 + 高铁新城(追加)+ 空港小镇(改派)。
 	"N": {"airport_town", "air_logistics", "highspeed_rail_town"},
 	// 住宿与餐饮/旅游(§2.4 row13):山居民宿区 + 湿地公园 + 湾区新城。
 	"O": {"mountain_resort", "wetland_park", "bay_new_town"},
-	"P": {"tech", "software_park"},                 // 信息传输/软件(§2.4 row1 追加软件园)
-	"Q": {"finance", "fin_sub_center"},             // 货币金融(§2.4 row2 追加金融副中心)
-	"R": {"finance"},                               // 专业服务
-	"S": {"tech"},                                  // 科学研究与技术服务
-	"T": {"university_town"},                       // 教育与培训 → 大学城(§2.4 改派,原 residential)
-	"U": {"medical_city", "health_town"},           // 卫生/康养(§2.4 row12 追加康养小镇)
+	"P": {"tech", "software_park"},                                    // 信息传输/软件(§2.4 row1 追加软件园)
+	"Q": {"finance", "fin_sub_center"},                                // 货币金融(§2.4 row2 追加金融副中心)
+	"R": {"finance"},                                                  // 专业服务
+	"S": {"tech"},                                                     // 科学研究与技术服务
+	"T": {"university_town"},                                          // 教育与培训 → 大学城(§2.4 改派,原 residential)
+	"U": {"medical_city", "health_town"},                              // 卫生/康养(§2.4 row12 追加康养小镇)
 	"V": {"sports_new_city", "cultural_creative", "old_city_culture"}, // 文化传媒体育(§2.4 row10/11)
-	"W": {"oldtown"},                               // 公共管理与国防
-	"X": {"residential"},                           // 社会组织与公益慈善
-	"Y": {"oldtown"},                               // 居民生活服务
-	"Z": {"riverside"},                             // 新兴交叉职业与其他
+	"W": {"oldtown"},                                                  // 公共管理与国防
+	"X": {"residential"},                                              // 社会组织与公益慈善
+	"Y": {"oldtown"},                                                  // 居民生活服务
+	"Z": {"riverside"},                                                // 新兴交叉职业与其他
 }
 
 // cityTierDistrict 真实城市名 → 城区(行业缺失时的次级信号)。
@@ -855,6 +874,10 @@ func (l *Loader) mapCard(raw docCard, rel string) (Card, error) {
 	default:
 		c.HealthGrade = "B"
 	}
+	// gender(批次34 §5.4):男→m 女→f 缺失/其它→u;FilterByVocab 不过滤本字段。
+	c.Gender = raw.genderCode()
+	// 就业形态原文(批次34 §5.1:char_service 的「平台就业/灵活就业」判据)。
+	c.Employment = raw.employmentText()
 	// 人格/行为:先过词库;词库全miss(真实卡含「情绪稳定/细腻敏感/月光族」等
 	// 词库外标签)→ 保留原始前 2 词,避免 Agent 人设全空(prompt 第 2 段失血)。
 	c.Personality = filterWithFallback(raw.Personality.Items, personalityVocab, 4, 2)

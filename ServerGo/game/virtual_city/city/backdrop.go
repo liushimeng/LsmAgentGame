@@ -73,10 +73,10 @@ const (
 
 // 意图消费常量(契约 02 §4 表格)。
 const (
-	reemploymentJobSeeking   = 0.30 // job_seeking 加成后再就业概率
-	frugalExpenseFactor      = 0.9  // frugal 本月支出系数
-	consumeExpenseFactor     = 1.25 // consume 本月支出系数
-	socializeStressReliefPr  = 0.20 // socialize 压力位额外解除概率
+	reemploymentJobSeeking  = 0.30 // job_seeking 加成后再就业概率
+	frugalExpenseFactor     = 0.9  // frugal 本月支出系数
+	consumeExpenseFactor    = 1.25 // consume 本月支出系数
+	socializeStressReliefPr = 0.20 // socialize 压力位额外解除概率
 )
 
 // Backdrop 是一城的背景居民数组 + 月度演化状态。并发安全(内部互斥);
@@ -323,6 +323,9 @@ type Snapshot struct {
 	// Driver 居民驱动层快照(2026-09-22 §17-CityHuman 契约 02 §5;omitempty
 	// —— driver 未启用时不下发,前端不渲染「本月驱动」行)。
 	Driver *DriverSnapshot `json:"driver,omitempty"`
+	// Crowd 人流 manifest(批次34 §6.4;omitempty —— 未建城房间 nil 不下发,
+	// 旧帧结构向后兼容)。随 game.state.city 原样序列化(view.go 无中间 DTO)。
+	Crowd *CrowdSnapshot `json:"crowd,omitempty"`
 }
 
 // Snapshot 聚合快照(契约 03 §4.4;锁内计算,纯函数视图)。
@@ -390,6 +393,12 @@ func (b *Backdrop) Snapshot() Snapshot {
 		ds := b.driver.Snapshot()
 		s.Driver = &ds
 	}
+	// 批次34 §6.4:人流 manifest(锁内纯函数视图;§92a —— 本方法已持 b.mu,
+	// 只能走 *Locked 变体,不得回进 CrowdSnapshot() 再加锁)。
+	// churn 代数 = b.month(CHURN_PERIOD ≈ 1 城市月,故月数即换班代数;
+	// Snapshot 调用方无 month 入参,取 Backdrop 自有月计数,无需外接)。
+	crowd := b.crowdSnapshotLocked(crowdCapHigh, b.month)
+	s.Crowd = &crowd
 	return s
 }
 

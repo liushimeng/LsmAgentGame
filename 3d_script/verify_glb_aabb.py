@@ -75,6 +75,26 @@ TARGETS = {
     'vehicles/bus.glb':       dict(x=1.200, y=0.320, z=0.255, axis='x_flat', pivot='轮底贴地 minY=0，X/Z 居中'),
     'vehicles/truck.glb':     dict(x=0.850, y=0.340, z=0.250, axis='x_flat', pivot='轮底贴地 minY=0，X/Z 居中'),
     'characters/pedestrian_walk.glb': dict(x=0.055, y=0.167, z=0.035, pivot='身高 1.67 m，脚底 minY=0，X/Z 居中'),
+    # ── 批次 34 八人物原型（build_character.py）─────────────────────────────
+    # 表值 = 各原型设计身高/肩宽（设计 34 §5.1 + 任务书规格表），tol=0.08 对应
+    # 「8 个原型允许 ±8% 身材差」（设计 34 §5.2）；Z 仍按 0.035 收（行走进深包络）。
+    # worker 肩宽 0.62 m 属显式规格（超出 0.55 的 ±8% 包络），按原型自身表值判。
+    'characters/char_casual.glb':   dict(x=0.055, y=0.167, z=0.035, tol=0.08,
+                                         pivot='兜底休闲 ≡ pedestrian_walk（1.67 m / 肩 0.55）'),
+    'characters/char_business.glb': dict(x=0.055, y=0.172, z=0.035, tol=0.08,
+                                         pivot='标准商务 1.72 m，西装上衣略长'),
+    'characters/char_worker.glb':   dict(x=0.062, y=0.172, z=0.035, tol=0.08,
+                                         pivot='壮实工装：肩宽 0.62 m（显式规格）'),
+    'characters/char_elder.glb':    dict(x=0.052, y=0.158, z=0.035, tol=0.08,
+                                         pivot='银发退休 1.58 m，微驼背（头前伸 + 上背垫）'),
+    'characters/char_student.glb':  dict(x=0.052, y=0.175, z=0.035, tol=0.08,
+                                         pivot='高瘦学生 1.75 m，肩收窄'),
+    'characters/char_service.glb':  dict(x=0.055, y=0.168, z=0.035, tol=0.08,
+                                         pivot='服务制服 1.68 m，帽顶 = 身高顶点'),
+    'characters/char_formal.glb':   dict(x=0.056, y=0.178, z=0.035, tol=0.08,
+                                         pivot='挺拔正装 1.78 m，上衣更长 + 领带'),
+    'characters/char_parent.glb':   dict(x=0.055, y=0.165, z=0.035, tol=0.08,
+                                         pivot='柔和持家 1.65 m，躯干略厚'),
     'civic/city_hall.glb':    dict(x=1.440, y=2.000, z=0.840, pivot='地面中心 minY=0'),
     'civic/comm_tower.glb':   dict(x=1.000, y=2.050, z=1.000, pivot='地面中心 minY=0'),
     'civic/water_tower.glb':  dict(x=0.360, y=1.330, z=0.360, pivot='地面中心 minY=0'),
@@ -388,6 +408,11 @@ def check(path, rel):
 
     # 3. 尺寸（(a) 世界口径 与 (b) 几何口径 双查 —— 二者一致时数值相同）
     if target:
+        # 逐件容差：人物原型按设计 34 §5.2 允许 ±8%（target['tol']），其余沿用全局 ±5%
+        tol = float(target.get('tol', SIZE_TOL))
+        if tol != SIZE_TOL:
+            notes.append('尺寸容差：±%.0f%%（本件 target.tol 覆盖全局 ±%.0f%%）'
+                         % (tol * 100, SIZE_TOL * 100))
         for i, key in enumerate('xyz'):
             want = target[key]
             if want is None:
@@ -395,15 +420,15 @@ def check(path, rel):
                 continue
             dev = size[i] - want
             rel_dev = abs(dev) / want
-            tag = 'ok  ' if rel_dev <= SIZE_TOL else 'FAIL'
+            tag = 'ok  ' if rel_dev <= tol else 'FAIL'
             notes.append('%s 实测 %.4f / 目标 %.3f  偏差 %+.4f (%+.2f%%)  %s'
                          % (key.upper(), size[i], want, dev, rel_dev * 100, tag))
             notes.append('   └ 几何(accessor)口径 %.4f（Δ %+.4f）'
                          % (size_geo[i], size_geo[i] - want))
-            if rel_dev > SIZE_TOL:
+            if rel_dev > tol:
                 problems.append('FAIL  尺寸 %s：实测 %.4f 目标 %.3f（偏差 %+.2f%%）'
                                 % (key.upper(), size[i], want, rel_dev * 100))
-            if abs(size_geo[i] - want) / want > SIZE_TOL:
+            if abs(size_geo[i] - want) / want > tol:
                 problems.append('FAIL  几何口径尺寸 %s：%.4f 目标 %.3f'
                                 % (key.upper(), size_geo[i], want))
     elif report_only:

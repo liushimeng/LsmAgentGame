@@ -29,6 +29,8 @@ type Card struct {
 	Personality     []string // 2–4 词(Schema v1.1 词库)
 	BehaviorTraits  []string // 2–4 词(可空)
 	HealthGrade     string   // "A"|"B"|"C"
+	Gender          string   // "m"|"f"|"u"(批次34 §5.4:男→m 女→f 缺失/其它→u)
+	Employment      string   // 就业形态原文(全职/平台就业/灵活就业/退休返聘…;批次34 §5.1 原型判据)
 	Marital         string   // single | married(文档池)
 	ChildrenCount   int      // 初始子女数
 	EldersDependent int      // 需赡养老人数(月支出 +1000/位)

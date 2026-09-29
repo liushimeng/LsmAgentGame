@@ -29,6 +29,7 @@ import { u, worldDims, sizeTargetFor, DISTRICT_SURFACE_Y } from '../cityScale';
 import { useSharedGLTF, blenderModelsEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+import type { CrowdAppearance } from '../crowdFormula';
 
 export interface PedestrianV3Props {
   /** 漫步路径折线（世界坐标 x,z；首尾不闭合，到端点折返）。 */
@@ -40,6 +41,12 @@ export interface PedestrianV3Props {
   outfit?: 0 | 1 | 2 | 3;
   /** 起始相位（0..1，错开步态与 path 初值，避免全员同步摆腿）。 */
   phase?: number;
+  /**
+   * 批次 34 §5.3：居民外观投影（原型 + 色板 + 身高系数）。
+   * 传入时优先取 `characters/<archetype>.glb` 并按材质槽换色；
+   * 缺省则回落到 `outfit` 四套服装色 + 程序化几何。
+   */
+  appearance?: CrowdAppearance;
 }
 
 /**
@@ -143,15 +150,68 @@ function samplePath(
 }
 
 // 批次 28 A1：memo —— path（layout useMemo）/ speed / outfit / phase 全为稳定引用。
-export const PedestrianV3 = memo(function PedestrianV3({ path, speed = u(1.4), outfit = 0, phase = 0 }: PedestrianV3Props) {
-  // 19-Blender3D模型集成：.glb 模式优先级最高，绕过原 6 mesh + 摆臂逻辑
-  const modelUrlStr = modelUrl('characters', 'pedestrian_walk');
+export const PedestrianV3 = memo(function PedestrianV3({
+  path,
+  speed = u(1.4),
+  outfit = 0,
+  phase = 0,
+  appearance,
+}: PedestrianV3Props) {
+  // 19-Blender3D模型集成：.glb 模式优先级最高，绕过原 6 mesh + 摆臂逻辑。
+  // 批次 34 §5.3：有 appearance 时取对应原型 GLB；原型 GLB 缺失 → 退回 pedestrian_walk
+  // （两者同骨架/同步态 clip，walk 动画仍成立）；再缺 → 程序化几何。
+  const archetype = appearance?.archetype;
+  const modelUrlStr = (archetype ? modelUrl('characters', archetype) : '')
+    || modelUrl('characters', 'pedestrian_walk');
   const blenderOn = blenderModelsEnabled();
   const useGLB = !!modelUrlStr && blenderOn;
   void useGLB; // 标记保留：未来 v19.5 通过此 flag 控制 GLB vs 程序化几何 fallback
   // 批次 29：注册目标尺寸（dev 态 glbSizeGuard 量测 GLB 直立性/脚底贴地/总高）
   const { scene: glbScene, animations } = useSharedGLTF(modelUrlStr, PED_SIZE_TARGET);
-  const glbCloned = useMemo(() => (glbScene ? glbScene.clone(true) : null), [glbScene]);
+
+  /**
+   * 批次 34 §5.3：**克隆 + 换色必须同处一个 useMemo**。
+   * `Object3D.clone(true)` **共享材质引用** —— 直接改 `material.color` 会污染
+   * 同 URL 的所有行人（全城一起变色）。故先为每个 mesh 克隆材质，再改色；
+   * 克隆出来的材质在 cleanup 里 dispose，否则换批居民时泄漏显存。
+   */
+  const glbCloned = useMemo(() => {
+    if (!glbScene) return null;
+    const c = glbScene.clone(true);
+    if (appearance) {
+      const tinted: THREE.Material[] = [];
+      c.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const apply = (src: THREE.Material): THREE.Material => {
+          const m = src.clone();
+          tinted.push(m);
+          const name = m.name || '';
+          const std = m as THREE.MeshStandardMaterial;
+          if (std.color) {
+            // 材质槽名约定（3d_script/build_character.py 固定）：
+            // PedestrianBody / PedestrianPants / PedestrianHead / PedestrianShoes
+            if (name.includes('Body')) std.color.set(appearance.top);
+            else if (name.includes('Pants')) std.color.set(appearance.pants);
+            else if (name.includes('Head')) std.color.set(appearance.skin);
+            else if (name.includes('Shoes')) std.color.set('#1a1a1a');
+            else std.color.set(appearance.top);
+          }
+          return m;
+        };
+        mesh.material = Array.isArray(mesh.material)
+          ? mesh.material.map(apply)
+          : apply(mesh.material);
+      });
+      c.userData.__tintedMats = tinted;
+    }
+    return c;
+  }, [glbScene, appearance]);
+
+  useEffect(() => () => {
+    const mats = glbCloned?.userData.__tintedMats as THREE.Material[] | undefined;
+    if (mats) for (const m of mats) m.dispose();
+  }, [glbCloned]);
   // GLB 模式 mixer（per-instance，独立推进 walk clip）
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   useEffect(() => {
@@ -215,7 +275,11 @@ export const PedestrianV3 = memo(function PedestrianV3({ path, speed = u(1.4), o
     return { segs: s, totalLen: total || 1 };
   }, [path]);
 
-  const [topColor, pantsColor, skinColor] = PEDESTRIAN_OUTFITS[outfit] ?? PEDESTRIAN_OUTFITS[0];
+  const [outfitTop, outfitPants, outfitSkin] = PEDESTRIAN_OUTFITS[outfit] ?? PEDESTRIAN_OUTFITS[0];
+  // 批次 34：有 appearance 时用居民专属色板，否则回落到 outfit 四套。
+  const topColor = appearance?.top ?? outfitTop;
+  const pantsColor = appearance?.pants ?? outfitPants;
+  const skinColor = appearance?.skin ?? outfitSkin;
 
   /** 四肢归零（站立/静止）。 */
   const stillLimbs = () => {
@@ -289,7 +353,14 @@ export const PedestrianV3 = memo(function PedestrianV3({ path, speed = u(1.4), o
   const info = useObjectInfoProps('actor.pedestrian', { anchorY: PED_H + 0.4 });
 
   return (
-    <group {...info} ref={groupRef} userData={{ bucket: 'pedestrians' }} position={[start[0], DISTRICT_SURFACE_Y, start[1]]}>
+    <group
+      {...info}
+      ref={groupRef}
+      userData={{ bucket: 'pedestrians' }}
+      position={[start[0], DISTRICT_SURFACE_Y, start[1]]}
+      // 批次 34 §5.2：原型身高系数（elder 略矮驼 / student 略高瘦，±8% 内）
+      scale={appearance?.scale ?? 1}
+    >
       {/* 19-Blender3D模型集成：GLB 模式优先级最高（GLB 自带摆臂动画） */}
       {glbCloned ? (
         <primitive object={glbCloned} />

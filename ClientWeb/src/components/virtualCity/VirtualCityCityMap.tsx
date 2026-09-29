@@ -181,8 +181,8 @@ const SHADOW_CAMERA_HALF = WORLD_SIZE * 0.5;
 /** 批次 22：俯仰角上限 1.2（≈69°，2.5D 锁定俯视）→ 1.54（≈88°，可压到近街面视角，
  *  仍留约 2° 余量防止完全平视时地平线穿帮）。 */
 const ORBIT_MAX_POLAR_ANGLE = 1.54;
-/** 自由飞行基础移速：20 m/s（无人机巡航量级；Shift ×4 = 80 m/s，
- *  配合 `[` `]` 档位最高 320 m/s 用来俯瞰全城）。 */
+/** 自由飞行基础移速：20 m/s（无人机巡航量级）。批次 34 起由速度倍率档
+ *  X1/X2/X4/X8/X16（Shift 切换）缩放 ⇒ 全域 20 ~ 320 m/s，最高档用来俯瞰全城。 */
 const FLY_SPEED = u(20);
 /** 轨道模式下平移聚焦点的移速：10 m/s（俯瞰时小幅挪移足够）。 */
 const ORBIT_PAN_SPEED = u(10);
@@ -398,6 +398,21 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
     return m;
   }, [gameState]);
 
+  /**
+   * 批次 34 §6.2：人流布点种子。协议里没有下发房间 seed（只在建房 payload 里），
+   * 故用「房内稳定不变量」派生 —— 人口规模 + 各区人口分布，同房间恒同、
+   * 跨房间几乎必不同；换班变化交给 `crowd.churn`。禁 Math.random（截图不可复现）。
+   */
+  const crowdRoomSeed = useMemo(() => {
+    const c = gameState?.city;
+    if (!c) return 0;
+    let h = (c.resident_count | 0) >>> 0;
+    for (const d of c.districts ?? []) {
+      h = Math.imul(h ^ ((d.population | 0) + 1), 0x85ebca6b) >>> 0;
+    }
+    return (h ^ (h >>> 13)) >>> 0;
+  }, [gameState]);
+
   // ── 批次 32：自由视角（俯瞰 / 全自由飞行 / 街景漫游 三态）。模式存于 engine3d
   //    store，Canvas 内的控制器与 Canvas 外的 <FreeViewHud /> 经同一 store 通信。────
   /** 相机碰撞体（32 区全部建筑 AABB）：随房价指数重装配，见 freeViewColliders.ts。 */
@@ -482,7 +497,13 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
         {/* P1-C：街道道具层（树 / 车辆 / 行人 / 标识 / 屋顶杂物）；
             v2.12 阶段 2：districts 由父层注入（props 化，适配 16 城区） */}
         <group userData={{ bucket: 'street-props' }}>
-          <StreetPropsLayer districts={VIRTUAL_CITY_DISTRICTS} segments={ROAD_NETWORK.segments} />
+          <StreetPropsLayer
+            districts={VIRTUAL_CITY_DISTRICTS}
+            segments={ROAD_NETWORK.segments}
+            crowd={gameState?.city?.crowd}
+            residentCount={gameState?.city?.resident_count}
+            roomSeed={crowdRoomSeed}
+          />
         </group>
         {/* 批次 28 二轮：?debug=1 场景归因探针（__cityScene/__cityRenderer/__cityBreakdown） */}
         <SceneDebugProbe />
@@ -554,7 +575,7 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
           modes: ['俯瞰归零点', '自由飞行'],
           help: '键位说明',
           speed: '速度',
-          tiers: ['慢速', '常速', '快速'],
+          tiers: ['1 倍', '2 倍', '4 倍', '8 倍', '16 倍'],
           clear: '视野畅通',
           colliding: '被场景阻挡',
           shortcuts: [
@@ -562,11 +583,11 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
             ['1 / 2', '直达 俯瞰归零点 / 自由飞行'],
             ['WASD', '自由移动 / 选中时环绕物体'],
             ['空格 / E / Q', '上升 / 上升 / 下降'],
-            ['Shift', '加速 ×4'],
+            ['Shift', '切换移动速度 ×1→×2→×4→×8→×16（回绕）'],
             ['右键拖拽', '自由飞行下转向（俯瞰为平移）'],
             ['中键拖拽', '自由飞行下视口平移'],
             ['滚轮', '俯瞰缩放视距 / 自由视角变焦'],
-            ['[ / ]', '速度档位 慢 / 常 / 快'],
+            ['[ / ]', '速度档 降 / 升（同 Shift，可回绕）'],
             ['R', '复位视角'],
             ['H', '展开 / 收起本说明'],
           ],

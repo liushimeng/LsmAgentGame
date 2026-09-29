@@ -121,6 +121,10 @@ func TestParse_RealSchemaV11Shapes(t *testing.T) {
 	if c.HealthGrade != "B" {
 		t.Errorf("health_grade = %q, want B", c.HealthGrade)
 	}
+	// 批次34 §5.4:gender: 男 → "m"。
+	if c.Gender != "m" {
+		t.Errorf("gender = %q, want m(frontmatter gender: 男)", c.Gender)
+	}
 	if c.Marital != "married" {
 		t.Errorf("marital = %q, want married", c.Marital)
 	}
@@ -155,6 +159,52 @@ func TestParse_RealSchemaV11Shapes(t *testing.T) {
 	}
 	if err := c.Validate(); err != nil {
 		t.Errorf("Validate: %v", err)
+	}
+}
+
+// TestParse_GenderShapeTolerant 批次34 §5.4:gender 缺失/异形不得让整卡解析
+// 失败;归一 男→m 女→f 缺失/其它→u。
+func TestParse_GenderShapeTolerant(t *testing.T) {
+	cases := []struct {
+		name string
+		val  string // gender 字段值("" = 整行缺失)
+		want string
+	}{
+		{"男", "男", "m"},
+		{"女", "女", "f"},
+		{"其它", "其它", "u"},
+		{"缺失", "", "u"},
+		{"异形map", "{value: 男}", "m"}, // flexText map 形状 → value 键
+	}
+	const body = `---
+id: N777
+gender: %s
+occupation: 测试员
+income_monthly: 12000
+---
+正文`
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			fm := body
+			if tc.val == "" {
+				// 缺失:删掉 gender 行。
+				fm = strings.Replace(body, "gender: %s\n", "", 1)
+			} else {
+				fm = strings.Replace(body, "gender: %s", "gender: "+tc.val, 1)
+			}
+			writeCard(t, dir, "N777-测试.md", fm)
+			cards := NewLoader(dir).Draw(1, rand.New(rand.NewSource(1)))
+			if len(cards) != 1 {
+				t.Fatalf("draw = %d, want 1(gender 异形不得导致整卡失败)", len(cards))
+			}
+			if cards[0].Source != "docs" {
+				t.Fatalf("source = %q, want docs(gender 异形不得回退合成卡)", cards[0].Source)
+			}
+			if cards[0].Gender != tc.want {
+				t.Errorf("gender = %q, want %q", cards[0].Gender, tc.want)
+			}
+		})
 	}
 }
 
@@ -441,14 +491,14 @@ func TestResolveDistrict_Priority(t *testing.T) {
 		industry, city, id string
 		wants              []string // 允许结果集(单元素 = 逐字相等)
 	}{
-		{"Q", "县城", "X1", []string{"finance", "fin_sub_center"}},  // 行业优先(§2.4 row2:finance + 金融副中心)
-		{"", "一线城市", "X2", []string{"finance"}},                 // 关键词表
-		{"", "高新区", "X3", []string{"tech"}},                      // 关键词表
-		{"", "北京", "X4", []string{"finance"}},                     // 城市分层:一线
-		{"", "杭州", "X5", []string{"tech"}},                        // 城市分层:新一线
-		{"", "厦门", "X6", []string{"commerce"}},                    // 城市分层:二线
-		{"P", "未知", "X7", []string{"tech", "software_park"}},      // 行业:信息传输/软件(§2.4 row1)
-		{"A", "未知", "X8", []string{"agri_park"}},                  // 行业:农林牧渔 → 现代农业园(§2.4 改派)
+		{"Q", "县城", "X1", []string{"finance", "fin_sub_center"}},                                // 行业优先(§2.4 row2:finance + 金融副中心)
+		{"", "一线城市", "X2", []string{"finance"}},                                                 // 关键词表
+		{"", "高新区", "X3", []string{"tech"}},                                                     // 关键词表
+		{"", "北京", "X4", []string{"finance"}},                                                   // 城市分层:一线
+		{"", "杭州", "X5", []string{"tech"}},                                                      // 城市分层:新一线
+		{"", "厦门", "X6", []string{"commerce"}},                                                  // 城市分层:二线
+		{"P", "未知", "X7", []string{"tech", "software_park"}},                                    // 行业:信息传输/软件(§2.4 row1)
+		{"A", "未知", "X8", []string{"agri_park"}},                                                // 行业:农林牧渔 → 现代农业园(§2.4 改派)
 		{"V", "未知", "X9", []string{"sports_new_city", "cultural_creative", "old_city_culture"}}, // 文体传媒(§2.4 row10/11)
 	}
 	for _, c := range cases {

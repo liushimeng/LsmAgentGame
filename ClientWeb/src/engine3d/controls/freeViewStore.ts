@@ -23,11 +23,30 @@ export type FreeViewMode = 'orbit' | 'fly';
 
 export const FREE_VIEW_MODES: readonly FreeViewMode[] = ['orbit', 'fly'];
 
-/** 速度档位倍率（与 `Shift` 加速正交：档位是基线，Shift 在其上再乘）。 */
-export const FREE_VIEW_TIERS = [0.25, 1, 4] as const;
-export type FreeViewTierIndex = 0 | 1 | 2;
+/**
+ * 速度倍率档（批次 34「视觉速度切换」）。
+ *
+ * 用户需求：**Shift 不是按住加速，而是切换速度** —— 在 X1/X2/X4/X8/X16 五档间
+ * 循环切换，WASD 移动速度随之整体缩放，左下角 HUD 的「速度 ×N」实时同步。
+ *
+ * 替换掉批次 32 的 `FREE_VIEW_TIERS = [0.25, 1, 4]` 三档 + `Shift` 临时 ×4 加速
+ * 正交模型：那套「档位是基线、Shift 在其上再乘」的最大倍率 4×4=16 与本表
+ * X16 上限一致（基础移速 20 m/s ⇒ 全域 20~320 m/s），观感跨度零回归。
+ *
+ * 下标即档序：`Shift` / `]` 前进一档（到 16 回绕到 1），`[` 后退一档（到 1 回绕到 16）。
+ */
+export const FREE_VIEW_TIERS = [1, 2, 4, 8, 16] as const;
+export type FreeViewTierIndex = 0 | 1 | 2 | 3 | 4;
+/** 档位总数（stepTier 回绕用；与 FREE_VIEW_TIERS.length 同步）。 */
+export const FREE_VIEW_TIER_COUNT = FREE_VIEW_TIERS.length;
 
-const STORAGE_KEY = 'engine3d.freeView';
+/**
+ * localStorage key。批次 34 起升为 `.v2`：旧三档 `tier ∈ {0,1,2}` = {0.25,1,4} 与
+ * 新五档 `tier ∈ {0..4}` = {1,2,4,8,16} **下标语义不兼容**（同为 1 却是 1× vs 2×），
+ * 迁移映射会误伤「新用户刚选 ×2」的场景 ⇒ 直接换 key，旧值整体作废（mode 一并重置，
+ * 用户重选一次即可，成本远低于错误映射）。
+ */
+const STORAGE_KEY = 'engine3d.freeView.v2';
 
 interface Persisted {
   mode: FreeViewMode;
@@ -35,16 +54,20 @@ interface Persisted {
 }
 
 function loadPersisted(): Persisted {
-  const fallback: Persisted = { mode: 'orbit', tier: 1 };
+  // 批次 34：缺省档 = X1（下标 0）——「打开就是 1 倍」最可预期，用户按需 Shift 加速。
+  const fallback: Persisted = { mode: 'orbit', tier: 0 };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<Persisted>;
+    const t = parsed.tier;
     return {
       mode: FREE_VIEW_MODES.includes(parsed.mode as FreeViewMode)
         ? (parsed.mode as FreeViewMode)
         : fallback.mode,
-      tier: parsed.tier === 0 || parsed.tier === 1 || parsed.tier === 2 ? parsed.tier : fallback.tier,
+      tier: typeof t === 'number' && Number.isInteger(t) && t >= 0 && t < FREE_VIEW_TIER_COUNT
+        ? (t as FreeViewTierIndex)
+        : fallback.tier,
     };
   } catch {
     return fallback;
@@ -117,8 +140,12 @@ export const useFreeView = create<FreeViewState>((set, get) => ({
     persist({ mode: get().mode, tier });
     set({ tier });
   },
+  /** 档位步进（**回绕**，不是夹取）：X16 再 +1 → X1；X1 再 −1 → X16（批次 34）。 */
   stepTier: (delta) => {
-    const next = Math.min(2, Math.max(0, get().tier + delta)) as FreeViewTierIndex;
+    const n = FREE_VIEW_TIER_COUNT;
+    const cur = get().tier;
+    // 先对 delta 取模，避免 stepTier(99) 这类调用溢出下标
+    const next = (((cur + (delta % n)) % n) + n) % n as FreeViewTierIndex;
     get().setTier(next);
   },
   setColliding: (colliding) => {

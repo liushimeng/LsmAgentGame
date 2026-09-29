@@ -61,7 +61,21 @@ export const MODEL_NAMES = {
     'oak_tree_autumn',
     'oak_tree_winter',
   ] as const,
-  characters: ['pedestrian_walk'] as const,
+  characters: [
+    // 批次 34 §5.2：8 个人物原型（3d_script/build_character.py --archetype <name> 产出）。
+    // 每个原型剪影/体型不同（elder 驼背矮壮 / student 高瘦 / worker 壮实 / formal 挺拔…），
+    // 共享 10 骨 + 24 帧 walk clip；材质槽名 PedestrianBody/Pants/Head/Shoes 供运行时换色。
+    'char_business',
+    'char_casual',
+    'char_worker',
+    'char_elder',
+    'char_student',
+    'char_service',
+    'char_formal',
+    'char_parent',
+    // 原型缺失时的降级 GLB（批次 19 交付，保留为 fallback）
+    'pedestrian_walk',
+  ] as const,
   // 批次 30：`road_props` 注销（§130「声明了却从不接线」）—— 全仓零消费点：
   // 该 GLB 是 3 盏灯沿 X 排布的**合成 mesh**（单节点 RoadProps/单 mesh Cylinder，
   // 无逐灯命名节点），无法做单灯实例化（measureNode 无从指定）；路灯实际由

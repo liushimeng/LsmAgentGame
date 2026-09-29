@@ -485,10 +485,73 @@ export interface VirtualCityCityResidentProfile {
   source_file: string;
 }
 
-/** 城区当月氛围标签（city.ambiance，2026-09-22 §CityHuman重构；全员可见，地图氛围渲染）。 */
+/** 城区当月氛围标签（city.ambiance，2026-09-22 §CityHuman重构；全员可见，地图渲染）。 */
 export interface VirtualCityDistrictAmbiance {
   smells: string[];
   sounds: string[];
+}
+
+/**
+ * 人物 3D 原型（批次 34 §5.1）。8 个 Blender GLB 的文件 stem
+ * （`characters/<archetype>.glb`），缺失时 `PedestrianV3` 降级回程序化几何。
+ */
+export type VirtualCityArchetype =
+  | 'char_business'
+  | 'char_casual'
+  | 'char_worker'
+  | 'char_elder'
+  | 'char_student'
+  | 'char_service'
+  | 'char_formal'
+  | 'char_parent';
+
+/** 全部原型（顺序 = 降级轮换序，仅供 UI/测试枚举）。 */
+export const VIRTUAL_CITY_ARCHETYPES: readonly VirtualCityArchetype[] = [
+  'char_business', 'char_casual', 'char_worker', 'char_elder',
+  'char_student', 'char_service', 'char_formal', 'char_parent',
+];
+
+/**
+ * 上街居民的外观投影（批次 34 §6.4 `city.crowd.entries[]`）。
+ * 与后端 `city.CrowdEntry` json tag 逐字对齐。
+ */
+export interface VirtualCityCrowdEntry {
+  /** backdrop.residents 下标（可回溯）。 */
+  index: number;
+  /** 人物卡编号（可点开 ResidentProfileDrawer）。 */
+  card_id: string;
+  /** 化名。 */
+  name: string;
+  /** 3D 人物原型。 */
+  archetype: VirtualCityArchetype;
+  /** m | f | u。 */
+  gender: string;
+  age: number;
+  /** 0..25 L1 行业域（A=0 … Z=25）。 */
+  domain: number;
+  /** 0..31 城区下标。 */
+  district: number;
+  /** 0..3 财富档。 */
+  wealth: number;
+  /** A | B | C 健康档。 */
+  health: string;
+  /** true = 在建筑内（不渲染，仅作换班候选）。 */
+  indoor: boolean;
+}
+
+/**
+ * 城市人流快照（批次 34 §6.4 `city.crowd`）。
+ * 未建城 / 旧房 omitempty ⇒ 前端必须能用 `outdoorCount()` 自算兜底。
+ */
+export interface VirtualCityCrowdSnapshot {
+  /** 当前在街上的人数 V(N)。 */
+  outdoor: number;
+  /** 在建筑内的人数 N − V(N)。 */
+  indoor: number;
+  /** 换班代数（前端据此重算 path / 身份轮换）。 */
+  churn: number;
+  /** ≤ CAP+16 条；`indoor=true` 的条目不渲染，仅作换班候选。 */
+  entries: VirtualCityCrowdEntry[];
 }
 
 /** 城市背景层快照（game.state.city）。 */
@@ -510,6 +573,8 @@ export interface VirtualCityCitySnapshot {
   profiles?: VirtualCityCityProfileProgress;
   /** 每城区当月气味/声响标签（§CityHuman重构；键 = 城区 id）。 */
   ambiance?: Record<string, VirtualCityDistrictAmbiance>;
+  /** 城市人流快照（批次 34 §6.4；未建城/旧房 omit ⇒ 前端用 outdoorCount() 自算）。 */
+  crowd?: VirtualCityCrowdSnapshot;
   /** 居民驱动层快照（17-CityHuman §2 §6；驱动层未启用/旧房 omit）。 */
   driver?: {
     /** 驱动层是否启用（city_driver_enabled）。 */
