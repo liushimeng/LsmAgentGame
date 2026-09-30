@@ -536,6 +536,25 @@ export const VIRTUAL_CITY_ARCHETYPES: readonly VirtualCityArchetype[] = [
 ];
 
 /**
+ * 性别 × 年龄段 15 人物模型 key（批次 36 §4.1，类型/文档用）。
+ * 文件 stem 即 `modelUrl('characters', key)` 的 key（`char_{m,f,u}_{youth,young,middle,senior,elder}`）；
+ * 材质槽固定 5 个供运行时换色：`PedestrianBody/Pants/Head/Shoes/Hair`。
+ * 选型由 `crowdFormula.modelKeyFor(gender, age)` 推导；缺失时降级链
+ * char_casual → pedestrian_walk → 程序化 6-mesh（见 §4.5）。
+ */
+export type VirtualCityModelKey =
+  | 'char_m_youth' | 'char_m_young' | 'char_m_middle' | 'char_m_senior' | 'char_m_elder'
+  | 'char_f_youth' | 'char_f_young' | 'char_f_middle' | 'char_f_senior' | 'char_f_elder'
+  | 'char_u_youth' | 'char_u_young' | 'char_u_middle' | 'char_u_senior' | 'char_u_elder';
+
+/** 全部 15 模型 key（性别 m/f/u × 年龄段，仅供 UI/测试枚举）。 */
+export const VIRTUAL_CITY_MODEL_KEYS: readonly VirtualCityModelKey[] = [
+  'char_m_youth', 'char_m_young', 'char_m_middle', 'char_m_senior', 'char_m_elder',
+  'char_f_youth', 'char_f_young', 'char_f_middle', 'char_f_senior', 'char_f_elder',
+  'char_u_youth', 'char_u_young', 'char_u_middle', 'char_u_senior', 'char_u_elder',
+];
+
+/**
  * 上街居民的外观投影（批次 34 §6.4 `city.crowd.entries[]`）。
  * 与后端 `city.CrowdEntry` json tag 逐字对齐。
  */

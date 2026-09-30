@@ -17,6 +17,7 @@
 import type {
   VirtualCityArchetype,
   VirtualCityCrowdEntry,
+  VirtualCityModelKey,
 } from '@/types/virtualCity';
 
 /** 「人少就都上街」的拐点。N ≤ N0 时恒 V(N) = N。 */
@@ -101,6 +102,34 @@ export function archetypeFor(a: {
   return 'char_casual';
 }
 
+// ── 批次 36 §4.1/§4.5：性别 × 年龄段 15 人物模型选型 ─────────────────────
+// 几何 = 谁（性别/年龄），颜色 = 干什么（职业/财富）。人物卡无外貌字段，
+// gender/age 是仅有的两个「体貌」信号 ⇒ 模型主轴；archetype 仅保留调色/scale 通道。
+
+/**
+ * 年龄段（§4.1 判据）：youth ≤24 / young 25–34 / middle 35–54 / senior 55–64 / elder ≥65。
+ * 缺省（undefined / 非有限数）按 `young`。
+ */
+export function ageBandFor(age?: number): 'youth' | 'young' | 'middle' | 'senior' | 'elder' {
+  if (!Number.isFinite(age)) return 'young';
+  const a = age as number;
+  if (a <= 24) return 'youth';
+  if (a <= 34) return 'young';
+  if (a <= 54) return 'middle';
+  if (a <= 64) return 'senior';
+  return 'elder';
+}
+
+/**
+ * 性别 × 年龄段 → 15 模型 key 之一（`char_${g}_${band}`，§4.1 表）。
+ * gender 归一 `m|f|u`（非 m/f 一律 u）；文件缺失时调用方走 char_casual → pedestrian_walk
+ * 二段兜底（§4.5），故此处不做存在性检查。
+ */
+export function modelKeyFor(gender?: string, age?: number): VirtualCityModelKey {
+  const g = gender === 'm' || gender === 'f' ? gender : 'u';
+  return `char_${g}_${ageBandFor(age)}` as VirtualCityModelKey;
+}
+
 // ── 运行时二次差异化调色板（§5.1）──────────────────────────────────────
 // 8 原型 × 色板组合 ≈ 可稳定区分 200+ 种观感。GLB 路径按材质槽名换色，
 // 程序化 fallback 路径直接吃这三元组（对应 PEDESTRIAN_OUTFITS 的扩展）。
@@ -117,14 +146,21 @@ export const SKIN_PALETTE = ['#f0c9a0', '#e8c39a', '#d8a878', '#c08a5a'] as cons
 /** 发色（索引 0..2）：深 / 中 / 灰白（≥50 岁取灰白）。 */
 export const HAIR_PALETTE = ['#2a2118', '#4a3a2c', '#c9c4bc'] as const;
 
-/** 外观三元组 + 发色（GLB 换色通道 / 程序化几何共用）。 */
+/** 外观三元组 + 发色 + 模型 key（GLB 换色通道 / 程序化几何共用）。 */
 export interface CrowdAppearance {
+  /** 调色/协议语义（批次 34 八原型；不再作为 GLB 选型主路径，见 §4.6）。 */
   archetype: VirtualCityArchetype;
+  /** 批次 36 §4.5：GLB 选型 key（`char_{m,f,u}_{band}`，15 键之一）。 */
+  model: string;
   top: string;
   pants: string;
   skin: string;
   hair: string;
-  /** 相对身高系数（elder 略矮驼、student 略高瘦；§5.2 允许 ±8%）。 */
+  /**
+   * 相对身高系数。批次 36 起由**年龄段主导**（§4.5：身高差已烘进几何，
+   * scale 仅留 2~5% 微抖动，防双重叠加）：youth 1.02 / young·middle 1.0 /
+   * senior 0.98 / elder 0.95 × health C 0.97 × index jitter ±1.5%。
+   */
   scale: number;
 }
 
@@ -164,23 +200,28 @@ export function appearanceFor(e: {
   const hairIdx = e.age >= 50 ? 2 : jitter(3) < 0.45 ? 1 : 0;
   return {
     archetype: arch,
+    model: modelKeyFor(e.gender, e.age),
     top: TOP_PALETTE[topIdx],
     pants: PANTS_PALETTE[wealth],
     skin: SKIN_PALETTE[skinIdx],
     hair: HAIR_PALETTE[hairIdx],
-    scale: archetypeScale(arch, e.health),
+    scale: ageBandScale(e.age, e.health, jitter(4)),
   };
 }
 
-/** 原型 × 健康档 → 身高系数（§5.2 允许 ±8%，elder 可到 0.94 驼背）。 */
-function archetypeScale(arch: VirtualCityArchetype, health?: string): number {
-  const base = arch === 'char_elder' ? 0.95
-    : arch === 'char_student' ? 1.05
-      : arch === 'char_formal' ? 1.06
-        : arch === 'char_worker' ? 1.02
-          : 1.0;
-  // C 档健康（重大风险）略缩，读作体态衰弱
-  return health === 'C' ? base * 0.97 : base;
+/**
+ * 年龄段 × 健康档 → 身高系数（批次 36 §4.5；`archetypeScale` 已并入年龄段 ——
+ * 身高差已烘进 15 件 GLB 几何，scale 只留 2~5% 微抖动，防双重叠加）。
+ * @param j01 index 抖动（0..1）→ ±1.5% 微差，同段内不同人不同高。
+ */
+function ageBandScale(age: number | undefined, health: string | undefined, j01: number): number {
+  const band = ageBandFor(age);
+  const base = band === 'youth' ? 1.02
+    : band === 'senior' ? 0.98
+      : band === 'elder' ? 0.95
+        : 1.0;
+  // C 档健康（重大风险）略缩，读作体态衰弱；index jitter ±1.5%
+  return (health === 'C' ? base * 0.97 : base) * (1 + (j01 - 0.5) * 0.03);
 }
 
 /**

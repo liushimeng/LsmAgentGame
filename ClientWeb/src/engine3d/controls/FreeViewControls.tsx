@@ -9,10 +9,13 @@
  *   「同一套积分器 + 按模式分流的输入映射」：切换时先 Seed 新模式的内部状态、
  *   再走 600 ms 位姿过渡（位置球面/线性插值 + 四元数 slerp + FOV 插值），零跳变。
  *
- * 交互契约（对应需求 R1–R17）：
- *   - orbit 轨道式：左拖绕目标公转 / 右拖平面平移 / 滚轮缩放视距 / WASD 平移聚焦点。
- *   - fly  全自由六自由度：**右拖**控制俯仰与水平旋转 / WASD 前后左右 /
+ * 交互契约（对应需求 R1–R17；批次 36 §3 起 WASD = 视向位移）：
+ *   - orbit 轨道式：左拖绕目标公转 / 右拖平面平移 / 滚轮缩放视距 /
+ *     W/S 沿视线（含俯仰）推进聚焦点、A/D 沿画面右向平移（整体刚性平移）。
+ *   - fly  全自由六自由度：**右拖**控制俯仰与水平旋转 / WASD 沿视线·画面右向移动 /
  *     空格·E 上升、Q 下降 / **中拖**屏幕平面视口平移 / 滚轮改 FOV（长焦检视）。
+ *   - fly 选中物体（focus）：WASD 推着 focus 与相机同步平移（物体保持画面居中）/
+ *     右拖绕 focus 环绕 / 滚轮拉近拉远（dolly）。
  *   - walk 街景漫游：贴地第一人称，眼高恒定（不可穿地）。
  *   - 全模式：场景碰撞（AABB 推出）+ 地图边界钳制 + 地面钳制（避免穿模）。
  *   - 全模式：帧率无关指数阻尼（移动 / 转向 / 缩放），抑制抖动。
@@ -85,7 +88,8 @@ export interface FreeViewControlsProps {
   orbitPanSpeed?: number;
   /**
    * 选中物体的聚焦点（世界坐标 + 环绕半径）。非空时 fly 进入「选中环绕」子状态：
-   * W/S = 拉远/拉近（半径），A/D = 水平环绕，朝向 lookAt(focus)；仍支持垂直升降。
+   * WASD = focus 与相机沿视线/画面右向同步平移（物体保持画面居中，半径不变），
+   * 右拖 = 绕 focus 环绕，滚轮 = 拉近/拉远（dolly 半径），仍支持垂直升降。
    * null（或未传）= 自由飞行（WASD 沿视线移动）。
    */
   selectedFocus?: { x: number; y: number; z: number; radius: number } | null;
@@ -267,6 +271,10 @@ function createRig(camera: THREE.PerspectiveCamera, pr: FreeViewControlsProps): 
   _euler.setFromQuaternion(camera.quaternion, 'YXZ');
   const pitch = clamp(_euler.x, -(pr.pitchLimit ?? 1.553), pr.pitchLimit ?? 1.553);
   const target = new THREE.Vector3().fromArray(pr.initialTarget ?? [0, 0, 0]);
+  // 批次 36 §3：初始 target 也进 bounds（俯瞰缺省 [0,0,0] 低于 y 下限 0.25）。
+  // 否则首次按 W 平移时 clampTarget 把 y 从 0 抬到下限，相机先「向上一顿」
+  // 再俯冲，与「W 沿视线向前」的观感相悖。
+  clampTarget(target, pr);
   return {
     mode: pr.mode ?? 'orbit',
     pendingMode: null,
@@ -350,8 +358,11 @@ function inputVelocity(
     out.z += -sinY;
   }
   if (keySet.has('KeyA') || keySet.has('ArrowLeft')) {
+    // 批次 36 §3：A = −右向 = (−cosY, 0, +sinY)。旧写法 `out.z -= sinY` 是
+    // 批次 32 遗留的 z 符号错误 —— yaw≠0 时 A 沿前向分量滑动而非画面左移
+    // （实测 θ=π/4 时 A 与水平前向重合），按用户「A 根据视觉角度向左」修正。
     out.x -= cosY;
-    out.z -= sinY;
+    out.z += sinY;
   }
   if (allowVertical) {
     for (const k of verticalKeys.up) if (keySet.has(k)) out.y += 1;
@@ -409,11 +420,14 @@ function stepOrbit(
   keySet: Set<string>,
   tier: number,
 ): void {
-  // WASD 平移聚焦点（水平面），E/Q 升降 —— R7「前后左右平面平移」在轨道态的落点。
+  // WASD = 视向位移（批次 36 §3.2）：pitch 传 φ−π/2 ⇒ inputVelocity 的前向
+  // 恒等于视线方向 (−sinφ·sinθ, −cosφ, −sinφ·cosθ)，W/S 含俯仰分量朝画面中心推进，
+  // A/D 沿画面右向（无滚转 = 水平右向）。只平移 targetGoal，相机由 target + sphOffset
+  // 导出自动跟随（半径/φ/θ 不变，整 rig 刚性平移）。Q/E 升降仍走 targetGoal.y（allowVertical=false）。
   const vkeys = pr.verticalKeys ?? { up: ['Space', 'KeyE'], down: ['KeyQ'] };
   const mag = moveSpeed(baseSpeed(pr, 'orbit'), tier);
   _velGoal.set(0, 0, 0);
-  inputVelocity(_velGoal, keySet, s.theta, 0, mag, vkeys, false);
+  inputVelocity(_velGoal, keySet, s.theta, s.phi - Math.PI / 2, mag, vkeys, false);
   if (_velGoal.lengthSq() > 1e-9) {
     s.targetGoal.addScaledVector(_velGoal, dt);
     for (const k of vkeys.up) if (keySet.has(k)) s.targetGoal.y += mag * dt;
@@ -447,10 +461,12 @@ export interface SelectedFocus {
 
 /** 全自由六自由度一步。
  *
- *  批次 32 v2：按需求分两种子状态 ——
- *    focus == null（未选中物体）：WASD 沿视线前后左右 + 垂直升降，可穿水平面任意位置；
- *    focus != null（选中物体）：WASD 变成围绕物体移动 —— W/S = 半径减小/增大（拉近/拉远），
- *      A/D = 水平环绕（绕 focus.y 轴公转），朝向 lookAt(focus)。垂直升降仍可用。
+ *  批次 32 v2 分两种子状态；批次 36 §3.3 改造 focus 子状态 ——
+ *    focus == null（未选中物体）：WASD 沿视线前后左右 + 垂直升降，可穿水平面任意位置（零改动）；
+ *    focus != null（选中物体）：WASD = focus 与相机沿视线/画面右向**同步**平移
+ *      （物体保持画面居中、观感 = 推着物体一起飞；半径不变、lookAt(focus) 保持）。
+ *      环绕（原 A/D 公转）移交**右键拖拽**改球坐标 θ/φ；半径增减移交**滚轮 dolly**。
+ *      垂直升降仍可用（只改 pos.y，球坐标随反解重算）。
  */
 function stepFly(
   s: RigState,
@@ -465,21 +481,24 @@ function stepFly(
   const vkeys = pr.verticalKeys ?? { up: ['Space', 'KeyE'], down: ['KeyQ'] };
 
   if (focus) {
-    // ── 选中环绕子状态 ──
-    // 把当前 pos 投影到「以 focus 为中心、保持到 focus 距离」的球坐标（无跳变）。
+    // ── 选中环绕子状态（批次 36 §3.3）──
+    // 把当前 pos 投影到「以 focus 为中心」的球坐标（无跳变）。
     _v1.copy(s.pos).sub(_v2.set(focus.x, focus.y, focus.z));
     const sph = new THREE.Spherical().setFromVector3(_v1);
     let radius = sph.radius;
     let theta = sph.theta;
     let phi = sph.phi;
-    // W/S 改变半径（拉近/拉远），A/D 环绕（水平公转），垂直升降由 Space/E/Q 直接改 pos.y
-    if (keySet.has('KeyW') || keySet.has('ArrowUp')) radius -= mag * dt;
-    if (keySet.has('KeyS') || keySet.has('ArrowDown')) radius += mag * dt;
-    if (keySet.has('KeyD') || keySet.has('ArrowRight')) theta -= mag * dt / Math.max(radius, 1);
-    if (keySet.has('KeyA') || keySet.has('ArrowLeft')) theta += mag * dt / Math.max(radius, 1);
+    // WASD = 视向位移：focus 与相机同步平移（半径不变、lookAt 自动保持）。
+    // pitch = φ−π/2 ⇒ 前向 = −offset 方向 = 真视线（推导见批次 36 §3.2）。
+    inputVelocity(_velGoal, keySet, theta, phi - Math.PI / 2, mag, vkeys, false);
+    if (_velGoal.lengthSq() > 1e-9) {
+      focus.x += _velGoal.x * dt;
+      focus.y += _velGoal.y * dt;
+      focus.z += _velGoal.z * dt;
+    }
     radius = clamp(radius, (pr.collisionRadius ?? 0) + 0.5, pr.maxDistance ?? 100);
     phi = clamp(phi, pr.minPolar ?? 0.02, pr.maxPolar ?? 1.545);
-    // 垂直升降（仍可任意高度，不受水平面限制）
+    // 垂直升降（仍可任意高度，不受水平面限制）；Q/E 只改相机高度，球坐标随之重算
     let y = focus.y + radius * Math.cos(phi);
     for (const k of vkeys.up) if (keySet.has(k)) y += mag * dt;
     for (const k of vkeys.down) if (keySet.has(k)) y -= mag * dt;
@@ -494,7 +513,7 @@ function stepFly(
     camera.position.copy(s.pos);
     s.collisionHit = collide(camera.position, pr);
     s.pos.copy(camera.position);
-    // 朝向聚焦点（环绕语义）；右键拖拽 yaw/pitch 仍在改 goal，但每帧被 lookAt 覆盖 ——
+    // 朝向聚焦点（环绕语义）；右键拖拽已改为改球坐标绕 focus 公转（onMove，见批次 36 §3.3）。
     // 想脱离 lookAt 环绕就取消选中（左键点空白）。
     _mat.lookAt(camera.position, _v2.set(focus.x, focus.y, focus.z), UP);
     camera.quaternion.setFromRotationMatrix(_mat);
@@ -906,10 +925,26 @@ export function FreeViewControls(props: FreeViewControlsProps) {
           panOrbit(s, dx, dy, el.clientHeight, p);
         }
       } else if (d.button === 2) {
-        // 右拖 look（fly / walk）
-        const lim = p.pitchLimit ?? pitchLimit;
-        s.yawGoal = wrapAngle(s.yawGoal - dx * rs);
-        s.pitchGoal = clamp(s.pitchGoal - dy * rs, -lim, lim);
+        const focus = p.selectedFocusRef?.current ?? null;
+        if (focus) {
+          // 批次 36 §3.3：focus 态右拖 = 绕 focus 公转（改球坐标 θ/φ）。
+          // 原「右拖改 yaw/pitch goal」在 focus 态被 lookAt 每帧覆盖（死代码），此处语义回收。
+          _v1.copy(s.pos).sub(_v2.set(focus.x, focus.y, focus.z));
+          const sph = new THREE.Spherical().setFromVector3(_v1);
+          sph.theta -= dx * rs;
+          sph.phi = clamp(sph.phi - dy * rs, p.minPolar ?? minPolar, p.maxPolar ?? maxPolar);
+          const sinPhi = Math.sin(sph.phi);
+          s.pos.set(
+            focus.x + sph.radius * sinPhi * Math.sin(sph.theta),
+            focus.y + sph.radius * Math.cos(sph.phi),
+            focus.z + sph.radius * sinPhi * Math.cos(sph.theta),
+          );
+        } else {
+          // 右拖 look（fly 未选中）
+          const lim = p.pitchLimit ?? pitchLimit;
+          s.yawGoal = wrapAngle(s.yawGoal - dx * rs);
+          s.pitchGoal = clamp(s.pitchGoal - dy * rs, -lim, lim);
+        }
       } else if (d.button === 1) {
         // 中拖屏幕平面视口平移（朝向不变）
         panFly(s, dx, dy, el.clientHeight, p);
@@ -937,7 +972,23 @@ export function FreeViewControls(props: FreeViewControlsProps) {
           p.maxDistance ?? 100,
         );
       } else {
-        s.userFovGoal = clamp(s.userFovGoal + e.deltaY * 0.03, p.fovMin ?? fovMin, p.fovMax ?? fovMax);
+        const focus = p.selectedFocusRef?.current ?? null;
+        if (focus) {
+          // 批次 36 §3.3：focus 态滚轮 = dolly 半径（拉近/拉远，指数律同 orbit）；
+          // 未选中 fly 的滚轮 FOV 语义不变。
+          _v1.copy(s.pos).sub(_v2.set(focus.x, focus.y, focus.z));
+          const r = _v1.length();
+          if (r > 1e-6) {
+            const nr = clamp(
+              r * Math.exp(e.deltaY * (p.zoomSpeed ?? zoomSpeed)),
+              (p.collisionRadius ?? 0) + 0.5,
+              p.maxDistance ?? 100,
+            );
+            s.pos.copy(_v2).addScaledVector(_v1, nr / r);
+          }
+        } else {
+          s.userFovGoal = clamp(s.userFovGoal + e.deltaY * 0.03, p.fovMin ?? fovMin, p.fovMax ?? fovMax);
+        }
       }
     };
     // 禁用右键默认菜单（否则 pan/look 一按住就弹浏览器菜单，R16）

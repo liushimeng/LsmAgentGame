@@ -36,7 +36,11 @@ export const DISTRICT_PLATE_SIZE = 8;
  * 批次 22 的漫游边界是 ±60（只看建成区），自由视角放开到四缘才算「自由」。
  */
 export const FREE_VIEW_BOUNDS = {
-  min: [-88, 0.25, -88] as [number, number, number],
+  // 批次 36 §3：y 下限 0.25 → −20 —— 相机贴地保护由 FREE_VIEW_GROUND_Y（0.25）独立承担
+  // （resolveCameraCollision 先地面钳制后边界钳制），bounds 的 y 下限实际只钳 orbit
+  // 聚焦点。聚焦点是抽象点（不可见），允许潜到地面下，俯瞰态按 W 才能沿视线俯冲
+  // （旧值 0.25/0 会把聚焦点顶在地面，W 退化成水平滑动）。相机本体永不低于地面。
+  min: [-88, -20, -88] as [number, number, number],
   max: [88, 140, 155] as [number, number, number],
 };
 

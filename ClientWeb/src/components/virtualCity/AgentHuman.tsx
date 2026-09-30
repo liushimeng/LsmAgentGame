@@ -3,11 +3,12 @@
  * **替换** AgentToken 的圆柱 token 渲染（AgentToken.tsx 保留 —— 小地图仍用其
  * districtSeatOffset 落位公式，CityVoiceBubbleLayer 仍用其 SPEECH_BUBBLE_TTL_MS）。
  *
- * 身体：`characters/<archetype>.glb`（批次 34 八原型）+ 材质槽换色（克隆/换色/dispose
- * 套路照抄 PedestrianV3），appearance 由 `crowdFormula.appearanceFor` 从
- * `game.state.players[].avatar` 推导（与背景行人同源 ⇒ 观感连续）；
- * 降级链：GLB 缺失 / `disable-blender-models=1` → 程序化 6-mesh 人形（站姿，
- * 几何常量复用 PedestrianV3）→ avatar 缺失 → char_casual + 职业色上衣（§4.3）。
+ * 身体：`characters/<appearance.model>.glb`（批次 36 §4.5 性别 × 年龄段 15 键）
+ * + 材质槽换色（克隆/换色/dispose 套路照抄 PedestrianV3），appearance 由
+ * `crowdFormula.appearanceFor` 从 `game.state.players[].avatar` 推导（与背景行人同源
+ * ⇒ 观感连续）；降级链：模型 GLB 缺失 → char_casual → pedestrian_walk
+ * → 程序化 6-mesh 人形（站姿，几何常量复用 PedestrianV3）→ avatar 缺失 →
+ * char_casual + 职业色上衣（§4.3）。
  *
  * 站位（§4.1）：`districtCenter + (local_pos − 0.5) × 5.6`（城区底板 8×8 内缩
  * ±2.8，与人行道带同量级）；local_pos 缺失（旧房）→ districtSeatOffset 环形落位。
@@ -152,8 +153,12 @@ export function AgentHuman({ player, cx, cz, index, total, isMe, speech, action 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [avArchetype, avAge, avDomain, avWealth, avGender, player.age, player.seat, color, !!player.avatar]);
 
-  // ── GLB 身体（批次 34 八原型；disable-blender-models=1 / 资产缺失 → 程序化兜底）──
-  const url = blenderModelsEnabled() ? modelUrl('characters', appearance.archetype) : '';
+  // ── GLB 身体（批次 36 §4.5：性别 × 年龄段模型三段兜底；disable-blender-models=1 → 程序化）──
+  const url = blenderModelsEnabled()
+    ? (modelUrl('characters', appearance.model)
+      || modelUrl('characters', 'char_casual')
+      || modelUrl('characters', 'pedestrian_walk'))
+    : '';
   const { scene: glbScene, animations } = useSharedGLTF(url, PED_SIZE_TARGET);
 
   /**
@@ -172,13 +177,15 @@ export function AgentHuman({ player, cx, cz, index, total, isMe, speech, action 
         tinted.push(m);
         const std = m as THREE.MeshStandardMaterial;
         if (std.color) {
-          // 材质槽名约定（3d_script/build_character.py 固定）：
-          // PedestrianBody / PedestrianPants / PedestrianHead / PedestrianShoes
+          // 材质槽名约定（3d_script/build_character.py 固定 5 槽，禁改名）：
+          // PedestrianBody / PedestrianPants / PedestrianHead / PedestrianShoes / PedestrianHair
+          // 批次 36 §4.5 换色修复：Hair 槽须命中 appearance.hair（§130 补接线）。
           const name = m.name || '';
           if (name.includes('Body')) std.color.set(appearance.top);
           else if (name.includes('Pants')) std.color.set(appearance.pants);
           else if (name.includes('Head')) std.color.set(appearance.skin);
           else if (name.includes('Shoes')) std.color.set('#1a1a1a');
+          else if (name.includes('Hair')) std.color.set(appearance.hair);
           else std.color.set(appearance.top);
         }
         return m;

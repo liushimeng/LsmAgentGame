@@ -62,7 +62,14 @@ export const MODEL_NAMES = {
     'oak_tree_winter',
   ] as const,
   characters: [
+    // 批次 36 §4.1：性别 × 年龄段 15 模型（3d_script/build_character.py --variant <key> 产出）。
+    // 材质槽固定 5 个供运行时换色：PedestrianBody/Pants/Head/Shoes/Hair；
+    // 选型由 crowdFormula.modelKeyFor(gender, age) 推导，缺失走 char_casual → pedestrian_walk 兜底。
+    'char_m_youth', 'char_m_young', 'char_m_middle', 'char_m_senior', 'char_m_elder',
+    'char_f_youth', 'char_f_young', 'char_f_middle', 'char_f_senior', 'char_f_elder',
+    'char_u_youth', 'char_u_young', 'char_u_middle', 'char_u_senior', 'char_u_elder',
     // 批次 34 §5.2：8 个人物原型（3d_script/build_character.py --archetype <name> 产出）。
+    // 批次 36 §4.6：保留为兜底池 + 装饰池多样性，不再作为居民选型主路径。
     // 每个原型剪影/体型不同（elder 驼背矮壮 / student 高瘦 / worker 壮实 / formal 挺拔…），
     // 共享 10 骨 + 24 帧 walk clip；材质槽名 PedestrianBody/Pants/Head/Shoes 供运行时换色。
     'char_business',

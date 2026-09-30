@@ -43,8 +43,8 @@ export interface PedestrianV3Props {
   /** 起始相位（0..1，错开步态与 path 初值，避免全员同步摆腿）。 */
   phase?: number;
   /**
-   * 批次 34 §5.3：居民外观投影（原型 + 色板 + 身高系数）。
-   * 传入时优先取 `characters/<archetype>.glb` 并按材质槽换色；
+   * 批次 34 §5.3 / 批次 36 §4.5：居民外观投影（模型 key + 色板 + 身高系数）。
+   * 传入时优先取 `characters/<appearance.model>.glb`（性别 × 年龄段 15 键）并按材质槽换色；
    * 缺省则回落到 `outfit` 四套服装色 + 程序化几何。
    */
   appearance?: CrowdAppearance;
@@ -167,10 +167,11 @@ export const PedestrianV3 = memo(function PedestrianV3({
   trackIndex,
 }: PedestrianV3Props) {
   // 19-Blender3D模型集成：.glb 模式优先级最高，绕过原 6 mesh + 摆臂逻辑。
-  // 批次 34 §5.3：有 appearance 时取对应原型 GLB；原型 GLB 缺失 → 退回 pedestrian_walk
-  // （两者同骨架/同步态 clip，walk 动画仍成立）；再缺 → 程序化几何。
-  const archetype = appearance?.archetype;
-  const modelUrlStr = (archetype ? modelUrl('characters', archetype) : '')
+  // 批次 36 §4.5：有 appearance 时取性别 × 年龄段模型（appearance.model，15 键）；
+  // 缺失 → char_casual → pedestrian_walk 二段兜底（同骨架/同步态 clip，walk 动画仍成立）；
+  // 再缺 → 程序化几何。
+  const modelUrlStr = modelUrl('characters', appearance?.model ?? '')
+    || modelUrl('characters', 'char_casual')
     || modelUrl('characters', 'pedestrian_walk');
   const blenderOn = blenderModelsEnabled();
   const useGLB = !!modelUrlStr && blenderOn;
@@ -198,12 +199,15 @@ export const PedestrianV3 = memo(function PedestrianV3({
           const name = m.name || '';
           const std = m as THREE.MeshStandardMaterial;
           if (std.color) {
-            // 材质槽名约定（3d_script/build_character.py 固定）：
-            // PedestrianBody / PedestrianPants / PedestrianHead / PedestrianShoes
+            // 材质槽名约定（3d_script/build_character.py 固定 5 槽，禁改名）：
+            // PedestrianBody / PedestrianPants / PedestrianHead / PedestrianShoes / PedestrianHair
+            // 批次 36 §4.5 换色修复：Hair 槽须命中 appearance.hair，
+            // 否则落入 else 被染成上衣色（§130 补接线）。
             if (name.includes('Body')) std.color.set(appearance.top);
             else if (name.includes('Pants')) std.color.set(appearance.pants);
             else if (name.includes('Head')) std.color.set(appearance.skin);
             else if (name.includes('Shoes')) std.color.set('#1a1a1a');
+            else if (name.includes('Hair')) std.color.set(appearance.hair);
             else std.color.set(appearance.top);
           }
           return m;
