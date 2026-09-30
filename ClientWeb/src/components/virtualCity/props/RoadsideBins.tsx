@@ -23,10 +23,16 @@
  * 公交站台旁），本组件只负责渲染，不含布点逻辑。
  */
 
-import { memo, useLayoutEffect, useMemo, useRef  } from 'react';
+import { memo, useMemo } from 'react';
 import * as THREE from 'three';
 import { modelUrl } from '@/assets/models';
 import { blenderModelsEnabled, useSharedGLTF } from '@/engine3d';
+import {
+  collectGlbPairs,
+  pairPivotOffset,
+  GlbPairInstances,
+  type GlbRenderPair,
+} from '../glbInstances';
 import { useI18nStore } from '@/store/i18n.store';
 import type { Lang } from '@/i18n';
 import type { RoadsideBinSpot } from '../StreetPropsLayer';
@@ -57,36 +63,11 @@ const ROADSIDE_CATEGORY: Record<RoadsideBinSpot['variant'], Record<Lang, string>
   blue: { 'zh-CN': '可回收物（蓝）', en: 'Recyclable (blue)', ja: 'リサイクル（青）' },
 };
 
-/** GLB 子树内抽出的一个 (geometry, material) 渲染对。 */
-interface BinPair {
-  geometry: THREE.BufferGeometry;
-  material: THREE.Material;
-  /** mesh 相对变体根节点的局部矩阵（多 primitive 拆分时非平凡）。 */
-  localMatrix: THREE.Matrix4;
-}
-
-/** 遍历子树收集去重 (geometry, material) 对（§5 调用约定）。 */
-function collectPairs(root: THREE.Object3D | null): BinPair[] {
-  if (!root) return [];
-  const seen = new Set<string>();
-  const pairs: BinPair[] = [];
-  root.updateWorldMatrix(true, true);
-  const rootInv = new THREE.Matrix4().copy(root.matrixWorld).invert();
-  root.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh || !mesh.geometry || !mesh.material) return;
-    const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-    const key = `${mesh.geometry.uuid}|${mat.uuid}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    pairs.push({
-      geometry: mesh.geometry,
-      material: mat,
-      localMatrix: rootInv.clone().multiply(mesh.matrixWorld),
-    });
-  });
-  return pairs;
-}
+/** GLB 子树内抽出的一个 (geometry, material) 渲染对（共享实现在 ../glbInstances）。 */
+type BinPair = GlbRenderPair;
+const collectPairs = collectGlbPairs;
+const variantPivotOffset = pairPivotOffset;
+const BinPairMesh = GlbPairInstances;
 
 /** 桶位 → 世界矩阵（绕 Y 旋转；variant 归一化位移见 variantPivotOffset）。 */
 function binWorldMatrix(b: RoadsideBinSpot): THREE.Matrix4 {
@@ -94,63 +75,6 @@ function binWorldMatrix(b: RoadsideBinSpot): THREE.Matrix4 {
     new THREE.Vector3(b.x, 0, b.z),
     new THREE.Quaternion().setFromEuler(new THREE.Euler(0, b.rotation, 0)),
     new THREE.Vector3(1, 1, 1),
-  );
-}
-
-/**
- * 变体子树的**内容包围盒归一化位移**（在变体根局部系下）：
- *   - x/z 取内容盒中心 ⇒ 变体顶点在 GLB 内被平移摆放（如 Blue 烘焙在 +1.2 m 处）
- *     时，仍把桶身摆到桶位点上；
- *   - y 取 −min.y ⇒ 桶底贴地，不假设原点在桶底（art 侧改原点约定也不受影响）。
- *
- * ⚠️ 前置契约（批次 29 明示）：变体**根节点与其子节点**的 scale / rotation 必须
- * identity（位移允许）。否则：本函数按「几何 × matrixWorld 相对变体根」重算，
- * 而 rootInv 会**静默抵消**变体根自身的 scale ⇒ 渲染尺寸与设计尺寸差任意倍数
- * （trash_can.glb 旧版正是如此：单位几何 + 节点 scale 0.0375 ⇒ 全城桶放大 20 倍）。
- * engine3d/glbSizeGuard 已对该前置条件告警（几何级 vs 世界级尺寸 + 节点变换 identity
- * 两条判据，见 engine3d/glbSizeGuard.ts）。
- */
-function variantPivotOffset(pairs: BinPair[]): THREE.Vector3 {
-  const box = new THREE.Box3();
-  const tmp = new THREE.Box3();
-  for (const p of pairs) {
-    if (!p.geometry.boundingBox) p.geometry.computeBoundingBox();
-    if (p.geometry.boundingBox) box.union(tmp.copy(p.geometry.boundingBox).applyMatrix4(p.localMatrix));
-  }
-  if (box.isEmpty()) return new THREE.Vector3(0, 0, 0);
-  const center = box.getCenter(new THREE.Vector3());
-  return new THREE.Vector3(-center.x, -box.min.y, -center.z);
-}
-
-/** 单个 (geometry, material) 对的全城 instancedMesh（矩阵一次性写入）。 */
-function BinPairMesh({
-  pair,
-  worldMatrices,
-  pivot,
-}: {
-  pair: BinPair;
-  worldMatrices: THREE.Matrix4[];
-  /** 变体内容盒归一化位移（变体根局部系，见 variantPivotOffset）。 */
-  pivot: THREE.Matrix4;
-}) {
-  const ref = useRef<THREE.InstancedMesh>(null);
-  useLayoutEffect(() => {
-    const mesh = ref.current;
-    if (!mesh) return;
-    const m = new THREE.Matrix4();
-    worldMatrices.forEach((wm, i) => {
-      // 桶位世界矩阵 × 归一化位移 × 子网格局部矩阵（位移在旋转之后、变体局部系内生效）
-      m.copy(wm).multiply(pivot).multiply(pair.localMatrix);
-      mesh.setMatrixAt(i, m);
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.computeBoundingSphere(); // 实例级视锥剔除包围球
-  }, [pair, worldMatrices, pivot]);
-  return (
-    <instancedMesh
-      ref={ref}
-      args={[pair.geometry, pair.material, Math.max(1, worldMatrices.length)]}
-    />
   );
 }
 

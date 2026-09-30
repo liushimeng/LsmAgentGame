@@ -143,6 +143,16 @@ TARGETS = {
     # 故用 per_part 模式：对每个节点各求 AABB，取各轴最大值（而非整体包围盒）。
     'road/trash_can.glb':     dict(x=0.050, y=0.100, z=0.050, per_part=True, axis='per_part_y',
                                    min_parts=2, pivot='单桶 桶底 minY=0（两桶各自 minY=0）'),
+    # ── 批次 38 运河/桥三件（build_canal_bank / build_canal_reed / build_bridge_rail）──
+    # 表值 = 资产实测（1 世界单位 = 10 m）。尺寸判据 ±5%；直立豁免见
+    # DOMINANT_AXIS_EXEMPT（canal_bank / bridge_rail 为横向线性构件，主轴 X）。
+    # canal_reed 为丛状件，Y 主导（2.41 m 丛高）⇒ 走默认 'target' 直立判据。
+    'road/canal_bank.glb':    dict(x=0.800, y=0.160, z=0.298,
+                                   pivot='段底 minY=0，X/Z 居中；沿河 8 m 段可平铺'),
+    'road/canal_reed.glb':    dict(x=0.195, y=0.241, z=0.191,
+                                   pivot='丛底 minY=0，X/Z 居中；沿岸实例化点缀'),
+    'road/bridge_rail.glb':   dict(x=0.200, y=0.115, z=0.012,
+                                   pivot='段底 minY=0；沿桥长 2 m 段可平铺'),
     # ── 植被（nature）—— 批次 30 补齐（原 12 件无尺寸判据，只过直立/贴地/节点 identity）──
     # 表值来源：cityScale.ts::REAL_DIMS_M（米制）÷ 10 ≡ 批次 29 方案 §3.4-E。
     # oak_tree 与 _spring / _autumn 三变体同尺寸；_winter 单列（落叶冠幅本就细，表值 = 资产真值）。
@@ -158,7 +168,13 @@ TARGETS = {
 }
 
 # 直立判据的例外：长轴落在水平轴属正确摆放。
-DOMINANT_AXIS_EXEMPT = {'ocean/cargo_ship.glb': 'X', 'ocean/sailboat.glb': 'X'}
+# 批次 38 追加两件**横向线性构件**：驳岸挡墙段（8 m 长 / 1.6 m 高 / 3 m 深）与
+# 桥栏杆段（2 m 长 / 1.15 m 高 / 0.12 m 厚）—— 长度沿 X 平铺，与船体同类，
+# 非「应当直立」类物件（树/人/楼/桶才走主轴=Y 判据）；直立性由 Y 尺寸判据保证。
+DOMINANT_AXIS_EXEMPT = {
+    'ocean/cargo_ship.glb': 'X', 'ocean/sailboat.glb': 'X',
+    'road/canal_bank.glb': 'X', 'road/bridge_rail.glb': 'X',
+}
 # 地形基准：只报实测，不参与直立 / 贴地判据。
 TERRAIN_BASELINE = {'nature/snow_mountain.glb'}
 # 吃水线：minY < 0 属正确。

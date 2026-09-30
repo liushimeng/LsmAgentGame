@@ -51,6 +51,7 @@ import { DISTRICT_FLOORS, buildingHeight, spacing, u } from './cityScale';
 import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
 import { ROAD_WIDTH_MAIN } from './Road';
 import { FIRST_RING_RADIUS, type RoadJunction, type RoadSegment } from './roadNetwork';
+import { inWater, isBuildable, onFirstRing } from './cityObstacles';
 import { buildingsFor } from './building_layout';
 import { outdoorCount, crowdCapFor, synthCrowdEntry } from './crowdFormula';
 import { layoutCrowd, type CrowdPedestrian } from './crowdLayout';
@@ -144,7 +145,8 @@ interface DistrictProps {
     stationary: boolean;
   }>;
   furniture: FurnitureSpec[];
-  sign: SignSpec;
+  /** 路口标识牌（批次 38 R3：落入水域时为 null —— 不在河里立牌）。 */
+  sign: SignSpec | null;
 }
 
 interface RoadVehicle {
@@ -191,6 +193,13 @@ export const PEDESTRIAN_TOTAL_CAP_LOW = 60;
  *  批次 30 A5：行道树株距 25 m → 真实 9 m（REAL_SPACING_M.streetTree），
  *  总量 550 → 1800（实例化 3+2 draw call 不变，仅实例数增加）。 */
 export const TREE_TOTAL_CAP = 1800;
+/**
+ * 批次 38 审计 A4b：区内树 / 街具 / 标识的 keep-out 余量（世界单位 0.3 = 3 m）。
+ * 判定走 `isBuildable`（水域 + **全部**路廊 + 一环带域）—— 与建筑的 main-only
+ * 口径不同是刻意的：connector 走街区庭院，区内树半径 3.3u，若几乎与某条
+ * connector 平行则确实会立在路面上，全量路廊判定才是真实违例。
+ */
+const PROP_KEEP_OUT_MARGIN = 0.3;
 
 /**
  * 城区行人密度档位（按城区属性分档：核心 5-6 / 一般 3-4 / 郊区 2）。
@@ -306,7 +315,18 @@ function propsForDistrict(def: VirtualCityDistrictDef, idx: number): DistrictPro
       // treeShape 基准已归一到 REAL_DIMS_M.streetTree（9 m），scale 收敛到 0.85~1.15。
       scale: isPark ? 0.9 + rnd() * 0.25 : 0.85 + rnd() * 0.2,
     };
-  });
+    // 批次 38 审计 A4b：区内树改用 isBuildable（水域 + 路廊 + 一环带域），
+    // 与建筑退让同口径 —— 骑在一环带上的城区（suburb 区心 r=19.8）不再
+    // 把树长在一环路面正中。
+  }).filter((t) => isBuildable(t.x, t.z, PROP_KEEP_OUT_MARGIN));
+
+  // §禁止静默降级：keep-out 把某城区区树清空到 0 棵时 dev 告警
+  if (!trees.length && treeCount > 0) {
+    console.warn(
+      `[cityObstacles] propsForDistrict(${def.id}) keep-out 后区树 0 棵（原计划 ${treeCount} 棵）：` +
+      `城区骑在路廊/水域/一环带域上（margin ${PROP_KEEP_OUT_MARGIN}）。`,
+    );
+  }
 
   // 1-2 个楼顶杂物（批次 30 A2：锚点改挂街墙楼栋槽位 —— 旧「区中心半径 0.8~2.4」
   // 在街墙布局下会悬在庭院半空；y 仍取楼层区间中值 ×0.9 的近似屋顶高）。
@@ -431,14 +451,17 @@ function propsForDistrict(def: VirtualCityDistrictDef, idx: number): DistrictPro
     variant: idx % 2 === 0 ? 'traffic' : 'info',
   };
 
+  // 批次 38 审计 A4b：街具/标识同样改用 isBuildable（与树、建筑同口径）
+  const furnitureDry = furniture.filter((f) => isBuildable(f.x, f.z, PROP_KEEP_OUT_MARGIN));
+
   return {
     districtId: def.id,
     trees,
     rooftop,
     solar,
     pedestrians,
-    furniture,
-    sign,
+    furniture: furnitureDry,
+    sign: isBuildable(sign.x, sign.z, PROP_KEEP_OUT_MARGIN) ? null : sign,
   };
 }
 
@@ -516,10 +539,16 @@ function vehiclesForNetwork(segments: RoadSegment[], withExtra: boolean): RoadVe
 
 /**
  * 阶段 L 行道树：沿主干道等距布点（与路灯错相位 π/2 避免冲突）。
- * 批次 30 A5：株距 25 m（2.5u）→ 真实 9 m（REAL_SPACING_M.streetTree），
- * 道路两侧交替；scale 收敛 0.85~1.05（树形基准已归一 streetTree 9 m）。
+ * 批次 30 A5：株距 25 m（2.5u）→ 真实 9 m（REAL_SPACING_M.streetTree）。
  * 批次 31：扩展到全路网 main 段（spoke + arterial + edgeLink；connector 为
  * 9m 窄路不布树，防与对路树/楼群过密）。
+ * 批次 38 R4：单侧交替 → **双侧平行行列**（同 t 处左右各一棵，与真实街道一致）；
+ * R3：水域净空 —— `inWater` 点跳过（修「树长在运河上」）。
+ * 批次 38 审计 A4b：增补 `onFirstRing` 净空（修「树冠顶球立在一环路面正中」——
+ * 环带内 r≈20 处约 50 棵）。**刻意不挂 `onRoadCorridor`**：行道树的定义就是
+ * 站在**自己那条路**的路缘外 1.35 u，而该值只比 main 路廊半宽 +margin
+ * （0.95+0.3=1.25）多 0.1 u —— 一旦某条 connector / 交叉口靠近，保守判定
+ * 就会把本该保留的路缘树连坐掉（实测多杀 107 棵，见 02-实施记录）。
  */
 function roadTreesForNetwork(segments: RoadSegment[]): RoadTree[] {
   const trees: RoadTree[] = [];
@@ -531,25 +560,30 @@ function roadTreesForNetwork(segments: RoadSegment[]): RoadTree[] {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 
-  segments
-    .filter((s) => s.kind === 'main')
-    .forEach((s) => {
-      const [fx, fz] = s.from;
-      const [tx, tz] = s.to;
-      const dx = tx - fx;
-      const dz = tz - fz;
-      const len = Math.sqrt(dx * dx + dz * dz);
-      const treeSpacing = spacing('streetTree');
-      const count = Math.max(2, Math.floor(len / treeSpacing));
-      const nx = -dz / len;
-      const nz = dx / len;
-      const sideOffset = ROAD_WIDTH_MAIN / 2 + 0.35 + 0.3; // 道路外 + 路灯偏移 + 树位
-      for (let i = 1; i <= count; i++) {
-        const t = i / (count + 1) + 0.25; // 错相位 π/2（路灯在 0.25 t 起步）
-        if (t >= 1) continue;
-        const side = i % 2 === 0 ? 1 : -1; // 两侧交替
+  for (const s of segments) {
+    if (s.kind !== 'main') continue;
+    const [fx, fz] = s.from;
+    const [tx, tz] = s.to;
+    const dx = tx - fx;
+    const dz = tz - fz;
+    const len = Math.sqrt(dx * dx + dz * dz);
+    const treeSpacing = spacing('streetTree');
+    const count = Math.max(2, Math.floor(len / treeSpacing));
+    const nx = -dz / len;
+    const nz = dx / len;
+    const sideOffset = ROAD_WIDTH_MAIN / 2 + 0.35 + 0.3; // 道路外 + 路灯偏移 + 树位
+    for (let i = 1; i <= count; i++) {
+      const t = i / (count + 1) + 0.25; // 错相位 π/2（路灯在 0.25 t 起步）
+      if (t >= 1) continue;
+      // 批次 38 R4：双侧平行行列（两侧同相位，同 t 处左右各一棵）
+      for (const side of [1, -1] as const) {
         const x = fx + dx * t + nx * sideOffset * side;
         const z = fz + dz * t + nz * sideOffset * side;
+        // 批次 38 R3：水域净空（运河/港池上不种树）
+        if (inWater(x, z, 0.3)) continue;
+        // 批次 38 审计 A4b：一环带域净空（骑环城区 suburb/oldtown 的行道树立在一环路上）
+        if (onFirstRing(x, z, 0.3)) continue;
+        if (trees.length >= TREE_TOTAL_CAP) return trees; // 段顺序确定性截断
         trees.push({
           x,
           z,
@@ -558,7 +592,8 @@ function roadTreesForNetwork(segments: RoadSegment[]): RoadTree[] {
           rotation: rnd() * Math.PI * 2,
         });
       }
-    });
+    }
+  }
   return trees;
 }
 
@@ -606,19 +641,18 @@ export function trafficSignalsForCity(
     const tx = -oz;
     const tz = ox;
     // 面向来向车流（A 组）：位于右行侧（junction − t·off），灯面朝径向外 o
-    out.push({
-      x: jx - tx * SIGNAL_SIDE_OFFSET,
-      z: jz - tz * SIGNAL_SIDE_OFFSET,
-      rotation: Math.atan2(ox, oz),
-      phase: 'A',
-    });
+    // 批次 38 审计 R3 残留：过河交点的信号杆会浮在运河上（杆位在桥面之外）→ 跳过
+    const ax = jx - tx * SIGNAL_SIDE_OFFSET;
+    const az = jz - tz * SIGNAL_SIDE_OFFSET;
+    if (!inWater(ax, az, 0.3)) {
+      out.push({ x: ax, z: az, rotation: Math.atan2(ox, oz), phase: 'A' });
+    }
     // 面向环道车流（B 组）：位于环道车右行侧（junction + o·off），灯面朝 −t
-    out.push({
-      x: jx + ox * SIGNAL_SIDE_OFFSET,
-      z: jz + oz * SIGNAL_SIDE_OFFSET,
-      rotation: Math.atan2(-tx, -tz),
-      phase: 'B',
-    });
+    const bx = jx + ox * SIGNAL_SIDE_OFFSET;
+    const bz = jz + oz * SIGNAL_SIDE_OFFSET;
+    if (!inWater(bx, bz, 0.3)) {
+      out.push({ x: bx, z: bz, rotation: Math.atan2(-tx, -tz), phase: 'B' });
+    }
   }
 
   // ② 方格骨干互交点：纵路灯面向 ±x 来车、横路灯面向 ±z 来车（对角布置）
@@ -626,9 +660,14 @@ export function trafficSignalsForCity(
     const phase: TrafficSignalSpot['phase'] = idx % 2 === 0 ? 'A' : 'B';
     const off = SIGNAL_SIDE_OFFSET;
     // 纵路（x = j.x）来车自 ±x：灯立于路口对角 (j.x+off, j.z+off)，面朝 −x
-    out.push({ x: j.x + off, z: j.z + off, rotation: Math.atan2(-1, 0), phase });
+    // 批次 38 审计 R3 残留：方格骨干 × 运河交点的信号杆会浮在水上 → 跳过
+    if (!inWater(j.x + off, j.z + off, 0.3)) {
+      out.push({ x: j.x + off, z: j.z + off, rotation: Math.atan2(-1, 0), phase });
+    }
     // 横路（z = j.z）来车自 ±z：灯立于对角 (j.x−off, j.z−off)，面朝 −z
-    out.push({ x: j.x - off, z: j.z - off, rotation: Math.atan2(0, -1), phase: phase === 'A' ? 'B' : 'A' });
+    if (!inWater(j.x - off, j.z - off, 0.3)) {
+      out.push({ x: j.x - off, z: j.z - off, rotation: Math.atan2(0, -1), phase: phase === 'A' ? 'B' : 'A' });
+    }
   });
 
   return out;
@@ -688,9 +727,13 @@ export function roadsideBinsForNetwork(
         const sAlong = 3.75 + i * BIN_SPACING;
         if (sAlong > len - 3) break;
         const side = i % 2 === 0 ? 1 : -1; // 两侧交替
+        const bx = fx + ux * sAlong + rx * BIN_SIDE_OFFSET * side;
+        const bz = fz + uz * sAlong + rz * BIN_SIDE_OFFSET * side;
+        // 批次 38 R3：水域净空
+        if (inWater(bx, bz, 0.3)) continue;
         out.push({
-          x: fx + ux * sAlong + rx * BIN_SIDE_OFFSET * side,
-          z: fz + uz * sAlong + rz * BIN_SIDE_OFFSET * side,
+          x: bx,
+          z: bz,
           rotation: Math.atan2(rx * side, rz * side),
           variant: nextVariant(),
         });
@@ -699,9 +742,12 @@ export function roadsideBinsForNetwork(
   // 每个公交站台旁追加 1 个（站台 rotation = atan2(dx,dz)，可还原路向 u=(sin,cos)；
   // 桶沿路向 +0.45 错开雨棚，站台本身只布在主干道上，无重复计入问题）
   for (const bs of busStops) {
+    const bx = bs.x + Math.sin(bs.rotation) * 0.45;
+    const bz = bs.z + Math.cos(bs.rotation) * 0.45;
+    if (inWater(bx, bz, 0.3)) continue; // 批次 38 R3
     out.push({
-      x: bs.x + Math.sin(bs.rotation) * 0.45,
-      z: bs.z + Math.cos(bs.rotation) * 0.45,
+      x: bx,
+      z: bz,
       rotation: bs.rotation,
       variant: nextVariant(),
     });
@@ -725,9 +771,13 @@ export function busStopsForNetwork(segments: RoadSegment[]): Layout['busStops'] 
     const sideOffset = ROAD_WIDTH_MAIN / 2 + 0.35;
     for (const t of [0.3, 0.7]) {
       const side = seq % 2 === 0 ? 1 : -1; // 沿线两侧交替
+      const bx = seg.from[0] + dx * t + nx * sideOffset * side;
+      const bz = seg.from[1] + dz * t + nz * sideOffset * side;
+      // 批次 38 R3：水域净空（站台不落在运河/港池）
+      if (inWater(bx, bz, 0.3)) continue;
       out.push({
-        x: seg.from[0] + dx * t + nx * sideOffset * side,
-        z: seg.from[1] + dz * t + nz * sideOffset * side,
+        x: bx,
+        z: bz,
         rotation: Math.atan2(dx, dz),
       });
       seq++;
@@ -893,13 +943,15 @@ export function StreetPropsLayer({ districts, segments, crowd, residentCount, ro
                 return null;
             }
           })}
-          {/* 路口标识牌 */}
-          <Sign
-            x={dp.sign.x}
-            z={dp.sign.z}
-            rotation={dp.sign.rotation}
-            variant={dp.sign.variant}
-          />
+          {/* 路口标识牌（批次 38 R3：水域净空后可能缺省） */}
+          {dp.sign && (
+            <Sign
+              x={dp.sign.x}
+              z={dp.sign.z}
+              rotation={dp.sign.rotation}
+              variant={dp.sign.variant}
+            />
+          )}
         </group>
       ))}
 

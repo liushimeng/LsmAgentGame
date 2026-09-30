@@ -119,6 +119,8 @@ export const EXTRA_LABELS: Record<string, TriText> = {
   housePrice: { 'zh-CN': '房价', en: 'House Price', ja: '住宅価格' },
   rent: { 'zh-CN': '租金', en: 'Rent', ja: '家賃' },
   beta: { 'zh-CN': '房价 β', en: 'Price β', ja: '価格 β' },
+  // 批次 38 R7：运河桥衔接路段 key（canalBridgeSpots 的 roadKey）
+  road: { 'zh-CN': '衔接路段', en: 'Road', ja: '接続道路' },
 };
 
 /** 语义 key → 当前语言标签；非 key 文本原样返回。 */

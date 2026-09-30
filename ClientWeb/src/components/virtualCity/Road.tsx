@@ -18,11 +18,14 @@
  * 由 VirtualCityCityMap 汇总后交 <StreetLightsInstanced> 全局实例化。
  */
 
+import { useEffect, useMemo } from 'react';
 import type { Texture } from 'three';
+import * as THREE from 'three';
 import { streetTileUrl, pbrNormalUrl, pbrRoughUrl, type StreetTileName } from '@/assets/images/virtualCity';
 import type { InstancedLamp } from './props/StreetLightsInstanced';
 import { useSharedPBR, useSharedTexture, withPBR } from '@/engine3d';
-import { ROAD_SURFACE_Y, spacing } from './cityScale';
+import { ROAD_SURFACE_Y, ROAD_WIDTH_MAIN, ROAD_WIDTH_SIDE, spacing } from './cityScale';
+import { inWater, segCrossesCanal, segWaterOverlapFrac } from './cityObstacles';
 import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 
 interface Props {
@@ -42,19 +45,15 @@ interface Props {
 /** 加载单张贴图（14-3D渲染深化：走共享缓存；缺失返回 null）。 */
 function useStreetTile(
   name: StreetTileName,
-  repeatX: number,
-  repeatY: number,
 ): Texture | null {
   return useSharedTexture(streetTileUrl(name), {
     wrap: 'repeat',
-    repeat: [repeatX, repeatY],
+    repeat: [1, 1],
   });
 }
 
-/** 主干道路面宽度（世界单位）。 */
-export const ROAD_WIDTH_MAIN = 1.4;
-/** 次干道路面宽度。 */
-export const ROAD_WIDTH_SIDE = 0.9;
+/** 主干道路面宽度（世界单位）。批次 38：常量上移 cityScale，此处 re-export 保持零回归。 */
+export { ROAD_WIDTH_MAIN, ROAD_WIDTH_SIDE };
 /** 主干道路灯间距（批次 30 A4：cityScale.REAL_SPACING_M.lampMain = 37 m，两侧交替）。 */
 const LAMP_SPACING_MAIN = spacing('lampMain');
 /** 次干道路灯间距（REAL_SPACING_M.lampSide = 50 m，两侧交替）。 */
@@ -92,9 +91,27 @@ export function lampsForRoad(
     const nz = dx / len;
     const sideOffset = roadWidth / 2 + 0.08;
     const side: 1 | -1 = i % 2 === 0 ? 1 : -1; // 两侧交替
-    out.push({ x: x + nx * sideOffset * side, z: z + nz * sideOffset * side, rot: angle, kind, side });
+    const lx = x + nx * sideOffset * side;
+    const lz = z + nz * sideOffset * side;
+    // 批次 38 R3：水域净空 —— 灯杆不得立在运河/港池上
+    if (inWater(lx, lz, 0.3)) continue;
+    out.push({ x: lx, z: lz, rot: angle, kind, side });
   }
   return out;
+}
+
+/**
+ * 几何 UV 按物理长度烘焙（批次 38 R6：替代 `Math.round(len/roadWidth)` 取整拉伸）。
+ * 横向 U：一个贴图周期 = 一整个路幅（road_main 断面标线烘焙图的语义）；
+ * 纵向 V：`len / roadWidth` 连续周期（末端裁切是真实道路语义，不再拉伸）。
+ * 贴图 repeat 恒 [1,1] ⇒ 纹理缓存键不分裂（与 FirstRingRoad.uTiledPlane 同思路）。
+ */
+function roadUVGeometry(roadWidth: number, len: number): THREE.BufferGeometry {
+  const g = new THREE.PlaneGeometry(roadWidth, len);
+  const uv = g.attributes.uv;
+  const scaleY = len / roadWidth;
+  for (let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) * scaleY);
+  return g;
 }
 
 export function Road({ from, to, kind, yOffset = 0 }: Props) {
@@ -114,30 +131,44 @@ export function Road({ from, to, kind, yOffset = 0 }: Props) {
     extra: [{ label: 'variant', value: kind }],
   });
 
-  // ── ① 路面贴图（批次 24：标线烘焙进整幅贴图；贴图覆盖 roadWidth×roadWidth，
-  //    沿路长 repeat = round(len / roadWidth)。缺失 → 纯色 #1f2733 降级）。
+  // ── ① 路面贴图（批次 24：标线烘焙进整幅贴图；批次 38 R6：UV 按物理长度烘焙、
+  //    repeat 恒 [1,1]。缺失 → 纯色 #1f2733 降级）。
   //    批次 31 二轮：人行道 PBR 对随合并迁往 RoadMarkings，此处仅 asphalt 对。
   const surfaceName = kind === 'main' ? 'road_main' : 'road_side';
   const pbrName = kind === 'main' ? 'asphalt_main' : 'asphalt_side';
-  const roadRepeatY = Math.max(1, Math.round(len / roadWidth));
-  const roadTex = useStreetTile(surfaceName, 1, roadRepeatY);
+  const roadTex = useStreetTile(surfaceName);
   // PBR 复用 asphalt 对（normalScale [0.5,0.5]；标线平坦无需独立法线，文档 24 §4）。
+  // UV 周期已烘进几何，贴图 repeat 恒 [1,1]（批次 38 R6）。
   const asphaltPbr = useSharedPBR(
     streetTileUrl(pbrName),
     pbrNormalUrl('streets', pbrName),
     pbrRoughUrl('streets', pbrName),
-    { wrap: 'repeat', repeat: [1, roadRepeatY], normalScale: [0.5, 0.5] },
+    { wrap: 'repeat', repeat: [1, 1], normalScale: [0.5, 0.5] },
   );
+
+  // 批次 38 §4.6：**真过河段**不渲染路面，由运河桥桥面承载（视觉「桥就是路的延续」；
+  // 否则 0.015 < 水面 0.028 的「潜水路」会穿帮）。桥由 canalBridgeSpots 按真实
+  // 过河路段生成，天然衔接。
+  // 纵向压水段（如 arterial z=18 全程落在河带内）**不跳过**，只把路面抬到桥面高
+  // （0.036）保证可见 —— 整段跳过会吞掉 96u 道路（批次 38 实测）。
+  const crossesCanal = segCrossesCanal(from, to);
+  const waterFrac = segWaterOverlapFrac(from, to);
+  const elevated = !crossesCanal && waterFrac > 0;
+
+  const deckGeo = useMemo(() => roadUVGeometry(roadWidth, len), [roadWidth, len]);
+  useEffect(() => () => deckGeo.dispose(), [deckGeo]);
+
+  if (crossesCanal) return null;
 
   return (
     <group {...info} rotation={[0, angle, 0]} position={[from[0], 0, from[1]]}>
       {/* ① 主车道（z ∈ [-w/2, w/2]；标线烘焙贴图 / 纯色降级） */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, roadY, 0]}
+        position={[0, elevated ? 0.036 : roadY, 0]}
+        geometry={deckGeo}
         receiveShadow
       >
-        <planeGeometry args={[roadWidth, len]} />
         <meshStandardMaterial
           {...withPBR(
             {

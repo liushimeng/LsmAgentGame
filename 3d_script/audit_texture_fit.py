@@ -77,6 +77,13 @@ UV_COVERAGE_MIN = 0.90   # A6 UV 覆盖下限
 TILE_TARGETS = {
     'FACADE_TILE': ('facade_tiles', 'facade_tiles'),
     'ROOF_TILE': ('roofs', 'roofs'),
+    # 批次 38 R6：streets 一族（road_* 为整幅断面贴图，周期 = 路幅；
+    # sidewalk_* 为人行道方砖，周期 2.5 m）。crosswalk / stopline / arrow_straight
+    # 为线段精灵图，无平铺周期语义，**不登记**（A2/A5 只看登记的 stems）。
+    # 第三元 = 该登记条目覆盖的文件 stem 白名单（目录异构时必需，缺省 = 全目录）。
+    'STREET_MAIN_TILE': ('streets', 'streets', ('road_main', 'asphalt_main')),
+    'STREET_SIDE_TILE': ('streets', 'streets', ('road_side', 'asphalt_side')),
+    'SIDEWALK_TILE': ('streets', 'streets', ('sidewalk_main', 'sidewalk_side')),
 }
 
 # A4 派生后缀
@@ -89,7 +96,7 @@ A3_FAIL_TILES = ('facade_tiles',)
 A3_ADVISORY_GLOBS = ('roofs/*.png', 'ground/*_tile.png')
 
 # color_dir -> pbr 子目录（TILE_TARGETS 的反向视图，避免第二份映射表）
-COLOR_DIR_TO_PBR = {c: p for c, p in TILE_TARGETS.values()}
+COLOR_DIR_TO_PBR = {t[0]: t[1] for t in TILE_TARGETS.values()}
 
 # 登记表里必须凑齐的四个字段
 NUM_FIELDS = ('texW', 'texH', 'tileMetersU', 'tileMetersV')
@@ -161,6 +168,20 @@ TILE_BLOCK_RE = re.compile(
 )
 
 
+def _target_stems(target):
+    """TILE_TARGETS 条目的 stem 白名单（第三元，可选）。"""
+    return target[2] if len(target) > 2 else None
+
+
+def _target_pngs(sub, target):
+    """目录内属于该登记条目的 PNG（有 stems 白名单时按 stem 过滤）。"""
+    files = sorted(glob.glob(os.path.join(IMAGES_DIR, sub, '*.png')))
+    stems = _target_stems(target)
+    if stems is None:
+        return files
+    return [p for p in files if os.path.splitext(os.path.basename(p))[0] in stems]
+
+
 def parse_registry(path):
     """解析 texScale.ts 里的 `export const XXX: TextureTile = { texW: .., ... }`。
 
@@ -222,7 +243,7 @@ def judge_a1_a2(table, reg_err):
             continue
         for sub in TILE_TARGETS[name][0:1]:
             d = os.path.join(IMAGES_DIR, sub)
-            files = sorted(glob.glob(os.path.join(d, '*.png')))
+            files = _target_pngs(sub, TILE_TARGETS[name])
             if not files:
                 res['A2']['items'].append({'name': name, 'dir': sub, 'files': 0, 'mismatch': 0})
                 res['A2']['problems'].append('%s 声明的目录无 PNG: %s/' % (name, sub))
@@ -365,8 +386,9 @@ def judge_a5(table, reg_err):
     for name, v in sorted(table.items()):
         if any(f not in v for f in NUM_FIELDS) or name not in TILE_TARGETS:
             continue
-        color_dir, pbr_dir = TILE_TARGETS[name]
-        for p in sorted(glob.glob(os.path.join(IMAGES_DIR, color_dir, '*.png'))):
+        target = TILE_TARGETS[name]
+        color_dir, pbr_dir = target[0], target[1]
+        for p in _target_pngs(color_dir, target):
             record(p, v, name)
         # 派生图：仅当**配对颜色图本身就是平铺贴图**才适用同一物理周期。
         # 配对规则与 A4 严格一致：pbr/<cat>/<stem>{_n,_r}.png <-> <cat>/<stem>.png，

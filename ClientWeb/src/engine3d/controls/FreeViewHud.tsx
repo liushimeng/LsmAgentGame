@@ -38,6 +38,11 @@ export interface FreeViewLabels {
   colliding: string;
   /** 键位帮助表：`[按键, 说明]`。 */
   shortcuts: Array<[string, string]>;
+  /**
+   * 帮助面板底部的常驻提示行（批次 38 R5 选中可发现性）；缺省英文。
+   * 不新增弹窗，只补一行文字（避免遮挡画面）。
+   */
+  hint?: string;
 }
 
 const DEFAULT_LABELS: FreeViewLabels = {
@@ -56,6 +61,8 @@ const DEFAULT_LABELS: FreeViewLabels = {
     ['[ / ]', 'Speed step down / up'],
     ['H', 'This panel'],
   ],
+  // 批次 38 R5：选中可发现性常驻提示（调用方按 i18n 覆盖三语）
+  hint: 'Left-click any object in the city (buildings / roads / trees / vehicles / bridges) to view details. Drag to rotate, scroll to zoom.',
 };
 
 const MODE_ORDER: FreeViewMode[] = ['orbit', 'fly'];
@@ -132,17 +139,21 @@ export function FreeViewHud({ labels, allowedModes }: FreeViewHudProps) {
       {helpOpen && (
         // 列优先双列布局：12 条键位若单列会长到 ~250px，顶边会撞上左上角小地图
         // （z-index 40 > HUD 32）而被裁掉前两行。切成两列后面板高度腰斩。
-        <dl
-          className="freeview-hud__help"
-          style={{ ['--fv-help-rows' as string]: Math.ceil(L.shortcuts.length / 2) }}
-        >
-          {L.shortcuts.map(([k, d]) => (
-            <div className="freeview-hud__help-row" key={k}>
-              <dt><kbd>{k}</kbd></dt>
-              <dd>{d}</dd>
-            </div>
-          ))}
-        </dl>
+        <>
+          <dl
+            className="freeview-hud__help"
+            style={{ ['--fv-help-rows' as string]: Math.ceil(L.shortcuts.length / 2) }}
+          >
+            {L.shortcuts.map(([k, d]) => (
+              <div className="freeview-hud__help-row" key={k}>
+                <dt><kbd>{k}</kbd></dt>
+                <dd>{d}</dd>
+              </div>
+            ))}
+          </dl>
+          {/* 批次 38 R5：选中可发现性常驻提示（一行文字，不新增弹窗） */}
+          {L.hint && <p className="freeview-hud__hint">{L.hint}</p>}
+        </>
       )}
     </div>
   );

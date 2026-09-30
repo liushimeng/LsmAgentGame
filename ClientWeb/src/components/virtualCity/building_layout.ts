@@ -19,6 +19,7 @@
  */
 
 import type { VirtualCityDistrictDef } from '@/types/virtualCity';
+import { isBuildable, mainRoadCorridors } from './cityObstacles';
 
 export interface BuildingSpec {
   /** 相对区中心偏移（x, z）。 */
@@ -60,23 +61,47 @@ const EDGE_CENTER = 2.85;
 const SLOTS_PER_SIDE = 4;
 /** 槽位沿边跨度半宽（槽位 x/z ∈ ±2.7，间距 1.8）。 */
 const SLOT_SPAN = 2.7;
+/** 建筑退让路廊/水域的余量（批次 38 R2，世界单位 0.25 = 2.5 m）。 */
+const KEEP_OUT_MARGIN = 0.25;
+/** 兜底放宽后的余量（§4.2：某区 keep-out 误伤过狠时重算一轮）。 */
+const KEEP_OUT_MARGIN_RELAXED = 0.1;
+/** 普通城区保底楼数（低于此触发兜底 + dev 告警，禁止静默降级）。 */
+const MIN_BUILDINGS = 4;
+
+/**
+ * 楼体是否可放（批次 38 R2 路廊退让）：中心点判 `isBuildable`，margin 取
+ * 「退让余量 + 外接圆半径 max(w,d)*0.5」（轴对齐盒 vs 路廊线段的精确相交更准，
+ * 但中心+外接圆已拦住用户主诉的穿楼，零新增几何代码）。
+ *
+ * 路廊只取 **main 级**（arterial / edgeLink）+ 一环 + 水域：connector 走街区
+ * 庭院、街墙楼在底板边缘天然不重叠，纳入外接圆判定会误杀全区楼
+ * （见 cityObstacles.mainRoadCorridors 注释）。
+ */
+function slotBuildable(def: VirtualCityDistrictDef, spec: BuildingSpec, margin: number): boolean {
+  const reach = margin + Math.max(spec.w, spec.d) * 0.5;
+  return isBuildable(def.x + spec.x, def.z + spec.z, reach, mainRoadCorridors());
+}
 
 /**
  * 楼群布局（seed = district id；仅高度随行情缩放，布局与 price_index 无关）。
  * 普通城区 8–14 栋街墙；中央公园 2–4 栋 pavilion（绿化由 StreetPropsLayer 树群承担）。
+ *
+ * 批次 38 R2：候选楼位（含 jitter 之后）判 `isBuildable`，不通过则**丢弃该槽位、
+ * 不递补**（保持确定性与楼层高度可预测；空位 = 真实世界路口/环路旁的空地）。
+ * 兜底：普通城区产出 < 4 栋时放宽 margin 重算一轮，仍不足则保留结果 + console.warn。
  */
 export function buildingsFor(def: VirtualCityDistrictDef): BuildingSpec[] {
   const rnd = mulberry32(hashStr(def.id));
   const isPark = def.id === 'central_park';
   const count = isPark ? 2 + Math.floor(rnd() * 3) : 8 + Math.floor(rnd() * 7);
-  const out: BuildingSpec[] = [];
+  const candidates: BuildingSpec[] = [];
 
   if (isPark) {
     // 公园景观小品：中心附近散布（半径 0.6~2.2），尺度小
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + rnd() * 0.8;
       const radius = 0.6 + rnd() * 1.6;
-      out.push({
+      candidates.push({
         x: Math.cos(angle) * radius,
         z: Math.sin(angle) * radius,
         w: 1.0 + rnd() * 0.8,
@@ -85,7 +110,7 @@ export function buildingsFor(def: VirtualCityDistrictDef): BuildingSpec[] {
         idx: i,
       });
     }
-    return out;
+    return candidates.filter((s) => slotBuildable(def, s, KEEP_OUT_MARGIN));
   }
 
   // 街墙：4 边 × 4 槽，确定性去尾抽 count 个（保留槽位顺序环绕）
@@ -108,7 +133,7 @@ export function buildingsFor(def: VirtualCityDistrictDef): BuildingSpec[] {
   for (const [pi, { slot }] of picked.entries()) {
     // 沿边方向 = w（1.5~1.9，保证 hasBillboard/useSaw 分支全区一致）；进深 = d
     const jitter = (rnd() - 0.5) * 0.3;
-    out.push({
+    candidates.push({
       x: slot.x + (slot.faceX ? jitter : 0),
       z: slot.z + (slot.faceX ? 0 : jitter),
       w: 1.5 + rnd() * 0.4,
@@ -116,6 +141,22 @@ export function buildingsFor(def: VirtualCityDistrictDef): BuildingSpec[] {
       factor: 0.6 + rnd() * 0.4,
       idx: pi,
     });
+  }
+
+  // 批次 38 R2：路廊/水域/一环 keep-out（丢弃不递补）
+  let out = candidates.filter((s) => slotBuildable(def, s, KEEP_OUT_MARGIN));
+  if (out.length < MIN_BUILDINGS) {
+    // 兜底：放宽 margin 重算一轮（只放宽判定，不重掷 rnd —— 布局确定性不变）
+    const relaxed = candidates.filter((s) => slotBuildable(def, s, KEEP_OUT_MARGIN_RELAXED));
+    if (relaxed.length > out.length) out = relaxed;
+    if (out.length < MIN_BUILDINGS) {
+      // §5.3 禁止静默降级：keep-out 误伤导致楼数骤降必须 dev 告警
+      console.warn(
+        `[cityObstacles] buildingsFor(${def.id}) keep-out 后仅 ${out.length} 栋 < ${MIN_BUILDINGS}：` +
+        `候选 ${candidates.length} 栋中多数落入路廊/水域/一环带域（margin ${KEEP_OUT_MARGIN}→${KEEP_OUT_MARGIN_RELAXED} 仍不足），` +
+        '保留当前结果不递补。',
+      );
+    }
   }
   return out;
 }

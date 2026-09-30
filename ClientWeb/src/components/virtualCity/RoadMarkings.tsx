@@ -30,6 +30,7 @@ import { streetTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/virtua
 import { useSharedTexture, useSharedPBR, withPBR, mergeParts, type MergePart } from '@/engine3d';
 import { ROAD_SURFACE_Y } from './cityScale';
 import { ROAD_WIDTH_MAIN, ROAD_WIDTH_SIDE } from './Road';
+import { segIntersectsWater } from './cityObstacles';
 import type { RoadSegment } from './roadNetwork';
 
 // ── 布局常量（旧 Road.tsx 同源逐字搬迁）────────────────────────────
@@ -113,6 +114,10 @@ export function RoadMarkings({ segments }: Props) {
       const dz = seg.to[1] - seg.from[1];
       const len = Math.sqrt(dx * dx + dz * dz);
       const roadWidth = seg.kind === 'main' ? ROAD_WIDTH_MAIN : ROAD_WIDTH_SIDE;
+
+      // 批次 38 R3/§4.3：与水域矩形相交的路段**整段跳过**人行道/斑马线/停止线
+      // 铺装（桥面自身标线由 CanalBridge 承担，不在此列）。
+      if (segIntersectsWater(seg.from, seg.to, 0)) continue;
 
       // ② 双端斑马线（全部线段）
       for (const t of CROSSWALK_T) {

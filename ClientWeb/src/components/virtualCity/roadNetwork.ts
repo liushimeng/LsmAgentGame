@@ -51,8 +51,9 @@ export const CONNECTOR_CAP = 36;
  *  穿金融 CBD 底板（半宽 4.05）的路与建筑 3D 模型重叠（2026-09-28 用户反馈）。 */
 export const CONNECTOR_CBD_KEEP_OUT = 5.0;
 
-/** 点 (px,pz) 到线段 a→b 的最短距离。 */
-function pointSegDist(px: number, pz: number, a: [number, number], b: [number, number]): number {
+/** 点 (px,pz) 到线段 a→b 的最短距离（批次 38：去私有化导出，cityObstacles 复用本实现，
+ *  禁止复制第二份 —— 布局互知唯一入口 `cityObstacles.ts` 的 keep-out 判定同源）。 */
+export function pointSegDist(px: number, pz: number, a: [number, number], b: [number, number]): number {
   const dx = b[0] - a[0];
   const dz = b[1] - a[1];
   const A = dx * dx + dz * dz;

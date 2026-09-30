@@ -89,6 +89,11 @@ export const MODEL_NAMES = {
   // props/StreetLightsInstanced.tsx 程序化实例化。重生为逐灯命名节点后再注册。
   // 批次 31：road_props.glb 文件已删除（设计 31 §4.2 资产清理），本清单维持空。
   // trash_can.glb 不在本清单（MODEL_NAMES 仅文档/类型用，glob 才是取 URL 的事实来源）。
-  road: [] as const,
+  //
+  // 批次 38 R3 · §4.7(b)：运河水系三件套（art-designer 产出；
+  // `3d_script/build_canal_bank.py` / `build_canal_reed.py` / `build_bridge_rail.py`）。
+  // 消费方：civic/CanalExtras（驳岸/芦苇）+ CanalBridge（桥栏杆），一律包
+  // `<Model url={...}>{程序化 fallback}</Model>`（CLAUDE.md §27.3 硬约束 3）。
+  road: ['canal_bank', 'canal_reed', 'bridge_rail'] as const,
   ocean: ['lighthouse', 'cargo_ship', 'sailboat'] as const,
 } as const;

@@ -45,12 +45,25 @@ export const ROAD_SURFACE_Y = 0.015;
 export const VEHICLE_GROUND_Y = ROAD_SURFACE_Y + 0.005;
 
 /**
- * 地块表面标高（世界单位）= DistrictBlock 底板顶面（y=0.02）。
+ * 地块表面标高（世界单位）= DistrictBlock 底板顶面。
  * 批次 30 P0-6「落地基准三源统一」：站在**地块**上的物件（行人 / 街具）以此为
  * 落位 y；路面系物件用 ROAD_SURFACE_Y / VEHICLE_GROUND_Y，人行道用
  * SIDEWALK_Y（Road.tsx = ROAD_SURFACE_Y + 0.012）。禁止再出现第四个 0/0.02/0.035。
+ *
+ * 批次 38 §4.6 标高修复：0.02 → **0.010**（低于路面 0.015），把分层关系从
+ * 「板盖路」翻成「路在板上」—— 街区内部道路不再被区底板吞没。视觉等价于
+ * DistrictBlock 几何开口，但零几何重构（方案降级方案优先）。
  */
-export const DISTRICT_SURFACE_Y = 0.02;
+export const DISTRICT_SURFACE_Y = 0.010;
+
+/**
+ * 主干道路面宽（世界单位 1.4u = 14m）。批次 38：从 Road.tsx 上移到本模块
+ * （cityObstacles 路廊半宽与 Road 同源，避免 tsx↔ts 循环 import 踩 TDZ）。
+ * Road.tsx 仍 re-export 保持既有 `import { ROAD_WIDTH_MAIN } from './Road'` 零回归。
+ */
+export const ROAD_WIDTH_MAIN = 1.4;
+/** 次干道路面宽（0.9u = 9m；同上）。 */
+export const ROAD_WIDTH_SIDE = 0.9;
 
 /**
  * 真实米制尺寸表（单位 = 米）—— **虚拟城市 3D 物件尺寸的唯一事实来源**。

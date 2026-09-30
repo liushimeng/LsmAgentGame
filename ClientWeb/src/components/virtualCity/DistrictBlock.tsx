@@ -29,7 +29,7 @@ import { districtTexture, districtTextureStem, groundTileUrl, pbrNormalUrl, pbrR
 import { buildingsFor } from './building_layout';
 import { DistrictBuildings } from './DistrictBuildings';
 import { mergeBoxes, type BoxSpec } from './building_shapes';
-import { DISTRICT_FLOORS, buildingHeight, prosperityOf, u } from './cityScale';
+import { DISTRICT_FLOORS, DISTRICT_SURFACE_Y, buildingHeight, prosperityOf, u } from './cityScale';
 import { useSharedPBR, useSharedTexture, withPBR } from '@/engine3d';
 import { currentSeason, subscribeSeason } from './cityTimeStore';
 import type { CitySeason } from './cityTimeStore';
@@ -163,8 +163,10 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
       onPointerOut={handleOut}
       onClick={info.onClick}
     >
-      {/* 底板 8×8（纹理缺失降级主色） */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} receiveShadow>
+      {/* 底板 8×8（纹理缺失降级主色）。
+          批次 38 §4.6：y 0.02 → DISTRICT_SURFACE_Y(0.010)，低于路面 0.015 ⇒
+          「路在板上」—— 街区内部道路不再被底板吞没（降级方案优先，零几何开口）。 */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, DISTRICT_SURFACE_Y, 0]} receiveShadow>
         <planeGeometry args={[8, 8]} />
         {texture ? (
           <meshStandardMaterial {...withPBR({ map: texture, roughness: 0.9 }, boardPbr)} />

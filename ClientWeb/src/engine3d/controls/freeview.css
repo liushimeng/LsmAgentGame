@@ -189,6 +189,20 @@
   font-size: 11px;
 }
 
+/* 批次 38 R5：选中可发现性提示行（帮助面板底部常驻一行；不新增弹窗） */
+.freeview-hud__hint {
+  margin: 6px 0 0;
+  padding: 6px 11px;
+  border-radius: 9px;
+  background: rgba(10, 14, 20, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #c9d5e1;
+  font-size: 11px;
+  line-height: 1.5;
+  max-width: 340px;
+  pointer-events: none;
+}
+
 /* 动效可访问性兜底（CLAUDE.md §26.3 + WCAG 2.3.3） */
 @media (prefers-reduced-motion: reduce) {
   .freeview-hud__help { animation: none; }

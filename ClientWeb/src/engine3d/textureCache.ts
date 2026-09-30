@@ -207,6 +207,10 @@ export function useSharedPBR(
 
 /**
  * 统一材质规则（withPBR）：
+ *   - **pbr 提供缺省，base 可覆盖**（批次 38 R6 P0 修复：原 `{...rest, ...mp}`
+ *     让 `mp.map` 覆盖 `base.map`，导致 road_main/road_side 烘焙标线永远不上屏）；
+ *   - base 中 `undefined` 值**不算显式覆盖**（`{ map: tex ?? undefined }` 的惯用写法
+ *     在 tex 缺失时应回落 pbr 的缺省 map，而不是把 map 清掉）；
  *   - 有 roughnessMap 时不传 roughness（由贴图全权决定；three 用 roughnessMap.g × 1.0）。
  *   - 无 roughnessMap 时保留 base.roughness 硬编码值。
  * 贴图 map/normalMap 缺失时 matProps 自动不含对应键。
@@ -221,7 +225,13 @@ export function withPBR(
   const mp = pbr.matProps;
   if (!mp.map && !mp.normalMap && !mp.roughnessMap) return base;
   const { roughness: _omitRoughness, ...rest } = base;
-  const merged: Record<string, unknown> = { ...rest, ...mp };
+  // 只收集显式（非 undefined）的 base 键 —— 调用方传入的 map 优先，pbr 只补缺
+  const overrides: Record<string, unknown> = {};
+  for (const key of Object.keys(rest)) {
+    const v = rest[key];
+    if (v !== undefined) overrides[key] = v;
+  }
+  const merged: Record<string, unknown> = { ...mp, ...overrides };
   if (!mp.roughnessMap) merged.roughness = base.roughness;
   return merged;
 }

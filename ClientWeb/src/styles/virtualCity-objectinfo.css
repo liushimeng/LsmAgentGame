@@ -96,6 +96,51 @@
   word-break: break-all;
 }
 
+/* 批次 38 R1：详情卡正文显式可选中（不依赖浏览器默认；拖选不被画布抢手势，
+   事件隔离在卡片根节点 onPointerDown/onMouseDown/onSelectStart） */
+.virtualCity-objectinfo-card__body--selectable {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+/* 批次 38 R1：复制按钮（与关闭按钮并列；1.2s「已复制」回弹） */
+.virtualCity-objectinfo-card__copy {
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #e8eef5;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.virtualCity-objectinfo-card__copy:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.virtualCity-objectinfo-card__copy:focus-visible {
+  outline: 2px solid #9fd0ff;
+  outline-offset: 1px;
+}
+
+/* aria-live 提示（读屏用；视觉零占位） */
+.virtualCity-objectinfo-card__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.virtualCity-objectinfo-card--detail {
+  position: relative;
+}
+
 .virtualCity-objectinfo-card__close {
   flex: none;
   width: 22px;

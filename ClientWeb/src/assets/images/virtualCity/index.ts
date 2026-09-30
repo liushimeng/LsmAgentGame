@@ -250,7 +250,11 @@ export type GroundTileName =
   | 'ocean_tile'
   | 'grass_spring_tile'
   | 'grass_autumn_tile'
-  | 'snow_cover_tile';
+  | 'snow_cover_tile'
+  // 批次 38 R3 · §4.7(a)：运河水面 / 河床（art-agent 产出；缺失返回 '' 时
+  // WaterPlane 自动回落 water_tile —— 既有降级链兜住）。
+  | 'canal_tile'
+  | 'canal_bed';
 
 /**
  * 地表环境贴图 URL（缺失 = ''，组件回退纯色：grass #3f7a3a / plaza #9aa1ab / water #1a3a52）。

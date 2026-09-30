@@ -22,6 +22,7 @@ import { streetTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/virtua
 import { useSharedTexture, useSharedPBR, withPBR, mergeParts, type MergePart } from '@/engine3d';
 import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 import { ROAD_SURFACE_Y } from './cityScale';
+import { segCrossesCanal } from './cityObstacles';
 import {
   FIRST_RING_RADIUS,
   FIRST_RING_WIDTH,
@@ -86,6 +87,13 @@ export function FirstRingRoad({ junctionAngles, fallbackColor = '#232b38' }: Pro
       const theta = ((i + 0.5) / FIRST_RING_SEGMENTS) * Math.PI * 2;
       const cx = Math.cos(theta) * FIRST_RING_RADIUS;
       const cz = Math.sin(theta) * FIRST_RING_RADIUS;
+      // 批次 38 §4.6：**真过河**段不渲染路面（由 canalBridgeSpots 的桥面承载，
+      // 视觉「桥就是路的延续」；否则一环路过河处整段沉入水面下）
+      const a0 = (i / FIRST_RING_SEGMENTS) * Math.PI * 2;
+      const a1 = ((i + 1) / FIRST_RING_SEGMENTS) * Math.PI * 2;
+      const p0: [number, number] = [Math.cos(a0) * FIRST_RING_RADIUS, Math.sin(a0) * FIRST_RING_RADIUS];
+      const p1: [number, number] = [Math.cos(a1) * FIRST_RING_RADIUS, Math.sin(a1) * FIRST_RING_RADIUS];
+      if (segCrossesCanal(p0, p1)) continue;
       pavements.push({
         geo: uTiledPlane(FIRST_RING_WIDTH, segLen, 3),
         matrix: segMatrix(cx, cz, ringY, theta),

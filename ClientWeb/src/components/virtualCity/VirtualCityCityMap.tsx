@@ -71,6 +71,7 @@
  */
 
 import { memo, useMemo, useRef } from 'react';
+import { useI18nStore } from '@/store/i18n.store';
 import {
   EngineCanvas,
   useSharedTexture,
@@ -119,6 +120,7 @@ import { RingRoad } from './RingRoad';
 import { FirstRingRoad } from './FirstRingRoad';
 import { RoadMarkings } from './RoadMarkings';
 import { buildRoadNetwork } from './roadNetwork';
+import { CANAL_Z, CANAL_HALF_X, installRoadCorridors } from './cityObstacles';
 import { CanalBridges } from './CanalBridge';
 import { LandmarksLayer } from './LandmarksLayer';
 import { CloudLayer } from './props/CloudLayer';
@@ -157,6 +159,13 @@ export const GROUND_REPEAT = WORLD_GROUND_SIZE / GROUND_TILE;
  *  批次 20（文档 1 §3.2）：原写死 12 → 派生 WORLD_SIZE*0.15（80→12 / 120→18），
  *  防止 32 区 100% 主干道化导致道具超线性爆炸。 */
 export const MAIN_ROAD_MIN_LEN = WORLD_SIZE * 0.15;
+
+/** 批次 38 R5 · §4.9：选中可发现性提示（FreeViewHud 帮助面板底部一行，三语）。 */
+const SELECT_HINT: Record<string, string> = {
+  'zh-CN': '左键点击城市中的任意物体（建筑 / 道路 / 树木 / 车辆 / 桥梁）可查看详情；拖动旋转视角，滚轮缩放。',
+  en: 'Left-click any object in the city (buildings / roads / trees / vehicles / bridges) to view details. Drag to rotate, scroll to zoom.',
+  ja: '街中の任意のオブジェクト（建物 / 道路 / 樹木 / 車両 / 橋）を左クリックで詳細を表示。ドラッグで回転、ホイールでズーム。',
+};
 /** 远景雾化近/远平面。批次 20（文档 1 §3.1）：批次 11 已证「不可等比外推」，
  *  按 80 时代绝对观感（100/200）近似保留 → 1.0×W / 2.0×W（=120 / 240），截图验收定稿。 */
 export const FOG_NEAR = WORLD_SIZE * 1.0;
@@ -256,6 +265,8 @@ function Ground() {
  * 主干道 vs 次干道按 kind 字段（批次 20 §3.2 派生阈值在 buildRoadNetwork 内应用）。
  */
 const ROAD_NETWORK = buildRoadNetwork(VIRTUAL_CITY_DISTRICTS, MAIN_ROAD_MIN_LEN);
+// 批次 38 §4.1：路廊表注入 cityObstacles（建筑/街具/桥 keep-out 唯一入口）
+installRoadCorridors(ROAD_NETWORK);
 
 function RoadsLayer() {
   const { lamps, signals, bins } = useMemo(() => {
@@ -302,10 +313,8 @@ function RoadsLayer() {
   );
 }
 
-/** 运河中心 z（与 CanalBridge 契约一致）。 */
-export const CANAL_Z = 17;
-/** 运河 x 半跨（水面横贯 x ∈ [-CANAL_HALF_X, CANAL_HALF_X]）。 */
-export const CANAL_HALF_X = 48;
+/** 运河常量（批次 38：唯一事实来源迁至 cityObstacles.ts，此处 re-export 保持零回归）。 */
+export { CANAL_Z, CANAL_HALF_X };
 
 /**
  * 水系层（14-3D城市渲染深化 · 阶段 I + 15-3D城市全面真实感深化 · 阶段 P）：
@@ -387,6 +396,8 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
 }: Props) {
   /** FreeViewControls 在 orbit 模式下填充的聚焦点（TargetLike 形状）。 */
   const controlsRef = useRef<TargetLike | null>(null);
+  // 批次 38 R5：帮助面板「点击可查看详情」提示三语（跟 useI18nStore.lang）
+  const lang = useI18nStore((s) => s.lang);
   const { players, byDistrict, counts } = useMemo(() => tokenLayout(gameState), [gameState]);
   const mySeat = gameState?.my_seat ?? -1;
   // 批次 23：座位居民语音气泡（useVirtualCitySpeech 写入；key = seat）。
@@ -498,7 +509,7 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
         <group userData={{ bucket: 'roads' }}>
           <RoadsLayer />
           <RingRoad junctionAngles={ROAD_NETWORK.cbdRingJunctionAngles} />
-          <CanalBridges />
+          <CanalBridges net={ROAD_NETWORK} />
         </group>
         {/* P1-C：街道道具层（树 / 车辆 / 行人 / 标识 / 屋顶杂物）；
             v2.12 阶段 2：districts 由父层注入（props 化，适配 16 城区） */}
@@ -587,6 +598,8 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
           tiers: ['1 倍', '2 倍', '4 倍', '8 倍', '16 倍'],
           clear: '视野畅通',
           colliding: '被场景阻挡',
+          // 批次 38 R5：选中可发现性（§4.9 三语；不新增弹窗，只补一行提示）
+          hint: SELECT_HINT[lang] ?? SELECT_HINT['zh-CN'],
           shortcuts: [
             ['V / F', '俯瞰 ⇄ 自由 往返'],
             ['1 / 2', '直达 俯瞰归零点 / 自由飞行'],

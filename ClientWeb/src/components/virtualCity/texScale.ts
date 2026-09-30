@@ -77,6 +77,43 @@ export const ROOF_TILE: TextureTile = {
   texW: 512, texH: 512, tileMetersU: 10, tileMetersV: 10,
 };
 
+// ── streets 一族（批次 38 R6 · 方案 §4.5(c)）──────────────────────────────
+// 语义与立面/屋顶不同：`road_main/road_side` 是**整幅断面**贴图（中心黄虚线 +
+// 白边线烘焙在 U 方向路幅内），周期 U = 一整个路幅、周期 V = 同值
+// （Road.tsx UV 按 `len/roadWidth` 连续烘焙，repeat 恒 [1,1]）。
+// 磁盘实测（2026-09-30）：road_main/asphalt_main 已升 1024²（73.1 px/m 入带）。
+// ⚠ **已知出带、待后批次**（登记值以磁盘为准，不是漏登记）：
+//   - STREET_SIDE_TILE 512² @ 9 m = 56.9 px/m（略低于 60 下限）
+//   - SIDEWALK_TILE    512² @ 2.5 m = 204.8 px/m（高于 120 上限）
+//   断面标线的 U 周期被路幅锁死（缩小周期会让边线画到路中间），
+//   入带只能靠 art 侧重生成升分辨率。审计 A5 对本族记 WARN 不判 FAIL。
+
+/**
+ * 主干道路面断面周期（`streets/road_main.png` + `streets/asphalt_main.png` 派生对）。
+ * 物理周期 14 m x 14 m = ROAD_WIDTH_MAIN(1.4u) 一整个路幅（不变式 1024/1024 = 14/14）。
+ * 像素 1024x1024：art-agent 批次 38 由 512² 升档（磁盘实测 2026-09-30），
+ * 纹素密度 73.1 px/m 落入 60–120 标称带。
+ */
+export const STREET_MAIN_TILE: TextureTile = {
+  texW: 1024, texH: 1024, tileMetersU: 14, tileMetersV: 14,
+};
+
+/**
+ * 次干道路面断面周期（`streets/road_side.png` + `streets/asphalt_side.png`）。
+ * 物理周期 9 m x 9 m = ROAD_WIDTH_SIDE(0.9u) 一整个路幅。
+ */
+export const STREET_SIDE_TILE: TextureTile = {
+  texW: 512, texH: 512, tileMetersU: 9, tileMetersV: 9,
+};
+
+/**
+ * 人行道砖纹周期（`streets/sidewalk_{main,side}.png`）。
+ * 物理周期 2.5 m x 2.5 m（RoadMarkings.SIDEWALK_TILE = 0.25u）。
+ */
+export const SIDEWALK_TILE: TextureTile = {
+  texW: 512, texH: 512, tileMetersU: 2.5, tileMetersV: 2.5,
+};
+
 /**
  * 校验贴图周期登记的自洽性（方案 §2.1 不变式；判据 A1）。
  * @throws {Error} 尺寸非正有限数、或「物理周期比 ≠ 像素宽高比」时抛出 ——

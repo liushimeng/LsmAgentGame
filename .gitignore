@@ -104,3 +104,5 @@ go-web-debug-tool/GoWebDebugTool
 # render_preview.py 预览图（一次性质检产物，不入库）
 3d_script/preview/
 3d_script/*.preview.png
+# 建模过程中的临时质检图（`__<name>check_*.png` 等，批次 38 起拦截，§27.3「量测与预览产物不入库」）
+3d_script/__*.png

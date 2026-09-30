@@ -18,7 +18,7 @@
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
-import { groundTileUrl, pbrNormalUrl } from '@/assets/images/virtualCity';
+import { groundTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/virtualCity';
 import { useSharedPBR } from '@/engine3d';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
 
@@ -51,14 +51,23 @@ interface Props {
 
 export function WaterPlane({ x, z, w, d, rotation = 0, infoId = 'water.canal' }: Props) {
   const info = useObjectInfoProps(infoId, { anchorY: 0.4 });
-  // 18-X PBR：颜色贴图 + 法线（synth/water 无粗糙度图）。wrap/repeat 共用。
+  // 批次 38 R3 · §4.7(a)：优先 canal_tile（含流向条纹/深度渐变）+ 法线/粗糙度对；
+  // 文件未到位时回落既有 water_tile / synth.water —— groundTileUrl/pbr*Url 缺文件
+  // 返回 ''，useSharedPBR 对空 URL 不发起请求，降级链零代码分支。
+  const canalColor = groundTileUrl('canal_tile');
+  const colorUrl = canalColor || groundTileUrl('water_tile');
+  const normalUrl = pbrNormalUrl('ground', 'canal_tile') || pbrNormalUrl('synth', 'water');
+  const roughUrl = pbrRoughUrl('ground', 'canal_tile') || '';
+  // 物理周期：canal_tile 12 m（85 px/m，§4.7）；water_tile 兜底保持旧 20 m 口径。
+  const tileU = canalColor ? 1.2 : 2;
+  // 18-X PBR：颜色贴图 + 法线。wrap/repeat 共用。
   const shared = useSharedPBR(
-    groundTileUrl('water_tile'),
-    pbrNormalUrl('synth', 'water'),
-    '',
+    colorUrl,
+    normalUrl,
+    roughUrl,
     {
       wrap: 'repeat',
-      repeat: [Math.max(1, Math.round(w / 2)), Math.max(1, Math.round(d / 2))],
+      repeat: [Math.max(1, w / tileU), Math.max(1, d / tileU)],
       normalScale: [0.35, 0.35],
     },
   );
