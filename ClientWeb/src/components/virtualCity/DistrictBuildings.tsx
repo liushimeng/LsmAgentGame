@@ -27,6 +27,8 @@ import { useFrame } from '@react-three/fiber';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import {
+  facadeTilePbrUrl,
+  facadeTileUrl,
   districtFacadeUrl,
   districtRoofUrl,
   districtTextureStem,
@@ -46,6 +48,7 @@ import {
   type BuildingArchetype,
   type WallCtx,
   type WallMatSpec,
+  warnFacadeDegradeOnce,
 } from './building_shapes';
 import type { BuildingSpec } from './building_layout';
 import {
@@ -118,27 +121,57 @@ interface Props {
 // 批次 28 A1 memo 约定延续：specs（useMemo 布局）/ def（常量表）/ prosperity（原语）稳定。
 export const DistrictBuildings = memo(function DistrictBuildings({ specs, def, prosperity }: Props) {
   // 18-X PBR 三件套 + 立面/屋顶贴图（原 BuildingMesh 同款；stem 拼接只在本文件发生）。
+  //
+  // 批次 37 P1 · 立面贴图三级降级链（任一级缺失都只影响该级、不产生新变形）：
+  //   1) facade_tiles/<stem>_{base,mid}.png 存在 → 物理尺寸 UV + wrap:'repeat'（零变形）；
+  //   2) 回落 facades/<stem>_{base,mid}.png（整栋立面图）→ 沿用 0..1 UV
+  //      （批次 37 §1.3 的 D1 变形仍在，但这是**已知且被记录**的降级态，并 dev 告警一次）；
+  //   3) 颜色图也缺失 → 纯色 fallbackColor（零回归）。
+  // 开关 `facadeTiles` 同时统辖几何 UV（wallBox）与贴图包裹（wrap），二者必须同源切换。
   const stem = districtTextureStem(def.id);
-  const facadeBaseTex = useSharedTexture(districtFacadeUrl(stem, 'base'));
-  const facadeMidTex = useSharedTexture(districtFacadeUrl(stem, 'mid'));
-  const roofTex = useSharedTexture(districtRoofUrl(stem));
+  // 开间贴图按**材质族**出图（16 族复用 32 城区），故传原始城区 id def.id ——
+  // 若先经 districtTextureStem 别名（旧 16 区→新区的复用表）会把 mountain_resort
+  // 提前改写成 suburb，丢掉 resort_wood 的材质族归属。映射见 FACADE_TILE_STEM。
+  const tileBaseUrl = facadeTileUrl(def.id, 'base');
+  const tileMidUrl = facadeTileUrl(def.id, 'mid');
+  const legacyBaseUrl = districtFacadeUrl(stem, 'base');
+  const legacyMidUrl = districtFacadeUrl(stem, 'mid');
+  const facadeTiles = tileBaseUrl !== '' && tileMidUrl !== '';
+  // 降级态 2 告警（dev-only，每 stem×variant 一次）。
+  useEffect(() => {
+    if (facadeTiles) return;
+    warnFacadeDegradeOnce(stem, 'base', legacyBaseUrl);
+    warnFacadeDegradeOnce(stem, 'mid', legacyMidUrl);
+  }, [facadeTiles, stem, legacyBaseUrl, legacyMidUrl]);
+
+  const facadePbrOpts = facadeTiles
+    ? { wrap: 'repeat' as const, normalScale: [0.8, 0.8] as [number, number] }
+    : { normalScale: [0.8, 0.8] as [number, number] };
   const pbrBase = useSharedPBR(
-    districtFacadeUrl(stem, 'base'),
-    pbrNormalUrl('facades', `${stem}_base`),
-    pbrRoughUrl('facades', `${stem}_base`),
-    { normalScale: [0.8, 0.8] },
+    facadeTiles ? tileBaseUrl : legacyBaseUrl,
+    facadeTiles ? facadeTilePbrUrl('n', def.id, 'base') : pbrNormalUrl('facades', `${stem}_base`),
+    facadeTiles ? facadeTilePbrUrl('r', def.id, 'base') : pbrRoughUrl('facades', `${stem}_base`),
+    facadePbrOpts,
   );
   const pbrMid = useSharedPBR(
-    districtFacadeUrl(stem, 'mid'),
-    pbrNormalUrl('facades', `${stem}_mid`),
-    pbrRoughUrl('facades', `${stem}_mid`),
-    { normalScale: [0.8, 0.8] },
+    facadeTiles ? tileMidUrl : legacyMidUrl,
+    facadeTiles ? facadeTilePbrUrl('n', def.id, 'mid') : pbrNormalUrl('facades', `${stem}_mid`),
+    facadeTiles ? facadeTilePbrUrl('r', def.id, 'mid') : pbrRoughUrl('facades', `${stem}_mid`),
+    facadePbrOpts,
   );
+  // 立面颜色图统一取自 PBR 三件套的 map（保证 map 与 normalMap/roughnessMap 包裹一致）。
+  const facadeBaseTex = pbrBase.map;
+  const facadeMidTex = pbrMid.map;
+  const roofUrl = districtRoofUrl(stem);
+  const roofTex = useSharedTexture(roofUrl, facadeTiles ? { wrap: 'repeat' } : undefined);
+  const roofPbrOpts = facadeTiles
+    ? { wrap: 'repeat' as const, normalScale: [0.7, 0.7] as [number, number] }
+    : { normalScale: [0.7, 0.7] as [number, number] };
   const roofPbr = useSharedPBR(
-    districtRoofUrl(stem),
+    roofUrl,
     pbrNormalUrl('roofs', stem),
     pbrRoughUrl('roofs', stem),
-    { normalScale: [0.7, 0.7] },
+    roofPbrOpts,
   );
   // house/shed 屋面 synth 兜底（原 HouseShape/ShedShape 内 useSynthPBR 上移至区级）。
   const tilePbr = useSynthPBR('tile_roof', { wrap: 'repeat', repeat: [1, 1], normalScale: [1.0, 1.0] });
@@ -161,8 +194,9 @@ export const DistrictBuildings = memo(function DistrictBuildings({ specs, def, p
       roofPbr,
       tilePbr,
       metalPbr,
+      facadeTiles,
     }),
-    [facadeBaseTex, facadeMidTex, roofTex, def.color, emissive, tint, pbrBase, pbrMid, roofPbr, tilePbr, metalPbr],
+    [facadeBaseTex, facadeMidTex, roofTex, def.color, emissive, tint, pbrBase, pbrMid, roofPbr, tilePbr, metalPbr, facadeTiles],
   );
 
   // ── 几何合并（按 matSpecs 签名分组；同签名 ⇒ 单墙体 mesh 多 group）──
@@ -177,7 +211,7 @@ export const DistrictBuildings = memo(function DistrictBuildings({ specs, def, p
     for (const spec of specs) {
       // 批次 32：改走 cityScale.buildingTopY（渲染与相机碰撞体共用单一事实来源）。
       const h = buildingTopY(def.id, prosperity, spec.factor);
-      const parts = buildBuildingParts(archetype, spec.w, spec.d, h, emissive);
+      const parts = buildBuildingParts(archetype, spec.w, spec.d, h, emissive, facadeTiles);
       const sig = specsSignature(parts.matSpecs);
       let g = groups.get(sig);
       if (!g) {
@@ -201,7 +235,7 @@ export const DistrictBuildings = memo(function DistrictBuildings({ specs, def, p
       hasAccent: accents.length > 0,
       proxyData,
     };
-  }, [specs, def.id, prosperity, archetype, emissive]);
+  }, [specs, def.id, prosperity, archetype, emissive, facadeTiles]);
 
   // 几何 dispose（§92a；依赖变化即释放）。
   useEffect(

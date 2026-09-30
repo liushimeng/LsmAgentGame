@@ -97,6 +97,99 @@ export function boxFaces(
   return sliced;
 }
 
+// ── 批次 37 · P0：盒面物理尺寸 UV 投影（消除各向异性变形）────────────
+
+/**
+ * 盒面物理尺寸 UV 投影参数（单位 = **世界单位**，与 boxFaces 的 w/h/d 同标尺）。
+ *
+ * 背景：three 的 BoxGeometry 每面 UV 恒为 0..1，等价于「一个贴图周期 = 整个面」，
+ * 同一张 512×1024 立面图被拉伸到 10 m 高的裙楼与 44 m 高的塔身时，
+ * **两个体块的变形方向相反**（裙楼横向拉伸 3.40× / 塔身纵向拉伸 1.61×）。
+ * 传入本参数后 UV 取值改为 `面尺寸 ÷ 周期尺寸`（可 > 1，配合 `wrap: 'repeat'`），
+ * 只要 `tileU / tileV === texW / texH`，任意尺寸的面上横向/纵向纹素密度恒相等。
+ */
+export interface BoxUVSpec {
+  /** 一个 U 周期覆盖的物理宽度（世界单位）。 */
+  tileU: number;
+  /** 一个 V 周期覆盖的物理高度（世界单位）。 */
+  tileV: number;
+  /**
+   * V 方向「整周期吸附」步长（可选，单位 = UV 周期数）。
+   * 贴图内容含楼层语义时（如立面开间图 1 周期 = 4 层），吸附可避免楼层在面顶被腰斩：
+   * `v = max(1, floor(v / snapV)) * snapV`。**代价**是纵向纹素密度不再恒定，
+   * 故缺省不开启（各向异性 = 1 的严格性优先）。
+   */
+  snapV?: number;
+}
+
+/** 面类的物理面宽/面高（世界单位）：A(±X) = d×h / B(±Z) = w×h / top(±Y) = w×d。 */
+function faceSpan(
+  w: number, h: number, d: number, cls: 'A' | 'B' | 'top',
+): { fw: number; fh: number } {
+  switch (cls) {
+    case 'A': return { fw: d, fh: h };
+    case 'B': return { fw: w, fh: h };
+    case 'top': return { fw: w, fh: d };
+  }
+}
+
+/**
+ * 就地覆写盒面几何的 uv 为物理尺寸投影（原始 0..1 UV × 周期跨度）。
+ * 只改 uv 属性，position / normal 逐位不动（切片仍走 sliceVerts）。
+ */
+function applyBoxUV(
+  geo: THREE.BufferGeometry,
+  w: number, h: number, d: number,
+  cls: 'A' | 'B' | 'top',
+  spec: BoxUVSpec,
+): void {
+  const { tileU, tileV, snapV } = spec;
+  const { fw, fh } = faceSpan(w, h, d, cls);
+  // 登记表写错（0 / 负数 / NaN）必须立刻炸，绝不静默退化成 0..1（渲染出一片拉伸贴图）
+  if (!Number.isFinite(tileU) || tileU <= 0 || !Number.isFinite(tileV) || tileV <= 0) {
+    throw new Error(
+      `boxFacesUV: 非法 tile 尺寸 tileU=${tileU} / tileV=${tileV}（须为正有限数）；` +
+      `面类 ${cls}，面尺寸 ${fw}×${fh} 世界单位。` +
+      '请检查资产登记表（components/virtualCity/texScale.ts）的 tileMeters 与像素尺寸配比。',
+    );
+  }
+  const spanU = fw / tileU;
+  let spanV = fh / tileV;
+  if (snapV !== undefined && Number.isFinite(snapV) && snapV >= 1) {
+    spanV = Math.max(1, Math.floor(spanV / snapV)) * snapV;
+  }
+  const attr = geo.getAttribute('uv') as THREE.BufferAttribute | undefined;
+  if (!attr) {
+    throw new Error('boxFacesUV: 几何缺 uv 属性（boxFaces 产物恒有，属内部契约破坏）');
+  }
+  for (let i = 0; i < attr.count; i++) {
+    attr.setXY(i, attr.getX(i) * spanU, attr.getY(i) * spanV);
+  }
+  attr.needsUpdate = true;
+}
+
+/**
+ * 物理尺寸 UV 投影的盒面切片（position / normal 与 `boxFaces` **逐位一致**，仅 uv 不同）。
+ *
+ * 面向 ↔ tile 对应：
+ *   `A`(±X，面宽 = d，面高 = h) / `B`(±Z，面宽 = w，面高 = h) / `top`(±Y，面宽 = w，面深 = d)
+ *
+ * @param uv 缺省时行为与 `boxFaces` **完全相同**（UV 恒 0..1）—— 非立面调用方零回归。
+ *          传入时 UV 取值为 `面宽 / tileU` 与 `面高 / tileV`（**不是**归一化到 0..1，
+ *          故 v 可以是 > 1 的多周期取值），调用方必须配套 `wrap: 'repeat'`。
+ * @throws {Error} `uv.tileU` / `uv.tileV` 非正有限数时抛出（错误处理纪律，不静默退化）。
+ */
+export function boxFacesUV(
+  w: number, h: number, d: number,
+  x: number, y: number, z: number,
+  cls: 'A' | 'B' | 'top',
+  uv?: BoxUVSpec,
+): THREE.BufferGeometry {
+  const geo = boxFaces(w, h, d, x, y, z, cls);
+  if (uv) applyBoxUV(geo, w, h, d, cls, uv);
+  return geo;
+}
+
 /** 部件几何就位（clone → 变换），返回非索引副本。内部使用。 */
 function placedGeometry(part: MergePart): THREE.BufferGeometry {
   const g = part.geo.index ? part.geo.toNonIndexed() : part.geo.clone();

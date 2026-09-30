@@ -36,10 +36,11 @@ export {
   mergeGrouped,
   mergeParts,
   boxFaces,
+  boxFacesUV,
   boxPart,
   cylPart,
 } from './geoMerge';
-export type { MergePart, GroupedMergePart } from './geoMerge';
+export type { MergePart, GroupedMergePart, BoxUVSpec } from './geoMerge';
 
 export {
   useSharedTexture,

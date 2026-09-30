@@ -15,6 +15,10 @@
  *   goods/{food,clothing,housing,household,transport,education,healthcare,misc}.png
  *     128×128 透明（统计局 CPI 八大类消费品图标，P1 真实经济循环引擎）
  *   facades/<districtId>_{base,mid}.png                  512×1024 透明（P1-B 楼宇贴图）
+ *   facade_tiles/<materialFamily>_{base,mid}.png        512×1024 四边无缝可平铺开间贴图
+ *     （批次 37 P1：2 开间 × 4 层，物理周期 6 m × 12 m；**stem 为 16 个建筑材质族**
+ *      而非 32 个城区 id，城区→材质族映射见 FACADE_TILE_STEM；登记表见
+ *      components/virtualCity/texScale.ts::FACADE_TILE。缺失时消费端降级回 facades/）
  *   roofs/<districtId>.png                               512×512  透明
  *   streets/{asphalt_main,asphalt_side,road_main,road_side,sidewalk_main,sidewalk_side,
  *            crosswalk,stopline,arrow_straight}.png
@@ -107,6 +111,97 @@ export type FacadeVariant = 'base' | 'mid';
  */
 export function districtFacadeUrl(districtId: string, variant: FacadeVariant): string {
   return facadeImgs[`./facades/${districtTextureStem(districtId)}_${variant}.png`] ?? '';
+}
+
+// ── 批次 37 P1：可平铺立面开间贴图（物理周期 UV 管线）────────────────
+
+const facadeTileImgs = import.meta.glob<string>('./facade_tiles/*.png', {
+  eager: true,
+  import: 'default',
+});
+
+/**
+ * 城区 → **立面材质族 stem** 映射（32 城区 → 16 族 × {base,mid} = 32 件）。
+ *
+ * 为什么去重：开间贴图经 `import.meta.glob(..., { eager: true })` 直接打进 JS bundle，
+ * 逐城区出图 64 件在 1024x2048 档下约 314 MB（≈ 现有全量资产 3.5 倍，首屏不可接受）。
+ * 建筑立面本就按材质族群分（玻璃幕墙 / 办公板材 / 住宅砖 / 老城面砖 / 厂房金属板…），
+ * 故按材质族出图，32 个城区复用 16 张。
+ *
+ * 归并依据：`DISTRICT_ARCHETYPE`（building_shapes.tsx 导出）+ 城区业态定位 ——
+ *   塔楼 → cbd_glass / med_glass / civic_stone；板楼 → office_panel / tech_curtain /
+ *   edu_brick / retail_shophouse / transport_glass；住宅 → resi_brick；
+ *   老城/文创/古城 → oldtown_tile / culture_wall；厂房 → industrial_metal；
+ *   仓库/物流 → warehouse_metal；郊野/农/康养/度假 → rural_white / resort_wood；
+ *   公园/湿地 → park_wood。
+ *
+ * ⚠️ 同步纪律：本表 stem 同时被两端消费 ——
+ *   - 前端 `facadeTileUrl` / `facadeTilePbrUrl`（本文件）；
+ *   - 美术侧 `python-generate-image-tool/generate_virtual_city_facade_tiles.py` 的 JOBS、
+ *     `3d_script/audit_texture_fit.py` 的登记表审计。
+ *   **映射一旦变更需三端同步**，否则前端会静默落到降级态 2（0..1 UV，形变仍在）。
+ *   缺表项按既有 `DISTRICT_TEXTURE_ALIAS` → 城区 id 两级回落，保证新城区不炸。
+ */
+export const FACADE_TILE_STEM: Partial<Record<VirtualCityDistrictId, string>> = {
+  // ── 塔楼（CBD / 医疗 / 行政新城）──
+  finance: 'cbd_glass',
+  riverside: 'cbd_glass',
+  fin_sub_center: 'cbd_glass',
+  medical_city: 'med_glass',
+  bay_new_town: 'civic_stone',
+  sports_new_city: 'civic_stone',
+  // ── 板楼（办公 / 科技幕墙 / 教育 / 商业 / 交通枢纽）──
+  tech: 'office_panel',
+  highspeed_rail_town: 'office_panel',
+  hightech_park: 'tech_curtain',
+  software_park: 'tech_curtain',
+  edu_district: 'edu_brick',
+  university_town: 'edu_brick',
+  commerce: 'retail_shophouse',
+  transport_hub: 'transport_glass',
+  airport_town: 'transport_glass',
+  cultural_creative: 'culture_wall',
+  // ── 住宅（小区板楼 / 郊区别墅）──
+  residential: 'resi_brick',
+  suburb: 'resi_brick',
+  // ── 老城 / 文保 ──
+  oldtown: 'oldtown_tile',
+  old_city_culture: 'oldtown_tile',
+  // ── 郊野 / 农 / 康养 / 度假 ──
+  mountain_resort: 'resort_wood',
+  health_town: 'resort_wood',
+  agri_park: 'rural_white',
+  // ── 工业 / 仓储 ──
+  industry: 'industrial_metal',
+  industrial_park: 'industrial_metal',
+  auto_city: 'industrial_metal',
+  chem_park: 'industrial_metal',
+  steel_town: 'industrial_metal',
+  logistics_port: 'warehouse_metal',
+  air_logistics: 'warehouse_metal',
+  // ── 公园 / 湿地 ──
+  central_park: 'park_wood',
+  wetland_park: 'park_wood',
+};
+
+/** 贴图 stem 解析（开间贴图专用）：先查材质族表，再回落既有别名表（两级查表）。 */
+export function facadeTileStem(districtId: string): string {
+  return FACADE_TILE_STEM[districtId as VirtualCityDistrictId] ?? districtTextureStem(districtId);
+}
+
+/**
+ * 城区立面**开间贴图** URL（缺失 = ''，DistrictBuildings 走三级降级链第 2 级）。
+ *
+ * 与 `districtFacadeUrl`（整栋立面图，0..1 UV）的区别：
+ *   - 本图语义是「2 开间 × 4 层、**四边无缝**」，必须配 `wrap: 'repeat'` +
+ *     `engine3d/boxFacesUV` 的物理尺寸 UV 投影（周期 6 m × 12 m，见 texScale.ts）；
+ *   - 缺失时**不得**改用本函数拉伸旧图，须回落到 districtFacadeUrl 的 0..1 行为。
+ *
+ * @param districtId 城区 id（经 `facadeTileStem` 解析材质族，缺表时回落别名表）
+ * @param variant    'base' = 楼栋底层 / 'mid' = 楼栋中上层
+ */
+export function facadeTileUrl(districtId: string, variant: FacadeVariant): string {
+  return facadeTileImgs[`./facade_tiles/${facadeTileStem(districtId)}_${variant}.png`] ?? '';
 }
 
 /** 城区楼顶贴图 URL（缺失 = ''，BuildingMesh 退回到 DistrictDefs 主色）。 */
@@ -255,4 +350,23 @@ export function pbrNormalUrl(category: PbrCategory, name: string): string {
 /** 粗糙度贴图 URL（缺失 = ''）。synth/water 无 _r（水面粗糙度是材质常量）。 */
 export function pbrRoughUrl(category: PbrCategory, name: string): string {
   return pbrImgs[`./pbr/${category}/${name}_r.png`] ?? '';
+}
+
+/**
+ * 开间贴图（`facade_tiles/`）的派生 PBR 贴图 URL（缺失 = ''，材质降级为无凹凸）。
+ *
+ * **注意与 `pbrNormalUrl('facades', ...)` 不可混用**：facades 下的 `_n/_r` 是从
+ * 「整栋立面图」派生的，与开间贴图内容不同源，混用会让凹凸与颜色图错位
+ * （批次 37 §1.7 缺陷 D5）。派生图须与颜色图同源、同宽高比（判据 A4）。
+ *
+ * @param kind 'n' = 法线图 / 'r' = 粗糙度图
+ * @param name 城区 id（经 `facadeTileStem` 解析材质族；已解析的 stem 传入亦可幂等命中）
+ * @param variant 'base' / 'mid'
+ */
+export function facadeTilePbrUrl(
+  kind: 'n' | 'r',
+  name: string,
+  variant: FacadeVariant,
+): string {
+  return pbrImgs[`./pbr/facade_tiles/${facadeTileStem(name)}_${variant}_${kind}.png`] ?? '';
 }

@@ -25,6 +25,14 @@
  *       lag_docs/虚拟城市/已实现/18-3D城市PBR材质与真实城市冲刺/02-架构设计-PBR材质管线与建筑几何深化-v1.md、
  *       lag_docs/虚拟城市/已实现/28-3D性能优化与物件信息交互/01-方案设计-v1.md §4 A2
  *
+ * 批次 37 · P0/P1（3D 资产贴图匹配与渲染保真）：盒面 UV 不再恒 0..1。
+ *   - 引擎层新增 `engine3d/boxFacesUV`（物理尺寸 UV 投影，缺省参数与 boxFaces 逐位一致）；
+ *   - 本模块的侧 A / 侧 B / 顶三组盒面统一经 `wallBox()` 出口，按 `facadeTiles` 开关二选一：
+ *       true  → 物理 UV（6 m×12 m 开间 / 10 m×10 m 屋顶周期）⇒ 各向异性 = 1、零变形；
+ *       false → 原 boxFaces 0..1（降级态 2/3，**几何逐位不变**，零回归）；
+ *   - 贴图包裹（`wrap: 'repeat'`）由 DistrictBuildings 依同一开关统一切换；
+ *   - prism 坡屋顶 / glass / glow / crown / 点缀 mesh 一律不动（自构几何或纯色，无贴图 UV 问题）。
+ *
  * 技术要点：
  *   - 立面贴图分配：+X/-X 用 facadeBase（侧 A）、+Z/-Z 用 facadeMid（侧 B），
  *     塔楼裙楼固定 facadeBase、塔身固定 facadeMid（契约 §2.2）。
@@ -48,9 +56,62 @@ import {
   type GroupedMergePart,
   type MergePart,
   boxFaces,
+  boxFacesUV,
   boxPart,
   cylPart,
 } from '@/engine3d';
+import { FACADE_UV, ROOF_UV } from './texScale';
+
+// ── 批次 37 · P0/P1：盒面物理 UV 接线（三级降级链的引擎侧入口）─────────
+
+/**
+ * 盒面几何 + 物理尺寸 UV 的唯一入口（批次 37 P0）。
+ *
+ * `facadeTiles = false`（降级态 2/3：缺 `facade_tiles/` 资产）时**返回与旧
+ * `boxFaces` 逐位一致**的几何（UV 恒 0..1）—— 故新接线对存量城区零回归；
+ * `facadeTiles = true`（降级态 1：开间贴图就位）时返回物理尺寸 UV 投影几何，
+ * 调用方须配套 `wrap: 'repeat'`（由 DistrictBuildings 依同一开关统一切换）。
+ *
+ * 顶面用 `ROOF_UV`（10 m × 10 m 正方形周期）⇒ 相邻楼栋屋顶纹素密度一致；
+ * 侧墙用 `FACADE_UV`（6 m × 12 m）⇒ 侧 A(面宽 d) 与侧 B(面宽 w) 纹素密度相等，
+ * 转角处窗格对得上（旧 0..1 映射下两面差 1.55x，缺陷 D2）。
+ */
+export function wallBox(
+  w: number, h: number, d: number,
+  x: number, y: number, z: number,
+  cls: 'A' | 'B' | 'top',
+  facadeTiles: boolean,
+): THREE.BufferGeometry {
+  if (!facadeTiles) return boxFaces(w, h, d, x, y, z, cls);
+  return boxFacesUV(w, h, d, x, y, z, cls, cls === 'top' ? ROOF_UV : FACADE_UV);
+}
+
+/**
+ * 降级态 2 告警（dev-only，每个 stem + variant 打印**一次**；范式参照
+ * engine3d/glbSizeGuard 的 dev-only 告警 + 模块级 Set 去重）。
+ *
+ * 场景：`facade_tiles/<stem>_{base,mid}.png` 缺失 ⇒ 回落到 `facades/` 整栋立面图 +
+ * 0..1 UV，此时批次 37 §1.3 的各向异性变形（D1）**仍然存在**。这是**已知且被记录**
+ * 的降级态，但必须可见 —— 静默降级正是本批要根除的失效模式。
+ */
+const FACADE_DEGRADE_WARNED = new Set<string>();
+
+export function warnFacadeDegradeOnce(
+  stem: string,
+  variant: 'base' | 'mid',
+  legacyUrl: string,
+): void {
+  if (!import.meta.env.DEV || legacyUrl === '') return;
+  const key = `${stem}_${variant}`;
+  if (FACADE_DEGRADE_WARNED.has(key)) return;
+  FACADE_DEGRADE_WARNED.add(key);
+  console.warn(
+    `[building_shapes] 立面贴图降级（批次 37 降级态 2）：facade_tiles/${key}.png 缺失，` +
+    `回落到整栋立面图 facades/${key}.png（${legacyUrl}）+ 0..1 UV，` +
+    '该立面**仍有各向异性变形**（方案 §1.3 D1：裙楼横向 3.40x / 塔身纵向 1.61x / house 16.2x）。' +
+    '补齐开间贴图（facade_tiles/）后自动升级到物理 UV + repeat，无需改代码。',
+  );
+}
 
 // ── Archetype 分派（契约 §2.1 表格，勿随意改派）────────────────────
 
@@ -133,6 +194,12 @@ export interface ShapeProps {
   pbrMid?: SharedPBR;
   /** 18-X：屋顶贴图对应的 PBR 三件套。 */
   roofPbr?: SharedPBR;
+  /**
+   * 批次 37 P0/P1：是否使用**物理尺寸 UV**（`facade_tiles/` 开间贴图就位 = true）。
+   * true ⇒ 盒面走 `boxFacesUV` + 贴图 `wrap: 'repeat'`（零变形）；
+   * false ⇒ 沿用 `boxFaces` 0..1（降级态 2/3，行为与批次 37 之前逐位一致）。
+   */
+  facadeTiles?: boolean;
 }
 
 // ── 16 · 阶段 R：楼宇色相分化（确定性，不引随机源）────────────────
@@ -230,16 +297,40 @@ export interface WallCtx {
   /** PrismRoof synth 兜底（18-X 契约：有贴图走 roofPbr，无贴图走 synth）。 */
   tilePbr?: SharedPBR;
   metalPbr?: SharedPBR;
+  /**
+   * 批次 37：立面/屋顶贴图是否走物理尺寸 UV 管线（贴图以 `wrap: 'repeat'` 加载）。
+   * 材质侧据此做**包裹一致性自检**（物理 UV 遇到 clamp 贴图 = 整面拉成边缘竖条），
+   * 几何侧由 `build*Parts` 的同名开关决定 UV 投影（`wallBox`）。
+   */
+  facadeTiles?: boolean;
+}
+
+/**
+ * 批次 37 包裹一致性自检（dev-only）：声明了物理 UV 却挂了 clamp 贴图时告警。
+ * 这正是方案 §3.2 点名的失效模式（`v = 3.67` 被 clamp 成边缘像素 → 整面竖条）。
+ */
+function warnIfNotRepeat(tex: THREE.Texture | null, ctx: WallCtx, label: string): void {
+  if (!import.meta.env.DEV || !ctx.facadeTiles || !tex) return;
+  if (tex.wrapS !== THREE.RepeatWrapping || tex.wrapT !== THREE.RepeatWrapping) {
+    console.warn(
+      `[building_shapes] ${label}：facadeTiles=true（盒面走物理尺寸 UV，UV 可 > 1），` +
+      '但贴图不是 RepeatWrapping ⇒ 多周期取值会被 clamp 成边缘像素，整面拉成竖条。' +
+      '请检查 DistrictBuildings 的 useSharedTexture/useSharedPBR 是否随 facadeTiles 传 wrap:"repeat"。',
+    );
+  }
 }
 
 export function buildWallMaterial(spec: WallMatSpec, ctx: WallCtx): THREE.MeshStandardMaterial {
   switch (spec.kind) {
     case 'sideA':
+      warnIfNotRepeat(ctx.facadeBase, ctx, '侧 A（facadeBase）');
       return new THREE.MeshStandardMaterial(sideMatProps(ctx.facadeBase, ctx.fallbackColor, ctx.emissive, ctx.tint, ctx.pbrBase));
     case 'sideB':
+      warnIfNotRepeat(ctx.facadeMid, ctx, '侧 B（facadeMid）');
       return new THREE.MeshStandardMaterial(sideMatProps(ctx.facadeMid, ctx.fallbackColor, ctx.emissive, ctx.tint, ctx.pbrMid));
     case 'top':
       // roof=false 的体块（塔楼裙楼/house/shed 主体）顶面原就是纯色兜底（top={null}）
+      if (spec.roof) warnIfNotRepeat(ctx.roofMap, ctx, '顶面（roofMap）');
       return new THREE.MeshStandardMaterial(
         topMatProps(spec.roof ? ctx.roofMap : null, ctx.fallbackColor, ctx.emissive, spec.roof ? ctx.roofPbr : undefined),
       );
@@ -657,7 +748,9 @@ function sawtoothParts(w: number, d: number, y: number, deckMat: number, glassMa
 // 点缀/墙体几何与原组件逐件全等（仅去 React 包装）。
 
 /** tower：裙楼 + 塔身 + 楼冠/玻璃门/灯带/广告牌 + 点缀件。 */
-export function buildTowerParts(w: number, d: number, h: number, emissive: number): BuildingParts {
+export function buildTowerParts(
+  w: number, d: number, h: number, emissive: number, facadeTiles = false,
+): BuildingParts {
   const pH = Math.min(u(10), h * 0.35);
   const cH = Math.min(u(6), h * 0.22);
   const bodyH = Math.max(h - pH - cH, u(3)); // 塔身至少 1 层
@@ -675,13 +768,13 @@ export function buildTowerParts(w: number, d: number, h: number, emissive: numbe
 
   const wall: GroupedMergePart[] = [
     // 裙楼（商业基座，facadeBase 四面；几何 = 原 BoxSolid pod box 三组面）
-    { geo: boxFaces(w, pH, d, 0, pH / 2, 0, 'A'), mat: 0 },
-    { geo: boxFaces(w, pH, d, 0, pH / 2, 0, 'B'), mat: 0 },
-    { geo: boxFaces(w, pH, d, 0, pH / 2, 0, 'top'), mat: 1 },
+    { geo: wallBox(w, pH, d, 0, pH / 2, 0, 'A', facadeTiles), mat: 0 },
+    { geo: wallBox(w, pH, d, 0, pH / 2, 0, 'B', facadeTiles), mat: 0 },
+    { geo: wallBox(w, pH, d, 0, pH / 2, 0, 'top', facadeTiles), mat: 1 },
     // 塔身（facadeMid 四面 + roof 顶面）
-    { geo: boxFaces(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'A'), mat: 2 },
-    { geo: boxFaces(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'B'), mat: 2 },
-    { geo: boxFaces(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'top'), mat: 3 },
+    { geo: wallBox(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'A', facadeTiles), mat: 2 },
+    { geo: wallBox(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'B', facadeTiles), mat: 2 },
+    { geo: wallBox(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'top', facadeTiles), mat: 3 },
     // 顶部收分（原独立 crown mesh）
     { geo: new THREE.BoxGeometry(w * 0.55, cH, d * 0.55), x: 0, y: pH + bodyH + cH / 2, z: 0, mat: 4 },
     // 入口玻璃门
@@ -710,7 +803,9 @@ export function buildTowerParts(w: number, d: number, h: number, emissive: numbe
 }
 
 /** slab：单 box（侧A/侧B/顶 3 group）+ 檐口/雨棚/灯带/阳台/屋顶件/构造件。 */
-export function buildSlabParts(w: number, d: number, h: number, emissive: number): BuildingParts {
+export function buildSlabParts(
+  w: number, d: number, h: number, emissive: number, facadeTiles = false,
+): BuildingParts {
   const shopY = Math.min(u(3.6), h * 0.3);
   const hasQuoins = w > 1.4;
 
@@ -721,9 +816,9 @@ export function buildSlabParts(w: number, d: number, h: number, emissive: number
   ];
 
   const wall: GroupedMergePart[] = [
-    { geo: boxFaces(w, h, d, 0, h / 2, 0, 'A'), mat: 0 },
-    { geo: boxFaces(w, h, d, 0, h / 2, 0, 'B'), mat: 1 },
-    { geo: boxFaces(w, h, d, 0, h / 2, 0, 'top'), mat: 2 },
+    { geo: wallBox(w, h, d, 0, h / 2, 0, 'A', facadeTiles), mat: 0 },
+    { geo: wallBox(w, h, d, 0, h / 2, 0, 'B', facadeTiles), mat: 1 },
+    { geo: wallBox(w, h, d, 0, h / 2, 0, 'top', facadeTiles), mat: 2 },
     { ...entranceGlass(d), mat: 3 },
     shopfrontGlow(w, d, shopY, 4),
   ];
@@ -742,7 +837,9 @@ export function buildSlabParts(w: number, d: number, h: number, emissive: number
 }
 
 /** house：box 主体 + 三棱柱坡屋顶（prism group）+ 入口/角柱（点缀）。 */
-export function buildHouseParts(w: number, d: number, h: number, emissive: number): BuildingParts {
+export function buildHouseParts(
+  w: number, d: number, h: number, emissive: number, facadeTiles = false,
+): BuildingParts {
   void emissive; // house 材质表无 glow 组（emissive 只经 ctx 传入侧墙/屋顶）
   const bodyH = h * 0.7;
   const roofH = h * 0.3;
@@ -755,9 +852,9 @@ export function buildHouseParts(w: number, d: number, h: number, emissive: numbe
   ];
 
   const wall: GroupedMergePart[] = [
-    { geo: boxFaces(w, bodyH, d, 0, bodyH / 2, 0, 'A'), mat: 0 },
-    { geo: boxFaces(w, bodyH, d, 0, bodyH / 2, 0, 'B'), mat: 1 },
-    { geo: boxFaces(w, bodyH, d, 0, bodyH / 2, 0, 'top'), mat: 2 },
+    { geo: wallBox(w, bodyH, d, 0, bodyH / 2, 0, 'A', facadeTiles), mat: 0 },
+    { geo: wallBox(w, bodyH, d, 0, bodyH / 2, 0, 'B', facadeTiles), mat: 1 },
+    { geo: wallBox(w, bodyH, d, 0, bodyH / 2, 0, 'top', facadeTiles), mat: 2 },
     // 坡屋顶（w+0.12 外扩，几何 = 原 PrismRoof）
     { geo: prismGeometry(w + 0.12, roofH, d + 0.12), x: 0, y: bodyH, z: 0, mat: 3 },
     { ...entranceGlass(d), mat: 4 },
@@ -768,7 +865,9 @@ export function buildHouseParts(w: number, d: number, h: number, emissive: numbe
 }
 
 /** shed：大跨 box + 卷帘门 + 高窗带 + 锯齿顶/人字顶 + 烟囱。 */
-export function buildShedParts(w: number, d: number, h: number, emissive: number): BuildingParts {
+export function buildShedParts(
+  w: number, d: number, h: number, emissive: number, facadeTiles = false,
+): BuildingParts {
   void emissive;
   const bw = w * 1.2;
   const bH = h * 0.8;
@@ -782,9 +881,9 @@ export function buildShedParts(w: number, d: number, h: number, emissive: number
   if (useSaw) matSpecs.push({ kind: 'glass', c: GLASS_SKY });
 
   const wall: GroupedMergePart[] = [
-    { geo: boxFaces(bw, bH, d, 0, bH / 2, 0, 'A'), mat: 0 },
-    { geo: boxFaces(bw, bH, d, 0, bH / 2, 0, 'B'), mat: 1 },
-    { geo: boxFaces(bw, bH, d, 0, bH / 2, 0, 'top'), mat: 2 },
+    { geo: wallBox(bw, bH, d, 0, bH / 2, 0, 'A', facadeTiles), mat: 0 },
+    { geo: wallBox(bw, bH, d, 0, bH / 2, 0, 'B', facadeTiles), mat: 1 },
+    { geo: wallBox(bw, bH, d, 0, bH / 2, 0, 'top', facadeTiles), mat: 2 },
   ];
   const accent: MergePart[] = [
     ...shutterAccent(bw, bH, d),
@@ -807,14 +906,16 @@ export function buildShedParts(w: number, d: number, h: number, emissive: number
 }
 
 /** pavilion：低矮平顶 box + 大挑檐（点缀）。 */
-export function buildPavilionParts(w: number, d: number, h: number, emissive: number): BuildingParts {
+export function buildPavilionParts(
+  w: number, d: number, h: number, emissive: number, facadeTiles = false,
+): BuildingParts {
   void emissive;
   const bH = Math.min(h, u(9));
   const matSpecs: WallMatSpec[] = [{ kind: 'sideA' }, { kind: 'top', roof: true }];
   const wall: GroupedMergePart[] = [
-    { geo: boxFaces(w, bH, d, 0, bH / 2, 0, 'A'), mat: 0 },
-    { geo: boxFaces(w, bH, d, 0, bH / 2, 0, 'B'), mat: 0 },
-    { geo: boxFaces(w, bH, d, 0, bH / 2, 0, 'top'), mat: 1 },
+    { geo: wallBox(w, bH, d, 0, bH / 2, 0, 'A', facadeTiles), mat: 0 },
+    { geo: wallBox(w, bH, d, 0, bH / 2, 0, 'B', facadeTiles), mat: 0 },
+    { geo: wallBox(w, bH, d, 0, bH / 2, 0, 'top', facadeTiles), mat: 1 },
   ];
   // 大挑檐（外扩 0.15，木色）
   const accent: MergePart[] = [boxPart(w + 0.3, 0.04, d + 0.3, 0, bH + 0.02, 0, EAVE_COLOR)];
@@ -828,14 +929,16 @@ export function buildBuildingParts(
   d: number,
   h: number,
   emissive: number,
+  /** 批次 37：是否使用物理尺寸 UV（缺省 false = 与批次 37 之前逐位一致）。 */
+  facadeTiles = false,
 ): BuildingParts {
-  if (archetype === 'tower' && h < u(16)) return buildSlabParts(w, d, h, emissive);
+  if (archetype === 'tower' && h < u(16)) return buildSlabParts(w, d, h, emissive, facadeTiles);
   switch (archetype) {
-    case 'tower': return buildTowerParts(w, d, h, emissive);
-    case 'house': return buildHouseParts(w, d, h, emissive);
-    case 'shed': return buildShedParts(w, d, h, emissive);
-    case 'pavilion': return buildPavilionParts(w, d, h, emissive);
+    case 'tower': return buildTowerParts(w, d, h, emissive, facadeTiles);
+    case 'house': return buildHouseParts(w, d, h, emissive, facadeTiles);
+    case 'shed': return buildShedParts(w, d, h, emissive, facadeTiles);
+    case 'pavilion': return buildPavilionParts(w, d, h, emissive, facadeTiles);
     case 'slab':
-    default: return buildSlabParts(w, d, h, emissive);
+    default: return buildSlabParts(w, d, h, emissive, facadeTiles);
   }
 }
