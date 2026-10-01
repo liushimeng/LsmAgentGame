@@ -29,7 +29,19 @@
  * 批次 28 二轮（DC 攻坚）：18 个附件 mesh 按材质类合并为 2 mesh（几何逐件全等，
  * engine3d/geoMerge）：车轮/轮毂/雨刮/后视镜 → 顶点色 1 mesh；玻璃/前灯/尾灯 →
  * 3 group 1 mesh。GLB 等材质 group 归并在 modelCache 加载期完成（sedan 18→7 组）。
- * 每车 mesh：GLB/sprite/几何分支 1 + 附件 2 = 3。
+ *
+ * 批次 41（车辆真实感）：
+ *   - B1 双渲染修复：附件 2 mesh 仅 fallback 模式渲染 —— GLB 模式不再叠加（GLB 内
+ *     已含车轮/玻璃/车灯，旧无条件渲染会与 GLB 附件双重叠加穿模）。每车 mesh：
+ *     GLB 分支 = GLB 归并 mesh 数（约 8-10，modelCache 按材质分组）；fallback 分支
+ *     = 车身 1 + 附件 2 = 3（批次 41 起 GLB 模式不再叠加附件）。
+ *   - B2 GLB 昼夜灯：traverse 按材质名（Headlight/Taillight/Sign 前缀 includes 命中）
+ *     收集共享 emissive 材质，useFrame 调制 emissiveIntensity（基值 = GLB 烘焙值）。
+ *   - B3 涂装变体 prop glbName：sedan_silver / truck_white 只换 GLB 查找名，
+ *     variant 保持 4 原值（dims/sizeTarget/WHEEL_SPEC 查表口径不变）。
+ *   - C2 信号耦合 prop stops：红/黄灯按 v=√(2·a·d) 运动学曲线在停车线前减速排队
+ *     （含 C3 队列槽位 gap），绿灯恢复巡航起步；相位复用 props/TrafficSignals 的
+ *     signalLitColor，时间基准同为 clock.elapsedTime（同源零漂移）。
  */
 
 import { memo, useEffect, useMemo, useRef } from 'react';
@@ -52,8 +64,28 @@ import {
   detectQualityTier,
 } from '@/engine3d';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+import { signalLitColor } from './TrafficSignals';
 
 type VehicleVariant = 'sedan' | 'truck' | 'bus' | 'taxi';
+
+/**
+ * 批次 41 C2：arterial 车受控红绿灯停车线（StreetPropsLayer::vehiclesForNetwork 产出）。
+ * connector / edgeLink 车无灯（stops 缺省），保持匀速巡航。
+ */
+export interface VehicleStop {
+  /** 停车线在 from→to 路径上的 t 参数（0..1，已含沿行进反方向的后退量）。 */
+  t: number;
+  /** 受控相位组（与 TrafficSignals 同源 A/B：16s 周期 绿6/黄2/红8，B 组 +8s）。 */
+  phase: 'A' | 'B';
+  /** 队列槽位后退距离（世界单位 = slot × (车长 + 0.2)；slot 1 的轿车停在线后 0.66u）。 */
+  gap: number;
+}
+
+/** 批次 41 B2：GLB 灯族条目（mat = 共享材质引用；base = GLB 烘焙 emissiveIntensity）。 */
+interface GlbLampEntry {
+  mat: THREE.MeshStandardMaterial;
+  base: number;
+}
 
 interface Props {
   /** 起始坐标。 */
@@ -61,10 +93,21 @@ interface Props {
   /** 终点坐标（沿 from→to 直线路径循环）。 */
   to: [number, number];
   variant?: VehicleVariant;
+  /**
+   * 批次 41 B3：涂装变体 GLB 名（'sedan_silver' / 'truck_white'，尺寸同 variant）。
+   * 仅影响 GLB 查找（modelUrl('vehicles', glbName ?? variant)）；variant 保持 4 原值
+   * 供 dims / sizeTarget / WHEEL_SPEC 查表。VehicleVariant 类型不变。
+   */
+  glbName?: string;
   /** 循环速度（t / 秒）。 */
   speed?: number;
   /** 起始相位偏移 [0, 1)，避免多辆车完全同步。 */
   phase?: number;
+  /**
+   * 批次 41 C2：红绿灯停车线集合（arterial 车专用）。红/黄灯时在最近前方停车线
+   * （含队列槽位 gap）按 v=√(2·a·d) 减速至停稳，绿灯起步；缺省 = 匀速巡航。
+   */
+  stops?: VehicleStop[];
   /**
    * 16 · 阶段 S：车道偏移（世界单位）。>0 = 行进方向右侧通行；
    * 0（默认）= 沿路中线（现行为）。双向车道两方向都传**同样的正值**——
@@ -181,14 +224,16 @@ function hubPositions(l: number, w: number, r: number): Array<[number, number, n
   ];
 }
 
-// 批次 28 A1：memo —— from/to（layout useMemo 的元组）/ variant / speed / phase /
-// laneOffset / palette 全为稳定引用（palette 由调用方常量表传入）。
+// 批次 28 A1：memo —— from/to（layout useMemo 的元组）/ variant / glbName / speed /
+// phase / stops（layout 产出数组）/ laneOffset / palette 全为稳定引用。
 export const Vehicle = memo(function Vehicle({
   from,
   to,
   variant = 'sedan',
+  glbName,
   speed = 0.06,
   phase = 0,
+  stops,
   laneOffset = 0,
   palette,
 }: Props) {
@@ -199,10 +244,12 @@ export const Vehicle = memo(function Vehicle({
   //   - GLB 缺失或加载失败 → scene=null → 走原有 useSprite / 几何体 / palette 分支
   //   - GLB 加载成功 → 仅渲染 .glb（视觉最丰富）
   //   - palette 模式（消防/巡逻车换色）→ 强制不走 GLB（GLB 颜色固定）
-  const modelUrlStr = modelUrl('vehicles', variant);
+  // 批次 41 B3：glbName 涂装变体只换 GLB 查找名（sedan_silver/truck_white 尺寸同
+  //   variant，sizeTarget/dims 查表仍走 variant 4 原值）。
+  // 批次 41 B6：旧 useGLB 死变量删除，blenderOn / palette 就地接线 —— 此前
+  //   disable-blender-models=1 与 palette 对 GLB 分支实际都不生效（§27.5 降级链破洞）。
   const blenderOn = blenderModelsEnabled();
-  const useGLB = !palette && blenderOn && !!modelUrlStr;
-  void useGLB; // 标记保留：未来 v19.5 通过此 flag 控制 GLB vs sprite / palette fallback
+  const modelUrlStr = blenderOn && !palette ? modelUrl('vehicles', glbName ?? variant) : '';
   // 批次 29：注册本车型目标尺寸（dev 态 glbSizeGuard 量测 GLB 包围盒/落地并比对表值）
   const { scene: glbScene } = useSharedGLTF(modelUrlStr, VEHICLE_SIZE_TARGETS[variant]);
   const glbCloned = useMemo(() => (glbScene ? glbScene.clone(true) : null), [glbScene]);
@@ -217,6 +264,35 @@ export const Vehicle = memo(function Vehicle({
       if ((o as THREE.Mesh).isMesh) o.castShadow = shadow;
     });
   }, [glbCloned, tier]);
+
+  // ── 批次 41 B2：GLB 昼夜灯材质收集 ──────────────────────────────────
+  // traverse 一次按材质名前缀收集（'Headlight_L_Mat' / 'TaxiSign' 等 includes 命中；
+  // 烘焙基值逐材质记录）。材质跨实例共享（clone(true) 浅拷贝共享 material 引用），
+  // 同帧重复赋同值无害，刻意不去重到模块级。灯族：head 前灯（基值≈1.0）/
+  // tail 尾灯（≈0.8）/ sign 顶灯牌（≈1.4，taxi 顶灯）。
+  const glbLightsRef = useRef<{ head: GlbLampEntry[]; tail: GlbLampEntry[]; sign: GlbLampEntry[] }>({
+    head: [], tail: [], sign: [],
+  });
+  useEffect(() => {
+    if (!glbCloned) return;
+    const head: GlbLampEntry[] = [];
+    const tail: GlbLampEntry[] = [];
+    const sign: GlbLampEntry[] = [];
+    glbCloned.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const m of mats) {
+        const std = m as THREE.MeshStandardMaterial | undefined;
+        // 仅 PBR 材质有 emissiveIntensity；基值 = GLB 烘焙常量
+        if (!std || !std.name || !('emissiveIntensity' in std)) continue;
+        if (std.name.includes('Headlight')) head.push({ mat: std, base: std.emissiveIntensity });
+        else if (std.name.includes('Taillight')) tail.push({ mat: std, base: std.emissiveIntensity });
+        else if (std.name.includes('Sign')) sign.push({ mat: std, base: std.emissiveIntensity });
+      }
+    });
+    glbLightsRef.current = { head, tail, sign };
+  }, [glbCloned]);
   const groupRef = useRef<THREE.Group>(null);
   const dims = VEHICLE_DIMS[variant];
   // 18 · 阶段 Z：涂装三色（body 车身 / roof 车顶 / accent 前后端，缺省回退 body）
@@ -238,10 +314,12 @@ export const Vehicle = memo(function Vehicle({
   //
   // ⚠️ 与 `PedestrianV3.tsx` 的约定**不同**（行人模型 +Z 向前，故行人用 `atan2(dx, dz)`）——
   //   两者各自自洽，勿互相"对齐"。
-  const { dx, dz, angle } = useMemo(() => {
+  const { dx, dz, angle, pathLen } = useMemo(() => {
     const dx = to[0] - from[0];
     const dz = to[1] - from[1];
-    return { dx, dz, angle: Math.atan2(-dz, dx) };
+    // 批次 41 D：from===to（站前静止车）len 兜底 1、角度 atan2(0,0)=0，静态摆放
+    const len = Math.hypot(dx, dz) || 1;
+    return { dx, dz, angle: Math.atan2(-dz, dx), pathLen: len };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from[0], from[1], to[0], to[1]]);
 
@@ -254,8 +332,10 @@ export const Vehicle = memo(function Vehicle({
 
   // 起始位置
   const tRef = useRef(phase);
+  // 批次 41 C2：当前速度倍率（0..1，1 = 巡航；红灯前按 v=√(2·a·d) 曲线压低后回升）
+  const vRef = useRef(1);
 
-  useFrame((_state, delta) => {
+  useFrame(({ clock }, delta) => {
     // 批次 30 B2：车灯随昼夜（昼 0.25/0.35 → 夜 1.6/0.9；读 cityTimeStore 同源快照）。
     const day = getDayNight()?.dayFactor01 ?? 1;
     const nightK = 1 - day;
@@ -265,10 +345,47 @@ export const Vehicle = memo(function Vehicle({
     if (glassLampMaterials[2]) {
       glassLampMaterials[2].emissiveIntensity = 0.35 + 0.55 * nightK;
     }
+    // 批次 41 B2：GLB 灯昼夜调制（基值 × 系数：head 夜 2.0×/昼 0.35×，
+    // tail 夜 1.4×/昼 0.5×，sign 夜 1.4×/昼 0.8×；材质可能为空数组 = 无 GLB 灯）
+    const lamps = glbLightsRef.current;
+    for (const e of lamps.head) e.mat.emissiveIntensity = e.base * (0.35 + 1.65 * nightK);
+    for (const e of lamps.tail) e.mat.emissiveIntensity = e.base * (0.5 + 0.9 * nightK);
+    for (const e of lamps.sign) e.mat.emissiveIntensity = e.base * (0.8 + 0.6 * nightK);
     const g = groupRef.current;
     if (!g) return;
     if (REDUCED_MOTION) return;
-    tRef.current += delta * speed;
+    // ── 批次 41 C2：信号耦合（无 stops 的车零扰动，targetMul 恒 1 = 原匀速巡航）──
+    // 速度用 0..1 倍率表达：世界速度 = speed·pathLen·vRef（speed 已含 ÷len 换算）。
+    // 红黄灯按运动学允许速度 v=√(2·a·d)（a=0.8 u/s²，d=到停车目标的世界距离 =
+    // 前方停车线距离 − 队列槽位 gap − 1 m 停车裕量）；绿灯 target=cruise → vRef
+    // 自然回升起步；黄灯按红处理。
+    const cruiseWorld = Math.max(speed * pathLen, 1e-6);
+    let targetMul = 1;
+    if (stops && stops.length) {
+      let bestAhead = Infinity;
+      let bestStop: VehicleStop | null = null;
+      const tNow = tRef.current;
+      for (const s of stops) {
+        const ahead = (s.t - tNow + 1) % 1; // 环形前方距离（t 单位，刚越线 ≈ 1 整圈）
+        if (ahead < bestAhead) {
+          bestAhead = ahead;
+          bestStop = s;
+        }
+      }
+      if (bestStop) {
+        const color = signalLitColor(bestStop.phase, clock.elapsedTime);
+        if (color !== 'green') {
+          const distWorld = bestAhead * pathLen - bestStop.gap - 0.1; // 停车裕量 1 m
+          targetMul = Math.min(targetMul, Math.sqrt(2 * 0.8 * Math.max(distWorld, 0)) / cruiseWorld);
+          if (distWorld <= 0.05 && vRef.current < 0.15) targetMul = 0; // 停稳保持（防爬行抖动）
+        }
+      }
+    }
+    // 加速 0.6 u/s² / 制动 2 倍（世界加速度换算到倍率空间；绿灯起步即由此回升）
+    const accelMul = 0.6 / cruiseWorld;
+    const dv = Math.max(-accelMul * 2 * delta, Math.min(accelMul * delta, targetMul - vRef.current));
+    vRef.current = Math.min(1, Math.max(0, vRef.current + dv));
+    tRef.current += delta * speed * vRef.current;
     if (tRef.current >= 1) tRef.current -= 1;
     const t = tRef.current;
     g.position.x = from[0] + dx * t + lane.ox;
@@ -344,7 +461,8 @@ export const Vehicle = memo(function Vehicle({
       position={[from[0] + lane.ox, VEHICLE_GROUND_Y, from[1] + lane.oz]}
       rotation={[0, angle, 0]}
     >
-      {/* 19-Blender3D模型集成：.glb 优先级最高，绕过 sprite 和 palette（palette 模式 useGLB=false）；
+      {/* 19-Blender3D模型集成：.glb 优先级最高（palette 模式 / GLB 开关关闭时
+          modelUrlStr='' → glbCloned=null → 走 sprite/几何分支，批次 41 B6 接线）；
           批次 28 A3：castShadow 由上方 traverse 按质量档逐 mesh 设置（high 才投影）。
           批次 28 二轮：GLB 等材质 group 已在 modelCache 加载期归并（sedan 18→7 组）。
           批次 29 落地契约：GLB 原点在**轮底**（minY=0，与 REAL_DIMS_M 的 minY 同行），
@@ -364,7 +482,8 @@ export const Vehicle = memo(function Vehicle({
       ) : (
         // 几何车身（缺贴图 / 自定义涂装）：车体底面 = 离地间隙（批次 30 P0-7：
         // 轿车 0.15 m / 卡车车架 1.1 m），轮子露在间隙内，总高仍 = 表值 dims.h。
-        <mesh castShadow={false} position={[0, (dims.h + WHEEL_SPEC[variant].clearance) / 2, 0]}>
+        // 批次 41 B4：fallback 车身投影跟 GLB 分支同口径（high 才投影，消 V11）。
+        <mesh castShadow={tier === 'high'} position={[0, (dims.h + WHEEL_SPEC[variant].clearance) / 2, 0]}>
           <boxGeometry args={[dims.l, dims.h - WHEEL_SPEC[variant].clearance, dims.w]} />
           {palette ? (
             // 六面材质：[+X 前, -X 后, +Y 顶, -Y 底, +Z, -Z]（同 building_shapes 口径）
@@ -382,12 +501,19 @@ export const Vehicle = memo(function Vehicle({
           )}
         </mesh>
       )}
-      {/* 批次 28 二轮：车轮/轮毂/雨刮/后视镜 —— 顶点色合并 1 mesh */}
-      <mesh geometry={detailGeos.solids}>
-        <meshStandardMaterial vertexColors roughness={0.65} metalness={0.3} />
-      </mesh>
-      {/* 批次 28 二轮：玻璃 + 前大灯 + 尾灯 —— 3 材质组合并 1 mesh */}
-      <mesh geometry={detailGeos.glassLamps} material={glassLampMaterials} />
+      {/* 批次 41 B1：双渲染修复 —— 附件 2 mesh 仅 fallback（sprite/几何）模式渲染；
+          GLB 内已含车轮/玻璃/车灯，旧无条件渲染会双重叠加穿模 + 每车多 2 mesh。 */}
+      {!glbCloned && (
+        <>
+          {/* 批次 28 二轮：车轮/轮毂/雨刮/后视镜 —— 顶点色合并 1 mesh
+              （批次 41 B4：投影跟车身同口径 high 档） */}
+          <mesh geometry={detailGeos.solids} castShadow={tier === 'high'}>
+            <meshStandardMaterial vertexColors roughness={0.65} metalness={0.3} />
+          </mesh>
+          {/* 批次 28 二轮：玻璃 + 前大灯 + 尾灯 —— 3 材质组合并 1 mesh（透明玻璃不投影） */}
+          <mesh geometry={detailGeos.glassLamps} material={glassLampMaterials} />
+        </>
+      )}
     </group>
   );
 });

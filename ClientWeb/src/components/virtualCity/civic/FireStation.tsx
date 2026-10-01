@@ -1,6 +1,7 @@
 /**
  * 消防站（18-AA · §5.2 FireStation）
  *   红白条外墙 + 2 个车库门 + 滑杆塔 + 红色消防车 1 辆。布点 (8, -12)。
+ *   批次 41 D1：站内消防车改用 <Vehicle> 静止摆放（truck + 红涂装 + 车顶警灯）。
  *
  * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
  */
@@ -8,6 +9,7 @@ import { u, worldDims, sizeTargetFor } from '../cityScale';
 import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+import { Vehicle } from '../props/Vehicle';
 
 const RED = '#c0392b';
 const WHITE = '#e8e3dc';
@@ -35,24 +37,37 @@ export function FireStation() {
   const url = modelUrl('civic', 'fire_station');
   // 批次 28 B2：消防站信息交互。
   const info = useObjectInfoProps('civic.fire-station', { anchorY: 5 });
-  if (!url || !blenderEnabled()) {
-    return (
-      <group {...info}>
-        <FireStationFallback />
-      </group>
-    );
-  }
   return (
     <group {...info}>
-      <Model
-        url={url}
-        sizeTarget={FIRE_SIZE_TARGET}
-        position={[8, 0, -12]}
-        castShadow
-        receiveShadow
-      >
+      {!url || !blenderEnabled() ? (
         <FireStationFallback />
-      </Model>
+      ) : (
+        <Model
+          url={url}
+          sizeTarget={FIRE_SIZE_TARGET}
+          position={[8, 0, -12]}
+          castShadow
+          receiveShadow
+        >
+          <FireStationFallback />
+        </Model>
+      )}
+      {/* 批次 41 D1：站内消防车 + 车顶警灯 —— 主渲染路径（<Model> 的 sibling；
+          批次 41 art 线已重导出站 GLB 并移除烘焙 2-box 假车，无双重渲染）。
+          站局部坐标系与 fallback 同源（外层 group position=[8,0,-12]）。
+          from===to、speed=0：组件内 len 兜底 1、角度 0，静态摆放不占路网车流；
+          无 GLB 分支同样渲染（Vehicle 自行走几何/sprite fallback 简版，可接受）。 */}
+      <group position={[8, 0, -12]}>
+        <Vehicle from={[-u(6), u(5.5)]} to={[-u(6), u(5.5)]} variant="truck" speed={0} />
+        {/* 车顶警灯 ×2（驾驶室上方；材质名约定 'Beacon'，供未来 GLB 化后接入批次 41
+            B2 的昼夜调制）。y = 车顶 0.36u（VEHICLE_GROUND_Y 0.02 + 车高 0.34）+ 半高。 */}
+        {[-u(2.2), -u(3.3)].map((bx, j) => (
+          <mesh key={`fire-beacon-${j}`} position={[bx, u(3.75), u(5.5)]}>
+            <boxGeometry args={[u(0.06), u(0.03), u(0.03)]} />
+            <meshStandardMaterial color="#ff3b30" emissive="#ff3b30" emissiveIntensity={0.9} />
+          </mesh>
+        ))}
+      </group>
     </group>
   );
 }
@@ -101,15 +116,8 @@ function FireStationFallback() {
         <sphereGeometry args={[BEACON_R, 8, 8]} />
         <meshStandardMaterial color="#5a86b8" emissive="#5a86b8" emissiveIntensity={0.5} />
       </mesh>
-      {/* 红色消防车（用 box 简化）—— 实车在 StreetPropsLayer 里 */}
-      <mesh position={[-u(6), u(0.7), u(5.5)]} castShadow>
-        <boxGeometry args={[u(2.4), u(1.2), u(1)]} />
-        <meshStandardMaterial color={RED} roughness={0.5} metalness={0.3} />
-      </mesh>
-      <mesh position={[-u(6), u(1.6), u(5.5)]} castShadow>
-        <boxGeometry args={[u(1.4), u(0.8), u(0.95)]} />
-        <meshStandardMaterial color={RED} roughness={0.5} metalness={0.3} />
-      </mesh>
+      {/* 批次 41 D1：消防车已移至 FireStation() 主渲染路径（站 GLB 重导出后无烘焙车，
+          fallback 内不再放车，避免双渲染） */}
     </group>
   );
 }

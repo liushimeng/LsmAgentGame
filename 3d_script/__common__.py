@@ -104,8 +104,13 @@ def make_sphere(name: str, r: float, segs: int, pos):
 
 
 def make_material(name: str, base_color: str, rough: float, metal: float,
-                  emissive=None, emissive_intensity: float = 0.0):
-    """创建 PBR 材质（Principled BSDF）。base_color 接受 "#rrggbb"。"""
+                  emissive=None, emissive_intensity: float = 0.0,
+                  alpha: float = 1.0):
+    """创建 PBR 材质（Principled BSDF）。base_color 接受 "#rrggbb"。
+
+    alpha < 1.0 → 接线 Principled Alpha 输入，glTF 导出为 alphaMode BLEND
+    （批次 41 车窗玻璃用；既有调用点缺省 1.0，行为逐字节不变）。
+    """
     mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     bsdf = mat.node_tree.nodes.get('Principled BSDF')
@@ -120,6 +125,8 @@ def make_material(name: str, base_color: str, rough: float, metal: float,
         er, eg, eb = _hex_to_rgb(emissive)
         bsdf.inputs['Emission Color'].default_value = (er, eg, eb, 1.0)
         bsdf.inputs['Emission Strength'].default_value = emissive_intensity
+    if alpha < 1.0:
+        bsdf.inputs['Alpha'].default_value = alpha
     return mat
 
 
@@ -130,10 +137,12 @@ def assign_material(obj, mat):
 
 
 def apply_pbr(obj, base_color: str, rough: float, metal: float,
-              emissive=None, emissive_intensity: float = 0.0):
+              emissive=None, emissive_intensity: float = 0.0,
+              alpha: float = 1.0):
     """便利方法：make_material + assign_material 一体。"""
     mat = make_material(obj.name + '_Mat', base_color, rough, metal,
-                        emissive=emissive, emissive_intensity=emissive_intensity)
+                        emissive=emissive, emissive_intensity=emissive_intensity,
+                        alpha=alpha)
     assign_material(obj, mat)
     return obj
 
@@ -306,6 +315,18 @@ CITY_PALETTE = {
     'foliage_autumn': '#b8792f',   # 秋叶（oak_tree_autumn）
     'wood':           '#7a5a3a',   # 木板 / 树皮 / 栈桥
     'soil':           '#5a4634',   # 树池 / 地被土
+    # ── 车辆涂装（批次 41 新增；涂装是「品牌语义」不是「城市材质」，单列一族）──
+    'tire':           '#1c1e22',   # 轮胎橡胶（全车型共用）
+    'vehicle_glass':  '#2c4356',   # 车窗玻璃基色（透明度走 alpha 通道）
+    'vehicle_dark':   '#22262c',   # 下裙 / 格栅 / 内饰 / 底板（车用暗塑料）
+    'sedan_blue':     '#3a5a8a',   # 私家轿车主流蓝（批次 41 沿用 v19 基色）
+    'sedan_silver':   '#b8bcc2',   # 私家轿车银灰变体
+    'taxi_yellow':    '#e8c020',   # 出租车涂装黄
+    'bus_teal':       '#2a8c4a',   # 公交下裙带（青绿系，沿用 v19 基色）
+    'bus_white':      '#e8eaec',   # 公交上装白
+    'truck_red':      '#c83a2c',   # 货车驾驶室红（消防红同族）
+    'truck_cargo':    '#c8ccd0',   # 货车货厢浅灰
+    'sign_amber':     '#ffb43a',   # 公交路牌屏 emissive 琥珀
 }
 # 白/黑/警示红单列在表外（不是"材质语义"而是全城通用）：黑橡胶轮胎、红消防标识。
 

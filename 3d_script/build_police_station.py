@@ -3,7 +3,7 @@
 build_police_station — 警局（PoliceStation）Blender headless 导出脚本（19-Blender3D模型集成）。
 
 对应组件 ClientWeb/src/components/virtualCity/civic/PoliceStation.tsx：
-  - 主屋 + 屋顶檐口 + 蓝色腰线 + 门厅雨棚 + 2 立柱 + 警灯柱（红蓝双灯）+ 巡逻车
+  - 主屋 + 屋顶檐口 + 蓝色腰线 + 门厅雨棚 + 2 立柱 + 警灯柱（红蓝双灯）（站内车由前端 Vehicle 摆放，批次 41）
   - 全城坐标 (10, 0, 8)
 
 坐标与尺度规约（2026-09-27 批次 19 GLB 轴向/尺度回溯修正，全目录统一）：
@@ -81,16 +81,11 @@ def build_police_station() -> bpy.types.Object:
     apply_pbr(lamp_red, LAMP_RED, rough=0.4, metal=0.0,
               emissive=LAMP_RED, emissive_intensity=1.2)
 
-    # 巡逻车（白底蓝条，停在门前）
-    patrol_body = make_box('PatrolBody', (0.320, 0.140, 0.130), (0.300, -0.240, 0.065))
-    apply_pbr(patrol_body, PATROL_WHITE, rough=0.6, metal=0.1)
-    patrol_strip = make_box('PatrolStrip', (0.100, 0.145, 0.040), (0.300, -0.240, 0.090))
-    apply_pbr(patrol_strip, BAND, rough=0.6, metal=0.1)
-    patrol_cab = make_box('PatrolCab', (0.100, 0.130, 0.080), (0.220, -0.240, 0.170))
-    apply_pbr(patrol_cab, PATROL_WHITE, rough=0.6, metal=0.1)
+    # 批次 41 D1：烘焙巡逻车删除 —— 站内车改由前端 <Vehicle variant="sedan"
+    # glbName="sedan_silver" 静态摆放（PoliceStation.tsx），GLB 不再自带 2-box 假车。
 
     all_objs = ([main, roof, band, canopy, lamp_pole, lamp_blue, lamp_red,
-                 patrol_body, patrol_strip, patrol_cab] + cols)
+                 ] + cols)
     return join_objects(all_objs, 'PoliceStation')
 
 

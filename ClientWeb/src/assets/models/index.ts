@@ -49,7 +49,12 @@ export function modelUrl(category: ModelCategory, name: string): string {
 /** 模型名字面量（与 3d_script/build_*.py 文件名一一对齐，禁止运行时拼字符串）。 */
 export const MODEL_NAMES = {
   civic: ['city_hall', 'comm_tower', 'water_tower', 'fire_station', 'police_station'] as const,
-  vehicles: ['sedan', 'truck', 'bus', 'taxi'] as const,
+  vehicles: [
+    'sedan', 'truck', 'bus', 'taxi',
+    // 批次 41 涂装变体（A6）：sedan_silver 银灰漆（尺寸同 sedan）/ truck_white 白漆
+    // （尺寸同 truck）—— 只作 Vehicle glbName，variant 仍走 4 原值查 REAL_DIMS_M。
+    'sedan_silver', 'truck_white',
+  ] as const,
   nature: [
     'oak_tree',
     'snow_mountain',

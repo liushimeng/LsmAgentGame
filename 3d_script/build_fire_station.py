@@ -3,7 +3,7 @@
 build_fire_station — 消防站（FireStation）Blender headless 导出脚本（19-Blender3D模型集成）。
 
 对应组件 ClientWeb/src/components/virtualCity/civic/FireStation.tsx：
-  - 主屋 + 屋顶 + 白色腰线 + 2 车库门 + 滑杆塔 + 警灯 + 红消防车
+  - 主屋 + 屋顶 + 白色腰线 + 2 车库门 + 滑杆塔 + 警灯（站内车由前端 Vehicle 摆放，批次 41）
   - 全城坐标 (-12, 0, 6)
 
 坐标与尺度规约（2026-09-27 批次 19 GLB 轴向/尺度回溯修正，全目录统一）：
@@ -74,13 +74,10 @@ def build_fire_station() -> bpy.types.Object:
     apply_pbr(lamp, LAMP_RED, rough=0.4, metal=0.0,
               emissive=LAMP_RED, emissive_intensity=1.5)
 
-    # 简化红消防车（单 body + 驾驶室）
-    truck_body = make_box('FireTruckBody', (0.300, 0.140, 0.130), (-0.300, -0.280, 0.065))
-    apply_pbr(truck_body, DOOR_RED, rough=0.6, metal=0.1)
-    truck_cab = make_box('FireTruckCab', (0.100, 0.130, 0.110), (-0.400, -0.280, 0.185))
-    apply_pbr(truck_cab, DOOR_RED, rough=0.6, metal=0.1)
+    # 批次 41 D1：烘焙消防车删除 —— 站内车改由前端 <Vehicle variant="truck">
+    # 静态摆放（真实车模 + 车顶警灯，FireStation.tsx），GLB 不再自带 2-box 假车。
 
-    all_objs = [main, band, roof, tower, lamp_rod, lamp, truck_body, truck_cab] + doors
+    all_objs = [main, band, roof, tower, lamp_rod, lamp] + doors
     return join_objects(all_objs, 'FireStation')
 
 

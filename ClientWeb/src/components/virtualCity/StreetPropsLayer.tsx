@@ -47,7 +47,7 @@ import { useEffect, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import type { VirtualCityCrowdSnapshot, VirtualCityDistrictDef } from '@/types/virtualCity';
 import { detectQualityTier } from '@/engine3d';
-import { DISTRICT_SURFACE_Y, buildingTopY, spacing, u } from './cityScale';
+import { DISTRICT_SURFACE_Y, buildingTopY, spacing, u, worldDims } from './cityScale';
 import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
 import { ROAD_WIDTH_MAIN } from './Road';
 import { FIRST_RING_RADIUS, type RoadJunction, type RoadSegment } from './roadNetwork';
@@ -57,7 +57,7 @@ import { outdoorCount, crowdCapFor, synthCrowdEntry } from './crowdFormula';
 import { layoutCrowd, type CrowdPedestrian } from './crowdLayout';
 import { clearCrowdPositions } from './crowdRegistry';
 import { TreesInstanced } from './props/TreesInstanced'; // 批次 20 §3.3：TreeV3 逐实例 → 全局 InstancedMesh（形态同源）
-import { Vehicle } from './props/Vehicle';
+import { Vehicle, type VehicleStop } from './props/Vehicle';
 import { PedestrianV3, type PedestrianV3Props } from './props/PedestrianV3';
 import { Sign } from './props/Sign';
 import { RooftopAcc } from './props/RooftopAcc';
@@ -157,6 +157,10 @@ interface RoadVehicle {
   phase: number;
   /** 16 · 阶段 S：车道偏移（>0 右行 / <0 对向）。 */
   laneOffset: number;
+  /** 批次 41 C1：涂装变体 GLB 名（sedan_silver / truck_white；缺省 = variant 本名）。 */
+  glbName?: string;
+  /** 批次 41 C2：红绿灯停车线（仅 arterial 车；connector/edgeLink 无灯匀速）。 */
+  stops?: VehicleStop[];
 }
 
 interface RoadTree {
@@ -484,19 +488,121 @@ function propsForDistrict(
 }
 
 /**
- * 批次 31：全路网双向车流编排（设计文档 31 §4.5）。
- *   - connector：1 辆/条，仅 withExtra（high 档），上限 20；
- *   - arterial：双向各 1 辆；edgeLink：外向 1 辆（区→高速）；均仅 withExtra（low 档
- *     不渲染新车流，控 draw call —— 实施记录二轮）；放射路删除后无 spoke 车流。
- *   - arterial：双向各 1 辆；edgeLink：外向 1 辆（区→高速）；均仅 withExtra（low 档
- *     只保留 spoke 车流，控 draw call —— 实施记录二轮）。
+ * 批次 31：全路网双向车流编排（设计文档 31 §4.5）→ **批次 41 C1/C2/C3 改版**：
+ *   - connector：1 辆/条，仅 withExtra（high 档）—— 批次 41 去 20 上限（36 条全量）；
+ *   - arterial：每方向 1→**2** 辆（同向第二辆 phase +0.5 错开）；**low 档保底每方向
+ *     1 辆（共 8 辆）**，替代旧 low 档 0 辆；edgeLink：外向 1 辆（区→高速），仅
+ *     withExtra；放射路删除后无 spoke 车流；
+ *   - C1 变体池按路权分池：connector = sedan/taxi/sedan/truck（9 m 窄路无公交），
+ *     arterial/edgeLink 维持全 4 型轮转；
+ *   - C1 扰动（消「等差 phase + 同速直线」机械感）：速度 ×(0.92+0.16·hash01)、
+ *     phase fract(i·0.37+0.21·hash01)，hash01 为确定性 0..1（禁 Math.random）；
+ *   - C1 涂装变体（A6 双涂装 GLB）：sedan i%3===0 → sedan_silver /
+ *     truck i%3===1 → truck_white，4 色 → 6 色；
+ *   - C2 信号耦合：arterial 车附 stops[]（交点推导 + 停车线后退 + C3 队列槽位 gap），
+ *     Vehicle.tsx 据此红/黄灯减速排队、绿灯起步；
+ *   - 密度：high ≈ 69 辆（connector 36 + arterial 16 + edgeLink 17）/ low 8 辆。
  * 速度口径照批次 30 P1-12：真实米/秒经 u() 换算 ÷ 路径长（市区 32~43 km/h）。
  */
 function vehiclesForNetwork(segments: RoadSegment[], withExtra: boolean): RoadVehicle[] {
   const roads: RoadVehicle[] = [];
   const speedMapMs = { sedan: 11, truck: 9, bus: 9, taxi: 12 };
+  // C1：connector 变体池（9 m 窄路无公交）；arterial/edgeLink 维持全 4 型
+  const CONNECTOR_VARIANTS: Array<RoadVehicle['variant']> = ['sedan', 'taxi', 'sedan', 'truck'];
+  /** 全局产车序号（变体轮转 / 速度相位涂装扰动 / 涂装 i%3 的确定性种子）。 */
   let i = 0;
-  let connectorCount = 0;
+
+  // ── C2：arterial 交点推导 ──────────────────────────────────────────
+  // 收集 arterial 段按行进轴分类：Z 跑段（|dx|<ε，x=const）× X 跑段（|dz|<ε，z=const）
+  // 两两求交点，按 Math.atan2(z,x) 升序 idx —— 与 roadNetwork.arterialIntersections
+  // （trafficSignalsForCity 消费）同点集合同排序。
+  // 相位规则（几何口径）：phaseOf(idx)=idx%2===0?'A':'B' 管控**沿 X 跑的路（z=const）**，
+  // 沿 Z 跑的路（x=const）受 opposite 管控。依据 = trafficSignalsForCity 产出的
+  // `rotation: atan2(-1,0)`（灯面朝 −x）灯携带 phase(idx)，它服务于沿 +x 行驶的车
+  // —— 即沿 X 跑的路（该函数内「纵路/横路」注释命名与几何相反，以几何为准）。
+  const zRun = segments.filter((s) => s.cls === 'arterial' && Math.abs(s.to[0] - s.from[0]) < 1e-6);
+  const xRun = segments.filter((s) => s.cls === 'arterial' && Math.abs(s.to[1] - s.from[1]) < 1e-6);
+  const intersections = zRun
+    .flatMap((a) => xRun.map((b) => ({ x: a.from[0], z: b.from[1] })))
+    .sort((p, q) => Math.atan2(p.z, p.x) - Math.atan2(q.z, q.x))
+    .map((p, idx) => ({ ...p, phaseX: (idx % 2 === 0 ? 'A' : 'B') as 'A' | 'B' }));
+
+  /** C2 停车线后退量（世界单位）：交点中心沿行进反方向退主干道半宽 + 1.2 m 路缘余量。 */
+  const STOP_LINE_BACK = ROAD_WIDTH_MAIN / 2 + 0.12;
+
+  /** C1 确定性 0..1 hash（速度/相位扰动种子；同源 hashStr 风格，禁 Math.random）。 */
+  const hash01 = (n: number): number => {
+    let h = Math.imul(n ^ 0x9e3779b9, 2654435761);
+    h ^= h >>> 15;
+    h = Math.imul(h, 2246822519);
+    h ^= h >>> 13;
+    return (h >>> 0) / 4294967296;
+  };
+  /** C1 相位抖动（extra：同向第二辆 +0.5 错开）。 */
+  const jitterPhase = (n: number, extra = 0): number => (n * 0.37 + 0.21 * hash01(n) + extra) % 1;
+  /** C1 涂装变体（A6：sedan_silver / truck_white 各 1/3 轮转，其余用 variant 本名）。 */
+  const glbNameFor = (variant: RoadVehicle['variant'], n: number): string | undefined => {
+    if (variant === 'sedan' && n % 3 === 0) return 'sedan_silver';
+    if (variant === 'truck' && n % 3 === 1) return 'truck_white';
+    return undefined;
+  };
+
+  /** 产单辆车（C1 速度/相位扰动 + 涂装轮转 + C2 stops 透传；调用后 i 自增）。 */
+  const pushVehicle = (
+    from: [number, number],
+    to: [number, number],
+    variant: RoadVehicle['variant'],
+    len: number,
+    opts: { extraPhase?: number; stops?: VehicleStop[] } = {},
+  ): void => {
+    roads.push({
+      from,
+      to,
+      variant,
+      speed: (u(speedMapMs[variant]) / Math.max(1, len)) * (0.92 + 0.16 * hash01(i)),
+      phase: jitterPhase(i, opts.extraPhase ?? 0),
+      // 右行偏移：bus/truck 更宽，偏移略大
+      laneOffset: variant === 'bus' || variant === 'truck' ? 0.36 : 0.32,
+      glbName: glbNameFor(variant, i),
+      stops: opts.stops,
+    });
+    i++;
+  };
+
+  /**
+   * C2/C3：某 arterial 车（from→to）的受控停车线集合 + 队列槽位 gap。
+   * 判据：交点落在该车 from→to 线段上 —— 投影参数 t ∈ (0.05, 0.95) **且垂距 ≈ 0**
+   * （平行路的交点投影 t 相同，只查 t 会把别条路的停车线挂到本车，实测 4 stops/车）；
+   * 停车线 t = t_center − STOP_LINE_BACK/len（车从 from 向 to，t_stop < t_center）；
+   * gap = slot × (车长 + 0.2)（C3：同段同向按生成序排 slot 0..n-1）。
+   */
+  const stopsFor = (
+    from: [number, number],
+    to: [number, number],
+    variant: RoadVehicle['variant'],
+    slot: number,
+  ): VehicleStop[] => {
+    const dx = to[0] - from[0];
+    const dz = to[1] - from[1];
+    const len = Math.sqrt(dx * dx + dz * dz) || 1;
+    const runsAlongX = Math.abs(dz) < Math.abs(dx); // 沿 X 跑（z=const）↔ 沿 Z 跑（x=const）
+    const carLen = worldDims(variant).x;
+    const stops: VehicleStop[] = [];
+    for (const p of intersections) {
+      const rx = p.x - from[0];
+      const rz = p.z - from[1];
+      const tCenter = (rx * dx + rz * dz) / (len * len);
+      const perp = Math.abs(rx * dz - rz * dx) / len; // 点到本车所在直线的垂距
+      if (tCenter <= 0.05 || tCenter >= 0.95 || perp > 1e-6) continue;
+      stops.push({
+        t: tCenter - STOP_LINE_BACK / len,
+        phase: runsAlongX ? p.phaseX : p.phaseX === 'A' ? 'B' : 'A',
+        gap: slot * (carLen + 0.2),
+      });
+    }
+    return stops;
+  };
+
   for (const seg of segments) {
     const [fx, fz] = seg.from;
     const [tx, tz] = seg.to;
@@ -505,51 +611,39 @@ function vehiclesForNetwork(segments: RoadSegment[], withExtra: boolean): RoadVe
     const len = Math.sqrt(dx * dx + dz * dz);
 
     if (seg.cls === 'connector') {
-      if (!withExtra || connectorCount >= 20 || len < 1) continue;
-      connectorCount++;
-      const variant = VEHICLE_VARIANTS[i % VEHICLE_VARIANTS.length];
-      const fwdOffset = variant === 'bus' || variant === 'truck' ? 0.36 : 0.32;
-      roads.push({
-        from: [fx, fz],
-        to: [tx, tz],
-        variant,
-        speed: u(speedMapMs[variant]) / Math.max(1, len),
-        phase: (i * 0.37) % 1,
-        laneOffset: fwdOffset,
-      });
-      i++;
+      // C1：去 20 上限（36 条全量；B1 修复后 GLB 模式不再叠加附件 mesh，DC 增量可控）
+      if (!withExtra || len < 1) continue;
+      const variant = CONNECTOR_VARIANTS[i % CONNECTOR_VARIANTS.length];
+      pushVehicle([fx, fz], [tx, tz], variant, len);
       continue;
     }
 
-    // 批次 31 二轮：arterial / edgeLink 车流仅 high 档（low 档控 draw call）
-    if ((seg.cls === 'arterial' || seg.cls === 'edgeLink') && !withExtra) continue;
+    // 批次 31 二轮：edgeLink 车流仅 high 档（low 档控 draw call）
+    if (seg.cls === 'edgeLink') {
+      if (!withExtra || len < 1) continue;
+      const variant = VEHICLE_VARIANTS[i % VEHICLE_VARIANTS.length];
+      pushVehicle([fx, fz], [tx, tz], variant, len);
+      continue;
+    }
 
-    const variant = VEHICLE_VARIANTS[i % VEHICLE_VARIANTS.length];
-    // 右行偏移：bus/truck 更宽，偏移略大
-    const fwdOffset = variant === 'bus' || variant === 'truck' ? 0.36 : 0.32;
-    roads.push({
-      from: [fx, fz],
-      to: [tx, tz],
-      variant,
-      speed: u(speedMapMs[variant]) / Math.max(1, len),
-      phase: (i * 0.37) % 1,
-      laneOffset: fwdOffset,
-    });
-    i++;
-    // 对向车流：arterial 双向各 1（对向即本条）。laneOffset 取「行进方向右侧」
-    // 语义，方向反转后世界侧自动翻转，因此对向车传同样的正值（取负会落到同侧 → 对撞）。
-    if (seg.cls === 'arterial') {
-      const backVariant = VEHICLE_VARIANTS[(i + 2) % VEHICLE_VARIANTS.length];
-      const backOffset = backVariant === 'bus' || backVariant === 'truck' ? 0.36 : 0.32;
-      roads.push({
-        from: [tx, tz],
-        to: [fx, fz],
-        variant: backVariant,
-        speed: u(speedMapMs[backVariant]) / Math.max(1, len),
-        phase: ((i * 0.37) + 0.5) % 1,
-        laneOffset: backOffset,
+    if (seg.cls !== 'arterial') continue;
+    // C1：high 每方向 2 辆 / low 保底每方向 1 辆；双向各排独立队列槽位（C3）。
+    // laneOffset 取「行进方向右侧」语义，方向反转后世界侧自动翻转，因此对向车传
+    // 同样的正值（取负会落到同侧 → 对撞）。
+    const perDir = withExtra ? 2 : 1;
+    for (let k = 0; k < perDir; k++) {
+      const variant = VEHICLE_VARIANTS[i % VEHICLE_VARIANTS.length];
+      pushVehicle([fx, fz], [tx, tz], variant, len, {
+        extraPhase: k * 0.5,
+        stops: stopsFor([fx, fz], [tx, tz], variant, k),
       });
-      i++;
+    }
+    for (let k = 0; k < perDir; k++) {
+      const variant = VEHICLE_VARIANTS[i % VEHICLE_VARIANTS.length];
+      pushVehicle([tx, tz], [fx, fz], variant, len, {
+        extraPhase: k * 0.5,
+        stops: stopsFor([tx, tz], [fx, fz], variant, k),
+      });
     }
   }
   return roads;
@@ -875,7 +969,8 @@ export function StreetPropsLayer({
     } else {
       capPedestrians(districtProps, pedCap);
     }
-    // 批次 31：车辆/行道树改沿全路网（connector 车流仅 high 档，上限 20）
+    // 批次 31：车辆/行道树改沿全路网 → 批次 41 C1/C2/C3：connector 全量 + arterial
+    // 每方向 2 辆（low 保底 1）+ 涂装/速度/相位扰动 + 红绿灯停车线 stops
     const roadVehicles = vehiclesForNetwork(segments, tier === 'high');
     const roadTrees = roadTreesForNetwork(segments);
     const busStops = busStopsForNetwork(segments);
@@ -1004,15 +1099,18 @@ export function StreetPropsLayer({
       {/* 批次 20 §3.3：区内树 + 行道树 → 单一全局 InstancedMesh 集合（3 draw call） */}
       <TreesInstanced trees={allTrees} totalCap={TREE_TOTAL_CAP} />
 
-      {/* 主干道车辆（16 · 阶段 S：双向车道，右行偏移） */}
+      {/* 主干道车辆（16 · 阶段 S：双向车道，右行偏移；批次 41 C1/C2：涂装变体
+          glbName + arterial 红绿灯停车线 stops 透传） */}
       {layout.roadVehicles.map((v, i) => (
         <Vehicle
           key={`vehicle-${i}`}
           from={v.from}
           to={v.to}
           variant={v.variant}
+          glbName={v.glbName}
           speed={v.speed}
           phase={v.phase}
+          stops={v.stops}
           laneOffset={v.laneOffset}
         />
       ))}

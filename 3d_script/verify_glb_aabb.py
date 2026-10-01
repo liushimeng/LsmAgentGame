@@ -74,6 +74,11 @@ TARGETS = {
     'vehicles/taxi.glb':      dict(x=0.470, y=0.150, z=0.185, axis='x_flat', pivot='轮底贴地 minY=0，X/Z 居中'),
     'vehicles/bus.glb':       dict(x=1.200, y=0.320, z=0.255, axis='x_flat', pivot='轮底贴地 minY=0，X/Z 居中'),
     'vehicles/truck.glb':     dict(x=0.850, y=0.340, z=0.250, axis='x_flat', pivot='轮底贴地 minY=0，X/Z 居中'),
+    # 批次 41 涂装变体：尺寸同原型（taxi 顶灯计入 Y，+4.7% 在容差内）
+    'vehicles/sedan_silver.glb': dict(x=0.460, y=0.145, z=0.182, axis='x_flat',
+                                      pivot='≡ sedan（银灰涂装变体）'),
+    'vehicles/truck_white.glb':  dict(x=0.850, y=0.340, z=0.250, axis='x_flat',
+                                      pivot='≡ truck（白涂装变体）'),
     'characters/pedestrian_walk.glb': dict(x=0.055, y=0.167, z=0.035, pivot='身高 1.67 m，脚底 minY=0，X/Z 居中'),
     # ── 批次 34 八人物原型（build_character.py）─────────────────────────────
     # 表值 = 各原型设计身高/肩宽（设计 34 §5.1 + 任务书规格表），tol=0.08 对应
