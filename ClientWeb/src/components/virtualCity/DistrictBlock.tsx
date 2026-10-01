@@ -16,8 +16,9 @@
  *
  * 批次 27 §4.3：中央公园草地覆盖层按季节换贴图（seasonAssets 适配：
  * 夏 grass_tile / 春秋冬季节贴图，缺失回退 grass_tile），低频订阅不抖动布局。
- * 批次 30 A3/P1-10：马路牙子 u(0.5)=50cm「黑框」→ 真实 15 cm 浅色路缘，
- * 且 4 条经 building_shapes.mergeBoxes 合为 1 mesh（每区省 3 draw call）。
+ * 批次 40 C1：区四边路缘方框取消 —— 区边界是行政概念，真实城市无物理实体；
+ * 路缘（道路与人行道的边界）由道路层 RoadMarkings 负责。原 15 cm 浅色路缘
+ * 几何（curbGeo）已删除，区底板边缘由贴图四边暗色收边提供视觉过渡。
  */
 
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
@@ -28,8 +29,7 @@ import type { TKey } from '@/i18n';
 import { districtTexture, districtTextureStem, groundTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/virtualCity';
 import { buildingsFor } from './building_layout';
 import { DistrictBuildings } from './DistrictBuildings';
-import { mergeBoxes, type BoxSpec } from './building_shapes';
-import { DISTRICT_FLOORS, DISTRICT_SURFACE_Y, buildingHeight, prosperityOf, u } from './cityScale';
+import { DISTRICT_FLOORS, DISTRICT_SURFACE_Y, buildingHeight, prosperityOf } from './cityScale';
 import { useSharedPBR, useSharedTexture, withPBR } from '@/engine3d';
 import { currentSeason, subscribeSeason } from './cityTimeStore';
 import type { CitySeason } from './cityTimeStore';
@@ -60,17 +60,6 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
   const [hovered, setHovered] = useState(false);
   const texUrl = districtTexture(def.id);
   const buildings = useMemo(() => buildingsFor(def), [def]);
-  // 批次 30 A3/P1-10：四边路缘 mergeBoxes 合 1 mesh（真实 15 cm 高浅色路缘）。
-  const curbGeo = useMemo(() => {
-    const specs: BoxSpec[] = [
-      { x: 0, y: u(0.075), z: -3.95, w: 8.1, h: u(0.15), d: 0.18 },
-      { x: 0, y: u(0.075), z: 3.95, w: 8.1, h: u(0.15), d: 0.18 },
-      { x: -3.95, y: u(0.075), z: 0, w: 0.18, h: u(0.15), d: 8.1 },
-      { x: 3.95, y: u(0.075), z: 0, w: 0.18, h: u(0.15), d: 8.1 },
-    ];
-    return mergeBoxes(specs);
-  }, []);
-  useEffect(() => () => curbGeo.dispose(), [curbGeo]);
 
   // 14-3D渲染深化：共享贴图缓存（失败静默降级主色底板 —— 降级策略 §9）。
   const texture = useSharedTexture(texUrl);
@@ -202,12 +191,8 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
           />
         </mesh>
       )}
-      {/* 14-3D渲染深化：马路牙子 curb（底板四边窄条）。
-          批次 30 A3/P1-10：原 u(0.5)=50 cm 高深色条读作「黑框棋盘格」⇒
-          真实路缘 15 cm + 浅色；4 条经 mergeBoxes 合 1 mesh（×32 区省 3 DC/区）。 */}
-      <mesh geometry={curbGeo} position={[0, 0.03, 0]}>
-        <meshStandardMaterial color="#7a828e" roughness={0.9} />
-      </mesh>
+      {/* 批次 40 C1：区四边路缘已取消 —— 区边界是行政概念，真实城市无物理实体，
+          路缘由道路层 RoadMarkings 负责。区底板边缘由贴图四边暗色收边提供视觉过渡。 */}
       {/* 选中 / 悬停描边 */}
       {(selected || hovered) && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>

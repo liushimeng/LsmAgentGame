@@ -88,6 +88,12 @@ TILE_TARGETS = {
     'STREET_MAIN_TILE': ('streets', 'streets', ('road_main', 'asphalt_main')),
     'STREET_SIDE_TILE': ('streets', 'streets', ('road_side', 'asphalt_side')),
     'SIDEWALK_TILE': ('streets', 'streets', ('sidewalk_main', 'sidewalk_side')),
+    # 批次 40：ground 一族（urban_base 城市地表基底，80 m 周期）+ districts 一族
+    # （街区内部地表，整幅 80 m）。两者纹素密度均低于 60 带（基底/被覆盖），A5 记 WARN。
+    # GROUND_TILE 需 stem 白名单：ground/ 目录混有 512²（urban_base/grass/plaza/water）
+    # 与 1024²（canal/forest/ocean/rock_snow/sand/snow_cover）两档，无白名单则 A2 全量校验必红。
+    'GROUND_TILE': ('ground', 'ground', ('urban_base',)),
+    'DISTRICT_TILE': ('districts', 'districts'),
 }
 
 # A4 派生后缀

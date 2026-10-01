@@ -126,6 +126,26 @@ export const SIDEWALK_TILE: TextureTile = {
 };
 
 /**
+ * 城市地表基底周期（`ground/urban_base.png`，**512×512**）。
+ * 物理周期 80 m × 80 m = GROUND_TILE(8u) × 10 m/u（区底板边长）。
+ * 纹素密度 512/80 = 6.4 px/m（基底贴图，被道路/区底板覆盖 90%+，主动取舍）。
+ * 批次 40：原图低频色块 std=9.8（20×20 平铺形成可见网格）→ 程序化重出 std<3。
+ */
+export const GROUND_TILE: TextureTile = {
+  texW: 512, texH: 512, tileMetersU: 80, tileMetersV: 80,
+};
+
+/**
+ * 街区内部地表周期（`districts/<stem>.png`，**1024×1024**）。
+ * 物理周期 80 m × 80 m（整幅非平铺，一个区一张）。
+ * 纹素密度 1024/80 = 12.8 px/m（被建筑覆盖 80%+，低密度可接受）。
+ * 批次 40：原 8 张航拍图（双重影像）+ 8 张占位图（水印）→ 5 族程序化地表材质。
+ */
+export const DISTRICT_TILE: TextureTile = {
+  texW: 1024, texH: 1024, tileMetersU: 80, tileMetersV: 80,
+};
+
+/**
  * 校验贴图周期登记的自洽性（方案 §2.1 不变式；判据 A1）。
  * @throws {Error} 尺寸非正有限数、或「物理周期比 ≠ 像素宽高比」时抛出 ——
  *   登记表写错必须在开发期炸掉，而不是渲染出一片各向异性拉伸的贴图。
