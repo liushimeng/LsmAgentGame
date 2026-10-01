@@ -59,6 +59,20 @@ export const VendorKiosk = memo(function VendorKiosk({ x, z, rotation = 0 }: Pro
         <boxGeometry args={[W + u(0.15), ROOF_T, D + u(0.15)]} />
         <meshStandardMaterial color={ROOF} roughness={0.7} metalness={0.1} />
       </mesh>
+      {/* 批次 42 D1：雨棚条纹（白色竖条 ×5）+ 柜台线 */}
+      {[0, 1, 2, 3, 4].map((i) => (
+        <mesh
+          key={`stripe-${i}`}
+          position={[(i - 2) * u(0.24), H + ROOF_T / 2, D / 2 + u(0.076)]}
+        >
+          <boxGeometry args={[u(0.1), ROOF_T * 1.04, u(0.02)]} />
+          <meshStandardMaterial color="#f2efe6" roughness={0.7} />
+        </mesh>
+      ))}
+      <mesh position={[0, H * 0.42, D / 2 + u(0.03)]}>
+        <boxGeometry args={[W * 0.95, u(0.06), u(0.06)]} />
+        <meshStandardMaterial color="#4a3426" roughness={0.65} />
+      </mesh>
       {/* 蓝色招牌（顶棚下沿） */}
       <mesh position={[0, H - u(0.08), D / 2 + 0.001]}>
         <planeGeometry args={[W * 0.85, u(0.3)]} />

@@ -65,6 +65,22 @@ export const PhoneBooth = memo(function PhoneBooth({ x, z, rotation = 0, variant
           <meshStandardMaterial color={FRAME} metalness={0.5} roughness={0.4} />
         </mesh>
       ))}
+      {/* 批次 42 D1：玻璃分格线（腰线横档 + 竖梃）+ 顶灯 emissive */}
+      {[0.45, 0.75].map((f, i) => (
+        <mesh key={`mullion-h-${i}`} position={[0, u(0.2) + (H - u(0.2)) * f, 0]}>
+          <boxGeometry args={[W + u(0.01), u(0.03), D + u(0.01)]} />
+          <meshStandardMaterial color={FRAME} metalness={0.5} roughness={0.4} />
+        </mesh>
+      ))}
+      <mesh position={[0, H + ROOF_T + u(0.035), 0]}>
+        <boxGeometry args={[W * 0.55, u(0.05), D * 0.55]} />
+        <meshStandardMaterial
+          color="#ffe9b8"
+          emissive="#ffe9b8"
+          emissiveIntensity={0.7}
+          roughness={0.35}
+        />
+      </mesh>
     </group>
   );
 });

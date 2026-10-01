@@ -327,6 +327,15 @@ CITY_PALETTE = {
     'truck_red':      '#c83a2c',   # 货车驾驶室红（消防红同族）
     'truck_cargo':    '#c8ccd0',   # 货车货厢浅灰
     'sign_amber':     '#ffb43a',   # 公交路牌屏 emissive 琥珀
+    # ── 街具（批次 42 新增；城市家具是「市政语义」不是建筑/车辆材质，单列一族）──
+    'post_green':     '#0a6b45',   # 中国邮政绿（柱式邮筒主色）
+    'post_green_d':   '#084f34',   # 邮政绿暗部（顶盖/铭牌底）
+    'sign_blue':      '#1a4f9c',   # 路名牌蓝底（交通指路牌国标色系）
+    'sign_green':     '#0d6b3f',   # 信息牌绿底
+    'meter_blue':     '#3a5a8a',   # 停车咪表机身蓝灰
+    'glass_panel':    '#a8c8d0',   # 候车亭玻璃（比 glass 略暖，与建筑窗区分）
+    'bench_alu':      '#9aa2a8',   # 铝条座椅（阳极氧化铝）
+    'reflect_white':  '#e8eaec',   # 反光膜牌面/标识白
 }
 # 白/黑/警示红单列在表外（不是"材质语义"而是全城通用）：黑橡胶轮胎、红消防标识。
 
@@ -432,3 +441,59 @@ def weathered_pbr(obj, base_color: str, rough: float, metal: float, *,
 
     assign_material(obj, mat)
     return obj
+
+
+def flatten_weathered_materials(obj):
+    """weathered_pbr 的 Mix/Noise 节点链会让 glTF 导出**丢掉 Base Color**（导出白模）：
+    Principled BSDF 的 Base Color 被链路占用后，导出器读不到常量 ⇒ baseColorFactor 缺省
+    = 纯白（批次 38 实测：canal_bank/canal_reed 首版 9/51 个材质全白）。
+    导出前解链回常量：基色取 Mix 的 A 输入（weathered_pbr 写入的 CITY_PALETTE 值），
+    粗糙度取 Math MULTIPLY_ADD 的 addend（= 原 rough）。磨损只存在于 Blender 场景
+    预览（glTF 无 Noise 对应物，weathered_pbr 文档已注明），游戏内即纯色基值。
+
+    2026-10-02 批次 42：自 build_canal_bank.py 的私有副本上收为共享工具
+    （新街具 5 件都需要；原副本保留不动，行为逐字节一致）。
+    """
+    mats = obj.data.materials if hasattr(obj, 'data') else []
+    for mat in mats:
+        if not mat or not mat.use_nodes:
+            continue
+        bsdf = mat.node_tree.nodes.get('Principled BSDF')
+        if bsdf is None:
+            continue
+        bc = bsdf.inputs['Base Color']
+        if bc.is_linked:
+            node = bc.links[0].from_node
+            col = (1.0, 1.0, 1.0, 1.0)
+            if node.bl_idname == 'ShaderNodeMix':
+                for s in node.inputs:
+                    if s.name == 'A' and s.type == 'RGBA':
+                        col = tuple(s.default_value)
+                        break
+            for lk in list(bc.links):
+                mat.node_tree.links.remove(lk)
+            bc.default_value = col
+        rc = bsdf.inputs['Roughness']
+        if rc.is_linked:
+            node = rc.links[0].from_node
+            rough = 0.8
+            if node.bl_idname == 'ShaderNodeMath':
+                rough = float(node.inputs[2].default_value)   # MULTIPLY_ADD 的 addend
+            for lk in list(rc.links):
+                mat.node_tree.links.remove(lk)
+            rc.default_value = rough
+
+
+def shared_weathered(objs, base_color: str, rough: float, metal: float, *, name: str = '', **kw):
+    """多件共享**同一** weathered 材质（批次 42）：先给首件建 weathered_pbr 材质，
+    再把同一 datablock 赋给其余件 —— join 后材质槽按 datablock 去重，
+    每个语义组只占 1 个 primitive/DC（32 实例 × 11 槽的邮筒会爆 DC 预算）。
+    磨损噪声只在首件材质节点图里（glTF 一律丢弃，flatten 后即纯色）。"""
+    if not objs:
+        return
+    weathered_pbr(objs[0], base_color, rough, metal, **kw)
+    mat = objs[0].data.materials[0]
+    if name:
+        mat.name = name
+    for o in objs[1:]:
+        assign_material(o, mat)

@@ -40,7 +40,6 @@ VERIFIER = ROOT / "3d_script/verify_glb_aabb.py"
 # ── 表键 → 资产键（唯一映射表；只登记**有对应 GLB** 的键）────────────────
 KEY_MAP = {
     "trashCan": "road/trash_can",
-    "streetLight": "road/road_props",        # 多物件合成 GLB，仅 y 有目标
     "sedan": "vehicles/sedan",
     "taxi": "vehicles/taxi",
     "bus": "vehicles/bus",
@@ -55,10 +54,19 @@ KEY_MAP = {
     "waterTower": "civic/water_tower",
     "policeStation": "civic/police_station",
     "fireStation": "civic/fire_station",
+    # 批次 42 街具五件（设计 42 §3）
+    "busStop": "road/bus_stop",
+    "mailbox": "road/mailbox",
+    "streetSign": "road/street_sign",
+    "parkingMeter": "road/parking_meter",
+    "bikeRack": "road/bike_rack",
 }
 
 # 程序化 fallback 专用、无 GLB ⇒ 不送检（但解析出来打印，便于人眼核对）。
-PROCEDURAL_ONLY = {"streetLightSide", "streetTree", "trafficSignalPole"}
+# 批次 42 增补 streetLight：road_props.glb 批次 31 已删（路灯改由
+# props/StreetLightsInstanced.tsx 程序化实例化），旧 KEY_MAP 映射指向空文件
+# 导致 crosscheck 常红 —— 移入本集合（与 streetLightSide 同口径）。
+PROCEDURAL_ONLY = {"streetLight", "streetLightSide", "streetTree", "trafficSignalPole"}
 
 LINE_RE = re.compile(r"^\s*(\w+)\s*:\s*\{([^}]*)\}")
 FIELD_RE = re.compile(r"\b(x|y|z|minY)\s*:\s*(-?\d+(?:\.\d+)?)")

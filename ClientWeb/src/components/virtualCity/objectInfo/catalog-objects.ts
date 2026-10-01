@@ -81,9 +81,9 @@ export const OBJECT_ENTRIES: ObjectInfoEntry[] = [
     icon: '📮',
     name: { 'zh-CN': '邮筒', en: 'Mailbox', ja: '郵便ポスト' },
     desc: {
-      'zh-CN': '街头邮筒，供市民投寄信件与明信片，是邮政服务在街区的末梢触点。',
-      en: 'A street pillar box for letters and postcards — the postal service’s fingertips in every neighbourhood.',
-      ja: '手葉書を投函する街角の郵便ポスト。郵便サービスが街区に届く末端の接点。',
+      'zh-CN': '街头柱式邮筒（中国邮政绿涂装），供市民投寄信件与明信片，是邮政服务在街区的末梢触点。',
+      en: 'A green street pillar box for letters and postcards — the postal service’s fingertips in every neighbourhood.',
+      ja: '緑色の街角の柱式郵便ポスト。手葉書を投函し、郵便サービスが街区に届く末端の接点となる。',
     },
   },
   {

@@ -95,6 +95,23 @@ export const REAL_DIMS_M = {
   streetLight: { y: 12.0, minY: 0 },
   /** 次干道路灯总高 7.00（项目现行值；road_props.glb 已随批次 31 删除）。 */
   streetLightSide: { y: 7.0, minY: 0 },
+  // ── 批次 42 街具（表值 = 设计 42 §3；GLB 长轴朝向见各行）──
+  /**
+   * 公交候车亭 5.00 × 2.70 × 1.80（长边 X 沿道路向，含站牌灯箱）。
+   * GLB `road/bus_stop`（节点 BusStop）与 fallback 同取本行；灯箱材质名含 `Lightbox`。
+   */
+  busStop: { x: 5.0, y: 2.7, z: 1.8, minY: 0 },
+  /** 柱式邮筒 0.60 × 1.40 × 0.60（直立件；中国邮政绿，投信口朝 +Z）。 */
+  mailbox: { x: 0.6, y: 1.4, z: 0.6, minY: 0 },
+  /**
+   * 路名牌/标志杆 0.62 × 2.65 × 0.12（直立件）。GLB `road/street_sign` 双变体节点
+   * Sign_Traffic / Sign_Info 沿 X 排开（仿 trash_can 双桶），消费端 measureNode 单取。
+   */
+  streetSign: { x: 0.62, y: 2.65, z: 0.12, minY: 0 },
+  /** 停车咪表 0.32 × 1.38 × 0.28（直立件；屏幕朝 +Z，材质名含 `Screen`）。 */
+  parkingMeter: { x: 0.32, y: 1.38, z: 0.28, minY: 0 },
+  /** 倒 U 停车架 + 斜靠自行车 1.80 × 1.10 × 0.62（长边 X；GLB 双节点 BikeRack / BikeRack_Bike）。 */
+  bikeRack: { x: 1.8, y: 1.1, z: 0.62, minY: 0 },
 
   // ── 批次 30 新增（只增不改：旧值不动 ⇒ 无需重导 GLB）──
   /**
@@ -155,6 +172,8 @@ export const REAL_SPACING_M = {
   trashCan: 60,
   /** 公交站台间距（主干道沿线）。 */
   busStop: 500,
+  /** 停车咪表沿路缘间距（两侧交替 ⇒ 单侧 16 m；批次 42 C1）。 */
+  parkingMeter: 8,
 } as const;
 
 export type RealSpacingKey = keyof typeof REAL_SPACING_M;
@@ -224,6 +243,12 @@ export const MODEL_AXIS_CONVENTIONS: Readonly<Partial<Record<RealDimKey, ModelAx
   // 0.5×1.0×0.5 ⇒ Y 主导 ✓）。若哪天改为量测整棵场景（Green+Blue 两变体沿 X 排布
   // ⇒ 1.7×1.0×0.5，X 主导），本声明会误报 —— 届时须同时改 measureNode 与本节。
   trashCan: { upright: true },
+  // 批次 42 街具：直立件（Y 主导 1.40>0.60 / 2.65>0.62 / 1.38>0.32）声明 upright。
+  // busStop（5.0×2.7×1.8）与 bikeRack（1.8×1.1×0.62）长边 X 沿道路向
+  // ⇒ **不声明 upright**（声明即"正确资产被判侧躺"的反向误报，见 ModelAxisConvention）。
+  mailbox: { upright: true },
+  streetSign: { upright: true },
+  parkingMeter: { upright: true },
 
   // ── 市政建筑 ──
   // 仅声明 **Y 主导** 的塔/高层楼；`policeStation`(12.1×6.6×7.0) 与

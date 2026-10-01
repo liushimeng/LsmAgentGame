@@ -61,6 +61,8 @@ export function Fountain({ x, z }: Props) {
         ),
         color: STONE_DARK,
       },
+      // 批次 42 D1：池沿压顶（外缘薄环，强调池口收边）
+      cylPart(u(2.28), u(2.32), u(0.06), 24, 0, u(0.52), 0, STONE_DARK),
       // 中心柱
       cylPart(u(0.12), u(0.16), u(0.9), 10, 0, u(0.85), 0, STONE),
       // 顶碗

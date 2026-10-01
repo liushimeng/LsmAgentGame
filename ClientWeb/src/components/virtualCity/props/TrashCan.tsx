@@ -79,6 +79,15 @@ export const TrashCan = memo(function TrashCan({ x, z, rotation = 0, variant = 0
         <planeGeometry args={[u(0.15), u(0.04)]} />
         <meshStandardMaterial color="#ffffff" roughness={0.6} />
       </mesh>
+      {/* 批次 42 D1：桶沿分色环（深色压圈嵌在盖顶，不越出表值总高）+ 脚踏板 */}
+      <mesh position={[0, H + CAP_T - u(0.008), 0]}>
+        <cylinderGeometry args={[R * 0.96, R * 0.96, u(0.016), 12]} />
+        <meshStandardMaterial color="#2a2e36" roughness={0.55} metalness={0.35} />
+      </mesh>
+      <mesh position={[0, u(0.03), R * 0.72]}>
+        <boxGeometry args={[u(0.14), u(0.025), u(0.06)]} />
+        <meshStandardMaterial color="#2a2e36" roughness={0.7} metalness={0.3} />
+      </mesh>
     </group>
   );
 });

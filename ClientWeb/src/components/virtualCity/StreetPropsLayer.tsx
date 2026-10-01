@@ -176,6 +176,8 @@ interface Layout {
   roadVehicles: RoadVehicle[];
   roadTrees: RoadTree[];
   busStops: Array<{ x: number; z: number; rotation: number }>;
+  /** 批次 42 C1：路缘停车咪表（parkingMetersForNetwork 产出）。 */
+  parkingMeters: ParkingMeterSpot[];
 }
 
 const TREE_VARIANTS: Array<'oak' | 'pine' | 'palm'> = ['oak', 'pine', 'palm'];
@@ -266,8 +268,8 @@ const KIOSK_DISTRICTS = new Set([
 const BICYCLE_DISTRICTS = new Set(['residential', 'edu_district', 'commerce', 'transport_hub', 'riverside']);
 /** 电话亭布点列表。 */
 const PHONE_DISTRICTS = new Set(['oldtown', 'commerce', 'finance']);
-/** 停车牌布点列表。 */
-const PARKING_DISTRICTS = new Set(['finance', 'commerce', 'tech', 'transport_hub']);
+// 批次 42 C1：PARKING_DISTRICTS 注销 —— 停车咪表改沿路缘成排
+// （`parkingMetersForNetwork`），不再按城区撒点。
 
 /**
  * 为单个城区生成 path（折线 2-3 段；总长 6-10 单位；起点远离城区中心 >2）。
@@ -401,75 +403,93 @@ function propsForDistrict(
   });
 
   // 阶段 M 街道家具（按城区属性选择性布点）
+  // 批次 42 C1 布点真实化：朝向统一 `faceOutward(angleToFinance)`（局部 +Z 指向
+  // 区外缘/朝路）；邮筒/自行车架固定在 finance 侧缘（与 sign 同侧错开）；
+  // trash/phone/kiosk 留区心带但不再随机角。**停车咪表已迁往路缘成排**
+  // （`parkingMetersForNetwork`，旧「每城区 1 个 parking」删除）。
   const furniture: FurnitureSpec[] = [];
-  // 垃圾箱：每城区 1
+  /** 局部 +Z 指向世界方向 (cos a, sin a) 的绕 Y 角（物件开敞面/投信口朝区外）。 */
+  const faceOutward = (a: number): number => Math.atan2(Math.cos(a), Math.sin(a));
+  const outRot = faceOutward(angleToFinance);
+  /**
+   * 区缘家具落位搜索（批次 42 C1）：首选 (r=3.5, tan=preferTan)，被路廊 keep-out
+   * 顶掉时沿切向 ±0.6 步长、径向 −0.4 步长找首个 `isBuildable` 点。
+   * 依据：区缘朝 finance 的射线常与 connector 走廊重合（中心连线即路），固定
+   * 偏移 0.6 u 仍落在走廊 keep-out 内（半宽 0.6+margin 0.3=0.9）—— 静默被
+   * `furnitureDry` 滤掉会让约 12/31 区的邮筒消失（§130 断线）。离线实算
+   * （32 区全量）：首选命中 19 区，回退后 31 区全命中。
+   */
+  const edgeSpot = (preferTan: number): { x: number; z: number } | null => {
+    const ex = Math.cos(angleToFinance);
+    const ez = Math.sin(angleToFinance);
+    const tx = -ez; // 区缘切向（垂直于径向）
+    const tz = ex;
+    const tans = [preferTan, preferTan + 0.6, preferTan + 1.2, preferTan + 1.8, preferTan - 0.6, preferTan - 1.2, preferTan - 1.8];
+    for (let ri = 0; ri < 4; ri++) {
+      const r = 3.5 - ri * 0.4;
+      for (const tan of tans) {
+        const x = c.x + ex * r + tx * tan;
+        const z = c.z + ez * r + tz * tan;
+        if (isBuildable(x, z, PROP_KEEP_OUT_MARGIN)) return { x, z };
+      }
+    }
+    return null;
+  };
+  // 垃圾箱：每城区 1（区心带，朝向区外缘）
   const trashAngle = rnd() * Math.PI * 2;
   furniture.push({
     type: 'trash',
     x: c.x + Math.cos(trashAngle) * 3.5,
     z: c.z + Math.sin(trashAngle) * 3.5,
-    rotation: rnd() * Math.PI * 2,
-    variant: idx % 3, // 0/1/2 → 蓝/灰/红
+    rotation: outRot,
+    variant: idx % 3, // 0/1/2 → 蓝/灰/绿
   });
-  // 邮筒：每城区 1
-  const mailAngle = rnd() * Math.PI * 2;
-  furniture.push({
-    type: 'mailbox',
-    x: c.x + Math.cos(mailAngle) * 3.2,
-    z: c.z + Math.sin(mailAngle) * 3.2,
-    rotation: rnd() * Math.PI * 2,
-  });
-  // 报刊亭：选择性
+  // 邮筒：每城区 1（finance 侧缘，与 sign 同侧沿切向错开 0.6 u；投信口朝区外）
+  const mailSpot = edgeSpot(0.6);
+  if (mailSpot) {
+    furniture.push({ type: 'mailbox', x: mailSpot.x, z: mailSpot.z, rotation: outRot });
+  }
+  // 报刊亭：选择性（区心带，朝向区外缘）
   if (KIOSK_DISTRICTS.has(def.id)) {
     const kAngle = rnd() * Math.PI * 2;
     furniture.push({
       type: 'kiosk',
       x: c.x + Math.cos(kAngle) * 3.0,
       z: c.z + Math.sin(kAngle) * 3.0,
-      rotation: rnd() * Math.PI * 2,
+      rotation: outRot,
     });
   }
-  // 自行车：选择性（1-2 辆）
+  // 自行车架：选择性 1-2（finance 侧缘，与 mailbox 反向错开；面向路）
   if (BICYCLE_DISTRICTS.has(def.id)) {
     const bikeCount = 1 + Math.floor(rnd() * 2);
+    const bikeSpots: Array<{ x: number; z: number }> = [];
     for (let i = 0; i < bikeCount; i++) {
-      const bAngle = rnd() * Math.PI * 2;
-      const bR = 2.8 + i * 0.6;
-      furniture.push({
-        type: 'bicycle',
-        x: c.x + Math.cos(bAngle) * bR,
-        z: c.z + Math.sin(bAngle) * bR,
-        rotation: rnd() * Math.PI * 2,
-      });
+      const spot = edgeSpot(-0.75 - i * 0.9);
+      // 回退搜索可能收敛到同一点：与已放车架间距 <0.5 u 则放弃第二件（§130 防重叠）
+      if (spot && bikeSpots.every((b) => Math.hypot(b.x - spot.x, b.z - spot.z) >= 0.5)) {
+        bikeSpots.push(spot);
+        furniture.push({ type: 'bicycle', x: spot.x, z: spot.z, rotation: outRot });
+      }
     }
   }
-  // 电话亭：选择性
+  // 电话亭：选择性（区心带，朝向区外缘）
   if (PHONE_DISTRICTS.has(def.id)) {
     const pAngle = rnd() * Math.PI * 2;
     furniture.push({
       type: 'phone',
       x: c.x + Math.cos(pAngle) * 3.0,
       z: c.z + Math.sin(pAngle) * 3.0,
-      rotation: rnd() * Math.PI * 2,
+      rotation: outRot,
       variant: rnd() < 0.5 ? 0 : 1, // red / green
     });
   }
-  // 停车牌：选择性
-  if (PARKING_DISTRICTS.has(def.id)) {
-    const pkAngle = rnd() * Math.PI * 2;
-    furniture.push({
-      type: 'parking',
-      x: c.x + Math.cos(pkAngle) * 3.5,
-      z: c.z + Math.sin(pkAngle) * 3.5,
-      rotation: rnd() * Math.PI * 2,
-    });
-  }
 
-  // 路口标识牌
+  // 路口标识牌（批次 42 C1：rotation 改 faceOutward —— 旧 `a + π/2` 只在部分象限
+  // 让牌面朝径向外，(0,±r) 区块上牌面反了 180°；+Z 朝区外/朝路才指向来车）
   const sign: SignSpec = {
     x: c.x + Math.cos(angleToFinance) * 3.5,
     z: c.z + Math.sin(angleToFinance) * 3.5,
-    rotation: angleToFinance + Math.PI / 2,
+    rotation: outRot,
     variant: idx % 2 === 0 ? 'traffic' : 'info',
   };
 
@@ -483,6 +503,10 @@ function propsForDistrict(
     solar,
     pedestrians,
     furniture: furnitureDry,
+    // 批次 42 D2 正名（原注释与谓词相反）：**保留的是"落在路廊侧"的牌**。
+    // isBuildable=true = 可建地块（避水/避路廊/退让）⇒ 牌插在地块中间不真实，置 null；
+    // isBuildable=false = 该点压在路廊/水域边缘 ⇒ 路牌正该立在路边，保留。
+    // 语义即「路口标识牌只出现在路缘」，谓词不动（C1 重写期实测它是承重逻辑）。
     sign: isBuildable(sign.x, sign.z, PROP_KEEP_OUT_MARGIN) ? null : sign,
   };
 }
@@ -851,11 +875,11 @@ export function roadsideBinsForNetwork(
         });
       }
     });
-  // 每个公交站台旁追加 1 个（站台 rotation = atan2(dx,dz)，可还原路向 u=(sin,cos)；
-  // 桶沿路向 +0.45 错开雨棚，站台本身只布在主干道上，无重复计入问题）
+  // 每个公交站台旁追加 1 个（批次 42 C1：站台 rotation 已改为「+X 平行路向、
+  // +Z 朝路心」⇒ 路向由局部 +X 还原 =(cosθ, −sinθ)；桶沿路向 +0.45 错开雨棚）
   for (const bs of busStops) {
-    const bx = bs.x + Math.sin(bs.rotation) * 0.45;
-    const bz = bs.z + Math.cos(bs.rotation) * 0.45;
+    const bx = bs.x + Math.cos(bs.rotation) * 0.45;
+    const bz = bs.z - Math.sin(bs.rotation) * 0.45;
     if (inWater(bx, bz, 0.3)) continue; // 批次 38 R3
     out.push({
       x: bx,
@@ -868,7 +892,17 @@ export function roadsideBinsForNetwork(
 }
 
 /** 方格骨干路侧公交站台（批次 31 三轮：放射路删除后改布在 arterial 上，
- *  每条骨干 t=0.30 / 0.70 两处、两侧交替；roadsideBinsForNetwork 站台旁布桶复用）。 */
+ *  每条骨干 t=0.30 / 0.70 两处、两侧交替；roadsideBinsForNetwork 站台旁布桶复用）。
+ *
+ *  批次 42 C1 rotation 修正（GLB 站台长边 X 沿道路向，设计 42 §3.1）：
+ *  旧 `atan2(dx,dz)` 把局部 **+Z** 对齐路向，站台长边（X）因此**垂直**道路。
+ *  three.js 绕 Y 旋转 θ：局部 +X = (cosθ, 0, −sinθ)、+Z = (sinθ, 0, cosθ)。
+ *  令 **+X 平行路向** (dx,dz)/L 且 **+Z 指向路心**（= −侧向偏移方向 −n·side）：
+ *      cosθ = dx/L,  −sinθ = dz/L   →  仅翻转侧不足以同解，故直接取
+ *      (sinθ, cosθ) = (−nx·side, −nz·side)  ⇒  θ = atan2(−nx·side, −nz·side)
+ *  验证（路沿 +X、side=+1）：θ=π，+X→−X 仍平行路、+Z→−Z 朝路心 ✓；
+ *  side=−1：θ=0，+X→+X、+Z→+Z 朝路心 ✓。**开敞面两侧对局都朝路**。
+ *  下游 `roadsideBinsForNetwork` 站台旁布桶改用局部 +X 还原路向（见该函数）。 */
 export function busStopsForNetwork(segments: RoadSegment[]): Layout['busStops'] {
   const out: Layout['busStops'] = [];
   let seq = 0;
@@ -890,10 +924,81 @@ export function busStopsForNetwork(segments: RoadSegment[]): Layout['busStops'] 
       out.push({
         x: bx,
         z: bz,
-        rotation: Math.atan2(dx, dz),
+        rotation: Math.atan2(-nx * side, -nz * side),
       });
       seq++;
     }
+  }
+  return out;
+}
+
+/** 停车咪表点位规格（ParkingMeter 组件渲染契约，批次 42 C1）。 */
+export interface ParkingMeterSpot {
+  x: number;
+  z: number;
+  /** 局部 +Z 指向路心（屏幕朝路）。 */
+  rotation: number;
+}
+
+/**
+ * 停车咪表总量上限（批次 42 C1 DC 护栏，类比 TREE_TOTAL_CAP 的确定性截断）。
+ *
+ * 布点公式密度（spacing('parkingMeter') = u(8) = 8 m）在当前 4 条 ×96 u 干线上
+ * 理论产 ≈ 470 件；每件走 `<ParkingMeter>` **克隆模式**（B1 夜间 Screen 调制
+ * 需 cloned scene，计划 42 B3 估「咪表 8」与公式密度不符）。克隆模式下每件
+ * ≈2–5 DC ⇒ 不设上限会直接击穿验收 V5（DC ≤ 1035）。处置：等距 stride 抽稀到
+ * 上限内（保留「沿路缘成排」的交替侧观感，四条干线都有）；若需更高密度，
+ * 应改走 `glbInstances.GlbPairInstances` 实例化（RoadsideBins 模式）再抬上限。
+ */
+const METER_TOTAL_CAP = 48;
+
+/**
+ * 全城停车咪表布点（批次 42 C1「沿路缘成排」，紧邻 roadsideBinsForNetwork 风格）：
+ *   - 段集：cls==='arterial' 优先；干线缺失时补 'connector'；
+ *   - 站位：沿程每 `spacing('parkingMeter')`（= u(8) = 8 m）一处，端部留白 0.6 u；
+ *   - 两侧交替（side = ±1），sideOffset = ROAD_WIDTH_MAIN/2 + 0.18（紧贴路缘）；
+ *   - rotation 面向道路（局部 +Z 指向路心）：θ = atan2(−rx·side, −rz·side)
+ *     （右行法线 (rx,rz)=(uz,−ux)；(sinθ,cosθ) = −侧偏方向）；
+ *   - 净空：`inWater(..., 0.3)` —— **与 roadsideBinsForNetwork 同口径**。
+ *     ⚠️ 刻意不挂 `isBuildable`：路廊半宽已含人行道（0.7/2+0.25=0.95 u）> 咪表
+ *     sideOffset 0.88 u，isBuildable 会把**全部路缘咪表**当违例清零（§130 静默断线）。
+ */
+export function parkingMetersForNetwork(segments: RoadSegment[]): ParkingMeterSpot[] {
+  const primary = segments.filter((s) => s.cls === 'arterial');
+  const use = primary.length ? primary : segments.filter((s) => s.cls === 'connector');
+  const step = spacing('parkingMeter');
+  const sideOffset = ROAD_WIDTH_MAIN / 2 + 0.18;
+  // 站位（未抽稀）：沿段线 sAlong = 0.6 + i·step
+  const stations: Array<{ x: number; z: number; rx: number; rz: number }> = [];
+  for (const s of use) {
+    const [fx, fz] = s.from;
+    const [tx, tz] = s.to;
+    const len = lenOf(s);
+    if (len < 2) continue;
+    const ux = (tx - fx) / len;
+    const uz = (tz - fz) / len;
+    const rx = uz; // 右行侧单位向量（与 roadsideBinsForNetwork 同式）
+    const rz = -ux;
+    for (let sAlong = 0.6; sAlong <= len - 0.6; sAlong += step) {
+      stations.push({ x: fx + ux * sAlong, z: fz + uz * sAlong, rx, rz });
+    }
+  }
+  // 等距 stride 抽稀到 METER_TOTAL_CAP（确定性；四条干线均匀保留）
+  const stride = Math.max(1, Math.ceil(stations.length / METER_TOTAL_CAP));
+  if (stride > 1 && import.meta.env.DEV) {
+    console.warn(
+      `[streetProps] parkingMetersForNetwork: 站位 ${stations.length} 超 DC 上限 ` +
+      `${METER_TOTAL_CAP}，stride=${stride} 抽稀（克隆模式护栏；要更高密度请改 GlbPairInstances）。`,
+    );
+  }
+  const out: ParkingMeterSpot[] = [];
+  for (let i = 0; i < stations.length; i += stride) {
+    const st = stations[i];
+    const side = out.length % 2 === 0 ? 1 : -1;
+    const bx = st.x + st.rx * sideOffset * side;
+    const bz = st.z + st.rz * sideOffset * side;
+    if (inWater(bx, bz, 0.3)) continue;
+    out.push({ x: bx, z: bz, rotation: Math.atan2(-st.rx * side, -st.rz * side) });
   }
   return out;
 }
@@ -974,7 +1079,9 @@ export function StreetPropsLayer({
     const roadVehicles = vehiclesForNetwork(segments, tier === 'high');
     const roadTrees = roadTreesForNetwork(segments);
     const busStops = busStopsForNetwork(segments);
-    return { districtProps, roadVehicles, roadTrees, busStops };
+    // 批次 42 C1：停车咪表沿路缘成排（旧「每城区 1 个 parking」已从 propsForDistrict 删除）
+    const parkingMeters = parkingMetersForNetwork(segments);
+    return { districtProps, roadVehicles, roadTrees, busStops, parkingMeters };
   }, [districts, segments, pedCap, crowdActive, prosperityByDistrict]);
 
   /**
@@ -1121,6 +1228,11 @@ export function StreetPropsLayer({
       {/* 主干道公交站台 */}
       {layout.busStops.map((bs, i) => (
         <BusStop key={`busstop-${i}`} x={bs.x} z={bs.z} rotation={bs.rotation} />
+      ))}
+
+      {/* 批次 42 C1：路缘停车咪表成排（key 含下标保证唯一；组件复用 props/ParkingMeter） */}
+      {layout.parkingMeters.map((m, i) => (
+        <ParkingMeter key={`pmeter-${i}`} x={m.x} z={m.z} rotation={m.rotation} />
       ))}
     </>
   );

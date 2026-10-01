@@ -99,6 +99,13 @@ export const MODEL_NAMES = {
   // `3d_script/build_canal_bank.py` / `build_canal_reed.py` / `build_bridge_rail.py`）。
   // 消费方：civic/CanalExtras（驳岸/芦苇）+ CanalBridge（桥栏杆），一律包
   // `<Model url={...}>{程序化 fallback}</Model>`（CLAUDE.md §27.3 硬约束 3）。
-  road: ['canal_bank', 'canal_reed', 'bridge_rail'] as const,
+  road: [
+    'canal_bank', 'canal_reed', 'bridge_rail',
+    // 批次 42 街具（3d_script/build_bus_stop|mailbox|street_sign|parking_meter|bike_rack.py）：
+    // bus_stop / parking_meter 单节点 GLB（灯箱 Lightbox / 屏幕 Screen 材质名供昼夜调制）；
+    // street_sign 双变体节点 Sign_Traffic / Sign_Info；bike_rack 双节点 BikeRack + BikeRack_Bike。
+    // 消费方：props/{BusStop,Mailbox,Sign,ParkingMeter,BicycleRack}.tsx（缺失自动走程序化 fallback）。
+    'bus_stop', 'mailbox', 'street_sign', 'parking_meter', 'bike_rack',
+  ] as const,
   ocean: ['lighthouse', 'cargo_ship', 'sailboat'] as const,
 } as const;
