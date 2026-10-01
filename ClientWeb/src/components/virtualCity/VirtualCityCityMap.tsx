@@ -136,7 +136,7 @@ import {
   type VirtualCityDistrictId,
   type VirtualCityGameState,
 } from '@/types/virtualCity';
-import { u } from './cityScale';
+import { u, prosperityOf } from './cityScale';
 
 /** 主场景 → 小地图的相机视野快照（ref 每帧覆写，不触发 React 渲染）。 */
 export type VirtualCityCameraView = CameraView;
@@ -434,6 +434,17 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
   //    store，Canvas 内的控制器与 Canvas 外的 <FreeViewHud /> 经同一 store 通信。────
   /** 相机碰撞体（32 区全部建筑 AABB）：随房价指数重装配，见 freeViewColliders.ts。 */
   const cameraColliders = useMemo(() => buildCityCameraColliders(marketById), [marketById]);
+  /**
+   * 批次 39 A4：逐区**繁荣度** 0–1（`cityScale.prosperityOf(price_index)`）。
+   * 与 `marketById` / `buildCityCameraColliders` 同源同派生，供 `<StreetPropsLayer>`
+   * 求楼顶杂物 / 太阳能板的 y 锚点（`buildingTopY`）—— 锚点、渲染楼高、相机碰撞体
+   * 三者必须同源，否则杂物会与真实楼顶脱节（批次 39 B13 闭环）。
+   */
+  const prosperityById = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const [id, price] of marketById) m.set(id, prosperityOf(price));
+    return m;
+  }, [marketById]);
   /** 自由视角的相机朝向 / FOV 读回源（fly 才有意义），供小地图画真实视锥。 */
   const aimRefs = useRef<FreeViewAim>({ yaw: null, fov: null });
   /** 批次 32 v2：选中物体的聚焦点（世界坐标 + 半径），由 selectedTargetFor 检索得出。 */
@@ -520,6 +531,7 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
             crowd={gameState?.city?.crowd}
             residentCount={gameState?.city?.resident_count}
             roomSeed={crowdRoomSeed}
+            prosperityByDistrict={prosperityById}
           />
         </group>
         {/* 批次 28 二轮：?debug=1 场景归因探针（__cityScene/__cityRenderer/__cityBreakdown） */}

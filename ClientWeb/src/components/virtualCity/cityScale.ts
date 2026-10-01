@@ -402,7 +402,11 @@ export const DISTRICT_FLOORS: Record<VirtualCityDistrictId, [number, number]> = 
   highspeed_rail_town: [3, 12],// 高铁新城   9~36 m（TOD 综合体）
 };
 
-/** 楼层数 → 世界单位楼高。 */
+/**
+ * 楼层数 → 世界单位楼高。
+ * 批次 39 C2：消费方 `buildingTopY` 恒传**整数**层数 ⇒ 楼高恒为 3 m 整数倍
+ * （立面开间贴图 12 m = 4 层、楼层线自 y=0 起 ⇒ 楼层线对齐）。
+ */
 export const buildingHeight = (floors: number): number => u(FLOOR_HEIGHT_M) * floors;
 
 /**
@@ -416,19 +420,75 @@ export const prosperityOf = (priceIndex: number): number =>
   Math.min(1, Math.max(0, (priceIndex - 0.8) / 0.8));
 
 /**
- * 批次 32：单栋楼的**顶面 y**（世界单位）。
- * 与 `DistrictBuildings` 的渲染楼高公式逐字节同源，碰撞体直接复用。
+ * 批次 39 C2：`factor`（楼高布局系数）的取值区间 —— **布局与楼高共用的唯一事实来源**。
+ *
+ * `building_layout.buildingsFor` 按幂律 `MIN + (MAX-MIN)·rnd()^2.2` 在此区间采样
+ * （多数楼偏低、少数楼拔高），`buildingTopY` 在同一区间归一化。两侧引用本常量，
+ * 任何一侧改区间都不会与另一侧漂移（CLAUDE.md §130）。
+ */
+export const BUILDING_FACTOR_MIN = 0.55;
+export const BUILDING_FACTOR_MAX = 1.0;
+
+/**
+ * 批次 39 C2：楼高离散度 —— 单栋楼相对**标称层数**的最大偏移占 `maxF - minF` 的比例。
+ *
+ * 现状（批次 39 之前）`0.85 + factor*0.15` 只贡献 0.94~1.00 ⇒ 同区 11 栋楼高差
+ * ≤ 6%，天际线齐平（B7）。改为**层数增量**口径后，同区楼高按 factor 双向拉开
+ * `±(maxF-minF) × FLOOR_SPREAD` 层：finance（8~20 层，跨度 12）⇒ ±3 层，
+ * 最高最低差 6 层 = 18 m，肉眼可见的天际线。
+ */
+export const FLOOR_SPREAD = 0.25;
+
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/**
+ * 批次 39 C2：**单栋楼的层数**（整数，clamp 到 `DISTRICT_FLOORS` 的 [minF, maxF]）。
+ *
+ * 这是「层数 → 楼高」推导链的**唯一事实来源**：
+ *   - `buildingTopY`（渲染 + `freeViewColliders` 相机碰撞体 + `StreetPropsLayer` 屋顶锚点）
+ *     内部只调它；
+ *   - `DistrictBuildings` 的悬停提示「N 层」也调它 —— 此前那份
+ *     `Math.round(minF + (maxF-minF)*prosperity)` **不含 factor**，与真实楼高最多差
+ *     `span × FLOOR_SPREAD` 层（finance 满繁荣度 ±3 层），即提示的楼层数与看到的楼对不上。
+ *     两处共用本函数即杜绝第二份公式（CLAUDE.md §130）。
  *
  * @param districtId 城区 id（取 DISTRICT_FLOORS 的楼层区间）
  * @param prosperity 0–1，由 `prosperityOf(price_index)` 得到
- * @param factor 布局系数 0.6–1.0（`buildingsFor` 产出）
+ * @param factor 布局系数 {@link BUILDING_FACTOR_MIN}–{@link BUILDING_FACTOR_MAX}（`buildingsFor` 幂律采样产出）
  */
-export const buildingTopY = (
+export const buildingFloorsOf = (
   districtId: VirtualCityDistrictId,
   prosperity: number,
   factor: number,
 ): number => {
   const [minF, maxF] = DISTRICT_FLOORS[districtId];
-  const floors = minF + (maxF - minF) * prosperity;
-  return buildingHeight(floors) * (0.85 + factor * 0.15);
+  const span = maxF - minF;
+  // 标称层数（浮点）：繁荣度在 [minF, maxF] 区间内插值，语义与批次 32 一致
+  const nominal = minF + span * clamp01(prosperity);
+  // factor 归一化到 [0,1]（0 = 矮，1 = 高），与布局侧同区间（BUILDING_FACTOR_*）
+  const fn = clamp01(
+    (factor - BUILDING_FACTOR_MIN) / (BUILDING_FACTOR_MAX - BUILDING_FACTOR_MIN),
+  );
+  // 双向离散：fn=0 ⇒ 矮 span×FLOOR_SPREAD 层，fn=1 ⇒ 高同样层数；clamp 回楼层带
+  return Math.min(
+    maxF,
+    Math.max(minF, Math.round(nominal + span * FLOOR_SPREAD * (2 * fn - 1))),
+  );
 };
+
+/**
+ * 批次 32：单栋楼的**顶面 y**（世界单位）。
+ * 与 `DistrictBuildings` 的渲染楼高公式逐字节同源，碰撞体直接复用。
+ *
+ * 批次 39 C2（本函数是 B3「楼高对齐层高」的落点）：
+ *   - 层数**取整**（经 {@link buildingFloorsOf}）⇒ `buildingTopY ≡ FLOOR_HEIGHT_M ×
+ *     整数层数`，立面开间贴图（12 m = 4 层、楼层线自 y=0 起）的楼层线不再永久错位、
+ *     顶行窗不再被腰斩；
+ *   - 缩放系数由浮点倍率 `0.85 + factor*0.15` 改为**层数增量**（`FLOOR_SPREAD`），
+ *     消除「齐平天际线」（B7）。
+ */
+export const buildingTopY = (
+  districtId: VirtualCityDistrictId,
+  prosperity: number,
+  factor: number,
+): number => buildingHeight(buildingFloorsOf(districtId, prosperity, factor));

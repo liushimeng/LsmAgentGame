@@ -29,6 +29,7 @@ import type { TKey } from '@/i18n';
 import {
   facadeTilePbrUrl,
   facadeTileUrl,
+  facadeTileLitUrl,
   districtFacadeUrl,
   districtRoofUrl,
   districtTextureStem,
@@ -36,11 +37,12 @@ import {
   pbrRoughUrl,
 } from '@/assets/images/virtualCity';
 import type { VirtualCityDistrictDef } from '@/types/virtualCity';
-import { DISTRICT_FLOORS, buildingTopY } from './cityScale';
+import { buildingFloorsOf, buildingTopY } from './cityScale';
 import {
   buildBuildingParts,
   buildWallMaterial,
   buildingTint,
+  districtFacadeUvOffset,
   tagBaseEmissive,
   ACCENT_ROUGH,
   ACCENT_METAL,
@@ -77,6 +79,29 @@ function offsetPart<T extends MergePart>(p: T, dx: number, dz: number): T {
 /** matSpecs 签名（分组合并键：kind 序列；glow 强度随 emissive 全区一致）。 */
 function specsSignature(specs: WallMatSpec[]): string {
   return specs.map((s) => s.kind).join('|');
+}
+
+/**
+ * 批次 39 B1 · 降级态 3 告警（dev-only，每城区打印**一次**；范式同
+ * `building_shapes::warnFacadeDegradeOnce` 的模块级 Set 去重）。
+ *
+ * 场景：开间贴图 `facade_tiles/<family>_{base,mid}.png` 在位（物理 UV 管线正常），
+ * 但**亮窗遮罩 `<family>_lit.png` 缺失** ⇒ 侧墙 `emissiveIntensity = 0`，
+ * 该城区夜间**没有窗灯**。这是有记录的安全降级（宁可无灯，不可整墙发光），
+ * 但必须可见 —— 静默降级正是批次 37 起要根除的失效模式。
+ */
+const LIT_MASK_DEGRADE_WARNED = new Set<string>();
+
+function warnLitMaskDegradeOnce(districtId: string): void {
+  if (!import.meta.env.DEV) return;
+  if (LIT_MASK_DEGRADE_WARNED.has(districtId)) return;
+  LIT_MASK_DEGRADE_WARNED.add(districtId);
+  console.warn(
+    `[DistrictBuildings] 城区 ${districtId}：facade_tiles/<family>_lit.png 缺失 ⇒ ` +
+    '该区侧墙 emissiveIntensity = 0，夜间无窗灯（安全降级：不回退到 albedo，' +
+    '否则整个墙面连窗间墙一起发光 = 批次 39 要根除的缺陷 B3）。' +
+    '补齐亮窗遮罩后自动恢复，无需改代码。',
+  );
 }
 
 /** 逐栋不可见代理盒（hover/信息卡；不产生 draw call）。 */
@@ -177,10 +202,29 @@ export const DistrictBuildings = memo(function DistrictBuildings({ specs, def, p
   const tilePbr = useSynthPBR('tile_roof', { wrap: 'repeat', repeat: [1, 1], normalScale: [1.0, 1.0] });
   const metalPbr = useSynthPBR('metal_deck', { wrap: 'repeat', repeat: [1, 1], normalScale: [0.9, 0.9] });
 
+  // 批次 39 B1：立面**亮窗遮罩**（`facade_tiles/<family>_lit.png`，只有窗玻璃非黑）。
+  // 侧墙 emissiveMap 的唯一来源 —— 批次 39 之前挂的是立面 albedo（`pbrBase.map`），
+  // 整个墙面（窗间墙 / 贴图里画好的空调外机）一起发光。
+  // 缺失 ⇒ null ⇒ 材质 emissiveIntensity = 0（夜间无窗灯），**不回退 albedo**。
+  // 包裹必须 repeat：与 albedo 共用同一套几何 UV（值可 > 1，批次 37 P1 口径）。
+  const litUrl = facadeTiles ? facadeTileLitUrl(def.id) : '';
+  const litMap = useSharedTexture(litUrl, facadeTiles ? { wrap: 'repeat' } : undefined);
+  // 降级态 3 告警：开间贴图在、亮窗遮罩缺 ⇒ 夜间无窗灯（dev-only，每区一次）。
+  useEffect(() => {
+    if (!facadeTiles || litUrl !== '') return;
+    warnLitMaskDegradeOnce(def.id);
+  }, [facadeTiles, litUrl, def.id]);
+
   const archetype = DISTRICT_ARCHETYPE[def.id] ?? 'slab';
-  const emissive = Math.min(0.35, prosperity * 0.35);
+  // 批次 39 B1.4：**入住率下限**。原式 `min(0.35, prosperity*0.35)` 在 prosperity = 0
+  // 时基准为 0 ⇒ 萧条城区夜全黑（B5）。真实城市从不全黑，取 0.06 作地板：
+  // 繁荣度 0 的城区仍有零星灯光（少，但不是没有）。
+  const emissive = Math.max(0.06, Math.min(0.35, prosperity * 0.35));
   // 区内统一 tint（原逐栋 hash；合并取舍见文件头）。
   const tint = useMemo(() => buildingTint(1.7, 1.35), []);
+  // 批次 39 B1.3：逐城区**立面 UV 相位**（整数周期 ⇒ 平移后无缝，纹素密度不变）。
+  // 打在几何 UV 上而非 `texture.offset`（理由见 building_shapes::districtFacadeUvOffset）。
+  const uvOffset = useMemo(() => districtFacadeUvOffset(def.id), [def.id]);
   const ctx = useMemo<WallCtx>(
     () => ({
       facadeBase: facadeBaseTex,
@@ -194,14 +238,14 @@ export const DistrictBuildings = memo(function DistrictBuildings({ specs, def, p
       roofPbr,
       tilePbr,
       metalPbr,
+      litMap,
       facadeTiles,
     }),
-    [facadeBaseTex, facadeMidTex, roofTex, def.color, emissive, tint, pbrBase, pbrMid, roofPbr, tilePbr, metalPbr, facadeTiles],
+    [facadeBaseTex, facadeMidTex, roofTex, def.color, emissive, tint, pbrBase, pbrMid, roofPbr, tilePbr, metalPbr, litMap, facadeTiles],
   );
 
   // ── 几何合并（按 matSpecs 签名分组；同签名 ⇒ 单墙体 mesh 多 group）──
   const merged = useMemo(() => {
-    const [minF, maxF] = DISTRICT_FLOORS[def.id];
     const groups = new Map<
       string,
       { matSpecs: WallMatSpec[]; wall: GroupedMergePart[] }
@@ -211,7 +255,12 @@ export const DistrictBuildings = memo(function DistrictBuildings({ specs, def, p
     for (const spec of specs) {
       // 批次 32：改走 cityScale.buildingTopY（渲染与相机碰撞体共用单一事实来源）。
       const h = buildingTopY(def.id, prosperity, spec.factor);
-      const parts = buildBuildingParts(archetype, spec.w, spec.d, h, emissive, facadeTiles);
+      // 批次 39 C3/C4：透传临街面（法向轴 + 朝向）—— 决定 facadeBase 挂哪一面、
+      // 以及门 / 门框 / 雨棚 / 底商雨棚 / 灯带挂在哪一侧（缺省 'z'/+1 = 旧行为）。
+      const parts = buildBuildingParts(
+        archetype, spec.w, spec.d, h, emissive, facadeTiles, uvOffset,
+        spec.streetAxis, spec.streetSign,
+      );
       const sig = specsSignature(parts.matSpecs);
       let g = groups.get(sig);
       if (!g) {
@@ -223,7 +272,10 @@ export const DistrictBuildings = memo(function DistrictBuildings({ specs, def, p
       proxyData.push({
         spec,
         h,
-        floors: Math.round(minF + (maxF - minF) * prosperity),
+        // 批次 39 C2：楼层数改走 `cityScale.buildingFloorsOf`（与 buildingTopY 同源）。
+        // 旧口径 `round(minF + (maxF-minF)*prosperity)` **不含 factor**，与真实楼高
+        // 最多差 span×FLOOR_SPREAD 层（finance ±3 层）⇒ 悬停提示的楼层数对不上楼。
+        floors: buildingFloorsOf(def.id, prosperity, spec.factor),
       });
     }
     return {
@@ -235,7 +287,7 @@ export const DistrictBuildings = memo(function DistrictBuildings({ specs, def, p
       hasAccent: accents.length > 0,
       proxyData,
     };
-  }, [specs, def.id, prosperity, archetype, emissive, facadeTiles]);
+  }, [specs, def.id, prosperity, archetype, emissive, facadeTiles, uvOffset]);
 
   // 几何 dispose（§92a；依赖变化即释放）。
   useEffect(
@@ -277,11 +329,15 @@ export const DistrictBuildings = memo(function DistrictBuildings({ specs, def, p
 
   return (
     <group userData={{ bucket: 'buildings' }}>
+      {/* 批次 39 B2：墙 mesh 补 `receiveShadow` —— 此前只有 `castShadow`，
+          楼与楼之间无遮蔽、楼自身无自遮挡、晨昏无长影（B14，几何明明是对的）。
+          点缀 mesh 由 `receiveShadow={false}` 改 `true`：点缀件（女儿墙/雨棚/空调外机/
+          楼层线）已随墙体 castShadow，收阴影后楼角与雨棚会正确压暗。 */}
       {merged.wallGroups.map((g, i) => (
-        <mesh key={`wall-${i}`} geometry={g.geo} material={materialGroups[i]} castShadow />
+        <mesh key={`wall-${i}`} geometry={g.geo} material={materialGroups[i]} castShadow receiveShadow />
       ))}
       {merged.hasAccent && (
-        <mesh geometry={merged.accentGeo} castShadow={false} receiveShadow={false}>
+        <mesh geometry={merged.accentGeo} castShadow={false} receiveShadow>
           <meshStandardMaterial vertexColors roughness={ACCENT_ROUGH} metalness={ACCENT_METAL} />
         </mesh>
       )}

@@ -47,12 +47,12 @@ import { useEffect, useMemo } from 'react';
 import { useThree } from '@react-three/fiber';
 import type { VirtualCityCrowdSnapshot, VirtualCityDistrictDef } from '@/types/virtualCity';
 import { detectQualityTier } from '@/engine3d';
-import { DISTRICT_FLOORS, buildingHeight, spacing, u } from './cityScale';
+import { DISTRICT_SURFACE_Y, buildingTopY, spacing, u } from './cityScale';
 import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
 import { ROAD_WIDTH_MAIN } from './Road';
 import { FIRST_RING_RADIUS, type RoadJunction, type RoadSegment } from './roadNetwork';
 import { inWater, isBuildable, onFirstRing } from './cityObstacles';
-import { buildingsFor } from './building_layout';
+import { buildingsFor, type BuildingSpec } from './building_layout';
 import { outdoorCount, crowdCapFor, synthCrowdEntry } from './crowdFormula';
 import { layoutCrowd, type CrowdPedestrian } from './crowdLayout';
 import { clearCrowdPositions } from './crowdRegistry';
@@ -286,7 +286,12 @@ function pathForDistrict(def: VirtualCityDistrictDef, rnd: () => number): Array<
 }
 
 /** 为单个城区生成 props。 */
-function propsForDistrict(def: VirtualCityDistrictDef, idx: number): DistrictProps {
+function propsForDistrict(
+  def: VirtualCityDistrictDef,
+  idx: number,
+  /** 批次 39 A4：城区繁荣度 0–1（缺项按 `prosperityOf(1) = 0.25` 兜底，与 DistrictBlock 一致）。 */
+  prosperity: number,
+): DistrictProps {
   const rnd = mulberry32(hashStr(def.id));
   const c = { x: def.x, z: def.z };
   // 城区朝向 finance（原点）的方向角（标识牌/树避让共用）
@@ -329,19 +334,30 @@ function propsForDistrict(def: VirtualCityDistrictDef, idx: number): DistrictPro
   }
 
   // 1-2 个楼顶杂物（批次 30 A2：锚点改挂街墙楼栋槽位 —— 旧「区中心半径 0.8~2.4」
-  // 在街墙布局下会悬在庭院半空；y 仍取楼层区间中值 ×0.9 的近似屋顶高）。
-  const [minF, maxF] = DISTRICT_FLOORS[def.id];
-  const roofY = buildingHeight((minF + maxF) / 2) * 0.9;
+  // 在街墙布局下会悬在庭院半空）。
+  //
+  // 批次 39 A4：y 改走 `cityScale.buildingTopY(def.id, prosperity, spec.factor)` ——
+  // 旧口径 `buildingHeight((minF+maxF)/2) * 0.9` 是**区楼层中值**近似，与单栋真实楼顶
+  // 无关（审计实测：finance 繁荣度 0 时悬空 14 m，B13）。`buildingTopY` 是渲染楼高与
+  // `freeViewColliders` 相机碰撞体的**单一事实来源**（批次 32 立此约定），杂物因此
+  // 与楼顶/碰撞盒三者永远同高。
   const bSpecs = buildingsFor(def);
-  const rooftop: RooftopSpec[] = [0, 1].slice(0, 1 + (rnd() < 0.5 ? 1 : 0)).map((k) => {
-    const anchor = bSpecs[(k + Math.floor(rnd() * bSpecs.length)) % bSpecs.length];
-    return {
+  /** 某栋楼的真实屋面世界 y（含城区底板偏移）。 */
+  const roofYOf = (spec: BuildingSpec): number =>
+    DISTRICT_SURFACE_Y + buildingTopY(def.id, prosperity, spec.factor);
+  const pickSpec = (i: number): BuildingSpec | undefined =>
+    bSpecs.length ? bSpecs[(i + Math.floor(rnd() * bSpecs.length)) % bSpecs.length] : undefined;
+
+  const rooftop: RooftopSpec[] = [0, 1].slice(0, 1 + (rnd() < 0.5 ? 1 : 0)).flatMap((k) => {
+    const anchor = pickSpec(k);
+    if (!anchor) return [];
+    return [{
       x: c.x + anchor.x + (rnd() - 0.5) * 0.6,
       z: c.z + anchor.z + (rnd() - 0.5) * 0.6,
       variant: ROOFTOP_VARIANTS[Math.floor(rnd() * ROOFTOP_VARIANTS.length)],
       rotation: rnd() * Math.PI * 2,
-      yOffset: roofY,
-    };
+      yOffset: roofYOf(anchor),
+    }];
   });
 
   // 16 · 阶段 T：太阳能板（suburb / oldtown 屋顶确定性 1-2 块）
@@ -350,11 +366,13 @@ function propsForDistrict(def: VirtualCityDistrictDef, idx: number): DistrictPro
     const panelCount = 1 + (rnd() < 0.5 ? 1 : 0);
     for (let i = 0; i < panelCount; i++) {
       // 批次 30 A2：同屋顶杂物，锚到街墙楼栋（防庭院悬空）
-      const anchor = bSpecs[(i + Math.floor(rnd() * bSpecs.length)) % bSpecs.length];
+      const anchor = pickSpec(i);
+      if (!anchor) continue;
       solar.push({
         x: c.x + anchor.x + (rnd() - 0.5) * 0.5,
         z: c.z + anchor.z + (rnd() - 0.5) * 0.5,
-        y: roofY * 0.72, // house 主体高 = 总高 ×0.7（坡顶下方贴合）
+        // house 主体高 = 总高 ×0.7（坡顶下方贴合）；总高改取该栋真实楼高
+        y: DISTRICT_SURFACE_Y + buildingTopY(def.id, prosperity, anchor.factor) * 0.72,
         rotation: rnd() * Math.PI * 2,
       });
     }
@@ -801,7 +819,17 @@ interface StreetPropsLayerProps {
   residentCount?: number;
   /** 房间随机种子（确定性布点；缺省 0）。 */
   roomSeed?: number;
+  /**
+   * 批次 39 A4：城区 id → **prosperity 0–1**（`cityScale.prosperityOf(price_index)`）。
+   * 楼顶杂物 / 太阳能板的 y 锚点经 `cityScale.buildingTopY` 求出，必须拿当前繁荣度，
+   * 否则锚点与真实楼顶脱节。缺项按 `prosperityOf(1) = 0.25` 兜底（与 DistrictBlock
+   * 的 `?? 1` 缺省同口径）。
+   */
+  prosperityByDistrict?: ReadonlyMap<string, number>;
 }
+
+/** 繁荣度缺省值：`prosperityOf(1) = (1-0.8)/0.8 = 0.25`（与 DistrictBlock 缺省一致）。 */
+const PROSPERITY_FALLBACK = 0.25;
 
 /**
  * 全城行人总上限守卫（批次 20：high 110 / 批次 28 A4：low 60）。
@@ -821,7 +849,9 @@ function capPedestrians(districtProps: DistrictProps[], cap: number): void {
   }
 }
 
-export function StreetPropsLayer({ districts, segments, crowd, residentCount, roomSeed }: StreetPropsLayerProps) {
+export function StreetPropsLayer({
+  districts, segments, crowd, residentCount, roomSeed, prosperityByDistrict,
+}: StreetPropsLayerProps) {
   // 批次 28 A4/A5：行人上限按质量档映射（high 110 / low 60，游戏侧策略；
   // detectQualityTier 读 GL 上下文，engine3d 不持有游戏字段）。
   const gl = useThree((s) => s.gl);
@@ -836,7 +866,9 @@ export function StreetPropsLayer({ districts, segments, crowd, residentCount, ro
   const crowdActive = !!crowd || (typeof residentCount === 'number' && residentCount > 0);
 
   const layout = useMemo<Layout>(() => {
-    const districtProps = districts.map((d, idx) => propsForDistrict(d, idx));
+    // 批次 39 A4：prosperity 逐城区传入（楼顶杂物/太阳能板锚点经 buildingTopY 求 y）。
+    const districtProps = districts.map((d, idx) =>
+      propsForDistrict(d, idx, prosperityByDistrict?.get(d.id) ?? PROSPERITY_FALLBACK));
     if (crowdActive) {
       // 真实居民模式：清空装饰行人（由 crowdPeds 接管），其余街具照旧
       for (const dp of districtProps) dp.pedestrians = [];
@@ -848,7 +880,7 @@ export function StreetPropsLayer({ districts, segments, crowd, residentCount, ro
     const roadTrees = roadTreesForNetwork(segments);
     const busStops = busStopsForNetwork(segments);
     return { districtProps, roadVehicles, roadTrees, busStops };
-  }, [districts, segments, pedCap, crowdActive]);
+  }, [districts, segments, pedCap, crowdActive, prosperityByDistrict]);
 
   /**
    * 批次 34 §6.1/§6.2：上街居民集合 + 布点。

@@ -34,10 +34,16 @@
  *   - prism 坡屋顶 / glass / glow / crown / 点缀 mesh 一律不动（自构几何或纯色，无贴图 UV 问题）。
  *
  * 技术要点：
- *   - 立面贴图分配：+X/-X 用 facadeBase（侧 A）、+Z/-Z 用 facadeMid（侧 B），
- *     塔楼裙楼固定 facadeBase、塔身固定 facadeMid（契约 §2.2）。
- *   - emissive 统一暖窗光 #ffd9a0；有贴图时 emissiveMap 复用立面贴图
- *     （窗格亮度差近似夜景窗灯，契约 §2.3），无贴图回退城区主色。
+ *   - 立面贴图分配（批次 39 C3 修正）：**含首层商业的 facadeBase 挂「临街面」** ——
+ *     `BuildingSpec.streetAxis`/`streetSign` 给出临街法向轴与朝向，单层体块
+ *     （slab / house / shed）据此把 facadeBase 挂到 ±X 或 ±Z（此前恒挂 ±X ⇒
+ *     一半的楼首层商业朝街区内部，B9）；塔楼裙楼四面 facadeBase、塔身四面
+ *     facadeMid（分界在体块而非面轴，无需换面）；pavilion 两面均 facadeBase。
+ *     `matSpecs` 顺序恒定，只换「面类 → 材质索引」映射，故不产生第二种材质签名。
+ *   - **emissive 只属于「窗」**（批次 39）：
+ *       · 侧墙 `emissiveMap` = 独立亮窗遮罩 `facade_tiles/<family>_lit.png`（只有窗玻璃非黑）；
+ *         遮罩缺失 ⇒ emissiveIntensity = 0（安全降级，**不回退 albedo**）；
+ *       · 顶面 / 坡屋顶**完全无自发光**（`topMatProps` / `prism` 已删三项 emissive）。
  *   - 所有米制尺寸经 cityScale.u() 换算，禁止硬编码米数（§2.1 标尺）。
  *   - building_shapes 不 import @/assets/images/virtualCity（02 §3.3 硬约束：stem 拼接
  *     只允许在 BuildingMesh.tsx 发生；合成材质 PBR 经 textureCache::useSynthPBR 间接取用）。
@@ -75,15 +81,74 @@ import { FACADE_UV, ROOF_UV } from './texScale';
  * 顶面用 `ROOF_UV`（10 m × 10 m 正方形周期）⇒ 相邻楼栋屋顶纹素密度一致；
  * 侧墙用 `FACADE_UV`（6 m × 12 m）⇒ 侧 A(面宽 d) 与侧 B(面宽 w) 纹素密度相等，
  * 转角处窗格对得上（旧 0..1 映射下两面差 1.55x，缺陷 D2）。
+ *
+ * @param uvOffset 批次 39 B1：**立面**UV 相位偏移，单位 = 贴图周期数（整周期）。
+ *   只对 `cls` 为 'A'/'B' 的侧墙生效（'top' 是屋面，走 ROOF_UV 另一套周期，不打散）。
+ *   偏移量取**整数**周期 ⇒ RepeatWrapping 下平移后仍然无缝，且纹素密度/各向异性
+ *   完全不变（只换相位）。见 `districtFacadeUvOffset`。
  */
 export function wallBox(
   w: number, h: number, d: number,
   x: number, y: number, z: number,
   cls: 'A' | 'B' | 'top',
   facadeTiles: boolean,
+  uvOffset?: FacadeUvOffset,
 ): THREE.BufferGeometry {
-  if (!facadeTiles) return boxFaces(w, h, d, x, y, z, cls);
-  return boxFacesUV(w, h, d, x, y, z, cls, cls === 'top' ? ROOF_UV : FACADE_UV);
+  const geo = !facadeTiles
+    ? boxFaces(w, h, d, x, y, z, cls)
+    : boxFacesUV(w, h, d, x, y, z, cls, cls === 'top' ? ROOF_UV : FACADE_UV);
+  // ⚠ 只在物理 UV 管线（facadeTiles = true，贴图以 `wrap: 'repeat'` 加载）下打散：
+  //   降级态（facadeTiles = false）的贴图是 **clamp** 包裹的整栋立面图，UV 恒 0..1，
+  //   平移后会被 clamp 拉成边缘像素 = 整面糊成一片。
+  if (facadeTiles && uvOffset && cls !== 'top') applyUvOffset(geo, uvOffset);
+  return geo;
+}
+
+/**
+ * 批次 39 B1：立面 UV 相位偏移（单位 = 贴图周期数）。
+ * 消费方 `DistrictBuildings::districtFacadeUvOffset` 派生出**逐城区确定性**取值。
+ */
+export interface FacadeUvOffset {
+  /** U 方向周期数偏移（横向）。 */
+  u: number;
+  /** V 方向周期数偏移（纵向）。 */
+  v: number;
+}
+
+/** 就地平移 uv 属性（批次 39 B1；只动 uv，position/normal 逐位不变）。 */
+function applyUvOffset(geo: THREE.BufferGeometry, off: FacadeUvOffset): void {
+  const uv = geo.getAttribute('uv');
+  if (!uv) return;
+  for (let i = 0; i < uv.count; i++) {
+    uv.setXY(i, uv.getX(i) + off.u, uv.getY(i) + off.v);
+  }
+  uv.needsUpdate = true;
+}
+
+/**
+ * 批次 39 B1：逐城区**立面 UV 相位**（由城区 id hash 派生，确定性、零随机源）。
+ *
+ * 为什么必须逐城区：同一张 `facade_tiles/<family>_lit.png` 被同族多个城区复用
+ * （32 城区 → 16 材质族），不平移的话 finance / riverside / fin_sub_center 的
+ * 亮窗分布**完全一样**（B4）。
+ *
+ * 为什么打在**几何 UV** 上而不是 `texture.offset`：
+ *   - 贴图经 `engine3d/textureCache` 按 url 共享，同族的 `map` 是**同一个
+ *     THREE.Texture 实例** —— 在其上写 `.offset` 是全局副作用，会被最后挂载的
+ *     城区覆盖（同族其余城区跟着一起变），拿不到「逐区打散」；
+ *   - `texture.clone()` 可解，但 three r169 的 `WebGLTextures` 按 **Texture 对象**
+ *     分配 GPU 存储（`source` 只共享图片解码、不共享 `__webglTexture`），
+ *     32 区各克隆一份 = 立面贴图显存翻倍；
+ *   - 几何 UV 是**逐区独立**的（区级合并本就是逐区构建），且同一 mesh 上
+ *     `map` 与 `emissiveMap` 共用同一套 UV ⇒ 亮窗遮罩与立面窗格**天然对齐**，
+ *     不必两边各配一次 offset。
+ *
+ * 取值：偏移量取**整数**周期（U ∈ {0,1,2}、V ∈ {0,1,2,3}），整周期平移在
+ * RepeatWrapping 下无缝，纹素密度与各向异性完全不变，只换相位。
+ */
+export function districtFacadeUvOffset(districtId: string): FacadeUvOffset {
+  const h = hashStr(`facade-uv-${districtId}`);
+  return { u: h % 3, v: (h >>> 8) % 4 };
 }
 
 /**
@@ -157,12 +222,15 @@ const WINBAND_COLOR = '#7fa8c4';  // 厂房高窗带
 const ROOFTOP_TANK = '#a8a4a0';   // 屋顶水箱
 const ROOFTOP_VENT = '#8a8d96';   // 屋顶通风管
 const ROOFTOP_SKY = '#5a6270';    // 屋顶天窗小盒
+const ROOFTOP_DECK = '#6f7683';   // 屋顶设备平台格栅（批次 39 A3）
+const ROOFTOP_MAST = '#5d646f';   // 屋顶天线杆（批次 39 A3）
 
 const CROWN_COLOR = '#3a4250';   // 塔楼收分金属
 const CORNICE_COLOR = '#242a35'; // 板楼檐口
 const ROOF_TILE_COLOR = '#8a4b3a'; // 坡屋顶红瓦兜底
 const GABLE_COLOR = '#6b7280';   // 厂房山墙/烟囱
 const EAVE_COLOR = '#3f3a33';    // 公园挑檐木色
+const PLINTH_COLOR = '#71767e';  // 建筑基座 / 勒脚（批次 39 C5；比女儿墙略深，突出接地线）
 
 /** 点缀类统一材质参数（批次 28 二轮视觉取舍：原 0.05–0.95 区间取中；DistrictBuildings 复用）。 */
 export const ACCENT_ROUGH = 0.7;
@@ -230,8 +298,20 @@ function hashStr(s: string): number {
 
 // ── 6 面材质声明（面序 [+X,-X,+Y,-Y,+Z,-Z]；与原 BoxSolid 完全同源）─────────
 
+/**
+ * 侧墙材质规格（批次 39 B1：emissiveMap 由 albedo 换为**独立亮窗遮罩**）。
+ *
+ * @param tex   立面 albedo（`facade_tiles/<family>_{base,mid}.png`）
+ * @param lit   亮窗遮罩（`facade_tiles/<family>_lit.png`；缺失 = null ⇒ 完全不发光）。
+ *              批次 39 之前 `emissiveMap: tex` ⇒ 整个墙面（窗间墙 / 贴图里画好的空调
+ *              外机 / 晾衣绳）一起发光（B3）；且同材质族全城共用一张 albedo ⇒ 亮窗分布
+ *              完全一致（B4）。遮罩图只有窗玻璃非黑，故「只有窗发光」。
+ *              ⚠ 遮罩缺失时**不得**回退到 albedo（那正是本项要根除的缺陷），
+ *              走 `emissiveIntensity: 0` 的安全降级 = 夜间无窗灯，而不是错误地整墙发光。
+ */
 function sideMatProps(
   tex: THREE.Texture | null,
+  lit: THREE.Texture | null,
   fallback: string,
   emissive: number,
   tint: string,
@@ -240,9 +320,11 @@ function sideMatProps(
   const base = {
     map: tex ?? undefined,
     color: tex ? tint : fallback,
-    emissive: tex ? EMISSIVE_WINDOW : fallback,
-    emissiveMap: tex ?? undefined,
-    emissiveIntensity: emissive,
+    // 遮罩自身带三档暖色 ⇒ emissive 取白，让遮罩色原样透出（省一套 uniform）；
+    // 遮罩缺失时 emissiveIntensity = 0，emissive 颜色取什么都不上屏。
+    emissive: lit ? '#ffffff' : (tex ? EMISSIVE_WINDOW : fallback),
+    emissiveMap: lit ?? undefined,
+    emissiveIntensity: lit ? emissive : 0,
     roughness: 0.7,
     metalness: 0.1,
     envMapIntensity: 0.5, // 16 · 阶段 R：天空环境反射（幕墙/立面）
@@ -251,18 +333,21 @@ function sideMatProps(
   return withPBR(base, pbr ?? { map: null, normalMap: null, roughnessMap: null, matProps: {} });
 }
 
+/**
+ * 顶面材质规格（批次 39 A2）。
+ *
+ * ⚠ **屋顶不发光**：`emissive` / `emissiveMap` / `emissiveIntensity` 三项已删除。
+ * 批次 39 之前 `emissiveMap: tex`（= 屋面 albedo 自发光），夜景里全城屋顶连贴图上的
+ * 占位水印一起发暖光（B2）。屋面是纯漫反射面，夜间只应靠月光/环境光变暗。
+ */
 function topMatProps(
   tex: THREE.Texture | null,
   fallback: string,
-  emissive: number,
   pbr?: SharedPBR,
 ) {
   const base = {
     map: tex ?? undefined,
     color: tex ? '#ffffff' : fallback,
-    emissive: tex ? EMISSIVE_WINDOW : fallback,
-    emissiveMap: tex ?? undefined,
-    emissiveIntensity: emissive * 0.6,
     roughness: 0.8,
     metalness: 0.05,
     envMapIntensity: 0.5,
@@ -298,6 +383,13 @@ export interface WallCtx {
   tilePbr?: SharedPBR;
   metalPbr?: SharedPBR;
   /**
+   * 批次 39 B1：立面**亮窗遮罩**（`facade_tiles/<family>_lit.png`），侧墙 emissiveMap
+   * 的唯一来源。缺失（null）⇒ 侧墙 `emissiveIntensity = 0`（夜间无窗灯），
+   * **不回退到 albedo**。着色器层面与 `map` 共用同一套几何 UV ⇒ 遮罩窗格永远
+   * 与立面窗格对齐，无需另设 offset。
+   */
+  litMap?: THREE.Texture | null;
+  /**
    * 批次 37：立面/屋顶贴图是否走物理尺寸 UV 管线（贴图以 `wrap: 'repeat'` 加载）。
    * 材质侧据此做**包裹一致性自检**（物理 UV 遇到 clamp 贴图 = 整面拉成边缘竖条），
    * 几何侧由 `build*Parts` 的同名开关决定 UV 投影（`wallBox`）。
@@ -324,15 +416,17 @@ export function buildWallMaterial(spec: WallMatSpec, ctx: WallCtx): THREE.MeshSt
   switch (spec.kind) {
     case 'sideA':
       warnIfNotRepeat(ctx.facadeBase, ctx, '侧 A（facadeBase）');
-      return new THREE.MeshStandardMaterial(sideMatProps(ctx.facadeBase, ctx.fallbackColor, ctx.emissive, ctx.tint, ctx.pbrBase));
+      if (ctx.litMap) warnIfNotRepeat(ctx.litMap, ctx, '侧 A 亮窗遮罩（_lit）');
+      return new THREE.MeshStandardMaterial(sideMatProps(ctx.facadeBase, ctx.litMap ?? null, ctx.fallbackColor, ctx.emissive, ctx.tint, ctx.pbrBase));
     case 'sideB':
       warnIfNotRepeat(ctx.facadeMid, ctx, '侧 B（facadeMid）');
-      return new THREE.MeshStandardMaterial(sideMatProps(ctx.facadeMid, ctx.fallbackColor, ctx.emissive, ctx.tint, ctx.pbrMid));
+      if (ctx.litMap) warnIfNotRepeat(ctx.litMap, ctx, '侧 B 亮窗遮罩（_lit）');
+      return new THREE.MeshStandardMaterial(sideMatProps(ctx.facadeMid, ctx.litMap ?? null, ctx.fallbackColor, ctx.emissive, ctx.tint, ctx.pbrMid));
     case 'top':
       // roof=false 的体块（塔楼裙楼/house/shed 主体）顶面原就是纯色兜底（top={null}）
       if (spec.roof) warnIfNotRepeat(ctx.roofMap, ctx, '顶面（roofMap）');
       return new THREE.MeshStandardMaterial(
-        topMatProps(spec.roof ? ctx.roofMap : null, ctx.fallbackColor, ctx.emissive, spec.roof ? ctx.roofPbr : undefined),
+        topMatProps(spec.roof ? ctx.roofMap : null, ctx.fallbackColor, spec.roof ? ctx.roofPbr : undefined),
       );
     case 'crown':
       // 原 TowerShape 楼冠材质逐字段保留
@@ -345,21 +439,20 @@ export function buildWallMaterial(spec: WallMatSpec, ctx: WallCtx): THREE.MeshSt
         envMapIntensity: 0.9,
       });
     case 'prism': {
-      // 原 PrismRoof 材质逐字段保留（DoubleSide 防背面剔除；synth 兜底随 stem）
+      // 批次 39 A5：坡屋顶**一律走 synth 瓦面/金属面**，不再吃平屋顶贴图。
+      // 批次 39 之前 `eff = ctx.roofMap ? ctx.roofPbr : synth` ⇒ 红瓦色坡屋顶被贴上
+      // 深灰卷材纹理（B15：`roofs/finance.png` 这类**平屋面**资产贴在 30° 斜面上）。
+      // `roofMap` / `roofPbr` 自此只服务 `case 'top'`（平屋面）。
+      // 同 A2：坡屋顶不发光（原 emissiveMap = 屋面 albedo 自发光），三项一并去掉。
       const synth = spec.stem === 'metal_deck' ? ctx.metalPbr : ctx.tilePbr;
-      const eff = (ctx.roofMap ? ctx.roofPbr : undefined) ?? synth;
       const base = {
-        map: ctx.roofMap ?? undefined,
-        color: ctx.roofMap ? '#ffffff' : spec.fallback,
-        emissive: ctx.roofMap ? EMISSIVE_WINDOW : spec.fallback,
-        emissiveMap: ctx.roofMap ?? undefined,
-        emissiveIntensity: ctx.emissive * 0.5,
+        color: spec.fallback,
         roughness: 0.85,
         metalness: 0.05,
         envMapIntensity: 0.35,
       };
       return new THREE.MeshStandardMaterial({
-        ...withPBR(base, eff ?? { map: null, normalMap: null, roughnessMap: null, matProps: {} }),
+        ...withPBR(base, synth ?? { map: null, normalMap: null, roughnessMap: null, matProps: {} }),
         side: THREE.DoubleSide,
       });
     }
@@ -521,11 +614,19 @@ export function mergeBoxes(boxes: BoxSpec[]): THREE.BufferGeometry {
 
 // ── 18-Y 构造件 → 点缀部件发射器（几何与原 JSX 逐件全等）──────────────
 
+/** 女儿墙几何常数（批次 39 A3 提取：女儿墙 / 压顶线脚共用同一套口径）。 */
+const PARAPET_T = u(0.25);   // 墙厚 0.25 m
+const PARAPET_H = u(0.9);    // 墙高 0.9 m（真实规范 0.9~1.2 m）
+const PARAPET_HALF = u(0.125); // 环心内缩（t/2）
+/** 压顶线脚：女儿墙顶再加宽 `t + u(0.06)`、高 `u(0.08)` 的薄挑檐（批次 39 A3）。 */
+const COPING_H = u(0.08);
+const COPING_OVER = u(0.06);
+
 /** 女儿墙（02 §3.2 · ParapetRing）：4 条 box @ y（原 mesh position=[0,y,0] 内 y=h/2）。 */
 function parapetAccent(w: number, d: number, y: number): MergePart[] {
-  const t = u(0.25);
-  const h = u(0.9);
-  const half = u(0.125);
+  const t = PARAPET_T;
+  const h = PARAPET_H;
+  const half = PARAPET_HALF;
   return [
     boxPart(w, h, t, 0, y + h / 2, +(d / 2 - half), CONCRETE_COLOR),
     boxPart(w, h, t, 0, y + h / 2, -(d / 2 - half), CONCRETE_COLOR),
@@ -534,25 +635,121 @@ function parapetAccent(w: number, d: number, y: number): MergePart[] {
   ];
 }
 
-/** 入口门厅框 + 雨棚（02 §3.2 · EntranceLobby；玻璃门另入墙体 glass 组）。 */
-function entranceAccent(d: number): MergePart[] {
-  const glassW = u(1.4);
-  const glassH = u(2.4);
-  const frameT = u(0.06);
+/**
+ * 压顶线脚（批次 39 A3）：女儿墙**顶面**再加一圈薄挑檐（ coping ），4 条。
+ * 薄挑檐比墙身厚 `COPING_OVER`（两侧各挑出 0.06 m），比墙身高 `COPING_H`（0.08 m），
+ * 坐在女儿墙顶上 —— 真实女儿墙的收头件，缺了它墙顶就是一道光板。
+ */
+function copingAccent(w: number, d: number, y: number): MergePart[] {
+  const t = PARAPET_T + COPING_OVER;
+  const half = PARAPET_HALF + COPING_OVER / 2;
+  const cy = y + PARAPET_H + COPING_H / 2;
   return [
-    boxPart(frameT, glassH, frameT, -glassW / 2 + frameT / 2, glassH / 2, d / 2 + 0.004, FRAME_COLOR),
-    boxPart(frameT, glassH, frameT, +glassW / 2 - frameT / 2, glassH / 2, d / 2 + 0.004, FRAME_COLOR),
-    boxPart(glassW + 2 * frameT, frameT, frameT, 0, glassH - frameT / 2, d / 2 + 0.004, FRAME_COLOR),
-    // 雨棚 box [u(2.2), u(0.12), u(0.9)] @ y=u(2.6)
-    boxPart(u(2.2), u(0.12), u(0.9), 0, u(2.6), d / 2 + u(0.45), AWNING_BLUE),
+    boxPart(w + COPING_OVER, COPING_H, t, 0, cy, +(d / 2 - half), CONCRETE_COLOR),
+    boxPart(w + COPING_OVER, COPING_H, t, 0, cy, -(d / 2 - half), CONCRETE_COLOR),
+    boxPart(t, COPING_H, d - 2 * half, +(w / 2 - half), cy, 0, CONCRETE_COLOR),
+    boxPart(t, COPING_H, d - 2 * half, -(w / 2 - half), cy, 0, CONCRETE_COLOR),
   ];
 }
 
-/** 入口玻璃门 plane（原 EntranceLobby 玻璃门，材质参数 GLASS_DOOR）。 */
-function entranceGlass(d: number): GroupedMergePart {
+/** 女儿墙 + 压顶线脚（批次 39 A3：有女儿墙的顶面统一带收头）。 */
+function parapetWithCoping(w: number, d: number, y: number): MergePart[] {
+  return [...parapetAccent(w, d, y), ...copingAccent(w, d, y)];
+}
+
+// ── 批次 39 C3/C4：临街面定位（门 / 雨棚 / 底商 一律挂同一面）────────────
+
+/**
+ * 临街面：法向轴 + 朝向符号。布局层（`building_layout.BuildingSpec`）已知
+ * 南北边楼临 ±Z、东西边楼临 ±X（C3），经 `buildBuildingParts` 透传下来。
+ *
+ * 批次 39 之前所有底层构件都硬编码在固定轴上：门 / 门框 / 门厅雨棚在 **+Z**、
+ * 底商雨棚 / 灯带 / 厂房卷帘门 / 高窗带在 **−Z 或 +Z**，于是
+ *   - 一半的楼「首层商业朝街区内部、背街面无门」（B9）；
+ *   - 门与底商雨棚**永不在同一面**（B10）。
+ * 现统一改为「按临街面定位 + 按墙高自适应」。
+ */
+interface Street {
+  /** 临街面法向轴：'x' = ±X 面临街；'z' = ±Z 面临街。 */
+  axis: 'x' | 'z';
+  /** 朝向符号：+1 = 该轴正侧临街，−1 = 负侧临街。 */
+  sign: 1 | -1;
+}
+
+/** 缺省临街面（与批次 39 之前的 +Z 门 / −Z 底商在**南北边楼**上等价）。 */
+const STREET_DEFAULT: Street = { axis: 'z', sign: 1 };
+
+/**
+ * 临街面局部坐标 → 世界 (x, z)：`along` = 沿街墙方向（切向），
+ * `out` = 沿法向朝街面外挑（恒为正，符号由 `sign` 决定）。
+ */
+function streetXZ(st: Street, along: number, out: number): [number, number] {
+  return st.axis === 'z' ? [along, st.sign * out] : [st.sign * out, along];
+}
+
+/** 门 / 门厅雨棚高度随墙高自适应（批次 39 C4）。 */
+function entranceHeight(wallH: number): number {
+  return Math.min(u(2.4), 0.62 * wallH);
+}
+
+/** 门厅雨棚挂高随墙高自适应（批次 39 C4）。 */
+function canopyHeight(wallH: number): number {
+  return Math.min(u(2.6), 0.75 * wallH);
+}
+
+/**
+ * 入口门厅框 + 雨棚（02 §3.2 · EntranceLobby；玻璃门另入墙体 glass 组）。
+ *
+ * 批次 39 C3/C4：整体挂到临街面；门高 `min(u(2.4), 0.62·墙高)`、
+ * 雨棚挂高 `min(u(2.6), 0.75·墙高)` —— 郊区 2~3 m 的矮楼不再长出穿出屋顶的
+ * 2.4 m 门与浮在檐口之上的雨棚（B11）。
+ */
+function entranceAccent(d: number, st: Street, wallH: number): MergePart[] {
   const glassW = u(1.4);
-  const glassH = u(2.4);
-  return { geo: new THREE.PlaneGeometry(glassW, glassH), x: 0, y: glassH / 2, z: d / 2 + 0.002, mat: -1 };
+  const glassH = entranceHeight(wallH);
+  const frameT = u(0.06);
+  const out = d / 2 + 0.004;
+  const [flx, flz] = streetXZ(st, -glassW / 2 + frameT / 2, out);
+  const [frx, frz] = streetXZ(st, +glassW / 2 - frameT / 2, out);
+  const [tlx, tlz] = streetXZ(st, 0, out);
+  const [ctx, ctz] = streetXZ(st, 0, d / 2 + u(0.45));
+  const canopyY = canopyHeight(wallH);
+  return [
+    boxPart(frameT, glassH, frameT, flx, glassH / 2, flz, FRAME_COLOR),
+    boxPart(frameT, glassH, frameT, frx, glassH / 2, frz, FRAME_COLOR),
+    boxPart(glassW + 2 * frameT, frameT, frameT, tlx, glassH - frameT / 2, tlz, FRAME_COLOR),
+    // 雨棚 box [u(2.2), u(0.12), u(0.9)]（±X 临街时切向/法向互换）
+    st.axis === 'z'
+      ? boxPart(u(2.2), u(0.12), u(0.9), ctx, canopyY, ctz, AWNING_BLUE)
+      : boxPart(u(0.9), u(0.12), u(2.2), ctx, canopyY, ctz, AWNING_BLUE),
+  ];
+}
+
+/**
+ * 把一张**面片**挂到临街面（宽 `w`、高 `h`、中心高 `y`、外挑 `out`）。
+ *
+ * `PlaneGeometry` 默认面朝 +Z；临街轴为 'x' 时必须绕 Y 转 ∓90°，否则面片与墙面
+ * 平行（审计实测：转角/侧向楼出现「门是一条看不见的线」）。
+ */
+function facePlane(
+  w: number, h: number, out: number, y: number, st: Street,
+): Pick<MergePart, 'geo' | 'x' | 'y' | 'z' | 'matrix'> {
+  const [x, z] = streetXZ(st, 0, out);
+  const geo = new THREE.PlaneGeometry(w, h);
+  if (st.axis === 'z') return { geo, x, y, z };
+  const q = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(0, st.sign > 0 ? Math.PI / 2 : -Math.PI / 2, 0),
+  );
+  return {
+    geo,
+    matrix: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(1, 1, 1)),
+  };
+}
+
+/** 入口玻璃门 plane（原 EntranceLobby 玻璃门，材质参数 GLASS_DOOR）。 */
+function entranceGlass(d: number, st: Street, wallH: number): GroupedMergePart {
+  const glassH = entranceHeight(wallH);
+  return { ...facePlane(u(1.4), glassH, d / 2 + 0.002, glassH / 2, st), mat: -1 };
 }
 
 /** 角柱（02 §3.2 · CornerQuoins）：四角竖条 [u(0.15), h, u(0.15)]。 */
@@ -622,16 +819,23 @@ function podiumRailAccent(w: number, d: number, y: number): MergePart[] {
   return out;
 }
 
-/** 底商雨棚（14 阶段 I · Shopfront 雨棚件；灯带另入墙体 glow 组）。 */
-function shopfrontAwningAccent(w: number, d: number, y: number): MergePart {
+/** 底商雨棚（14 阶段 I · Shopfront 雨棚件；灯带另入墙体 glow 组）。批次 39 C4 改挂临街面。 */
+function shopfrontAwningAccent(w: number, d: number, y: number, st: Street): MergePart {
   const awningD = u(1.2);
-  return boxPart(w * 0.9, u(0.35), awningD, 0, y, -(d / 2 + awningD * 0.5), AWNING_COLOR);
+  const [x, z] = streetXZ(st, 0, d / 2 + awningD * 0.5);
+  return st.axis === 'z'
+    ? boxPart(w * 0.9, u(0.35), awningD, x, y, z, AWNING_COLOR)
+    : boxPart(awningD, u(0.35), d * 0.9, x, y, z, AWNING_COLOR);
 }
 
-/** 底商暖光灯带（原 Shopfront 灯带，emissive min(0.45, e*1.2)）。 */
-function shopfrontGlow(w: number, d: number, y: number, mat: number): GroupedMergePart {
+/** 底商暖光灯带（原 Shopfront 灯带，emissive min(0.45, e*1.2)）。批次 39 C4 改挂临街面。 */
+function shopfrontGlow(w: number, d: number, y: number, mat: number, st: Street): GroupedMergePart {
   const awningD = u(1.2);
-  return { geo: new THREE.BoxGeometry(w * 0.85, u(0.18), u(0.06)), x: 0, y: y - u(0.25), z: -(d / 2 + awningD * 0.95), mat };
+  const [x, z] = streetXZ(st, 0, d / 2 + awningD * 0.95);
+  const geo = st.axis === 'z'
+    ? new THREE.BoxGeometry(w * 0.85, u(0.18), u(0.06))
+    : new THREE.BoxGeometry(u(0.06), u(0.18), d * 0.85);
+  return { geo, x, y: y - u(0.25), z, mat };
 }
 
 /** 广告牌（14 阶段 I：双杆 @ y + 发光面板；辉光 pointLight 由 Shape 组件挂）。 */
@@ -668,13 +872,73 @@ function balconyAccent(w: number, d: number, h: number): MergePart[] {
   return out;
 }
 
-/** 屋顶设备（阶段 N：确定性 1-2 件，w>1.5 分支）。 */
+/**
+ * 屋顶设备平台 + 检修马道（批次 39 A3）。
+ *
+ * 平台是一片 `w*0.6 × d*0.6` 的**格栅板**（5 根细条 + 2 条边梁拼出网格感，
+ * 站在俯视机位能看出"这是一块格栅"而不是一块实心板），另加一条从平台西缘
+ * 伸向屋面中心的窄检修马道。所有件走 `boxPart` 发射器 ⇒ 并进区级点缀 mesh，
+ * 不新增 draw call。
+ */
+function rooftopPlatform(w: number, d: number, y: number): MergePart[] {
+  const pw = w * 0.6;
+  const pd = d * 0.6;
+  const slatT = u(0.05);   // 格栅条厚 0.05 m
+  const slatW = u(0.08);   // 格栅条宽 0.08 m
+  const deckY = y + u(0.3); // 平台面高出屋面 0.3 m
+  const out: MergePart[] = [];
+  const n = 5;
+  for (let i = 0; i < n; i++) {
+    const x = -pw / 2 + (pw * (i + 0.5)) / n;
+    out.push(boxPart(slatW, slatT, pd, x, deckY, 0, ROOFTOP_DECK));
+  }
+  // 平台边梁（沿 X 的两条边框，略高于格栅条）
+  const beamT = u(0.09);
+  out.push(boxPart(pw + u(0.12), slatT * 1.6, beamT, 0, deckY, +(pd / 2), FRAME_COLOR));
+  out.push(boxPart(pw + u(0.12), slatT * 1.6, beamT, 0, deckY, -(pd / 2), FRAME_COLOR));
+  // 检修马道：自平台 -Z 边沿伸向屋面边的窄板（宽 u(0.9)）。
+  // 长度**按「平台边到女儿墙内缘」的净距**取，绝不越出屋面轮廓。
+  const walkLen = Math.max((d / 2 - pd / 2) * 0.8, u(0.8));
+  out.push(boxPart(u(0.9), slatT, walkLen, 0, deckY, -(pd / 2 + walkLen / 2), FRAME_COLOR));
+  return out;
+}
+
+/**
+ * 屋顶天线（批次 39 A3）：1 根 3~6 m 桅杆 + 2~3 段横杆。
+ * 高度/横杆数由 **roof 尺寸 hash** 决定（§92a 布局确定性：禁 `Math.random`，
+ * 同楼同形，跨帧/跨重载稳定）。桅杆立在**平台与女儿墙之间的环带**上（0.4w/0.4d），
+ * 不与设备平台格栅互相穿插。
+ */
+function antennaMast(w: number, d: number, y: number): MergePart[] {
+  const seed = hashStr(`antenna-${w.toFixed(3)}-${d.toFixed(3)}-${y.toFixed(3)}`);
+  const h = u(3 + (seed % 4));        // 3~6 m
+  const r = u(0.06);                 // 直径 0.12 m
+  const cx = -w * 0.4;
+  const cz = +d * 0.4;
+  const baseY = y + u(0.05);
+  const out: MergePart[] = [
+    cylPart(r, r * 1.5, h, 6, cx, baseY + h / 2, cz, ROOFTOP_MAST),
+  ];
+  // 2~3 段横杆：自下而上等分，绕 Z 转 90° 变成水平横担（沿 X）
+  const arms = 2 + ((seed >>> 5) % 2);
+  for (let i = 0; i < arms; i++) {
+    const ay = baseY + (h * (i + 1)) / (arms + 1);
+    const al = u(0.5 + i * 0.35);
+    out.push({ ...cylPart(r * 0.7, r * 0.7, al, 5, cx, ay, cz, FRAME_COLOR), rotZ: Math.PI / 2 });
+  }
+  return out;
+}
+
+/** 屋顶设备（阶段 N 基础件 + 批次 39 A3：设备平台 + 检修马道 + 天线）。 */
 function rooftopAccent(w: number, d: number, y: number): MergePart[] {
   const baseY = y + u(0.05);
   if (w > 1.5) {
     return [
-      cylPart(u(0.15), u(0.15), u(0.3), 8, w * 0.3, baseY + u(0.15), d * 0.3, ROOFTOP_TANK),
-      cylPart(u(0.08), u(0.08), u(0.35), 6, -w * 0.3, baseY + u(0.18), -d * 0.3, ROOFTOP_VENT),
+      // 水箱 / 通风管同样移到 0.4w·0.4d 的环带上（原 0.3w 恰好压在平台边缘）
+      cylPart(u(0.15), u(0.15), u(0.3), 8, w * 0.4, baseY + u(0.15), d * 0.4, ROOFTOP_TANK),
+      cylPart(u(0.08), u(0.08), u(0.35), 6, -w * 0.4, baseY + u(0.18), -d * 0.4, ROOFTOP_VENT),
+      ...rooftopPlatform(w, d, y),
+      ...antennaMast(w, d, y),
     ];
   }
   return [
@@ -683,24 +947,65 @@ function rooftopAccent(w: number, d: number, y: number): MergePart[] {
   ];
 }
 
-/** 厂房卷帘门（阶段 N；批次 28 A2 横纹已并件）@ z=+d/2。 */
-function shutterAccent(w: number, h: number, d: number): MergePart[] {
+/**
+ * 厂房卷帘门（阶段 N；批次 28 A2 横纹已并件）。批次 39 C4 改挂临街面（原固定 +Z）。
+ *
+ * @param bw 厂房体量 X 向尺寸（shed 为 `w*1.2`）
+ * @param bd 厂房体量 Z 向尺寸（shed 为 `d`）
+ * ⚠ 临街面距离随轴而变（'x' 面在 `bw/2`、'z' 面在 `bd/2`）—— 厂房是**扁体量**
+ * （bw ≫ bd），沿用 d/2 会把门埋进墙体内部。
+ */
+function shutterAccent(bw: number, bH: number, bd: number, st: Street): MergePart[] {
+  const faceAt = (st.axis === 'x' ? bw : bd) / 2;
+  const alongW = (st.axis === 'x' ? bd : bw) * 0.6;  // 卷帘门宽度 = 临街面宽的 60%
   const out: MergePart[] = [
-    // 卷帘门主体 plane（原 planeGeometry [w*0.6, h*0.4] @ z=d/2+0.001）
-    { geo: new THREE.PlaneGeometry(w * 0.6, h * 0.4), x: 0, y: h * 0.2, z: d / 2 + 0.001, color: SHUTTER_COLOR },
+    // 卷帘门主体 plane（原 planeGeometry [w*0.6, h*0.4] @ 面外 0.001）
+    { ...facePlane(alongW, bH * 0.4, faceAt + 0.001, bH * 0.2, st), color: SHUTTER_COLOR },
   ];
   for (const t of [0.15, 0.25, 0.35, 0.45]) {
-    out.push(boxPart(w * 0.6, u(0.02), 0.004, 0, h * t, d / 2 + 0.002, BALCONY_COLOR));
+    const [rx, rz] = streetXZ(st, 0, faceAt + 0.002);
+    out.push(
+      st.axis === 'z'
+        ? boxPart(alongW, u(0.02), 0.004, rx, bH * t, rz, BALCONY_COLOR)
+        : boxPart(0.004, u(0.02), alongW, rx, bH * t, rz, BALCONY_COLOR),
+    );
   }
   return out;
 }
 
-/** 厂房侧高窗带（02 §3.2 · ShedWindowBands）：+Z 面 2 条。 */
-function windowBandAccent(w: number, d: number, h: number): MergePart[] {
-  const bandW = w * 1.2 * 0.9;
+/**
+ * 厂房侧高窗带（02 §3.2 · ShedWindowBands）：临街面 2 条（批次 39 C4，原固定 +Z）。
+ *
+ * @param bandW 窗带宽度（调用方按临街面实际面宽裁剪，避免沿用固定 `w*1.2*0.9` 时
+ *   在侧向楼（面宽 = bd ≪ bw）上横向出挑出墙体）。
+ */
+function windowBandAccent(bandW: number, bH: number, faceAt: number, st: Street): MergePart[] {
+  return [0.55, 0.75].map((fy) => {
+    const [x, z] = streetXZ(st, 0, faceAt + 0.003);
+    return st.axis === 'z'
+      ? boxPart(bandW, u(0.6), u(0.06), x, bH * fy, z, WINBAND_COLOR)
+      : boxPart(u(0.06), u(0.6), bandW, x, bH * fy, z, WINBAND_COLOR);
+  });
+}
+
+/**
+ * 建筑基座 / 勒脚（批次 39 C5）：沿四边一圈 `u(0.35)` 高、`u(0.08)` 出挑的基座带。
+ *
+ * 现状缺陷（B20）：建筑 box 底面 y=0 而区底板顶面 `DISTRICT_SURFACE_Y = 0.010`
+ * （10 cm）⇒ 基座被埋 10 cm，box 与地面之间没有任何过渡。基座带从 y=0 起
+ * （**不下探**，绝不穿到区底板之下），露出 25 cm 勒脚 + 8 cm 出挑的阴影线。
+ *
+ * 4 件全部走 `boxPart` ⇒ 并入区级点缀 mesh，**不新增 draw call**。
+ */
+function plinthAccent(w: number, d: number): MergePart[] {
+  const h = u(0.35);
+  const over = u(0.08);
+  const y = h / 2;
   return [
-    boxPart(bandW, u(0.6), u(0.06), 0, h * 0.55, d / 2 + 0.003, WINBAND_COLOR),
-    boxPart(bandW, u(0.6), u(0.06), 0, h * 0.75, d / 2 + 0.003, WINBAND_COLOR),
+    boxPart(w + 2 * over, h, over, 0, y, +(d / 2 + over / 2), PLINTH_COLOR),
+    boxPart(w + 2 * over, h, over, 0, y, -(d / 2 + over / 2), PLINTH_COLOR),
+    boxPart(over, h, d, +(w / 2 + over / 2), y, 0, PLINTH_COLOR),
+    boxPart(over, h, d, -(w / 2 + over / 2), y, 0, PLINTH_COLOR),
   ];
 }
 
@@ -747,18 +1052,56 @@ function sawtoothParts(w: number, d: number, y: number, deckMat: number, glassMa
 // 由 DistrictBuildings 合并为「每区 1 墙体 mesh + 1 点缀 mesh」（DC ≈ 材质组数 + 1）。
 // 点缀/墙体几何与原组件逐件全等（仅去 React 包装）。
 
+/**
+ * 盒面工厂（批次 39 B1）：把「物理 UV + 逐区相位偏移」两件事收进一个闭包，
+ * 5 个构造器共用。`cls === 'top'` 是屋面（ROOF_UV 另一套周期），不打散。
+ */
+function wallBoxFactory(facadeTiles: boolean, uvOffset?: FacadeUvOffset) {
+  return (
+    w: number, h: number, d: number,
+    x: number, y: number, z: number,
+    cls: 'A' | 'B' | 'top',
+  ): THREE.BufferGeometry => wallBox(w, h, d, x, y, z, cls, facadeTiles, uvOffset);
+}
+
+/**
+ * 批次 39 C3：临街轴 → 侧墙材质索引。
+ *
+ * `matSpecs` 的**顺序恒定不变**（[0]=sideA/facadeBase、[1]=sideB/facadeMid …），
+ * 只交换「哪个面类用哪个索引」—— 否则同城区两种朝向的楼会产生**两种 matSpecs
+ * 签名**，`DistrictBuildings` 会分裂成两个材质组（多一套材质 + 多一个 mesh）。
+ * 面类本身也不动：`'A'` 恒 = ±X（面宽 d）、`'B'` 恒 = ±Z（面宽 w），
+ * 物理 UV 密度因此保持不变，只换贴图语义。
+ *
+ * @param axis 临街面法向轴（布局层给出）：'z' ⇒ ±Z 面临街 ⇒ base 挂 `'B'` 面。
+ */
+function facadeMats(
+  axis: 'x' | 'z',
+  matBase: number,
+  matMid: number,
+): { mA: number; mB: number } {
+  return axis === 'x' ? { mA: matBase, mB: matMid } : { mA: matMid, mB: matBase };
+}
+
 /** tower：裙楼 + 塔身 + 楼冠/玻璃门/灯带/广告牌 + 点缀件。 */
 export function buildTowerParts(
   w: number, d: number, h: number, emissive: number, facadeTiles = false,
+  uvOffset?: FacadeUvOffset,
+  streetAxis: 'x' | 'z' = STREET_DEFAULT.axis,
+  streetSign: 1 | -1 = STREET_DEFAULT.sign,
 ): BuildingParts {
   const pH = Math.min(u(10), h * 0.35);
   const cH = Math.min(u(6), h * 0.22);
   const bodyH = Math.max(h - pH - cH, u(3)); // 塔身至少 1 层
   const shopY = Math.min(u(3.6), pH * 0.5);
   const hasBillboard = w > 1.4;
+  const st: Street = { axis: streetAxis, sign: streetSign };
 
   // 材质表：0 裙楼侧(facadeBase) / 1 裙楼顶(纯色) / 2 塔身侧(facadeMid) / 3 塔身顶(roof) /
   // 4 楼冠 / 5 玻璃门 / 6 灯带 / 7 广告牌面板（hasBillboard 才有）
+  // 批次 39 C3：**塔楼不参与 base/mid 换面** —— 裙楼（= 首层商业基座）四面都用
+  // facadeBase、塔身四面都用 facadeMid，base/mid 的分界在「裙楼 vs 塔身」而非面轴，
+  // 临街面天然带商业首层（换面只对单层体块的 slab/house/shed 有意义）。
   const matSpecs: WallMatSpec[] = [
     { kind: 'sideA' }, { kind: 'top', roof: false }, { kind: 'sideB' }, { kind: 'top', roof: true },
     { kind: 'crown' }, { kind: 'glass', c: GLASS_DOOR },
@@ -766,30 +1109,39 @@ export function buildTowerParts(
   ];
   if (hasBillboard) matSpecs.push({ kind: 'glow', intensity: 0.5, rough: 0.4, metal: 0.4 });
 
+  const wx = wallBoxFactory(facadeTiles, uvOffset);
   const wall: GroupedMergePart[] = [
     // 裙楼（商业基座，facadeBase 四面；几何 = 原 BoxSolid pod box 三组面）
-    { geo: wallBox(w, pH, d, 0, pH / 2, 0, 'A', facadeTiles), mat: 0 },
-    { geo: wallBox(w, pH, d, 0, pH / 2, 0, 'B', facadeTiles), mat: 0 },
-    { geo: wallBox(w, pH, d, 0, pH / 2, 0, 'top', facadeTiles), mat: 1 },
+    { geo: wx(w, pH, d, 0, pH / 2, 0, 'A'), mat: 0 },
+    { geo: wx(w, pH, d, 0, pH / 2, 0, 'B'), mat: 0 },
+    { geo: wx(w, pH, d, 0, pH / 2, 0, 'top'), mat: 1 },
     // 塔身（facadeMid 四面 + roof 顶面）
-    { geo: wallBox(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'A', facadeTiles), mat: 2 },
-    { geo: wallBox(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'B', facadeTiles), mat: 2 },
-    { geo: wallBox(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'top', facadeTiles), mat: 3 },
+    { geo: wx(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'A'), mat: 2 },
+    { geo: wx(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'B'), mat: 2 },
+    { geo: wx(w * 0.8, bodyH, d * 0.8, 0, pH + bodyH / 2, 0, 'top'), mat: 3 },
     // 顶部收分（原独立 crown mesh）
     { geo: new THREE.BoxGeometry(w * 0.55, cH, d * 0.55), x: 0, y: pH + bodyH + cH / 2, z: 0, mat: 4 },
-    // 入口玻璃门
-    { ...entranceGlass(d), mat: 5 },
-    // 底商灯带
-    shopfrontGlow(w, d, shopY, 6),
+    // 入口玻璃门（批次 39 C3/C4：挂临街面 + 高度随裙墙自适应）
+    { ...entranceGlass(d, st, pH), mat: 5 },
+    // 底商灯带（与门 / 雨棚同面）
+    shopfrontGlow(w, d, shopY, 6, st),
   ];
+  const crownTopY = pH + bodyH + cH;
   const accent: MergePart[] = [
+    // 批次 39 C5：基座带贴裙楼轮廓（裙楼才是接地体量）
+    ...plinthAccent(w, d),
     ...parapetAccent(w, d, pH),
     ...acUnitsAccent(w * 0.8, d * 0.8, bodyH + pH),
-    ...podiumRailAccent(w, d, pH),
-    ...entranceAccent(d),
-    shopfrontAwningAccent(w, d, shopY),
+    // 批次 39 A3.2：退台面护栏改挂**塔身**尺寸、抬到塔身顶（`pH + bodyH`）。
+    // 旧口径 `podiumRailAccent(w, d, pH)` 与裙楼女儿墙 `parapetAccent(w, d, pH)`
+    // 同尺寸同高度 ⇒ 两套构件在同一圈互相穿插（B30）。
+    ...podiumRailAccent(w * 0.8, d * 0.8, pH + bodyH),
+    ...entranceAccent(d, st, pH),
+    shopfrontAwningAccent(w, d, shopY, st),
     ...balconyAccent(w * 0.8, d * 0.8, bodyH + pH),
-    ...rooftopAccent(w * 0.55, d * 0.55, pH + bodyH + cH),
+    ...rooftopAccent(w * 0.55, d * 0.55, crownTopY),
+    // 批次 39 A3.1：塔冠顶原是裸 BoxGeometry（顶面无任何收头，B12）⇒ 补女儿墙 + 压顶线脚。
+    ...parapetWithCoping(w * 0.55, d * 0.55, crownTopY),
   ];
   if (w > 1.2) accent.push(...liftRoomAccent(w * 0.55, d * 0.55, pH + bodyH + cH));
   let lightY = 0;
@@ -805,32 +1157,46 @@ export function buildTowerParts(
 /** slab：单 box（侧A/侧B/顶 3 group）+ 檐口/雨棚/灯带/阳台/屋顶件/构造件。 */
 export function buildSlabParts(
   w: number, d: number, h: number, emissive: number, facadeTiles = false,
+  uvOffset?: FacadeUvOffset,
+  streetAxis: 'x' | 'z' = STREET_DEFAULT.axis,
+  streetSign: 1 | -1 = STREET_DEFAULT.sign,
 ): BuildingParts {
   const shopY = Math.min(u(3.6), h * 0.3);
   const hasQuoins = w > 1.4;
+  const st: Street = { axis: streetAxis, sign: streetSign };
 
+  // 0 = sideA(facadeBase, 含首层商业) / 1 = sideB(facadeMid)
   const matSpecs: WallMatSpec[] = [
     { kind: 'sideA' }, { kind: 'sideB' }, { kind: 'top', roof: true },
     { kind: 'glass', c: GLASS_DOOR },
     { kind: 'glow', intensity: Math.min(0.45, emissive * 1.2), rough: 0.3, metal: 0 },
   ];
+  // 批次 39 C3：base（含首层商业）挂临街面 —— 临 ±X 用原口径、临 ±Z 换面
+  const { mA, mB } = facadeMats(streetAxis, 0, 1);
 
+  const wx = wallBoxFactory(facadeTiles, uvOffset);
   const wall: GroupedMergePart[] = [
-    { geo: wallBox(w, h, d, 0, h / 2, 0, 'A', facadeTiles), mat: 0 },
-    { geo: wallBox(w, h, d, 0, h / 2, 0, 'B', facadeTiles), mat: 1 },
-    { geo: wallBox(w, h, d, 0, h / 2, 0, 'top', facadeTiles), mat: 2 },
-    { ...entranceGlass(d), mat: 3 },
-    shopfrontGlow(w, d, shopY, 4),
+    { geo: wx(w, h, d, 0, h / 2, 0, 'A'), mat: mA },
+    { geo: wx(w, h, d, 0, h / 2, 0, 'B'), mat: mB },
+    { geo: wx(w, h, d, 0, h / 2, 0, 'top'), mat: 2 },
+    { ...entranceGlass(d, st, h), mat: 3 },
+    shopfrontGlow(w, d, shopY, 4, st),
   ];
   const accent: MergePart[] = [
-    // 檐口条（0.05 高深色压顶线，契约 §2.2）
-    boxPart(w + 0.08, 0.05, d + 0.08, 0, h + 0.025, 0, CORNICE_COLOR),
-    shopfrontAwningAccent(w, d, shopY),
+    // 批次 39 C5：基座带（贴地勒脚，出挑 0.08 m）
+    ...plinthAccent(w, d),
+    // 檐口条（高 0.5 m 深色压顶线，两侧各挑出 0.4 m；契约 §2.2）。
+    // 批次 39 A6：原为世界单位裸值 0.05 / 0.08 / 0.025（读作 0.5 m / 0.8 m / 0.25 m，
+    // 数值恰好合理但语义是"把世界单位当米用"）⇒ 改走 u()，取值不变 ⇒ 零视觉回归。
+    boxPart(w + u(0.8), u(0.5), d + u(0.8), 0, h + u(0.25), 0, CORNICE_COLOR),
+    shopfrontAwningAccent(w, d, shopY, st),
     ...balconyAccent(w, d, h),
     ...rooftopAccent(w, d, h),
-    ...parapetAccent(w, d, h),
+    // 批次 39 A3：slab 平屋面与塔冠统一带压顶线脚（真实城市所有平屋顶女儿墙顶都有收头，
+    // 只给塔冠加会让两种平屋面一眼看出「只改了一处」）。
+    ...parapetWithCoping(w, d, h),
     ...acUnitsAccent(w, d, h),
-    ...entranceAccent(d),
+    ...entranceAccent(d, st, h),
   ];
   if (hasQuoins) accent.push(...quoinAccent(w, d, h));
   return { wallParts: wall, matSpecs, accentParts: accent, billboardLightY: 0 };
@@ -839,27 +1205,37 @@ export function buildSlabParts(
 /** house：box 主体 + 三棱柱坡屋顶（prism group）+ 入口/角柱（点缀）。 */
 export function buildHouseParts(
   w: number, d: number, h: number, emissive: number, facadeTiles = false,
+  uvOffset?: FacadeUvOffset,
+  streetAxis: 'x' | 'z' = STREET_DEFAULT.axis,
+  streetSign: 1 | -1 = STREET_DEFAULT.sign,
 ): BuildingParts {
   void emissive; // house 材质表无 glow 组（emissive 只经 ctx 传入侧墙/屋顶）
   const bodyH = h * 0.7;
   const roofH = h * 0.3;
   const hasQuoins = w > 1.4;
+  const st: Street = { axis: streetAxis, sign: streetSign };
 
   const matSpecs: WallMatSpec[] = [
     { kind: 'sideA' }, { kind: 'sideB' }, { kind: 'top', roof: false },
     { kind: 'prism', fallback: ROOF_TILE_COLOR, stem: 'tile_roof' },
     { kind: 'glass', c: GLASS_DOOR },
   ];
+  // 批次 39 C3：0 = sideA(facadeBase) / 1 = sideB(facadeMid)，base 挂临街面
+  const { mA, mB } = facadeMats(streetAxis, 0, 1);
 
+  const wx = wallBoxFactory(facadeTiles, uvOffset);
   const wall: GroupedMergePart[] = [
-    { geo: wallBox(w, bodyH, d, 0, bodyH / 2, 0, 'A', facadeTiles), mat: 0 },
-    { geo: wallBox(w, bodyH, d, 0, bodyH / 2, 0, 'B', facadeTiles), mat: 1 },
-    { geo: wallBox(w, bodyH, d, 0, bodyH / 2, 0, 'top', facadeTiles), mat: 2 },
-    // 坡屋顶（w+0.12 外扩，几何 = 原 PrismRoof）
-    { geo: prismGeometry(w + 0.12, roofH, d + 0.12), x: 0, y: bodyH, z: 0, mat: 3 },
-    { ...entranceGlass(d), mat: 4 },
+    { geo: wx(w, bodyH, d, 0, bodyH / 2, 0, 'A'), mat: mA },
+    { geo: wx(w, bodyH, d, 0, bodyH / 2, 0, 'B'), mat: mB },
+    { geo: wx(w, bodyH, d, 0, bodyH / 2, 0, 'top'), mat: 2 },
+    // 坡屋顶（四周各外扩 1.2 m 出檐，批次 39 A6：原为世界单位裸值 0.12）
+    { geo: prismGeometry(w + u(1.2), roofH, d + u(1.2)), x: 0, y: bodyH, z: 0, mat: 3 },
+    { ...entranceGlass(d, st, bodyH), mat: 4 },
   ];
-  const accent: MergePart[] = [...entranceAccent(d)];
+  const accent: MergePart[] = [
+    ...plinthAccent(w, d),   // 批次 39 C5：基座带
+    ...entranceAccent(d, st, bodyH),
+  ];
   if (hasQuoins) accent.push(...quoinAccent(w, d, bodyH));
   return { wallParts: wall, matSpecs, accentParts: accent, billboardLightY: 0 };
 }
@@ -867,27 +1243,40 @@ export function buildHouseParts(
 /** shed：大跨 box + 卷帘门 + 高窗带 + 锯齿顶/人字顶 + 烟囱。 */
 export function buildShedParts(
   w: number, d: number, h: number, emissive: number, facadeTiles = false,
+  uvOffset?: FacadeUvOffset,
+  streetAxis: 'x' | 'z' = STREET_DEFAULT.axis,
+  streetSign: 1 | -1 = STREET_DEFAULT.sign,
 ): BuildingParts {
   void emissive;
   const bw = w * 1.2;
   const bH = h * 0.8;
   const chimneyH = h * 0.5;
   const useSaw = w > 1.4;
+  const st: Street = { axis: streetAxis, sign: streetSign };
 
   const matSpecs: WallMatSpec[] = [
     { kind: 'sideA' }, { kind: 'sideB' }, { kind: 'top', roof: false },
     useSaw ? { kind: 'deck' } : { kind: 'prism', fallback: GABLE_COLOR, stem: 'metal_deck' },
   ];
   if (useSaw) matSpecs.push({ kind: 'glass', c: GLASS_SKY });
+  // 批次 39 C3：0 = sideA(facadeBase) / 1 = sideB(facadeMid)，base 挂临街面
+  const { mA, mB } = facadeMats(streetAxis, 0, 1);
 
+  const wx = wallBoxFactory(facadeTiles, uvOffset);
   const wall: GroupedMergePart[] = [
-    { geo: wallBox(bw, bH, d, 0, bH / 2, 0, 'A', facadeTiles), mat: 0 },
-    { geo: wallBox(bw, bH, d, 0, bH / 2, 0, 'B', facadeTiles), mat: 1 },
-    { geo: wallBox(bw, bH, d, 0, bH / 2, 0, 'top', facadeTiles), mat: 2 },
+    { geo: wx(bw, bH, d, 0, bH / 2, 0, 'A'), mat: mA },
+    { geo: wx(bw, bH, d, 0, bH / 2, 0, 'B'), mat: mB },
+    { geo: wx(bw, bH, d, 0, bH / 2, 0, 'top'), mat: 2 },
   ];
+  // 批次 39 C4：卷帘门 / 高窗带改挂临街面（原固定 +Z）。临街面距离随轴而变，
+  // 窗带宽度按**实际面宽**裁剪（原 `w*1.2*0.9` 在侧向楼会横向出挑出墙体）。
+  const faceAt = st.axis === 'x' ? bw / 2 : d / 2;
+  const alongW = st.axis === 'x' ? d : bw;
+  const bandW = Math.min(w * 1.2 * 0.9, alongW * 0.95);
   const accent: MergePart[] = [
-    ...shutterAccent(bw, bH, d),
-    ...windowBandAccent(w, d, bH),
+    ...plinthAccent(bw, d),  // 批次 39 C5：基座带贴厂房轮廓（bw = w*1.2）
+    ...shutterAccent(bw, bH, d, st),
+    ...windowBandAccent(bandW, bH, faceAt, st),
   ];
   if (useSaw) {
     // 锯齿顶：3 齿 deck + 3 采光带 glass
@@ -908,17 +1297,29 @@ export function buildShedParts(
 /** pavilion：低矮平顶 box + 大挑檐（点缀）。 */
 export function buildPavilionParts(
   w: number, d: number, h: number, emissive: number, facadeTiles = false,
+  uvOffset?: FacadeUvOffset,
+  streetAxis: 'x' | 'z' = STREET_DEFAULT.axis,
+  streetSign: 1 | -1 = STREET_DEFAULT.sign,
 ): BuildingParts {
   void emissive;
+  void streetAxis;
+  void streetSign;
+  // 批次 39 C3：pavilion **两面都用 facadeBase**（mat 0），无 base/mid 之分 ⇒ 不换面；
+  // 门前构件（门 / 雨棚 / 底商）pavilion 原本就没有，也不在本批新增。
   const bH = Math.min(h, u(9));
   const matSpecs: WallMatSpec[] = [{ kind: 'sideA' }, { kind: 'top', roof: true }];
+  const wx = wallBoxFactory(facadeTiles, uvOffset);
   const wall: GroupedMergePart[] = [
-    { geo: wallBox(w, bH, d, 0, bH / 2, 0, 'A', facadeTiles), mat: 0 },
-    { geo: wallBox(w, bH, d, 0, bH / 2, 0, 'B', facadeTiles), mat: 0 },
-    { geo: wallBox(w, bH, d, 0, bH / 2, 0, 'top', facadeTiles), mat: 1 },
+    { geo: wx(w, bH, d, 0, bH / 2, 0, 'A'), mat: 0 },
+    { geo: wx(w, bH, d, 0, bH / 2, 0, 'B'), mat: 0 },
+    { geo: wx(w, bH, d, 0, bH / 2, 0, 'top'), mat: 1 },
   ];
-  // 大挑檐（外扩 0.15，木色）
-  const accent: MergePart[] = [boxPart(w + 0.3, 0.04, d + 0.3, 0, bH + 0.02, 0, EAVE_COLOR)];
+  // 大挑檐（四周各挑出 3 m、厚 0.4 m，木色；批次 39 A6：原为世界单位裸值 0.3/0.04/0.02）
+  // + 批次 39 C5：基座带
+  const accent: MergePart[] = [
+    ...plinthAccent(w, d),
+    boxPart(w + u(3.0), u(0.4), d + u(3.0), 0, bH + u(0.2), 0, EAVE_COLOR),
+  ];
   return { wallParts: wall, matSpecs, accentParts: accent, billboardLightY: 0 };
 }
 
@@ -931,14 +1332,26 @@ export function buildBuildingParts(
   emissive: number,
   /** 批次 37：是否使用物理尺寸 UV（缺省 false = 与批次 37 之前逐位一致）。 */
   facadeTiles = false,
+  /** 批次 39 B1：立面 UV 相位偏移（逐区打散；仅 facadeTiles=true 时有意义）。 */
+  uvOffset?: FacadeUvOffset,
+  /**
+   * 批次 39 C3/C4：临街面法向轴（布局层 `BuildingSpec.streetAxis`）。
+   * 缺省 `'z'` = 与批次 39 之前在**南北边楼**上等价；消费方 `DistrictBuildings`
+   * 须传 `spec.streetAxis` / `spec.streetSign` 才会按实际街墙朝向换面。
+   */
+  streetAxis: 'x' | 'z' = STREET_DEFAULT.axis,
+  /** 批次 39 C3/C4：临街面朝向符号（`BuildingSpec.streetSign`）。 */
+  streetSign: 1 | -1 = STREET_DEFAULT.sign,
 ): BuildingParts {
-  if (archetype === 'tower' && h < u(16)) return buildSlabParts(w, d, h, emissive, facadeTiles);
+  if (archetype === 'tower' && h < u(16)) {
+    return buildSlabParts(w, d, h, emissive, facadeTiles, uvOffset, streetAxis, streetSign);
+  }
   switch (archetype) {
-    case 'tower': return buildTowerParts(w, d, h, emissive, facadeTiles);
-    case 'house': return buildHouseParts(w, d, h, emissive, facadeTiles);
-    case 'shed': return buildShedParts(w, d, h, emissive, facadeTiles);
-    case 'pavilion': return buildPavilionParts(w, d, h, emissive, facadeTiles);
+    case 'tower': return buildTowerParts(w, d, h, emissive, facadeTiles, uvOffset, streetAxis, streetSign);
+    case 'house': return buildHouseParts(w, d, h, emissive, facadeTiles, uvOffset, streetAxis, streetSign);
+    case 'shed': return buildShedParts(w, d, h, emissive, facadeTiles, uvOffset, streetAxis, streetSign);
+    case 'pavilion': return buildPavilionParts(w, d, h, emissive, facadeTiles, uvOffset, streetAxis, streetSign);
     case 'slab':
-    default: return buildSlabParts(w, d, h, emissive, facadeTiles);
+    default: return buildSlabParts(w, d, h, emissive, facadeTiles, uvOffset, streetAxis, streetSign);
   }
 }

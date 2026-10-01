@@ -19,6 +19,8 @@
  *     （批次 37 P1：2 开间 × 4 层，物理周期 6 m × 12 m；**stem 为 16 个建筑材质族**
  *      而非 32 个城区 id，城区→材质族映射见 FACADE_TILE_STEM；登记表见
  *      components/virtualCity/texScale.ts::FACADE_TILE。缺失时消费端降级回 facades/）
+ *   facade_tiles/<materialFamily>_lit.png               512×1024 亮窗遮罩（批次 39 B1）
+ *     （只亮窗玻璃、墙面纯黑；无 PBR 三件套；emissiveMap 唯一来源，见 facadeTileLitUrl）
  *   roofs/<districtId>.png                               512×512  透明
  *   streets/{asphalt_main,asphalt_side,road_main,road_side,sidewalk_main,sidewalk_side,
  *            crosswalk,stopline,arrow_straight}.png
@@ -202,6 +204,26 @@ export function facadeTileStem(districtId: string): string {
  */
 export function facadeTileUrl(districtId: string, variant: FacadeVariant): string {
   return facadeTileImgs[`./facade_tiles/${facadeTileStem(districtId)}_${variant}.png`] ?? '';
+}
+
+/**
+ * 城区立面**亮窗遮罩** URL（批次 39 B1；缺失 = '' ⇒ 材质不设 emissiveMap）。
+ *
+ * 语义（与 `_base/_mid` 开间贴图同周期 6 m × 12 m，但内容不同）：
+ *   - 只有**窗玻璃**区域非黑，按确定性随机取「灭 / 暖黄 / 暖白」三档；
+ *   - 墙面、窗间墙、贴图里画好的空调外机/晾衣绳一律纯黑。
+ *
+ * 用途：`MeshStandardMaterial.emissiveMap` 的**唯一**来源。批次 39 之前 emissiveMap
+ * 直接挂 albedo（`sideMatProps`）⇒ 整个墙面（含窗间墙）一起发光、且全城同族亮窗分布
+ * 完全一致 —— 遮罩化之后才是「只有窗发光」。
+ *
+ * ⚠ 与 `facadeTilePbrUrl` 的区别：亮窗遮罩**没有 PBR 三件套**（自发光不吃 PBR），
+ * 故本图不进 `pbr/` 目录、也不提供 `facadeTileLitPbrUrl`。
+ *
+ * @param districtId 城区 id（经 `facadeTileStem` 解析材质族，与 `facadeTileUrl` 同一张映射表）
+ */
+export function facadeTileLitUrl(districtId: string): string {
+  return facadeTileImgs[`./facade_tiles/${facadeTileStem(districtId)}_lit.png`] ?? '';
 }
 
 /** 城区楼顶贴图 URL（缺失 = ''，BuildingMesh 退回到 DistrictDefs 主色）。 */

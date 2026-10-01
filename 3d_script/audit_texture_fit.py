@@ -10,8 +10,11 @@ audit_texture_fit — 虚拟城市「贴图 ↔ 几何」保真审计（批次 3
 判据（任一 FAIL ⇒ 退出码 1；WARN 不影响退出码；依赖缺失 ⇒ SKIP 不阻塞）：
   A1  资产登记表 texScale.ts 的 `tileMetersU/tileMetersV` == `texW/texH`   相对误差 < 0.5%
   A2  磁盘实际像素 == 登记表声明值                                          完全相等
-  A3  被 repeat 平铺的贴图四边无缝（左右/上下边缘列行平均像素差，facade_tiles
-      颜色图 **与其派生 _n/_r** 全量硬判；roofs/ground 只报不判）                 < 2/255
+  A3  被 repeat 平铺的贴图四边无缝。**按族两指标**（都算都打印，按族判定）：
+      ① 逐点相等：首末列/行像素差 < 2/255          —— 用于 facade_tiles（低频开间纹样）
+      ② 统计无缝：接缝梯度P99 / 图内相邻梯度P99 ≤ 1.10 且 wrapMax ≤ 图内Max
+                                                     —— 用于 roofs（逐像素随机场）
+      两者均硬判**颜色图 + 派生 _n/_r**；ground 只报不判。见 `A3_METRIC` / `stat_seam`
   A4  派生 PBR 图（`_n`/`_r`）与其颜色图的宽高比一致                        相对误差 < 0.5%
   A5  全量 PNG 物理纹素密度落在标称带内                                      60–120 px/m（WARN）
   A6  GLB：有 `Image Texture` 节点时须 UV 覆盖完整（primitives 带 TEXCOORD_0）≥ 90%
@@ -68,6 +71,7 @@ MODELS_DIR = os.environ.get('GLB_MODELS_DIR') or os.path.join(
 # ── 阈值（方案 §5.1 表）─────────────────────────────────────────────────────
 ASPECT_REL_TOL = 0.005   # 0.5%：A1 宽高比不变式 / A4 派生图宽高比
 SEAM_MAX_255 = 2.0       # 2/255：A3 四边无缝（0..255 量纲）
+SEAM_STAT_P99_MAX = 1.10  # A3 ② 统计无缝：接缝梯度 P99 / 图内相邻梯度 P99 之比上限
 UV_COVERAGE_MIN = 0.90   # A6 UV 覆盖下限
 
 # 登记表常量 -> (颜色图目录, 派生图 pbr 子目录)：A2 / A5 共用的唯一映射处，
@@ -89,11 +93,28 @@ TILE_TARGETS = {
 # A4 派生后缀
 PBR_SUFFIXES = ('_n', '_r')
 
-# A3 判集：批次 37 新增的可平铺开间贴图 —— 颜色图 **与其派生 _n/_r** 一并硬判。
-# 参考判集：既有的平铺贴图（roofs / ground），同样被 repeat，但属批次 18/26 的历史
-# 资产，只报不判 FAIL，避免把既有结论硬翻红。
-A3_FAIL_TILES = ('facade_tiles',)
-A3_ADVISORY_GLOBS = ('roofs/*.png', 'ground/*_tile.png')
+# A3 判集：**可平铺开间贴图** —— 颜色图 **与其派生 _n/_r** 一并硬判。
+#   - facade_tiles：批次 37 P1 新增的可平铺开间贴图。
+#   - roofs：批次 39 A1 升级入硬判 —— 16 张屋面图由 `placeholder_roof()`（纯色块 +
+#     "xxRF" 水印）改为程序化重出，门禁同步收紧（A3 由 advisory 转硬判）。
+#     机制复用既有代码：登记项里 'ROOF_TILE': ('roofs', 'roofs') 已给出
+#     `颜色图目录 -> pbr 子目录` 映射，故只加一个词即覆盖
+#     `roofs/*.png` + `pbr/roofs/*_n.png` + `pbr/roofs/*_r.png`，**不扩到别的族**。
+# 参考判集：ground（同样被 repeat，但属批次 18/26/27 的历史资产），只报不判 FAIL。
+A3_FAIL_TILES = ('facade_tiles', 'roofs')
+A3_ADVISORY_GLOBS = ('ground/*_tile.png',)
+
+# A3 **按族的判据**（两个指标都算、都打印，但各族按自己的指标下判定）：
+#   'edge' = ① 首末列/行**逐点相等** < 2/255 —— 适合低频、开间规整的立面贴图。
+#   'stat' = ② 统计无缝：接缝梯度 P99 / 图内相邻梯度 P99 ≤ 1.10 且 wrapMax ≤ 内Max
+#            —— 适合**逐像素随机场**（屋面碎石 / 斑块 / 砾石），见 `stat_seam` 的
+#            「为什么需要 ②」。两指标口径与美术侧生成器 `seam_report` 同源。
+#
+# 批次 39 实测依据：roofs 族用 ① 判会 **33/144 全族翻红**（含 16 张颜色图），
+# 而生成器自检显示 16 张颜色图 + 16 张粗糙度图的 ② 全部通过 —— 即 ① 对该族
+# **恒失败且与是否可平铺无关**，用它当门禁等于造一个永远红的假警报。
+# facade_tiles 维持 ① 不变（其贴图是低频开间纹样，① 本就通过，不扩大改动范围）。
+A3_METRIC = {'facade_tiles': 'edge', 'roofs': 'stat'}
 
 # color_dir -> pbr 子目录（TILE_TARGETS 的反向视图，避免第二份映射表）
 COLOR_DIR_TO_PBR = {t[0]: t[1] for t in TILE_TARGETS.values()}
@@ -159,6 +180,31 @@ def edge_diff(a):
     base_lr = float(abs(a[:, 0, :] - a[:, 1, :]).mean())
     base_tb = float(abs(a[0, :, :] - a[1, :, :]).mean())
     return left, top, (base_lr + base_tb) / 2.0
+
+
+def stat_seam(a):
+    """A3 ② **统计无缝**：返回 (接缝梯度P99/图内相邻梯度P99 之比, wrapMax≤内Max?)，均无量纲。
+
+    为什么需要 ②：判据 ①（`edge_diff` 的 2/255）测的是「首末列/行**逐点相等**」，
+    这比可平铺**更严** —— 它要求图幅首末列是同一条随机样本。碎石 / 斑块这类
+    **逐像素随机场**在 x=0 与 x=W−1 是两次独立采样，逐点差必然远大于 2/255，
+    与是否可平铺无关。物理上正确的判据是：平铺后接缝处走的那一步，与图内
+    任意相邻一步**同分布** ⇒ 接缝不可见。
+
+    口径与美术侧生成器 `python-generate-image-tool/generate_virtual_city_roof_assets.py
+    ::seam_report` **逐行一致**（同一套公式、同一对阈值），两处不各写一份。
+    """
+    np_ = _np
+    wrap = np_.concatenate([
+        np_.abs(a[:, 0, :] - a[:, -1, :]).max(axis=-1),
+        np_.abs(a[0, :, :] - a[-1, :, :]).max(axis=-1),
+    ])
+    dx = np_.abs(np_.diff(a, axis=1)).max(axis=-1).ravel()
+    dy = np_.abs(np_.diff(a, axis=0)).max(axis=-1).ravel()
+    interior = np_.concatenate([dx, dy])
+    p99 = float(np_.percentile(wrap, 99)) / max(float(np_.percentile(interior, 99)), 1e-6)
+    max_ok = float(wrap.max()) <= float(interior.max()) + 1e-6
+    return p99, max_ok
 
 
 # ── 判据 A1 / A2：资产登记表 ───────────────────────────────────────────────
@@ -266,38 +312,56 @@ def judge_a1_a2(table, reg_err):
 
 # ── 判据 A3：四边无缝 ─────────────────────────────────────────────────────
 def judge_a3():
-    """主判集 = 被 repeat 平铺的开间贴图 facade_tiles/*.png（方案 §4.1）。
-    参考判集 = roofs/*.png 与 ground/*_tile.png（同样被 repeat，但属既有资产，
-    只报 WARN 不判 FAIL，避免把批次 18/26 的历史结论硬翻红）。"""
+    """主判集 = 被 repeat 平铺的开间贴图 facade_tiles/*.png 与 roofs/*.png，
+    及其各自派生图 pbr/<dir>/*_n.png / *_r.png（方案 §4.1 / 批次 39 A1）。
+    判定按族走 `A3_METRIC`（facade_tiles 走 ① 逐点相等，roofs 走 ② 统计无缝），
+    两个指标都算都打印。参考判集 = ground/*_tile.png（属批次 18/26/27 的历史资产），
+    只报 WARN 不判 FAIL。"""
     res = {'status': 'pass', 'items': [], 'problems': [], 'advisory': []}
     if _np is None:
         res['status'] = 'skip'
         res['reason'] = '缺 numpy，A3 需整图逐像素比对'
         sys.stderr.write('⚠ [A3] SKIP —— 缺 numpy（pip install numpy）\n')
         return res
+    # (路径, 族) 列表：族决定用哪个指标判定（派生图继承其颜色图目录的族）
     main_set = []
     for color_dir in A3_FAIL_TILES:
-        main_set += glob.glob(os.path.join(IMAGES_DIR, color_dir, '*.png'))
         pbr_dir = COLOR_DIR_TO_PBR.get(color_dir)
+        for p in glob.glob(os.path.join(IMAGES_DIR, color_dir, '*.png')):
+            main_set.append((p, color_dir))
         if pbr_dir:
-            main_set += glob.glob(os.path.join(IMAGES_DIR, 'pbr', pbr_dir, '*.png'))
-    main_set = sorted(main_set)
+            for p in glob.glob(os.path.join(IMAGES_DIR, 'pbr', pbr_dir, '*.png')):
+                main_set.append((p, color_dir))
+    main_set.sort(key=lambda t: t[0])
     if not main_set:
         res['status'] = 'skip'
-        res['reason'] = 'facade_tiles/ 为空或不存在（批次 37 P1 资产未生成）'
+        res['reason'] = 'facade_tiles/ 与 roofs/ 均为空或不存在（贴图资产未生成）'
         sys.stderr.write('⚠ [A3] SKIP —— %s\n' % res['reason'])
         return res
-    for p in main_set:
+    for p, family in main_set:
+        metric = A3_METRIC.get(family, 'edge')
         a = to_array(p)
         left, top, base = edge_diff(a)
-        ok = max(left, top) < SEAM_MAX_255
-        res['items'].append({'path': os.path.relpath(p, IMAGES_DIR),
+        p99, max_ok = stat_seam(a)
+        if metric == 'stat':
+            ok = (p99 <= SEAM_STAT_P99_MAX) and max_ok
+        else:
+            ok = max(left, top) < SEAM_MAX_255
+        res['items'].append({'path': os.path.relpath(p, IMAGES_DIR), 'metric': metric,
                              'leftDiff': round(left, 3), 'topDiff': round(top, 3),
-                             'adjacentBaseline': round(base, 3), 'ok': ok})
+                             'adjacentBaseline': round(base, 3),
+                             'statP99': round(p99, 3), 'statMaxOk': bool(max_ok),
+                             'ok': ok})
         if not ok:
-            res['problems'].append(
-                '%s 接缝过大: 左右 %.2f / 上下 %.2f（阈值 %.1f，相邻基线 %.2f）'
-                % (os.path.relpath(p, IMAGES_DIR), left, top, SEAM_MAX_255, base))
+            if metric == 'stat':
+                res['problems'].append(
+                    '%s 统计无缝超阈: 接缝梯度P99/图内P99 = %.3f（阈值 %.2f）%s'
+                    % (os.path.relpath(p, IMAGES_DIR), p99, SEAM_STAT_P99_MAX,
+                       '，wrapMax ≤ 图内Max ✓' if max_ok else '，且 wrapMax > 图内Max ✗'))
+            else:
+                res['problems'].append(
+                    '%s 接缝过大: 左右 %.2f / 上下 %.2f（阈值 %.1f，相邻基线 %.2f）'
+                    % (os.path.relpath(p, IMAGES_DIR), left, top, SEAM_MAX_255, base))
     for pat in A3_ADVISORY_GLOBS:
         for p in sorted(glob.glob(os.path.join(IMAGES_DIR, pat))):
             a = to_array(p)
@@ -488,7 +552,7 @@ MARK = {'pass': 'PASS', 'fail': 'FAIL', 'warn': 'WARN', 'skip': 'SKIP'}
 TITLES = {
     'A1': '登记表宽高比不变式 tileU/tileV == texW/texH',
     'A2': '磁盘实际像素 == 登记表声明值',
-    'A3': '被 repeat 平铺的贴图四边无缝（< 2/255）',
+    'A3': '被 repeat 平铺的贴图四边无缝（facade_tiles 判据 ①<2/255，roofs 判据 ②P99 比≤1.10）',
     'A4': '派生 PBR 图（_n/_r）与其颜色图宽高比一致',
     'A5': '物理纹素密度落在 60–120 px/m 标称带（WARN 级）',
     'A6': 'GLB 有 Image Texture 节点时须 UV 覆盖完整（≥ 90%）',
@@ -513,17 +577,20 @@ def print_block(code, res, verbose):
     if code == 'A3':
         if res['items']:
             n_fail = sum(1 for i in res['items'] if not i['ok'])
-            print('    · 主判集 facade_tiles（颜色 + _n/_r）：%d 张，超阈 %d 张%s'
-                  % (len(res['items']), n_fail, '，全部 ≤ %.1f/255 ✓' % SEAM_MAX_255 if not n_fail else ''))
+            print('    · 主判集 facade_tiles（判据 ① 逐点相等）+ roofs（判据 ② 统计无缝），'
+                  '颜色 + _n/_r：%d 张，超阈 %d 张' % (len(res['items']), n_fail))
         if res.get('advisory'):
             bad = [a for a in res['advisory'] if not a['ok']]
-            print('    · 参考判集 roofs/ground（只报不判）：%d 张，%d 张超阈'
+            print('    · 参考判集 ground（只报不判）：%d 张，%d 张超阈'
                   % (len(res['advisory']), len(bad)))
         if verbose:
-            for it in res['items'] + res.get('advisory', []):
-                print('      · %-40s 左右 %6.2f 上下 %6.2f（相邻基线 %5.2f）%s'
-                      % (it['path'], it['leftDiff'], it['topDiff'], it['adjacentBaseline'],
-                         'OK' if it['ok'] else '✗'))
+            for it in res['items']:
+                print('      · %-40s [%s] ①左右 %6.2f 上下 %6.2f ②接缝P99比 %5.3f%s'
+                      % (it['path'], it['metric'], it['leftDiff'], it['topDiff'],
+                         it['statP99'], 'OK' if it['ok'] else '  ✗'))
+            for it in res.get('advisory', []):
+                print('      · %-40s [adv] 左右 %6.2f 上下 %6.2f（相邻基线 %5.2f）'
+                      % (it['path'], it['leftDiff'], it['topDiff'], it['adjacentBaseline']))
     if code == 'A4':
         print('    · 派生图 %d 张，孤儿（无对应颜色图）%d 张'
               % (len(res['items']), len(res['orphans'])))
