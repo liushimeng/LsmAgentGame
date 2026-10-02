@@ -247,9 +247,9 @@ export const SCENE_ENTRIES: ObjectInfoEntry[] = [
     icon: '🏗️',
     name: { 'zh-CN': '建筑工地', en: 'Construction Site', ja: '建設現場' },
     desc: {
-      'zh-CN': '围挡中的建筑工地，塔吊林立，见证城市的建设与扩张。',
-      en: 'A fenced construction site of tower cranes, witnessing the city’s build-out and growth.',
-      ja: '仮囲いの建設現場。タワークレーンが立ち並び、都市の建設と拡張を見守る。',
+      'zh-CN': '50×44 m 围挡施工场地：1 台格构塔式起重机（塔身 35 m / 起重臂 50 m / 塔帽顶 44.2 m）+ 3 层在建混凝土框架 + 临建集装箱办公与材料堆场。',
+      en: 'A 50×44 m fenced construction site: one lattice tower crane (35 m mast, 50 m jib, 44.2 m overall) over a 3-storey concrete frame under construction, with site cabins and material laydown.',
+      ja: '50×44 m の仮囲い建設現場。格構式タワークレーン（塔身 35 m・ジブ 50 m・全高 44.2 m）と施工中 3 階コンクリート躯体、仮設事務所と資材置場。',
     },
   },
   {

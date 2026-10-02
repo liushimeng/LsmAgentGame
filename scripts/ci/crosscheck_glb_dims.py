@@ -84,6 +84,7 @@ KEY_MAP = {
     "portTerminal": "civic/port_terminal",
     "railSpan": "civic/rail_span",
     "railStation": "civic/rail_station",
+    "constructionSite": "civic/construction_site",
 }
 
 # 程序化 fallback 专用、无 GLB ⇒ 不送检（但解析出来打印，便于人眼核对）。

@@ -253,6 +253,11 @@ TARGETS = {
                                 pivot='承台底 minY=0；**墩心在局部 x=-1.4115**（非包围盒中心）'),
     'civic/rail_station.glb': dict(x=12.024, y=2.360, z=2.520, axis='x_flat',
                                    pivot='出入口塔基 minY=0，X/Y 居中；站厅跨双线，出入口塔在 three 负 z 侧'),
+    # ── 批次 50 施工工地（build_construction_site.py）────────────────────
+    # 长轴 = X（起重臂沿 X 探出 50 m）⇒ x_flat。直立性由 Y 尺寸判据
+    # （塔帽顶 44.2 m，全城最高构筑物）+ minY=0（裸土场坪底）保证。
+    'civic/construction_site.glb': dict(x=6.640, y=4.420, z=4.560, axis='x_flat',
+                                        pivot='裸土场坪底 minY=0，X/Y 居中；塔吊回转中心在局部 (-9, +6)'),
 }
 
 # 直立判据的例外：长轴落在水平轴属正确摆放。

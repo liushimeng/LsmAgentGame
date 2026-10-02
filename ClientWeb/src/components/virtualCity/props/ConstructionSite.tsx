@@ -1,148 +1,253 @@
 /**
- * ConstructionSite — 施工工地 + 塔吊（16-3D城市WebGL质感与城市补全 · 阶段 T）：
+ * ConstructionSite — 施工工地 + 格构塔式起重机（16-3D城市WebGL质感与城市补全 · 阶段 T）。
  *
- * 文创区东南角：裸土面 + 工程黄围挡 4 面 + 塔吊（格构塔身 / 起重臂 /
- * 平衡臂+配重 / 操作室 / 吊钩钢缆）。城市天际线「在生长」的标配符号。
+ * 批次 50「施工工地真实感」重制为 `civic/construction_site.glb`。
  *
- * 批次 28 二轮（DC 攻坚）：21 mesh → 3 mesh（engine3d/geoMerge，几何全等）：
- *   1) 裸土面独立保留（receiveShadow 语义不动，泥土粗糙度 0.98 不参与统一）；
- *   2) 非金属纯色件（围挡黄板 ×4 + 压条 ×4 / 塔身 / 横撑 ×3 / 起重臂 / 配重）
- *      顶点色合并单 mesh；
- *   3) 金属件（操作室 / 平衡臂 / 塔头 / 拉索 / 钢缆 / 吊钩）顶点色合并单 mesh。
- * 批次 28 二轮取舍：非金属组粗糙度 0.6–0.98 → 0.7、金属度恒 0、塔身/起重臂
- * envMapIntensity 0.6 → 默认 1.0（组内多数件本为默认）；金属组粗糙度
- * 0.3–0.8 → 0.5、金属度恒 0.5、envMapIntensity 0.8–1.0 → 0.9（钢缆原无
- * 金属归入金属组，0.008 半径细件不可辨）。
- * 批次 28 二轮取舍：caster 裁剪——地标不投影（shadow pass 实测 1044 DC 超阈，
- * 全地标 castShadow=false；原围挡/塔身/臂/操作室的投影随批取消，裸土面
- * receiveShadow 保留仍承接楼体投影）。
+ * ── 重制理由（详见 `lag_docs/虚拟城市/已实现/50-施工工地真实感/01-方案设计.md`）──
+ *   批次 18-AA 的程序化版本有两类硬伤：
  *
- * 契约：lag_docs/虚拟城市/已实现/16-3D城市WebGL质感与城市补全/02-架构设计 §8.3。
+ *   1) **★ 围挡压在方格骨干主路里 4.0 m**：`SITE_X=28, SITE_W=3.4` ⇒ 西侧围挡在
+ *      x=26.30，而 `arterial-z26` 路幅是 x∈[25.3, 26.7] —— 一段工程黄围挡站在
+ *      主路中央。**几何没错，是落位错了**，tsc / 构建 / 出图全部无感。
+ *      新落位由 `scripts/ci/check_site_clearance.mjs` 的净距数值解给出。
+ *
+ *   2) **塔吊差了一个数量级**：旧版是「1.6 m 见方 × 9 m 高的一根实心柱」+
+ *      「一根 7.2 m 的 10 cm 见方细杆当起重臂」+「1 块 0.15 t 的方块当配重」，
+ *      且无基础、无塔帽、无拉索、无吊钩组。而方圆 QTZ80(TC6010) 的实际参数是：
+ *      标准节 1.8×1.8×2.5 m **格构**、14~18 节（起升高度 40.5~46.2 m、总高约
+ *      55.9 m）、起重臂 50/55/60 m **三角形桁架**、平衡臂 12.4~13.4 m、
+ *      配重 11.75~18 t（5~7 块）、承台 4.0×4.0×1.2 m。
+ *
+ * ── 落位（净距数值解，不是拍脑袋）─────────────────────────────────────
+ *   判据 `净距 = 点到路段中心线距离 − 路半宽`，场坪按 25×25 网格采样：
+ *     旧 (28, −1) 34×26 m  ⇒  **−4.0 m**（围挡压在 arterial-z26 上）
+ *     新 (30.5, −1.5) 50×44 m ⇒ **13.0 m**（离 arterial-z26 13 m，
+ *                                        离最近区底板 cultural_creative 60.4 m）
+ *   塔吊起重臂会**越出场坪**探到东侧相邻街区 —— 这是它的本职工作：
+ *   臂根标高 41.8 m，远高于路面与沿线 15~25 m 建筑，规范允许越路回转。
+ *   护栏 `check_site_clearance.mjs` **不检查回转扫掠**，只检查落地场坪。
+ *
+ * ── 坐标系 ────────────────────────────────────────────────────────────
+ *   建模脚本在 Blender 的 XY 平面铺场（X = 东西 50 m、Y = 南北 44 m、Z = 高），
+ *   导出 Yup 后 `three.y = Blender z`（高）、`three.z = -Blender y`（南北翻转）。
+ *   场坪是 X/Z 对称的 50×44 矩形，**零旋转**直挂即可。
+ *
+ * ── 降级链（§27.3-3）────────────────────────────────────────────────
+ *   `blenderModelsEnabled()` → `modelUrl` → GLB 载入 → 否则本文件的程序化几何
+ *   （**按新尺寸重建**，§27.3-7 双路径同尺寸）。尺寸守卫 `sizeTargetFor`。
  */
-
 import { useEffect, useMemo } from 'react';
-import * as THREE from 'three';
+import { boxPart, cylPart, mergeParts, type MergePart } from '@/engine3d';
 import { u } from '../cityScale';
-import { type MergePart, boxPart, cylPart, mergeParts } from '@/engine3d';
-import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+import { CivicGlbPiece } from '../civic/CivicGlb';
 
-const SITE_X = 28; // 批次 20 §3.4 语义改注：软件园区界（software_park (38,14) 西南侧空地，
-const SITE_Z = -1; // 坐标不动，与 16 新区底板两两校验无碰撞）；楼群 / 围挡 / 塔吊不与城区建筑穿插
-const SITE_W = 3.4;
-const SITE_D = 2.6;
+/** 场坪中心与尺寸（米 → 世界单位由 `u()` 换算；护栏 `check_site_clearance.mjs`
+ *  从**本文件源码**取这四个常量，改这里脚本就会红）。 */
+const SITE_X = 30.5;
+const SITE_Z = -1.5;
+const SITE_W = 5.0;
+const SITE_D = 4.4;
 
-const CRANE_X = -0.6; // 塔吊场内靠后侧（原嵌套 group position 烘焙进部件坐标）
-const CRANE_Z = -0.4;
+/** 塔机关键标高（与 `build_construction_site.py` 对齐，仅供 fallback 复用）。 */
+const FOOT_H = 1.2;
+const MAST_H = 35.0;
+const HEAD_H = 8.0;
+const JIB_L = 50.0;
+const CRANE_DX = -0.9;    // 回转中心相对场坪中心的 X 偏移（-9.0 m）
+const CRANE_DZ = 0.6;     // 回转中心相对场坪中心的 Z 偏移（+6.0 m）
 
 const YELLOW = '#e8b930';
 const YELLOW_DARK = '#b8921f';
-const STEEL = '#d8dce2';
-const MUD = '#6b5a44';
-const CABIN = '#2a4a6e';       // 操作室
-const COUNTERWEIGHT = '#8a8d96'; // 配重块
-const CABLE = '#3a3f47';       // 吊钩钢缆
-const HOOK = '#5a6270';        // 钩块
+const HOARD = '#f0c93a';
+const STEEL = '#b8bcc2';
+const MUD = '#8a7658';
+const CONCRETE = '#9e9c96';
+const CABIN_BLUE = '#2f6fa8';
+const CABIN_WINDOW = '#e0a020';
+const NET_GREEN = '#2f7a3e';
+const REBAR = '#7a5c40';
+const AGG = '#9a9285';
+const CONCRETE_DARK = '#8d8a85';
 
-/** 非金属组统一粗糙度（批次 28 二轮取舍：原 0.6–0.98 取中）。 */
-const PLAIN_ROUGH = 0.7;
-/** 金属组统一材质参数（批次 28 二轮取舍：原 0.3–0.8 / 0.5 取中）。 */
-const METAL_ROUGH = 0.5;
-const METAL_METAL = 0.5;
-
-interface Props {
-  /** 朝向（弧度；默认面向园区中心）。 */
-  rotation?: number;
+/** 程序化 fallback 的场地件（裸土 + 围挡 + 硬路 + 洗车槽）。 */
+function siteFallbackParts(): MergePart[] {
+  const p: MergePart[] = [];
+  p.push(boxPart(u(SITE_W * 10), u(0.1), u(SITE_D * 10), 0, u(0.05), 0, MUD));
+  // 围挡 4 面（南面留 7.0 m 门洞）
+  const hw = u(SITE_W * 10) / 2;
+  const hd = u(SITE_D * 10) / 2;
+  const gate = u(7.0);
+  const seg = (u(SITE_W * 10) - gate) / 2;
+  const h = u(2.5);
+  p.push(boxPart(u(SITE_W * 10), h, u(0.12), 0, h / 2, -hd, HOARD));
+  p.push(boxPart(u(SITE_W * 10), h, u(0.12), 0, h / 2, hd, HOARD));
+  p.push(boxPart(u(0.12), h, u(SITE_D * 10), -hw, h / 2, 0, HOARD));
+  p.push(boxPart(u(0.12), h, u(SITE_D * 10), hw, h / 2, 0, HOARD));
+  p.push(boxPart(seg, h, u(0.12), -(gate / 2 + seg / 2), h / 2, -hd, HOARD));
+  p.push(boxPart(seg, h, u(0.12), gate / 2 + seg / 2, h / 2, -hd, HOARD));
+  for (const sx of [-1, 1]) {
+    p.push(boxPart(u(0.3), u(3.05), u(0.3), sx * gate / 2, u(1.525), -hd, YELLOW));
+  }
+  // 场内硬路 + 洗车槽
+  for (const dz of [-hd + u(9), hd - u(8)]) {
+    p.push(boxPart(u(SITE_W * 10 - 6), u(0.14), u(5.0), 0, u(0.17), dz, CONCRETE));
+  }
+  p.push(boxPart(u(4.2), u(0.22), u(7.0), 0, u(0.21), -hd + u(5.0), CONCRETE));
+  return p;
 }
 
-export function ConstructionSite({ rotation }: Props) {
-  // 默认朝向：面向 cultural_creative 中心 (24,8)
-  const rot = rotation ?? Math.atan2(24 - SITE_X, 8 - SITE_Z);
-  const mastH = u(9);
-
-  // 非金属纯色件（围挡 + 塔身/横撑/起重臂/配重）→ 单顶点色 mesh
-  const plainGeo = useMemo(() => {
-    const parts: MergePart[] = [];
-    // 围挡 4 面（工程黄 + 深色压条；原嵌套 group 偏移烘焙进部件坐标）
-    const fences: Array<[number, number, boolean]> = [
-      [0, -SITE_D / 2, true],
-      [0, SITE_D / 2, true],
-      [-SITE_W / 2, 0, false],
-      [SITE_W / 2, 0, false],
-    ];
-    for (const [fx, fz, horizontal] of fences) {
-      parts.push(
-        boxPart(
-          horizontal ? SITE_W : 0.04, u(1.8), horizontal ? 0.04 : SITE_D,
-          fx, u(0.9), fz, YELLOW,
-        ),
-        boxPart(
-          horizontal ? SITE_W : 0.05, u(0.16), horizontal ? 0.05 : SITE_D,
-          fx, u(1.72), fz, YELLOW_DARK,
-        ),
-      );
+/** 程序化 fallback 的塔机件（格构塔身 + 桁架臂 + 配重 + 吊钩）。 */
+function craneFallbackParts(): MergePart[] {
+  const p: MergePart[] = [];
+  const cx = u(CRANE_DX);
+  const cz = u(CRANE_DZ);
+  const sec = u(2.5);
+  const half = u(0.9);
+  // 承台
+  p.push(boxPart(u(5.2), u(FOOT_H), u(5.2), cx, u(FOOT_H / 2), cz, CONCRETE_DARK));
+  p.push(boxPart(u(5.28), u(0.36), u(5.28), cx, u(0.42), cz, YELLOW_DARK));
+  // 塔身：4 根通长主肢 + 逐节横撑 / 斜撑（用细杆近似）
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      p.push(boxPart(u(0.16), u(MAST_H), u(0.16), cx + sx * half,
+        u(FOOT_H) + u(MAST_H) / 2, cz + sz * half, YELLOW));
     }
-    // 格构塔身 + 3 道横撑
-    parts.push(boxPart(0.16, mastH, 0.16, CRANE_X, mastH / 2, CRANE_Z, YELLOW));
-    for (const t of [0.3, 0.55, 0.8]) {
-      parts.push(boxPart(0.2, 0.03, 0.2, CRANE_X, mastH * t, CRANE_Z, YELLOW_DARK));
+  }
+  for (let i = 0; i <= 14; i++) {
+    const z = u(FOOT_H) + sec * i;
+    p.push(boxPart(u(1.8), u(0.09), u(0.09), cx, z, cz - half, STEEL));
+    p.push(boxPart(u(1.8), u(0.09), u(0.09), cx, z, cz + half, STEEL));
+    p.push(boxPart(u(0.09), u(0.09), u(1.8), cx - half, z, cz, STEEL));
+    p.push(boxPart(u(0.09), u(0.09), u(1.8), cx + half, z, cz, STEEL));
+    if (i < 14) {
+      p.push(boxPart(u(1.86), u(0.06), u(0.06), cx, z + u(1.25), cz, STEEL));
+      p.push(boxPart(u(0.06), u(0.06), u(1.86), cx, z + u(1.25), cz, STEEL));
     }
-    // 起重臂（长臂，沿 +x）+ 配重块
-    parts.push(boxPart(u(7.2), 0.1, 0.1, CRANE_X + u(3.6), mastH + u(0.9), CRANE_Z, YELLOW));
-    parts.push(boxPart(u(0.6), u(0.5), u(0.5), CRANE_X - u(1.9), mastH + u(0.7), CRANE_Z, COUNTERWEIGHT));
-    return mergeParts(parts);
-  }, [mastH]);
-  useEffect(() => () => plainGeo.dispose(), [plainGeo]);
+  }
+  const zTop = u(FOOT_H) + u(MAST_H);
+  // 塔帽
+  p.push(boxPart(u(2.4), u(0.16), u(2.0), cx, zTop + u(HEAD_H) - u(0.1), cz, YELLOW));
+  for (const sx of [-1, 1]) {
+    p.push(boxPart(u(0.9), u(HEAD_H), u(0.14), cx + sx * u(0.5), zTop + u(HEAD_H / 2), cz, YELLOW));
+  }
+  // 起重臂（格构近似：2 上弦 + 1 下弦 + 腹杆）
+  const jz = zTop + u(5.6);
+  const jd = jz - u(1.7);
+  for (const sy of [-1, 1]) {
+    p.push(boxPart(u(JIB_L), u(0.16), u(0.16), cx + u(JIB_L / 2), jz, cz + sy * u(0.75), YELLOW));
+  }
+  p.push(boxPart(u(JIB_L), u(0.16), u(0.16), cx + u(JIB_L / 2), jd, cz, YELLOW));
+  for (let i = 0; i <= 10; i++) {
+    const x = cx + u(i * 5.0);
+    p.push(boxPart(u(0.08), u(1.7), u(0.08), x, (jz + jd) / 2, cz, STEEL));
+    p.push(boxPart(u(0.07), u(0.07), u(1.5), x, jz, cz, STEEL));
+  }
+  p.push(boxPart(u(0.6), u(1.9), u(2.0), cx + u(JIB_L), (jz + jd) / 2, cz, YELLOW));
+  // 平衡臂 + 配重
+  const cz2 = zTop + u(4.2);
+  p.push(boxPart(u(13.0), u(0.14), u(1.4), cx - u(6.5), cz2, cz, YELLOW));
+  for (let i = 0; i < 4; i++) {
+    p.push(boxPart(u(2.4), u(0.55), u(1.9), cx - u(11.9), cz2 - u(1.4 + (i % 2) * 1.94),
+      cz + ((i < 3 ? -1 : 0) + (i < 3 ? i : 0)) * 0.6, CONCRETE_DARK));
+  }
+  // 拉索
+  for (const fx of [JIB_L / 3, (JIB_L * 2) / 3]) {
+    p.push(boxPart(u(Math.hypot(fx, HEAD_H - 5.3)), u(0.07), u(0.07),
+      cx + u(fx / 2), zTop + u((HEAD_H + 5.6) / 2), cz, STEEL));
+  }
+  // 小车 + 吊钩组
+  p.push(boxPart(u(1.6), u(0.55), u(1.8), cx + u(30), jd - u(0.42), cz, STEEL));
+  p.push(boxPart(u(0.05), u(24.7), u(0.05), cx + u(30), jd - u(12.7), cz, STEEL));
+  p.push(boxPart(u(1.1), u(0.85), u(0.55), cx + u(30), jd - u(25.1), cz, STEEL));
+  p.push(boxPart(u(0.46), u(0.55), u(0.3), cx + u(30), jd - u(26.3), cz, STEEL));
+  // 操作室
+  p.push(boxPart(u(1.6), u(2.0), u(2.2), cx + u(1.9), zTop + u(1.1), cz - u(1.3), CABIN_BLUE));
+  return p;
+}
 
-  // 金属件（操作室 / 平衡臂 / 塔头 / 拉索 / 钢缆 / 吊钩）→ 单顶点色 mesh
-  const metalGeo = useMemo(() => {
-    const parts: MergePart[] = [
-      // 操作室（塔顶）
-      boxPart(u(0.9), u(0.8), u(0.9), CRANE_X + 0.14, mastH + u(0.4), CRANE_Z, CABIN),
-      // 平衡臂（短臂，沿 -x）
-      boxPart(u(2.2), 0.1, 0.1, CRANE_X - u(1.1), mastH + u(0.9), CRANE_Z, STEEL),
-      // 塔头
-      boxPart(0.05, u(1.4), 0.05, CRANE_X, mastH + u(1.6), CRANE_Z, STEEL),
-      // 前拉索（rotZ 0.32 逐位保留）
-      {
-        geo: new THREE.BoxGeometry(u(4.6), 0.015, 0.015),
-        x: CRANE_X + u(2.4), y: mastH + u(1.35), z: CRANE_Z,
-        rotZ: 0.32, color: STEEL,
-      },
-      // 吊钩钢缆 + 钩块（臂前段垂下）
-      cylPart(0.008, 0.008, u(1.3), 4, CRANE_X + u(4.6), mastH + u(0.25), CRANE_Z, CABLE),
-      boxPart(0.06, 0.06, 0.06, CRANE_X + u(4.6), mastH - u(0.45), CRANE_Z, HOOK),
-    ];
-    return mergeParts(parts);
-  }, [mastH]);
-  useEffect(() => () => metalGeo.dispose(), [metalGeo]);
+/** 程序化 fallback 的在建结构 + 临建 + 材料堆场。 */
+function yardFallbackParts(): MergePart[] {
+  const p: MergePart[] = [];
+  const bx = u(6.0);
+  const bz = u(-6.0);
+  const hx = u(9.0);
+  const hy = u(6.0);
+  const fh = u(3.6);
+  // 在建框架：3 层柱 + 梁板
+  for (let f = 0; f <= 3; f++) {
+    const z = u(0.1) + fh * f;
+    for (const cx2 of [-hx, -hx / 3, hx / 3, hx]) {
+      for (const cz2 of [-hy, hy]) {
+        p.push(boxPart(u(0.45), fh, u(0.6), bx + cx2, z + fh / 2, bz + cz2, CONCRETE));
+      }
+    }
+    for (const cz2 of [-hy, hy]) {
+      p.push(boxPart(hx * 2, u(0.24), u(1.3), bx + bx, z + fh - u(0.12), bz + cz2, CONCRETE));
+      p.push(boxPart(hx * 2, u(0.45), u(0.35), bx + bx, z + fh - u(0.45), bz + cz2, CONCRETE));
+    }
+  }
+  // 脚手架立杆（两面）
+  for (const side of [-1, 1]) {
+    for (let i = 0; i <= 10; i++) {
+      const x = bx - hx + (i * hx * 2) / 10;
+      p.push(cylPart(u(0.055), u(0.055), u(12.4), 5, x, u(6.3), bz + side * (hy + u(0.9)), STEEL));
+    }
+    p.push(boxPart(hx * 2, u(12.4), u(0.04), bx + bx, u(6.3), bz + side * (hy + u(0.94)), NET_GREEN));
+  }
+  // 临建集装箱 2 组 × 2 层
+  for (let g = 0; g < 2; g++) {
+    for (let lv = 0; lv < 2; lv++) {
+      const z = u(0.1) + lv * (u(2.59) + u(0.06)) + u(2.59) / 2;
+      const x = u(13.0) + g * (u(6.06) + u(1.2));
+      p.push(boxPart(u(6.06), u(2.59), u(2.44), x, z, u(9.0), CABIN_BLUE));
+      for (const sy of [-1, 1]) {
+        p.push(boxPart(u(5.06), u(0.85), u(0.05), x, z + u(0.35), u(9.0) + sy * u(1.24), CABIN_WINDOW));
+      }
+    }
+  }
+  // 材料堆场：钢筋捆 + 砂石堆 + 模板垛
+  for (let i = 0; i < 2; i++) {
+    for (let k = 0; k < 4; k++) {
+      p.push(cylPart(u(0.28), u(0.28), u(9.0), 6, u(15.0), u(4.0) + k * u(0.62), u(0.4), REBAR));
+    }
+  }
+  p.push(cylPart(u(1.1), u(3.2), u(2.1), 10, u(15.5), u(-6.0), u(1.15), AGG));
+  p.push(cylPart(u(0.9), u(2.6), u(1.7), 10, u(20.5), u(-6.0), u(0.95), AGG));
+  for (let i = 0; i < 2; i++) {
+    for (let k = 0; k < 6; k++) {
+      p.push(boxPart(u(4.0), u(0.09), u(2.4), u(23.0), u(0.16) + k * u(0.11), u(-8.0) + i * u(3.2), AGG));
+    }
+  }
+  return p;
+}
 
-  const info = useObjectInfoProps('landmark.construction-site', { anchorY: 1.0 });
+/**
+ * 施工工地（批次 50）。
+ *
+ * 走 `CivicGlbPiece` 的标准降级链（批次 46 抽出的可复用件）：GLB 优先，
+ * 缺失 / 未启用 / 加载中则渲染本文件的程序化几何（**按新尺寸重建**）。
+ * `anchorY` 由 1.0 提到 **8.0** —— 旧值是按「9 m 高的实心柱」定的，
+ * 真实塔帽顶在 44.2 m，悬停卡片挂 8 m 正好落在塔身中段的可读位置。
+ */
+export function ConstructionSite() {
+  const geo = useMemo(
+    () => mergeParts([...siteFallbackParts(), ...craneFallbackParts(), ...yardFallbackParts()]),
+    [],
+  );
+  useEffect(() => () => geo.dispose(), [geo]);
+
   return (
-    <group
-      {...info}
+    <CivicGlbPiece
+      glbName="construction_site"
+      dimsKey="constructionSite"
+      infoId="landmark.construction-site"
+      anchorY={8}
       position={[SITE_X, 0, SITE_Z]}
-      rotation={[0, rot, 0]}
-    >
-      {/* 裸土面（独立保留：receiveShadow + 粗糙度 0.98 均不动） */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.028, 0]} receiveShadow>
-        <planeGeometry args={[SITE_W, SITE_D]} />
-        <meshStandardMaterial color={MUD} roughness={0.98} />
-      </mesh>
-      {/* 非金属纯色件合并（顶点色逐件保留；批次 28 二轮 caster 裁剪 → 不投影） */}
-      <mesh geometry={plainGeo}>
-        <meshStandardMaterial vertexColors roughness={PLAIN_ROUGH} metalness={0} />
-      </mesh>
-      {/* 金属件合并（顶点色逐件保留；envMapIntensity 统一 0.9；不投影） */}
-      <mesh geometry={metalGeo}>
-        <meshStandardMaterial
-          vertexColors
-          roughness={METAL_ROUGH}
-          metalness={METAL_METAL}
-          envMapIntensity={0.9}
-        />
-      </mesh>
-    </group>
+      fallback={
+        <mesh geometry={geo} receiveShadow>
+          <meshStandardMaterial vertexColors roughness={0.82} metalness={0.22} />
+        </mesh>
+      }
+    />
   );
 }
-
-export default ConstructionSite;

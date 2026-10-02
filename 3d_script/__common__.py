@@ -14,6 +14,8 @@ __common__ — Blender headless 导出工具集（19-Blender3D模型集成）。
   make_taper(name, r_bot, r_top, h, segs, pos, rot=None)  — 批次 44：带收分的圆台（make_cylinder 会静默忽略 r_top）
   make_strut(name, p0, p1, w, h=None)    — 批次 48：两点之间的杆件（to_track_quat 求朝向，别手算欧拉角）
   center_content_xz(objs=None)           — 批次 44：把内容盒在两个**水平**轴（Blender X/Y）上居中
+  weld_split_vertices(obj, threshold)    — 批次 50：焊接 Blender 立方体按面分裂的顶点（锐边保硬）
+  strip_uvs(obj)                        — 批次 50：剥掉死 UV 层（纯色 PBR 件省 ~25% 顶点字节）
   apply_pbr(obj, base_color, rough, metal, emissive=None, emissive_intensity=0.0)
   make_material(name, base_color, rough, metal, emissive=None, emissive_intensity=0.0) — 返回 mat
   weathered_pbr(obj, base_color, rough, metal, *, wear=0.35, grime='#3a352c', scale=6.0)
@@ -170,6 +172,80 @@ def make_strut(name: str, p0, p1, w: float, h: float | None = None):
     obj.location = (v0 + d * 0.5)
     obj.rotation_euler = d.to_track_quat('Z', 'Y').to_euler()
     return obj
+
+
+def weld_split_vertices(obj, threshold=1.0e-4):
+    """把 Blender 立方体「按面分裂」的顶点焊接掉（每箱 24 → 8），**锐边保持硬边**。
+
+    ## 为什么需要（批次 50 实测：675 KB 的 `.glb` 卡在 §27.3 的 500 KB 硬线上）
+
+    `bpy.ops.mesh.primitive_cube_add` 生成的立方体是 **6 个独立面、每面 4 个顶点**
+    （24 顶点 / 36 索引），而几何上它只有 8 个角。`join_objects` 把几百个这样的
+    立方体并成一个 mesh 后，顶点数是**理论最小值的 3 倍**。批次 50 的塔吊
+    （14 节格构塔身 + 50 m 桁架臂 + 外脚手架，共 ~750 根杆件）因此是
+    20452 顶点 / 39844 索引，光 POSITION+NORMAL+TEXCOORD_0 就占掉 654 KB。
+
+    ## 关键：`use_sharp_edge_from_normals=True`
+
+    直接 `remove_doubles` 会把 6 个面的法线在角点平均 ⇒ 立方体变成「球」，
+    整个模型糊成一团。`use_sharp_edge_from_normals` 让焊接按**面法线夹角**判定：
+    夹角超过自动阈值（默认 30°）的边保持分裂 ⇒ 拿到 8 顶点 + 硬边。
+
+    ⚠ **Blender 5 的 API 与 4.x 不同**：`mesh.mark_sharp` 只剩 `clear` / `use_verts`
+    （按角度标锐边的老接口随 auto-smooth 一起被移除），传 `angle=` 直接报
+    `keyword "angle" unrecognized`。正确姿势是**只调 `remove_doubles` 的
+    `use_sharp_edge_from_normals`**，不要先 mark_sharp。
+
+    ## 何时**不要**调
+
+    · 有 UV 岛依赖的物件（焊接会破坏 UV 连续性）——本仓库的 GLB 全部是
+      纯色 PBR、无贴图，UV 已是死数据；
+    · 形变 / 骨骼 / 蒙皮 mesh（`bake_transforms` 同样按此豁免）。
+
+    幂等：已是 8 顶点的 mesh 焊接后无变化（阈值远小于任何杆件尺寸）。
+    """
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    before = len(obj.data.vertices)
+    try:
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.remove_doubles(threshold=threshold, use_sharp_edge_from_normals=True)
+        bpy.ops.object.mode_set(mode='OBJECT')
+    except Exception as exc:                      # noqa: BLE001
+        print(f'[weld] ⚠ {obj.name} 焊接失败（{exc}），保持原状', flush=True)
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception:
+            pass
+    return before, len(obj.data.vertices)
+
+
+def strip_uvs(obj) -> int:
+    """删掉 mesh 的 UV 层（返回删除的层数）。
+
+    ## 为什么需要（批次 50：675 KB 卡在 §27.3 的 500 KB 硬线上）
+
+    本仓库的 GLB **全部是纯色 PBR、无贴图** —— `TEXCOORD_0` 是 Blender
+    `primitive_cube_add` / `primitive_cylinder_add` 自带的死数据，每个顶点白占
+    **8 字节**。批次 50 的塔吊有 20452 顶点 ⇒ UV 层合计 **164 KB**（占 BIN 的 25%）。
+    glTF 导出器在没有 UV 层时不会写 `TEXCOORD_0`，three.js 也不需要。
+
+    **这是给「确定不用贴图」的脚本用的显式优化**，不要塞进 `export_glb` ——
+    将来若有件真贴了图，剥 UV 会静默毁掉它。
+    """
+    layers = list(obj.data.uv_layers)
+    if not layers:
+        return 0
+    try:
+        # ⚠ Blender 5 已移除 `bpy.ops.uv.remove`（连同整套 uv 编辑 operator 一起
+        #   搬到了 UV 编辑器上下文），headless 里调用直接报
+        #   `could not be found`。正确姿势是走数据 API `uv_layers.remove(layer)`。
+        for layer in layers:
+            obj.data.uv_layers.remove(layer)
+    except Exception as exc:                      # noqa: BLE001
+        print(f'[uv] ⚠ {obj.name} 剥 UV 失败（{exc}）', flush=True)
+    return len(layers)
 
 
 def center_content_xz(objs=None):
@@ -562,6 +638,29 @@ CITY_PALETTE = {
     'train_body':      '#c8d2dc',
     # 列车前照灯（卤素暖白，与站台冷白 LED 区分）
     'train_headlight': '#fff6dc',
+    # ── 施工工地（批次 50 新增；工地/塔机是「建设语义」单列一族）──
+    # 场区裸土（碾压后的黄褐土，比通用 soil 亮半档 —— 干燥碾压面）
+    'site_earth':     '#8a7658',
+    # 塔机涂装（工程黄：QTZ 系列标准涂装，比车道黄更暖更饱和）
+    'crane_yellow':   '#e8b930',
+    # 塔机涂装暗部（塔帽/节点板/底架，比机身暗两档）
+    'crane_dark':     '#a8801c',
+    # 塔机钢结构件（塔身主肢/起重臂弦杆/拉索：Q345B 涂装钢结构件本色）
+    'crane_steel':    '#b8bcc2',
+    # 塔机混凝土配重（清水混凝土配重块，比通用 concrete 略冷）
+    'crane_weight':   '#a8a8a4',
+    # 工地围挡（工程黄围挡板，比塔机黄更亮一档 —— 围挡是标识，塔机是设备）
+    'hoarding_yellow': '#f0c93a',
+    # 在建结构混凝土（现浇结构：比预制件略深，带模板拼缝的湿痕感）
+    'site_concrete':  '#9e9c96',
+    # 临建集装箱（工地办公箱体：国际标准蓝，比车辆蓝更亮）
+    'cabin_blue':     '#2f6fa8',
+    # 钢筋原材（未经锈蚀的螺纹钢，暖褐）
+    'site_rebar':     '#7a5c40',
+    # 砂石料（级配砂石堆：比裸土亮一档的暖灰）
+    'site_aggregate': '#9a9285',
+    # 施工安全网（国标密目型绿色安全网：半透，alpha 走 alpha 通道）
+    'site_netting':   '#2f7a3e',
 }
 # 白/黑/警示红单列在表外（不是"材质语义"而是全城通用）：黑橡胶轮胎、红消防标识。
 

@@ -87,6 +87,16 @@ export const MODEL_NAMES = {
     //   材质槽（两件同名）：Rail_Concrete / _ConcreteDark / _Steel / _Glass /
     //     _Warn / _Light / RailStation_Sign（仅车站）。
     'rail_span', 'rail_station',
+    // 批次 50 施工工地（3d_script/build_construction_site.py）：50×44 m 城市施工围挡
+    //   场地 + 格构塔式起重机（方圆 QTZ80 档：标准节 1.8×1.8×2.5 × 14 节 = 塔身
+    //   35 m、起重臂 50 m 三角桁架、平衡臂 13 m、配重 6 块、承台 5.2×5.2×1.2）
+    //   + 3 层在建框架 + 临建集装箱 + 材料堆场。**整件 66.4×45.6×44.2 m**
+    //   （起重臂 50 m 会**越出场坪**探到相邻街区 —— 真实塔机本就如此，
+    //     臂根 41.8 m 远高于沿线 15~25 m 建筑）。
+    //   消费方：props/ConstructionSite.tsx，**零旋转**挂载 `position=[30.5, 0, -1.5]`
+    //   （落位是净距数值解：西侧离 arterial-z26 骨干主路 13 m；原 (28,-1) 的
+    //     围挡压在主路里 4.0 m）。材质槽 11（Site_Net 为半透绿安全网 alpha 0.34）。
+    'construction_site',
   ] as const,
   vehicles: [
     'sedan', 'truck', 'bus', 'taxi',
