@@ -64,13 +64,18 @@ KEY_MAP = {
     "trafficSignal": "road/traffic_signal",
     "pedestrianSignal": "road/pedestrian_signal",
     "mastArmSignal": "road/mast_arm_signal",
+    # 批次 44 城市树（设计 44 §3）。streetTree 由 PROCEDURAL_ONLY 移入本表 ——
+    #   它现在真的有 GLB 了（批次 30 起该键只是占位、零消费点，见批次 44 T12）。
+    "streetTree": "nature/street_tree",
+    "palmTree": "nature/palm_tree",
 }
 
 # 程序化 fallback 专用、无 GLB ⇒ 不送检（但解析出来打印，便于人眼核对）。
 # 批次 42 增补 streetLight：road_props.glb 批次 31 已删（路灯改由
 # props/StreetLightsInstanced.tsx 程序化实例化），旧 KEY_MAP 映射指向空文件
 # 导致 crosscheck 常红 —— 移入本集合（与 streetLightSide 同口径）。
-PROCEDURAL_ONLY = {"streetLight", "streetLightSide", "streetTree", "trafficSignalPole"}
+# 批次 44：streetTree 已移出本集合（接入 nature/street_tree.glb）。
+PROCEDURAL_ONLY = {"streetLight", "streetLightSide", "trafficSignalPole"}
 
 LINE_RE = re.compile(r"^\s*(\w+)\s*:\s*\{([^}]*)\}")
 FIELD_RE = re.compile(r"\b(x|y|z|minY)\s*:\s*(-?\d+(?:\.\d+)?)")

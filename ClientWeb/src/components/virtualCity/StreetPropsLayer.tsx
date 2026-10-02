@@ -56,7 +56,7 @@ import { buildingsFor, type BuildingSpec } from './building_layout';
 import { outdoorCount, crowdCapFor, synthCrowdEntry } from './crowdFormula';
 import { layoutCrowd, type CrowdPedestrian } from './crowdLayout';
 import { clearCrowdPositions } from './crowdRegistry';
-import { TreesInstanced } from './props/TreesInstanced'; // 批次 20 §3.3：TreeV3 逐实例 → 全局 InstancedMesh（形态同源）
+import { TreesInstanced, type TreeVariant } from './props/TreesInstanced'; // 批次 20 §3.3 → 批次 44：GLB 化 + 三变体（variant 字段即由此导入）
 import { Vehicle, type VehicleStop } from './props/Vehicle';
 import { PedestrianV3, type PedestrianV3Props } from './props/PedestrianV3';
 import { Sign } from './props/Sign';
@@ -95,7 +95,7 @@ function mulberry32(seed: number): () => number {
 interface TreeSpec {
   x: number;
   z: number;
-  variant: 'oak' | 'pine' | 'palm';
+  variant: TreeVariant;
   scale: number;
 }
 
@@ -167,7 +167,7 @@ interface RoadVehicle {
 interface RoadTree {
   x: number;
   z: number;
-  variant: 'oak' | 'pine' | 'palm';
+  variant: TreeVariant;
   scale: number;
   rotation: number;
 }
@@ -181,7 +181,49 @@ interface Layout {
   parkingMeters: ParkingMeterSpot[];
 }
 
-const TREE_VARIANTS: Array<'oak' | 'pine' | 'palm'> = ['oak', 'pine', 'palm'];
+/**
+ * 批次 44 C1：树变体按**真实城市植物地理规律**分配（方案 §5）。
+ *
+ * 改前是 `['oak','pine','palm'][Math.floor(rnd() * 3)]` —— 纯随机，且结果在
+ * `allTrees` 合并时就被丢弃，所以「随机」实际从未生效（全城一种树）。改后按地理
+ * 分带，且**带规范约束**：
+ *
+ * | 变体 | 真实依据 | 本城分配 |
+ * |---|---|---|
+ * | `oak` 悬铃木（法桐）| 温带落叶，冠大荫浓、深根性、耐修剪，**行道树主力**；CJJ/T 75-2023 §6.0.3「寒冷积雪地区行道树绿带宜用落叶树种」| 其余全部（默认 ~90%）|
+ * | `pine` 黑松/雪松 | 常绿针叶，**耐寒、抗风**；雪松枝下高极低（≤0.3~1.0 m，DB11/T 211—2017）| 北缘（靠雪山）城区 + 中央公园 |
+ * | `palm` 棕榈 | 常绿，**耐盐碱、耐海雾、抗风**；耐 −15 ℃（蒲葵仅 −5 ℃，故选棕榈）| 湾区/滨海新城 |
+ *
+ * ⚠ **`pine` 不做行道树**是规范约束而非美术偏好：雪松/黑松枝下高 0.3~1.0 m，
+ *   远低于**车行道树冠净空 ≥3.5 m**（DB4105/T 150-2020），种在路缘会挡行车视线。
+ */
+const CONIFER_DISTRICTS: ReadonlySet<string> = new Set([
+  // 北缘（−z，雪山带）：山居民宿区 / 化工园区 / 航空物流园 / 汽车城 / 现代农业园
+  'mountain_resort', 'chem_park', 'air_logistics', 'auto_city', 'agri_park',
+  // 北中缘：中央公园 / 产业基地 / 空港小镇 / 交通枢纽
+  'central_park', 'industrial_park', 'airport_town', 'transport_hub',
+]);
+/** 滨海/湾区片区 —— 棕榈是滨海新城最标志性的行道树。 */
+const PALM_DISTRICTS: ReadonlySet<string> = new Set(['bay_new_town']);
+/** 湾区行道树判定：x > 30 且 z > 18（湾区新城 (40,28) 所在的东南沿海象限）。 */
+const PALM_ROAD_X = 30;
+const PALM_ROAD_Z = 18;
+
+/** 区内园林树变体（按城区地理分带）。 */
+function treeVariantForDistrict(districtId: string, rnd: () => number): TreeVariant {
+  if (PALM_DISTRICTS.has(districtId)) return 'palm';
+  if (CONIFER_DISTRICTS.has(districtId)) {
+    // 北缘并非 100% 松：针叶林缘与常绿阔叶混交是真实配置，留 35% 法桐
+    return rnd() < 0.65 ? 'pine' : 'oak';
+  }
+  return 'oak';
+}
+
+/** 行道树变体（按坐标分带；`pine` 永不用于行道树，见上方净空约束）。 */
+function treeVariantForRoad(x: number, z: number, _rnd: () => number): TreeVariant {
+  return x > PALM_ROAD_X && z > PALM_ROAD_Z ? 'palm' : 'oak';
+}
+
 const ROOFTOP_VARIANTS: Array<'ac' | 'tank' | 'antenna'> = ['ac', 'tank', 'antenna'];
 const VEHICLE_VARIANTS: Array<'sedan' | 'truck' | 'bus' | 'taxi'> = ['sedan', 'truck', 'bus', 'taxi'];
 
@@ -322,7 +364,8 @@ function propsForDistrict(
     return {
       x: c.x + Math.cos(angle) * radius,
       z: c.z + Math.sin(angle) * radius,
-      variant: TREE_VARIANTS[Math.floor(rnd() * TREE_VARIANTS.length)],
+      // 批次 44 C1：按城区地理分带（北缘/公园=针叶、湾区=棕榈、其余=法桐）
+      variant: treeVariantForDistrict(def.id, rnd),
       // 批次 30 P0-3：scale 0.5~1.2 × 旧 3.4 m 基准树 = 1.7~4.4 m「棒棒糖」——
       // treeShape 基准已归一到 REAL_DIMS_M.streetTree（9 m），scale 收敛到 0.85~1.15。
       scale: isPark ? 0.9 + rnd() * 0.25 : 0.85 + rnd() * 0.2,
@@ -724,7 +767,9 @@ function roadTreesForNetwork(segments: RoadSegment[]): RoadTree[] {
         trees.push({
           x,
           z,
-          variant: TREE_VARIANTS[Math.floor(rnd() * TREE_VARIANTS.length)],
+          // 批次 44 C1：按坐标分带（东南湾区象限 = 棕榈行道树；`pine` 永不用于行道树，
+          // 因雪松/黑松枝下高 0.3~1.0 m < 车行道树冠净空 3.5 m，会挡行车视线）
+          variant: treeVariantForRoad(x, z, rnd),
           scale: 0.85 + rnd() * 0.2,
           rotation: rnd() * Math.PI * 2,
         });
@@ -1220,10 +1265,16 @@ export function StreetPropsLayer({
   // 批次 28 B2：kind 标记 —— 区内树 tree.park / 行道树 tree.road（物件信息按实例区分）。
   const allTrees = useMemo(
     () => [
+      // 批次 44 B1：**透传 variant** —— 此前这两处只取 {x,z,scale,kind}，
+      // 把上游按地理分带选好的树种整个丢掉（§130「声明了却从不接线」）。
       ...layout.districtProps.flatMap((dp) =>
-        dp.trees.map((t) => ({ x: t.x, z: t.z, scale: t.scale, kind: 'park' as const })),
+        dp.trees.map((t) => ({
+          x: t.x, z: t.z, scale: t.scale, kind: 'park' as const, variant: t.variant,
+        })),
       ),
-      ...layout.roadTrees.map((t) => ({ x: t.x, z: t.z, scale: t.scale, kind: 'road' as const })),
+      ...layout.roadTrees.map((t) => ({
+        x: t.x, z: t.z, scale: t.scale, kind: 'road' as const, variant: t.variant,
+      })),
     ],
     [layout],
   );

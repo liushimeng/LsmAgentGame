@@ -23,6 +23,7 @@ import { currentSeason, subscribeSeason } from '../cityTimeStore';
 import type { CitySeason } from '../cityTimeStore';
 import { seasonOakModelUrl } from '../seasonAssets';
 import { sizeTargetFor } from '../cityScale';
+import { blenderModelsEnabled } from '@/engine3d';
 import { GlbInstanced, type GlbInstanceTRS } from './glbInstanced';
 import { ProceduralOaks, ProceduralPines, type FloraSpot } from './proceduralFlora';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
@@ -48,6 +49,10 @@ const TRANSITION_KEEP = 0.1;
 
 export function EastForest() {
   // 批次 27：季节低频订阅（仅 season 变化 setState）。
+  // 批次 44 D3：§27.5 总闸 —— `disable-blender-models=1` 时强制走程序化 fallback。
+  // 此前本组件**漏挂**总闸（批次 41 只在 props/ 一族补齐），是降级链破洞。
+  const blenderOn = useMemo(() => blenderModelsEnabled(), []);
+
   const [season, setSeason] = useState<CitySeason>(currentSeason);
   useEffect(() => subscribeSeason(setSeason), []);
 
@@ -90,14 +95,14 @@ export function EastForest() {
       {/* 阔叶树（oak_tree GLB 实例化，批次 27 按季节切变体；fallback 程序化球冠树，
           批次 29：按 season 同步取表值 —— 冬 oakTreeWinter / 其余 oakTree） */}
       <GlbInstanced
-        url={seasonOakModelUrl(season)}
+        url={blenderOn ? seasonOakModelUrl(season) : ''}
         instances={oakInstances}
         fallback={<ProceduralOaks spots={oaks} season={season} />}
         sizeTarget={OAK_SIZE_TARGETS[season]}
       />
       {/* 针叶树（pine_tree GLB 实例化；fallback 程序化圆锥树） */}
       <GlbInstanced
-        url={modelUrl('nature', 'pine_tree')}
+        url={blenderOn ? modelUrl('nature', 'pine_tree') : ''}
         instances={pineInstances}
         fallback={<ProceduralPines spots={pines} />}
         sizeTarget={PINE_SIZE_TARGET}

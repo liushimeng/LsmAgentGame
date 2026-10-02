@@ -65,6 +65,12 @@ export const MODEL_NAMES = {
     'oak_tree_spring',
     'oak_tree_autumn',
     'oak_tree_winter',
+    // 批次 44 城市树（行道树/区内园林树三变体，配 StreetPropsLayer.TREE_VARIANTS）：
+    //   street_tree = 悬铃木(法桐)杯状形行道树 4.96×9.0×4.9 m
+    //   pine_tree   = 黑松/雪松（**已重制**，原 3 锥玩具树 → 4 层平展针叶盘）3.98×7.0×3.95 m
+    //   palm_tree   = 棕榈(老人葵) 2.76×5.42×2.81 m，补齐此前「声明了却无资产」的 'palm' 变体
+    'street_tree',
+    'palm_tree',
   ] as const,
   characters: [
     // 批次 36 §4.1：性别 × 年龄段 15 模型（3d_script/build_character.py --variant <key> 产出）。

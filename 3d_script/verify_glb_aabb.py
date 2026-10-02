@@ -167,8 +167,18 @@ TARGETS = {
     'nature/oak_tree_autumn.glb': dict(x=0.450, y=1.010, z=0.470, pivot='地面中心 minY=0（三季变体同尺寸）'),
     'nature/oak_tree_winter.glb': dict(x=0.412, y=0.955, z=0.382,
                                        pivot='冬季落叶冠幅细；表值 = 资产真值（批次 29 §3.4-E 单列）'),
-    # pine_tree 表值 = **资产现值**（5.4 m），非「真实云杉 8~12 m」拟值（批次 29 遗留 L3 已裁决）
-    'nature/pine_tree.glb':       dict(x=0.340, y=0.540, z=0.340, pivot='地面中心 minY=0；表值 = 资产现值'),
+    # 批次 44 城市树三件（表值 = **真实设计尺寸** REaL_DIMS_M，不是「资产现值」）。
+    #   pine_tree 已于批次 44 重制（3 锥 70 面 → 主干+4 层平展针叶盘+塔尖，79 KB），
+    #   原「表值 = 资产现值 5.4 m」的遗留 L3 自认作废，改为真实雪松 6~8 m 档 → 7.0 m。
+    #   实测 3.975 / 7.000 / 3.949（对表值 -0.6% / 0% / -1.3%）。
+    'nature/pine_tree.glb':       dict(x=0.400, y=0.700, z=0.400,
+                                       pivot='树干基部 minY=0，X/Z 居中；冠幅 = 环半径+枝端簇'),
+    # 悬铃木（法桐）行道树 —— 杯状形三股六杈 + 18 叶簇；实测 4.958/8.970/4.895
+    'nature/street_tree.glb':     dict(x=0.500, y=0.900, z=0.500,
+                                       pivot='根盘底 minY=0，X/Z 居中；分枝点 3.0 m，冠底 4.28 m'),
+    # 棕榈（老人葵）—— 杆 3.6 m + 9 道环状叶痕 + 12 片掌状扇叶；实测 2.763/5.424/2.807
+    'nature/palm_tree.glb':       dict(x=0.280, y=0.540, z=0.280,
+                                       pivot='树干基部 minY=0，X/Z 居中；净干高 3.6 m'),
     'nature/cactus.glb':          dict(x=0.170, y=0.290, z=0.070, pivot='地面中心 minY=0'),
     # ── 批次 42 街具五件（build_bus_stop / build_mailbox / build_street_sign /
     #    build_parking_meter / build_bike_rack）────────────────────────────────

@@ -103,6 +103,89 @@ def make_sphere(name: str, r: float, segs: int, pos):
     return obj
 
 
+def make_icosphere(name: str, r: float, subdiv: int, pos):
+    """正二十面体细分球（subdiv=0 → 20 面；1 → 80 面）。
+
+    批次 44 新增。`make_sphere` 走 UV 球（segs/2 圈纬线），面数随 segs 线性涨且
+    极点密集；树冠叶簇要的是「低面数、棱面明显、彼此不成球」的颗粒感，
+    ico 球 subdiv=0（20 面）是性价比最高的叶团表达。
+    尺寸写在 radius 上（不走 obj.scale），天然满足 §27.3-6「节点变换 identity」。
+    """
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=max(int(subdiv), 0),
+                                           radius=r,
+                                           location=(0, 0, 0))
+    obj = bpy.context.active_object
+    obj.name = name
+    obj.location = (pos[0], pos[1], pos[2])
+    return obj
+
+
+def make_taper(name: str, r_bot: float, r_top: float, h: float, segs: int, pos, rot=None):
+    """**上下不同半径**的圆台（树干收分 / 根盘 / 枝条渐细 / 锥形树冠层）。
+
+    批次 44 新增。`make_cylinder` 的 `r_top` **被静默忽略**（它对 X/Y 用同一个
+    `r_bot` 做等比缩放），因此它只能做正圆柱 —— 想做带收分的树干/根盘/枝条必须用本函数。
+    尺寸直接写进 `radius1`/`radius2`/`depth`（不走 obj.scale），
+    天然满足 §27.3-6「节点变换 identity」。
+
+    r_top = 0 ⇒ 真正的圆锥；r_bot = r_top ⇒ 等价于 make_cylinder（但本函数走 cone 图元，
+    侧面三角化方式与 cylinder 略有差异，混用时以本函数为准）。
+    """
+    bpy.ops.mesh.primitive_cone_add(vertices=max(segs, 6),
+                                    radius1=r_bot,
+                                    radius2=max(float(r_top), 0.0),
+                                    depth=h,
+                                    location=(0, 0, 0))
+    obj = bpy.context.active_object
+    obj.name = name
+    obj.location = (pos[0], pos[1], pos[2])
+    if rot is not None:
+        obj.rotation_euler = (rot[0], rot[1], rot[2])
+    return obj
+
+
+def center_content_xz(objs=None):
+    """把整件内容盒在 **X/Z 上居中**（§27.3「原点 minY = 0 贴地、X/Z 居中」）。
+
+    批次 44 新增。为何不能靠"对称布点"自然居中：叶簇/枝端用的是 **icosahedron
+    （正二十面体）**，它在面内**不是旋转对称**的 —— 即使枝条方位角在数学上
+    均布（6 枝 60°、4 枝 90°），每个 icosphere 的自身顶点分布仍随朝向变化，
+    合起来就是一个**偏心**的内容盒。实测 pine_tree 曾因此出现
+    X ∈ [-0.148, +0.172]（中心 +0.012 u = 12 cm 偏移）。
+
+    这在纯装饰件上无害，但会破坏 §27.3 的原点约定，且消费端
+    `edge/glbInstanced.tsx::collectGlbMeshParts` 直接用 `matrixWorld`
+    （**不像** `glbInstances.ts` 那样做 `pairPivotOffset` 内容盒归一化），
+    偏移量会原样进世界。
+
+    本函数按**几何世界包围盒**（含节点变换）求并集，再整体平移。
+    Y 方向不动 —— 贴地对齐由建模时的绝对高度保证。
+    """
+    import mathutils
+    objs = list(objs) if objs is not None else list(bpy.context.scene.objects)
+    meshes = [o for o in objs if o.type == 'MESH']
+    if not meshes:
+        return (0.0, 0.0)
+    bpy.context.view_layer.update()
+    lo = mathutils.Vector((float('inf'), float('inf'), float('inf')))
+    hi = mathutils.Vector((float('-inf'), float('-inf'), float('-inf')))
+    for o in meshes:
+        for corner in o.bound_box:
+            p = o.matrix_world @ mathutils.Vector(corner)
+            for i in range(3):
+                lo[i] = min(lo[i], p[i])
+                hi[i] = max(hi[i], p[i])
+    # ⚠ **Blender 是 Z-up** —— 要居中的是两个**水平**轴 (X, Y)，**不是** (X, Z)。
+    #   曾把 Z（垂直轴）当水平轴居中，结果整棵树沿垂直方向平移了半个树高
+    #   （palm_tree 实测 minY = -0.256 m，贴地判据直接 FAIL）。
+    dx = -(lo.x + hi.x) / 2.0
+    dy = -(lo.y + hi.y) / 2.0
+    for o in meshes:
+        o.location = (o.location[0] + dx, o.location[1] + dy, o.location[2])
+    bpy.context.view_layer.update()
+    return (dx, dy)
+
+
 def make_material(name: str, base_color: str, rough: float, metal: float,
                   emissive=None, emissive_intensity: float = 0.0,
                   alpha: float = 1.0):
@@ -342,6 +425,19 @@ CITY_PALETTE = {
     'signal_red':     '#ff2d2d',   # 红色 LED
     'signal_yellow':  '#ffc40f',   # 黄色 LED
     'signal_green':   '#2ecc71',   # 绿色 LED
+    # ── 植被（批次 44 新增；树皮/针叶/棕榈是「植物语义」不是建筑材质，单列一族）──
+    # 悬铃木（法桐）行道树：浅灰褐平滑树皮（悬铃木最显著特征 —— 剥落后呈灰白斑驳）
+    'bark_sycamore':  '#9a9187',
+    # 根盘 / 根颈：比干皮深一档的土褐（根颈长期贴地潮湿积污）
+    'bark_root':      '#6d6357',
+    # 松树皮：深棕红、鳞片状开裂（黑松/雪松老皮）
+    'bark_pine':      '#6b4a35',
+    # 松针：深墨绿（黑松针叶 2 针一束，色比阔叶深暗）
+    'needle_pine':    '#2c4a2c',
+    # 棕榈干：红褐（棕榈「基部显著膨大 + 红褐色树干 + 环状叶痕」形态志特征）
+    'palm_trunk':     '#7a4b34',
+    # 棕榈扇叶：比阔叶更亮更黄的青绿（棕榈科叶面蜡质）
+    'palm_frond':     '#4c8a46',
 }
 # 白/黑/警示红单列在表外（不是"材质语义"而是全城通用）：黑橡胶轮胎、红消防标识。
 

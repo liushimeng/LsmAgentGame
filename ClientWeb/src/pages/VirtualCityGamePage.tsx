@@ -177,18 +177,25 @@ export function VirtualCityGamePage() {
       ? gameState.time_ratio
       : 60;
   useEffect(() => {
+    // 批次 44 修：季节/天气/城市档案与**时钟锚定无关**，必须无条件落地。
+    // 此前它们被塞在 `c <= 0` 的早退**之后**，于是未开局房（city_clock_ms=0）
+    // 拿不到 season ⇒ 3D 停在 cityTimeStore 默认 'summer'，而 HUD 徽章直读
+    // gameState.season 显示后端真值（SeasonAt(0)=1970-01 = 冬）⇒
+    // **HUD 与 3D 季节源分叉**。本批的城市树季节换色（方案 C2）也因此无法验收。
+    // 对已开局房行为逐字节不变（这三条原本就在早退之后正常执行）。
+    setCityEnv(gameState?.season, gameState?.weather, gameState?.weather_intensity);
+    // 批次 33：真实城市档案（时区 + 当日日出日落）写入渲染单例；未选城市
+    // 传 null → 复位 tz=0 / 6:00-18:00（批次 27 行为零回归）。
+    setCityGeo(gameState?.city_info ?? null);
+
     const c = gameState?.city_clock_ms;
-    if (typeof c !== 'number' || c <= 0) return;
+    if (typeof c !== 'number' || c <= 0) return;   // 仅跳过**时钟锚定**
     const prev = cityClockRef.current;
     const frozen = prev !== null && prev.cityMs === c;
     const at = frozen ? prev.at : Date.now();
     const speed = frozen ? 0 : timeRatio;
     cityClockRef.current = { cityMs: c, at, speed };
     setCityClockAnchor(c, at, speed);
-    setCityEnv(gameState?.season, gameState?.weather, gameState?.weather_intensity);
-    // 批次 33：真实城市档案（时区 + 当日日出日落）写入渲染单例；未选城市
-    // 传 null → 复位 tz=0 / 6:00-18:00（批次 27 行为零回归）。
-    setCityGeo(gameState?.city_info ?? null);
   }, [gameState, timeRatio]);
 
   // 入场：join / spectate（WS 未 OPEN 时 500ms 重试）+ 8s 轮询全量快照。

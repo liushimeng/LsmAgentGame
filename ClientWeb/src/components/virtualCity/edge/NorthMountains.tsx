@@ -18,6 +18,7 @@ import { useMemo } from 'react';
 import { modelUrl } from '@/assets/models';
 import { u, sizeTargetFor } from '../cityScale';
 import { hashStr, mulberry32 } from '../civic/rand';
+import { blenderModelsEnabled } from '@/engine3d';
 import { GlbInstanced, type GlbInstanceTRS } from './glbInstanced';
 import { ProceduralPines, type FloraSpot } from './proceduralFlora';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
@@ -32,6 +33,10 @@ const MOUNTAIN_COUNT = 7;
 const PINE_COUNT = 60;
 
 export function NorthMountains() {
+  // 批次 44 D3：§27.5 总闸 —— `disable-blender-models=1` 时强制走程序化 fallback。
+  // 此前本组件**漏挂**总闸（批次 41 只在 props/ 一族补齐），是降级链破洞。
+  const blenderOn = useMemo(() => blenderModelsEnabled(), []);
+
   // 雪山脊线：x ∈ [−90,90] 均分 + 抖动，z ∈ [−76,−70]，scale 6~10（≈150~250m 高）
   const mountains = useMemo<GlbInstanceTRS[]>(() => {
     const rnd = mulberry32(hashStr('edge26:north:mountains'));
@@ -79,13 +84,13 @@ export function NorthMountains() {
     <group {...info}>
       {/* 雪山脊线（GLB 实例化；fallback 程序化锥体山） */}
       <GlbInstanced
-        url={modelUrl('nature', 'snow_mountain')}
+        url={blenderOn ? modelUrl('nature', 'snow_mountain') : ''}
         instances={mountains}
         fallback={<ProceduralMountains mountains={mountains} />}
       />
       {/* 山脚针叶树（GLB 实例化；fallback 程序化圆锥树） */}
       <GlbInstanced
-        url={modelUrl('nature', 'pine_tree')}
+        url={blenderOn ? modelUrl('nature', 'pine_tree') : ''}
         instances={pineInstances}
         fallback={<ProceduralPines spots={pines} />}
         sizeTarget={PINE_SIZE_TARGET}

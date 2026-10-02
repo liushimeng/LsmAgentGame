@@ -28,10 +28,15 @@ export interface FloraSpot {
 
 /**
  * 尺寸口径（批次 29）：三种植被的**包围盒取自 cityScale.REAL_DIMS_M**
- * （pineTree 3.4×8.0 / oakTree 4.5×10.1 / cactus 1.7×2.9 m），与 nature/*.glb
+ * （oakTree 4.5×10.1 / cactus 1.7×2.9 m；pineTree 见下），与 nature/*.glb
  * 共用同一行表值。做法 = 把原程序化几何的基准（松 6.1 m / 橡 4.2 m / 仙 3.0 m 高）
  * 按表值**归一化**（高度 kY、宽度 kX），保留原有造型比例 ⇒ 两条渲染路径包围盒一致。
  * 此前 fallback 比 GLB 小 2~3 倍（禁用 GLB 时全城植被整体"缩水"）。
+ *
+ * ⚠ **pineTree 的表值在批次 44 变了**（3.4×5.4 → 3.98×7.0，因 pine_tree.glb
+ *   由「3 锥玩具树」重制为真实雪松），但**本文件的 kX/kY 无需手改** —— 它们
+ *   是从 `worldDims('pineTree')` 派生的，改表即自动跟随（这正是「尺寸单一事实
+ *   来源」的设计意图）。若将来 pine 基准几何改动，才需要同步改下面的基准常量。
  */
 const PINE = worldDims('pineTree');
 const OAK = worldDims('oakTree');

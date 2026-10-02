@@ -115,10 +115,14 @@ export const REAL_DIMS_M = {
 
   // ── 批次 30 新增（只增不改：旧值不动 ⇒ 无需重导 GLB）──
   /**
-   * 城内行道树/园林树（程序化 fallback 归一目标；森林橡树 oakTree 10.1 m 同量级，
-   * 行道树取 9.0 m 高 / 4.5 m 冠幅 —— 批次 30 P0-3 修复「城内树 1.7~4.4 m 棒棒糖」）。
+   * 城市行道树 = **悬铃木（法桐）**，4.96 × 9.00 × 4.90 m（批次 44 改为真实设计值，
+   * 并首次真正消费：GLB 接入 + `crosscheck` 送检，见批次 44 方案 §3.1）。
+   *
+   * **批次 44 改值理由**：原 4.5 × 9.0 × 4.5 是批次 30 为「程序化 fallback 归一」
+   * 设的占位值，挂在 `crosscheck` 的 `PROCEDURAL_ONLY` 里、**零消费点**（T12）。
+   * 现按 CJJ/T 75-2023 + 苗圃分级取真值：分枝点 3.0 m、树高 9.0 m、冠幅 5.0 m。
    */
-  streetTree: { x: 4.5, y: 9.0, z: 4.5, minY: 0 },
+  streetTree: { x: 4.96, y: 9.0, z: 4.9, minY: 0 },
   /** 交通信号杆（杆 + 灯头总高 5.50；灯头尺寸见 TrafficSignals 消费点）。 */
   trafficSignalPole: { y: 5.5, minY: 0 },
   // ── 批次 43 新增：交通信号灯三件（GLB 与 fallback 同取本表，唯一事实来源）──
@@ -158,10 +162,23 @@ export const REAL_DIMS_M = {
    * 消费端 = EastForest（按 season 切 url/目标/fallback 归一化系数）。
    */
   oakTreeWinter: { x: 4.12, y: 9.55, z: 3.82, minY: 0 },
-  /** 针叶树：**现行资产真值**（nature/pine_tree.glb 几何 0.340/0.540/0.340 + 节点 identity；
-   *  本批不重导，故表值 = 资产现值，而非"真实云杉 8~12 m"的拟值）。 */
-  pineTree: { x: 3.4, y: 5.4, z: 3.4, minY: 0 },
+  /**
+   * 针叶树（黑松/雪松）：**3.98 × 7.00 × 3.95 m**。
+   * 批次 44 重制 `pine_tree.glb`（原 3 锥 70 面玩具树）后，表值由「资产现值
+   * 3.4×5.4×3.4」改为**真实值** —— DB11/T 211—2017 雪松 6.0~8.0 m 株高档，
+   * 冠幅该档 ≥5.0(Ⅰ)/≥4.0(Ⅱ) m。原注释「本批不重导，故表值 = 资产现值」的
+   * 遗留自认于本批作废（§27.3-7 三侧同步：EastForest / NorthMountains 的
+   * sizeTarget 走 `sizeTargetFor` 自动跟随，`proceduralFlora` 的 PINE_KX/KY 需手改）。
+   */
+  pineTree: { x: 3.98, y: 7.0, z: 3.95, minY: 0 },
   cactus: { x: 1.7, y: 2.9, z: 0.7, minY: 0 },
+  /**
+   * 棕榈（老人葵 Trachycarpus fortunei）：2.76 × 5.42 × 2.81 m，净干高 3.6 m。
+   * 批次 44 新增，用于补齐 `TREE_VARIANTS` 里声明了却**零资产**的 `'palm'` 变体（T4）。
+   * 选棕榈而非蒲葵：棕榈耐 −15 ℃（长江流域可露地越冬），蒲葵仅短期耐 −5 ℃
+   * 「寒地多作盆栽」。冠幅取工程苗 2.5~3.0 m 档。
+   */
+  palmTree: { x: 2.76, y: 5.42, z: 2.81, minY: 0 },
 
   // ── 市政建筑（占地宽 X × 总高 Y × 进深 Z；不含门廊/雨棚外挑）──
   cityHall: { x: 14.4, y: 20.0, z: 8.4, minY: 0 },
@@ -282,12 +299,17 @@ export const MODEL_AXIS_CONVENTIONS: Readonly<Partial<Record<RealDimKey, ModelAx
   waterTower: { upright: true },
 
   // ── 植被 ──
-  // 橡树四季（前 3 变体同尺寸 4.5×10.1×4.7、冬季 4.12×9.55×3.82）、针叶树 3.4×5.4×3.4、
+  // 橡树四季（前 3 变体同尺寸 4.5×10.1×4.7、冬季 4.12×9.55×3.82）、
+  // 城市树三件（法桐 4.96×9.0×4.9 / 黑松 3.98×7.0×3.95 / 棕榈 2.76×5.42×2.81）、
   // 仙人掌 1.7×2.9×0.7 —— 全部 Y 主导（判据 ⑤ 实测 ✓）。
   oakTree: { upright: true },
   oakTreeWinter: { upright: true },
   pineTree: { upright: true },
   cactus: { upright: true },
+  // 批次 44：cityScale.ts 此前**没有** streetTree 的轴向声明 ⇒ 城内 1800 株树
+  // 零度量衡护栏覆盖（批次 44 T12）。三件城市树一并补齐。
+  streetTree: { upright: true },
+  palmTree: { upright: true },
 
   // ── 明文豁免（不声明，理由留档）──
   // 下列 4 项均经 `<Model url={modelUrl(...)}>` **不带 sizeTarget** 直挂

@@ -65,9 +65,23 @@ interface Props {
    * 调用方用 `sizeTargetFor(...)`（返回缓存对象，引用稳定）传入；缺省 = 不校验。
    */
   sizeTarget?: ModelSizeTarget;
+  /**
+   * 批次 44 新增：阴影投射开关（默认 false = 保持既有调用方行为不变）。
+   * 树的全部 primitive（干/枝/冠）是一体的，无法像 drei `<Instances>` 那样
+   * 「只让主干投影」；由调用方按质量档整体取舍。
+   */
+  castShadow?: boolean;
+  receiveShadow?: boolean;
 }
 
-export function GlbInstanced({ url, instances, fallback, sizeTarget }: Props) {
+export function GlbInstanced({
+  url,
+  instances,
+  fallback,
+  sizeTarget,
+  castShadow = false,
+  receiveShadow = false,
+}: Props) {
   const { scene } = useSharedGLTF(url, sizeTarget);
   const parts = useMemo(() => (scene ? collectGlbMeshParts(scene) : null), [scene]);
 
@@ -90,14 +104,30 @@ export function GlbInstanced({ url, instances, fallback, sizeTarget }: Props) {
   return (
     <group>
       {parts.map((part, i) => (
-        <InstancedPart key={i} part={part} matrices={matrices} />
+        <InstancedPart
+          key={i}
+          part={part}
+          matrices={matrices}
+          castShadow={castShadow}
+          receiveShadow={receiveShadow}
+        />
       ))}
     </group>
   );
 }
 
 /** 单个子网格的 instancedMesh（逐实例矩阵 = 实例 TRS × 子网格局部矩阵）。 */
-function InstancedPart({ part, matrices }: { part: GlbMeshPart; matrices: THREE.Matrix4[] }) {
+function InstancedPart({
+  part,
+  matrices,
+  castShadow = false,
+  receiveShadow = false,
+}: {
+  part: GlbMeshPart;
+  matrices: THREE.Matrix4[];
+  castShadow?: boolean;
+  receiveShadow?: boolean;
+}) {
   const ref = useRef<THREE.InstancedMesh>(null);
 
   useLayoutEffect(() => {
@@ -118,6 +148,8 @@ function InstancedPart({ part, matrices }: { part: GlbMeshPart; matrices: THREE.
     <instancedMesh
       ref={ref}
       args={[part.geometry, part.material, Math.max(1, matrices.length)]}
+      castShadow={castShadow}
+      receiveShadow={receiveShadow}
     />
   );
 }
