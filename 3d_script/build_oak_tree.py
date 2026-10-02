@@ -1,5 +1,44 @@
 #!/usr/bin/env python3
 """
+build_oak_tree — ⚠⚠ **已废弃：不要用它导出 `nature/oak_tree.glb`** ⚠⚠
+
+## 批次 51 实证（gamma 全量重导时踩到）
+
+本脚本是**批次 19 的原始版本**，产出的是**横躺**的树：实测
+`minY = -0.25`、包围盒 `0.45 × 0.50 × 0.81`（表值要求 `1.01` 高），
+`verify_glb_aabb.py` 直接 FAIL「贴地 + 尺寸 Y/Z」三项。
+
+而仓库里**已入库的** `nature/oak_tree.glb` 是**批次 29「统一度量衡」修正后的
+直立版** —— 也就是说：**脚本与资产早已脱节**（§130「声明了却从不接线」的
+另一种形态：脚本「能用」，但它产出的东西和库里的不是同一个）。
+
+批次 44 写 `build_oak_tree_season.py` 时已经发现并修正了这一点，其文件头
+原话：「批次 19 的 oak_tree 侧躺（Blender 内 x∈[-0.25,0.25] / z∈[-1.01,-0.2]），
+本脚本改为 Z-up 修正该缺陷」，且 `VARIANTS` 里带 `'oak_tree': 'summer'`
+（「原版绿；用于（可选）修正批次 19 的 oak_tree.glb」）。
+
+**当前正确做法**（批次 51 起）：
+
+    blender --background --python 3d_script/build_oak_tree_season.py -- \
+      ClientWeb/src/assets/models/nature/oak_tree.glb
+
+即：夏版橡树也走 `build_oak_tree_season.py`（stem `oak_tree` → variant `summer`），
+**本脚本仅作历史留档**。
+
+## 教训
+
+「资产是脚本产的」这个假设在跨越多批次后会悄悄失效：脚本被修好、或资产被
+单独修好，两边不再同步，而**没有任何判据检查「用当前脚本重跑能否复现库里的
+资产」**。批次 51 的 gamma 重导（必须重跑每一个脚本）才把这条裂缝暴露出来
+—— 若不是必须全量重导，`oak_tree.glb` 会永远带着一个「看起来能用但其实是
+坏的」的生成器。
+
+> 更彻底的做法是给 `verify_glb_aabb.py` 加一条「可复现性」判据
+> （重跑脚本 → 比对包围盒），代价是每次门禁要跑 N 次 Blender。
+> 本批未做，登记为遗留。
+
+## 以下为批次 19 原始脚本（仅留档，勿执行）
+"""
 build_oak_tree — 橡树（oak_tree）Blender headless 导出脚本（19-Blender3D模型集成）。
 
 ⚠️ **已废弃（勿用于重导）**：本脚本按「作者自定 Y-up」建模（约定 y=上），经 glTF Yup

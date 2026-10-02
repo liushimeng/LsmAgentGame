@@ -16,6 +16,8 @@ __common__ — Blender headless 导出工具集（19-Blender3D模型集成）。
   center_content_xz(objs=None)           — 批次 44：把内容盒在两个**水平**轴（Blender X/Y）上居中
   weld_split_vertices(obj, threshold)    — 批次 50：焊接 Blender 立方体按面分裂的顶点（锐边保硬）
   strip_uvs(obj)                        — 批次 50：剥掉死 UV 层（纯色 PBR 件省 ~25% 顶点字节）
+  srgb_to_linear(c)                     — 批次 51：sRGB→线性逐通道（glTF 规范要求）
+  _hex_to_rgb(hex, linear=True)         — 批次 51：hex → 线性 0..1（**唯一换算入口**）
   apply_pbr(obj, base_color, rough, metal, emissive=None, emissive_intensity=0.0)
   make_material(name, base_color, rough, metal, emissive=None, emissive_intensity=0.0) — 返回 mat
   weathered_pbr(obj, base_color, rough, metal, *, wear=0.35, grime='#3a352c', scale=6.0)
@@ -295,6 +297,11 @@ def make_material(name: str, base_color: str, rough: float, metal: float,
                   alpha: float = 1.0):
     """创建 PBR 材质（Principled BSDF）。base_color 接受 "#rrggbb"。
 
+    ⚠ **批次 51 起，`base_color` / `emissive` 会被做 sRGB→线性换算**
+      （见 `srgb_to_linear` 的说明）。全城 72 个 GLB 此前把 sRGB 值当线性值存，
+      导致整城提亮一档。本函数是**唯一的换算入口** —— 不要在任何 build 脚本里
+      手工再换一次。
+
     alpha < 1.0 → 接线 Principled Alpha 输入，glTF 导出为 alphaMode BLEND
     （批次 41 车窗玻璃用；既有调用点缺省 1.0，行为逐字节不变）。
     """
@@ -352,14 +359,51 @@ def join_objects(objs, name: str):
     return joined
 
 
-def _hex_to_rgb(hex_str: str):
-    """'#rrggbb' / 'rrggbb' → (r, g, b) 浮点 0..1。"""
+def srgb_to_linear(c: float) -> float:
+    """sRGB 编码值（0..1）→ 线性值（0..1）。逐通道。
+
+    ## 为什么需要（批次 51：全城 72 个 GLB 的 `baseColorFactor` 存的是 sRGB）
+
+    glTF 2.0 规范要求 `pbrMetallicRoughness.baseColorFactor` 是**线性**颜色。
+    而 `CITY_PALETTE` 里的 `#rrggbb` 是**设计师按屏幕效果挑的 sRGB 值** ——
+    `_hex_to_rgb()` 把它除以 255 得到 0..1 就直接塞进 Principled BSDF 的
+    `Base Color`，Blender 的 Python API 对 `default_value` **不做任何转换**，
+    于是 sRGB 值被当作线性值存下来。
+
+    实测（批次 51 开工前核对）：
+        `Substation_Concrete_Mat.baseColorFactor = (0.7137, 0.7020, 0.6784)`
+        正是 `#b6b3ad` 的 sRGB 值；正确线性值应为 `(0.468, 0.451, 0.418)`。
+
+    渲染后果：three.js 按线性值做光照与输出编码，**整城提亮一档** ——
+    近黑的轮胎（`#1c1e22`，sRGB 0.11）渲成中灰，信号灯壳（`#17191d`）渲成浅灰，
+    沥青路面（`#3f4247`，线性应为 0.05）渲成 0.25 的水泥灰。
+
+    ## 影响面提醒：`emissive` 也要换算
+
+    `emissiveFactor` 同样是线性量。批次 41~50 的**夜间自发光目标值全部是在
+    「emissive 存 sRGB」的前提下调出来的**（如站名牌蓝 `#1a4f9c`：sRGB 0.10 vs
+    线性 0.028，差 3.5 倍）。换算后夜间灯/sign 会明显变暗，
+    **必须同步上调各组件的 `litMaterials` 目标值**，否则夜景整体塌一层。
+    """
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def _hex_to_rgb(hex_str: str, linear: bool = True):
+    """'#rrggbb' / 'rrggbb' → (r, g, b) 浮点 0..1。
+
+    `linear=True`（默认，批次 51 起）先取 sRGB 值再逐通道过 `srgb_to_linear`，
+    产出 glTF 规范要求的线性色。`linear=False` 返回原始 sRGB 值 ——
+    仅供「明确知道自己要 sRGB」的调用方（如离线做色卡对比的诊断脚本）使用。
+    """
     s = hex_str.lstrip('#')
     if len(s) != 6:
         raise ValueError(f'bad hex color: {hex_str}')
-    return (int(s[0:2], 16) / 255.0,
-            int(s[2:4], 16) / 255.0,
-            int(s[4:6], 16) / 255.0)
+    rgb = (int(s[0:2], 16) / 255.0,
+           int(s[2:4], 16) / 255.0,
+           int(s[4:6], 16) / 255.0)
+    if not linear:
+        return rgb
+    return tuple(srgb_to_linear(c) for c in rgb)
 
 
 def bake_transforms() -> list:
