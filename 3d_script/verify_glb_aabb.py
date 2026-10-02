@@ -222,6 +222,17 @@ TARGETS = {
                                       pivot='脚底 minY=0，X/Z 居中；座面向 +Z（面朝方向）'),
     'civic/park_lamp.glb':       dict(x=0.038, y=0.320, z=0.038,
                                       pivot='基座底 minY=0，X/Z 居中；灯罩材质名 ParkLamp_Lantern_Mat'),
+    # ── 批次 46 城市公用设施三件（build_substation / _gas_station / _heli_pad）──
+    # 表值 = GLB 实测真值（world 单位，1 单位 = 10 m）。
+    # 三件主包围轴都落在水平轴（变电站是 18.3×19.7 的平面院落 + 12 m 电杆；
+    # 加油站是 25.9×20.1 的大跨罩棚；停机坪是 ⌀28.2 的圆台），属**正确摆放**，
+    # 一律走默认 'target' 模式：直立性由 Y 尺寸判据 + minY=0 保证。
+    'civic/substation.glb':  dict(x=1.834, y=1.241, z=1.967,
+                                  pivot='围墙基础 minY=0，X/Z 居中；大门朝导出 -Z（Blender +Y 面）'),
+    'civic/gas_station.glb': dict(x=2.593, y=0.940, z=2.007,
+                                  pivot='柱脚 minY=0，X/Z 居中；进站口朝导出 +Z（Blender -Y 面）'),
+    'civic/heli_pad.glb':    dict(x=2.820, y=0.409, z=2.820,
+                                  pivot='台体底 minY=0，X/Z 居中；⌀28.2 m 圆形台体天然居中'),
 }
 
 # 直立判据的例外：长轴落在水平轴属正确摆放。

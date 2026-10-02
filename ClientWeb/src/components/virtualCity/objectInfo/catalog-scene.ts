@@ -57,9 +57,9 @@ export const SCENE_ENTRIES: ObjectInfoEntry[] = [
     icon: '🚁',
     name: { 'zh-CN': '直升机坪', en: 'Heli-pad', ja: 'ヘリポート' },
     desc: {
-      'zh-CN': '应急与商务直升机停机坪，提供城市空中快速通道。',
-      en: 'A heli-pad for emergency and business helicopters — the city’s fast lane through the sky.',
-      ja: '緊急・業務用ヘリコプターの発着場。都市の空中快速路を提供する。',
+      'zh-CN': '应急与商务直升机停机坪，⌀28 m 中型机位：白色 FATO 圆环、H 标识、8 盏绿色着陆区灯与 12 盏助航边灯（ICAO Annex 14 Vol.II 标线与灯光体系）。',
+      en: 'A heli-pad for emergency and business helicopters: a ⌀28 m medium deck with the ICAO Annex 14 Vol.II scheme — white FATO ring, H marking, 8 green touchdown-area lights and 12 edge lights.',
+      ja: '緊急・業務用ヘリコプターの発着場。⌀28 m の中型着陸面。ICAO Annex 14 Vol.II に準拠した白色 FATO 環・H 表示・8 灯の緑色着陸灯・12 灯の縁灯を備える。',
     },
   },
   {

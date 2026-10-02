@@ -217,6 +217,31 @@ export const REAL_DIMS_M = {
   waterTower: { x: 3.6, y: 13.3, z: 3.6, minY: 0 },
   policeStation: { x: 12.1, y: 6.6, z: 7.0, minY: 0 },
   fireStation: { x: 18.1, y: 8.5, z: 8.0, minY: 0 },
+
+  // ── 批次 46 城市公用设施（表值 = 3d_script/verify_glb_aabb.py 实测真值）──
+  /**
+   * 城区 10/35kV 配电站 18.34 × 12.41 × 19.67 m。
+   * x = 围墙外轮廓（18.0 + 压顶外挑 0.34）；z = 围墙半深 7.17 + 出线电杆位
+   * 9.65 + 引下线段 2.85；y = 电杆全高（杆脚墩 0.40 + 杆 12.0 + 渐收帽）。
+   * 依据 GB 50059-2011 §2.0.5（实体围墙 ≥2.2 m，实测 2.45 m）+ GB 50053-2013
+   * §4.2.2（变压器外廓距围栏 ≥0.8 m / 底部距地 ≥0.3 m）。GLB `civic/substation`。
+   */
+  substation: { x: 18.34, y: 12.41, z: 19.67, minY: 0 },
+  /**
+   * 加油站 25.93 × 9.40 × 20.07 m。
+   * x = 形象牌外缘 14.72 ~ 罩棚右缘 11.21；y = 形象牌灯箱顶（杆 9.0 + 灯箱 2.6/2
+   * + 边框 0.10）；z = 罩棚天沟 -7.26 ~ 站房屋面 12.81。
+   * 罩棚投影 22×14 = 308 ㎡，檐口下**有效净高 4.70 m**（GB 50156-2012 要求
+   * 不小于 4.5 m）。GLB `civic/gas_station`。
+   */
+  gasStation: { x: 25.93, y: 9.4, z: 20.07, minY: 0 },
+  /**
+   * 直升机停机坪 ⌀28.20 × 4.09 m。
+   * TLOF 标称直径 28.0 m（中型机位，ICAO Annex 14 Vol.II：按旋翼直径 1.5 倍）；
+   * y = 坪面标高 0.49 + 风向袋杆 3.60。
+   * GLB `civic/heli_pad`。
+   */
+  heliPad: { x: 28.2, y: 4.09, z: 28.2, minY: 0 },
 } as const satisfies Record<string, RealDimsM>;
 
 /**
@@ -334,6 +359,10 @@ export const MODEL_AXIS_CONVENTIONS: Readonly<Partial<Record<RealDimKey, ModelAx
   cityHall: { upright: true },
   commTower: { upright: true },
   waterTower: { upright: true },
+  // 批次 46 城市公用设施三件：主包围轴**均落在水平轴**（变电站 18.3×19.7 的平面
+  // 院落、加油站 25.9×20.1 的大跨罩棚、停机坪 ⌀28.2 圆台）—— 声明 upright 会
+  // 反向误报（判据 ⑤ 要求 Y 主导）。同 policeStation/fireStation 先例：**不声明**，
+  // 轴向错误由「三轴互异 + Y 尺寸判据」兜住，直立性由 minY=0 承担。
 
   // ── 植被 ──
   // 橡树四季（前 3 变体同尺寸 4.5×10.1×4.7、冬季 4.12×9.55×3.82）、

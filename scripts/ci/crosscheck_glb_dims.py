@@ -74,6 +74,10 @@ KEY_MAP = {
     "parkFitness": "civic/park_fitness",
     "parkBench": "civic/park_bench",
     "parkLamp": "civic/park_lamp",
+    # 批次 46 城市公用设施三件（设计 46 §3）
+    "substation": "civic/substation",
+    "gasStation": "civic/gas_station",
+    "heliPad": "civic/heli_pad",
 }
 
 # 程序化 fallback 专用、无 GLB ⇒ 不送检（但解析出来打印，便于人眼核对）。

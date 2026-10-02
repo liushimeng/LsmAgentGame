@@ -1,22 +1,28 @@
 /**
- * 医疗直升机坪（18-AA · §5.2 HeliPad）
- *   圆坪（白色 H + 圆环标线 + 4 角边灯 + 风向袋）。布点 (15.5, 22)，直径 u(28)。
+ * 医疗直升机坪（18-AA · §5.2 HeliPad）。布点 (15.5, 22)。
  *
- * 批次 28 二轮（DC 攻坚）：11 mesh → 4 mesh（几何全等合并，engine3d/geoMerge）：
- *   1) 圆坪 mesh：保持独立（receiveShadow 接地面 + 粗糙度 0.85 专属）。
- *   2) 风向袋 mesh（顶点色）：圆柱杆 + 三角锥合并 —— 颜色逐件保留。
- *   3) 标线 mesh（顶点色）：圆环 + H 两竖一横 4 件 plane 合并 —— 保留
- *      meshBasicMaterial 半透明（transparent 0.9 + DoubleSide）材质类。
- *   4) 边灯 mesh：4 颗 emissive 红球合并（材质逐字段保留）。
- * 批次 28 二轮取舍：杆/锥粗糙度统一 0.85（原 1.0 / 0.7）、金属度 0.25
- *   （原 0.5 / 0）；caster 裁剪——市政设施不投影（shadow pass 实测 1044 DC
- *   超 500 阈值，只留楼体+树干）。
+ * 批次 46「城市公用设施真实感」：接入 Blender GLB（`civic/heli_pad.glb`
+ * ＋ `3d_script/build_heli_pad.py`）。
+ *
+ * ── 与另两件的差别：fallback **不需要重建** ───────────────────────────
+ *   批次 18-AA 的程序化圆坪是 `CircleGeometry(u(14))` —— ⌀28 m 的 TLOF 尺度
+ *   **本来就合规**（ICAO Annex 14 Vol.II：中型机位常用 ⌀15~30 m），
+ *   且 GLB 同样是 ⌀28.2 m 的圆台 ⇒ 双路径包围盒天然一致（§27.3-7 满足）。
+ *   缺的是台体厚度、FATO 圆环线宽、着陆区（TLOF）内嵌绿灯与助航边灯 ——
+ *   这些在 GLB 侧补齐，fallback 侧保持现状（降级链只在 GLB 不可用时出现）。
+ *
+ * ── 标线标高（GLB 侧的三层叠压，fallback 用贴地 y 近似）─────────────────
+ *   0.49 坪面 → 0.49 FATO 白色外盘(⌀27.4) → 0.50 内覆(⌀26.0) → 0.53 H / 着陆区灯。
+ *   任何一层压错都会被上层整盘盖掉（批次 46 首版即踩过：H 标识被内覆盘吞没）。
+ *
+ * ── 降级链（§27.3-3）──────────────────────────────────────────────────
+ *   `blenderModelsEnabled()` → `modelUrl` → GLB 载入 → 否则本文件的程序化几何。
  */
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { mergeParts, type MergePart } from '@/engine3d';
 import { u } from '../cityScale';
-import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+import { CivicGlbPiece } from './CivicGlb';
 
 const PAD_WHITE = '#d8d4ca';
 const PAD_LINE = '#e8e8e8';
@@ -28,6 +34,12 @@ const CONE_ORANGE = '#ff8b1a';
 const SOCK_ROUGH = 0.85;
 const SOCK_METAL = 0.25;
 
+/** 夜间自发光：着陆区内嵌绿灯 3.0 / 助航边灯 3.0。 */
+const LIT = {
+  HeliPad_TLOF_Green: 3.0,
+  HeliPad_EdgeLight: 3.0,
+};
+
 /** 欧拉旋转 + 平移的部件矩阵（等价原 JSX 的 rotation + position 组合）。 */
 function partMatrix(x: number, y: number, z: number, rx: number, ry: number, rz: number): THREE.Matrix4 {
   return new THREE.Matrix4().compose(
@@ -38,8 +50,6 @@ function partMatrix(x: number, y: number, z: number, rx: number, ry: number, rz:
 }
 
 export function HeliPad() {
-  const info = useObjectInfoProps('civic.heli-pad', { anchorY: 0.5 });
-
   // 圆坪（保持独立 mesh：地面 receiveShadow）
   const padGeo = useMemo(() => {
     const g = new THREE.CircleGeometry(u(14), 48);
@@ -59,15 +69,12 @@ export function HeliPad() {
   );
   useEffect(() => () => sockGeo.dispose(), [sockGeo]);
 
-  // 标线：圆环 + H 两竖一横（4 件 plane，basic 半透明 + 顶点色）
+  // 标线：FATO 圆环 + H 两竖一横（basic 半透明 + 顶点色）
   const markGeo = useMemo(() => {
     const parts: MergePart[] = [
-      // 圆环标线（外圈）
       { geo: new THREE.RingGeometry(u(12.5), u(13), 48), matrix: partMatrix(0, 0.001, 0, -Math.PI / 2, 0, 0), color: PAD_LINE },
-      // H 字符两竖
       { geo: new THREE.PlaneGeometry(u(0.6), u(7)), matrix: partMatrix(-u(3.5), 0.002, 0, -Math.PI / 2, 0, 0), color: PAD_WHITE },
       { geo: new THREE.PlaneGeometry(u(0.6), u(7)), matrix: partMatrix(u(3.5), 0.002, 0, -Math.PI / 2, 0, 0), color: PAD_WHITE },
-      // H 字符一横
       { geo: new THREE.PlaneGeometry(u(7.5), u(0.6)), matrix: partMatrix(0, 0.002, 0, -Math.PI / 2, 0, 0), color: PAD_WHITE },
     ];
     return mergeParts(parts);
@@ -87,23 +94,32 @@ export function HeliPad() {
   useEffect(() => () => lightGeo.dispose(), [lightGeo]);
 
   return (
-    <group {...info} position={[15.5, 0.05, 22]}>
-      {/* 圆坪 */}
-      <mesh geometry={padGeo} receiveShadow>
-        <meshStandardMaterial color={PAD_WHITE} roughness={0.85} />
-      </mesh>
-      {/* 风向袋：圆柱杆 + 三角锥（caster 裁剪不投影） */}
-      <mesh geometry={sockGeo}>
-        <meshStandardMaterial vertexColors roughness={SOCK_ROUGH} metalness={SOCK_METAL} />
-      </mesh>
-      {/* 标线：圆环 + H（basic 半透明，DoubleSide） */}
-      <mesh geometry={markGeo}>
-        <meshBasicMaterial vertexColors side={THREE.DoubleSide} transparent opacity={0.9} />
-      </mesh>
-      {/* 4 角边灯（emissive 红） */}
-      <mesh geometry={lightGeo}>
-        <meshStandardMaterial color={LIGHT_RED} emissive={LIGHT_RED} emissiveIntensity={0.8} />
-      </mesh>
-    </group>
+    <CivicGlbPiece
+      glbName="heli_pad"
+      dimsKey="heliPad"
+      infoId="civic.heli-pad"
+      anchorY={1.4}
+      position={[15.5, 0.05, 22]}
+      litMaterials={LIT}
+      fallback={
+        <>
+          <mesh geometry={padGeo} receiveShadow>
+            <meshStandardMaterial color={PAD_WHITE} roughness={0.85} />
+          </mesh>
+          {/* 风向袋：圆柱杆 + 三角锥（caster 裁剪不投影） */}
+          <mesh geometry={sockGeo}>
+            <meshStandardMaterial vertexColors roughness={SOCK_ROUGH} metalness={SOCK_METAL} />
+          </mesh>
+          {/* 标线：FATO 圆环 + H（basic 半透明，DoubleSide） */}
+          <mesh geometry={markGeo}>
+            <meshBasicMaterial vertexColors side={THREE.DoubleSide} transparent opacity={0.9} />
+          </mesh>
+          {/* 4 角边灯（emissive 红） */}
+          <mesh geometry={lightGeo}>
+            <meshStandardMaterial color={LIGHT_RED} emissive={LIGHT_RED} emissiveIntensity={0.8} />
+          </mesh>
+        </>
+      }
+    />
   );
 }

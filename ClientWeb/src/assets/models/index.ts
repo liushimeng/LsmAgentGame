@@ -48,7 +48,23 @@ export function modelUrl(category: ModelCategory, name: string): string {
 
 /** 模型名字面量（与 3d_script/build_*.py 文件名一一对齐，禁止运行时拼字符串）。 */
 export const MODEL_NAMES = {
-  civic: ['city_hall', 'comm_tower', 'water_tower', 'fire_station', 'police_station'] as const,
+  civic: [
+    'city_hall', 'comm_tower', 'water_tower', 'fire_station', 'police_station',
+    // 批次 46 城市公用设施三件（3d_script/build_substation|_gas_station|_heli_pad.py）：
+    //   substation   = 城区 10/35kV 配电站 18.34×12.41×19.67 m（围墙 2.45 m + 12 m 出线电杆）
+    //   gas_station  = 加油站 25.93×9.40×20.07 m（罩棚净高 4.70 m，进站口朝 three +Z）
+    //   heli_pad     = ⌀28.20×4.09 m 直升机停机坪（FATO 环 + H 标识 + TLOF 着陆区灯）
+    // 消费方：civic/{Substation,GasStation,HeliPad}.tsx，均包
+    // `<Model>` 式降级链（GLB 缺失/未启用 ⇒ 原程序化几何）。
+    // 材质槽名（供昼夜调制）：Substation_Sign / GasStation_SIGN_Panel / GasStation_PUMP_Screen
+    //                        / HeliPad_TLOF_Green / HeliPad_EdgeLight。
+    //
+    // ⚠ park_bench / park_pavilion / park_playground / park_fitness / park_lamp
+    //   （批次 45）**未登记在本表** —— 属批次 45 遗留的 §130 缺口（`ParkExtras.tsx`
+    //   以 `glbName: string` 形参直传 modelUrl，绕过了本表的字面量约束）。
+    //   本批不越界修，后续「asset 接线收口」批次统一处理。
+    'substation', 'gas_station', 'heli_pad',
+  ] as const,
   vehicles: [
     'sedan', 'truck', 'bus', 'taxi',
     // 批次 41 涂装变体（A6）：sedan_silver 银灰漆（尺寸同 sedan）/ truck_white 白漆
