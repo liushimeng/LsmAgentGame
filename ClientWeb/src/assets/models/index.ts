@@ -64,6 +64,10 @@ export const MODEL_NAMES = {
     //   以 `glbName: string` 形参直传 modelUrl，绕过了本表的字面量约束）。
     //   本批不越界修，后续「asset 接线收口」批次统一处理。
     'substation', 'gas_station', 'heli_pad',
+    // 批次 47 体育场（3d_script/build_sports_field.py）：200 m 半圆式田径场
+    //   110.0×15.58×74.0 m（6 道 × 1.22 m，r=20 m，单侧直道 37.17 m ⇒ 精确 200 m）。
+    //   消费方：civic/SportsField.tsx。材质槽名 `Stadium_Floodlight`（夜间 2.6）。
+    'sports_field',
   ] as const,
   vehicles: [
     'sedan', 'truck', 'bus', 'taxi',

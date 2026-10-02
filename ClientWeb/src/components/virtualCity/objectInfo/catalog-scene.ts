@@ -32,12 +32,12 @@ export const SCENE_ENTRIES: ObjectInfoEntry[] = [
   {
     id: 'civic.sports-field',
     category: 'civic',
-    icon: '⚽',
-    name: { 'zh-CN': '运动场', en: 'Sports Field', ja: 'スポーツ場' },
+    icon: '🏟',
+    name: { 'zh-CN': '体育新城体育场', en: 'Sports New City Stadium', ja: 'スポーツ新都心スタジアム' },
     desc: {
-      'zh-CN': '带跑道与球门的综合运动场，供市民锻炼健身与举办社区赛事。',
-      en: 'A multi-sport field with running track and goals for exercise and community matches.',
-      ja: 'トラックとゴールを備えた総合スポーツ場。市民の運動やコミュニティ大会に使われる。',
+      'zh-CN': '体育新城的 200 m 六道半圆式田径场（内沿半径 20 m、外沿 27.32 m），内场铺七人制人造草足球场，主看台 5 排带罩棚，四角 15 m 高杆灯夜间照明。',
+      en: 'The 200 m six-lane half-circle athletics track of Sports New City (20 m inner kerb, 27.32 m outer), with a seven-a-side artificial-turf pitch inside, a five-row covered main stand, and four 15 m floodlight masts.',
+      ja: 'スポーツ新都心の 200 m 6 レーン半円式トラック（内側 20 m・外側 27.32 m）。内側に 7 人制人工芝サッカー場、5 段屋根付きメインスタンド、四隅に 15 m 照明塔を備える。',
     },
   },
   {

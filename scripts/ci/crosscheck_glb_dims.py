@@ -78,6 +78,8 @@ KEY_MAP = {
     "substation": "civic/substation",
     "gasStation": "civic/gas_station",
     "heliPad": "civic/heli_pad",
+    # 批次 47 体育场（设计 47 §3）
+    "sportsField": "civic/sports_field",
 }
 
 # 程序化 fallback 专用、无 GLB ⇒ 不送检（但解析出来打印，便于人眼核对）。

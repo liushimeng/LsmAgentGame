@@ -233,6 +233,11 @@ TARGETS = {
                                   pivot='柱脚 minY=0，X/Z 居中；进站口朝导出 +Z（Blender -Y 面）'),
     'civic/heli_pad.glb':    dict(x=2.820, y=0.409, z=2.820,
                                   pivot='台体底 minY=0，X/Z 居中；⌀28.2 m 圆形台体天然居中'),
+    # ── 批次 47 体育场（build_sports_field.py）────────────────────────────
+    # 200 m 六道半圆式田径场：长轴 = X（场地 110×74 m 的平面场馆）⇒ axis='x_flat'，
+    # 与车辆/街具/公园设施同类。直立性由 Y 尺寸判据（灯杆 15.58 m）+ minY=0 保证。
+    'civic/sports_field.glb': dict(x=11.000, y=1.558, z=7.400, axis='x_flat',
+                                    pivot='基面 minY=0，X/Z 居中；主看台在 Blender +Y 侧'),
 }
 
 # 直立判据的例外：长轴落在水平轴属正确摆放。

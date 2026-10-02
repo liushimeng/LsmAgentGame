@@ -162,10 +162,15 @@ export function Road({ from, to, kind, yOffset = 0 }: Props) {
 
   return (
     <group {...info} rotation={[0, angle, 0]} position={[from[0], 0, from[1]]}>
-      {/* ① 主车道（z ∈ [-w/2, w/2]；标线烘焙贴图 / 纯色降级） */}
+      {/* ① 主车道（z ∈ [-w/2, w/2]；标线烘焙贴图 / 纯色降级）
+       *  ⚠ `PlaneGeometry` 是**居中**的（y ∈ [-len/2, len/2]），而 `from` 是路段的
+       *    **起点**。不补 `len/2` 的话整条路面会沿轴线反向平移半条长度 ——
+       *    沥青面与它自己的人行道（`RoadMarkings.partMatrix` 里已按 `lz = len/2`
+       *    正确补偿）、路灯、红绿灯全线错开半条路。批次 47 修体育场时被顶视截图抓到。
+       *    `angle = atan2(dx, dz)` 使组局部 +Z 即 from→to 方向，故沿 +Z 补 len/2。 */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, elevated ? 0.036 : roadY, 0]}
+        position={[0, elevated ? 0.036 : roadY, len / 2]}
         geometry={deckGeo}
         receiveShadow
       >

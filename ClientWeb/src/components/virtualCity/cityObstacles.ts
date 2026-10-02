@@ -22,6 +22,7 @@ import {
   type RoadNetwork,
 } from './roadNetwork';
 import { VIRTUAL_CITY_DISTRICTS } from '@/types/virtualCity';
+import { LANDMARK_FIELDS } from './cityLandmarks';
 import { ROAD_WIDTH_MAIN, ROAD_WIDTH_SIDE } from './cityScale';
 
 // ── 水域常量（唯一事实来源；原 VirtualCityCityMap::WaterLayer 持有）──────────
@@ -51,6 +52,29 @@ export const PORT_POOL_WATER: WaterBody = {
 
 /** 全部水域（布点 keep-out 与桥位过滤共用）。 */
 export const WATER_BODIES: readonly WaterBody[] = [CANAL_WATER, PORT_POOL_WATER];
+
+// ── 地面场馆保留地（批次 47 新增）────────────────────────────────────────
+/**
+ * 体育场用地（轴对齐矩形）**与水域同档**：`isBuildable()` 一律让开。
+ *
+ * 定义放在 leaf 模块 `cityLandmarks.ts`（零 import），因为道路网也要消费同一份数据 ——
+ * `roadNetwork` 的 `conn-fin_sub_center~sports_new_city` 与 `edge-sports_new_city`
+ * 两条路的端点都落在体育场中心，不截断就会横穿跑道；而 `cityObstacles` 本身 import
+ * `roadNetwork`，反向 import 会成环。
+ *
+ * 与中央公园的差异：`central_park` 是在 `building_layout.ts` 里按 `isPark` 走**另一条
+ * 布点分支**（散布小品而非街墙）；体育场是「单一大场馆 + 周边街墙」，所以按
+ * **矩形保留地**处理，`building_layout` 的既有语义（不通过则丢弃槽位、不递补）直接生效。
+ *
+ * 尺寸口径：110×74 m = `cityScale.REAL_DIMS_M.sportsField`（即 GLB 包围盒）。
+ */
+export { LANDMARK_FIELDS, SPORTS_FIELD_AREA, segHitsLandmark, trimSegmentToLandmarks } from './cityLandmarks';
+
+/** 全部地面保留地（水域 + 场馆）。 */
+export const RESERVED_FIELDS: readonly WaterBody[] = [
+  ...WATER_BODIES,
+  ...LANDMARK_FIELDS.map((f) => ({ minX: f.minX, maxX: f.maxX, minZ: f.minZ, maxZ: f.maxZ })),
+];
 
 // ── 类型 ─────────────────────────────────────────────────────────────────
 
@@ -132,9 +156,19 @@ export function onFirstRing(x: number, z: number, margin = 0): boolean {
   return Math.abs(d - FIRST_RING_CORRIDOR.radius) < FIRST_RING_CORRIDOR.halfWidth + margin;
 }
 
+/** 点是否落入任一**地面保留地**（水域 + 体育场等场馆；含 margin 外扩）。 */
+export function inReservedField(x: number, z: number, margin = 0): boolean {
+  for (const w of RESERVED_FIELDS) {
+    if (x >= w.minX - margin && x <= w.maxX + margin && z >= w.minZ - margin && z <= w.maxZ + margin) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * 综合判定：该点可否放置「地面实体」（建筑 / 树 / 灯 / 桶）。
- * = !inWater && !onRoadCorridor && !onFirstRing
+ * = !inWater && !inReservedField && !onRoadCorridor && !onFirstRing
  */
 export function isBuildable(
   x: number,
@@ -142,7 +176,10 @@ export function isBuildable(
   margin = 0,
   corridors?: readonly RoadCorridor[],
 ): boolean {
-  return !inWater(x, z, margin) && !onRoadCorridor(x, z, margin, corridors) && !onFirstRing(x, z, margin);
+  return !inWater(x, z, margin)
+    && !inReservedField(x, z, margin)
+    && !onRoadCorridor(x, z, margin, corridors)
+    && !onFirstRing(x, z, margin);
 }
 
 /**

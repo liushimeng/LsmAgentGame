@@ -242,6 +242,19 @@ export const REAL_DIMS_M = {
    * GLB `civic/heli_pad`。
    */
   heliPad: { x: 28.2, y: 4.09, z: 28.2, minY: 0 },
+
+  // ── 批次 47 体育场（表值 = 3d_script/verify_glb_aabb.py 实测真值）────────
+  /**
+   * 200 m 半圆式田径场 110.0 × 15.58 × 74.0 m（长轴沿 X = 场长向）。
+   * 跑道本体（GB/T 跑道通用参数）= r=20.00 m + 6 道×1.22 m ⇒ 外半径 27.32 m、
+   * 单侧直道 37.17 m（闭式 2×37.17 + 2π×20.00 = 200.00 m）、外接 91.8×54.6 m；
+   * 场地 110×74 m 容下跑道外安全区 3 m、端部看台 2 排、主看台 5 排 + 罩棚、4.0 m
+   * 消防车道与 4.0 m 围网。内场 74.34×40 m 放七人制人造草 60×32 m
+   * （200 m 场放不下 11 人制 105×68 m —— 这是场地规格的硬约束）。
+   * Y = 灯杆 15.58 m（湖南省社会足球场地技术标准：11 人制 ≥15 m）。
+   * GLB `civic/sports_field`；布点由 `cityObstacles.SPORTS_FIELD_AREA` 保留地锁定。
+   */
+  sportsField: { x: 110.0, y: 15.58, z: 74.0, minY: 0 },
 } as const satisfies Record<string, RealDimsM>;
 
 /**
@@ -363,6 +376,8 @@ export const MODEL_AXIS_CONVENTIONS: Readonly<Partial<Record<RealDimKey, ModelAx
   // 院落、加油站 25.9×20.1 的大跨罩棚、停机坪 ⌀28.2 圆台）—— 声明 upright 会
   // 反向误报（判据 ⑤ 要求 Y 主导）。同 policeStation/fireStation 先例：**不声明**，
   // 轴向错误由「三轴互异 + Y 尺寸判据」兜住，直立性由 minY=0 承担。
+  // 批次 47 体育场：110×15.58×74 的平面场馆，长轴 X 主导 ⇒ 同 policeStation/
+  // fireStation 先例，**不登记条目**（空对象无意义，只会让人误以为已声明）。
 
   // ── 植被 ──
   // 橡树四季（前 3 变体同尺寸 4.5×10.1×4.7、冬季 4.12×9.55×3.82）、

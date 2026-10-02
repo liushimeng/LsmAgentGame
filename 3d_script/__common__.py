@@ -210,6 +210,12 @@ def make_material(name: str, base_color: str, rough: float, metal: float,
         bsdf.inputs['Emission Strength'].default_value = emissive_intensity
     if alpha < 1.0:
         bsdf.inputs['Alpha'].default_value = alpha
+        # ⚠ 只设 Principled Alpha **不足以**让 glTF 导出 BLEND：exporter 读的是材质的
+        #   渲染方式（Blender 4.2+ 的 `surface_render_method`，5.x 里旧的
+        #   `blend_method` 只是兼容属性）。不设就导出成 OPAQUE，网片/玻璃渲成实心板
+        #   （批次 47 体育场围网：alpha 0.35 的网片渲成一堵灰墙）。
+        if hasattr(mat, 'surface_render_method'):
+            mat.surface_render_method = 'BLENDED'
     return mat
 
 
@@ -485,6 +491,17 @@ CITY_PALETTE = {
     'tlof_green':      '#2ecc71',
     # 助航灯暖白（白炽/LED 泛光灯的暖白，与标线 reflect_white 的中性白区分）
     'lamp_warm':       '#fff4e0',
+    # ── 体育场馆（批次 47 新增；田径场是「塑胶跑道 + 人造草 + 看台」一套语义）──
+    # 塑胶跑道 PU 面（行业标准砖红；比建筑砖红 `brick` 更灰一档，避免与红砖建筑抢色）
+    'track_surface':   '#a35a48',
+    # 七人制人造草（比城市绿化 `foliage` 亮半档 —— 球场草经频繁修剪碾压，更浅更匀）
+    'turf_sports':     '#54903f',
+    # 体育场围网网片（镀锌深灰；比变电围栏 `fence_mesh` 冷半档，区分「看台围网」语义）
+    'fence_net':       '#6b7076',
+    # 体育场投光灯发光面（卤化物灯暖白，比航标 `lamp_warm` 更黄一档——功率大色温低）
+    'floodlight':      '#fff0cc',
+    # 看台座椅（体育场馆通用深蓝塑壳）
+    'stand_seat':      '#4a6a8a',
 }
 # 白/黑/警示红单列在表外（不是"材质语义"而是全城通用）：黑橡胶轮胎、红消防标识。
 

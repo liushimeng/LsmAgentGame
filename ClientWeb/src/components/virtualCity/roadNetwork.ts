@@ -23,6 +23,7 @@
  */
 
 import { districtCenter, type VirtualCityDistrictDef } from '@/types/virtualCity';
+import { trimSegmentToLandmarks } from './cityLandmarks';
 
 // ── 一环路常量（FirstRingRoad 组件同读此处，单一事实来源）────────────────
 /** 一环路半径（世界单位；内圈含 5 个内城区 tech/industry/oldtown/commerce/residential）。 */
@@ -132,6 +133,26 @@ export function buildRoadNetwork(
   const segments: RoadSegment[] = [];
   const gates: GateSpot[] = [];
 
+  /**
+   * 路段入库前的**场地避让**（批次 47）。
+   *
+   * connector / edgeLink 的端点都锚在 `districtCenter` 上，而体育场正落在「体育新城」
+   * (10, 40) 的区中心 —— 不处理的话 `conn-fin_sub_center~sports_new_city` 与
+   * `edge-sports_new_city` 两条路会**从跑道正中穿过去**（CDP 顶视截图实锤）。
+   * 这里在保留地边界处截断，语义是「路止于场馆前庭」，与真实城市做法一致；
+   * 整段都在保留地里的直接丢弃。
+   */
+  const pushSegment = (seg: RoadSegment) => {
+    const trimmed = trimSegmentToLandmarks(seg.from, seg.to);
+    if (trimmed === null) return;
+    segments.push(
+      trimmed.from[0] === seg.from[0] && trimmed.from[1] === seg.from[1]
+        && trimmed.to[0] === seg.to[0] && trimmed.to[1] === seg.to[1]
+        ? seg
+        : { ...seg, from: trimmed.from, to: trimmed.to },
+    );
+  };
+
   // ── ① 邻接次干道（k 近邻互通；去重；长度/总量双上限）──
   const centers = nonCbd.map((d) => ({ id: d.id, c: districtCenter(d.id) }));
   const seen = new Set<string>();
@@ -150,7 +171,7 @@ export function buildRoadNetwork(
       // CBD 禁入：穿金融 CBD 建筑区的邻接路拒绝（防 3D 重叠，用户反馈 2026-09-28）
       if (pointSegDist(0, 0, [c.x, c.z], [nc.x, nc.z]) < CONNECTOR_CBD_KEEP_OUT) continue;
       seen.add(pair);
-      segments.push({
+      pushSegment({
         key: `conn-${pair}`,
         from: [c.x, c.z],
         to: [nc.x, nc.z],
@@ -167,7 +188,7 @@ export function buildRoadNetwork(
       line.axis === 'x' ? [-ARTERIAL_HALF, line.at] : [line.at, -ARTERIAL_HALF];
     const to: [number, number] =
       line.axis === 'x' ? [ARTERIAL_HALF, line.at] : [line.at, ARTERIAL_HALF];
-    segments.push({
+    pushSegment({
       key: `arterial-${line.axis}${line.at}`,
       from,
       to,
@@ -184,7 +205,7 @@ export function buildRoadNetwork(
     const ux = c.x / r;
     const uz = c.z / r;
     const endR = HIGHWAY_RING_RADIUS - HIGHWAY_RING_WIDTH / 2 - 0.2; // 57.2
-    segments.push({
+    pushSegment({
       key: `edge-${id}`,
       from: [c.x, c.z],
       to: [ux * endR, uz * endR],
