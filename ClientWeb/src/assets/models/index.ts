@@ -68,6 +68,12 @@ export const MODEL_NAMES = {
     //   110.0×15.58×74.0 m（6 道 × 1.22 m，r=20 m，单侧直道 37.17 m ⇒ 精确 200 m）。
     //   消费方：civic/SportsField.tsx。材质槽名 `Stadium_Floodlight`（夜间 2.6）。
     'sports_field',
+    // 批次 48 港口码头（3d_script/build_port_terminal.py）：内河支线集装箱码头
+    //   81.6×34.6×64.0 m（80 m 泊位 / 2 台 STS 岸桥 / 40 只 40ft 箱 / RMG / 照明塔）。
+    //   消费方：civic/PortTerminal.tsx，**必须** `rotation=[0, π, 0]` 挂载
+    //   （Blender +Y 是海侧，导出后 three -Z；转 180° 后悬臂才罩住北面的港池）。
+    //   材质槽：Port_Container0..4（箱色分 5 槽）/ Port_NavLight（夜间 2.0）。
+    'port_terminal',
   ] as const,
   vehicles: [
     'sedan', 'truck', 'bus', 'taxi',

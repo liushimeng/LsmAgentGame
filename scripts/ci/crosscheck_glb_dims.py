@@ -80,6 +80,8 @@ KEY_MAP = {
     "heliPad": "civic/heli_pad",
     # 批次 47 体育场（设计 47 §3）
     "sportsField": "civic/sports_field",
+    # 批次 48 港口码头（设计 48 §3）
+    "portTerminal": "civic/port_terminal",
 }
 
 # 程序化 fallback 专用、无 GLB ⇒ 不送检（但解析出来打印，便于人眼核对）。

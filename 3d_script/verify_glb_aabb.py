@@ -238,6 +238,11 @@ TARGETS = {
     # 与车辆/街具/公园设施同类。直立性由 Y 尺寸判据（灯杆 15.58 m）+ minY=0 保证。
     'civic/sports_field.glb': dict(x=11.000, y=1.558, z=7.400, axis='x_flat',
                                     pivot='基面 minY=0，X/Z 居中；主看台在 Blender +Y 侧'),
+    # ── 批次 48 港口码头（build_port_terminal.py）──────────────────────────
+    # 泊位沿 X（80 m 泊长），岸桥**悬臂伸向 +Z 港池侧**（three 里 = -Z 局部），
+    # 故整件用 `rotation=[0, π, 0]` 挂载才能罩住北面的港池。长轴 X 主导 ⇒ x_flat。
+    'civic/port_terminal.glb': dict(x=8.160, y=3.460, z=6.400, axis='x_flat',
+                                    pivot='码头面 minY=0，X/Z 居中；岸壁线（局部 z=-0.7）在 +Z 侧'),
 }
 
 # 直立判据的例外：长轴落在水平轴属正确摆放。

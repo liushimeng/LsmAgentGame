@@ -22,11 +22,11 @@ export const SCENE_ENTRIES: ObjectInfoEntry[] = [
     id: 'civic.port-terminal',
     category: 'civic',
     icon: '⚓',
-    name: { 'zh-CN': '港口码头', en: 'Port Terminal', ja: '港湾ターミナル' },
+    name: { 'zh-CN': '物流港集装箱码头', en: 'Logistics Port Container Terminal', ja: '物流港コンテナターミナル' },
     desc: {
-      'zh-CN': '物流港的码头作业区，岸吊与集装箱堆场昼夜运转，支撑城市对外贸易。',
-      en: 'The working quay of the logistics port, where cranes and container yards run day and night for the city’s trade.',
-      ja: '物流港の埠頭作業区。岸壁クレーンとコンテナヤードが昼夜稼働し、都市の対外貿易を支える。',
+      'zh-CN': '物流港 80 m 集装箱泊位：2 台岸桥（轨距 16 m、外伸 26 m 罩住水面、起升 26 m）作业，堆场 40 只 40 ft 集装箱分 5 色堆垛两層，昼夜运转支撑城市对外贸易。',
+      en: 'An 80 m container berth at the logistics port: two STS cranes (16 m rail gauge, 26 m outreach, 26 m lift height) work the quay while 40 forty-foot containers are stacked two high in five liveries, running day and night for the city’s trade.',
+      ja: '物流港の 80 m コンテナ岸壁。2 基の STS クレーン（軌間 16 m・海側張り出し 26 m・揚程 26 m）が岸壁を稼働し、40 個 の 40 ft コンテナを 5 色・2 段で堆積。昼夜稼働し都市の対外貿易を支える。',
     },
   },
   {

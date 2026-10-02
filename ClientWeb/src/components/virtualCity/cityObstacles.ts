@@ -68,7 +68,10 @@ export const WATER_BODIES: readonly WaterBody[] = [CANAL_WATER, PORT_POOL_WATER]
  *
  * 尺寸口径：110×74 m = `cityScale.REAL_DIMS_M.sportsField`（即 GLB 包围盒）。
  */
-export { LANDMARK_FIELDS, SPORTS_FIELD_AREA, segHitsLandmark, trimSegmentToLandmarks } from './cityLandmarks';
+export {
+  LANDMARK_FIELDS, SPORTS_FIELD_AREA, PORT_TERMINAL_AREA,
+  segHitsLandmark, trimSegmentToLandmarks,
+} from './cityLandmarks';
 
 /** 全部地面保留地（水域 + 场馆）。 */
 export const RESERVED_FIELDS: readonly WaterBody[] = [

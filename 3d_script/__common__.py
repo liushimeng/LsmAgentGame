@@ -144,6 +144,30 @@ def make_taper(name: str, r_bot: float, r_top: float, h: float, segs: int, pos, 
     return obj
 
 
+def make_strut(name: str, p0, p1, w: float, h: float | None = None):
+    """**两点之间的杆件**（沿 Blender Z 轴对齐的 box，w×w 方形或 w×h 矩形截面）。
+
+    批次 48 新增。斜杆件（岸桥 A 字架腿 / 拉杆、桁架腹杆、支架）此前只能手算
+    `rotation_euler` —— 但 Blender 默认 XYZ 欧拉序下**同时绕 X 和 Z 转会得到
+    意料之外朝向**（批次 48 首版的 A 字架腿就翘成了两架「爬梯」）。
+    这里用 `Vector.to_track_quat('Z', 'Y')` 直接求「局部 +Z 对准 p1−p0」的朝向，
+    数学上精确、与欧拉序无关。
+
+    ⚠ 轴序同 `make_box`：尺寸是 **(X 截面, Y 截面, Z 杆长)**，且 Z 是杆长方向。
+    """
+    import mathutils
+    v0 = mathutils.Vector(p0)
+    d = mathutils.Vector(p1) - v0
+    length = d.length
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0))
+    obj = bpy.context.active_object
+    obj.name = name
+    obj.scale = (w, h if h is not None else w, length)
+    obj.location = (v0 + d * 0.5)
+    obj.rotation_euler = d.to_track_quat('Z', 'Y').to_euler()
+    return obj
+
+
 def center_content_xz(objs=None):
     """把整件内容盒在 **X/Z 上居中**（§27.3「原点 minY = 0 贴地、X/Z 居中」）。
 
@@ -502,6 +526,19 @@ CITY_PALETTE = {
     'floodlight':      '#fff0cc',
     # 看台座椅（体育场馆通用深蓝塑壳）
     'stand_seat':      '#4a6a8a',
+    # ── 港口码头（批次 48 新增；集装箱与港机是「物流语义」单列一族）──
+    # 集装箱箱体（锈蚀红棕：海运箱经多年盐雾与磕碰，褪成暗赭）
+    'container_red':   '#8f4a38',
+    # 集装箱波纹侧板的暗面（整箱一个色时，竖向波纹靠法线与 AO 读出来）
+    'container_shade': '#6f3a2c',
+    # 岸桥涂装（港机惯例：浅灰蓝机身 + 白色门架，比建筑 steel 冷半档）
+    'crane_body':      '#9aa3ab',
+    # 门架腿与桁架腹杆（深灰，比机身暗两档，拉开层次）
+    'crane_frame':     '#5c646c',
+    # 吊具与警示（安全橙红：吊具/防撞柱/护舷警示带共用）
+    'crane_warn':      '#d4622a',
+    # 橡胶护舷与轮胎吊轮胎（近黑橡胶）
+    'rubber_fender':   '#22262a',
 }
 # 白/黑/警示红单列在表外（不是"材质语义"而是全城通用）：黑橡胶轮胎、红消防标识。
 

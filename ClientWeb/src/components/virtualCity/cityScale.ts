@@ -255,6 +255,18 @@ export const REAL_DIMS_M = {
    * GLB `civic/sports_field`；布点由 `cityObstacles.SPORTS_FIELD_AREA` 保留地锁定。
    */
   sportsField: { x: 110.0, y: 15.58, z: 74.0, minY: 0 },
+
+  // ── 批次 48 港口码头（表值 = 3d_script/verify_glb_aabb.py 实测真值）────────
+  /**
+   * 内河支线集装箱码头 81.6 × 34.6 × 64.0 m。
+   * x = 泊位长（80 m 泊位 + 护舷外挑 1.6 m）；
+   * y = 岸桥 A 字架顶 34.6 m（轨下起升 26 m + A 字架 8.6 m）；
+   * z = **陆侧堆场后沿 → 悬臂罩住水面**：码头面进深 34 m + 岸桥外伸 26 m + 后伸 12 m。
+   * 依据 DB36/T 1833-2023（轨距 16 m）与岸桥通用参数；40 ft 箱 12.19×2.44×2.59 m
+   * （ISO 668）—— 批次 18-AA 的 6×2.6×2.4 m 既不是 40 ft 也不是 20 ft。
+   * GLB `civic/port_terminal`；陆侧用地由 `cityObstacles.PORT_TERMINAL_AREA` 锁定。
+   */
+  portTerminal: { x: 81.6, y: 34.6, z: 64.0, minY: 0 },
 } as const satisfies Record<string, RealDimsM>;
 
 /**
@@ -378,6 +390,7 @@ export const MODEL_AXIS_CONVENTIONS: Readonly<Partial<Record<RealDimKey, ModelAx
   // 轴向错误由「三轴互异 + Y 尺寸判据」兜住，直立性由 minY=0 承担。
   // 批次 47 体育场：110×15.58×74 的平面场馆，长轴 X 主导 ⇒ 同 policeStation/
   // fireStation 先例，**不登记条目**（空对象无意义，只会让人误以为已声明）。
+  // 批次 48 港口码头：81.6×34.6×64 的泊位 + 岸桥，长轴 X 主导 ⇒ 同上不登记。
 
   // ── 植被 ──
   // 橡树四季（前 3 变体同尺寸 4.5×10.1×4.7、冬季 4.12×9.55×3.82）、

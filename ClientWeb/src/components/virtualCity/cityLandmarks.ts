@@ -45,8 +45,26 @@ export const SPORTS_FIELD_AREA: LandmarkField = {
   label: 'civic.sports-field',
 };
 
+/**
+ * 港口码头**陆侧用地**（轴对齐矩形；只圈陆域，港池本身已由
+ * `cityObstacles.PORT_POOL_WATER` 作为水域保留）。
+ *
+ * 批次 48：码头从 `(-30, -9.5)` 搬到 `(-32, -8.7)` 并把尺度从 800×250 m 收到
+ * 81.6×64 m —— 旧码头面横贯城市西半部、**伸出城界 100 m**，且一路铺到 CBD 脚下。
+ * 新陆域 x∈[-36.1,-27.9]、z∈[-12.0,-8.0]（8×4 u），与 `logistics_port`
+ * 底板（x∈[-26,-18]）、`industrial_park`（x∈[-28,-20]）均不重叠。
+ * 岸桥悬臂伸到 z∈[-8,-5.7]，那一段落在港池里，已由水域保留地覆盖。
+ */
+export const PORT_TERMINAL_AREA: LandmarkField = {
+  minX: -36.1,
+  maxX: -27.9,
+  minZ: -12.0,
+  maxZ: -8.0,
+  label: 'civic.port-terminal',
+};
+
 /** 全部地面场馆保留地。 */
-export const LANDMARK_FIELDS: readonly LandmarkField[] = [SPORTS_FIELD_AREA];
+export const LANDMARK_FIELDS: readonly LandmarkField[] = [SPORTS_FIELD_AREA, PORT_TERMINAL_AREA];
 
 /** 线段与轴对齐矩形是否相交（Liang-Barsky 精确求交，不用采样）。 */
 function segRect(
