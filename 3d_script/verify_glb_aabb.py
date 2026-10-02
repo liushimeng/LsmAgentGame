@@ -206,6 +206,22 @@ TARGETS = {
     # 高于横挑长度），走默认 'target' 模式：由 Y 尺寸判据 + minY=0 保证「站得住」。
     'road/mast_arm_signal.glb':    dict(x=0.438, y=0.632, z=0.059,
                                         pivot='基础 minY=0，X/Z 居中；悬臂沿 X'),
+    # ── 批次 45 公园设施五件（build_park_pavilion / _playground / _fitness /
+    #    _bench / _lamp）───────────────────────────────────────────────────
+    # 表值 = 设计名义值（§27.0-1 调研规格），REAL_DIMS_M 记实测真值，两者差 <5%。
+    # pavilion / playground / fitness / bench 长轴（或主包围）= X/Z 属正确摆放
+    # （宽亭矮檐 / 组合设施一字排开 / 座椅正向 ⇒ axis='x_flat'，同车辆/街具判据）；
+    # lamp 为直立件走默认 'target' 直立判据。
+    'civic/park_pavilion.glb':   dict(x=0.610, y=0.515, z=0.535, axis='x_flat',
+                                      pivot='台基底 minY=0，X/Z 居中；入口台阶朝导出 -Z（Blender +Y 面）'),
+    'civic/park_playground.glb': dict(x=0.465, y=0.250, z=0.265, axis='x_flat',
+                                      pivot='立柱脚底 minY=0，X/Z 居中；滑道沿 +X，秋千在 +Z 侧'),
+    'civic/park_fitness.glb':    dict(x=0.395, y=0.210, z=0.140, axis='x_flat',
+                                      pivot='法兰底 minY=0，X/Z 居中；三件沿 X 一字排开'),
+    'civic/park_bench.glb':      dict(x=0.180, y=0.089, z=0.048, axis='x_flat',
+                                      pivot='脚底 minY=0，X/Z 居中；座面向 +Z（面朝方向）'),
+    'civic/park_lamp.glb':       dict(x=0.038, y=0.320, z=0.038,
+                                      pivot='基座底 minY=0，X/Z 居中；灯罩材质名 ParkLamp_Lantern_Mat'),
 }
 
 # 直立判据的例外：长轴落在水平轴属正确摆放。

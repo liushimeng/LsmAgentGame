@@ -142,12 +142,68 @@ export const SCENE_ENTRIES: ObjectInfoEntry[] = [
   {
     id: 'civic.park-extras',
     category: 'civic',
-    icon: '🎪',
-    name: { 'zh-CN': '公园设施', en: 'Park Facilities', ja: '公園施設' },
+    icon: '🚻',
+    name: { 'zh-CN': '公共卫生间', en: 'Public Restroom', ja: '公衆トイレ' },
     desc: {
-      'zh-CN': '公园内的凉亭、儿童乐园与公共卫生间等配套，提升游园体验。',
-      en: 'Park extras — pavilions, playgrounds and restrooms — that make a visit to the park comfortable.',
-      ja: '公園内の東屋、児童遊園、公衆トイレなどの付帯施設。遊園体験を高める。',
+      'zh-CN': '公园西北角的公共卫生间，服务全园游园时长（批次 45 起凉亭/游乐/健身/座椅/园灯单列条目）。',
+      en: 'The park’s public restroom in its northwest corner, serving visits of any length.',
+      ja: '公園北西隅の公衆トイレ。遊園時間を支える。',
+    },
+  },
+  // ── 批次 45 公园设施五件（方案 45 §4 B4：拆分自 civic.park-extras 单条目）──
+  {
+    id: 'park.pavilion',
+    category: 'civic',
+    icon: '⛩️',
+    name: { 'zh-CN': '六角亭', en: 'Hexagonal Pavilion', ja: '六角東屋' },
+    desc: {
+      'zh-CN': '青灰瓦攒尖顶六角亭：石台基、六根檐柱、柱间美人靠。清式小式比例（柱高 = 面宽 × 0.8）。',
+      en: 'A slate-roofed hexagonal pavilion on a stone plinth — six columns, a latticed balustrade seat, classical proportions.',
+      ja: '石台基の上の六角東屋。柱間には腰掛、青瓦の宝形造屋根。',
+    },
+  },
+  {
+    id: 'park.playground',
+    category: 'civic',
+    icon: '🛝',
+    name: { 'zh-CN': '儿童乐园', en: 'Children’s Playground', ja: '児童遊園' },
+    desc: {
+      'zh-CN': '组合滑梯与双座秋千：1.2 m 平台、32° 滑道、EPDM 柔性垫层，符合儿童活动场地安全要求。',
+      en: 'A slide-and-swings combo on a soft rubber pad — 1.2 m platform, 32° chute, safety surfacing throughout.',
+      ja: '滑り台とブランコの複合遊具。1.2 m プラットホーム、32° スライド、弾性舗装。',
+    },
+  },
+  {
+    id: 'park.fitness',
+    category: 'civic',
+    icon: '🏋️',
+    name: { 'zh-CN': '健身角', en: 'Fitness Corner', ja: '健康広場' },
+    desc: {
+      'zh-CN': '全民健身三件套：双位太空漫步机、扭腰器与单杠，器材绿涂装，落地地脚法兰锚固。',
+      en: 'The outdoor fitness trio — air walker, waist twister and pull-up bar — bolted to the ground in municipal green.',
+      ja: '屋外健身器材三種：スカイウォーカー、ウェストツイスター、鉄棒。',
+    },
+  },
+  {
+    id: 'park.bench',
+    category: 'civic',
+    icon: '🪑',
+    name: { 'zh-CN': '公园长椅', en: 'Park Bench', ja: '公園ベンチ' },
+    desc: {
+      'zh-CN': '三人位防腐木长椅（1.8 m，铸铝弓形脚）：座高 43 cm、靠背 103°，沿园路按 50~100 m 间隔布置。',
+      en: 'A 1.8 m timber bench on cast-aluminium legs — 43 cm seat, 103° back — spaced along the paths.',
+      ja: '1.8 m の防腐木ベンチ。通路沿いに 50~100 m 間隔で配置。',
+    },
+  },
+  {
+    id: 'park.lamp',
+    category: 'civic',
+    icon: '🏮',
+    name: { 'zh-CN': '庭院灯', en: 'Garden Lamp', ja: '庭園灯' },
+    desc: {
+      'zh-CN': '3 m 单头方罩庭院灯：暖白灯罩夜间渐亮，沿园路 10 m 交错布置，是公园夜景的骨架。',
+      en: 'A 3 m lantern-head garden lamp, warming up after dusk and spacing the paths every 10 m.',
+      ja: '高さ 3 m の庭園灯。日没後に明るさを増し、園路を 10 m 間隔で照らす。',
     },
   },
   {

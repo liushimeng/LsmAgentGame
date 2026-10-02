@@ -68,6 +68,12 @@ KEY_MAP = {
     #   它现在真的有 GLB 了（批次 30 起该键只是占位、零消费点，见批次 44 T12）。
     "streetTree": "nature/street_tree",
     "palmTree": "nature/palm_tree",
+    # 批次 45 公园设施五件（设计 45 §3）
+    "parkPavilion": "civic/park_pavilion",
+    "parkPlayground": "civic/park_playground",
+    "parkFitness": "civic/park_fitness",
+    "parkBench": "civic/park_bench",
+    "parkLamp": "civic/park_lamp",
 }
 
 # 程序化 fallback 专用、无 GLB ⇒ 不送检（但解析出来打印，便于人眼核对）。

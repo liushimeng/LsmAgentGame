@@ -22,9 +22,13 @@ import { groundTileUrl } from '@/assets/images/virtualCity';
 import { u } from '../cityScale';
 import { type MergePart, mergeParts, useSharedTexture } from '@/engine3d';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+import { PLAYGROUND_PAD, FITNESS_PAD } from './parkLayout';
 
 const FLOWER_COLORS = ['#c8453a', '#d8c44a', '#7c3aed', '#e07a3f'];
 const SOIL = '#4a3f30';
+/** 批次 45 C2：EPDM 安全垫色（游乐区红 / 健身区墨绿沙石，GB 51192 §6.2 柔性铺装）。 */
+const PAD_PLAY = '#b0413e';
+const PAD_FITNESS = '#3a5a40';
 
 /** 花坛合并统一粗糙度（批次 28 二轮取舍：土圈 0.95 / 花球 0.7 取中）。 */
 const BED_ROUGH = 0.85;
@@ -110,6 +114,26 @@ export function ParkGrounds() {
   }, [beds]);
   useEffect(() => () => bedGeo.dispose(), [bedGeo]);
 
+  // 批次 45 C2：儿童/健身场地安全垫（两块矩形 EPDM，y=0.030 高于园路 0.027；
+  // 纯几何色块零贴图；GB 51192-2016 §6.2「儿童活动场地宜选择柔性、耐磨的地面材料」）
+  const padGeo = useMemo(
+    () =>
+      mergeParts([
+        {
+          geo: new THREE.PlaneGeometry(u(PLAYGROUND_PAD.w), u(PLAYGROUND_PAD.d)),
+          matrix: flatMatrix(PLAYGROUND_PAD.x, 0.03, PLAYGROUND_PAD.z),
+          color: PAD_PLAY,
+        },
+        {
+          geo: new THREE.PlaneGeometry(u(FITNESS_PAD.w), u(FITNESS_PAD.d)),
+          matrix: flatMatrix(FITNESS_PAD.x, 0.03, FITNESS_PAD.z),
+          color: PAD_FITNESS,
+        },
+      ]),
+    [],
+  );
+  useEffect(() => () => padGeo.dispose(), [padGeo]);
+
   const info = useObjectInfoProps('landmark.park-grounds', { anchorY: 0.5 });
   return (
     <group {...info} position={[park.x, 0, park.z]}>
@@ -124,6 +148,10 @@ export function ParkGrounds() {
       {/* 花坛 ×4（顶点色合并；批次 28 二轮 caster 裁剪 → 不投影） */}
       <mesh geometry={bedGeo}>
         <meshStandardMaterial vertexColors roughness={BED_ROUGH} metalness={0} />
+      </mesh>
+      {/* 安全垫 ×2（批次 45 C2；游乐红 + 健身墨绿） */}
+      <mesh geometry={padGeo}>
+        <meshStandardMaterial vertexColors roughness={0.92} metalness={0} />
       </mesh>
     </group>
   );

@@ -144,6 +144,35 @@ export const REAL_DIMS_M = {
    */
   mastArmSignal: { x: 4.38, y: 6.32, z: 0.59, minY: 0 },
 
+  // ── 批次 45 公园设施五件（表值 = GLB 实测真值，见 3d_script/verify_glb_aabb）──
+  /**
+   * 六角亭（单檐攒尖，仿古）6.11 × 5.16 × 5.34 m。x = 对角 4.16 + 2×角梁外挑 0.95；
+   * z = 对边向（攒尖脊线对齐柱位后）；y = 台基 0.40 + 柱 2.80 + 两段攒尖 1.45 + 宝顶。
+   * 入口台阶朝导出 -Z（Blender +Y 面）。GLB `civic/park_pavilion` + ParkExtras fallback。
+   */
+  parkPavilion: { x: 6.11, y: 5.16, z: 5.34, minY: 0 },
+  /**
+   * 儿童游乐组合（滑梯 + 秋千）4.64 × 2.50 × 2.65 m。长轴 X：爬梯→平台(1.2 m)→
+   * 32° 滑道→出料段；秋千架（梁高 2.26 m 双摆位）在 +Z 侧 1.35 m。GB/T 27689 档。
+   */
+  parkPlayground: { x: 4.64, y: 2.5, z: 2.65, minY: 0 },
+  /**
+   * 健身三件套（双位太空漫步机 + 扭腰器 + 单杠）3.97 × 2.12 × 1.40 m。
+   * GB 19272 器材绿涂装；柱脚带地脚法兰；三件沿 X 一字排开（跌落间距 ≥1.2 m）。
+   */
+  parkFitness: { x: 3.97, y: 2.12, z: 1.4, minY: 0 },
+  /**
+   * 公园长椅（三人位防腐木 + 铸铝弓形脚）1.80 × 0.89 × 0.48 m。
+   * GB 3326-1997：座高 0.43 / 座深 0.41（5 板条）/ 座面 6° 后倾 / 靠背 103°。
+   * 座面向 +Z（面朝方向）。
+   */
+  parkBench: { x: 1.8, y: 0.89, z: 0.48, minY: 0 },
+  /**
+   * 庭院灯（单头方灯罩）0.38 × 3.21 × 0.38 m（厂家档 2.5~4.0 m 取中低档）。
+   * 灯罩材质名固定 `ParkLamp_Lantern_Mat` —— 前端按名调制夜间 emissive。
+   */
+  parkLamp: { x: 0.38, y: 3.21, z: 0.38, minY: 0 },
+
   // ── 车辆（长 X × 高 Y × 宽 Z）──
   sedan: { x: 4.6, y: 1.45, z: 1.82, minY: 0 },
   taxi: { x: 4.7, y: 1.5, z: 1.85, minY: 0 },
@@ -290,6 +319,14 @@ export const MODEL_AXIS_CONVENTIONS: Readonly<Partial<Record<RealDimKey, ModelAx
   trafficSignal: { upright: true },
   pedestrianSignal: { upright: true },
   mastArmSignal: { upright: true },
+
+  // ── 批次 45 公园设施 ──
+  // parkLamp（0.38×3.21×0.38）Y 主导 ⇒ 声明 upright。
+  parkLamp: { upright: true },
+  // pavilion（6.11×5.16×5.34，屋面出檐主导水平包围）/ playground（4.64 长轴 X）/
+  // fitness（3.97 一字排开）/ bench（1.80 长轴 X）—— 主包围轴本就不是 Y
+  // ⇒ 不声明 upright（声明即反向误报，见 ModelAxisConvention 注释；
+  // 轴向错误由判据 ① 三轴互异兜住，同 busStop/bikeRack 先例）。
 
   // ── 市政建筑 ──
   // 仅声明 **Y 主导** 的塔/高层楼；`policeStation`(12.1×6.6×7.0) 与

@@ -58,6 +58,12 @@ export const SCENE_TYPE_IDS: string[] = [
   'road.pedestrian-signal',
   // 批次 43：宽路口悬臂式信号灯
   'road.mast-arm-signal',
+  // 批次 45：公园设施五件（拆分自 civic.park-extras）
+  'park.pavilion',
+  'park.playground',
+  'park.fitness',
+  'park.bench',
+  'park.lamp',
   'road.surface',
   'road.ring',
   'road.first-ring',

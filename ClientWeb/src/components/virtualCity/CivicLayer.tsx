@@ -6,6 +6,8 @@
  *   这里同时挂载扩围后的远景 Outskirts（r∈[38,58]）。
  */
 import { PortTerminal } from './civic/PortTerminal';
+import { ParkBenches } from './props/ParkBenches';
+import { ParkLamps } from './props/ParkLamps';
 import { SportsField } from './civic/SportsField';
 import { RailViaduct } from './civic/RailViaduct';
 import { HeliPad } from './civic/HeliPad';
@@ -36,6 +38,9 @@ export function CivicLayer() {
       <CityHall />
       <Outskirts />
       <ParkExtras />
+      {/* 批次 45 公园设施：长椅 ×10 / 园灯 ×12（实例化；点位见 props/parkLayout.ts） */}
+      <ParkBenches />
+      <ParkLamps />
       <CanalExtras />
     </group>
   );

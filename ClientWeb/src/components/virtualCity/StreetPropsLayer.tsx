@@ -57,6 +57,7 @@ import { outdoorCount, crowdCapFor, synthCrowdEntry } from './crowdFormula';
 import { layoutCrowd, type CrowdPedestrian } from './crowdLayout';
 import { clearCrowdPositions } from './crowdRegistry';
 import { TreesInstanced, type TreeVariant } from './props/TreesInstanced'; // 批次 20 §3.3 → 批次 44：GLB 化 + 三变体（variant 字段即由此导入）
+import { parkFacilityClearOf } from './props/parkLayout'; // 批次 45 C1：公园设施净空（公园树 filter 消费）
 import { Vehicle, type VehicleStop } from './props/Vehicle';
 import { PedestrianV3, type PedestrianV3Props } from './props/PedestrianV3';
 import { Sign } from './props/Sign';
@@ -373,7 +374,11 @@ function propsForDistrict(
     // 批次 38 审计 A4b：区内树改用 isBuildable（水域 + 路廊 + 一环带域），
     // 与建筑退让同口径 —— 骑在一环带上的城区（suburb 区心 r=19.8）不再
     // 把树长在一环路面正中。
-  }).filter((t) => isBuildable(t.x, t.z, PROP_KEEP_OUT_MARGIN));
+  }).filter((t) => isBuildable(t.x, t.z, PROP_KEEP_OUT_MARGIN)
+    // 批次 45 C1（方案 45 §6 例外①）：公园树加「设施净空」——凉亭/游乐/健身/
+    // 公厕/花坛/长椅/园灯的净空圆内不落树（防树穿设施）。只改树布点 filter，
+    // 不动树的变体/尺寸/密度逻辑（树族本体零改动）。
+    && (!isPark || parkFacilityClearOf(t.x, t.z)));
 
   // §禁止静默降级：keep-out 把某城区区树清空到 0 棵时 dev 告警
   if (!trees.length && treeCount > 0) {
