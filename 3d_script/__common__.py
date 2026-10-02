@@ -10,6 +10,10 @@ __common__ — Blender headless 导出工具集（19-Blender3D模型集成）。
   make_cylinder(name, r_top, r_bot, h, segs, pos, rot=None)
   make_cone(name, r, h, segs, pos, rot=None)
   make_sphere(name, r, segs, pos)
+  make_icosphere(name, r, subdiv, pos)    — 批次 44：面内**不对称**（叶簇/枝端用，见 center_content_xz 注释）
+  make_taper(name, r_bot, r_top, h, segs, pos, rot=None)  — 批次 44：带收分的圆台（make_cylinder 会静默忽略 r_top）
+  make_strut(name, p0, p1, w, h=None)    — 批次 48：两点之间的杆件（to_track_quat 求朝向，别手算欧拉角）
+  center_content_xz(objs=None)           — 批次 44：把内容盒在两个**水平**轴（Blender X/Y）上居中
   apply_pbr(obj, base_color, rough, metal, emissive=None, emissive_intensity=0.0)
   make_material(name, base_color, rough, metal, emissive=None, emissive_intensity=0.0) — 返回 mat
   weathered_pbr(obj, base_color, rough, metal, *, wear=0.35, grime='#3a352c', scale=6.0)
@@ -539,6 +543,25 @@ CITY_PALETTE = {
     'crane_warn':      '#d4622a',
     # 橡胶护舷与轮胎吊轮胎（近黑橡胶）
     'rubber_fender':   '#22262a',
+    # ── 轨道交通（批次 49 新增；桥梁/接触网/车辆涂装是「轨道交通语义」单列一族）──
+    # 整体道床混凝土（无砟轨道板：比通用 concrete 灰一档，风化后泛碱发白）
+    'rail_ballast':    '#9a978f',
+    # 60 kg/m 钢轨（氧化面暗灰，轨顶走行面被磨亮 —— 整根一个色，靠法线读出）
+    'rail_railhead':   '#6e737a',
+    # 接触网支柱与腕臂（热镀锌钢件：冷灰，比建筑 steel 亮半档）
+    'rail_mast':       '#9aa0a6',
+    # 接触线与承力索（铜合金绞线，氧化后暗褐）
+    'rail_wire':       '#5a5148',
+    # 声屏障 PC 透光板（聚碳酸酯：半透冷青，透明度走 alpha 通道）
+    'rail_barrier':    '#b4c8ce',
+    # 桥面防水层与检修走道面（深灰沥青混凝土走道，比道床暗两档）
+    'rail_deck':       '#7d7f80',
+    # 站台与站厅照明（LED 冷白 4000K，比航标/路灯的暖白更蓝）
+    'station_light':   '#f2f6ff',
+    # 轻轨车体涂装（银灰带蓝：现代城轨新车主流色，比 bus_white 暗一档）
+    'train_body':      '#c8d2dc',
+    # 列车前照灯（卤素暖白，与站台冷白 LED 区分）
+    'train_headlight': '#fff6dc',
 }
 # 白/黑/警示红单列在表外（不是"材质语义"而是全城通用）：黑橡胶轮胎、红消防标识。
 

@@ -70,10 +70,23 @@ export const MODEL_NAMES = {
     'sports_field',
     // 批次 48 港口码头（3d_script/build_port_terminal.py）：内河支线集装箱码头
     //   81.6×34.6×64.0 m（80 m 泊位 / 2 台 STS 岸桥 / 40 只 40ft 箱 / RMG / 照明塔）。
-    //   消费方：civic/PortTerminal.tsx，**必须** `rotation=[0, π, 0]` 挂载
-    //   （Blender +Y 是海侧，导出后 three -Z；转 180° 后悬臂才罩住北面的港池）。
+    //   消费方：civic/PortTerminal.tsx，**零旋转**挂载 `position=[-32, 0, -8.7]`
+    //   （Blender +Y 是海侧，导出后 three -Z ⇒ 悬臂天然罩住 z∈[-8,-5.7] 的港池；
+    //   批次 48 实施记录 §5 已核对，加 π 反而会把悬臂转回陆侧）。
     //   材质槽：Port_Container0..4（箱色分 5 槽）/ Port_NavLight（夜间 2.0）。
     'port_terminal',
+    // 批次 49 高架铁路（3d_script/build_rail_span.py + build_rail_station.py）：
+    //   rail_span    = 30.5 m 标准跨模块 32.89×17.90×10.45 m（z 是盖梁宽，桥面 9.0 m）
+    //     （单箱单室箱梁 + 承台/墩身/盖梁/支座 + 整体道床 4 根 60 kg/m 钢轨
+    //       + 防撞墙 + 单侧声屏障 + 门式接触网）。**实例化 ×12**
+    //     （`GlbInstanced` ⇒ 6 draw call 与实例数无关；20 个桥墩位里
+    //       8 个被两座车站占用而跳过）。
+    //     ⚠ 墩心在 GLB 局部 x = -1.4115 u，消费端 `RAIL_PIER_LOCAL_X` 必须逐位一致。
+    //   rail_station = 120 m 侧式站台车站 120.24×25.20×23.60 m
+    //     （站台 + 半高屏蔽门 + 雨棚 + 站厅 + 2 座开敞式出入口塔，自持站区箱梁）。
+    //   材质槽（两件同名）：Rail_Concrete / _ConcreteDark / _Steel / _Glass /
+    //     _Warn / _Light / RailStation_Sign（仅车站）。
+    'rail_span', 'rail_station',
   ] as const,
   vehicles: [
     'sedan', 'truck', 'bus', 'taxi',

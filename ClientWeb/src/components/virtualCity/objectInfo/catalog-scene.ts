@@ -46,9 +46,9 @@ export const SCENE_ENTRIES: ObjectInfoEntry[] = [
     icon: '🚄',
     name: { 'zh-CN': '轻轨高架', en: 'Rail Viaduct', ja: '高架鉄道' },
     desc: {
-      'zh-CN': '城市轻轨高架线路与站台，大运量通勤轨道，缓解地面交通压力。',
-      en: 'The elevated light-rail line and stations carrying mass commuter flows above the street traffic.',
-      ja: '都市ライトレールの高架線と駅。大量の通勤客を運び、地上交通の負担を軽減する。',
+      'zh-CN': '610 m 城市轻轨高架：20 孔 30.5 m 单箱单室箱梁标准跨（桥下净空 7.8 m）+ 2 座 120 m 侧式站台车站（站台面高出轨顶 1.10 m）+ 门式接触网与单侧声屏障。',
+      en: 'A 610 m elevated light-rail viaduct: 20 × 30.5 m single-box girder spans (7.8 m headroom) plus two 120 m side-platform stations (platform 1.10 m above rail), with portal catenary and a single-side acoustic barrier.',
+      ja: '610 m の高架軽鉄 viaduct：30.5 m 単箱複室箱桁 20 径間（桁下 7.8 m）+ 120 m 側式ホーム駅 2 座（ホーム面が軌道面より 1.10 m 高い）、門型架線と片側防音壁を備える。',
     },
   },
   {

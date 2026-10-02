@@ -239,10 +239,20 @@ TARGETS = {
     'civic/sports_field.glb': dict(x=11.000, y=1.558, z=7.400, axis='x_flat',
                                     pivot='基面 minY=0，X/Z 居中；主看台在 Blender +Y 侧'),
     # ── 批次 48 港口码头（build_port_terminal.py）──────────────────────────
-    # 泊位沿 X（80 m 泊长），岸桥**悬臂伸向 +Z 港池侧**（three 里 = -Z 局部），
-    # 故整件用 `rotation=[0, π, 0]` 挂载才能罩住北面的港池。长轴 X 主导 ⇒ x_flat。
+    # 泊位沿 X（80 m 泊长），岸桥悬臂伸向 Blender +Y ⇒ three -Z，**零旋转**即罩住
+    # 南面的港池（批次 48 实施记录 §5 实测；加 π 反而把悬臂转回陆侧）。长轴 X ⇒ x_flat。
     'civic/port_terminal.glb': dict(x=8.160, y=3.460, z=6.400, axis='x_flat',
                                     pivot='码头面 minY=0，X/Z 居中；岸壁线（局部 z=-0.7）在 +Z 侧'),
+    # ── 批次 49 高架铁路（build_rail_span.py + build_rail_station.py）──────
+    # 两件都是**横向线性构件**（沿走廊 X 平铺），与驳岸挡墙段/桥栏杆段同类 ⇒ x_flat。
+    # ⚠ rail_span 是**实例化资产**：单件 30.5 m 标准跨，消费端放 12 个实例；
+    #   消费端必须用 `RAIL_PIER_LOCAL_X = -1.4115` 把实例原点对到墩心，
+    #   否则 20 个桥墩会整体错位 1.41 m（这是 §130 类缺陷：GLB 局部约定只有
+    #   建模脚本知道，护栏管不到，必须在消费端写死并加单测）。
+    'civic/rail_span.glb': dict(x=3.289, y=1.790, z=1.045, axis='x_flat',
+                                pivot='承台底 minY=0；**墩心在局部 x=-1.4115**（非包围盒中心）'),
+    'civic/rail_station.glb': dict(x=12.024, y=2.360, z=2.520, axis='x_flat',
+                                   pivot='出入口塔基 minY=0，X/Y 居中；站厅跨双线，出入口塔在 three 负 z 侧'),
 }
 
 # 直立判据的例外：长轴落在水平轴属正确摆放。

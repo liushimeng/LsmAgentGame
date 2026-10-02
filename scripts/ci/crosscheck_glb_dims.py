@@ -82,6 +82,8 @@ KEY_MAP = {
     "sportsField": "civic/sports_field",
     # 批次 48 港口码头（设计 48 §3）
     "portTerminal": "civic/port_terminal",
+    "railSpan": "civic/rail_span",
+    "railStation": "civic/rail_station",
 }
 
 # 程序化 fallback 专用、无 GLB ⇒ 不送检（但解析出来打印，便于人眼核对）。
