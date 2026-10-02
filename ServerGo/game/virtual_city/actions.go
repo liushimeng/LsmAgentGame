@@ -40,6 +40,8 @@ type Action struct {
 	// set_side_price / start_side_business(批次20 文档2):定价档位
 	// 0=中价(缺省,兼容旧客户端/旧 Agent) 1=低价 2=高价。
 	Tier int `json:"tier,omitempty"`
+	// upgrade_education(批次52 §2 裁决 D11/D13):子女序下标(0 起)。
+	ChildIdx int `json:"child_idx,omitempty"`
 }
 
 // 动作类型常量(协议 §4)。
@@ -58,10 +60,10 @@ const (
 	ActMoveDistrict = "move_district"
 	// ActMove 统一移动(2026-09-22 §CityHuman重构):区内 walk/run 或跨城区
 	// bus/metro/taxi;跨城区语义替代 move_district(后者保留兼容)。
-	ActMove = "move"
-	ActConsume      = "consume"
-	ActDonate       = "donate"
-	ActSubmitMonth  = "submit_month"
+	ActMove        = "move"
+	ActConsume     = "consume"
+	ActDonate      = "donate"
+	ActSubmitMonth = "submit_month"
 	// P1 新增: 活期→定期 / 定期→活期。
 	ActDeposit  = "deposit"
 	ActWithdraw = "withdraw"
@@ -74,6 +76,9 @@ const (
 	ActCancelInsurance = "cancel_insurance"
 	// 批次20 新增(文档2 §3):副业改价 { "tier": 0|1|2 },预算 1(working)。
 	ActSetSidePrice = "set_side_price"
+	// 批次52 新增(§2 裁决 D13):代际财富两动作 {amount_cny}/{child_idx},预算各 1。
+	ActPaySupportExtra  = "pay_support_extra"
+	ActUpgradeEducation = "upgrade_education"
 )
 
 // 信用贷档位面额(协议 §4:credit 档位必须是 50000/100000/200000 之一)。
@@ -154,6 +159,10 @@ func (w *World) ApplyAction(seat int, a Action) (string, *errcode.Error) {
 		return w.actBuyInsurance(p, a)
 	case ActCancelInsurance:
 		return w.actCancelInsurance(p, a)
+	case ActPaySupportExtra:
+		return w.actPaySupportExtra(p, a)
+	case ActUpgradeEducation:
+		return w.actUpgradeEducation(p, a)
 	default:
 		return "", errcode.CodeMsg(errcode.ErrValidationFailed, "unknown wealth action: "+a.Type)
 	}
@@ -1037,9 +1046,9 @@ func (w *World) actMoveDistrict(p *Player, a Action) (string, *errcode.Error) {
 // moveModeDef 移动方式定价(2026-09-22 §CityHuman重构,设计文档 1 §4.1 move):
 // 跨城区三档(bus 最便宜 / metro 居中 / taxi 最贵最快),价格随 CPI 浮动。
 type moveModeDef struct {
-	CostCNY   int64 // 基准费用(元)
-	EnergyCost int  // 精力消耗
-	Label     string
+	CostCNY    int64 // 基准费用(元)
+	EnergyCost int   // 精力消耗
+	Label      string
 }
 
 var moveModeDefs = map[string]moveModeDef{
@@ -1119,7 +1128,7 @@ func (w *World) actMove(p *Player, a Action) (string, *errcode.Error) {
 }
 
 // itoaInt / itoaInt64 小整数转字符串(避免新增 strconv import 漂移)。
-func itoaInt(v int) string { return fmt.Sprintf("%d", v) }
+func itoaInt(v int) string     { return fmt.Sprintf("%d", v) }
 func itoaInt64(v int64) string { return fmt.Sprintf("%d", v) }
 
 // switchSelfOccupy 把自住标记迁到目标区的自有住宅(无则保持现状)。

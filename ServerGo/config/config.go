@@ -380,6 +380,10 @@ type VirtualCityConfig struct {
 	// 固定种子存量对局回归一致),view 不下发 insurance 段。零值强制 true
 	// (与 economy_enabled 同款取舍)。
 	InsuranceEnabled bool `json:"insurance_enabled"`
+	// FamilyEnabled 代际财富转移引擎(2026-10-02 §批次52)。默认 true;
+	// false 时:月结零接线、家庭工具拒绝 35045、遗产不分配、my.family 明细段
+	// omit(回滚阀,批次52 §5)。零值强制 true(与 insurance_enabled 同款取舍)。
+	FamilyEnabled bool `json:"family_enabled"`
 	// MaxResidents 城市背景居民数上限(2026-09-21 §虚拟城市-城市Agent规模化)。
 	// 建房 resident_count 超过此值时 clamp;负数由 API 层 400。默认 100000。
 	MaxResidents int `json:"max_residents"`
@@ -1243,6 +1247,10 @@ func applyDefaults(c *Config) {
 	// P1-4(2026-09-19 §财商流P1-4 §11):商业保险默认开启;零值强制 true。
 	if !c.VirtualCity.InsuranceEnabled {
 		c.VirtualCity.InsuranceEnabled = true
+	}
+	// 批次52(§5):代际财富转移引擎默认开启;零值强制 true(回滚阀见 family_enabled)。
+	if !c.VirtualCity.FamilyEnabled {
+		c.VirtualCity.FamilyEnabled = true
 	}
 	// 2026-09-21 §虚拟城市-城市Agent规模化 — 城市背景层配置默认值(契约 03 §7)。
 	if c.VirtualCity.MaxResidents <= 0 {

@@ -70,7 +70,8 @@ func SystemPromptBlocks(card vctypes.CardBrief) []llmtypes.SystemBlock {
 	for _, g := range card.Goals {
 		gb.WriteString("- " + g + "\n")
 	}
-	gb.WriteString("终局评分 = 财务自由度 50% + 人生满意度 30% + 社会贡献 20%。财务自由指数 FI = 月被动收入 ÷ 月总支出。")
+	// 批次52 §2 裁决 D14:总分权重再平衡 45/25/15/15(增代际贡献 15%)。
+	gb.WriteString("终局评分 = 财务自由度 45% + 人生满意度 25% + 社会贡献 15% + 代际贡献 15%。财务自由指数 FI = 月被动收入 ÷ 月总支出。")
 	seg3 := gb.String()
 
 	seg4 := `【第 4 段 · 规则摘要】
@@ -135,6 +136,18 @@ func SystemPromptBlocks(card vctypes.CardBrief) []llmtypes.SystemBlock {
 - 交易纪律:每座位最多 3 笔 open 挂单;不可自交易;挂单 3 月未成交自动过期;利率超限(>3.6%%/月)违法。
 - 决策启发:现金充裕(>2×月支出)时主动寻找低估资产或放贷吃息;现金紧张(<0.5×月支出)时挂牌变现或发起借款;认知≥5可出售情报;人脉≥5可担保赚利差。`
 
+	// 批次52 §2 裁决 D13:家庭/代际工具说明注入(与 ToolFamily 分组对应)。
+	seg8 := `【第 8 段 · 家庭与代际财富(批次52)】
+你上有老下有小,代际现金流是真实中国家庭最大支出项之一:
+- family(op=query):查父母(在世/年龄/健康)、子女(年龄/教育档)、本月赡养/教育/回流与累计(不耗预算)。
+- family(op=plan_inheritance):遗产分配预览——你身故后净遗产(现金+资产−负债−丧葬费¥5000)按
+  配偶50%/子女均分/无继承人充公;继承人为板外家人,不入座位账簿(不耗预算)。
+- family(op=pay_support_extra):自愿加赡养(耗 1 预算,≤净资产30%,精力−1);赡养是刚性月度支出,
+  父母健康越差赡养越高(fair×1.5/poor×2.5),你比全房中位数穷时社会兜底 ×0.5。
+- family(op=upgrade_education):子女教育升级(耗 1 预算,一次性¥200,000 升私立,仅 3–18 岁公立可升);
+  私立月费¥3,000 至 18 岁,子女≥22 岁后月度回流 1500×1.2(私立加成 20%)。
+- 代际贡献分 = (教育总投入 + 赡养总支出×0.3)/20000,占终局 15% —— 上有老下有小也是人生成就。`
+
 	return []llmtypes.SystemBlock{
 		{Type: "text", Text: seg1},
 		{Type: "text", Text: seg2},
@@ -143,6 +156,7 @@ func SystemPromptBlocks(card vctypes.CardBrief) []llmtypes.SystemBlock {
 		{Type: "text", Text: seg5},
 		{Type: "text", Text: seg6},
 		{Type: "text", Text: seg7},
+		{Type: "text", Text: seg8},
 	}
 }
 
@@ -234,6 +248,28 @@ func UserPrompt(ctx *vctypes.GameContext, memText string) string {
 	} else {
 		fmt.Fprintf(&b, "家庭:%s", marital)
 	}
+	// 批次52 §6:「家庭/代际」段随 query 结果注入(family_enabled=false 时
+	// FamilyInfo=nil,本段 omit;裁决 D13)。
+	if fi := me.FamilyInfo; fi != nil {
+		if fi.ParentsAlive {
+			fmt.Fprintf(&b, " ｜ 父母在世 %d 岁(%s)", fi.ParentsAge, familyHealthCN(fi.ParentsHealth))
+		} else {
+			b.WriteString(" ｜ 父母已故")
+		}
+		if len(fi.Kids) > 0 {
+			b.WriteString(" ｜ 子女")
+			for _, k := range fi.Kids {
+				edu := "公立"
+				if k.Education == "private" {
+					edu = "私立"
+				}
+				fmt.Fprintf(&b, " %d岁(%s)", k.Age, edu)
+			}
+		}
+		fmt.Fprintf(&b, "\n本月代际现金流:赡养 −%d ｜ 教育 −%d ｜ 子女回流 +%d;累计 赡养 %d ｜ 教育 %d ｜ 回流 %d",
+			fi.SupportCNY, fi.EduCNY, fi.ChildInCNY, fi.TotalSupport, fi.TotalEdu, fi.TotalChildIn)
+		b.WriteString(" ｜ 可用 family(op=query|plan_inheritance|pay_support_extra|upgrade_education)")
+	}
 	// P1-4(§财商流P1-4 §7.4):有保单时「我的财务」段末尾追加保单行。
 	if line := insurancePolicyLine(me.Policies); line != "" {
 		fmt.Fprintf(&b, "\n保单:%s", line)
@@ -318,6 +354,21 @@ func insuranceKindCN(kind string) string {
 		return "意外险"
 	default:
 		return kind
+	}
+}
+
+// familyHealthCN 父母健康档中文(批次52;与引擎侧 family.go::parentsHealthCN
+// 各持一份文案,本包不 import game/virtual_city)。
+func familyHealthCN(h string) string {
+	switch h {
+	case "good":
+		return "健康良好"
+	case "fair":
+		return "健康一般"
+	case "poor":
+		return "健康欠佳"
+	default:
+		return h
 	}
 }
 

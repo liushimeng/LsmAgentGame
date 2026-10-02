@@ -781,4 +781,48 @@ export interface VirtualCityDict {
   'virtualCity.election.colWealth': string;
   'virtualCity.election.colNetwork': string;
   'virtualCity.election.colSatisfaction': string;
+
+  // ── 批次52 §20261002-01 代际财富转移引擎（FamilyPanel / GameOverModal）──
+  // 键清单出处：批次52 实施设计 §8.3 + P1-3 契约 §10；locales 拆到 virtualCityFamily-*.ts。
+  'virtualCity.family.title': string;
+  'virtualCity.family.empty': string;
+  'virtualCity.family.spectatorHint': string;
+  'virtualCity.family.parents': string;
+  'virtualCity.family.parentsAlive': string;
+  'virtualCity.family.parentsGone': string;
+  'virtualCity.family.parentsAge': string; // {age}
+  'virtualCity.family.health.good': string;
+  'virtualCity.family.health.fair': string;
+  'virtualCity.family.health.poor': string;
+  'virtualCity.family.kids': string;
+  'virtualCity.family.noKids': string;
+  'virtualCity.family.childrenCount': string; // {n}
+  'virtualCity.family.kidEdu.public': string;
+  'virtualCity.family.kidEdu.private': string;
+  'virtualCity.family.monthlySupport': string;
+  'virtualCity.family.monthlyEdu': string;
+  'virtualCity.family.monthlyChildIn': string;
+  'virtualCity.family.totalsTitle': string;
+  'virtualCity.family.totalSupport': string;
+  'virtualCity.family.totalEdu': string;
+  'virtualCity.family.totalChildIn': string;
+  'virtualCity.family.upgradeEduBtn': string; // {age} {price}
+  'virtualCity.family.eduUnaffordable': string;
+  'virtualCity.family.paySupportLabel': string;
+  'virtualCity.family.paySupportAmount': string;
+  'virtualCity.family.paySupportBtn': string;
+  'virtualCity.family.paySupportCap': string; // {n}
+  'virtualCity.family.paySupportInvalid': string;
+  'virtualCity.family.previewBtn': string;
+  'virtualCity.family.previewTitle': string;
+  'virtualCity.family.previewEmpty': string;
+  'virtualCity.family.previewEstate': string;
+  'virtualCity.family.previewFuneral': string;
+  'virtualCity.family.previewSpouse': string;
+  'virtualCity.family.previewPerChild': string; // {n}
+  'virtualCity.family.previewWorld': string;
+  'virtualCity.family.previewNote': string;
+  // 终局：第 4 根评分条 + 排行榜「代际」列（批次52 §8.2 / §2 D14）。
+  'virtualCity.gameOver.familyScore': string;
+  'virtualCity.gameOver.familyCol': string;
 }

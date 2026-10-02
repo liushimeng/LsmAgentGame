@@ -29,34 +29,61 @@ type fakeTradeRunner struct {
 	whisperTarget   int
 	whisperText     string
 	// 各工具调用参数(按需断言)。
-	buyAssetArgs  struct{ asset string; amount int64 }
+	buyAssetArgs struct {
+		asset  string
+		amount int64
+	}
 	sellAssetArgs struct {
 		asset string
 		units float64
 	}
-	houseArgs struct{ district string; ratio float64; asset string }
-	takeLoanArgs   struct{ kind string; amount int64 }
-	repayArgs      struct{ loanID string; amount int64 }
-	earlyRepayArgs struct{ loanID string; amount int64 }
-	probeArgs      struct{ kind string; amount int64 }
+	houseArgs struct {
+		district string
+		ratio    float64
+		asset    string
+	}
+	takeLoanArgs struct {
+		kind   string
+		amount int64
+	}
+	repayArgs struct {
+		loanID string
+		amount int64
+	}
+	earlyRepayArgs struct {
+		loanID string
+		amount int64
+	}
+	probeArgs struct {
+		kind   string
+		amount int64
+	}
 	depositAmount  int64
 	withdrawAmount int64
 	insuranceKind  string
-	consumeArgs    struct {
+	// 批次52:代际财富工具参数。
+	familyArgs struct {
+		amount   int64
+		childIdx int
+	}
+	consumeArgs struct {
 		amount int64
 		reason string
 	}
 	donateAmount int64
-	sideBizArgs  struct{ kind string; tier int }
-	lastTier     int
-	speakArgs    struct{ text, thought string }
+	sideBizArgs  struct {
+		kind string
+		tier int
+	}
+	lastTier  int
+	speakArgs struct{ text, thought string }
 	// 交易参数。
 	listAssetArgs struct {
 		assetIndex int
 		ask, min   int64
 	}
-	viewFilter string
-	negID      string
+	viewFilter  string
+	negID       string
 	respondArgs struct {
 		negID, action string
 		offer         int64
@@ -235,6 +262,26 @@ func (f *fakeTradeRunner) GetInsuranceStatus(seat int) (string, error) {
 	return "保单快照", nil
 }
 
+// 批次52 §2 裁决 D13:代际财富四工具实现。
+func (f *fakeTradeRunner) QueryFamily(seat int) (string, error) {
+	f.lastTool, f.lastSeat = "QueryFamily", seat
+	return "家庭快照", nil
+}
+func (f *fakeTradeRunner) PlanInheritance(seat int) (string, error) {
+	f.lastTool, f.lastSeat = "PlanInheritance", seat
+	return "遗产预览", nil
+}
+func (f *fakeTradeRunner) PaySupportExtra(seat int, amountCNY int64) error {
+	f.lastTool, f.lastSeat = "PaySupportExtra", seat
+	f.familyArgs.amount = amountCNY
+	return nil
+}
+func (f *fakeTradeRunner) UpgradeEducation(seat int, childIdx int) error {
+	f.lastTool, f.lastSeat = "UpgradeEducation", seat
+	f.familyArgs.childIdx = childIdx
+	return nil
+}
+
 // P2 实现。
 func (f *fakeTradeRunner) ListAsset(seat int, assetIndex int, askCNY, minCNY int64) error {
 	f.lastTool, f.lastSeat = "ListAsset", seat
@@ -337,11 +384,11 @@ func TestTradeTools_InputSchema(t *testing.T) {
 	}
 }
 
-// TestToolNames_IncludesTrade 合并交易工具已并入 ToolNames()(总计 21)。
+// TestToolNames_IncludesTrade 合并交易工具已并入 ToolNames()(总计 22)。
 func TestToolNames_IncludesTrade(t *testing.T) {
 	names := ToolNames()
-	if len(names) != 21 {
-		t.Errorf("names count: got %d, want 21 (批次35 §3.2)", len(names))
+	if len(names) != 22 {
+		t.Errorf("names count: got %d, want 22 (批次35 §3.2 + 批次52 family)", len(names))
 	}
 	for _, tn := range TradeToolNames() {
 		found := false

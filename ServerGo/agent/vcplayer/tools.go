@@ -83,6 +83,11 @@ type ToolRunner interface {
 	BuyInsurance(seat int, kind string) error
 	CancelInsurance(seat int, kind string) error
 	GetInsuranceStatus(seat int) (string, error)
+	// 批次52(§2 裁决 D13): 代际财富(家庭)四工具。
+	QueryFamily(seat int) (string, error)
+	PlanInheritance(seat int) (string, error)
+	PaySupportExtra(seat int, amountCNY int64) error
+	UpgradeEducation(seat int, childIdx int) error
 	// P2(2026-09-16 §财商流P2): 玩家间交易与财富流动系统 12 工具。
 	ListAsset(seat int, assetIndex int, askCNY, minCNY int64) error
 	CancelListing(seat int, listingID string) error
@@ -128,6 +133,10 @@ const (
 	// ToolInsurance 吸收 buy_insurance + cancel_insurance +
 	// get_insurance_status(3→1)。
 	ToolInsurance = "insurance"
+	// ToolFamily 批次52 §2 裁决 D13:代际财富分组工具(参照 ToolInsurance 分组
+	// 风格),下辖 4 个 sub-command:query / plan_inheritance / pay_support_extra /
+	// upgrade_education(前两者免预算,后两者耗 1 动作预算)。
+	ToolFamily = "family"
 	// ToolActivity 吸收 study + socialize + rest + work_overtime + consume +
 	// donate(6→1,kind 参数)。
 	ToolActivity = "activity"
@@ -168,6 +177,7 @@ func enumStrSchema(values []string, desc string) map[string]any {
 // 批次35 §3.2:21 工具 = 基础 3(check_state/speak/submit_month)+
 // 本文件合并 7 + 原样 2(set_consumption/answer_survey)+
 // tools_trade.go 合并 5 + tools_sense.go 感知 4。
+// 批次52 §2 裁决 D13:+ToolFamily(代际财富分组)→ 合计 22。
 func BuildTools() []llmtypes.ToolDef {
 	base := []llmtypes.ToolDef{
 		{
@@ -218,7 +228,7 @@ func BuildTools() []llmtypes.ToolDef {
 			},
 		},
 		{
-			Name:        ToolSavings,
+			Name: ToolSavings,
 			Description: "储蓄存取(不消耗动作预算):deposit=活期→定期存款,年利率 1.5%,提前支取损失全部利息;" +
 				"withdraw=定期→活期,提前支取损失全部利息。",
 			InputSchema: map[string]any{
@@ -231,7 +241,7 @@ func BuildTools() []llmtypes.ToolDef {
 			},
 		},
 		{
-			Name:        ToolQueryFinance,
+			Name: ToolQueryFinance,
 			Description: "金融查询(全部 scope 均不消耗动作预算):central_bank=央行货币政策状态(M0/M1/M2、基础货币、货币乘数、" +
 				"政策利率、LPR、CPI、信贷约束、额度系数);banking_system=商业银行体系汇总(活期/定期存款、准备金、" +
 				"超额准备金、贷款余额);minsky=明斯基全局状态(庞氏/投机/对冲玩家数与占比、明斯基时刻冷却剩余月、" +
@@ -245,7 +255,7 @@ func BuildTools() []llmtypes.ToolDef {
 			},
 		},
 		{
-			Name:        ToolInsurance,
+			Name: ToolInsurance,
 			Description: "商业保险(三 op)。buy=购买商业保险(耗 1 次动作预算):每人每险种限 1 张有效保单;" +
 				"保险不产生收益,只转移风险:重疾确诊一次性赔付,百万医疗报销住院费 90%,寿险/意外险身故时赔付给遗产继承人;" +
 				"年保费按月扣缴,现金断缴 1 个月宽限期后保单失效。cancel=退保(耗 1 次动作预算):消费型保险零现金价值," +
@@ -257,6 +267,25 @@ func BuildTools() []llmtypes.ToolDef {
 				"properties": map[string]any{
 					"op":   enumStrSchema([]string{"buy", "cancel", "status"}, "buy=投保 / cancel=退保 / status=查保单"),
 					"kind": enumStrSchema([]string{"critical_illness", "medical_million", "term_life", "accident"}, "险种:critical_illness=重疾险 / medical_million=百万医疗险 / term_life=定期寿险 / accident=意外险(buy/cancel 必填)"),
+				},
+				"required": []string{"op"},
+			},
+		},
+		{
+			Name: ToolFamily,
+			Description: "家庭/代际财富(批次52,四 op)。query=查询父母(在世/年龄/健康)、子女(年龄/教育档)、" +
+				"本月赡养/教育/回流与累计三项(不消耗动作预算)。plan_inheritance=遗产分配预览:现在身故时遗产如何分配" +
+				"(配偶50%/子女均分/充公;现算不落账,不消耗动作预算)。pay_support_extra=自愿加赡养(耗 1 次动作预算):" +
+				"amount_cny>0 且 ≤净资产30%,计入代际贡献分,精力−1;赡养是刚性月度支出,此为额外孝亲。" +
+				"upgrade_education=子女教育升级(耗 1 次动作预算):child_idx 指定子女,一次性 ¥200,000 升私立" +
+				"(仅 3–18 岁且公立可升),此后月费 ¥3,000 至 18 岁;私立子女成年(≥22 岁)后月度回流 +20%。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"op": enumStrSchema([]string{"query", "plan_inheritance", "pay_support_extra", "upgrade_education"},
+						"query=查家庭 / plan_inheritance=遗产预览 / pay_support_extra=加赡养 / upgrade_education=教育升级"),
+					"amount_cny": intSchema(1, "金额(元;op=pay_support_extra 必填,≤净资产30%)"),
+					"child_idx":  intSchema(0, "子女序下标 0 起(op=upgrade_education 必填)"),
 				},
 				"required": []string{"op"},
 			},
@@ -351,12 +380,13 @@ func BuildTools() []llmtypes.ToolDef {
 	return base
 }
 
-// ToolNames 返回全部工具名(测试/lint 用;批次35 §3.2:合计 21)。
-// 基础 3 + 金融合并 5 + 生活 3 + 副业 1 + 交易合并 5 + 感知 4 = 21。
+// ToolNames 返回全部工具名(测试/lint 用;批次52 §2 裁决 D13 起合计 22)。
+// 基础 3 + 金融合并 5 + 代际 1 + 生活 3 + 副业 1 + 交易合并 5 + 感知 4 = 22。
 func ToolNames() []string {
 	return []string{
 		ToolCheckState, ToolSpeak, ToolSubmitMonth,
 		ToolAssetTrade, ToolBankLoan, ToolSavings, ToolQueryFinance, ToolInsurance,
+		ToolFamily,
 		ToolActivity, ToolSetConsumption, ToolAnswerSurvey, ToolSideBusiness,
 		ToolMarketListing, ToolNegotiate, ToolP2PLending, ToolAuctionBid, ToolInfoMarket,
 		ToolSee, ToolHear, ToolSmell, ToolMove,
@@ -375,7 +405,7 @@ type dispatchToolResult struct {
 	// 计数同源)。不耗预算的例外(与旧 47 工具语义逐条对齐):
 	// check_state / submit_month / see / hear / smell / savings 全部 op /
 	// query_finance 全部 scope / bank_loan.probe / insurance.status /
-	// market_listing.view / answer_survey。
+	// market_listing.view / answer_survey / family.query / family.plan_inheritance。
 	Budget bool
 }
 
@@ -519,6 +549,29 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 		default: // buy
 			res.Budget = true
 			return failOr(a.runner.BuyInsurance(seat, getStr("kind")), "投保成功", res)
+		}
+	case ToolFamily:
+		// 批次52 §2 裁决 D13:query / plan_inheritance 免预算;
+		// pay_support_extra / upgrade_education 耗 1 动作预算。
+		switch getStr("op") {
+		case "plan_inheritance":
+			s, err := a.runner.PlanInheritance(seat)
+			if err != nil {
+				return fail(err)
+			}
+			return ok(s)
+		case "pay_support_extra":
+			res.Budget = true
+			return failOr(a.runner.PaySupportExtra(seat, getInt("amount_cny")), "加赡养完成", res)
+		case "upgrade_education":
+			res.Budget = true
+			return failOr(a.runner.UpgradeEducation(seat, int(getInt("child_idx"))), "教育升级完成", res)
+		default: // query
+			s, err := a.runner.QueryFamily(seat)
+			if err != nil {
+				return fail(err)
+			}
+			return ok(s)
 		}
 	case ToolActivity:
 		// 六种 kind 均耗预算(批次35 §3.3)。

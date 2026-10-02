@@ -72,9 +72,13 @@ const CYCLE_CLASS: Record<string, string> = {
 function EconomyPanelWithSurvey({
   gameState,
   roomId,
+  onFamilyAction,
+  spectator,
 }: {
   gameState: import('@/types/virtualCity').VirtualCityGameState | null;
   roomId: string;
+  onFamilyAction: (action: import('@/types/virtualCity').VirtualCityAction) => void;
+  spectator: boolean;
 }) {
   const [surveyOpen, setSurveyOpen] = useState(false);
   return (
@@ -89,7 +93,7 @@ function EconomyPanelWithSurvey({
           📋 调研
         </button>
       </div>
-      <EconomyPanel gameState={gameState} />
+      <EconomyPanel gameState={gameState} onFamilyAction={onFamilyAction} spectator={spectator} />
       {surveyOpen && (
         <div
           className="virtualCity-modal-overlay"
@@ -510,6 +514,8 @@ export function VirtualCityGamePage() {
               <EconomyPanelWithSurvey
                 gameState={gameState}
                 roomId={roomId}
+                onFamilyAction={sendAction}
+                spectator={spectator || (gameState?.my_seat ?? -1) < 0}
               />
             )}
             {/* 阶段 Q：市场 Tab 聚合 listing / loan / infomarket 三个子面板 */}

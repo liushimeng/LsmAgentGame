@@ -1,4 +1,11 @@
 import type { TKey } from '@/i18n';
+import type {
+  VirtualCityFamilyParents,
+  VirtualCityFamilyKid,
+  VirtualCityFamilyTotals,
+  VirtualCityFamilyStats,
+  VirtualCityInheritanceEvent,
+} from './virtualCityFamily';
 
 // ─── 虚拟城市 (VirtualCity) types ───
 //
@@ -326,7 +333,25 @@ export interface VirtualCityLoan {
 export interface VirtualCityFamily {
   marital: 'single' | 'married';
   children: number;
+  // ── 批次52 §20261002-01 代际财富转移（P1-3 §7 MyFamilyJSON 扩展；snake_case 对齐后端）──
+  // family_enabled=false / 旧后端 → 新段整体 omit（渐进增强），前端降级只渲染婚育基础信息。
+  // 子类型/常量在 virtualCityFamily.ts（leaf；本文件超 §4 1800 行后拆出，下方 re-export）。
+  /** 父母段（ParentsJSON）：{alive, age, health, health_cn}。 */
+  parents?: VirtualCityFamilyParents;
+  /** 子女明细（KidJSON[]）：[{age, education, education_cn}]，序与卡面初始+事件生育对齐。 */
+  kids?: VirtualCityFamilyKid[];
+  /** 本月赡养（刚性+自愿，元）。 */
+  support_cny?: number;
+  /** 本月教育费（元）。 */
+  edu_cny?: number;
+  /** 本月子女成年回流（元，收入侧）。 */
+  child_in_cny?: number;
+  /** 累计三项（FamilyTotals）。 */
+  totals?: VirtualCityFamilyTotals;
 }
+
+// 批次52 代际财富类型/常量（leaf 模块）再导出——外部 import 路径保持 '@/types/virtualCity' 不变。
+export * from './virtualCityFamily';
 
 /** 仅本人座位填充；观战者 null。 */
 export interface VirtualCityMyState {
@@ -366,6 +391,8 @@ export interface VirtualCityMyState {
   consumption_by_goods?: Record<string, number>;
   /** 商业保险段（P1-4 保险引擎；仅本人座位下发，insurance_enabled=false 时整体 omit）。 */
   insurance?: VirtualCityInsuranceState;
+  /** 板外继承收入（批次52 §7 D7：恒 0，字段保留；座位间继承未来扩展时非零）。 */
+  inheritance_cny?: number;
 }
 
 /** Agent 思维可见性：本人座位 + 观战者可见；其他玩家不可见。 */
@@ -706,6 +733,10 @@ export interface VirtualCityGameState {
   /** 公共服务 + 监管 + 市长选举快照（阶段 8；economy_enabled=false 旧房 omit。
    *  FE-2 仅消费选举四字段段，其余字段原样透传不声明）。 */
   public_services?: VirtualCityPublicServices;
+  /** 房间级家庭汇总（批次52 §7 FamilyStatsJSON；family_enabled=false 旧房 omit）。 */
+  family?: VirtualCityFamilyStats;
+  /** 最近 5 条遗产继承（批次52 §7，降序；无继承 omit）。 */
+  inheritance_log?: VirtualCityInheritanceEvent[];
 }
 
 // ── 市长选举（批次 20 文档 3 A1/A3；game.state.public_services 选举段）────
@@ -1251,6 +1282,8 @@ export interface VirtualCityScore {
   fi_score: number;
   life_score: number;
   social_score: number;
+  /** 批次52 §7：代际贡献分（FinalScore.family_score）；旧后端缺省按 0 展示。 */
+  family_score?: number;
   total: number;
   ending: string;
 }
@@ -1278,7 +1311,9 @@ export type VirtualCityActionType =
   | 'submit_month'
   | 'early_repay'
   | 'set_consumption'
-  | 'buy_insurance' | 'cancel_insurance';
+  | 'buy_insurance' | 'cancel_insurance'
+  // 批次52 §2 D13：家庭/代际动作（upgrade_education / pay_support_extra）。
+  | 'upgrade_education' | 'pay_support_extra';
 
 export type VirtualCityAction =
   | { type: 'buy_asset'; asset: 'stock_index' | 'bond' | 'gold'; amount_cny: number }
@@ -1300,7 +1335,9 @@ export type VirtualCityAction =
   | { type: 'early_repay'; loan_id: string; amount_cny: number }
   | { type: 'set_consumption'; level: number }
   | { type: 'buy_insurance'; kind: VirtualCityInsuranceKind }
-  | { type: 'cancel_insurance'; kind: VirtualCityInsuranceKind };
+  | { type: 'cancel_insurance'; kind: VirtualCityInsuranceKind }
+  | { type: 'upgrade_education'; child_idx: number }
+  | { type: 'pay_support_extra'; amount_cny: number };
 
 // ── P2 交易系统：交易类动作（走 game.virtualCity_xxx 帧）──────────────────────
 

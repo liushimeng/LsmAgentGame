@@ -431,7 +431,8 @@ func TestInsurance_AccidentInjury(t *testing.T) {
 }
 
 // TestInsurance_AccidentDeath 意外身故(30% 分支)→ HandleDeath:双险有效 →
-// Cash += 1,500,000;Alive=false、Ending="accident_death"。
+// 理赔 1,500,000 入遗产池(批次52 §2 裁决 D8/D9:DistributeInheritance 接线后
+// 理赔自然并入遗产并分配,死者账簿清零);Alive=false、Ending="accident_death"。
 func TestInsurance_AccidentDeath(t *testing.T) {
 	seed := findAccidentSeed(t, true)
 	w := NewWorld(seed, emptyCardsFor(1))
@@ -449,7 +450,6 @@ func TestInsurance_AccidentDeath(t *testing.T) {
 	for w.Month < 5 {
 		w.Month++
 	}
-	cashBefore := p.Cash
 	w.MonthlyEvents()
 	if p.Alive {
 		t.Fatal("death branch must kill")
@@ -457,12 +457,17 @@ func TestInsurance_AccidentDeath(t *testing.T) {
 	if p.Ending != EndingAccidentDeath {
 		t.Errorf("ending: %s, want %s", p.Ending, EndingAccidentDeath)
 	}
-	if got := p.Cash - cashBefore; got != 1500000 {
-		t.Errorf("death payout into estate: %d, want 1500000", got)
-	}
 	n, total := insClaimTotal(w, 0)
 	if n != 2 || total != 1500000 {
 		t.Errorf("death claims: n=%d total=%d, want 2/1500000", n, total)
+	}
+	// 批次52:DistributeInheritance 随 HandleDeath 接线 —— 理赔并入遗产池分配
+	// (本例无配偶无子女 → 充公入 world),死者账簿清零。
+	if p.Cash != 0 || len(p.Assets) != 0 || len(p.Loans) != 0 {
+		t.Errorf("死者账簿应清零: cash=%d", p.Cash)
+	}
+	if len(w.InheritanceLog) != 1 {
+		t.Errorf("inheritance log: got %d, want 1", len(w.InheritanceLog))
 	}
 	// 身故座位月结跳过(不再扣缴保费):投保 2 笔,身后月结零新增。
 	w.SettleMonth()
@@ -476,14 +481,14 @@ func TestInsurance_AccidentDeath(t *testing.T) {
 func TestInsurance_HandleDeathDirect(t *testing.T) {
 	w := insWorld(21, true)
 	p := w.Players[0]
-	// 等待期(月 1 投保,寿险等 3 月)内身故 → 零赔付。
+	// 等待期(月 1 投保,寿险等 3 月)内身故 → 零赔付(理赔断言,批次52 起
+	// 身故现金由 DistributeInheritance 清算,不再以现金不变作代理断言)。
 	if _, e := w.ApplyAction(0, Action{Type: ActBuyInsurance, Kind: InsTermLife}); e != nil {
 		t.Fatalf("buy: %v", e)
 	}
-	cashBefore := p.Cash
 	w.HandleDeath(0, "意外身故")
-	if p.Cash != cashBefore {
-		t.Errorf("waiting-period death must pay 0, delta %d", p.Cash-cashBefore)
+	if n, total := insClaimTotal(w, 0); n != 0 || total != 0 {
+		t.Errorf("waiting-period death must pay 0, got n=%d total=%d", n, total)
 	}
 	if p.Alive || p.Ending != EndingAccidentDeath {
 		t.Errorf("death registration wrong: alive=%v ending=%s", p.Alive, p.Ending)

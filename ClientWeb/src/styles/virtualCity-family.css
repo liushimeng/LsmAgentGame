@@ -1,0 +1,221 @@
+/* ─── 虚拟城市 批次52 代际财富转移引擎（FamilyPanel）样式 — 2026-10-02 §20261002-01 ───
+ *
+ * 独立成文件：经 globals.css 链尾 @import 加载（只追加不改序，CLAUDE.md §2.1 约束 4）。
+ * 选择器全部为新增 .virtualCity-family-* 前缀，与既有规则零级联冲突。
+ *
+ * 对比度硬阈值（CLAUDE.md §26）：正文 ≥4.5:1（--virtualCity-text 系 token），徽章 ≥5:1
+ * （白字实底）；禁用按钮独立灰底 + cursor:not-allowed + 显式 opacity:1
+ * （§26.2 反模式 #5：禁 opacity:0.4 表 disabled）。
+ * 布局硬约束（批次52 §8.1）：随 EconomyPanel 网格宽度，禁止绝对定位溢出；
+ * 长文本 word-break；按钮组 flex-wrap；控件不重叠、不留大面积空白。
+ */
+
+.virtualCity-family-wrap {
+  margin-top: 10px;
+}
+
+.virtualCity-family {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.virtualCity-family__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--virtualCity-border);
+}
+
+.virtualCity-family__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.virtualCity-family__label {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--virtualCity-text-dim); /* ≈8:1 */
+  white-space: nowrap;
+}
+
+.virtualCity-family__value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  color: var(--virtualCity-text); /* #e5e7eb on #161d28 ≈ 13:1 */
+  word-break: break-word;
+}
+
+.virtualCity-family__meta {
+  font-size: 12px;
+  color: var(--virtualCity-text-dim);
+  word-break: break-word;
+}
+
+/* ── 徽章（白字实底，§26 ≥5:1）── */
+.virtualCity-family__badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.virtualCity-family__badge--alive   { background: #065f46; } /* 绿底白字 ≈ 6.4:1 */
+.virtualCity-family__badge--gone    { background: #4b5563; } /* 灰底白字 ≈ 5.3:1 */
+.virtualCity-family__badge--good    { background: #065f46; } /* ≈ 6.4:1 */
+.virtualCity-family__badge--fair    { background: #b45309; } /* 琥珀底白字 ≈ 5.3:1 */
+.virtualCity-family__badge--poor    { background: #b91c1c; } /* 红底白字 ≈ 5.9:1 */
+.virtualCity-family__badge--public  { background: #1d4ed8; } /* 蓝底白字 ≈ 6.6:1 */
+.virtualCity-family__badge--private { background: #4c1d95; } /* 紫底白字 ≈ 8:1 */
+
+/* ── 子女列表（横向 wrap，长文本换行不溢出）── */
+.virtualCity-family__kids {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.virtualCity-family__kid {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+  background: var(--virtualCity-panel-2); /* #1c2431 */
+  font-size: 12px;
+  color: var(--virtualCity-text);
+  word-break: break-word;
+}
+
+/* ── 现金流行（本月三行 / 累计三行 / 预览行共用）── */
+.virtualCity-family__flows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.virtualCity-family__flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+.virtualCity-family__amount {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--virtualCity-text);
+  white-space: nowrap;
+}
+
+.virtualCity-family__totals-wrap {
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+  background: var(--virtualCity-panel-2);
+}
+
+/* ── 操作区（flex-wrap；禁止绝对定位）── */
+.virtualCity-family__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.virtualCity-family__btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal; /* 长按钮文案换行，不溢出 */
+  word-break: break-word;
+}
+
+/* 置灰：独立灰底 + cursor:not-allowed + opacity:1（§26.2-5）。 */
+.virtualCity-family__btn:disabled {
+  background: #1a2029;
+  color: #6b7480;
+  border-color: var(--virtualCity-border);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+/* ── 自愿加赡养 行内表单 ── */
+.virtualCity-family__support {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.virtualCity-family__support-label {
+  font-size: 12px;
+  color: var(--virtualCity-text-dim);
+  white-space: nowrap;
+}
+
+.virtualCity-family__support-input {
+  flex: 1 1 90px;
+  min-width: 0;
+  max-width: 120px;
+  padding: 6px 8px;
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+  background: #121822;
+  color: var(--virtualCity-text);
+  font-size: 13px;
+}
+
+.virtualCity-family__support-input:focus {
+  outline: none;
+  border-color: var(--virtualCity-accent-strong, #d4a017);
+}
+
+/* ── 错误条（§7.1 优先级 1：面板内联，不关面板）── */
+.virtualCity-family__error {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid #b91c1c;
+  border-radius: 8px;
+  background: #450a0a; /* 深红底白字 ≈ 10:1 */
+  color: #ffffff;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+/* ── 遗产预览弹窗体 ── */
+.virtualCity-family__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .virtualCity-family *,
+  .virtualCity-family *::before,
+  .virtualCity-family *::after {
+    transition: none !important;
+  }
+}

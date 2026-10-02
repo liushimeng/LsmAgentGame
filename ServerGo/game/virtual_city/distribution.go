@@ -12,7 +12,7 @@ package virtual_city
 
 import "fmt"
 
-// 资金流向节点 ID(§13.2.3 映射表的"主体";固定集合不引入新节点)。
+// 资金流向节点 ID(§13.2.3 映射表的"主体";批次52 §3.3 起增补 FlowNodeFamily)。
 const (
 	FlowNodeSalary = "salary" // 工资来源(从 bank 出来到玩家)
 	FlowNodeFirms  = "firms"  // 企业部门(消费接收方)
@@ -21,6 +21,7 @@ const (
 	FlowNodeGov    = "gov"    // 政府(税收/养老金)
 	FlowNodePlayer = "player" // 玩家聚合(所有 seat:N 合计)
 	FlowNodeWorld  = "world"  // 系统外注入
+	FlowNodeFamily = "family" // 家庭(批次52 §3.3:代际财富转移,赡养/教育/继承/回流)
 )
 
 // FlowNode 节点(2026-09-19 §P2 v2 §13.2.2)。
@@ -35,7 +36,7 @@ type FlowNode struct {
 type FlowLink struct {
 	From      string  `json:"from"`       // 节点 ID
 	To        string  `json:"to"`         // 节点 ID
-	AmountCNY int64    `json:"amount_cny"` // 流量(恒正)
+	AmountCNY int64   `json:"amount_cny"` // 流量(恒正)
 	Pct       float64 `json:"pct"`        // 占总流量比(最大边为基准)
 }
 
@@ -54,10 +55,10 @@ type FlowStat struct {
 var flowCategoryMap = map[string]struct {
 	from, to string
 }{
-	CatSalary:       {FlowNodeBank, FlowNodePlayer},   // bank 工资代发 → player
-	CatSpouse:       {FlowNodeBank, FlowNodePlayer},   // 同上(配偶)
-	CatSide:         {FlowNodeBank, FlowNodePlayer},   // 副业收入
-	CatLiving:       {FlowNodePlayer, FlowNodeFirms},  // 消费 → 企业
+	CatSalary:       {FlowNodeBank, FlowNodePlayer},  // bank 工资代发 → player
+	CatSpouse:       {FlowNodeBank, FlowNodePlayer},  // 同上(配偶)
+	CatSide:         {FlowNodeBank, FlowNodePlayer},  // 副业收入
+	CatLiving:       {FlowNodePlayer, FlowNodeFirms}, // 消费 → 企业
 	CatConsume:      {FlowNodePlayer, FlowNodeFirms},
 	CatRentPay:      {FlowNodePlayer, FlowNodeFirms},
 	CatProperty:     {FlowNodePlayer, FlowNodeFirms},
@@ -81,6 +82,11 @@ var flowCategoryMap = map[string]struct {
 	CatBondInterest: {FlowNodeMarket, FlowNodePlayer}, // 债券利息/股息
 	CatFee:          {FlowNodePlayer, FlowNodeMarket}, // 手续费
 	CatInject:       {FlowNodeWorld, FlowNodePlayer},  // 系统注入
+	// 批次52 §3.3(裁决 D10–D12):代际财富四类。
+	CatFamilySupport: {FlowNodePlayer, FlowNodeFamily}, // 赡养支出(seat→family)
+	CatEduTuition:    {FlowNodePlayer, FlowNodeFamily}, // 教育投入(seat→family)
+	CatInheritance:   {FlowNodePlayer, FlowNodeFamily}, // 遗产继承(seat→family;充公分支入 world 不进聚合)
+	CatChildSupport:  {FlowNodeFamily, FlowNodePlayer}, // 子女成年回流(family→seat)
 	// P2-1 玩家间互转跳过:CatTrade / CatTradeFee / CatP2PInterest / CatP2PRepay /
 	// CatAuctionFee / CatInfoTrade / CatNegotiateFee → 不进入聚合。
 	// CatDonate / CatOvertime → 暂不进聚合(P0 极小流量;留 v3 补)
@@ -95,6 +101,7 @@ var flowNodeKind = map[string]string{
 	FlowNodeGov:    "sink",
 	FlowNodePlayer: "pass",
 	FlowNodeWorld:  "source",
+	FlowNodeFamily: "sink", // 批次52:家庭(赡养/教育/继承归集;回流为反向边)
 }
 
 // ComputeFlowStat 计算指定月份资金流向(纯函数,§13.2.3 算法)。
@@ -178,7 +185,7 @@ func ComputeFlowStat(w *World, month int) *FlowStat {
 		nodeSeen[k.to] += v
 	}
 	// 固定顺序(避免随机顺序影响前端 diff)
-	order := []string{FlowNodeSalary, FlowNodeBank, FlowNodeMarket, FlowNodeWorld, FlowNodePlayer, FlowNodeFirms, FlowNodeGov}
+	order := []string{FlowNodeSalary, FlowNodeBank, FlowNodeMarket, FlowNodeWorld, FlowNodePlayer, FlowNodeFirms, FlowNodeGov, FlowNodeFamily}
 	for _, id := range order {
 		amt, ok := nodeSeen[id]
 		if !ok {

@@ -10,12 +10,13 @@ import (
 	"LsmAgentGame/game/virtual_city/profession"
 )
 
-// TestBuildTools_21Tools 批次35 §3.2:工具收敛 47 → 21,感知四件套与
-// speak/check_state/submit_month 原样保留(V2 验收)。
-func TestBuildTools_21Tools(t *testing.T) {
+// TestBuildTools_22Tools 批次35 §3.2:工具收敛 47 → 21,感知四件套与
+// speak/check_state/submit_month 原样保留(V2 验收);批次52 §2 裁决 D13
+// 增 ToolFamily 分组工具 → 合计 22。
+func TestBuildTools_22Tools(t *testing.T) {
 	tools := BuildTools()
-	if len(tools) != 21 {
-		t.Errorf("tools count: got %d, want 21", len(tools))
+	if len(tools) != 22 {
+		t.Errorf("tools count: got %d, want 22", len(tools))
 	}
 	want := map[string]bool{
 		// 感知与基础(7,原样保留)。
@@ -24,6 +25,8 @@ func TestBuildTools_21Tools(t *testing.T) {
 		// 金融合并(5)。
 		ToolAssetTrade: false, ToolBankLoan: false, ToolSavings: false,
 		ToolQueryFinance: false, ToolInsurance: false,
+		// 代际财富(1,批次52 裁决 D13)。
+		ToolFamily: false,
 		// 生活(3)。
 		ToolActivity: false, ToolSetConsumption: false, ToolAnswerSurvey: false,
 		// 副业(1)。
@@ -82,11 +85,11 @@ func TestBuildTools_RequiredFields(t *testing.T) {
 	}
 }
 
-// TestToolNames_Returns21Names 工具名列表 = 21(测试/lint 口径,V2 验收)。
-func TestToolNames_Returns21Names(t *testing.T) {
+// TestToolNames_Returns22Names 工具名列表 = 22(测试/lint 口径;批次52 起)。
+func TestToolNames_Returns22Names(t *testing.T) {
 	names := ToolNames()
-	if len(names) != 21 {
-		t.Errorf("names count: got %d, want 21", len(names))
+	if len(names) != 22 {
+		t.Errorf("names count: got %d, want 22", len(names))
 	}
 	seen := map[string]bool{}
 	for _, n := range names {
@@ -175,6 +178,9 @@ func TestDispatchTool_BudgetSemantics(t *testing.T) {
 		{ToolInsurance, map[string]any{"op": "status"}, false},
 		{ToolMarketListing, map[string]any{"op": "view"}, false},
 		{ToolAnswerSurvey, map[string]any{"survey_id": "SV1", "option_index": 1}, false},
+		// 批次52 §2 裁决 D13:family query / plan_inheritance 免预算。
+		{ToolFamily, map[string]any{"op": "query"}, false},
+		{ToolFamily, map[string]any{"op": "plan_inheritance"}, false},
 		// 耗预算(其余全部 op)。
 		{ToolAssetTrade, map[string]any{"op": "buy", "asset": "stock_index", "amount_cny": 5000}, true},
 		{ToolAssetTrade, map[string]any{"op": "sell", "asset": "gold", "units": 10}, true},
@@ -183,6 +189,9 @@ func TestDispatchTool_BudgetSemantics(t *testing.T) {
 		{ToolBankLoan, map[string]any{"op": "early_repay", "loan_id": "L1", "amount_cny": 0}, true},
 		{ToolInsurance, map[string]any{"op": "buy", "kind": "term_life"}, true},
 		{ToolInsurance, map[string]any{"op": "cancel", "kind": "term_life"}, true},
+		// 批次52 §2 裁决 D13:加赡养/教育升级耗 1 动作预算。
+		{ToolFamily, map[string]any{"op": "pay_support_extra", "amount_cny": 1000}, true},
+		{ToolFamily, map[string]any{"op": "upgrade_education", "child_idx": 0}, true},
 		{ToolActivity, map[string]any{"kind": "study"}, true},
 		{ToolActivity, map[string]any{"kind": "socialize"}, true},
 		{ToolActivity, map[string]any{"kind": "rest"}, true},
@@ -321,6 +330,31 @@ func TestDispatchTool_Insurance(t *testing.T) {
 	}
 	if res := a.DispatchTool(ToolInsurance, map[string]any{"op": "status"}); res.IsErr || f.lastTool != "GetInsuranceStatus" {
 		t.Errorf("status: res=%+v method=%s", res, f.lastTool)
+	}
+}
+
+// TestDispatchTool_Family family 四 op 路由(批次52 §2 裁决 D13)。
+func TestDispatchTool_Family(t *testing.T) {
+	f := &fakeTradeRunner{}
+	a := NewAgent("r1", "u1", "", "", 0, 3, 0)
+	a.BindRunner(f)
+
+	if res := a.DispatchTool(ToolFamily, map[string]any{"op": "query"}); res.IsErr || f.lastTool != "QueryFamily" {
+		t.Errorf("query: res=%+v method=%s", res, f.lastTool)
+	}
+	if res := a.DispatchTool(ToolFamily, map[string]any{"op": "plan_inheritance"}); res.IsErr || f.lastTool != "PlanInheritance" {
+		t.Errorf("plan_inheritance: res=%+v method=%s", res, f.lastTool)
+	}
+	if res := a.DispatchTool(ToolFamily, map[string]any{"op": "pay_support_extra", "amount_cny": 2000}); res.IsErr || f.lastTool != "PaySupportExtra" || f.familyArgs.amount != 2000 {
+		t.Errorf("pay_support_extra: res=%+v method=%s amount=%d", res, f.lastTool, f.familyArgs.amount)
+	}
+	if res := a.DispatchTool(ToolFamily, map[string]any{"op": "upgrade_education", "child_idx": 1}); res.IsErr || f.lastTool != "UpgradeEducation" || f.familyArgs.childIdx != 1 {
+		t.Errorf("upgrade_education: res=%+v method=%s idx=%d", res, f.lastTool, f.familyArgs.childIdx)
+	}
+	// 缺省 op → query(与 insurance 缺省 buy 同款容错)。
+	f.lastTool = ""
+	if res := a.DispatchTool(ToolFamily, map[string]any{}); res.IsErr || f.lastTool != "QueryFamily" {
+		t.Errorf("default op: res=%+v method=%s", res, f.lastTool)
 	}
 }
 

@@ -102,10 +102,10 @@ type Loan struct {
 // SideBusiness 副业状态。
 // 批次20(文档2 §2)追加定价档字段;JSON 兼容旧档(零值 = 中价 = 旧行为)。
 type SideBusiness struct {
-	Kind        string // delivery|content|tutoring|freelance
-	BaseIncome  int64  // 档位基准(展示)
-	OpenedMonth int
-	PriceTier   int // 0=中价(默认,兼容旧档零值) 1=低价 2=高价(常量见 side_market.go)
+	Kind         string // delivery|content|tutoring|freelance
+	BaseIncome   int64  // 档位基准(展示)
+	OpenedMonth  int
+	PriceTier    int // 0=中价(默认,兼容旧档零值) 1=低价 2=高价(常量见 side_market.go)
 	TierSetMonth int // 最近改档月(0=未改过;set_side_price 每月限 1 次)
 }
 
@@ -195,6 +195,14 @@ type Player struct {
 	// (transfer_payment.go 消费)。
 	UnemployedAccumMonths int   // 终生累计失业月数(月末仍失业 +1;救济等待期/递减系数/低保门槛)
 	BirthMonths           []int // 每次生育的主钟月份(儿童津贴 6 岁以下判定;events.go 生育时追加)
+
+	// 批次52 §20261002-01 代际财富转移(P1-3 落地):需要跨月累积/决策落库的量。
+	// 派生口径(父母在世/年龄/健康、子女年龄/教育档)在 family.go 纯函数现算,不落库。
+	PrivateEduMask          []bool // 与子女序对齐:卡面初始在前、事件生育在后;true=私立
+	FamilySupportTotalCNY   int64  // 累计赡养总支出(含自愿加赡养)—— 代际贡献分输入
+	EducationTotalCNY       int64  // 累计教育总投入(升级一次性 + 月度教育费)—— 代际贡献分输入
+	ChildSupportReceivedCNY int64  // 累计子女成年后回流(批次52 §2 裁决 D12)
+	FamilySupportExtraCNY   int64  // 累计自愿加赡养(展示;计入 FamilySupportTotalCNY)
 
 	SalaryBase     int64 // 当前基准月薪(年增长累积;P16 为波动带中值)
 	SalaryLow      int64 // P16 波动带下界(非波动卡 = SalaryBase)

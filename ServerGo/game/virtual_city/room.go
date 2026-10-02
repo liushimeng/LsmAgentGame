@@ -149,6 +149,9 @@ type VirtualCityRoom struct {
 	// P1-4(2026-09-19 §财商流P1-4 §11):商业保险引擎开关(默认 true;
 	// Manager.CreateRoom 按 Manager.Config 调 SetInsuranceEnabled 回写)。
 	insuranceEnabled bool
+	// familyEnabled 批次52(§5):代际财富转移引擎开关(默认 true;
+	// Manager.CreateRoom 按 Manager.Config 调 SetFamilyEnabled 回写;false = 回滚阀)。
+	familyEnabled bool
 	// electionEnabled 批次20(文档3 A2):市长选举房间级开关。
 	// **默认 false(零值)= 关闭** —— 与 insuranceEnabled(NewWorld 恒 true,
 	// Start 回写)方向相反;NewVirtualCityRoom 不初始化 true,勿按保险家族惯性写。
@@ -218,8 +221,8 @@ type VirtualCityRoom struct {
 	// 批次 33:真实城市档案(city_geo.go)。"",=默认城市(cityGeo nil,批次 27
 	// 行为逐分不差);applyOpts 解析(在 Seed 落位后,random 用最终 seed)。
 	// 纯内存态,不进存档(与 pendingOpts 现状一致,批次 27 §9 同款)。
-	cityKey  string
-	cityGeo  *CityGeo
+	cityKey string
+	cityGeo *CityGeo
 
 	done     chan struct{}
 	settleCh chan struct{}
@@ -264,6 +267,7 @@ func NewVirtualCityRoom(roomID string, monthMs int, seed int64, llmConcurrency i
 		economyEnabled:   true,
 		surveyEnabled:    true,
 		insuranceEnabled: true,
+		familyEnabled:    true,
 		// 2026-09-21 §虚拟城市:城市之声默认开(契约 03 §7;Manager.CreateRoom
 		// 按 cfg 覆盖;无线路池时调度器自动空转,零开销)。
 		cityVoiceEnabled:  true,
@@ -303,6 +307,18 @@ func (r *VirtualCityRoom) SetInsuranceEnabled(enabled bool) {
 	r.insuranceEnabled = enabled
 	if r.World != nil {
 		r.World.InsuranceEnabled = enabled
+	}
+}
+
+// SetFamilyEnabled 回写房间级代际财富转移引擎开关(批次52 §5;由
+// Manager.CreateRoom 调用,须在 Start 之前)。false 时月结零接线、家庭工具
+// 拒绝 35045、遗产不分配(回滚阀)。
+func (r *VirtualCityRoom) SetFamilyEnabled(enabled bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.familyEnabled = enabled
+	if r.World != nil {
+		r.World.FamilyEnabled = enabled
 	}
 }
 
@@ -664,6 +680,8 @@ func (r *VirtualCityRoom) Start(loader *profession.Loader) *errcode.Error {
 	r.World.EconomyEnabled = r.economyEnabled
 	// P1-4(§财商流P1-4 §11):NewWorld 恒置 InsuranceEnabled=true,此处按开关回写。
 	r.World.InsuranceEnabled = r.insuranceEnabled
+	// 批次52(§5):NewWorld 恒置 FamilyEnabled=true,此处按开关回写(回滚阀)。
+	r.World.FamilyEnabled = r.familyEnabled
 	// 批次20(文档3 A2):市长选举接线 —— NewCivicElection 默认 Enabled=false
 	// (零值=false 家族,勿按上面 InsuranceEnabled 的反向语义写);房间级
 	// 开关 true 才启用。false 时 MonthlyStep 完全 no-op,与升级前逐分不差。

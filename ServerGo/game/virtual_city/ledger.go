@@ -24,6 +24,10 @@ const (
 	// 与 EntityGov 分离:gov 是 P0 既有税收归集实体(个税/社保/养老金回流);
 	// gov:treasury 是阶段4 国库 —— 只付不收(转移支付/财政直发 CatWelfare)。
 	EntityGovernment = "gov:treasury"
+	// EntityFamily 家庭(批次52 §3.3 裁决 D6):代际财富转移的板外家庭实体 ——
+	// 赡养/教育/遗产的接收方、子女回流的付款方。照 EntityGov 白名单守卫风格:
+	// 只收代际三类,只付 CatChildSupport(→ seat),其余方向恒非法。
+	EntityFamily = "family"
 )
 
 // SeatEntity 拼装座位实体 id。
@@ -83,6 +87,11 @@ const (
 	CatClaim   = "claim"   // 理赔(保险公司→座位)
 	// 阶段4: 政府财政(2026-09-21 §城市扩张v2.12)。
 	CatWelfare = "welfare" // 转移支付/财政直发(gov:treasury → seat;I1 守恒走 w.Pay)
+	// 批次52: 代际财富转移四类别(§3.3;数值与算法见 family.go)。
+	CatInheritance   = "inheritance"    // 遗产继承(seat→family/World,CatInheritance)
+	CatFamilySupport = "family_support" // 赡养支出(seat→family;含自愿加赡养)
+	CatEduTuition    = "education"      // 教育投入(seat→family;升级一次性 + 月度)
+	CatChildSupport  = "child_support"  // 子女成年回流(family→seat,收入侧)
 )
 
 // Entry 单条双式流水。
@@ -103,7 +112,7 @@ type Ledger struct {
 // validEntity 实体白名单(I3)。
 func validEntity(e string) bool {
 	switch e {
-	case EntityBank, EntityMarket, EntityGov, EntityInsurer, EntityWorld, EntityFirms, EntityGovernment:
+	case EntityBank, EntityMarket, EntityGov, EntityInsurer, EntityWorld, EntityFirms, EntityGovernment, EntityFamily:
 		return true
 	default:
 		if _, ok := IsSeatEntity(e); ok {
@@ -159,12 +168,33 @@ func validFromTo(from, to, category string) error {
 		if category == CatInject {
 			return fmt.Errorf("inject must come from world")
 		}
-		if category != CatDonate && !firmsInCategories[category] {
-			return fmt.Errorf("world only receives donate/consumption categories (category=%s)", category)
+		// 批次52(§4 裁决 D6):无配偶无子女 → 遗产充公入 world(CatInheritance)。
+		if category != CatDonate && category != CatInheritance && !firmsInCategories[category] {
+			return fmt.Errorf("world only receives donate/inheritance/consumption categories (category=%s)", category)
 		}
 	}
 	if from == EntityGov && category != CatPension {
 		return fmt.Errorf("gov never pays out except pension (category=%s)", category)
+	}
+	// 批次52(§3.3 裁决 D6):family 照 EntityGov 白名单守卫风格 ——
+	// 只收代际三类(继承/赡养/教育),只付 CatChildSupport(→ seat)。
+	if to == EntityFamily {
+		switch category {
+		case CatInheritance, CatFamilySupport, CatEduTuition:
+			if _, ok := IsSeatEntity(from); !ok {
+				return fmt.Errorf("family only receives from seats: %s → %s", from, to)
+			}
+		default:
+			return fmt.Errorf("family only receives inheritance/family_support/education (category=%s)", category)
+		}
+	}
+	if from == EntityFamily {
+		if category != CatChildSupport {
+			return fmt.Errorf("family only pays child_support (category=%s)", category)
+		}
+		if _, ok := IsSeatEntity(to); !ok {
+			return fmt.Errorf("family only pays child_support to seats: %s → %s", from, to)
+		}
 	}
 	// 阶段4: gov:treasury 通道(2026-09-21 §城市扩张v2.12,I3 增补):
 	//   - to=gov:treasury 恒非法(税收经 EntityGov 归集;国库现金由

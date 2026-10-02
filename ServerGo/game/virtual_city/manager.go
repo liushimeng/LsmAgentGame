@@ -58,6 +58,9 @@ type Config struct {
 	// NewManager 归一:零值 → true(false 时投保/退保返回 35041、月结不扣缴、
 	// 意外事件不掷骰)。
 	InsuranceEnabled bool
+	// FamilyEnabled 批次52(§5):代际财富转移引擎总开关。NewManager 归一:
+	// 零值 → true(false 时月结零接线、家庭工具拒绝 35045、遗产不分配 —— 回滚阀)。
+	FamilyEnabled bool
 	// CivicElectionEnabled 批次20(文档3 A2):市长选举启用。
 	// **零值 = false —— 有意区别于 InsuranceEnabled/EconomyEnabled 家族的
 	// 「零值→true」归一化**(它们靠 NewManager 兜底默认开;选举是 R8-2
@@ -154,6 +157,10 @@ func NewManager(cfg Config, reg LLMRegistry) *Manager {
 	// P1-4(§财商流P1-4 §11):零值 → true(默认开启)。
 	if !cfg.InsuranceEnabled {
 		cfg.InsuranceEnabled = true
+	}
+	// 批次52(§5):零值 → true(默认开启;false 回滚阀)。
+	if !cfg.FamilyEnabled {
+		cfg.FamilyEnabled = true
 	}
 	// 2026-09-21 §虚拟城市:城市背景层默认值(契约 03 §7)。
 	if cfg.MaxResidents <= 0 {
@@ -286,6 +293,8 @@ func (m *Manager) CreateRoom(roomID string) *VirtualCityRoom {
 	r.SetEconomyFlags(m.cfg.EconomyEnabled, m.cfg.SurveyEnabled)
 	// P1-4(§财商流P1-4 §11):保险引擎开关接线(Start 前回写)。
 	r.SetInsuranceEnabled(m.cfg.InsuranceEnabled)
+	// 批次52(§5):代际财富转移引擎开关接线(Start 前回写;回滚阀)。
+	r.SetFamilyEnabled(m.cfg.FamilyEnabled)
 	// 批次20(文档3 A2):市长选举开关接线(零值=false,不做归一化;
 	// 建房 HTTP body civic_election_enabled 经 applyOpts 房间级覆盖)。
 	r.SetElectionEnabled(m.cfg.CivicElectionEnabled)

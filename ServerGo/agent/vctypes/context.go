@@ -180,6 +180,30 @@ type SelfBrief struct {
 
 	// P1-4(2026-09-19 §财商流P1-4 §7.4):商业保险保单摘要(prompt 渲染用)。
 	Policies []PolicyBrief
+
+	// FamilyInfo 家庭/代际摘要(批次52 §6;family_enabled=false 或
+	// insurance_enabled=false 时 nil,prompt 段 omit)。
+	FamilyInfo *FamilyBrief
+}
+
+// FamilyBrief 是家庭/代际状态摘要(批次52 §6;引擎侧 BuildContextForAgent 填充)。
+type FamilyBrief struct {
+	ParentsAlive  bool   // 父母在世
+	ParentsAge    int    // 父母年龄
+	ParentsHealth string // good|fair|poor
+	Kids          []KidBrief
+	SupportCNY    int64 // 本月赡养
+	EduCNY        int64 // 本月教育费
+	ChildInCNY    int64 // 本月子女回流
+	TotalSupport  int64 // 累计赡养
+	TotalEdu      int64 // 累计教育
+	TotalChildIn  int64 // 累计回流
+}
+
+// KidBrief 是单个子女摘要(批次52 §6)。
+type KidBrief struct {
+	Age       int
+	Education string // public|private
 }
 
 // PolicyBrief 是单张保单摘要(P1-4;引擎侧 BuildContextForAgent 填充)。

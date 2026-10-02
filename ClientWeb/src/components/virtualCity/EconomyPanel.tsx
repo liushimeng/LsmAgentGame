@@ -24,15 +24,21 @@ import {
   formatCny,
   formatPct,
   virtualCityGoodsMeta,
+  type VirtualCityAction,
   type VirtualCityGameState,
   type VirtualCityGoodsItem,
 } from '@/types/virtualCity';
 import { LorenzCurvePanel } from './LorenzCurvePanel';
 import { VirtualCityPyramidPanel } from './VirtualCityPyramidPanel';
 import { FundFlowSankeyPanel } from './FundFlowSankeyPanel';
+import { FamilyPanel } from './FamilyPanel';
 
 interface Props {
   gameState: VirtualCityGameState | null;
+  /** 批次52：家庭动作通道（缺省 = 家庭面板只读降级）。 */
+  onFamilyAction?: (action: VirtualCityAction) => void;
+  /** 观战 / 全 Agent → 家庭面板只读。 */
+  spectator?: boolean;
 }
 
 /** 带符号百分比（+0.8% / −0.4%；0 → ±0.0%）。 */
@@ -133,7 +139,7 @@ function Meter({
   );
 }
 
-export function EconomyPanel({ gameState }: Props) {
+export function EconomyPanel({ gameState, onFamilyAction, spectator }: Props) {
   const t = useT();
   if (!gameState) {
     return (
@@ -160,6 +166,12 @@ export function EconomyPanel({ gameState }: Props) {
         <div className="virtualCity-panel__empty">
           <p>{t('virtualCity.economy.unavailable' as TKey)}</p>
         </div>
+        {/* 批次52：经济段空态也保留家庭段（family_enabled 与 economy_enabled 正交）。 */}
+        <FamilyPanel
+          my={gameState.my}
+          spectator={spectator ?? false}
+          onAction={onFamilyAction ?? (() => {})}
+        />
       </div>
     );
   }
@@ -359,6 +371,13 @@ export function EconomyPanel({ gameState }: Props) {
           </p>
         </div>
       </details>
+
+      {/* 批次52 §8.1：家庭 / 代际财富折叠区（默认展开；新段缺省时面板内部降级）。 */}
+      <FamilyPanel
+        my={gameState.my}
+        spectator={spectator ?? false}
+        onAction={onFamilyAction ?? (() => {})}
+      />
     </div>
   );
 }

@@ -498,6 +498,58 @@ func (a *AgentRunner) GetInsuranceStatus(seat int) (string, error) {
 	return w.InsuranceStatusText(p), nil
 }
 
+// ── 批次52(§2 裁决 D13): 代际财富四工具 ──
+
+// QueryFamily 查询家庭/代际状态(不耗动作预算;裁决 D13)。
+func (a *AgentRunner) QueryFamily(seat int) (string, error) {
+	a.room.mu.Lock()
+	defer a.room.mu.Unlock()
+	if a.room.closed || a.room.Status != StatusPlaying || a.room.World == nil {
+		return "", errcode.Code(errcode.ErrVirtualCityNotPlaying)
+	}
+	w := a.room.World
+	if !w.FamilyEnabled {
+		return "家庭/代际引擎未启用(family_enabled=false)", nil
+	}
+	p := w.Players[seat]
+	if p == nil {
+		return "", errcode.Code(errcode.ErrVirtualCityPlayerInactive)
+	}
+	return w.FamilyStatusText(p), nil
+}
+
+// PlanInheritance 遗产分配预览(不耗动作预算;现算不落账;裁决 D13)。
+func (a *AgentRunner) PlanInheritance(seat int) (string, error) {
+	a.room.mu.Lock()
+	defer a.room.mu.Unlock()
+	if a.room.closed || a.room.Status != StatusPlaying || a.room.World == nil {
+		return "", errcode.Code(errcode.ErrVirtualCityNotPlaying)
+	}
+	w := a.room.World
+	if !w.FamilyEnabled {
+		return "家庭/代际引擎未启用(family_enabled=false)", nil
+	}
+	p := w.Players[seat]
+	if p == nil {
+		return "", errcode.Code(errcode.ErrVirtualCityPlayerInactive)
+	}
+	return w.planInheritance(p), nil
+}
+
+// PaySupportExtra 自愿加赡养(耗 1 次动作预算;照 BuyInsurance 的 apply 模式)。
+func (a *AgentRunner) PaySupportExtra(seat int, amountCNY int64) error {
+	return a.apply(seat, vcplayer.ToolFamily, "", func() (string, error) {
+		return a.room.World.ApplyAction(seat, Action{Type: ActPaySupportExtra, AmountCNY: amountCNY})
+	})
+}
+
+// UpgradeEducation 教育升级(耗 1 次动作预算;照 BuyInsurance 的 apply 模式)。
+func (a *AgentRunner) UpgradeEducation(seat int, childIdx int) error {
+	return a.apply(seat, vcplayer.ToolFamily, "", func() (string, error) {
+		return a.room.World.ApplyAction(seat, Action{Type: ActUpgradeEducation, ChildIdx: childIdx})
+	})
+}
+
 func (a *AgentRunner) Speak(seat int, text, internalThought string) error {
 	// speak 走 chat sender,不耗动作预算。
 	a.room.mu.Lock()
@@ -1028,6 +1080,28 @@ func BuildContextForAgent(r *VirtualCityRoom, seat int) (*vctypes.GameContext, b
 				WaitingLeft:       pol.waitingLeft(r.World.Month),
 			})
 		}
+	}
+	// 批次52 §6:家庭/代际摘要(prompt「家庭/代际」段;裁决 D13)。
+	if r.World.FamilyEnabled && r.World.InsuranceEnabled {
+		fb := &vctypes.FamilyBrief{
+			ParentsAge:    r.World.parentsAgeOf(p),
+			ParentsHealth: parentsHealthOf(r.World.parentsAgeOf(p)),
+			SupportCNY:    r.World.monthlyFamilySupport(p),
+			EduCNY:        r.World.monthlyEduTuition(p),
+			ChildInCNY:    r.World.monthlyChildSupportIn(p),
+			TotalSupport:  p.FamilySupportTotalCNY,
+			TotalEdu:      p.EducationTotalCNY,
+			TotalChildIn:  p.ChildSupportReceivedCNY,
+		}
+		fb.ParentsAlive, _ = r.World.parentsAliveOf(p)
+		n := r.World.childCountOf(p)
+		for i := 0; i < n; i++ {
+			fb.Kids = append(fb.Kids, vctypes.KidBrief{
+				Age:       r.World.childAgeOf(p, i),
+				Education: childEduOf(p, i),
+			})
+		}
+		me.FamilyInfo = fb
 	}
 
 	// Peers 公开字段。

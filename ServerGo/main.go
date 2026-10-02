@@ -956,6 +956,8 @@ func main() {
 		SurveyEnabled:  cfg.VirtualCity.SurveyEnabled,
 		// P1-4(2026-09-19 §财商流P1-4 §11):商业保险与风险转移引擎开关。
 		InsuranceEnabled: cfg.VirtualCity.InsuranceEnabled,
+		// 批次52(§5):代际财富转移引擎开关(默认 true;false 回滚阀)。
+		FamilyEnabled: cfg.VirtualCity.FamilyEnabled,
 		// 2026-09-21 §虚拟城市(契约 03 §7)— 城市背景层配置。
 		MaxResidents:        cfg.VirtualCity.MaxResidents,
 		CityVoiceEnabled:    cfg.VirtualCity.CityVoiceEnabled,

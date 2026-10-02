@@ -334,7 +334,8 @@ func (w *World) rollAccident(seat int) {
 //     意外险(Status=="active" 且死因含"意外"):Pay(insurer→seat, CoverageCNY, CatClaim, "身故理赔-意外险")
 //     等待期(waiting)内身故:不赔不退(消费型,§2.3)。
 //     赔付入死者 Cash = 计入遗产池(代际引擎契约 §3.2:总遗产 = Cash+ΣAssets−ΣLoans)。
-//  3. 对接代际财富转移引擎:DistributeInheritance(seat)。
+//  3. 对接代际财富转移引擎:DistributeInheritance(seat)(批次52 §4,已接线;
+//     50%/子女均分/充公三分支,丧葬费 ¥5,000 先扣,family_enabled=false 跳过)。
 //  4. game.event{type:"life"} 公告(game.month 摘要 note 由 settlement 层补)。
 //
 // 破产出局(eliminate)不是身故,不触发任何寿险赔付(防道德风险套利,P1 新定)。
@@ -362,10 +363,15 @@ func (w *World) HandleDeath(seat int, cause string) {
 			texts = append(texts, fmt.Sprintf("意外险给付 ¥%d", pol.CoverageCNY))
 		}
 	}
-	// 【代际引擎对接点】《虚拟城市-P1-代际财富转移引擎-v1.md》§3 的
-	// DistributeInheritance(seat)(50% 配偶 + 50% 均分子女,丧葬费 ¥5,000 先扣)
-	// 尚未接线 —— 赔付留存死者 Cash(insurer→seat 已双式入账,I1 守恒不受影响),
-	// 代际引擎落地后在下方调用即可自动纳入遗产池(总遗产 = Cash+ΣAssets−ΣLoans)。
+	// 【代际引擎对接点】批次52 §2 裁决 D9:DistributeInheritance(seat) 在理赔
+	// 完成后立即调用(唯一死亡入口;破产出局 eliminate 不触发)。身故理赔已入
+	// 死者 Cash(insurer→seat 双式入账),自然并入遗产池(裁决 D8)。
+	// family_enabled=false 时零接线(回滚阀,批次52 §5),赔付留存死者 Cash。
+	if w.FamilyEnabled {
+		if err := w.DistributeInheritance(seat); err != nil {
+			w.emitEvent("life", seat, fmt.Sprintf("%d 号位遗产分配失败:%v", seat, err))
+		}
+	}
 	if len(texts) > 0 {
 		w.emitEvent("life", seat, fmt.Sprintf("%d 号位%s,身故理赔合计 ¥%d 已计入遗产", seat, cause, total))
 	} else {

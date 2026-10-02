@@ -489,6 +489,28 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 		}
 	}
 
+	// ── 步骤4.5 代际财富三通道(批次52 §5;裁决 D10–D12)。刚性赡养 + 私立
+	// 月度教育费入支出侧(seat→family),子女成年回流(D12 裁决)入收入侧
+	// (family→seat);插入点 = ② MonthlyEvents 之后、⑤ LivingExpense 之前。
+	// family_enabled=false 时零接线(回滚阀,批次52 §5)。
+	if w.FamilyEnabled {
+		if sup := w.monthlyFamilySupport(p); sup > 0 {
+			w.Pay(seat, SeatEntity(seat), EntityFamily, sup, CatFamilySupport, "赡养父母")
+			p.FamilySupportTotalCNY += sup
+			addExpense(sup, "family_support", "赡养父母")
+		}
+		if edu := w.monthlyEduTuition(p); edu > 0 {
+			w.Pay(seat, SeatEntity(seat), EntityFamily, edu, CatEduTuition, "子女教育")
+			p.EducationTotalCNY += edu
+			addExpense(edu, "education", "子女教育")
+		}
+		if childIn := w.monthlyChildSupportIn(p); childIn > 0 {
+			w.Pay(seat, EntityFamily, SeatEntity(seat), childIn, CatChildSupport, "子女回流")
+			p.ChildSupportReceivedCNY += childIn
+			addIncome(childIn, "child_support", "子女回流", false)
+		}
+	}
+
 	// ── 步骤5 生活支出:职业基数 × 通胀因子 × 档位乘数(P1 §3.3)+ 配偶 2000 +
 	// 每孩 5000 + 赡养;economy_enabled 时归入 firms 钱流并按恩格尔曲线拆 8 类。
 	infl := InflationFactorCB(w)
@@ -789,12 +811,15 @@ func (w *World) AnnualAdjust() {
 
 // ─────────────────── 终局评分与结局(§12) ───────────────────
 
-// FinalScore 单座位三维评分。
+// FinalScore 单座位四维评分(批次52 §2 裁决 D14:增 family_score;总分权重
+// 再平衡 fi×0.45 + life×0.25 + social×0.15 + family×0.15,结局阈值不变)。
 type FinalScore struct {
 	Seat        int     `json:"seat"`
 	FIScore     float64 `json:"fi_score"`
 	LifeScore   float64 `json:"life_score"`
 	SocialScore float64 `json:"social_score"`
+	// FamilyScore 代际贡献分(批次52 §2 裁决 D14;json key = family_score)。
+	FamilyScore float64 `json:"family_score"`
 	Total       float64 `json:"total"`
 	Ending      string  `json:"ending"`
 	Report      string  `json:"report"`
@@ -874,7 +899,11 @@ func (w *World) FinalScores() []FinalScore {
 			social = 100
 		}
 
-		total := fiScore*0.5 + life*0.3 + social*0.2
+		// 代际贡献分(批次52 §2 裁决 D14)。
+		family := w.FamilyScore(p)
+
+		// 总分权重再平衡(裁决 D14):45/25/15/15(原 50/30/20);结局阈值不变。
+		total := fiScore*0.45 + life*0.25 + social*0.15 + family*0.15
 
 		ending := EndingBankrupt
 		switch {
@@ -896,7 +925,7 @@ func (w *World) FinalScores() []FinalScore {
 
 		out = append(out, FinalScore{
 			Seat: seat, FIScore: fiScore, LifeScore: life, SocialScore: social,
-			Total: total, Ending: ending,
+			FamilyScore: family, Total: total, Ending: ending,
 			Report: w.finalReport(p, nw, fi),
 		})
 	}
@@ -926,8 +955,9 @@ func (w *World) finalReport(p *Player, netWorth int64, fi float64) string {
 		}
 	}
 	return fmt.Sprintf("%s(%s)的 35 年:终局净资产 ¥%d(FI %.2f),峰值 ¥%d / 谷底 ¥%d;"+
-		"最大单笔买入 ¥%d、最大单笔变现 ¥%d;累计捐赠 ¥%d。",
-		p.Card.Title, p.Card.ID, netWorth, fi, peak, trough, maxGain, maxLoss, p.DonationTotalCNY)
+		"最大单笔买入 ¥%d、最大单笔变现 ¥%d;累计捐赠 ¥%d。%s",
+		p.Card.Title, p.Card.ID, netWorth, fi, peak, trough, maxGain, maxLoss, p.DonationTotalCNY,
+		familySupportRatioNote(p))
 }
 
 func clamp(v, lo, hi int) int {

@@ -41,21 +41,21 @@ type ClientGameState struct {
 	CityClockMs int64 `json:"city_clock_ms"`
 	// 批次 27(§3.4):时间比例/季节/天气 —— 全部由 city_clock_ms + 房间
 	// seed 现算(确定性纯函数,见 time_weather.go),无额外房间状态。
-	TimeRatio        int            `json:"time_ratio"`        // 城市秒/现实秒(缺省 60)
-	Season           string         `json:"season"`            // spring|summer|autumn|winter
-	Weather          string         `json:"weather"`           // 8 类型 §3.3(clear|cloudy|fog|drizzle|rain|storm|snow|blizzard)
-	WeatherIntensity float64        `json:"weather_intensity"` // [0,1] 两位小数
+	TimeRatio        int     `json:"time_ratio"`        // 城市秒/现实秒(缺省 60)
+	Season           string  `json:"season"`            // spring|summer|autumn|winter
+	Weather          string  `json:"weather"`           // 8 类型 §3.3(clear|cloudy|fog|drizzle|rain|storm|snow|blizzard)
+	WeatherIntensity float64 `json:"weather_intensity"` // [0,1] 两位小数
 	// 批次 33:真实城市(方案 §2.3)。选中城市才下发(omitempty);默认城市
 	// 两字段恒空 —— 前端完全旁路,批次 27 行为逐分不差。
-	CityName string         `json:"city_name,omitempty"` // 选中城市中文名(顶栏标题)
-	CityInfo *CityGeoJSON   `json:"city_info,omitempty"` // 城市档案 + 当日日出日落(插值)
-	Players          []PlayerJSON   `json:"players"`
-	MySeat           int            `json:"my_seat"`
-	My               *MyJSON        `json:"my"` // nil = 观战者
-	BotContexts      []BotCtxJSON   `json:"bot_contexts"`
-	LedgerRecent     []LedgerJSON   `json:"ledger_recent"`
-	EventsRecent     []EventJSON    `json:"events_recent"`
-	Minsky           MinskyOverview `json:"minsky_overview"`
+	CityName     string         `json:"city_name,omitempty"` // 选中城市中文名(顶栏标题)
+	CityInfo     *CityGeoJSON   `json:"city_info,omitempty"` // 城市档案 + 当日日出日落(插值)
+	Players      []PlayerJSON   `json:"players"`
+	MySeat       int            `json:"my_seat"`
+	My           *MyJSON        `json:"my"` // nil = 观战者
+	BotContexts  []BotCtxJSON   `json:"bot_contexts"`
+	LedgerRecent []LedgerJSON   `json:"ledger_recent"`
+	EventsRecent []EventJSON    `json:"events_recent"`
+	Minsky       MinskyOverview `json:"minsky_overview"`
 	// P1(§财商流P1-2 §6.1):economy_enabled=false 时为零值/空数组下发。
 	ConsumerMarket ConsumerMarketJSON `json:"consumer_market"`
 	LaborMarket    LaborMarketJSON    `json:"labor_market"`
@@ -83,6 +83,10 @@ type ClientGameState struct {
 	// SideMarket 副业定价市场(批次20 文档2 §3):kind → 经营者列表
 	// (seat 升序;仅含有经营者的品类,≤12×4 条)。无经营者 → omit。
 	SideMarket map[string][]SideMarketRowJSON `json:"side_market,omitempty"`
+	// 批次52 §7(裁决 D15):家庭汇总 + 遗产日志(最近 5 条,降序;观战者可见;
+	// family_enabled=false → omit)。
+	Family         *FamilyStatsJSON       `json:"family,omitempty"`
+	InheritanceLog []InheritanceEventJSON `json:"inheritance_log,omitempty"`
 }
 
 // ConsumerMarketJSON 是 consumer_market 子结构(P1 §6.1)。
@@ -665,6 +669,9 @@ type MyJSON struct {
 	// StockT1Locked 当月买入 T+1 冻结份数(批次20 文档3 B2-3;FE-2「冻结 n」
 	// 角标数据源;0 = omit)。
 	StockT1Locked int64 `json:"stock_t1_locked,omitempty"`
+	// InheritanceCNY 本月遗产收入(批次52 §7 裁决 D7:板外继承恒 0,字段保留;
+	// 仅未来座位间继承扩展时非零 → omitempty 下恒 omit)。
+	InheritanceCNY int64 `json:"inheritance_cny,omitempty"`
 }
 
 // MySideBusinessJSON 是 my.side_business 子结构(批次20 文档2 §3:定价档 +
@@ -727,10 +734,57 @@ type MyLoanJSON struct {
 	MonthsLeft     int     `json:"months_left"`
 }
 
-// MyFamilyJSON 是 my.family。
+// MyFamilyJSON 是 my.family(批次52 §7 扩展:既有 maritals/children 保留,
+// 新增父母/子女明细段在 family_enabled=false 或 insurance_enabled=false 时
+// omit —— 渐进增强,旧前端零破坏)。
 type MyFamilyJSON struct {
 	Marital  string `json:"marital"`
 	Children int    `json:"children"`
+	// 批次52 §7:代际明细段(pointer/omitempty 实现 omit 语义,JSON 键不变)。
+	Parents    *ParentsJSON  `json:"parents,omitempty"`      // 父母(在世/年龄/健康)
+	Kids       []KidJSON     `json:"kids,omitempty"`         // 子女(年龄/教育档)
+	SupportCNY int64         `json:"support_cny,omitempty"`  // 本月赡养(刚性+自愿)
+	EduCNY     int64         `json:"edu_cny,omitempty"`      // 本月教育费
+	ChildInCNY int64         `json:"child_in_cny,omitempty"` // 本月子女回流
+	Totals     *FamilyTotals `json:"totals,omitempty"`       // 累计三项
+}
+
+// ParentsJSON 是 my.family.parents(批次52 §7)。
+type ParentsJSON struct {
+	Alive    bool   `json:"alive"`
+	Age      int    `json:"age"`
+	Health   string `json:"health"`    // good|fair|poor
+	HealthCN string `json:"health_cn"` // 健康良好/一般/欠佳
+}
+
+// KidJSON 是 my.family.kids 单条(批次52 §7)。
+type KidJSON struct {
+	Age         int    `json:"age"`
+	Education   string `json:"education"`    // public|private
+	EducationCN string `json:"education_cn"` // 公立/私立
+}
+
+// FamilyTotals 是 my.family.totals(批次52 §7:累计三项)。
+type FamilyTotals struct {
+	Support       int64 `json:"support"`        // 累计赡养(含自愿)
+	Education     int64 `json:"education"`      // 累计教育
+	ChildReceived int64 `json:"child_received"` // 累计子女回流
+}
+
+// FamilyStatsJSON 是 family 房间级汇总(批次52 §7 裁决 D15;观战者可见)。
+type FamilyStatsJSON struct {
+	ParentsAliveCount int `json:"parents_alive_count"` // 父母仍在世的存活玩家户数
+	ChildrenCount     int `json:"children_count"`      // 全房子女总数
+	PrivateEduCount   int `json:"private_edu_count"`   // 私立教育子女数
+}
+
+// InheritanceEventJSON 是 inheritance_log 单条(批次52 §7 裁决 D15)。
+// ToSeats 恒空数组(继承人为板外实体,裁决 D6/D7)。
+type InheritanceEventJSON struct {
+	FromSeat  int   `json:"from_seat"`
+	ToSeats   []int `json:"to_seats"` // 恒 [] 板外继承(协议字段保留)
+	AmountCNY int64 `json:"amount_cny"`
+	Month     int   `json:"month"`
 }
 
 // BotCtxJSON 是 bot_contexts 单条。
@@ -1007,10 +1061,20 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		if world.InsuranceEnabled && cs.My != nil {
 			cs.My.Insurance = world.buildInsuranceJSON(world.Players[viewer])
 		}
+		// 批次52 §7:my.family 扩展段(基础婚育字段恒下发;明细段门控在
+		// buildMyFamilyJSON 内)。
+		if cs.My != nil {
+			cs.My.Family = world.buildMyFamilyJSON(world.Players[viewer])
+		}
 	} else {
 		cs.MySeat = -1
 		cs.My = nil
 	}
+
+	// 批次52 §7(裁决 D15):房间级家庭汇总 + 遗产日志(降序;观战者可见;
+	// family_enabled=false → nil/omit)。
+	cs.Family = world.buildFamilyStatsJSON()
+	cs.InheritanceLog = world.inheritanceLogJSON()
 
 	// BotContexts:本人 + 观战者可见;其他玩家不可见(viewer 是他人时过滤掉他人 Bot)。
 	for s := range world.Players {

@@ -169,12 +169,15 @@ const (
 	// §批次20-市长选举启用与股票微观结构 文档3 B3)。
 	ErrVirtualCityMarketCircuitBreak = 35043 // 熔断期股票交易暂停(仅 stock_index)
 	ErrVirtualCityStockT1Locked      = 35044 // 当月买入份额 T+1 冻结不可卖
+	// 35045–35046 — 虚拟城市批次52 代际财富转移引擎(2026-10-02 §批次52)。
+	ErrVirtualCityFamilyDisabled = 35045 // family_enabled=false 引擎关闭(工具拒绝/月结零接线)
+	ErrVirtualCityFamilyInvalid  = 35046 // 家庭工具参数非法(child_idx 越界/年龄窗不符/加赡养超上限)
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
 	// 契约: lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md §4.4。
-	ErrVirtualCitySenseInvalid   = 35100 // 感知/移动工具参数非法(未知城区、未知 mode、目标不存在)
-	ErrVirtualCitySenseLimit     = 35101 // 当月感知/发言次数超限(see/hear/smell 各 ≤2,speak 合计 ≤2)
-	ErrVirtualCityMoveForbidden  = 35102 // 当前状态不允许移动(破产清算/停赛中等)
-	ErrVirtualCityWhisperTarget  = 35103 // 私聊目标不可达(目标出局/非座位居民/跨房)
+	ErrVirtualCitySenseInvalid  = 35100 // 感知/移动工具参数非法(未知城区、未知 mode、目标不存在)
+	ErrVirtualCitySenseLimit    = 35101 // 当月感知/发言次数超限(see/hear/smell 各 ≤2,speak 合计 ≤2)
+	ErrVirtualCityMoveForbidden = 35102 // 当前状态不允许移动(破产清算/停赛中等)
+	ErrVirtualCityWhisperTarget = 35103 // 私聊目标不可达(目标出局/非座位居民/跨房)
 	// 35104 — 虚拟城市房间停用人类文字聊天(2026-09-25 §23 房间聊天删除与
 	// 3D语音气泡):人类(含观战者)在 virtual_city 房间发 chat.send /
 	// chat.whisper 一律拒绝;bot 发言走 SendFromBot/WhisperFromBot 不经此拦截。
@@ -297,10 +300,10 @@ var DefaultMessages = map[int]string{
 	ErrVirtualCityMarketCircuitBreak: "virtual_city stock trading suspended by monthly circuit breaker",
 	ErrVirtualCityStockT1Locked:      "virtual_city stock units bought this month are T+1 locked and not sellable",
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
-	ErrVirtualCitySenseInvalid:   "virtual_city sense/move params invalid (unknown district/mode/target)",
-	ErrVirtualCitySenseLimit:     "virtual_city sense/speak monthly limit reached",
-	ErrVirtualCityMoveForbidden:  "virtual_city move forbidden in current state",
-	ErrVirtualCityWhisperTarget:  "virtual_city whisper target unreachable",
+	ErrVirtualCitySenseInvalid:  "virtual_city sense/move params invalid (unknown district/mode/target)",
+	ErrVirtualCitySenseLimit:    "virtual_city sense/speak monthly limit reached",
+	ErrVirtualCityMoveForbidden: "virtual_city move forbidden in current state",
+	ErrVirtualCityWhisperTarget: "virtual_city whisper target unreachable",
 	// 中文文案(前端 i18n 落地):虚拟城市房间已停用文字聊天，居民发言请在 3D 地图查看。
 	ErrVirtualCityRoomChatDisabled: "virtual_city room chat is disabled",
 }

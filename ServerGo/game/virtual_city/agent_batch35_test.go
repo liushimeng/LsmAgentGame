@@ -246,13 +246,14 @@ func TestBatch35_MoveEventAndOnState(t *testing.T) {
 	}
 }
 
-// TestBatch35_ToolNames21 引用 vcplayer 断言 21 工具口径(防两包漂移)。
-func TestBatch35_ToolNames21(t *testing.T) {
+// TestBatch35_ToolNames22 引用 vcplayer 断言工具口径(防两包漂移;
+// 批次35 §3.2 = 21,批次52 §2 裁决 D13 增 family → 22)。
+func TestBatch35_ToolNames22(t *testing.T) {
 	names := vcplayer.ToolNames()
-	if len(names) != 21 {
-		t.Fatalf("vcplayer.ToolNames() = %d, want 21 (批次35 §3.2)", len(names))
+	if len(names) != 22 {
+		t.Fatalf("vcplayer.ToolNames() = %d, want 22 (批次35 §3.2 + 批次52 family)", len(names))
 	}
-	if len(vcplayer.BuildTools()) != 21 {
-		t.Fatalf("vcplayer.BuildTools() = %d, want 21", len(vcplayer.BuildTools()))
+	if len(vcplayer.BuildTools()) != 22 {
+		t.Fatalf("vcplayer.BuildTools() = %d, want 22", len(vcplayer.BuildTools()))
 	}
 }

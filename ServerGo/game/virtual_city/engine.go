@@ -172,18 +172,18 @@ type World struct {
 	// + 可转债 + 融券做空 + 量化引擎;nil/空时 SettleMonth ⑥B 惰性初始化)。
 	// 见 fund_rating.go / interbank_cd.go / convertible_bond.go /
 	// short_selling.go / quant_fund.go。零 rand —— 固定种子存量对局回归零偏移。
-	FundRatings []FundRating        // 5 只虚拟基金评级(月度 ⑥B 末位刷新)
-	CDMarket    *CDMarket           // 同业存单市场(3 行 × 4 档期限)
-	CBonds      []*ConvertibleBond  // 可转债池(恒 5 只,退出滚动补发)
-	ShortBook   *ShortBook          // 融券台账(R6-1 双护栏)
-	QuantEngine *QuantFundEngine    // 量化基金引擎(R6-2 自适应权重)
+	FundRatings []FundRating       // 5 只虚拟基金评级(月度 ⑥B 末位刷新)
+	CDMarket    *CDMarket          // 同业存单市场(3 行 × 4 档期限)
+	CBonds      []*ConvertibleBond // 可转债池(恒 5 只,退出滚动补发)
+	ShortBook   *ShortBook         // 融券台账(R6-1 双护栏)
+	QuantEngine *QuantFundEngine   // 量化基金引擎(R6-2 自适应权重)
 
 	// 阶段8(2026-09-21 §城市扩张v2.12,最终阶段):公共服务 + 监管体系 +
 	// 市长选举。见 public_services.go / civic_election.go / regulators/ 子包。
 	// 零 rand —— 固定种子存量对局回归零偏移;nil 时 settlement ⑨G 惰性初始化。
-	PublicSvc *PublicServices  // 公共服务五件套(月度 ⑨G)
+	PublicSvc  *PublicServices  // 公共服务五件套(月度 ⑨G)
 	Regulators *RegulatorBundle // 证监会/反垄断/消协/隐私四监管(月度 ⑨G)
-	Election  *CivicElection    // 市长选举(R8-2 默认关闭 → no-op)
+	Election   *CivicElection   // 市长选举(R8-2 默认关闭 → no-op)
 
 	// P1: 社会调研系统(§财商流P1-2 调研契约 §2)。
 	Surveys   []*Survey // 全房调研(≤20,按发起序)
@@ -193,6 +193,14 @@ type World struct {
 	// true;房间层 Start 时按配置回写(false 时投保/退保 35041、月结不扣缴、
 	// 意外事件不掷骰 —— rand 序列零偏移,固定种子存量对局回归一致)。
 	InsuranceEnabled bool
+
+	// 批次52(§5):代际财富转移引擎开关 family_enabled。NewWorld 恒置 true;
+	// false 时月结零接线 + 家庭工具拒绝(35045)+ 遗产不分配(回滚阀,§5)。
+	FamilyEnabled bool
+
+	// InheritanceLog 遗产分配日志(批次52 §4 裁决 D15:最近 5 条;ToSeats 恒空 =
+	// 板外继承,裁决 D6/D7)。view 层降序下发。
+	InheritanceLog []InheritanceEvent
 
 	Players [MaxSeats]*Player // 空座 nil
 
@@ -224,11 +232,11 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		rng = rand.New(rand.NewSource(rand.Int63()))
 	}
 	w := &World{
-		Month:    1,
-		Status:   StatusOpen,
-		Market:   NewMarket(rng),
-		Ledger:   &Ledger{},
-		CB:       NewCentralBank(),
+		Month:  1,
+		Status: StatusOpen,
+		Market: NewMarket(rng),
+		Ledger: &Ledger{},
+		CB:     NewCentralBank(),
 		// 阶段4: 政府财政国库(初始现金 500 万;2026-09-21 §城市扩张v2.12)。
 		Treasury: NewTreasury(),
 		Rand:     rng,
@@ -238,8 +246,10 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		EconomyEnabled: true,
 		// P1-4: 保险引擎默认开启(§11;SetInsuranceEnabled 可覆盖)。
 		InsuranceEnabled: true,
-		Goods:            NewGoodsMarket(),
-		Labor:            NewFirmSector(),
+		// 批次52(§5):代际财富转移引擎默认开启(family_enabled;false 回滚阀)。
+		FamilyEnabled: true,
+		Goods:         NewGoodsMarket(),
+		Labor:         NewFirmSector(),
 		// 阶段7: 社会结构指标 24 月环形历史(2026-09-21 §城市扩张v2.12)。
 		SocietyHist: &SocietyHistory{},
 		// 阶段5: 产业链 15 节点 + 产业集群 6 集群(2026-09-21 §城市扩张v2.12)。

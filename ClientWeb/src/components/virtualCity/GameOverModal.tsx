@@ -1,5 +1,6 @@
 /**
- * GameOverModal — 终局「人生结算」：三维评分条（财务自由度 / 人生满意度 / 社会贡献）
+ * GameOverModal — 终局「人生结算」：四维评分条（财务自由度 / 人生满意度 / 社会贡献 /
+ * 代际贡献，批次52 §2 D14 权重 45/25/15/15）
  * + 结局徽章（6 结局）+ 净资产 SVG 折线（game.month 全帧推导）+ 人生报告 +
  * [查看完整 Ledger] / [返回大厅]。
  *
@@ -38,7 +39,7 @@ function endingKey(ending: string): TKey {
     : 'virtualCity.ending.ordinary') as TKey;
 }
 
-/** 三维评分条（0–100）。 */
+/** 评分条（0–100）。 */
 function ScoreBar({ label, weight, score }: { label: string; weight: string; score: number }) {
   const pct = Math.max(0, Math.min(100, score));
   return (
@@ -149,9 +150,11 @@ export function GameOverModal({ over, gameState, monthFrames, mySeat, onViewLedg
 
         {mine && (
           <div className="virtualCity-gameover__scores">
-            <ScoreBar label={t('virtualCity.gameOver.fiScore' as TKey)} weight="50%" score={mine.fi_score} />
-            <ScoreBar label={t('virtualCity.gameOver.lifeScore' as TKey)} weight="30%" score={mine.life_score} />
-            <ScoreBar label={t('virtualCity.gameOver.socialScore' as TKey)} weight="20%" score={mine.social_score} />
+            {/* 批次52 §2 D14：四维权重再平衡 45/25/15/15（原 50/30/20）。 */}
+            <ScoreBar label={t('virtualCity.gameOver.fiScore' as TKey)} weight="45%" score={mine.fi_score} />
+            <ScoreBar label={t('virtualCity.gameOver.lifeScore' as TKey)} weight="25%" score={mine.life_score} />
+            <ScoreBar label={t('virtualCity.gameOver.socialScore' as TKey)} weight="15%" score={mine.social_score} />
+            <ScoreBar label={t('virtualCity.gameOver.familyScore' as TKey)} weight="15%" score={mine.family_score ?? 0} />
           </div>
         )}
 
@@ -177,6 +180,7 @@ export function GameOverModal({ over, gameState, monthFrames, mySeat, onViewLedg
                 <th>FI</th>
                 <th>{t('virtualCity.gameOver.lifeScore' as TKey)}</th>
                 <th>{t('virtualCity.gameOver.socialScore' as TKey)}</th>
+                <th>{t('virtualCity.gameOver.familyCol' as TKey)}</th>
                 <th>{t('virtualCity.netWorth' as TKey)}</th>
                 <th>{t('virtualCity.gameOver.endingCol' as TKey)}</th>
               </tr>
@@ -193,6 +197,7 @@ export function GameOverModal({ over, gameState, monthFrames, mySeat, onViewLedg
                       <td>{Math.round(s.fi_score)}</td>
                       <td>{Math.round(s.life_score)}</td>
                       <td>{Math.round(s.social_score)}</td>
+                      <td>{Math.round(s.family_score ?? 0)}</td>
                       <td>{formatCny(p?.net_worth)}</td>
                       <td>{t(endingKey(s.ending))}</td>
                     </tr>
