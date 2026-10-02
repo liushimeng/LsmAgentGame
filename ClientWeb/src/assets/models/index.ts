@@ -106,6 +106,11 @@ export const MODEL_NAMES = {
     // street_sign 双变体节点 Sign_Traffic / Sign_Info；bike_rack 双节点 BikeRack + BikeRack_Bike。
     // 消费方：props/{BusStop,Mailbox,Sign,ParkingMeter,BicycleRack}.tsx（缺失自动走程序化 fallback）。
     'bus_stop', 'mailbox', 'street_sign', 'parking_meter', 'bike_rack',
+    // 批次 43 交通信号灯（3d_script/build_traffic_signal|pedestrian_signal|mast_arm_signal.py）：
+    // 单灯头 GLB，LED 按材质名 LEDRed / LEDYellow / LEDGreen（行人灯 LEDRed / LEDGreen）
+    // 分组，前端按相位对各组分别调制 emissive —— 真实信号灯同一时刻只亮一色。
+    // 消费方：props/TrafficSignals.tsx（机动车）+ props/PedestrianSignals.tsx（行人）。
+    'traffic_signal', 'pedestrian_signal', 'mast_arm_signal',
   ] as const,
   ocean: ['lighthouse', 'cargo_ship', 'sailboat'] as const,
 } as const;

@@ -186,6 +186,16 @@ TARGETS = {
                                    pivot='底座 minY=0，X/Z 居中；屏幕朝 +Z'),
     'road/bike_rack.glb':     dict(x=0.180, y=0.110, z=0.062, axis='x_flat',
                                    pivot='架脚/车轮触地点 minY=0，X/Z 居中；车长沿 X'),
+    # 批次 43 交通信号灯（表值 = REAL_DIMS_M ÷ 10 ≡ 方案 §3 交付尺寸）。
+    # 灯面朝 +Z；立杆/立柱底 minY=0，X/Z 居中。
+    'road/traffic_signal.glb':     dict(x=0.035, y=0.550, z=0.053,
+                                        pivot='法兰底 minY=0，X/Z 居中；灯面朝 +Z'),
+    'road/pedestrian_signal.glb':  dict(x=0.035, y=0.250, z=0.028,
+                                        pivot='法兰底 minY=0，X/Z 居中；人形象朝 +Z'),
+    # 悬臂式：柱高 6.32 m > 悬臂 4.375 m ⇒ 主包围轴 = Y 属正确（真实悬臂信号灯立柱
+    # 高于横挑长度），走默认 'target' 模式：由 Y 尺寸判据 + minY=0 保证「站得住」。
+    'road/mast_arm_signal.glb':    dict(x=0.438, y=0.632, z=0.059,
+                                        pivot='基础 minY=0，X/Z 居中；悬臂沿 X'),
 }
 
 # 直立判据的例外：长轴落在水平轴属正确摆放。

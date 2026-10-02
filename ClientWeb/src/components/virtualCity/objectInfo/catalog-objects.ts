@@ -347,4 +347,28 @@ export const OBJECT_ENTRIES: ObjectInfoEntry[] = [
       ja: '交差点の信号機。赤・黄・緑を位相で切り替え、車流を秩序よく導く。',
     },
   },
+  {
+    // 批次 43 新增：与 road.traffic-signal 反相联动（车绿 ⇒ 人红）。
+    id: 'road.pedestrian-signal',
+    category: 'road',
+    icon: '🚶',
+    name: { 'zh-CN': '行人信号灯', en: 'Pedestrian Signal', ja: '歩行者信号機' },
+    desc: {
+      'zh-CN': '路口人行过街信号，与车行信号反相联动：车放行时禁行，车停时放行。',
+      en: 'Pedestrian crossing signals interlocked with the vehicle ones: stop when traffic moves, walk when it stops.',
+      ja: '歩行者用信号。車用信号と逆位相で連動し、車が通行中は赤、停止中は緑。',
+    },
+  },
+  {
+    // 批次 43 新增：宽路口专用（GB 14886 §4.3）。
+    id: 'road.mast-arm-signal',
+    category: 'road',
+    icon: '🏗️',
+    name: { 'zh-CN': '悬臂式信号灯', en: 'Mast-arm Signal', ja: '門柱式信号機' },
+    desc: {
+      'zh-CN': '宽路口专用的横杆式信号灯：立柱在路口外缘，横臂伸到车流上方，让远处驾驶员提前看到信号。',
+      en: 'Mast-arm signals for wide junctions: the column stands at the kerb while the arm reaches over the traffic so drivers see it early.',
+      ja: '広い交差点用の門柱式信号。柱は路端に立ち、腕が車流の上まで伸び、遠方の運転手にも早い段階で信号が見える。',
+    },
+  },
 ];

@@ -46,6 +46,16 @@ export interface EngineCanvasProps {
   debugQueryFlag?: string;
   /** renderer.info 挂载的 window 全局名（默认 '__engine3dRenderInfo'）。 */
   debugGlobalName?: string;
+  /**
+   * scene / camera 挂载的 window 全局名（默认 `${debugGlobalName}Scene`；传 '' 关闭）。
+   *
+   * 批次 43 新增：r3f v9 不在 canvas 上暴露 store（`canvas.__r3f` 为 undefined），
+   * CDP 侧拿不到 three 场景就无法做「材质名 / 包围盒 / 坐标」数值审计 ——
+   * 而批次 42 遗留 L2 正是因全页截图偏暗导致视觉判读受阻、改用数值审计替代。
+   * 把 scene 一并挂到同一 `?debug=1` 闸门下（**仅调试态**，生产不挂），
+   * 补齐这条审计通路。`{ scene, camera }` 同挂，便于做屏幕坐标↔世界坐标换算。
+   */
+  debugSceneGlobalName?: string;
   children?: ReactNode;
 }
 
@@ -57,6 +67,7 @@ export function EngineCanvas({
   toneMappingExposure = 1.05,
   debugQueryFlag = 'debug=1',
   debugGlobalName = '__engine3dRenderInfo',
+  debugSceneGlobalName,
   children,
 }: EngineCanvasProps) {
   // 自适应 dpr 的质量档上界：low 档 / ?quality=low → 1.0（未探测时 knownQualityTier
@@ -72,7 +83,7 @@ export function EngineCanvas({
         dpr={effectiveDpr}
         camera={camera}
         gl={{ antialias: true, powerPreference: 'high-performance' }}
-        onCreated={({ gl }) => {
+        onCreated={({ gl, scene, camera }) => {
           // 胶片色调映射（高光不过曝）+ 柔和阴影边缘
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = toneMappingExposure;
@@ -82,7 +93,14 @@ export function EngineCanvas({
             debugQueryFlag &&
             window.location.search.includes(debugQueryFlag)
           ) {
-            (window as unknown as Record<string, unknown>)[debugGlobalName] = gl.info;
+            const w = window as unknown as Record<string, unknown>;
+            w[debugGlobalName] = gl.info;
+            // 批次 43：同闸门下挂 scene/camera，供 CDP 侧做材质名 / 包围盒 / 坐标审计
+            // （r3f v9 的 canvas.__r3f 为 undefined，无其它公开通路拿到场景）。
+            const sceneName = debugSceneGlobalName ?? `${debugGlobalName}Scene`;
+            if (sceneName) {
+              w[sceneName] = { scene, camera, gl };
+            }
             // eslint-disable-next-line no-console
             console.log(`[engine3d] renderer.info mounted on window.${debugGlobalName}`, gl.info);
           }

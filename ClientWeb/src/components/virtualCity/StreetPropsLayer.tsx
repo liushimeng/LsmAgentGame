@@ -69,6 +69,7 @@ import { TrashCan } from './props/TrashCan';
 import { PhoneBooth } from './props/PhoneBooth';
 import { Mailbox } from './props/Mailbox';
 import { ParkingMeter } from './props/ParkingMeter';
+import type { PedestrianSignalSpot } from './props/PedestrianSignals';
 
 // ── 确定性伪随机（同源 DistrictBlock.tsx）────────────────
 
@@ -806,6 +807,106 @@ export function trafficSignalsForCity(
     }
   });
 
+  return out;
+}
+
+/** 悬臂式信号灯点位规格（MastArmSignals 组件渲染契约）。 */
+export interface MastArmSignalSpot {
+  x: number;
+  z: number;
+  /** 绕 Y 旋转（弧度）：local +X = 悬臂悬挑方向（自路口外缘伸向路心）。 */
+  rotation: number;
+}
+
+/** 悬臂灯立柱离路口中心的距离（世界单位；立于路口外缘人行道后，臂端探入路口上空）。 */
+const MAST_ARM_OFFSET = 0.75;
+
+/**
+ * 全城悬臂式（横杆式）信号灯布点（批次 43 C3，方案 §6）。
+ *
+ * 真实规律（GB 14886 §4.3 + 城市道路交通设施设计规范）：
+ *   · 悬臂式信号灯用于**路面较宽、车道数多、驾驶员视线易被遮挡**的路口；
+ *   · 立柱立于路口**外侧人行道缘石之后**，横臂自柱顶**水平伸过路口上空**，
+ *     灯头悬于**对向进口道（或本进口道）车道中心线上方**，保证远处驾驶员
+ *     提前看到信号（这是立杆式做不到的）；
+ *   · 一个大型路口通常布 2~4 座悬臂灯，分别服务各进口道。
+ *
+ * 本实现：仅布在**方格骨干互交点**（arterial × arterial，路面最宽、车道最多，
+ * 是全城唯一满足「宽路口」判据的位置 —— 一环路交点与次干道过窄，用立杆式）。
+ * 每个交点布 2 座（对角），横臂分别伸向两个进口道方向。
+ */
+export function mastArmSignalsForCity(
+  arterialIntersections: RoadJunction[],
+  vehicleSignals: TrafficSignalSpot[],
+): MastArmSignalSpot[] {
+  // 复用机动车灯的水域净空口径：河上/水上不立柱。
+  const isWet = (x: number, z: number) => inWater(x, z, 0.3);
+  const out: MastArmSignalSpot[] = [];
+
+  arterialIntersections.forEach((j) => {
+    // 对角两座：立柱在 (j.x±off, j.z±off)，横臂分别朝 −x / −z 两个进口道方向伸。
+    const off = MAST_ARM_OFFSET;
+    const cands: Array<{ dx: number; dz: number; armDirX: number; armDirZ: number }> = [
+      // 立柱在东北角，横臂朝 −x（伸向自东向西的进口道）
+      { dx: off, dz: off, armDirX: -1, armDirZ: 0 },
+      // 立柱在西南角，横臂朝 −z（伸向自北向南的进口道）
+      { dx: -off, dz: -off, armDirX: 0, armDirZ: -1 },
+    ];
+    for (const c of cands) {
+      const cx = j.x + c.dx;
+      const cz = j.z + c.dz;
+      if (isWet(cx, cz)) continue;
+      // 悬臂臂端落点也要在陆地（臂伸到路中央，不该探进河里）。
+      if (isWet(cx + c.armDirX * 0.4, cz + c.armDirZ * 0.4)) continue;
+      // 横臂沿 local +X 悬挑 ⇒ 组件局部 +X 对齐世界 (armDirX, armDirZ)。
+      // 绕 Y 旋转 θ 使 local +X = (cosθ, −sinθ) ⇒ θ = atan2(−armDirZ, armDirX)。
+      const rotation = Math.atan2(-c.armDirZ, c.armDirX);
+      out.push({ x: cx, z: cz, rotation });
+    }
+  });
+
+  void vehicleSignals; // 预留：未来按车流方向挑进口道（本批按路口几何固定对角）
+  return out;
+}
+
+/**
+ * 全城行人过街信号灯布点（批次 43 C1，方案 §6）。
+ *
+ * 真实规律（GB 14886 + 城市道路交通设施设计规范）：
+ *   · 行人信号灯立于**路口停止线外侧的人行道缘石旁**，与机动车信号灯**同杆或并杆**，
+ *     两者沿道路方向错开 0.3~1.5 m（同侧并列），灯面**背向来车、正对等待过街的行人**；
+ *   · 每个有行人过街需求的路口通常布 2~4 座（对应各进口道的过街方向）。
+ *
+ * 本实现（成本/真实度折中）：
+ *   - 以既有 `trafficSignalsForCity` 布点为**锚**（不重复推导路口几何 —— 避免第二套
+ *     路口真相，与批次 38「布局互知唯一入口」纪律一致）；
+ *   - 每座机动车灯旁**并立 1 座**行人灯，沿路向外侧再错开 `PED_SIGNAL_LATERAL`；
+ *   - 灯面**反向**（面向人行道，即背对机动车灯面 —— 真实行人灯不朝来车）；
+ *   - 相位组沿用锚点 ⇒ 渲染层 `pedestrianLitColor()` 取反即可自动反相联动；
+ *   - 水域净空与机动车灯同口径（`inWater`）—— 河上不立灯。
+ */
+/** 行人信号灯离机动车灯的横向间距（世界单位；同侧并列，间距 ≈1.2 m，贴人行道缘）。 */
+const PED_SIGNAL_LATERAL = 0.12;
+
+export function pedestrianSignalsForCity(vehicleSignals: TrafficSignalSpot[]): PedestrianSignalSpot[] {
+  const out: PedestrianSignalSpot[] = [];
+  for (const s of vehicleSignals) {
+    // 机动车灯的面向法向（local +Z 方向的世界向量）。
+    const nx = Math.sin(s.rotation);
+    const nz = Math.cos(s.rotation);
+    // 行人灯立于机动车灯的**背向侧**（即路口对角的人行道缘石旁），
+    // 再沿路向外错开少量横向 ⇒ 灯面正对等待过街的行人。
+    const px = s.x - nx * PED_SIGNAL_LATERAL;
+    const pz = s.z - nz * PED_SIGNAL_LATERAL;
+    if (inWater(px, pz, 0.3)) continue; // 河上不立灯（与机动车灯同口径）
+    out.push({
+      x: px,
+      z: pz,
+      // 灯面与机动车灯**相反**（差 π）：机动车灯朝来车，行人灯朝等待过街的行人。
+      rotation: s.rotation + Math.PI,
+      phase: s.phase,
+    });
+  }
   return out;
 }
 

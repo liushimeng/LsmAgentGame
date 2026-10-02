@@ -106,10 +106,14 @@ import { StreetLightsInstanced } from './props/StreetLightsInstanced';
 import {
   StreetPropsLayer,
   trafficSignalsForCity,
+  pedestrianSignalsForCity,
+  mastArmSignalsForCity,
   roadsideBinsForNetwork,
   busStopsForNetwork,
 } from './StreetPropsLayer';
 import { TrafficSignals } from './props/TrafficSignals';
+import { PedestrianSignals } from './props/PedestrianSignals';
+import { MastArmSignals } from './props/MastArmSignals';
 import { RoadsideBins } from './props/RoadsideBins';
 import { HighwayGates } from './props/HighwayGates';
 import { WaterPlane } from './props/WaterPlane';
@@ -272,7 +276,7 @@ const ROAD_NETWORK = buildRoadNetwork(VIRTUAL_CITY_DISTRICTS, MAIN_ROAD_MIN_LEN)
 installRoadCorridors(ROAD_NETWORK);
 
 function RoadsLayer() {
-  const { lamps, signals, bins } = useMemo(() => {
+  const { lamps, signals, pedSignals, mastArms, bins } = useMemo(() => {
     // 批次 20 §3.3：全部道路的路灯点位汇总 → 全局 InstancedMesh（3 draw call）
     const lampList = ROAD_NETWORK.segments.flatMap((r) =>
       lampsForRoad(r.from, r.to, r.kind),
@@ -283,11 +287,22 @@ function RoadsLayer() {
       ROAD_NETWORK.firstRingJunctionAngles,
       ROAD_NETWORK.arterialIntersections,
     );
+    // 批次 43 C1：行人信号灯以机动车灯为锚并立（灯面反向，正对过街行人），
+    // 相位由 PedestrianSignals 内部取机动车相位反色 ⇒ 两端永不同时放行。
+    const pedSignalList = pedestrianSignalsForCity(signalList);
+    // 批次 43 C3：悬臂式信号灯只布宽路口（方格骨干互交点），横臂伸过路口上空。
+    const mastArmList = mastArmSignalsForCity(ROAD_NETWORK.arterialIntersections, signalList);
     const binList = roadsideBinsForNetwork(
       ROAD_NETWORK.segments,
       busStopsForNetwork(ROAD_NETWORK.segments),
     );
-    return { lamps: lampList, signals: signalList, bins: binList };
+    return {
+      lamps: lampList,
+      signals: signalList,
+      pedSignals: pedSignalList,
+      mastArms: mastArmList,
+      bins: binList,
+    };
   }, []);
 
   return (
@@ -310,6 +325,10 @@ function RoadsLayer() {
       <StreetLightsInstanced lamps={lamps} />
       {/* 批次 24：全城红绿灯（≈6 draw call，16s 相位：绿 6/黄 2/红 8，A/B 组错半周期） */}
       <TrafficSignals signals={signals} />
+      {/* 批次 43：全城行人过街信号灯（GLB 实例化；相位取机动车反色 ⇒ 永不同时放行） */}
+      <PedestrianSignals signals={pedSignals} />
+      {/* 批次 43：宽路口悬臂式信号灯（GLB 实例化；立柱在路口外缘，横臂伸过路面上空） */}
+      <MastArmSignals spots={mastArms} />
       {/* 批次 24：全城路侧垃圾桶（GLB 实例化 2~6 draw call；缺失回退程序化桶密度减半） */}
       <RoadsideBins bins={bins} />
     </>

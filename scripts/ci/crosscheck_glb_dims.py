@@ -60,6 +60,10 @@ KEY_MAP = {
     "streetSign": "road/street_sign",
     "parkingMeter": "road/parking_meter",
     "bikeRack": "road/bike_rack",
+    # 批次 43 交通信号灯三件（设计 43 §3）
+    "trafficSignal": "road/traffic_signal",
+    "pedestrianSignal": "road/pedestrian_signal",
+    "mastArmSignal": "road/mast_arm_signal",
 }
 
 # 程序化 fallback 专用、无 GLB ⇒ 不送检（但解析出来打印，便于人眼核对）。

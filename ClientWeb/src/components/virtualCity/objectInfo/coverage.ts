@@ -54,6 +54,10 @@ export const SCENE_TYPE_IDS: string[] = [
   // 道路 / 交通设施
   'road.street-light',
   'road.traffic-signal',
+  // 批次 43：行人过街信号灯（与 road.traffic-signal 反相联动）
+  'road.pedestrian-signal',
+  // 批次 43：宽路口悬臂式信号灯
+  'road.mast-arm-signal',
   'road.surface',
   'road.ring',
   'road.first-ring',

@@ -336,6 +336,12 @@ CITY_PALETTE = {
     'glass_panel':    '#a8c8d0',   # 候车亭玻璃（比 glass 略暖，与建筑窗区分）
     'bench_alu':      '#9aa2a8',   # 铝条座椅（阳极氧化铝）
     'reflect_white':  '#e8eaec',   # 反光膜牌面/标识白
+    # ── 交通信号灯（批次 43 新增；信号灯是「交通语义」不是建筑/街具材质，单列一族）──
+    'signal_housing': '#17191d',   # 灯箱近黑箱体
+    'signal_visor':   '#101216',   # 遮光罩黑
+    'signal_red':     '#ff2d2d',   # 红色 LED
+    'signal_yellow':  '#ffc40f',   # 黄色 LED
+    'signal_green':   '#2ecc71',   # 绿色 LED
 }
 # 白/黑/警示红单列在表外（不是"材质语义"而是全城通用）：黑橡胶轮胎、红消防标识。
 

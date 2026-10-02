@@ -1,25 +1,35 @@
 /**
- * TrafficSignals — 全城红绿灯（批次 24 §6.2，取代 props/TrafficLight.tsx 与
- * civic/IntersectionSignals.tsx 的渲染职责）：
+ * TrafficSignals — 全城机动车红绿灯（批次 24 §6.2 起始；**批次 43 真实感重制**）。
  *
- *   - 静态件（杆 / 灯箱背板 / 出檐檐口）走 drei <Instances> ×3 → 3 draw call；
- *   - 三色灯泡走原生 instancedMesh ×3（meshBasicMaterial toneMapped={false}，
- *     亮色 #ff2d2d/#ffc40f/#2ecc71、暗色 = 亮色 15% 亮度）→ 3 draw call；
- *     灯泡矩阵只在 useLayoutEffect 设置一次，颜色在 useFrame 按全局相位纯函数
- *     切换（无 React state，仅状态变化帧写 setColorAt + needsUpdate）。
- *   - 相位周期 16s：绿 6s → 黄 2s → 红 8s；A 组 0s 起，B 组 +8s 偏移
- *     （布点见 StreetPropsLayer::trafficSignalsForCity §6.2）。
+ * 批次 43 之前：纯程序化（立杆 + 灯箱 + 3 个纯色球灯泡），无遮光罩、无 LED 点阵。
+ * 批次 43 改为 **GLB 优先 + 程序化 fallback**：
+ *   - GLB `road/traffic_signal.glb`（3d_script/build_traffic_signal.py）含
+ *     ⌀300 mm 灯盘 ×3（半筒遮光罩 + 每盘 12 颗 LED 环形点阵）、近黑灯箱、
+ *     顶沿出檐檐口、法兰底座 + 4 膨胀螺栓；单灯头直立 0.35×5.50×0.53 m；
+ *   - **相位驱动的逐色调光**（真实性核心）：真实信号灯同一时刻只点亮一色，
+ *     另两色为熄灭暗态。GLB 三色 LED 分材质名 `LEDRed`/`LEDYellow`/`LEDGreen`，
+ *     本组件按 `signalLitColor()` 的结果对三者分别调制 emissiveIntensity
+ *     （亮 = base×1.0，熄灭 = base×0.06），**同材质共享 ⇒ 全城一次遍历即生效**；
+ *   - 保留原程序化三色球 fallback（GLB 缺失 / `blenderModelsEnabled()=false`），
+ *     其相位切换仍走原生 instancedMesh setColorAt（与 GLB 分支互斥，不双渲染）。
  *
- * 竖式三色灯头：红上 / 黄中 / 绿下，灯泡半径 u(0.28)，灯头中心高 ≈ u(5.5)。
- * 本组件纯程序化几何，不依赖 GLB —— blenderModelsEnabled()=false 时仍渲染
- * （相位色切换是交通语义状态而非装饰运动，不受 prefers-reduced-motion 门控）。
+ * 相位周期 16s：绿 6s → 黄 2s → 红 8s；A 组 0s 起，B 组 +8s 偏移
+ * （布点见 StreetPropsLayer::trafficSignalsForCity §6.2）。
+ *
+ * ⚠️ 与旧版的接口差异：旧版用 drei `<Instances>` 把杆/灯箱/檐口各合 1 draw call
+ *   （静态件 3 DC + 灯泡 3 DC = 6 DC）。GLB 分支下每座灯 7 个材质组，44 座 clone
+ *   会爆 DC —— 故 GLB 分支改走 `GlbPairInstances` 实例化（与 RoadsideBins 同款
+ *   范式，见 glbInstances.tsx），**全城 44 座 = 7 draw call**（材质组数，非座数）。
  */
 
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { Instances, Instance } from '@react-three/drei';
-import { u } from '../cityScale';
+import { modelUrl } from '@/assets/models';
+import { blenderModelsEnabled, useSharedGLTF } from '@/engine3d';
+import { collectGlbPairs, GlbInstances, type GlbRenderPair } from '../glbInstances';
+import { u, sizeTargetFor } from '../cityScale';
 import type { TrafficSignalSpot } from '../StreetPropsLayer';
 import {
   useObjectInfoProps,
@@ -62,9 +72,22 @@ const OFF_COLOR: Record<SignalColor, THREE.Color> = {
   green: ON_COLOR.green.clone().multiplyScalar(0.15),
 };
 
-// ── 几何尺寸（米制经 u()；批次 30 P1-8 收紧：原灯箱 1.0×2.6×0.5 m + ⌀0.56 m 灯泡
-//    配 7 m 真实杆 ⇒ 头部 2.6× 过大；改真实 0.35×1.0×0.25 / ⌀0.30 @ 0.35、
-//    杆 ⌀0.15，总高取 cityScale.REAL_DIMS_M.trafficSignalPole = 5.5 m）─────
+/** GLB 尺寸/落地校验目标（dev 态）；表值 = REAL_DIMS_M.trafficSignal（米制）。 */
+const SIGNAL_SIZE_TARGET = sizeTargetFor('trafficSignal', { label: 'road/traffic_signal' });
+
+/**
+ * GLB 三色 LED 的材质名键（3d_script/build_traffic_signal.py 写死 `Signal_LED{Color}_Mat`）。
+ * 前端按这些键收集共享材质，逐色调制 emissiveIntensity。
+ */
+const LED_MAT_KEY: Record<SignalColor, string> = {
+  red: 'LEDRed',
+  yellow: 'LEDYellow',
+  green: 'LEDGreen',
+};
+/** 熄灭态 = base × 0.06（灯盘罩体仍在，仅 LED 近乎不发光 —— 真实暗态观感）。 */
+const LED_OFF_FACTOR = 0.06;
+
+// ── 程序化 fallback 几何尺寸（米制经 u()；批次 30 P1-8 口径保留）──────
 /** 立杆：⌀0.15 × 高 5.50（= 表值总高，灯头不再越出）。 */
 const POLE_GEOM: [number, number, number, number] = [u(0.075), u(0.075), u(5.5), 8];
 const POLE_Y = u(2.75);
@@ -98,7 +121,107 @@ interface Props {
 
 const BULB_ORDER: SignalColor[] = ['red', 'yellow', 'green'];
 
+/**
+ * 收集 GLB 三色 LED 共享材质（同名材质在 GLTFLoader 后是同一引用，全城共享 ⇒
+ * 一次调制即全城生效）。返回 { color → {mat, base}[] }。
+ */
+function collectLedMaterials(root: THREE.Object3D | null): Record<SignalColor, Array<{ mat: THREE.MeshStandardMaterial; base: number }>> {
+  const out: Record<SignalColor, Array<{ mat: THREE.MeshStandardMaterial; base: number }>> = {
+    red: [],
+    yellow: [],
+    green: [],
+  };
+  if (!root) return out;
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const m of mats) {
+      const std = m as THREE.MeshStandardMaterial;
+      if (!std?.name || !('emissiveIntensity' in std)) continue;
+      for (const color of BULB_ORDER) {
+        if (std.name.includes(LED_MAT_KEY[color])) {
+          out[color].push({ mat: std, base: std.emissiveIntensity });
+          break;
+        }
+      }
+    }
+  });
+  return out;
+}
+
 export function TrafficSignals({ signals }: Props) {
+  // 批次 43：GLB 优先（`blenderModelsEnabled()` 覆盖 disable-blender-models 开关）。
+  const glbUrl = blenderModelsEnabled() ? modelUrl('road', 'traffic_signal') : '';
+  const { scene: glbScene } = useSharedGLTF(glbUrl, SIGNAL_SIZE_TARGET);
+  const useGlb = Boolean(glbUrl && glbScene);
+
+  // GLB 子树的 (geometry, material) 对（实例化用）+ 三色 LED 材质引用。
+  const pairs = useMemo<GlbRenderPair[]>(() => (useGlb ? collectGlbPairs(glbScene) : []), [useGlb, glbScene]);
+  const ledMats = useMemo(
+    () => (useGlb ? collectLedMaterials(glbScene) : { red: [], yellow: [], green: [] }),
+    [useGlb, glbScene],
+  );
+  /** GLB 是否真的带三色 LED（资产缺失时退回 fallback 观感）。 */
+  const hasLed = ledMats.red.length + ledMats.yellow.length + ledMats.green.length > 0;
+
+  // 实例世界矩阵（每座灯一个位姿；GLB 节点 identity ⇒ 直接用布点位姿）。
+  const worldMatrices = useMemo(
+    () =>
+      signals.map((s) => {
+        const m = new THREE.Matrix4();
+        m.makeRotationY(s.rotation);
+        m.setPosition(s.x, 0, s.z);
+        return m;
+      }),
+    [signals],
+  );
+
+  // 批次 28 B2：信号灯信息交互（objectInfo）。
+  const info = useObjectInfoProps('road.traffic-signal', { anchorY: 2.2 });
+
+  // GLB 分支：逐色 emissive 随全局相位。与 fallback 的 setColorAt 走同一
+  // `signalLitColor`，两分支共用相位语义。
+  useFrame(({ clock }) => {
+    if (!useGlb || !hasLed) return;
+    const t = clock.elapsedTime;
+    for (const color of BULB_ORDER) {
+      const list = ledMats[color];
+      if (!list.length) continue;
+      // 该色本帧是否点亮：真实路口对角双灯同相位同色，故按 A 组主相位驱动 GLB
+      // 共享材质（A/B 的差异体现在灯面朝向不同来车方向上）。
+      const lit = signalLitColor('A', t) === color;
+      const target = lit ? 1.0 : LED_OFF_FACTOR;
+      for (const e of list) e.mat.emissiveIntensity = e.base * target;
+    }
+  });
+
+  // 空（无主干道的极端地图）不渲染 —— 置于全部 hook 之后，防 Instances limit=0 崩溃。
+  if (!signals.length) return null;
+
+  // ── GLB 分支渲染：全城 instancedMesh（材质组数 = draw call，与座数无关）──
+  if (useGlb && pairs.length) {
+    return (
+      <group>
+        <GlbInstances
+          pairs={pairs}
+          worldMatrices={worldMatrices}
+          castShadow={false}
+          receiveShadow={false}
+        />
+      </group>
+    );
+  }
+
+  // ── fallback 分支：drei <Instances> 静态件 3 DC + 灯泡 3 DC ─────────────
+  return <ProceduralSignals signals={signals} info={info} />;
+}
+
+/**
+ * 程序化 fallback（GLB 缺失 / blenderModelsEnabled()=false 时的降级链）。
+ * 相位切换走原生 instancedMesh setColorAt —— 与 GLB 分支互斥，**不双渲染**。
+ */
+function ProceduralSignals({ signals, info }: { signals: TrafficSignalSpot[]; info: ReturnType<typeof useObjectInfoProps> }) {
   // 三色灯泡原生 instancedMesh refs（固定 3 个 hook，顺序稳定）。
   const bulbRefs = [
     useRef<THREE.InstancedMesh>(null),
@@ -125,7 +248,7 @@ export function TrafficSignals({ signals }: Props) {
         q.setFromEuler(e);
         m.compose(pos, q, one);
         mesh.setMatrixAt(i, m);
-        mesh.setColorAt(i, OFF_COLOR[color]); // 触发 instanceColor 建buffer
+        mesh.setColorAt(i, OFF_COLOR[color]); // 触发 instanceColor 建 buffer
       });
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -156,11 +279,7 @@ export function TrafficSignals({ signals }: Props) {
     }
   });
 
-  /** 静态件通用渲染（三段 = 3 draw call；Instance 世界位姿在布点层算好）。
-   *  批次 28 B2：{...info} 使信号灯可 hover/click（drei Instances 需恢复
-   *  instancedEventsRaycast 才能命中；instanceId = signals 序）。 */
-  const info = useObjectInfoProps('road.traffic-signal', { anchorY: 2.2 });
-
+  /** 静态件通用渲染（三段 = 3 draw call；Instance 世界位姿在布点层算好）。 */
   const renderPart = (
     key: string,
     geometry: JSX.Element,
@@ -201,9 +320,6 @@ export function TrafficSignals({ signals }: Props) {
     pos: [hx, VISOR_Y, hz] as [number, number, number],
     rot: s.rotation,
   }));
-
-  // 空（无主干道的极端地图）不渲染 —— 置于全部 hook 之后，防 Instances limit=0 崩溃。
-  if (!signals.length) return null;
 
   return (
     <group>

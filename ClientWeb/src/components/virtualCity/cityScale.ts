@@ -121,6 +121,24 @@ export const REAL_DIMS_M = {
   streetTree: { x: 4.5, y: 9.0, z: 4.5, minY: 0 },
   /** 交通信号杆（杆 + 灯头总高 5.50；灯头尺寸见 TrafficSignals 消费点）。 */
   trafficSignalPole: { y: 5.5, minY: 0 },
+  // ── 批次 43 新增：交通信号灯三件（GLB 与 fallback 同取本表，唯一事实来源）──
+  /**
+   * 机动车信号灯（竖式三色）0.35 × 5.50 × 0.53。进深 0.53 = 灯箱 0.25
+   * + 半筒遮光罩前伸 0.25 + LED 环面 0.03。LED 按材质名 `LEDRed`/`LEDYellow`/
+   * `LEDGreen` 分组，前端按相位对三者分别调制 emissive（同一时刻只亮一色）。
+   */
+  trafficSignal: { x: 0.35, y: 5.5, z: 0.53, minY: 0 },
+  /**
+   * 行人信号灯 0.35 × 2.50 × 0.28（直立件）。含方盘灯箱 + U 形遮光罩 + 红人/绿人
+   * 双色剪影 + 倒计时屏 + 侧挂黄色过街按钮盒。LED 材质名 `LEDRed`/`LEDGreen`，
+   * 与机动车灯反相耦合（机动车绿 ⇒ 行人红）。
+   */
+  pedestrianSignal: { x: 0.35, y: 2.5, z: 0.28, minY: 0 },
+  /**
+   * 悬臂式信号灯 4.38 × 6.32 × 0.59。x = 混凝土基础 0.40 + 悬臂 4.0 沿 X 居中；
+   * y = 基础 0.20 + 立柱 6.0 + 顶帽 0.12。柱高 > 悬臂长是真实形态（主包围轴 = Y）。
+   */
+  mastArmSignal: { x: 4.38, y: 6.32, z: 0.59, minY: 0 },
 
   // ── 车辆（长 X × 高 Y × 宽 Z）──
   sedan: { x: 4.6, y: 1.45, z: 1.82, minY: 0 },
@@ -249,6 +267,12 @@ export const MODEL_AXIS_CONVENTIONS: Readonly<Partial<Record<RealDimKey, ModelAx
   mailbox: { upright: true },
   streetSign: { upright: true },
   parkingMeter: { upright: true },
+  // 批次 43 交通信号灯：trafficSignal（0.35×5.50×0.53）与 pedestrianSignal
+  // （0.35×2.50×0.28）Y 主导 ⇒ 声明 upright；mastArmSignal 柱高 6.32 > 悬臂 4.38，
+  // 主包围轴仍是 Y ⇒ 同样声明 upright。
+  trafficSignal: { upright: true },
+  pedestrianSignal: { upright: true },
+  mastArmSignal: { upright: true },
 
   // ── 市政建筑 ──
   // 仅声明 **Y 主导** 的塔/高层楼；`policeStation`(12.1×6.6×7.0) 与
