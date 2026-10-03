@@ -38,7 +38,8 @@ export const SCENE_TYPE_IDS: string[] = [
   'prop.parking-meter',
   'prop.sign',
   'prop.solar-panel',
-  'prop.rooftop-acc',
+  // 批次 53：取代 prop.rooftop-acc（props/RooftopAcc.tsx 已删除，见 catalog-objects 注释）
+  'prop.roof-plant',
   'prop.bus-stop',
   // 树（实例化，road/park 按实例区分）
   'tree.road',

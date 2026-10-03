@@ -153,14 +153,17 @@ export const OBJECT_ENTRIES: ObjectInfoEntry[] = [
     },
   },
   {
-    id: 'prop.rooftop-acc',
+    // 批次 53：取代 `prop.rooftop-acc`（props/RooftopAcc.tsx 已删除 —— 它的 3D
+    // 几何分支因贴图恒命中而不可达，且与 building_shapes::rooftopAccent
+    // 存在 8 倍水箱尺寸分歧，见方案 53 §1.2 D6/D7/D8）。
+    id: 'prop.roof-plant',
     category: 'street-prop',
     icon: '🌀',
-    name: { 'zh-CN': '楼顶设备', en: 'Rooftop Equipment', ja: '屋上設備' },
+    name: { 'zh-CN': '屋顶设备机组', en: 'Rooftop Plant', ja: '屋上設備机组' },
     desc: {
-      'zh-CN': '楼顶设备群——空调外机、水箱与卫星天线，维系建筑的机电与通信运转。',
-      en: 'Rooftop kit — AC units, water tanks and satellite dishes — keeping the building’s services running.',
-      ja: '屋上の設備群。エアコン室外機、受水槽、衛星アンテナが建物の設備と通信を支える。',
+      'zh-CN': '屋顶设备组团——304 不锈钢水箱、方形横流式冷却塔、空调外机与检修平台防护栏，维系建筑中央空调与给水系统的运转。',
+      en: 'A rooftop plant — stainless water tank, cross-flow cooling tower, AC outdoor units and a railed service deck — serving the building’s HVAC and water supply.',
+      ja: '屋上の設備グループ。ステンレス製受水槽、横流式冷却塔、エアコン室外機、手すり付きの点検デッキ。建物の空調と給水を支える。',
     },
   },
   {

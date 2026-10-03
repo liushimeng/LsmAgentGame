@@ -79,6 +79,21 @@ def make_box(name: str, size, pos, rot=None):
     return obj
 
 
+def make_box_wdh(name: str, w: float, d: float, h: float, pos, rot=None):
+    """语义化别名：按 **宽 w(X) / 水平进深 d(Y) / 高 h(Z)** 建模。
+
+    `make_box(size)` 的槽位是 `(X宽, Y水平进深, Z高度)` —— 与 three.js 的
+    `BoxGeometry(w, h, d)` **中间槽位相反**（three 的第 2 槽是**高**）。
+    这是全项目最容易静默写错的入口：把 `make_box` 当 `BoxGeometry` 用，
+    宽和高会悄悄互换，且不报任何错。
+
+    批次 47 首次登记（`lag_docs/.../47-体育场真实感/02-实施记录.md §8 L5`），
+    批次 48/49/50 三次复登，批次 53 收口。**新增脚本一律用本函数**；
+    存量脚本保持 `make_box` 不动（避免无谓 diff）。
+    """
+    return make_box(name, (w, d, h), pos, rot)
+
+
 def make_cylinder(name: str, r_top: float, r_bot: float, h: float, segs: int, pos, rot=None):
     """圆柱（r_top == r_bot == h 为细管，r_top 0 / r_bot r 为圆锥）。"""
     bpy.ops.mesh.primitive_cylinder_add(vertices=max(segs, 8), radius=1, depth=1,
@@ -705,6 +720,22 @@ CITY_PALETTE = {
     'site_aggregate': '#9a9285',
     # 施工安全网（国标密目型绿色安全网：半透，alpha 走 alpha 通道）
     'site_netting':   '#2f7a3e',
+    # ── 建筑屋顶（批次 53 新增；屋顶设备是「机电语义」不复用建筑/街具族，单列一族）──
+    # 304 不锈钢水箱（拉丝银灰；经年挂水渍泛白，故比 ac_shell 暗一档）
+    'tank_steel':     '#c2c6cb',
+    # 玻璃钢冷却塔塔体（FRP 胶衣本色：暖白带一丝绿，比建筑 concrete 略绿 —— 与
+    # 清水混凝土的冷灰拉开半档，俯视时一眼分得清哪块是设备）
+    'tower_frp':      '#c8ccc4',
+    # 冷却塔进风百叶 / 检修平台格栅（深灰，靠法线读出叶片；比 tower_frp 暗两档）
+    'tower_louver':   '#5a6068',
+    # 空调外机镀锌折弯机壳（冷白，比 tank_steel 亮半档 —— 新机与常年水渍旧机同族）
+    'ac_shell':       '#d6d9dc',
+    # 检修平台钢格栅（热镀锌花纹板：中性灰带蓝）
+    'grate_deck':     '#787f88',
+    # 爬梯 / 护笼 / 栏杆（热镀锌：比 crane_steel 冷一档，避免与塔吊黄抢视觉）
+    'ladder_galv':    '#98a0a8',
+    # 屋面帽 / 压顶（风化清水混凝土：比建筑 concrete 暗一档，与屋面贴图拉开层次）
+    'roof_coping':    '#9a978f',
 }
 # 白/黑/警示红单列在表外（不是"材质语义"而是全城通用）：黑橡胶轮胎、红消防标识。
 

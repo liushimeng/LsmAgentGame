@@ -97,6 +97,15 @@ export const MODEL_NAMES = {
     //   （落位是净距数值解：西侧离 arterial-z26 骨干主路 13 m；原 (28,-1) 的
     //     围挡压在主路里 4.0 m）。材质槽 11（Site_Net 为半透绿安全网 alpha 0.34）。
     'construction_site',
+    // 批次 53 屋顶设备机组（3d_script/build_rooftop_plant.py）：8.37×4.19×5.47 m
+    //   水箱（304 不锈钢 ⌀2.20×2.60 + 4 支腿 0.50 + ⌀0.50 人孔）
+    //   + 冷却塔（150T 方形横流式 3.80×2.60×3.72 塔体 + ⌀2.00 轴流风机罩
+    //     + 两侧进风百叶 + 支腿减振垫 + 检修平台与 1100 mm 防护栏 + 塔侧直梯）
+    //   + 空调外机 2 台（0.90×0.30×0.70 + 侧百叶 + 风机罩 + 托架）。
+    //   消费方：props/RoofPlantLayer.tsx，**全城逐栋实例化**（GlbInstanced），
+    //   7 材质槽 ⇒ 7 draw call 与实例数无关。
+    //   ⚠ 只放平屋面（屋面 ≥ 9.2×6.3 m）；坡屋顶/窄体量一律跳过。
+    'rooftop_plant',
   ] as const,
   vehicles: [
     'sedan', 'truck', 'bus', 'taxi',

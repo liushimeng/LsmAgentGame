@@ -219,11 +219,14 @@ const QUOIN_COLOR = '#9a8f84';    // 角柱
 const BALCONY_COLOR = '#2a2e36';  // 阳台线 / 卷帘门横纹
 const SHUTTER_COLOR = '#3a414c';  // 卷帘门主体
 const WINBAND_COLOR = '#7fa8c4';  // 厂房高窗带
-const ROOFTOP_TANK = '#a8a4a0';   // 屋顶水箱
-const ROOFTOP_VENT = '#8a8d96';   // 屋顶通风管
+const ROOFTOP_VENT = '#8a8d96';   // 屋顶通风管（批次 53：屋顶水箱移交 GLB rooftop_plant）
 const ROOFTOP_SKY = '#5a6270';    // 屋顶天窗小盒
 const ROOFTOP_DECK = '#6f7683';   // 屋顶设备平台格栅（批次 39 A3）
 const ROOFTOP_MAST = '#5d646f';   // 屋顶天线杆（批次 39 A3）
+/** 屋面帽 / 压顶（批次 53）：比 `CONCRETE_COLOR` 暗一档，与屋面贴图拉开层次。 */
+const ROOF_COPING_COLOR = '#9a978f';
+/** 屋脊瓦 / 博风板 / 封檐板（批次 53）：青灰瓦烧成色，与 `tile_roof` 贴图同族。 */
+const ROOF_TILE_TRIM = '#4a4e55';
 
 const CROWN_COLOR = '#3a4250';   // 塔楼收分金属
 const CORNICE_COLOR = '#242a35'; // 板楼檐口
@@ -522,26 +525,35 @@ export function prismGeometry(w: number, h: number, d: number): THREE.BufferGeom
   const Ab = [-hw, 0, -hd], Bb = [hw, 0, -hd], Cb = [0, h, -hd];
   const Af = [-hw, 0, hd], Bf = [hw, 0, hd], Cf = [0, h, hd];
 
-  const tris: number[][][] = [
+  const tris: { p: number[][]; uv: 'slope' | 'gable' }[] = [
     // 后山墙（朝 -Z）
-    [Bb, Ab, Cb],
+    { p: [Bb, Ab, Cb], uv: 'gable' },
     // 前山墙（朝 +Z）
-    [Af, Bf, Cf],
+    { p: [Af, Bf, Cf], uv: 'gable' },
     // 左坡（-X 侧）：Ab→Cb→Cf→Af
-    [Ab, Cb, Cf], [Ab, Cf, Af],
+    { p: [Ab, Cb, Cf], uv: 'slope' }, { p: [Ab, Cf, Af], uv: 'slope' },
     // 右坡（+X 侧）：Bb→Bf→Cf→Cb
-    [Bb, Bf, Cf], [Bb, Cf, Cb],
+    { p: [Bb, Bf, Cf], uv: 'slope' }, { p: [Bb, Cf, Cb], uv: 'slope' },
     // 底面（朝 -Y，贴墙不可见但几何闭合）
-    [Ab, Af, Bf], [Ab, Bf, Bb],
+    { p: [Ab, Af, Bf], uv: 'gable' }, { p: [Ab, Bf, Bb], uv: 'gable' },
   ];
 
+  // 批次 53 D12：坡面 UV 由**俯视投影**（`u = x/w`、`v = z/d`）改为**沿坡长 / 沿脊长**
+  // 的平面投影。旧口径的 `v` **只依赖 z**，而坡面在 z 方向是常量 ⇒ 沿坡向的瓦纹被
+  // 拉成无限长条纹；山墙三角面用同一套俯视投影也严重畸变。
+  const ridgeLen = 2 * hd;
   const positions: number[] = [];
   const uvs: number[] = [];
   for (const tri of tris) {
-    for (const v of tri) {
+    for (const v of tri.p) {
       positions.push(v[0], v[1], v[2]);
-      // 坡面/山墙统一平面映射：u=x 归一，v=z 或 y 归一（近似即可）
-      uvs.push(v[0] / w + 0.5, v[2] / d + 0.5);
+      if (tri.uv === 'slope') {
+        // u = 沿脊长（z）归一；v = 沿坡长归一（自檐口 0 → 屋脊 1）
+        uvs.push((v[2] + hd) / ridgeLen, (hw - Math.abs(v[0])) / hw);
+      } else {
+        // 山墙 / 底面：山墙平面本身就在 XY 上，直接 (x, y) 归一即为正确的平面映射
+        uvs.push((v[0] + hw) / (2 * hw), v[1] / h);
+      }
     }
   }
   const geo = new THREE.BufferGeometry();
@@ -618,9 +630,17 @@ export function mergeBoxes(boxes: BoxSpec[]): THREE.BufferGeometry {
 const PARAPET_T = u(0.25);   // 墙厚 0.25 m
 const PARAPET_H = u(0.9);    // 墙高 0.9 m（真实规范 0.9~1.2 m）
 const PARAPET_HALF = u(0.125); // 环心内缩（t/2）
-/** 压顶线脚：女儿墙顶再加宽 `t + u(0.06)`、高 `u(0.08)` 的薄挑檐（批次 39 A3）。 */
-const COPING_H = u(0.08);
+/**
+ * 压顶线脚：女儿墙顶再加宽 `t + u(0.06)` 的薄挑檐，坐在女儿墙顶上。
+ *
+ * 批次 53 §2.1：`COPING_H` 由 0.08 → **0.12 m**（GB 50345-2012 §4.11.14
+ * 「压顶厚 ≥120mm」）。旧值 80 mm 不合规。
+ * 另加 `DRIP_NOTCH`：内侧 **8 mm 深滴水凹槽**（GB 50345 §4.11.14「压顶内侧
+ * 下端应作滴水处理（鹰嘴或滴水槽）」；印度金属压板滴水线宽 10~15/深 8 mm）。
+ */
+const COPING_H = u(0.12);
 const COPING_OVER = u(0.06);
+const DRIP_NOTCH = u(0.008);
 
 /** 女儿墙（02 §3.2 · ParapetRing）：4 条 box @ y（原 mesh position=[0,y,0] 内 y=h/2）。 */
 function parapetAccent(w: number, d: number, y: number): MergePart[] {
@@ -636,29 +656,162 @@ function parapetAccent(w: number, d: number, y: number): MergePart[] {
 }
 
 /**
- * 压顶线脚（批次 39 A3）：女儿墙**顶面**再加一圈薄挑檐（ coping ），4 条。
- * 薄挑檐比墙身厚 `COPING_OVER`（两侧各挑出 0.06 m），比墙身高 `COPING_H`（0.08 m），
- * 坐在女儿墙顶上 —— 真实女儿墙的收头件，缺了它墙顶就是一道光板。
+ * 压顶线脚（批次 39 A3 建立 / 批次 53 修正厚度 + 滴水凹槽）：女儿墙**顶面**再加一圈
+ * 薄挑檐（coping），4 条，坐在女儿墙顶上 —— 真实女儿墙的收头件，缺了它墙顶就是一道光板。
+ * 批次 53 在压顶**内侧**下缘加一道 8 mm 深滴水凹槽（南北 2 条 + 东西 2 条）。
  */
 function copingAccent(w: number, d: number, y: number): MergePart[] {
   const t = PARAPET_T + COPING_OVER;
   const half = PARAPET_HALF + COPING_OVER / 2;
   const cy = y + PARAPET_H + COPING_H / 2;
-  return [
+  const out: MergePart[] = [
     boxPart(w + COPING_OVER, COPING_H, t, 0, cy, +(d / 2 - half), CONCRETE_COLOR),
     boxPart(w + COPING_OVER, COPING_H, t, 0, cy, -(d / 2 - half), CONCRETE_COLOR),
     boxPart(t, COPING_H, d - 2 * half, +(w / 2 - half), cy, 0, CONCRETE_COLOR),
     boxPart(t, COPING_H, d - 2 * half, -(w / 2 - half), cy, 0, CONCRETE_COLOR),
   ];
+  // 滴水凹槽：压在压顶**内缘**（朝向屋面一侧）的下缘，暗一档压出 8 mm 深的凹线。
+  // 用比压顶暗的 `ROOFTOP_SKY` 走顶点色读出，不新增材质槽。
+  const dy = cy - COPING_H / 2 + DRIP_NOTCH;
+  const inner = PARAPET_HALF; // 压顶内缘 ≈ 女儿墙内表面
+  out.push(
+    boxPart(w, DRIP_NOTCH * 2, DRIP_NOTCH * 2, 0, dy, +(d / 2 - inner), ROOFTOP_SKY),
+    boxPart(w, DRIP_NOTCH * 2, DRIP_NOTCH * 2, 0, dy, -(d / 2 - inner), ROOFTOP_SKY),
+    boxPart(DRIP_NOTCH * 2, DRIP_NOTCH * 2, d - 2 * inner, +(w / 2 - inner), dy, 0, ROOFTOP_SKY),
+    boxPart(DRIP_NOTCH * 2, DRIP_NOTCH * 2, d - 2 * inner, -(w / 2 - inner), dy, 0, ROOFTOP_SKY),
+  );
+  return out;
 }
 
-/** 女儿墙 + 压顶线脚（批次 39 A3：有女儿墙的顶面统一带收头）。 */
+/**
+ * 屋面应急溢流口（批次 53，GB 50345-2012 §4.11.16）：**环形女儿墙屋面必须设置**，
+ * 孔下缘高于屋面防水层上缘 50 mm、远低于女儿墙顶。本件做女儿墙内侧南北各 1 个
+ * 短管 + 球形篦子，坐落在女儿墙内侧墙根。
+ */
+function scupperAccent(w: number, d: number, y: number): MergePart[] {
+  const r = u(0.10);            // ⌀0.20 m
+  const len = u(0.26);          // 自女儿墙内侧伸向屋面的短管
+  const cy = y + u(0.35);       // 孔心高于屋面 350 mm（> 50 mm 要求，留观感余量）
+  const zAt = d / 2 - PARAPET_T / 2 - len / 2;
+  // cylPart 无 rotX 通道（引擎层 MergePart 只有 rotZ / matrix），短管用 matrix 绕 X 转 90°。
+  const geo = new THREE.CylinderGeometry(r, r, len, 8, 1, true);
+  const m = new THREE.Matrix4();
+  const out: MergePart[] = [];
+  for (const [px, pz] of [[+(w / 2 - u(0.9)), +zAt], [-(w / 2 - u(0.9)), -zAt]] as const) {
+    m.makeTranslation(px, cy, pz);
+    m.multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    out.push({ geo, matrix: m.clone(), color: ROOFTOP_SKY });
+  }
+  return out;
+}
+
+/** 女儿墙 + 压顶线脚 + 应急溢流口（批次 53：有女儿墙的顶面统一带完整收头）。 */
 function parapetWithCoping(w: number, d: number, y: number): MergePart[] {
-  return [...parapetAccent(w, d, y), ...copingAccent(w, d, y)];
+  return [...parapetAccent(w, d, y), ...copingAccent(w, d, y), ...scupperAccent(w, d, y)];
+}
+
+// ── 批次 53 A1/A2：檐口 / 挑檐 —— 框架条而非实心板 ──────────────────────
+
+/**
+ * 檐口（批次 53 A1）。
+ *
+ * **这是本批最关键的一处修复。** 旧口径是一块覆盖**全屋面**的实心 box
+ * （`w+u(0.8) × u(0.5) × d+u(0.8)`），把屋面贴图和全部屋顶设备整个盖死 ——
+ * 批次 39 花了 15.3 MB 做的 16 张屋面图因此**零曝光**。
+ *
+ * 真实构造不是「一块盖板」而是**沿屋面周边一圈的线脚**：中间是屋面（找坡 + 防水 +
+ * 保护层），只有周边有厚度。本件按此重建为 4 条窄带：
+ *   - 南北 2 条贯通两角（长 `w + 2·ov`）；
+ *   - 东西 2 条夹在南北条之间（深 `d`，不重叠）。
+ *
+ * @param ov 外挑（slab 取 u(0.40)，满足 GB 50207 无组织排水 ≥60 mm；pavilion 取 u(1.5)）
+ * @param th 线脚厚度（沿 Z 高度）
+ */
+function corniceFrame(
+  w: number, d: number, y: number, ov: number, th: number, color: string,
+): MergePart[] {
+  const cy = y + th / 2;
+  return [
+    boxPart(w + 2 * ov, th, ov, 0, cy, +(d / 2 + ov / 2), color),
+    boxPart(w + 2 * ov, th, ov, 0, cy, -(d / 2 + ov / 2), color),
+    boxPart(ov, th, d, +(w / 2 + ov / 2), cy, 0, color),
+    boxPart(ov, th, d, -(w / 2 + ov / 2), cy, 0, color),
+  ];
+}
+
+/**
+ * 出檐斜撑（批次 53 A2）：pavilion 的大挑檐若凭空挑出没有任何支撑不合理，
+ * 按「每 2 m 一根 45° 斜撑」的构造惯例补上（4 边 × 2 根 = 8 根）。
+ *
+ * 斜撑在 YZ 平面内倾斜（绕 X 旋转 `rotX`）。`MergePart` 只有 `rotZ` 与
+ * `matrix`，此处用 `matrix` 表达绕 X 的复合变换。
+ */
+function eaveBrackets(w: number, d: number, y: number, ov: number, drop: number, color: string): MergePart[] {
+  const t = u(0.12);        // 撑杆 120×120 mm
+  const len = Math.hypot(ov, drop);
+  const ang = -Math.atan2(drop, ov); // Rx(ang) 把 +Z 轴抬到 (0, drop, ov)
+  const out: MergePart[] = [];
+  const m = new THREE.Matrix4();
+  for (const sx of [-0.28, 0.28]) {
+    // ±Z 面：撑杆中心在墙外挑中点，高度比檐口下缘低 drop/2
+    for (const sz of [1, -1]) {
+      m.makeTranslation(w * sx, y - drop / 2, sz * (d / 2 + ov / 2));
+      m.multiply(new THREE.Matrix4().makeRotationX(ang));
+      out.push({ geo: new THREE.BoxGeometry(t, t, len), matrix: m.clone(), color });
+    }
+    // ±X 面：同一根撑杆绕 Y 转 90° 复用
+    for (const sx2 of [1, -1]) {
+      m.makeTranslation(sx2 * (w / 2 + ov / 2), y - drop / 2, d * sx);
+      m.multiply(new THREE.Matrix4().makeRotationY(sx2 * sx * Math.PI / 2));
+      m.multiply(new THREE.Matrix4().makeRotationX(ang));
+      out.push({ geo: new THREE.BoxGeometry(t, t, len), matrix: m.clone(), color });
+    }
+  }
+  return out;
+}
+
+/**
+ * 坡屋顶三件收头（批次 53 D13）：屋脊 / 博风板 / 封檐板。
+ *
+ * 旧口径这三件**一件都没有** —— `prismGeometry` 是单层三角面片 + `DoubleSide`，
+ * 1.2 m 出檐在逆光下只是一条零厚度的亮线，屋脊是两根三角面直接相交的一条数学线。
+ *
+ * @param roofW/roofD 坡屋顶轮廓全宽 / 全深（含出檐）
+ * @param y 屋面**起坡标高**（prism 的底面）
+ * @param roofH 屋脊相对起坡面的抬升高度
+ */
+function pitchedRoofTrim(roofW: number, roofD: number, y: number, roofH: number): MergePart[] {
+  const hw = roofW / 2;
+  const hd = roofD / 2;
+  const ridgeW = u(0.26);   // 脊瓦宽 260 mm
+  const ridgeH = u(0.09);   // 脊瓦高 90 mm
+  const bargeW = u(0.32);   // 博风板宽 ≥300 mm（GB 50207 / 山墙檐口）
+  const bargeT = u(0.08);   // 博风板厚 80 mm
+  const fasciaT = u(0.06);  // 封檐板厚 60 mm
+  const fasciaH = u(0.16);
+  const out: MergePart[] = [
+    // 屋脊：沿脊线（Z 向）贯通，压在两坡交线上
+    boxPart(ridgeW, ridgeH, roofD, 0, y + roofH + ridgeH / 2, 0, ROOF_TILE_TRIM),
+  ];
+  // 博风板：2 片山墙各 1，沿坡面斜置（绕 Z 转，方向 (−hw, roofH)）
+  const slopeLen = Math.hypot(hw, roofH);
+  const ang = Math.atan2(roofH, -hw);
+  for (const sz of [1, -1]) {
+    const m = new THREE.Matrix4()
+      .makeTranslation(hw / 2, y + roofH / 2, sz * hd)
+      .multiply(new THREE.Matrix4().makeRotationZ(ang));
+    out.push({ geo: new THREE.BoxGeometry(slopeLen, bargeT, bargeW), matrix: m, color: ROOF_TILE_TRIM });
+  }
+  // 封檐板：挂在两道檐口（x = ±hw）正下方，把零厚度面片封出厚度
+  for (const sx of [1, -1]) {
+    out.push(
+      boxPart(fasciaT, fasciaH, roofD, sx * (hw + fasciaT / 2), y - fasciaH / 2, 0, ROOF_TILE_TRIM),
+    );
+  }
+  return out;
 }
 
 // ── 批次 39 C3/C4：临街面定位（门 / 雨棚 / 底商 一律挂同一面）────────────
-
 /**
  * 临街面：法向轴 + 朝向符号。布局层（`building_layout.BuildingSpec`）已知
  * 南北边楼临 ±Z、东西边楼临 ±X（C3），经 `buildBuildingParts` 透传下来。
@@ -763,16 +916,45 @@ function quoinAccent(w: number, d: number, h: number): MergePart[] {
   ];
 }
 
-/** 空调外机（02 §3.2 · AcUnits）：hash 确定性 2–3 个小盒挂 +Z 墙。 */
-function acUnitsAccent(w: number, d: number, wallH: number): MergePart[] {
+/**
+ * 空调外机（02 §3.2 · AcUnits；批次 53 D10 重制）。
+ *
+ * 旧口径两个缺陷（39-L6 登记 4 批未收口）：
+ *   1. **尺寸**：裸 box `0.5 × 0.35 × 0.25 m`。真实三匹室外机 **900 × 300 × 700 mm**
+ *      （宽 × 深 × 高），且必带侧进风百叶 + 顶部轴流风机罩 + 底部 2 根托架。
+ *   2. **朝向**：恒挂 `d / 2`（+Z 面），**无视 `streetAxis`** —— 东西边楼（临 ±X）
+ *      的外机全挂在背面墙上，等于给邻居装空调。
+ *
+ * 批次 53：外机改挂**背街面**（与临街面 `st` 相反的轴向），尺寸走真实值，
+ * 并补托架。仍走 `boxPart` ⇒ 并入区级点缀 mesh，不新增 draw call。
+ */
+function acUnitsAccent(w: number, d: number, wallH: number, st: Street): MergePart[] {
   const seed = `${w.toFixed(3)}-${d.toFixed(3)}-${wallH.toFixed(3)}`;
   const cnt = 2 + (hashStr(`ac-cnt-${seed}`) % 2); // 2 或 3
   const out: MergePart[] = [];
+  // 外机挂**背街面**：临街面留给底商雨棚 / 入口，背街面才是住宅外墙。
+  const back: Street = { axis: st.axis, sign: st.sign === 1 ? -1 : 1 };
+  const uw = u(0.90);   // 宽 900 mm（沿墙面）
+  const ud = u(0.30);   // 深 300 mm
+  const uh = u(0.70);   // 高 700 mm
+  const bracket = u(0.35);
+  const faceAt = (back.axis === 'x' ? w : d) / 2;
   for (let i = 0; i < cnt; i++) {
     const h = hashStr(`ac-${seed}-${i}`);
     const fy = ((h % 1000) / 1000) * 0.6 + 0.2; // 0.20..0.80 of wall height
-    const fx = (((h >>> 10) % 1000) / 1000 - 0.5) * 0.6; // ±0.30 of w
-    out.push(boxPart(u(0.5), u(0.35), u(0.25), fx * w, fy * wallH, d / 2 + u(0.12), AC_COLOR));
+    const fa = (((h >>> 10) % 1000) / 1000 - 0.5) * 0.6; // ±0.30 of 面宽
+    // 中心：背面墙外挑 (ud/2)，托架底再落回墙面
+    const cAlong = fa * (back.axis === 'x' ? d : w);
+    const [bx, bz] = streetXZ(back, cAlong, faceAt + ud / 2);
+    const by = fy * wallH;
+    out.push(
+      back.axis === 'z'
+        ? boxPart(uw, uh, ud, bx, by, bz, AC_COLOR)
+        : boxPart(ud, uh, uw, bx, by, bz, AC_COLOR),
+      back.axis === 'z'
+        ? boxPart(uw, bracket, u(0.05), bx, by - uh / 2 - bracket / 2, bz - ud / 2, FRAME_COLOR)
+        : boxPart(u(0.05), bracket, uw, bx - ud / 2, by - uh / 2 - bracket / 2, bz, FRAME_COLOR),
+    );
   }
   return out;
 }
@@ -929,21 +1111,84 @@ function antennaMast(w: number, d: number, y: number): MergePart[] {
   return out;
 }
 
-/** 屋顶设备（阶段 N 基础件 + 批次 39 A3：设备平台 + 检修马道 + 天线）。 */
+/**
+ * 屋面接闪短杆（批次 53，GB 50057 建筑防雷）：屋面**四角**各一根接闪短杆，
+ * 高出屋面 **500 mm**，φ10 镀锌圆钢（深圳市气象局公开答复口径：屋面天面阳角处
+ * 接闪短杆高 50 cm、材料 φ10 镀锌圆钢）。旧口径全城零接闪构件。
+ *
+ * 立在内缩 0.35 m 处（女儿墙内侧 250 mm 墙厚 + 100 mm 余量），不与设备平台打架。
+ */
+function lightningRods(w: number, d: number, y: number): MergePart[] {
+  const r = u(0.02);   // φ10 mm 镀锌圆钢（直径 0.01 m，取 0.02 半径 = ⌀0.04，可辨）
+  const h = u(0.5);    // 高出屋面 500 mm
+  const out: MergePart[] = [];
+  for (const sx of [1, -1]) {
+    for (const sz of [1, -1]) {
+      const px = sx * (w / 2 - u(0.35));
+      const pz = sz * (d / 2 - u(0.35));
+      out.push(cylPart(r, r, h, 6, px, y + h / 2, pz, FRAME_COLOR));
+      out.push(cylPart(r * 3, r * 3, u(0.05), 6, px, y + u(0.025), pz, FRAME_COLOR));
+    }
+  }
+  return out;
+}
+
+/**
+ * 屋面检修直爬梯（批次 53，钢结构厂房检修爬梯规范）：梯宽 450 mm、踏步间距 300 mm，
+ * 立在女儿墙内侧（通向上人屋面 / 设备平台）。旧口径全城零爬梯。
+ *
+ * 规范上落地高度 > 7 m 才需护笼；屋面梯高 ≤ 1.5 m 远低于阈值，**故不加护笼**
+ * （与方案 §2.2 的取舍相反 —— 复核后按规范从严取「不加」，护笼留给设备平台 GLB）。
+ */
+function roofLadder(w: number, d: number, y: number): MergePart[] {
+  const halfW = u(0.225);  // 梯宽 450 mm
+  const r = u(0.03);        // 边梁 ⌀60 mm
+  const h = u(1.4);         // 梯高 1.4 m
+  const t = u(0.03);        // 踏步 ⌀60 mm
+  const steps = 4;          // 踏步间距 300 mm
+  const px = -(w / 2 - u(0.55));
+  const pz = +(d / 2 - u(0.55));
+  const out: MergePart[] = [
+    cylPart(r, r, h, 6, px - halfW, y + h / 2, pz, FRAME_COLOR),
+    cylPart(r, r, h, 6, px + halfW, y + h / 2, pz, FRAME_COLOR),
+  ];
+  for (let i = 1; i <= steps; i++) {
+    out.push({
+      ...cylPart(t, t, 2 * halfW, 5, px, y + (h * i) / (steps + 1), pz, FRAME_COLOR),
+      rotZ: Math.PI / 2,
+    });
+  }
+  return out;
+}
+
+/**
+ * 屋面附属构件（批次 53 重构）。
+ *
+ * 批次 39 口径的「水箱 ⌀0.3 m + 通风管 ⌀0.16 m」有两个致命问题：
+ *   1. 尺寸差 8 倍（真实屋顶不锈钢水箱 ⌀2.0~2.4 m × 2.5~3.0 m）；
+ *   2. 两者都被 slab/pavilion 的**实心檐口板**整个埋掉（`baseY = y + u(0.05)`
+ *      落在檐口板占用的 y ∈ [0, 0.5 m] 内）—— 全城 180 栋楼的水箱**从未被看见**。
+ *
+ * 批次 53：檐口改框架条（`corniceFrame`）后屋面中央让出，**水箱 / 冷却塔 / 空调外机
+ * 三件大设备移交 GLB**（`civic/rooftop_plant.glb`，见 `props/RoofPlantLayer.tsx`）——
+ * 这类设备有风机罩、进风百叶、支腿减振垫等细节，盒几何表达不出来。
+ * 本函数只保留**盒几何能表达且不需要细节**的屋面构件：设备平台 + 检修马道 + 天线
+ * + 接闪短杆 + 检修梯。
+ */
 function rooftopAccent(w: number, d: number, y: number): MergePart[] {
   const baseY = y + u(0.05);
   if (w > 1.5) {
     return [
-      // 水箱 / 通风管同样移到 0.4w·0.4d 的环带上（原 0.3w 恰好压在平台边缘）
-      cylPart(u(0.15), u(0.15), u(0.3), 8, w * 0.4, baseY + u(0.15), d * 0.4, ROOFTOP_TANK),
-      cylPart(u(0.08), u(0.08), u(0.35), 6, -w * 0.4, baseY + u(0.18), -d * 0.4, ROOFTOP_VENT),
       ...rooftopPlatform(w, d, y),
       ...antennaMast(w, d, y),
+      ...lightningRods(w, d, y),
+      ...roofLadder(w, d, y),
     ];
   }
   return [
     cylPart(u(0.06), u(0.06), u(0.3), 6, 0, baseY + u(0.15), 0, ROOFTOP_VENT),
     boxPart(u(0.2), u(0.06), u(0.2), w * 0.25, baseY + u(0.04), 0, ROOFTOP_SKY),
+    ...lightningRods(w, d, y),
   ];
 }
 
@@ -1097,13 +1342,15 @@ export function buildTowerParts(
   const hasBillboard = w > 1.4;
   const st: Street = { axis: streetAxis, sign: streetSign };
 
-  // 材质表：0 裙楼侧(facadeBase) / 1 裙楼顶(纯色) / 2 塔身侧(facadeMid) / 3 塔身顶(roof) /
+  // 材质表：0 裙楼侧(facadeBase) / 1 裙楼顶(roof) / 2 塔身侧(facadeMid) / 3 塔身顶(roof) /
   // 4 楼冠 / 5 玻璃门 / 6 灯带 / 7 广告牌面板（hasBillboard 才有）
   // 批次 39 C3：**塔楼不参与 base/mid 换面** —— 裙楼（= 首层商业基座）四面都用
   // facadeBase、塔身四面都用 facadeMid，base/mid 的分界在「裙楼 vs 塔身」而非面轴，
   // 临街面天然带商业首层（换面只对单层体块的 slab/house/shed 有意义）。
+  // 批次 53 A4：裙楼顶由 `roof:false`（落到城区主色纯色块）改为 `roof:true` ——
+  // 裙楼顶就是塔身的**屋顶平台**（露台），从高处俯视必须走屋面贴图。
   const matSpecs: WallMatSpec[] = [
-    { kind: 'sideA' }, { kind: 'top', roof: false }, { kind: 'sideB' }, { kind: 'top', roof: true },
+    { kind: 'sideA' }, { kind: 'top', roof: true }, { kind: 'sideB' }, { kind: 'top', roof: true },
     { kind: 'crown' }, { kind: 'glass', c: GLASS_DOOR },
     { kind: 'glow', intensity: Math.min(0.45, emissive * 1.2), rough: 0.3, metal: 0 },
   ];
@@ -1127,11 +1374,21 @@ export function buildTowerParts(
     shopfrontGlow(w, d, shopY, 6, st),
   ];
   const crownTopY = pH + bodyH + cH;
+  // 批次 53 A3：塔冠顶面原是 `crown` 材质的裸 BoxGeometry 顶面，而 `crown` 带
+  // `emissive: EMISSIVE_WINDOW`（批次 39 A2 专门给 `topMatProps` 删了 emissive，
+  // crown 这条路径漏掉）⇒ **CBD 塔顶整面夜间泛暖光**。
+  // 修法：在塔冠顶补一块屋面帽，`parapetWithCoping` 相应上移。
+  // 帽体比名义厚度多 0.02 m 并**下沉**这 0.02 m（底面落进 crown 内部）——
+  // 否则帽底与 crown 顶面**共面**，近距离侧看会 z-fighting 闪出一条缝。
+  const capT = u(0.10);
+  const capSink = u(0.02);
+  const capTopY = crownTopY + capT - capSink;
   const accent: MergePart[] = [
     // 批次 39 C5：基座带贴裙楼轮廓（裙楼才是接地体量）
     ...plinthAccent(w, d),
     ...parapetAccent(w, d, pH),
-    ...acUnitsAccent(w * 0.8, d * 0.8, bodyH + pH),
+    boxPart(w * 0.55, capT, d * 0.55, 0, crownTopY + capT / 2 - capSink, 0, ROOF_COPING_COLOR),
+    ...acUnitsAccent(w * 0.8, d * 0.8, bodyH + pH, st),
     // 批次 39 A3.2：退台面护栏改挂**塔身**尺寸、抬到塔身顶（`pH + bodyH`）。
     // 旧口径 `podiumRailAccent(w, d, pH)` 与裙楼女儿墙 `parapetAccent(w, d, pH)`
     // 同尺寸同高度 ⇒ 两套构件在同一圈互相穿插（B30）。
@@ -1139,14 +1396,15 @@ export function buildTowerParts(
     ...entranceAccent(d, st, pH),
     shopfrontAwningAccent(w, d, shopY, st),
     ...balconyAccent(w * 0.8, d * 0.8, bodyH + pH),
-    ...rooftopAccent(w * 0.55, d * 0.55, crownTopY),
+    ...rooftopAccent(w * 0.55, d * 0.55, capTopY),
     // 批次 39 A3.1：塔冠顶原是裸 BoxGeometry（顶面无任何收头，B12）⇒ 补女儿墙 + 压顶线脚。
-    ...parapetWithCoping(w * 0.55, d * 0.55, crownTopY),
+    // 批次 53 A3：上移到屋面帽顶（`capTopY`），帽面盖掉 crown 的自发光顶面。
+    ...parapetWithCoping(w * 0.55, d * 0.55, capTopY),
   ];
-  if (w > 1.2) accent.push(...liftRoomAccent(w * 0.55, d * 0.55, pH + bodyH + cH));
+  if (w > 1.2) accent.push(...liftRoomAccent(w * 0.55, d * 0.55, capTopY));
   let lightY = 0;
   if (hasBillboard) {
-    const bb = billboardParts(w, pH + bodyH + cH, 7);
+    const bb = billboardParts(w, capTopY, 7);
     accent.push(...bb.accent);
     wall.push(bb.panel);
     lightY = bb.panelTopY;
@@ -1185,25 +1443,25 @@ export function buildSlabParts(
   const accent: MergePart[] = [
     // 批次 39 C5：基座带（贴地勒脚，出挑 0.08 m）
     ...plinthAccent(w, d),
-    // 檐口条（高 0.5 m 深色压顶线，两侧各挑出 0.4 m；契约 §2.2）。
-    // 批次 39 A6：原为世界单位裸值 0.05 / 0.08 / 0.025（读作 0.5 m / 0.8 m / 0.25 m，
-    // 数值恰好合理但语义是"把世界单位当米用"）⇒ 改走 u()，取值不变 ⇒ 零视觉回归。
-    boxPart(w + u(0.8), u(0.5), d + u(0.8), 0, h + u(0.25), 0, CORNICE_COLOR),
+    // 檐口：批次 53 A1 由「覆盖全屋面的实心板」改为**沿周边的框架条**。
+    // 旧件 `w+u(0.8) × u(0.5) × d+u(0.8)` 把 `mat: 2`（roof:true）的屋面贴图
+    // 与全部屋顶设备整个盖死 —— 批次 39 的 16 张屋面图因此零曝光。
+    // 外挑 400 mm（GB 50207 无组织排水 ≥60 mm），厚 500 mm，取值与旧件外轮廓等值。
+    ...corniceFrame(w, d, h, u(0.40), u(0.50), CORNICE_COLOR),
     shopfrontAwningAccent(w, d, shopY, st),
     ...balconyAccent(w, d, h),
     ...rooftopAccent(w, d, h),
     // 批次 39 A3：slab 平屋面与塔冠统一带压顶线脚（真实城市所有平屋顶女儿墙顶都有收头，
     // 只给塔冠加会让两种平屋面一眼看出「只改了一处」）。
     ...parapetWithCoping(w, d, h),
-    ...acUnitsAccent(w, d, h),
+    ...acUnitsAccent(w, d, h, st),
     ...entranceAccent(d, st, h),
   ];
   if (hasQuoins) accent.push(...quoinAccent(w, d, h));
   return { wallParts: wall, matSpecs, accentParts: accent, billboardLightY: 0 };
 }
 
-/** house：box 主体 + 三棱柱坡屋顶（prism group）+ 入口/角柱（点缀）。 */
-export function buildHouseParts(
+/** house：box 主体 + 三棱柱坡屋顶（prism group）+ 入口/角柱（点缀）。 */export function buildHouseParts(
   w: number, d: number, h: number, emissive: number, facadeTiles = false,
   uvOffset?: FacadeUvOffset,
   streetAxis: 'x' | 'z' = STREET_DEFAULT.axis,
@@ -1232,9 +1490,18 @@ export function buildHouseParts(
     { geo: prismGeometry(w + u(1.2), roofH, d + u(1.2)), x: 0, y: bodyH, z: 0, mat: 3 },
     { ...entranceGlass(d, st, bodyH), mat: 4 },
   ];
+  // 批次 53 D13：坡屋顶三件收头（真实双坡顶必有的构件，旧口径全城零件）。
+  //   - 屋脊（脊瓦）：沿脊线贯通，260 mm 宽 × 90 mm 高；
+  //   - 博风板（山墙压顶）：2 片山墙各 1，**宽 ≥ 300 mm**（GB 50207 / 科普中国「山墙檐口」）；
+  //   - 封檐板：4 边檐口封边，厚 60 mm。
+  // 旧 `prismGeometry` 是单层三角面片 + DoubleSide，出檐在逆光下是一条零厚度亮线；
+  // 这三件同时把 1.2 m 出檐的边缘「封」出厚度。
+  const roofW = w + u(1.2);
+  const roofD = d + u(1.2);
   const accent: MergePart[] = [
     ...plinthAccent(w, d),   // 批次 39 C5：基座带
     ...entranceAccent(d, st, bodyH),
+    ...pitchedRoofTrim(roofW, roofD, bodyH, roofH),
   ];
   if (hasQuoins) accent.push(...quoinAccent(w, d, bodyH));
   return { wallParts: wall, matSpecs, accentParts: accent, billboardLightY: 0 };
@@ -1283,10 +1550,16 @@ export function buildShedParts(
     const saw = sawtoothParts(bw, d, bH, 3, 4);
     wall.push(...saw.deck, ...saw.glass);
     // 锯齿顶时屋檐加女儿墙作檐口收边（人字顶与坡屋顶几何冲突，跳过）
-    accent.push(...parapetAccent(bw, d, bH));
+    // 批次 53 D11：原只给 `parapetAccent`（无压顶无溢流口），与 slab / 塔冠的
+    // `parapetWithCoping` 并列时一眼看得出「有的有收头、有的没有」。
+    accent.push(...parapetWithCoping(bw, d, bH));
   } else {
     // 人字顶（几何 = 原 PrismRoof）
-    wall.push({ geo: prismGeometry(bw, h * 0.2, d), x: 0, y: bH, z: 0, mat: 3 });
+    const gableH = h * 0.2;
+    wall.push({ geo: prismGeometry(bw, gableH, d), x: 0, y: bH, z: 0, mat: 3 });
+    // 批次 53 D13：人字顶同样补屋脊 + 博风板（封檐板省略 —— 厂房屋面直落女儿墙，
+    // 无独立挑檐可封）。
+    accent.push(...pitchedRoofTrim(bw, d, bH, gableH));
   }
   // 烟囱 1-2 根：由占地宽确定性决定（不引随机源，同楼同形）
   const chimneys = w > 1.5 ? [-bw * 0.25, bw * 0.25] : [bw * 0.25];
@@ -1314,11 +1587,14 @@ export function buildPavilionParts(
     { geo: wx(w, bH, d, 0, bH / 2, 0, 'B'), mat: 0 },
     { geo: wx(w, bH, d, 0, bH / 2, 0, 'top'), mat: 1 },
   ];
-  // 大挑檐（四周各挑出 3 m、厚 0.4 m，木色；批次 39 A6：原为世界单位裸值 0.3/0.04/0.02）
+  // 挑檐：批次 53 A2 由「覆盖全屋面的实心板」（四周挑出 3.0 m）改为
+  // **1.5 m 挑檐框架 + 8 根 45° 斜撑**。3.0 m 挑檐在 16 m 宽体量上占屋面 1/3，
+  // 且凭空挑出无支撑不合构造；斜撑按「每 2 m 一根」的惯例补齐。
   // + 批次 39 C5：基座带
   const accent: MergePart[] = [
     ...plinthAccent(w, d),
-    boxPart(w + u(3.0), u(0.4), d + u(3.0), 0, bH + u(0.2), 0, EAVE_COLOR),
+    ...corniceFrame(w, d, bH, u(1.5), u(0.4), EAVE_COLOR),
+    ...eaveBrackets(w, d, bH, u(1.5), u(0.9), EAVE_COLOR),
   ];
   return { wallParts: wall, matSpecs, accentParts: accent, billboardLightY: 0 };
 }

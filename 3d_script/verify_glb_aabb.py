@@ -258,6 +258,15 @@ TARGETS = {
     # （塔帽顶 44.2 m，全城最高构筑物）+ minY=0（裸土场坪底）保证。
     'civic/construction_site.glb': dict(x=6.640, y=4.420, z=4.560, axis='x_flat',
                                         pivot='裸土场坪底 minY=0，X/Y 居中；塔吊回转中心在局部 (-9, +6)'),
+
+    # ── 建筑屋顶（build_rooftop_plant.py，批次 53 新增）──────────────────
+    # 8.37 m (X，设备区三段东西排开) × 4.19 m (Y = 高，塔顶风机罩) × 5.47 m
+    # (Z = 南北；**冷却塔检修平台**比塔体 +Y 侧多出 0.80 m 走道撑出来的，
+    #  不是设备本体进深 —— 布点判屋面够不够要按平台尺寸算)。
+    # axis='x_flat'：长轴 X 主导（Y 4.19 非最大轴 ⇒ 按 cityScale 口径**不声明
+    # upright**，直立性由 minY=0 + 判据 ① 三轴互异兜住，同 sportsField/portTerminal 先例）。
+    'civic/rooftop_plant.glb': dict(x=0.837, y=0.419, z=0.547, axis='x_flat',
+                                        pivot='屋面 = 支腿底/减振垫底 minY=0，X/Z 居中'),
 }
 
 # 直立判据的例外：长轴落在水平轴属正确摆放。

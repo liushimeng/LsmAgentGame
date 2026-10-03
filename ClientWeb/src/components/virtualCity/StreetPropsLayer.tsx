@@ -56,12 +56,12 @@ import { buildingsFor, type BuildingSpec } from './building_layout';
 import { outdoorCount, crowdCapFor, synthCrowdEntry } from './crowdFormula';
 import { layoutCrowd, type CrowdPedestrian } from './crowdLayout';
 import { clearCrowdPositions } from './crowdRegistry';
-import { TreesInstanced, type TreeVariant } from './props/TreesInstanced'; // 批次 20 §3.3 → 批次 44：GLB 化 + 三变体（variant 字段即由此导入）
+import { TreesInstanced, type TreeVariant } from './props/TreesInstanced';
+import { RoofPlantLayer } from './props/RoofPlantLayer'; // 批次 53：屋顶设备机组（GLB 实例化） // 批次 20 §3.3 → 批次 44：GLB 化 + 三变体（variant 字段即由此导入）
 import { parkFacilityClearOf } from './props/parkLayout'; // 批次 45 C1：公园设施净空（公园树 filter 消费）
 import { Vehicle, type VehicleStop } from './props/Vehicle';
 import { PedestrianV3, type PedestrianV3Props } from './props/PedestrianV3';
 import { Sign } from './props/Sign';
-import { RooftopAcc } from './props/RooftopAcc';
 import { BusStop } from './props/BusStop';
 import { SolarPanel } from './props/SolarPanel';
 import { VendorKiosk } from './props/VendorKiosk';
@@ -100,14 +100,6 @@ interface TreeSpec {
   scale: number;
 }
 
-interface RooftopSpec {
-  x: number;
-  z: number;
-  variant: 'ac' | 'tank' | 'antenna';
-  rotation: number;
-  yOffset: number;
-}
-
 interface FurnitureSpec {
   type: 'kiosk' | 'bicycle' | 'trash' | 'phone' | 'mailbox' | 'parking';
   x: number;
@@ -134,7 +126,6 @@ interface SignSpec {
 interface DistrictProps {
   districtId: string;
   trees: TreeSpec[];
-  rooftop: RooftopSpec[];
   /** 16 · 阶段 T：屋顶太阳能板（suburb / oldtown）。 */
   solar: SolarSpec[];
   /** 城区内行人（V3 体积步态；outfit 0..3 对应 PEDESTRIAN_OUTFITS） */
@@ -225,7 +216,6 @@ function treeVariantForRoad(x: number, z: number, _rnd: () => number): TreeVaria
   return x > PALM_ROAD_X && z > PALM_ROAD_Z ? 'palm' : 'oak';
 }
 
-const ROOFTOP_VARIANTS: Array<'ac' | 'tank' | 'antenna'> = ['ac', 'tank', 'antenna'];
 const VEHICLE_VARIANTS: Array<'sedan' | 'truck' | 'bus' | 'taxi'> = ['sedan', 'truck', 'bus', 'taxi'];
 
 /**
@@ -388,32 +378,25 @@ function propsForDistrict(
     );
   }
 
-  // 1-2 个楼顶杂物（批次 30 A2：锚点改挂街墙楼栋槽位 —— 旧「区中心半径 0.8~2.4」
-  // 在街墙布局下会悬在庭院半空）。
+  // 楼顶设备（批次 53）：**已整块移出本层**，改由全局 `props/RoofPlantLayer.tsx`
+  // 逐栋实例化 `civic/rooftop_plant.glb`。三条理由：
+  //   1. 旧 `props/RooftopAcc.tsx` 每区 1~2 件、每件一个 Billboard mesh，而本层的
+  //      楼栋是**逐栋**的 —— 数量级对不上，屋顶会大面积空置；
+  //   2. 旧件的 3D 几何分支因贴图恒命中而不可达（方案 53 §1.2 D7）；
+  //   3. 设备尺寸（冷却塔 3.80 m、水箱 ⌀2.20 m）需要真几何，盒/面片表达不出。
+  // 太阳能板（`props/SolarPanel.tsx`）仍留在本层 —— 它是**独立物体族（光伏系统）**，
+  // 批次 53 明确不做（见方案 §1.3）。
+
+  // 逐栋取该区楼栋（太阳能板锚点用；屋顶设备批次 53 起改由 RoofPlantLayer 自行遍历）。
   //
   // 批次 39 A4：y 改走 `cityScale.buildingTopY(def.id, prosperity, spec.factor)` ——
   // 旧口径 `buildingHeight((minF+maxF)/2) * 0.9` 是**区楼层中值**近似，与单栋真实楼顶
   // 无关（审计实测：finance 繁荣度 0 时悬空 14 m，B13）。`buildingTopY` 是渲染楼高与
-  // `freeViewColliders` 相机碰撞体的**单一事实来源**（批次 32 立此约定），杂物因此
-  // 与楼顶/碰撞盒三者永远同高。
+  // `freeViewColliders` 相机碰撞体的**单一事实来源**（批次 32 立此约定），
+  // 锚点因此与楼顶 / 碰撞盒三者永远同高。
   const bSpecs = buildingsFor(def);
-  /** 某栋楼的真实屋面世界 y（含城区底板偏移）。 */
-  const roofYOf = (spec: BuildingSpec): number =>
-    DISTRICT_SURFACE_Y + buildingTopY(def.id, prosperity, spec.factor);
   const pickSpec = (i: number): BuildingSpec | undefined =>
     bSpecs.length ? bSpecs[(i + Math.floor(rnd() * bSpecs.length)) % bSpecs.length] : undefined;
-
-  const rooftop: RooftopSpec[] = [0, 1].slice(0, 1 + (rnd() < 0.5 ? 1 : 0)).flatMap((k) => {
-    const anchor = pickSpec(k);
-    if (!anchor) return [];
-    return [{
-      x: c.x + anchor.x + (rnd() - 0.5) * 0.6,
-      z: c.z + anchor.z + (rnd() - 0.5) * 0.6,
-      variant: ROOFTOP_VARIANTS[Math.floor(rnd() * ROOFTOP_VARIANTS.length)],
-      rotation: rnd() * Math.PI * 2,
-      yOffset: roofYOf(anchor),
-    }];
-  });
 
   // 16 · 阶段 T：太阳能板（suburb / oldtown 屋顶确定性 1-2 块）
   const solar: SolarSpec[] = [];
@@ -548,7 +531,6 @@ function propsForDistrict(
   return {
     districtId: def.id,
     trees,
-    rooftop,
     solar,
     pedestrians,
     furniture: furnitureDry,
@@ -1286,20 +1268,10 @@ export function StreetPropsLayer({
 
   return (
     <>
-      {/* 楼顶杂物 + 行人 + 家具 + 标识（树已抽出为全局 TreesInstanced） */}
+      {/* 行人 + 家具 + 标识（树已抽出为全局 TreesInstanced；
+          屋顶设备批次 53 起抽出为全局 RoofPlantLayer） */}
       {layout.districtProps.map((dp) => (
         <group key={dp.districtId}>
-          {/* 楼顶杂物 */}
-          {dp.rooftop.map((r, i) => (
-            <RooftopAcc
-              key={`roof-${i}`}
-              x={r.x}
-              y={r.yOffset}
-              z={r.z}
-              variant={r.variant}
-              rotation={r.rotation}
-            />
-          ))}
           {/* 16 · 阶段 T：屋顶太阳能板（suburb / oldtown） */}
           {dp.solar.map((sp, i) => (
             <SolarPanel key={`solar-${i}`} x={sp.x} y={sp.y} z={sp.z} rotation={sp.rotation} />
@@ -1362,6 +1334,14 @@ export function StreetPropsLayer({
 
       {/* 批次 20 §3.3：区内树 + 行道树 → 单一全局 InstancedMesh 集合（3 draw call） */}
       <TreesInstanced trees={allTrees} totalCap={TREE_TOTAL_CAP} />
+
+      {/* 批次 53：屋顶设备机组（逐栋实例化 civic/rooftop_plant.glb，7 draw call）。
+          同样抽到全局层：逐区渲染会退化成「每区一次 GlbInstanced」= 7×32 draw call。 */}
+      <RoofPlantLayer
+        districts={districts}
+        prosperityByDistrict={prosperityByDistrict}
+        prosperityFallback={PROSPERITY_FALLBACK}
+      />
 
       {/* 主干道车辆（16 · 阶段 S：双向车道，右行偏移；批次 41 C1/C2：涂装变体
           glbName + arterial 红绿灯停车线 stops 透传） */}

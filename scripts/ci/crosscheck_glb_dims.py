@@ -85,6 +85,8 @@ KEY_MAP = {
     "railSpan": "civic/rail_span",
     "railStation": "civic/rail_station",
     "constructionSite": "civic/construction_site",
+    # 批次 53 建筑屋顶：屋顶设备机组（新增键，见 53-建筑屋顶真实感 §3.4）
+    "roofPlant": "civic/rooftop_plant",
 }
 
 # 程序化 fallback 专用、无 GLB ⇒ 不送检（但解析出来打印，便于人眼核对）。
