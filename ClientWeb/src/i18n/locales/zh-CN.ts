@@ -1606,7 +1606,7 @@ const zhCN: Dict = {
   'virtualCity.create.watchOnly': '以观察者身份创建（全 Agent 城市）',
   // ── §20260921 建房解耦 + 城市背景层（契约 04 §3 键表）──
   'virtualCity.residentCount': '背景居民规模',
-  'virtualCity.residentCountHint': '每位居民都是一个 City-Human Agent：系统提示词与档案自动加载自 10 万人物卡知识库，由 LLM 线路池驱动',
+  'virtualCity.residentCountHint': '每位居民都是一个 City-Human Agent：系统提示词与档案自动加载自 10 万人物卡知识库（LsmKLBaseServer 引擎：LLM 特征抽取 + MySQL MCP + Graph 检索），由 LLM 线路池驱动',
   'virtualCity.residentCountRequired': '背景居民规模需在 10 ~ 100000 之间',
   'virtualCity.linePoolInfo': 'LLM 线路池：{n} 条线路（Agent 并发数）',
   'virtualCity.linePoolEmpty': '当前无可用 LLM 线路，请先在模型管理配置',

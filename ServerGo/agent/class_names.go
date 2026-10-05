@@ -127,6 +127,13 @@ const (
 	// 是「跨局 MEMORY.md 迭代」。
 	// 详见 lag_docs/德州扑克/德州扑克Agent聊天系统设计.md §3.4。
 	AgentClassTexasHoldemMemoryCompact AgentClassName = "LsmAgentGame-TexasHoldem-MemoryCompact"
+
+	// AgentClassKnowledgeExtractor 是 LsmKLBaseServer 知识库引擎 LLM 特征抽取的
+	// AgentClassName(2026-10-05 §知识库重构)。由 ServerGo/knowledge/feature_extract.go
+	// 的 FeatureExtractor.ExtractFromContent / ExtractBatch 调用;从 Markdown
+	// 人物卡中抽取结构化特征字符串数组,写入 t_lsm_game_knowledge_card。
+	// 详见 docs/知识库系统/LsmKLBaseServer-知识库引擎重构方案.md。
+	AgentClassKnowledgeExtractor AgentClassName = "LsmAgentGame-Knowledge-Extractor"
 )
 
 // AllAgentClassNames 返回当前已注册的全部 AgentClassName。
@@ -154,6 +161,8 @@ func AllAgentClassNames() []AgentClassName {
 		AgentClassDebateCommentator,
 		// 2026-09-22 §CityHuman重构 — 虚拟城市居民 Agent(五类合一)
 		AgentClassCityHuman,
+		// 2026-10-05 §LsmKLBaseServer 知识库引擎 — LLM 特征抽取
+		AgentClassKnowledgeExtractor,
 	}
 }
 

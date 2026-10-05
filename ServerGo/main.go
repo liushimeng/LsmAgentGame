@@ -44,6 +44,7 @@ import (
 	"LsmAgentGame/game/texasholdem"
 	"LsmAgentGame/game/virtual_city"
 	"LsmAgentGame/game/werewolf"
+	"LsmAgentGame/knowledge"
 	"LsmAgentGame/llm"
 	"LsmAgentGame/llm/sysprompt"
 	"LsmAgentGame/logger"
@@ -1024,7 +1025,18 @@ func main() {
 	// 2026-09-21 §档案锚定契约 §7 — 居民人物卡档案两端点(房间源 = vcMgr)。
 	vcCityAPI := api.NewVirtualCityAPI(vcMgr)
 
-	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, vcSurveyAPI, vcCityAPI)
+	// 2026-10-05 §LsmKLBaseServer 知识库引擎 — 特征抽取 + MCP + Graph 检索。
+	// 装配: Loader(MySQL) + FeatureExtractor(LLM) + KnowledgeGraph + KnowledgeAPI。
+	// 抽取失败时回退到 profession.Loader 的 frontmatter 解析(零回归)。
+	kbModelKey := "DeepSeek" // 默认抽取模型(可在配置中覆盖)
+	kbExtractor := knowledge.NewFeatureExtractor(llmRegistry, kbModelKey)
+	kbLoader := knowledge.NewLoader(gormDB, kbExtractor)
+	kbGraph := knowledge.NewKnowledgeGraph()
+	kbRetrievalChain := knowledge.NewRetrievalChain(kbLoader, kbGraph)
+	_ = kbRetrievalChain // 预留给未来 MCP tools/call 内部使用
+	kbAPI := api.NewKnowledgeAPI(kbLoader)
+
+	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, vcSurveyAPI, vcCityAPI, kbAPI)
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.

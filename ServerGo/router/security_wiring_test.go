@@ -35,7 +35,7 @@ func newTestRouter(t *testing.T, cfg *config.Config) *gin.Engine {
 	captchaAPI := api.NewCaptchaAPI(cfg, util.NewCaptchaStore(), nil)
 	r := New(cfg, authAPI, nil, captchaAPI, nil, nil, nil, nil, nil, nil,
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
-		nil, nil, nil, nil, nil)
+		nil, nil, nil, nil, nil, nil)
 	r.GET("/api/__probe_clientip", func(c *gin.Context) {
 		c.String(http.StatusOK, c.ClientIP())
 	})

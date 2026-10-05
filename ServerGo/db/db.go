@@ -96,6 +96,8 @@ func Init(cfg *config.Config) (*gorm.DB, error) {
 		&models.TLsmGameDebateScore{},
 		&models.TLsmGameDebateModelStats{},
 		&models.TLsmGameDebateTopic{},
+		// 2026-10-05 §LsmKLBaseServer 知识库引擎 — 知识卡特征表。
+		&models.TLsmGameKnowledgeCard{},
 	); err != nil {
 		return nil, err
 	}

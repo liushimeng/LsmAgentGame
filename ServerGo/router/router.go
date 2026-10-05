@@ -28,7 +28,7 @@ import (
 )
 
 // New constructs the *gin.Engine.
-func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcCityAPI *api.VirtualCityAPI) *gin.Engine {
+func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcCityAPI *api.VirtualCityAPI, knowledgeAPI *api.KnowledgeAPI) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 
@@ -272,10 +272,22 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 	vcGames := r.Group("/api/games/virtual_city")
 	vcGames.Use(middleware.AuthRequired(cfg))
 	{
-		vcGames.POST("/rooms/:id/survey", vcSurveyAPI.Launch)
+			vcGames.POST("/rooms/:id/survey", vcSurveyAPI.Launch)
 		vcGames.GET("/rooms/:id/surveys", vcSurveyAPI.List)
 		vcGames.GET("/rooms/:id/city/residents", vcCityAPI.ListResidents)
 		vcGames.GET("/rooms/:id/city/residents/:cardId", vcCityAPI.GetResident)
+	}
+
+	// 2026-10-05 §LsmKLBaseServer 知识库引擎 — 知识卡特征查询 + MCP 端点。
+	// 契约: docs/知识库系统/LsmKLBaseServer-知识库引擎重构方案.md §6。
+	knowledge := r.Group("/api/knowledge")
+	knowledge.Use(middleware.AuthRequired(cfg))
+	{
+		knowledge.GET("/cards", knowledgeAPI.ListCards)
+		knowledge.GET("/cards/:id", knowledgeAPI.GetCard)
+		knowledge.GET("/stats", knowledgeAPI.GetStats)
+		knowledge.POST("/extract", knowledgeAPI.ExtractFeatures)
+		knowledge.POST("/mcp", knowledgeAPI.HandleMCP)
 	}
 
 	// LLM model metadata — protected, returns the safe (key-free) list of

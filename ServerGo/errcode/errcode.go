@@ -186,6 +186,11 @@ const (
 	// 再次调用 wolf_kill 一律拒绝。R196 报告 P1:Bot 8 (GLM-5.2) 反复投票
 	// 15+ 次服务端仅覆盖不报错,LLM 看不到反馈陷入循环。
 	ErrAlreadyWolfVoted = 30201
+	// 35200–35203 — LsmKLBaseServer 知识库引擎(2026-10-05 §知识库重构)。
+	ErrKnowledgeCardNotFound  = 35200 // 知识卡不存在
+	ErrKnowledgeExtractFailed = 35201 // 特征抽取失败
+	ErrKnowledgeMCPInvalid    = 35202 // MCP 请求格式非法
+	ErrKnowledgeSearchFailed  = 35203 // 知识库搜索失败
 )
 
 // DefaultMessages maps a code to its canonical English message.
@@ -243,6 +248,12 @@ var DefaultMessages = map[int]string{
 	ErrLockContended:         "room lock contended, retry later",
 	ErrRestartVoteWrongPhase: "restart vote is not active in this room",
 	ErrAlreadyWolfVoted:      "狼人本轮已投票，不能重复投票（wolf_kill 一次性）",
+
+	// LsmKLBaseServer 知识库引擎(2026-10-05 §知识库重构)。
+	ErrKnowledgeCardNotFound:  "knowledge card not found",
+	ErrKnowledgeExtractFailed: "knowledge feature extraction failed",
+	ErrKnowledgeMCPInvalid:    "knowledge MCP request invalid",
+	ErrKnowledgeSearchFailed:  "knowledge search failed",
 
 	ErrPropEngineUnavailable: "prop engine unavailable (server not configured)",
 	ErrPropPlayerDead:        "死亡玩家不能使用道具（仅存活玩家可用）",
