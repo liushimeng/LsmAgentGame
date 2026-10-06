@@ -57,6 +57,9 @@ const en: Dict = {
   'chat.whisperPlaceholder': 'Whisper to {name}...',
   'chat.whisperSend': 'Whisper',
   'chat.selectUser': 'Select user',
+  // 2026-10-06 法官对话 — "Judge" entry in the whisper/@mention candidate list
+  // (AI judge placeholder user, werewolf only).
+  'chat.judgeName': 'Judge',
   // Spectator mode — applies across all 5 games.
   'chat.spectatorTag': 'Spectating',
   // R91-P0-3 (2026-07-11): Interject tag — bot 主动插话 / 主动发言标记。

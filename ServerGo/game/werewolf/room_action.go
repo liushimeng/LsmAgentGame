@@ -822,21 +822,6 @@ func (m *WerewolfManager) Action_LastWords(roomID, userID string, text string) (
 	return r, nil
 }
 
-func (m *WerewolfManager) enterDeathLyricRoundLocked(r *WerewolfRoom, seats []Seat, onDone func() *errcode.Error) *errcode.Error {
-	if r.State == nil {
-		return errcode.Code(errcode.ErrGameNotStarted)
-	}
-	prePhase := r.State.Phase
-	if err := r.State.tryEnterDeathLyricRound(seats, onDone); err != nil {
-		return err
-	}
-	// 若成功进入遗言阶段(prePhase != death_lyric → now == death_lyric),广播 start 事件。
-	if prePhase != PhaseDeathLyric && r.State.Phase == PhaseDeathLyric && r.State.DeathLyricCurrent >= 0 {
-		m.EmitDeathLyricStart(r, int(r.State.DeathLyricCurrent))
-	}
-	return nil
-}
-
 func (m *WerewolfManager) Action_SkipLastWords(roomID, userID string) (*WerewolfRoom, *errcode.Error) {
 	r := m.getRoom(roomID)
 	if r == nil {

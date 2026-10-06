@@ -55,6 +55,19 @@ func (m *WerewolfManager) RecordRoomMessage(roomID string, msg ChatMessageLike) 
 		return
 	}
 	r.appendRoomMessage(msg)
+	// 2026-10-06 §法官对话 B8 — 公屏 "@法官 …" 前缀检测(仅加调用,既有
+	// bot 唤醒 / transcript 逻辑零改动;公屏提问本来就是一条普通公屏消息)。
+	// recordJudgePublicQuestionLocked 是锁内变体(§92a),RecordRoomMessage
+	// 不持锁,故这里取锁;返回 extra 非 nil 时在**锁外** wakeJudgeLocked
+	// (其内部自行 lockRoomBriefly 构建快照)。
+	if !msg.Whisper && isJudgePublicQuestion(msg.Text) {
+		r.mu.Lock()
+		extra := m.recordJudgePublicQuestionLocked(r, msg.FromUserID, msg.FromAccount, msg.Text)
+		r.mu.Unlock()
+		if extra != nil {
+			dispatchJudgeQuestionEvent(r, extra)
+		}
+	}
 	// 2026-07-08 §13: 观战者公开消息触发 Agent wake(节流 + 阶段白名单)
 	if msg.FromRole == "spectator" && !msg.Whisper {
 		// BUG-R218 (2026-07-31): 观战者公屏发言链路日志 — 在调

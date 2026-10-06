@@ -145,6 +145,16 @@ type WerewolfConfig struct {
 	JudgeModelKey          string `json:"judge_model_key"`
 	EnableModelMemoryRecap bool   `json:"enable_model_memory_recap"`
 
+	// 2026-10-06 §法官对话 — 法官问答(@法官 / 私聊)配置。
+	// JudgeQAEnabled: true(默认)启用「私聊 @法官 / 公屏 @法官」问答链路;
+	// false 时 hook 直接返回 "AI judge not enabled in this room"(整链关闭回退)。
+	// 默认值处理与 DeathLyricEnabled 同模式(applyDefaults 零值补 true)。
+	// JudgeQACooldownSec: per-user 提问冷却秒数,默认 20;公屏路径自动 +10s
+	// (=30s)。0 视为默认 20(applyDefaults 填充)。
+	// 详见 docs/狼人杀/狼人杀法官对话与遗言聊天-设计与实现-20261006.md §4.3.4。
+	JudgeQAEnabled     bool `json:"judge_qa_enabled"`
+	JudgeQACooldownSec int  `json:"judge_qa_cooldown_sec"`
+
 	// 2026-07-12 §127 增强 — agent 外层 LLM 调用重试次数。
 	// 当 callProvider 返回 retryable 错误时，外层重试循环最大次数。
 	// 默认 5；0 时 fallback 到 5。
@@ -1129,6 +1139,14 @@ func applyDefaults(c *Config) {
 		// 默认值对齐新契约;旧 cfg 中的 "ai" 仍可被识别(见
 		// cfgWerewolfJudgeMode 的归一化处理)。
 		c.Werewolf.JudgeMode = "agent"
+	}
+	// 2026-10-06 §法官对话 — 法官问答默认启用 + 冷却默认 20s(公屏自动 +10s)。
+	// bool 默认值处理照抄 DeathLyricEnabled / SuicideTakeEnabled 的既有模式。
+	if !c.Werewolf.JudgeQAEnabled {
+		c.Werewolf.JudgeQAEnabled = true
+	}
+	if c.Werewolf.JudgeQACooldownSec == 0 {
+		c.Werewolf.JudgeQACooldownSec = 20
 	}
 	// §130 重构(2026-07-13):RoomLLMConcurrency 默认值已删除。
 	// 13 bot 现在完全并发调用 LLM,公平性由模型自身响应速率决定。

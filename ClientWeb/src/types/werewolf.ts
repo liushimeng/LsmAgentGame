@@ -10,6 +10,17 @@
 
 import type { RoomInfo } from './api';
 
+/**
+ * 狼人杀 AI 法官在聊天帧 / chat_message 表中的占位 user_id(R139 zero-uuid 方案,
+ * 与后端 ServerGo/ws/chat_service.go 的 JudgeFromUserID 常量保持一致)。
+ * 法官无 WS 连接、无座位,靠 from_role="judge" 区分真人/Agent 玩家。
+ * 前端用途(2026-10-06 法官对话设计 §4.1/§4.2):
+ *   ① @mention / 私聊候选列表里构造「法官」条目(judge_enabled 房间);
+ *   ② 共享 GameChatPanel 的 💬 按钮判定消息作者是否法官(占位 user 不在座位列表)。
+ * chat.whisper 发往该 id 时由后端 ChatService.Whisper() 截获转法官问答 hook。
+ */
+export const WEREWOLF_JUDGE_USER_ID = '00000000-0000-0000-0000-000000000000';
+
 export type WerewolfRole =
   | 'werewolf'
   | 'seer'

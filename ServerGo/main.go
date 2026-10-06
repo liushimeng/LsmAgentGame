@@ -460,6 +460,11 @@ func main() {
 	chatSvc.SetRoomService(roomSvc)
 	if werewolfMgrRef := gameSvcWs.WerewolfManager(); werewolfMgrRef != nil {
 		chatSvc.SetFactionLookup(werewolfMgrRef.FactionByUserID)
+		// 2026-10-06 §法官对话 B12 — 私聊 @法官 截获入口:Whisper 在狼人杀
+		// 房间发现 to_user_id == ws.JudgeFromUserID 时经此 hook 走法官问答
+		// 管线(开关/就绪/冷却校验 + 公开-only 上下文 + 唤醒法官)。
+		// 与 factionLookup 同点注入(§130:写完必须接线)。
+		chatSvc.SetJudgeQuestionHook(werewolfMgrRef.RecordJudgeQuestion)
 	}
 	// BUG-R7-P0-disconnect-stuck: 真人中途掉线时,除 DB 清理外,还需把 GameState
 	// 中该座位标记为死亡,避免 acting seat 永久卡在已断线的座位上。

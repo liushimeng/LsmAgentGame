@@ -67,6 +67,12 @@ const (
 	maxHistoryN     = 200
 )
 
+// JudgeFromUserID 是狼人杀 AI 法官在 chat_message 表与聊天帧中的占位身份
+// (无 WS 连接、无座位;FromRole="judge" 区分)。R139 起为 zero-uuid(≤36 字符
+// 列宽)。2026-10-06 §法官对话:收口为导出常量,供 ChatService.Whisper 的
+// 「私聊法官」截获分支与前端 JUDGE_USER_ID 契约共用同一事实源。
+const JudgeFromUserID = "00000000-0000-0000-0000-000000000000"
+
 // truncateChatText clamps text to maxChatTextLen runes (the varchar width of
 // t_lsm_game_chat_message.text). The human chat.send/chat.whisper paths reject
 // oversize input with an error; the bot paths (LLM-generated) silently truncate
@@ -189,6 +195,12 @@ type ActivityEvent struct {
 	RefSeat2      *int   `json:"ref_seat_2,omitempty"`
 	SilentForBots bool   `json:"silent_for_bots,omitempty"`
 	TS            int64  `json:"ts"` // unix milliseconds
+
+	// Scope 2026-10-06 §遗言聊天可见性(P3 主修复):活动事件只有 room 语义,
+	// 统一置 "room"。此前结构体无此字段,前端 useChat 按 scope 过滤时
+	// `undefined !== 'room'` 把所有 chat.activity 帧(阶段切换/投票/死亡/
+	// 遗言)整帧丢弃 —— §115 设计的 AC-4/AC-5 从未真正达成。
+	Scope string `json:"scope,omitempty"`
 }
 
 // gameKindLookuper 是 ChatService 对 RoomService 的最小依赖面(仅 GameKindOf)。
@@ -229,6 +241,13 @@ type ChatService struct {
 	// is invoked synchronously and MUST be non-blocking; a nil hook is a
 	// no-op. 2026-07-09 §13 增强 §115 房间聊天.
 	onRoomActivity func(ev *ActivityEvent)
+
+	// judgeQuestionHook 是「私聊 @法官」截获分支的狼人杀问答入口(2026-10-06
+	// §法官对话 B1)。main.go 注入 WerewolfManager.RecordJudgeQuestion;返回
+	// error 时 Whisper 以 chat.error(20001) 拒绝(开关关闭/法官未就绪/冷却)。
+	// hook 成功后 Whisper 落库私问行并仅回显发送者本人(不广播)。nil = 未接线,
+	// 私聊法官走既有阵营守卫(观战者被拒,向后兼容旧部署)。
+	judgeQuestionHook func(roomID, askerID, askerAccount, text string) error
 
 	// 2026-07-10 §4: 模型对局日志 hook
 	// recordLog 注入 RecordLogService(2026-07-10 §4),SendFromBot /
@@ -316,6 +335,16 @@ func (s *ChatService) virtualCityChatDisabled(roomID string) bool {
 // the Agent driver uses internally. nil disables the guard.
 func (s *ChatService) SetFactionLookup(fn func(roomID, userID string) (faction string, alive, isSpectator bool)) {
 	s.factionLookup = fn
+}
+
+// SetJudgeQuestionHook 注册狼人杀法官问答入口(main.go 注入
+// WerewolfManager.RecordJudgeQuestion)。Whisper 在狼人杀房间内发现
+// to_user_id == JudgeFromUserID 时调用该 hook:返回 error 即整条 whisper 以
+// chat.error(20001) 拒绝;成功则由 Whisper 落库私问行 + 仅回显发送者。
+// 仿 SetFactionLookup 的注入模式(chat_service 不能 import werewolf 包,
+// 循环依赖由回调切断)。nil = 清除(私聊法官退回阵营守卫行为)。2026-10-06 B1。
+func (s *ChatService) SetJudgeQuestionHook(fn func(roomID, askerID, askerAccount, text string) error) {
+	s.judgeQuestionHook = fn
 }
 
 // SetRoomActivityHook installs a callback fired by EmitRoomActivity after
@@ -680,6 +709,67 @@ func (s *ChatService) Whisper(c *Client, roomID, toUserID, toAccount, text strin
 	account := s.lookupAccount(c.UserID)
 	role := s.senderRole("room", roomID, c)
 
+	// 2026-10-06 §法官对话 B1 — 「私聊 @法官」截获分支。
+	// 位置:虚拟城市守卫之后、狼人杀阵营守卫**之前** —— 观战者(含全 AI 房
+	// 创建者)私聊法官占位 uuid 时,不能被下方 spectator 守卫硬拒(F-1);
+	// 截获成功后 return,普通玩家目标的既有阵营守卫零改动。
+	// 前置校验(empty/too long/scope/to_user_id/self)已在 HandleClientFrame
+	// 的 chat.whisper 分支完成,进入 Whisper 即已通过。
+	if roomID != "" && s.roomSvc != nil && s.judgeQuestionHook != nil &&
+		s.roomSvc.GameKindOf(roomID) == "werewolf" && toUserID == JudgeFromUserID {
+		// ① 问答总开关 / 法官就绪 / per-user 冷却(manager 锁内校验)。
+		//    返回 error → chat.error(20001),文案由 manager 提供。
+		if err := s.judgeQuestionHook(roomID, c.UserID, account, text); err != nil {
+			return nil, err
+		}
+		// ② 落库私问行(from=发送者, to=法官占位, to_account 缺省 "[法官]")。
+		if toAccount == "" {
+			toAccount = "[法官]"
+		}
+		row := models.TLsmGameChatMessage{
+			Scope:       "room",
+			RoomID:      roomID,
+			FromUserID:  c.UserID,
+			FromAccount: account,
+			FromRole:    role,
+			ToUserID:    JudgeFromUserID,
+			ToAccount:   toAccount,
+			Text:        text,
+		}
+		if err := s.db.Create(&row).Error; err != nil {
+			logger.L().Warn("chat whisper-to-judge persist failed", zap.Error(err))
+			return nil, errDB
+		}
+		msg := &ChatMessage{
+			ID:         row.ID,
+			Scope:      row.Scope,
+			RoomID:     row.RoomID,
+			FromUserID: row.FromUserID,
+			FromAccount: row.FromAccount,
+			FromRole:   role,
+			ToUserID:   row.ToUserID,
+			ToAccount:  row.ToAccount,
+			Whisper:    true,
+			Text:       row.Text,
+			TS:         row.CreatedAt.UnixMilli(),
+		}
+		if row.CreatedAt.IsZero() {
+			msg.TS = time.Now().UnixMilli()
+		}
+		// ③ 仅回显发送者本人(direct 帧):不广播脱敏帧、不 emitRoomMessage
+		//    (私问不进 bot 500K 队列 / judge transcript,公平性 F-2)。
+		//    法官占位 uuid 无 WS 连接,hub.SendToUser 天然 0 投递,复用
+		//    sendWhisperDirect 即可(与普通 whisper 的 sender 回显同构)。
+		payload, _ := json.Marshal(msg)
+		s.sendWhisperDirect(c, JudgeFromUserID, Envelope{Type: "chat.whisper", Payload: payload})
+		logger.L().Info("chat: whisper-to-judge accepted, judge wake dispatched",
+			zap.String("room_id", roomID),
+			zap.String("from", c.UserID),
+			zap.String("role", role),
+			zap.Int("len", len(text)))
+		return msg, nil
+	}
+
 	// §20260810-03 F1 — 狼人杀房间 whisper 阵营守卫。
 	// 规则:狼人杀房间(game_kind=="werewolf")内,如果发送者是 spectator,
 	// 整条 whisper 直接拒绝(观众通过 whisper 通道向玩家传信息 = 作弊通道,
@@ -1008,7 +1098,8 @@ func (s *ChatService) SendFromJudge(roomID, fromAccount, modelKey, text, kind st
 		// 2026-07-17 R139 修复:FromUserID 必须 ≤ 36 字符;法官此前用
 		// "judge:"+roomID(总 42 字符)超过列宽度 → Error 1406。现改用 zero-uuid
 		// 占位 + FromRole="judge" 区分;前端 GameChatPanel 按 FromRole 走 ⚖️ 渲染。
-		FromUserID:  "00000000-0000-0000-0000-000000000000",
+		// 2026-10-06 §法官对话:字面量收口为 JudgeFromUserID 常量(单一事实源)。
+		FromUserID:  JudgeFromUserID,
 		FromAccount: fromAccount,
 		FromRole:    "judge",
 		Text:        truncateChatText(text),
@@ -1045,6 +1136,60 @@ func (s *ChatService) SendFromJudge(roomID, fromAccount, modelKey, text, kind st
 	logger.L().Debug("judge chat sent",
 		zap.String("room_id", roomID), zap.String("kind", kind), zap.Int("len", len(text)))
 	return &wwplayer.BotChatSendResult{}, nil
+}
+
+// WhisperFromJudge 法官定向私答(2026-10-06 §法官对话 B1,与 SendFromJudge
+// 对称的私聊出口)。
+//
+// 流程:落库(from=法官占位 / from_role="judge" / from_account="[法官·{model}]",
+// to=提问者)+ 构造 chat.whisper 帧**仅** hub.SendToUser(toUserID)。
+//
+// 刻意不做的事(公平性 F-2,设计文档 §3.2):
+//   - 不广播脱敏帧(其它客户端完全感知不到「有人问过法官」);
+//   - 不调 emitRoomMessage(不进 werewolf bot 500K 队列 / judge transcript)。
+// toUserID 无在线连接时静默(行已落库,重连后 chat.history 经
+// isWhisperVisibleToMe 过滤仍对提问者可见)。
+func (s *ChatService) WhisperFromJudge(roomID, toUserID, toAccount, modelKey, text string) error {
+	if roomID == "" || toUserID == "" {
+		return errRoomIDRequired
+	}
+	display := "[法官·" + modelKey + "]"
+	row := models.TLsmGameChatMessage{
+		Scope:       "room",
+		RoomID:      roomID,
+		FromUserID:  JudgeFromUserID,
+		FromAccount: display,
+		FromRole:    "judge",
+		ToUserID:    toUserID,
+		ToAccount:   toAccount,
+		Text:        truncateChatText(text),
+	}
+	if err := s.db.Create(&row).Error; err != nil {
+		logger.L().Warn("judge whisper persist failed", zap.Error(err))
+		return errDB
+	}
+	msg := &ChatMessage{
+		ID:            row.ID,
+		Scope:         row.Scope,
+		RoomID:        row.RoomID,
+		FromUserID:    row.FromUserID,
+		FromAccount:   display,
+		FromRole:      "judge",
+		FromAgentName: s.lookupAgentName(modelKey),
+		ToUserID:      row.ToUserID,
+		ToAccount:     row.ToAccount,
+		Whisper:       true,
+		Text:          row.Text,
+		TS:            row.CreatedAt.UnixMilli(),
+	}
+	if row.CreatedAt.IsZero() {
+		msg.TS = time.Now().UnixMilli()
+	}
+	payload, _ := json.Marshal(msg)
+	s.hub.SendToUser(toUserID, Envelope{Type: "chat.whisper", Payload: payload})
+	logger.L().Debug("judge whisper sent",
+		zap.String("room_id", roomID), zap.String("to", toUserID), zap.Int("len", len(text)))
+	return nil
 }
 
 // §127: 复述段落已压缩 — git blame 与 lag_docs/ 索引可还原
@@ -1403,6 +1548,9 @@ func (s *ChatService) EmitRoomActivity(roomID, eventKind, text, phase string,
 		Icon:          icon,
 		SilentForBots: silentForBots,
 		TS:            time.Now().UnixMilli(),
+		// 2026-10-06 §遗言聊天可见性:活动事件只有 room 语义,统一置 "room",
+		// 前端 useChat 的 matches(raw.scope, ...) 不再整帧丢弃。
+		Scope: "room",
 	}
 	if refSeat >= 0 {
 		s := refSeat

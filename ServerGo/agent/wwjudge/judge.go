@@ -109,6 +109,19 @@ type AgentJudge struct {
 	// 由 NewAgentJudge 初始化;handleEvent 对 JudgePendingGameOverSummary 走它。
 	summaryLimiter *agentcore.SpeakLimiter
 
+	// questionLimiter 2026-10-06 §法官对话 B5 — 问答模式专用节流(8s),
+	// 独立于 announceLimiter(15s 会把连续问答掐死)。由 NewAgentJudge 初始化;
+	// handleEvent 的 KindJudgeQuestion 分支走它。超限直接回调兜底文案不调 LLM。
+	questionLimiter *agentcore.SpeakLimiter
+
+	// onQAReply 2026-10-06 §法官对话 B5 — 问答回答回调,由 startJudgeGoroutine
+	// 注入(→ WerewolfManager.RecordJudgeAnswer),goroutine 内只读。
+	// 签名:(roomID, askerID, askerAccount, question, answer, isPublic, fallback)。
+	// 任何路径(成功/兜底)都必须有回声,禁止静默吞问;fallback=true 表示
+	// answer 是兜底文案(节流/无 provider/quarantine/槽位超时/LLM 失败/空响应),
+	// manager 侧据此退还冷却 + 不写问答历史(E2E 2026-10-06 精化)。
+	onQAReply func(roomID, askerID, askerAccount, question, answer string, isPublic, fallback bool)
+
 	// consecutiveFailures / quarantined 沿用玩家 Agent 的语义;
 	// quarantine 后法官仅用 fallback 文本兜底,不调 LLM。
 	consecutiveFailures int
@@ -161,6 +174,8 @@ func NewAgentJudge(roomID, modelKey string) *AgentJudge {
 		events:          make(chan JudgeEvent, 32),
 		announceLimiter: agentcore.NewSpeakLimiter(15 * time.Second),
 		summaryLimiter:  agentcore.NewSpeakLimiter(60 * time.Second),
+		// 2026-10-06 §法官对话 B5:问答专用节流 8s(§3.4 限流矩阵)。
+		questionLimiter: agentcore.NewSpeakLimiter(8 * time.Second),
 		transcript:      JudgeTranscript{Model: modelKey, LastUpdatedAt: time.Now().UnixMilli()},
 		// §20260809-02 U1:初始化 20 条环形缓冲(默认容量)。
 		Memory: NewJudgeMemoryRing(20),
@@ -516,6 +531,13 @@ func (j *AgentJudge) handleEvent(ctx context.Context, evt JudgeEvent) {
 	if kind == JudgePendingGameOverSummary {
 		j.summaryLimiter.Allow() // 不严格阻塞(避免错过总结)
 		j.handleGameOverSummaryInternal(evt)
+		return
+	}
+	// 2026-10-06 §法官对话 B5 — 问答事件分流:必须在 announceLimiter **之前**,
+	// 否则 15s 宣告节流会把连续问答掐死。问答自带 questionLimiter(8s)+
+	// 槽位让路 + 兜底回声,任何路径都给提问者回音(禁止静默)。
+	if kind == KindJudgeQuestion {
+		j.handleQuestionEvent(ctx, evt)
 		return
 	}
 	// 限流:同一 kind 30s 内不重复宣告。

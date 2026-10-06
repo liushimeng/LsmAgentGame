@@ -667,6 +667,9 @@ export interface Dict extends VirtualCityDict {
   'chat.whisperPlaceholder': string; // {name}
   'chat.whisperSend': string;
   'chat.selectUser': string;
+  // 2026-10-06 法官对话 — @mention/私聊候选列表里的「法官」条目显示名
+  // (狼人杀 AI 法官占位用户,见 types/werewolf.ts WEREWOLF_JUDGE_USER_ID)。
+  'chat.judgeName': string;
 
   // 聊天设置 — chat settings modal
   'chatSettings.title': string;

@@ -10,7 +10,7 @@ import React, { useMemo } from 'react';
 import { GameChatPanel as SharedGameChatPanel } from '@/components/chat/GameChatPanel';
 import { useSpectatorMode } from '@/hooks/useSpectatorMode';
 import { useT } from '@/hooks/useT';
-import type { WerewolfGameState } from '@/types/werewolf';
+import { WEREWOLF_JUDGE_USER_ID, type WerewolfGameState } from '@/types/werewolf';
 
 interface Props {
   roomId: string;
@@ -28,8 +28,19 @@ function toRoomPlayers(
   gs: WerewolfGameState | null,
   myUserId?: string | null,
   t?: (key: any) => string,
+  spectator?: boolean,
 ): { user_id: string; nickname: string }[] {
   if (!gs) return [];
+  // 2026-10-06 法官对话(设计 §4.1/§4.2)— judge_enabled 房间把「法官」追加为
+  // 私聊目标:占位 user_id(zero-uuid,见 types/werewolf.ts 的
+  // WEREWOLF_JUDGE_USER_ID),后端 ChatService.Whisper() 截获该目标转法官问答。
+  const judgeEntry: { user_id: string; nickname: string }[] = gs.judge_enabled
+    ? [{ user_id: WEREWOLF_JUDGE_USER_ID, nickname: t ? t('chat.judgeName') : '法官' }]
+    : [];
+  // 观战者只能私聊法官:后端对「观战者 → 普通玩家」whisper 硬拒
+  // (§20260810-03 F1 "spectators cannot whisper in werewolf room"),前端
+  // 不开这个口子 —— 直接只保留法官条目(房内无法官则无任何私聊目标)。
+  if (spectator) return judgeEntry;
   const out: { user_id: string; nickname: string }[] = [];
   for (let i = 0; i < gs.max_seat; i++) {
     const uid = gs.seats[i];
@@ -51,7 +62,7 @@ function toRoomPlayers(
       : `玩家${i + 1}号${role}`;
     out.push({ user_id: uid, nickname: acct });
   }
-  return out;
+  return [...out, ...judgeEntry];
 }
 
 export const WerewolfGameChatPanel: React.FC<Props> = ({
@@ -64,8 +75,8 @@ export const WerewolfGameChatPanel: React.FC<Props> = ({
   const spectator = useSpectatorMode();
   const t = useT();
   const roomPlayers = useMemo(
-    () => toRoomPlayers(gameState, myUserId, t),
-    [gameState, myUserId, t],
+    () => toRoomPlayers(gameState, myUserId, t, spectator),
+    [gameState, myUserId, t, spectator],
   );
   // R100 P1 FIX (spectator chat disabled): the chat panel used to render the
   // same disabled-while-connecting state for spectators as for offline players,

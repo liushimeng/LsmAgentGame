@@ -24,6 +24,9 @@
 package werewolf
 
 import (
+	"strings"
+	"time"
+
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/logger"
 
@@ -588,6 +591,22 @@ func (m *WerewolfManager) sayLastWordsLocked(r *WerewolfRoom, seat Seat, text st
 	}
 	// §115 房间聊天 — 遗言广播(走 chat.send 路径,前端标记 💀 遗言)
 	m.EmitDeathLyricSpoken(r, int(seat), text)
+	// 2026-10-06 §遗言聊天 B10(D3 修复)— 对**任意座位**(含真人)写
+	// lastSpeechBySeat,使真人遗言同样出现在座位卡气泡。此前只有 bot 遗言经
+	// agentRunner.LastWords → recordLastSpeech(text,"last_words") 可见,
+	// 真人遗言不走 appendRoomMessage 公开分支 → 气泡永不更新。
+	// Kind="last_words" 与 bot 路径 wwplayer.RecordLastSpeech 的 kind 口径
+	// 对齐;Text 按 lastSpeechRuneLimit(200)rune 安全截断(与公开分支同款)。
+	if seat >= 0 && strings.TrimSpace(text) != "" {
+		if r.lastSpeechBySeat == nil {
+			r.lastSpeechBySeat = make(map[int]seatSpeech, MaxPlayers)
+		}
+		r.lastSpeechBySeat[int(seat)] = seatSpeech{
+			Text: truncate(text, lastSpeechRuneLimit),
+			AtMs: time.Now().UnixMilli(),
+			Kind: "last_words",
+		}
+	}
 	// 遗言计入 speak floor,避免 floor watchdog 在遗言阶段误 wake
 	if ag := r.BotAgents[int(seat)]; ag != nil {
 		ag.NoteIfSpeaking()

@@ -255,6 +255,13 @@ func (m *WerewolfManager) startJudgeGoroutine(r *WerewolfRoom) {
 					zap.String("room_id", roomID), zap.String("kind", kind), zap.Error(err))
 			}
 		})
+		// 2026-10-06 §法官对话 B7 — 注入问答回答回调:法官问答成功/兜底后
+		// 经 manager.RecordJudgeAnswer 分流(公屏 SendFromJudge / 私聊
+		// WhisperFromJudge)。roomID 用回调参数(多房间安全,闭包只捕获 m)。
+		// fallback=true(兜底文案)时 manager 退还 per-user 冷却且不写问答历史。
+		j.SetOnQAReply(func(roomID, askerID, askerAccount, question, answer string, isPublic, fallback bool) {
+			m.RecordJudgeAnswer(roomID, askerID, askerAccount, question, answer, isPublic, fallback)
+		})
 	}
 	r.judgeEvents = j.Events()
 	r.judge = j

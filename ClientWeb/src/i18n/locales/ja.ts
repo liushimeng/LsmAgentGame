@@ -57,6 +57,9 @@ const ja: Dict = {
   'chat.whisperPlaceholder': '{name} にささやく...',
   'chat.whisperSend': 'ささやく',
   'chat.selectUser': 'ユーザー選択',
+  // 2026-10-06 法官对话 — ささやき/@mention 候補リストの「裁判」エントリー
+  // (AI 裁判のプレースホルダーユーザー、人狼専用)。
+  'chat.judgeName': '裁判',
   // 観戦モード — 5 ゲーム共通。
   'chat.spectatorTag': '観戦',
   // R91-P0-3 (2026-07-11): Interject tag — bot 主动插话 / 主动发言标记。

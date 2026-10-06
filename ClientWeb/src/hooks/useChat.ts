@@ -111,7 +111,12 @@ export function useChat(scope: ChatScope, roomId?: string): UseChat {
           // are transient and not persisted). 2026-07-09 §115.
           const raw = env.payload as Record<string, unknown>;
           if (!raw) return;
-          if (!matches(raw.scope as ChatScope, raw.room_id as string | undefined, scopeRef.current, roomIdRef.current)) return;
+          // 2026-10-06 法官对话与遗言聊天修复 §5.1 — 兼容历史无 scope 的活动帧:
+          // 后端 ActivityEvent 自 2026-10-06 起补发 scope:"room";在此之前(以及任何
+          // 漏发该字段的帧)按 room 语义兜底,不再整帧丢弃。此前 undefined !== 'room'
+          // 导致全部 chat.activity(阶段切换/遗言/投票/死亡…)进不了任何聊天面板。
+          // 仅 activity 分支容错,其它帧(chat.message/whisper/history)不动。
+          if (!matches((raw.scope as ChatScope) ?? 'room', raw.room_id as string | undefined, scopeRef.current, roomIdRef.current)) return;
           const ts = (raw.ts as number) || Date.now();
           const fakeId = -(typeof raw.id === 'number' ? (raw.id as number) : ts);
           setMessages((prev) => {

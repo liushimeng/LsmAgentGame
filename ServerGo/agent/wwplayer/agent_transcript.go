@@ -316,6 +316,11 @@ type BotChatSender interface {
 	// BroadcastRoomIncludingSpectators + feed transcript。kind 是事件类型(仅供
 	// transcript/活动流记录,不影响广播)。
 	SendFromJudge(roomID, fromAccount, modelKey, text, kind string) (*BotChatSendResult, error)
+	// 2026-10-06 §法官对话 — WhisperFromJudge 是法官问答的**私聊**出口(对齐
+	// SendFromJudge):落库(from=法官占位/from_role="judge")+ 仅投递提问者。
+	// 刻意不广播、不 feed transcript(私问私答,公平性 F-2)。由
+	// WerewolfManager.RecordJudgeAnswer 调用。
+	WhisperFromJudge(roomID, toUserID, toAccount, modelKey, text string) error
 }
 func (a *Agent) BotTranscript() *BotTranscript {
 	a.Lock()

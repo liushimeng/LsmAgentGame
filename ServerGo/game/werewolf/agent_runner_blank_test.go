@@ -72,6 +72,12 @@ func (f *fakeChatSender) SendFromJudge(roomID, fromAccount, modelKey, text, kind
 	return &wwplayer.BotChatSendResult{}, nil
 }
 
+// WhisperFromJudge 2026-10-06 §法官对话 — BotChatSender 接口新增方法的测试桩
+// (法官问答私答出口;本文件用例不触发,仅满足接口)。
+func (f *fakeChatSender) WhisperFromJudge(roomID, toUserID, toAccount, modelKey, text string) error {
+	return nil
+}
+
 // newBlankSpeakRunner 构造一个 Speak / SpeakAuto / SpeakWithThought / Interject
 // 4 条广播路径都可调用的最小 agentRunner。
 // filterCfg 关闭 rate-limit / identity filter / fact-check,让空文检查成为

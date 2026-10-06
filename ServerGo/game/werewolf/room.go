@@ -42,6 +42,11 @@ type seatSpeech struct {
 	Text string
 	// AtMs 发言时间(Unix 毫秒),与 wwtypes.SpeechEvent.Ts 同源。
 	AtMs int64
+	// Kind 2026-10-06 §法官对话 B10(D3 修复):发言种类,对齐 bot 路径
+	// wwplayer.RecordLastSpeech 的 kind 口径 —— 普通公开发言为 ""
+	// (appendRoomMessage 既有写入点零改动),遗言为 "last_words"
+	// (sayLastWordsLocked 写入)。仅服务端簿记,不下发 wire。
+	Kind string
 }
 
 // ─────────────────── Room ───────────────────
@@ -373,6 +378,23 @@ type WerewolfRoom struct {
 	// lastJudgePhase 追踪上一次已投递给法官的 phase,用于 phaseWatchdogTick 检测
 	// 阶段切换时唤醒法官(初值 Phase(-1) 哨兵,避免首 tick 误触发)。
 	lastJudgePhase Phase
+
+	// lastActivityPhase 2026-10-06 §遗言聊天 B9:追踪上一次已发活动事件的
+	// phase 游标(与 lastJudgePhase 同源同节奏更新),用于在 phaseWatchdogTick
+	// 检测到「进入 PhaseDeathLyric」时补发 death_lyric_start 活动事件
+	// (设计 D1:原唯一发射点 enterDeathLyricRoundLocked 是死代码)。
+	lastActivityPhase Phase
+
+	// judgeQAHistory 2026-10-06 §法官对话 B3:per-asker 法官问答历史
+	// (环形 4 轮,RecordJudgeAnswer 追加 / buildJudgeQAContextLocked 读取)。
+	// 私问私答,不入 chat_message / 500K 队列 / judge transcript(公平性 F-2)。
+	// 惰性初始化(写入点判 nil 后 make),与 lastSpeechBySeat / infoLedger 同款
+	// —— 避免散布在 6 处 &WerewolfRoom{} 字面量构造点的同步遗漏。
+	judgeQAHistory map[string][]judgeQATurn
+	// judgeQALastAsk 2026-10-06 §法官对话 B3:per-user 提问冷却游标
+	// (私聊/公屏共用;私聊阈值 judge_qa_cooldown_sec,公屏 +10s)。
+	// 惰性初始化,同上。
+	judgeQALastAsk map[string]time.Time
 
 	// 2026-07-10 §125 增强 — 模型记忆持久化。
 	modelMemories map[string][]string
@@ -1433,9 +1455,9 @@ func (m *WerewolfManager) maybeSpectatorWake(r *WerewolfRoom) {
 // BUG 2026-07-09: 仅当前遗言座位可调用。调用方可能是 bot(driver run loop),因此走
 // manager-level Action_* 公开路径(自身持 r.mu,§92a 兼容)。
 
-// enterDeathLyricRoundLocked 是 tryEnterDeathLyricRound 的房间级包装。
-// 进入遗言阶段成功时,广播 death_lyric_start 活动事件(首个遗言座位入席)。
-// BUG 2026-07-09: 遗言功能 §13。调用方必须持有 r.mu。
+// 2026-10-06 §遗言聊天 B9:enterDeathLyricRoundLocked(死代码,全库零调用)
+// 已删除 —— death_lyric_start 活动事件改由 phaseWatchdogTick 的
+// lastActivityPhase 游标在 phase 进入 PhaseDeathLyric 时补发(room_watchdog.go)。
 
 // Action_SkipLastWords: 遗言 actor 放弃遗言。
 

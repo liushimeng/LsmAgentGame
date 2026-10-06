@@ -1040,6 +1040,11 @@ func phaseLabelCN(phase string) string {
 		return "PK 发言"
 	case "last_words":
 		return "遗言"
+	// 2026-10-06 §遗言聊天 B9(D2 修复):实际 phase 字符串是 "death_lyric"
+	// (PhaseDeathLyric.String()),原表只有旧别名 "last_words",映射永远落空
+	// (auto_skip 文案显示英文)。保留旧键不删(兼容历史字符串)。
+	case "death_lyric":
+		return "遗言"
 	case "gameover":
 		return "游戏结束"
 	}

@@ -388,7 +388,10 @@ export function GameChatPanel({ roomId, roomPlayers, isSpectator, isLocalPlayerD
                 )}
                 {/* 2026-07-16 主持人 Agent 重构 — 法官公屏播报(⚖️ 前缀 + 金底)。
                     后端 SendFromJudge 走 chat.message,from_role="judge",
-                    from_account="[法官·{model}]"(对齐设计 §5.4/§6.5)。 */}
+                    from_account="[法官·{model}]"(对齐设计 §5.4/§6.5)。
+                    2026-10-06 法官对话 — 本徽章对 whisper 分支同样生效:法官私答
+                    (WhisperFromJudge,from_role="judge" + whisper=true)复用同一
+                    金底徽章渲染,无需另开分支(设计 §6.2 F3)。 */}
                 {item.msg.from_role === 'judge' && (
                   <span
                     className="game-chat-msg__role-badge game-chat-msg__role-badge--judge"
@@ -410,7 +413,16 @@ export function GameChatPanel({ roomId, roomPlayers, isSpectator, isLocalPlayerD
                     whisperTarget 由 game-chat__whisper-indicator 单独渲染带 🔒 视觉提示,
                     onSubmit 走 wsClient.send('chat.whisper', {text, to_user_id}) 独立路径,
                     不依赖 draft 文本前缀。 */}
-                {!item.msg.whisper && item.msg.from_user_id !== myUserId && roomPlayers && (
+                {!item.msg.whisper &&
+                  item.msg.from_user_id !== myUserId &&
+                  roomPlayers &&
+                  // 2026-10-06 法官对话 — 💬 只对「可私聊目标」渲染:作者在
+                  // roomPlayers 列表内,或作者是法官(占位 user 无座位,但
+                  // @法官 问答通道开放,设计 §4.1)。此前只要 roomPlayers 非空
+                  // 就对一切消息显示,给不可私聊的作者(已离座/观战者等)也开了口子。
+                  // 不传 roomPlayers 的游戏(undefined)此处本就隐藏,行为不变。
+                  (roomPlayers.some((p) => p.user_id === item.msg.from_user_id) ||
+                    item.msg.from_role === 'judge') && (
                   <button
                     type="button"
                     className="game-chat-msg__whisper-btn"

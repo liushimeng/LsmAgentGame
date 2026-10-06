@@ -57,6 +57,8 @@ const zhCN: Dict = {
   'chat.whisperPlaceholder': '私聊给 {name}...',
   'chat.whisperSend': '私聊',
   'chat.selectUser': '选择用户',
+  // 2026-10-06 法官对话 — 私聊/@mention 候选列表里的「法官」条目(AI 法官占位用户)。
+  'chat.judgeName': '法官',
   // Spectator mode — applies across all 5 games.
   'chat.spectatorTag': '观战',
   // R91-P0-3 (2026-07-11): Interject tag — bot 主动插话 / 主动发言标记

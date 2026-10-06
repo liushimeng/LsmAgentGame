@@ -127,6 +127,11 @@ func (m *WerewolfManager) phaseWatchdogTick(r *WerewolfRoom) error {
 	// 记下此标记,由 defer 块在锁外调 EmitSheriffAutoSkip 公开广播
 	// 「⏭ 警长竞选超时 / 无人参选,本局无警长」,避免阶段无声切换。
 	sheriffAutoSkip := false
+	// 2026-10-06 §遗言聊天 B9(D1 接线)— phase 进入 death_lyric 的活动事件
+	// 标记:锁内只更新 lastActivityPhase 游标,由 defer 块在 r.mu.Unlock()
+	// 之后调 EmitDeathLyricStart(BUG-R231-P0-01 同款「锁外发」纪律:
+	// Emit* 走 hub.BroadcastRoomIncludingSpectators → h.mu.RLock)。
+	deathLyricStartSeat := -1
 	defer func() {
 		r.mu.Unlock()
 		if judgeWakeKind != "" {
@@ -147,6 +152,12 @@ func (m *WerewolfManager) phaseWatchdogTick(r *WerewolfRoom) error {
 		// 内部区分「超时」与「无人参选」两种文案(参见 activity_emitter.go)。
 		if sheriffAutoSkip {
 			m.EmitSheriffAutoSkip(r)
+		}
+		// 2026-10-06 §遗言聊天 B9:phase 进入 death_lyric → 补发
+		// death_lyric_start 活动事件(5s tick 内送达,徽章链 start→spoken
+		// 完整;设计 D1:原唯一发射点 enterDeathLyricRoundLocked 是死代码)。
+		if deathLyricStartSeat >= 0 {
+			m.EmitDeathLyricStart(r, deathLyricStartSeat)
 		}
 	}()
 
@@ -175,6 +186,14 @@ func (m *WerewolfManager) phaseWatchdogTick(r *WerewolfRoom) error {
 				"day":   r.State.DayNumber,
 			})
 		}
+		// 2026-10-06 §遗言聊天 B9 — phase 进入 death_lyric 且当前遗言座位
+		// 有效时补发 death_lyric_start(lastActivityPhase 游标防重;锁内只
+		// 记 seat,defer 块锁外 Emit)。
+		if r.State.Phase == PhaseDeathLyric && r.lastActivityPhase != PhaseDeathLyric &&
+			r.State.DeathLyricCurrent >= 0 {
+			deathLyricStartSeat = int(r.State.DeathLyricCurrent)
+		}
+		r.lastActivityPhase = r.State.Phase
 	}
 	// BUG-R48-P0-4 + 2026-07-10 重开局投票: 当 status=over 时先尝试进入
 	// PhaseRestartVote;投票阶段由专门 tick (restartDeadlineTickLocked) 推进,
