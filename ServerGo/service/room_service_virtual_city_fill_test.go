@@ -2,21 +2,25 @@
 // 合成单测(2026-09-22 §17-CityHuman 全民驱动,契约 03 §4 重写;
 // 2026-09-26 §批次25 居民-Agent 统一重写)。
 //
-// 覆盖:wealthDeepSeats 座位数 = clamp(resident_count,10,12)(N=10→10、
-// N=12→12、N=10000→12、N<=0→12 兼容旧路径);AgentSeatConfig 无 Profession
-// 字段(精选层退役,§1.4);creatorShouldBeSpectator 对全 Agent 开关的判定。
+// 覆盖:wealthDeepSeats 座位数 = clamp(resident_count,1,12)(N=1→1、N=9→9、
+// N=10→10、N=12→12、N=10000→12、N<=0→12 兼容旧路径);AgentSeatConfig 无
+// Profession 字段(精选层退役,§1.4);creatorShouldBeSpectator 对全 Agent 开关的判定。
+// 2026-10-08 §背景居民下限降至1:座位数下限由 10 降到 1。
 package service
 
 import "testing"
 
-// TestVirtualCityDeepSeats_SeatCountFollowsResidentCount 批次 25(25 文档 §3.2):
-// resident_count=N ⇒ 常驻座位数 = clamp(N,10,12);N<=0 保持 12(兼容旧路径)。
+// TestVirtualCityDeepSeats_SeatCountFollowsResidentCount 批次 25(25 文档 §3.2)
+// + 2026-10-08 §背景居民下限降至1:resident_count=N ⇒ 常驻座位数 =
+// clamp(N,1,12);N<=0 保持 12(兼容旧路径)。
 func TestVirtualCityDeepSeats_SeatCountFollowsResidentCount(t *testing.T) {
 	cases := []struct {
 		name      string
 		residents int
 		want      int
 	}{
+		{"N=1 gives 1 seat", 1, 1},
+		{"N=9 gives 9 seats", 9, 9},
 		{"N=10 gives 10 seats", 10, 10},
 		{"N=11 gives 11 seats", 11, 11},
 		{"N=12 gives 12 seats", 12, 12},
@@ -46,8 +50,9 @@ func TestVirtualCityDeepSeats_SeatCountFollowsResidentCount(t *testing.T) {
 	if wealthDeepSeatCount != 12 {
 		t.Fatalf("wealthDeepSeatCount = %d, want 12 (与 wealth.MaxSeats 对齐)", wealthDeepSeatCount)
 	}
-	if wealthDeepMinSeatCount != 10 {
-		t.Fatalf("wealthDeepMinSeatCount = %d, want 10 (与 wealth.MinSeats 对齐)", wealthDeepMinSeatCount)
+	// 2026-10-08 §背景居民下限降至1:座位数下限与前端 Stepper RESIDENT_MIN=1 对齐。
+	if wealthDeepMinSeatCount != 1 {
+		t.Fatalf("wealthDeepMinSeatCount = %d, want 1 (§背景居民下限降至1)", wealthDeepMinSeatCount)
 	}
 }
 

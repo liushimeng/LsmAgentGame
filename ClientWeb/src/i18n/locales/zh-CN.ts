@@ -1397,7 +1397,7 @@ const zhCN: Dict = {
   'virtualCity.noRooms': '暂无虚拟城市',
   'virtualCity.createFirst': '点击「创建城市」启动你的第一座城市模拟',
   // 2026-09-22 §CityHuman全民驱动：全体居民由大模型驱动，创建即自动启动模拟。
-  'virtualCity.lobbyHint': '全体居民由大模型驱动 · 背景居民规模 10 ~ 10 万 · 创建即自动启动模拟',
+  'virtualCity.lobbyHint': '全体居民由大模型驱动 · 背景居民规模 1 ~ 10 万 · 创建即自动启动模拟',
   'virtualCity.startEarly': '提前开始',
   'virtualCity.startHint': '居民 Agent 就绪后自动启动模拟',
   'virtualCity.month': '第 {m} 月',
@@ -1608,8 +1608,8 @@ const zhCN: Dict = {
   'virtualCity.create.watchOnly': '以观察者身份创建（全 Agent 城市）',
   // ── §20260921 建房解耦 + 城市背景层（契约 04 §3 键表）──
   'virtualCity.residentCount': '背景居民规模',
-  'virtualCity.residentCountHint': '每位居民都是一个 City-Human Agent：系统提示词与档案自动加载自 10 万人物卡知识库（LsmKLBaseServer 引擎：LLM 特征抽取 + MySQL MCP + Graph 检索），由 LLM 线路池驱动',
-  'virtualCity.residentCountRequired': '背景居民规模需在 10 ~ 100000 之间',
+  'virtualCity.residentCountHint': '每位居民都是一个 City-Human Agent：系统提示词与档案自动加载自 10 万人物卡知识库（LsmKLBaseServer 引擎：LLM 特征抽取 + MySQL MCP + Graph 检索），由 LLM 线路池驱动；1 ~ 12 位居民全部为常驻座位 Agent，超过 12 位的部分由驱动层每月抽样',
+  'virtualCity.residentCountRequired': '背景居民规模需在 1 ~ 100000 之间',
   'virtualCity.linePoolInfo': 'LLM 线路池：{n} 条线路（Agent 并发数）',
   'virtualCity.linePoolEmpty': '当前无可用 LLM 线路，请先在模型管理配置',
   'virtualCity.cityTitle': '城市',

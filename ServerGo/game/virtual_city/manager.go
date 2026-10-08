@@ -315,11 +315,15 @@ func (m *Manager) CreateRoom(roomID string) *VirtualCityRoom {
 	}
 	// 重启后第一次访问:从 DB 把座位恢复回来,否则 Start() 的 occupiedLocked
 	// 永远 < MinSeats → ErrVirtualCityNotEnoughPlayers(35003),游戏永远无法开局。
+	// 2026-10-08 §背景居民下限降至1:restoredBots 提到 hydrate 块之外声明 ——
+	// hydrate 早于 pendingOpts 应用,此时房间的 minSeats 还是缺省 MinSeats(10),
+	// 小城房(< 10 居民)在这一步会误判。applyOpts 之后再补一次同判定(见下方
+	// CreateRoom 尾段),覆盖小城房重启恢复全 Agent 标记的场景。
+	restoredBots := 0
 	if m.seatHydrator != nil {
 		seats, err := m.seatHydrator(roomID)
 		if err == nil && len(seats) > 0 {
 			r.mu.Lock()
-			restoredBots := 0
 			for _, s := range seats {
 				if s.Seat < 0 || s.Seat >= MaxSeats || s.UserID == "" {
 					continue
@@ -345,7 +349,10 @@ func (m *Manager) CreateRoom(roomID string) *VirtualCityRoom {
 			// 重启恢复的 10/11 bot 房同样具有全 Agent 语义。必须在房间锁
 			// 释放后、房间登记可见前恢复标记,剩余 1-2 物理空位不得重新
 			// 接受人类创建者/加入者。
-			if restoredBots >= MinSeats {
+			// 2026-10-08 §背景居民下限降至1:门槛改用房间级 minSeats
+			// (此时 pendingOpts 尚未应用,小城房按缺省 10 判 —— 小城场景由
+			// applyOpts 后的兜底判定覆盖)。
+			if restoredBots >= r.EffectiveMinSeats() {
 				r.SetFullAgentMode(true)
 			}
 			logger.L().Info("virtual_city room seats hydrated from DB",
@@ -372,6 +379,14 @@ func (m *Manager) CreateRoom(roomID string) *VirtualCityRoom {
 	m.mu.Unlock()
 	if opts != nil {
 		r.applyOpts(opts)
+	}
+	// 2026-10-08 §背景居民下限降至1:hydrate 早于 applyOpts,上方的全 Agent
+	// 判定用的是缺省门槛 MinSeats(10)。此处按最终的 minSeats(= 小城的 N)
+	// 补判一次,避免 3 人城重启后丢失全 Agent 标记、空位被人类抢坐。
+	// 锁纪律:此刻 m.mu 已释放;EffectiveMinSeats / SetFullAgentMode 各自
+	// 内部取 r.mu。
+	if restoredBots > 0 && restoredBots >= r.EffectiveMinSeats() {
+		r.SetFullAgentMode(true)
 	}
 	// 日志必须读取 pending opts 应用后的房间最终配置,不能打印 Manager 默认值;
 	// 否则 3000ms 房间会被误记为 8000ms。

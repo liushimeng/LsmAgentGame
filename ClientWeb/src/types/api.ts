@@ -461,7 +461,7 @@ export interface CreateRoomOptions {
   // （后端忽略 virtual_city 请求中的 agent_seats，自动合成 12 抽样展示居民）。
   virtual_city?: VirtualCityRoomOptions;
   // 2026-09-21 §建房解耦 — virtualCity only。背景居民规模：
-  // 缺省 10000；<10 clamp 10；上限 100000 后端 clamp；负值 400。
+  // 缺省 10000；<1 clamp 1；上限 100000 后端 clamp；负值 400。
   resident_count?: number;
   // 2026-09-19 §全Agent模式 — 是否全 Agent 模式（虚拟城市恒 true，
   // 创建者一律为观察者；werewolf 不发送）。现状漏声明但实际在发，一并补齐。

@@ -170,7 +170,13 @@ type VirtualCityRoom struct {
 	// 持久化说明:房间级 wealth 选项(含本字段)仅存内存 pendingOpts,
 	// 重启不恢复(与 month_ms/pool/seed 同现状),详见 room_city.go 头注。
 	ResidentCount int
-	City          *city.Backdrop
+	// minSeats 房间级开局门槛(2026-10-08 §背景居民下限降至1)=
+	// min(MinSeats, clamp(resident_count, 1, MaxSeats));即 residents ≥ 10
+	// ⇒ 10(与改造前逐字节一致), residents < 10 ⇒ N(小城即开)。
+	// MinSeats 常量自此退化为「默认值 + 上限」,不再直接充当门槛。
+	// 零值回归安全:minSeatsLocked 对 ≤0 回退 MinSeats。
+	minSeats int
+	City     *city.Backdrop
 	// cityRng 城市演化专用 rng(房间 seed ^ citySeedSalt 派生;与引擎 rng 流分离)。
 	cityRng *rand.Rand
 	// linePoolSource LLM 线路池来源(Manager 注入;池驱动座位 + 城市之声共用)。
@@ -274,6 +280,9 @@ func NewVirtualCityRoom(roomID string, monthMs int, seed int64, llmConcurrency i
 		cityVoicePerMonth: 4,
 		// 批次 25(问题 3):城市时钟固定纪元 2025-01-01 08:00 +0800。
 		cityEpochBaseMs: cityEpochBaseMillis(),
+		// 2026-10-08 §背景居民下限降至1:房间级开局门槛缺省 = MinSeats(10),
+		// applyOpts 收到 resident_count < 10 时下调为 N。
+		minSeats: MinSeats,
 	}
 }
 
@@ -365,6 +374,23 @@ func (r *VirtualCityRoom) IsFullAgentMode() bool {
 	return r.FullAgentMode
 }
 
+// EffectiveMinSeats 返回房间级开局门槛(2026-10-08 §背景居民下限降至1)。
+// 供 ws 层 / Manager 等锁外调用方使用(内部取 r.mu);零值回归 MinSeats。
+func (r *VirtualCityRoom) EffectiveMinSeats() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.minSeatsLocked()
+}
+
+// minSeatsLocked 房间级开局门槛的锁内变体(§92a:必须另建 *Locked 变体,
+// 不可重入 r.mu)。已持锁的调用方用本函数,勿调 EffectiveMinSeats。
+func (r *VirtualCityRoom) minSeatsLocked() int {
+	if r.minSeats <= 0 {
+		return MinSeats
+	}
+	return r.minSeats
+}
+
 // SetAgentLLMMinIntervalMs 批次 25(§3.3):每 Agent LLM 令牌桶补充间隔
 // (Manager.CreateRoom 装配;驱动层 RunMonth 共享桶同款间隔)。
 func (r *VirtualCityRoom) SetAgentLLMMinIntervalMs(ms int) {
@@ -416,6 +442,9 @@ func (r *VirtualCityRoom) applyOpts(opts *service.VirtualCityRoomOptions) {
 	// 此处再防御负数)。仅 Start 前生效(城市在 Start 一次性合成)。
 	if opts.ResidentCount > 0 {
 		r.ResidentCount = opts.ResidentCount
+		// 2026-10-08 §背景居民下限降至1:座位数下限同步降到 1,小城
+		// (< 10 居民)的开局门槛 = N,凑满即开;≥ 10 居民门槛恒为 10。
+		r.minSeats = clampInt(opts.ResidentCount, 1, MinSeats)
 	} else if opts.ResidentCount < 0 {
 		r.ResidentCount = 0
 	}
@@ -530,7 +559,9 @@ func (r *VirtualCityRoom) JoinGame(userID, nickname string) (int, bool, *errcode
 	// MinSeats(10)——10-11 bot 的全 Agent 房(创建者降级为观战者)在注册完
 	// bot 后即可自动开局,不必凑满 12 人。房间仍可容纳到 MaxSeats(12),超出的
 	// 2 头寸留给中途加入的人类玩家。
-	full := r.occupiedLocked() >= MinSeats && r.Status == StatusOpen
+	// 2026-10-08 §背景居民下限降至1:阈值改用房间级 minSeats(≥10 居民
+	// 仍是 10;小城即 N),故 3 人城入座第 3 人即可自动开局。
+	full := r.occupiedLocked() >= r.minSeatsLocked() && r.Status == StatusOpen
 	return seat, full, nil
 }
 
@@ -635,7 +666,9 @@ func (r *VirtualCityRoom) Start(loader *profession.Loader) *errcode.Error {
 		r.mu.Unlock()
 		return errcode.Code(errcode.ErrVirtualCityNotPlaying)
 	}
-	if n := r.occupiedLocked(); n < MinSeats {
+	// 2026-10-08 §背景居民下限降至1:人数门用房间级 minSeats(小城 < 10 居民
+	// ⇒ 门槛 N),≥10 居民房间与改造前完全一致(35003)。
+	if n := r.occupiedLocked(); n < r.minSeatsLocked() {
 		r.mu.Unlock()
 		return errcode.Code(errcode.ErrVirtualCityNotEnoughPlayers)
 	}

@@ -864,11 +864,13 @@ func creatorShouldBeSpectator(gameKind string, freeSeatCount int, virtualCityFul
 }
 
 // clampVirtualCityResidentCount 2026-09-22 §17-CityHuman(契约 03 §3.1)语义更新:
-// resident_count **必达** —— 缺省/0 → 10000;<10 → clamp 10;>maxResidents
+// resident_count **必达** —— 缺省/0 → defaultResidents(10000,仅「客户端不传
+// 该字段」路径;前端弹窗恒传,故 UI 默认由前端 RESIDENT_DEFAULT=10 决定);
+// <1 → clamp 1(2026-10-08 §背景居民下限降至1);>maxResidents
 // → clamp(默认 100000);负数在 API 层已 400,此处 v<=0 兜底走缺省。
 func clampVirtualCityResidentCount(v, maxResidents int) int {
 	const defaultResidents = 10000
-	const minResidents = 10
+	const minResidents = 1
 	if maxResidents <= 0 {
 		maxResidents = 100000
 	}

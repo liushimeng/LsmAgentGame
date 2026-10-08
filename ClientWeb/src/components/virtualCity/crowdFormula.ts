@@ -40,7 +40,7 @@ export const CROWD_INDOOR_SEEDS = 16;
 /**
  * 户外可见人数 V(N)。
  *
- * @param n 房间 resident_count（10..100000；0/非法 → 0）
+ * @param n 房间 resident_count（1..100000；0/非法 → 0）
  * @param cap 画质档上限（`crowdCapFor(quality)`）
  */
 export function outdoorCount(n: number, cap: number): number {

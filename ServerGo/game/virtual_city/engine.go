@@ -31,6 +31,10 @@ const MaxSeats = 12
 
 // MinSeats 最少开局展示位数(2026-09-16 §12 座扩容:3 → 10;
 // 2026-09-24 重构:10 = 最少 10 个抽样展示居民即可开局,无人类玩家概念)。
+// 2026-10-08 §背景居民下限降至1:本常量自此**不再直接充当门槛**,只作为
+// 房间级 minSeats 字段的「默认值 + 上限」—— minSeats =
+// min(MinSeats, clamp(resident_count, 1, MaxSeats));居民数 ≥ 10 时门槛仍是 10
+// (行为逐字节不变),< 10 的小城门槛为 N。见 room.go::EffectiveMinSeats。
 const MinSeats = 10
 
 // DefaultAgentConcurrency 是房间级 LLM 并发信号量(agentSem)的默认容量

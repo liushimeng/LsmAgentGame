@@ -361,7 +361,6 @@ const en: Dict = {
   // Texas Hold'em
   'nav.texasholdem': 'Texas Hold\'em',
 
-
   // Debate
   'nav.debate': 'Debate',
   'debate.title': 'Debate',
@@ -1399,7 +1398,7 @@ const en: Dict = {
   'virtualCity.createFirst': 'Click "Create City" to launch your first city simulation',
   // 2026-09-22 §CityHuman all-resident driving: every resident is LLM-driven;
   // simulation starts on creation.
-  'virtualCity.lobbyHint': 'All residents driven by LLMs · background population 10 ~ 100k · simulation auto-starts on creation',
+  'virtualCity.lobbyHint': 'All residents driven by LLMs · background population 1 ~ 100k · simulation auto-starts on creation',
   'virtualCity.startEarly': 'Start now',
   'virtualCity.startHint': 'Simulation starts automatically once resident Agents are ready',
   'virtualCity.month': 'Month {m}',
@@ -1610,8 +1609,8 @@ const en: Dict = {
   'virtualCity.create.watchOnly': 'Spectator creator (all {max} seats are Agents)',
   // ── §20260921 room-create decoupling + city background layer (contract 04 §3) ──
   'virtualCity.residentCount': 'Background residents',
-  'virtualCity.residentCountHint': 'Every resident is a City-Human agent: system prompt and profile auto-load from the ~100k persona-card knowledge base, driven by the LLM line pool',
-  'virtualCity.residentCountRequired': 'Background population must be between 10 and 100000',
+  'virtualCity.residentCountHint': 'Every resident is a City-Human agent: system prompt and profile auto-load from the ~100k persona-card knowledge base, driven by the LLM line pool; residents 1 ~ 12 are all permanent seat agents, and the portion beyond 12 is sampled monthly by the driver layer',
+  'virtualCity.residentCountRequired': 'Background population must be between 1 and 100000',
   'virtualCity.linePoolInfo': 'LLM line pool: {n} lines (Agent concurrency)',
   'virtualCity.linePoolEmpty': 'No LLM lines available — configure models in Model Management first',
   'virtualCity.cityTitle': 'City',

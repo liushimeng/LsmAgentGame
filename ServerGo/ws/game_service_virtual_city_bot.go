@@ -50,16 +50,21 @@ func (s *GameService) registerVirtualCityAgentSeats(roomID string, seats []servi
 		// 2026-09-21 §虚拟城市(契约 04 §1.4):空 model_key = 线路池驱动座位,
 		// 照常建 bot 用户/注册座位;SeatModelKeys 存空串(下方 RegisterBotSeats
 		// 对空串跳过显式 key 写入,昵称走 AI·居民<seat>号 → Start 抽卡升级)。
-		// 全 Agent 模式判定(len(seatUsers) ≥ MinSeats)不受空 key 影响。
+		// 全 Agent 模式判定(len(seatUsers) ≥ 房间级 need)不受空 key 影响。
 		seatModels[seatCfg.Seat] = seatCfg.ModelKey
 	}
+	// 2026-10-08 §背景居民下限降至1:三处门槛统一改用房间级 need =
+	// r.EffectiveMinSeats()(= min(MinSeats, clamp(resident_count,1,MaxSeats)))。
+	// 读房间时 CreateRoom 已应用 pendingOpts,need 即最终值;≥10 居民的房间
+	// need 恒为 10,与改造前逐字节一致。
+	need := r.EffectiveMinSeats()
 	// 2026-09-22 §17-CityHuman(契约 03 §3.2): 抽样层固定 12 —— 正常路径下
 	// service 层已在落库前合成 wealthDeepSeats()(12 池驱动座位);若注册进来
-	// 的座位仍不足 MinSeats(例如旧链路/重启恢复绕过了 service 层),用池驱动
-	// bot(ModelKey="")防御性补填空闲座位至 MinSeats,幂等无害。roomSvc 不可用
+	// 的座位仍不足 need(例如旧链路/重启恢复绕过了 service 层),用池驱动
+	// bot(ModelKey="")防御性补填空闲座位至 need,幂等无害。roomSvc 不可用
 	// (纯内存测试夹具)时跳过补填,不 panic。
-	if len(seatUsers) > 0 && len(seatUsers) < virtual_city.MinSeats && s.roomSvc != nil {
-		for seat := 0; seat < virtual_city.MaxSeats && len(seatUsers) < virtual_city.MinSeats; seat++ {
+	if len(seatUsers) > 0 && len(seatUsers) < need && s.roomSvc != nil {
+		for seat := 0; seat < virtual_city.MaxSeats && len(seatUsers) < need; seat++ {
 			if _, taken := seatUsers[seat]; taken {
 				continue
 			}
@@ -78,7 +83,7 @@ func (s *GameService) registerVirtualCityAgentSeats(roomID string, seats []servi
 	// FullAgentMode=false 的窗口内自动开局,创建者或并发人类仍可能尝试入座。
 	// 2026-09-26 §批次25:改为 EnsureFullAgentMode —— 建房请求显式
 	// full_agent:false 的房间已由 service 层置位过,此处不再翻回 true。
-	if len(seatUsers) >= virtual_city.MinSeats {
+	if len(seatUsers) >= need {
 		r.EnsureFullAgentMode()
 	}
 	r.RegisterBotSeats(seatUsers, seatModels)
@@ -88,12 +93,13 @@ func (s *GameService) registerVirtualCityAgentSeats(roomID string, seats []servi
 
 	// 2026-09-16 §12 座扩容:全 Agent 房(创建者降级为观战者)在
 	// CreateRoomWithAgents 里跳过 SyncSeat,此处必须兜底自动开局 —— 否则
-	// 10-11 bot 房注册完 bot 后永远停在 open。满 MinSeats(10) 即开,与
+	// 10-11 bot 房注册完 bot 后永远停在 open。满 need(≥10 居民时 = 10)即开,与
 	// JoinGame 的 full 语义一致;若人类创建者随后 SyncSeat 会再触发一次
 	// startVirtualCityRoom,但 r.Start 在 Status!=Open 时幂等返回错误(仅日志),不重复开局。
 	// 2026-09-26 §批次25:非全 Agent 房(显式 full_agent:false)不走兜底自动
 	// 开局 —— 创建者将经 SyncSeat 正常入座并触发开局(IsFullAgentMode 门控)。
-	if r.IsFullAgentMode() && r.GetStatus() == virtual_city.StatusOpen && r.Occupied() >= virtual_city.MinSeats {
+	// 2026-10-08 §背景居民下限降至1:3 人城在 need=3 时同样走这条兜底自动开局。
+	if r.IsFullAgentMode() && r.GetStatus() == virtual_city.StatusOpen && r.Occupied() >= need {
 		if e := s.startVirtualCityRoom(roomID); e != nil {
 			logger.L().Warn("registerVirtualCityAgentSeats: auto-start failed",
 				zap.String("room_id", roomID), zap.Error(e))

@@ -1397,7 +1397,7 @@ const ja: Dict = {
   'virtualCity.noRooms': '仮想都市はまだありません',
   'virtualCity.createFirst': '「都市を作成」で最初の都市シミュレーションを始動しよう',
   // 2026-09-22 §CityHuman 全住民駆動：全住民を LLM が駆動、作成すると自動開始。
-  'virtualCity.lobbyHint': '全住民を LLM が駆動 · 背景住民規模 10〜10万 · 作成すると自動でシミュレーション開始',
+  'virtualCity.lobbyHint': '全住民を LLM が駆動 · 背景住民規模 1〜10万 · 作成すると自動でシミュレーション開始',
   'virtualCity.startEarly': '今すぐ開始',
   'virtualCity.startHint': '住民 Agent の準備が整うと自動でシミュレーション開始',
   'virtualCity.month': '第{m}月',
@@ -1608,8 +1608,8 @@ const ja: Dict = {
   'virtualCity.create.watchOnly': '観戦者として作成（{max}席すべてAgent）',
   // ── §20260921 ルーム作成デカップリング + 都市背景レイヤ（契約 04 §3）──
   'virtualCity.residentCount': '背景住民規模',
-  'virtualCity.residentCountHint': '各住民は City-Human Agent：システムプロンプトとプロファイルは 10 万人物カード知識ベースから自動ロードされ、LLM ラインプールが駆動します',
-  'virtualCity.residentCountRequired': '背景住民規模は 10〜100000 の範囲で指定してください',
+  'virtualCity.residentCountHint': '各住民は City-Human Agent：システムプロンプトとプロファイルは 10 万人物カード知識ベースから自動ロードされ、LLM ラインプールが駆動します。1〜12 人の住民はすべて常駐席 Agent となり、12 人を超える分はドライバ層が毎月サンプリングします',
+  'virtualCity.residentCountRequired': '背景住民規模は 1〜100000 の範囲で指定してください',
   'virtualCity.linePoolInfo': 'LLM ラインプール：{n} ライン（Agent 同時実行数）',
   'virtualCity.linePoolEmpty': '利用可能な LLM ラインがありません。先にモデル管理で設定してください',
   'virtualCity.cityTitle': '都市',
