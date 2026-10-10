@@ -54,37 +54,54 @@ function cacheKey(url: string, opts: SharedTextureOpts): string {
   return `${url}|${wrap}|${rx}|${ry}|${srgb}|${aniso}`;
 }
 
+/** 给纹理对象应用缓存 key 对应的采样参数（创建时同步设置一次）。 */
+function applyTextureOpts(tex: THREE.Texture, opts: SharedTextureOpts): void {
+  tex.colorSpace = (opts.srgb !== false) ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  // 各向异性过滤（GPU 上限由 three 内部 clamp，设置值过大安全）
+  tex.anisotropy = opts.anisotropy ?? defaultAnisotropy(opts.wrap);
+  if (opts.wrap === 'repeat') {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    const [rx, ry] = opts.repeat ?? [1, 1];
+    tex.repeat.set(rx, ry);
+  } else {
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  }
+}
+
 function startLoad(url: string, key: string, opts: SharedTextureOpts): CacheEntry {
+  // 幂等：并发/StrictMode 双调返回既有 entry（占位纹理对象唯一）。
+  const existing = CACHE.get(key);
+  if (existing) return existing;
   const entry: CacheEntry = { tex: null, done: false, listeners: new Set() };
   CACHE.set(key, entry);
-  LOADER.load(
+  // 批次 54（地表全白根因修复）：占位纹理对象。TextureLoader.load 同步返回纹理
+  // 对象（image=null 占位、参数创建时同步施加），组件首帧即持稳定引用 ——
+  // `map` 在材质首编译时即入 program key（USE_MAP），图片到达后由 loader 内部
+  // needsUpdate 重上传。规避 r3f 8.17 applyProps 不设 material.needsUpdate 导致
+  // 「贴图到达但着色器不重编译」（map 被静默忽略 → 白 color 直通 → 全城地表全白）。
+  // 加载窗口内未上传纹理按 WebGL 规范采样 (0,0,0,1) 黑 —— 与多数降级色同为暗色，
+  // 本地资产毫秒级到达，验收以最终帧为准。
+  const tex = LOADER.load(
     url,
     (loaded) => {
-      loaded.colorSpace = (opts.srgb !== false) ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-      loaded.magFilter = THREE.LinearFilter;
-      loaded.minFilter = THREE.LinearMipmapLinearFilter;
-      // 各向异性过滤（GPU 上限由 three 内部 clamp，设置值过大安全）
-      loaded.anisotropy = opts.anisotropy ?? defaultAnisotropy(opts.wrap);
-      if (opts.wrap === 'repeat') {
-        loaded.wrapS = loaded.wrapT = THREE.RepeatWrapping;
-        const [rx, ry] = opts.repeat ?? [1, 1];
-        loaded.repeat.set(rx, ry);
-      } else {
-        loaded.wrapS = loaded.wrapT = THREE.ClampToEdgeWrapping;
-      }
-      entry.tex = loaded;
+      // loaded === tex（TextureLoader 同步返回的对象即回调入参），参数已施加。
       entry.done = true;
       entry.listeners.forEach((fn) => fn(loaded));
       entry.listeners.clear();
     },
     undefined,
     () => {
-      // 失败哨兵：tex 保持 null，done=true，后续直接走降级
+      // 失败哨兵：tex=null, done=true，后续直接走降级
       entry.done = true;
+      entry.tex = null;
       entry.listeners.forEach((fn) => fn(null));
       entry.listeners.clear();
     },
   );
+  applyTextureOpts(tex, opts);
+  entry.tex = tex;
   return entry;
 }
 
@@ -105,8 +122,12 @@ export function useSharedTexture(
 
   const [tex, setTex] = useState<THREE.Texture | null>(() => {
     if (!key) return null;
-    const hit = CACHE.get(key);
-    return hit?.done ? hit.tex : null;
+    // 批次 54：渲染期 get-or-create —— 首个消费者的首帧即持占位纹理对象
+    //（useEffect 在首帧编译之后才跑，等它再 setTex 就错过了 program 首编译），
+    // StrictMode/并发双调由 startLoad 内部幂等挡掉。命中未完成 entry 同理返回
+    // 占位纹理，保证 map 引用稳定、材质首编译即带 USE_MAP。
+    const hit = startLoad(url, key, { wrap, repeat: [rx, ry], srgb, anisotropy: aniso });
+    return hit.tex;
   });
 
   useEffect(() => {
