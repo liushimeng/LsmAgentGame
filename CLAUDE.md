@@ -157,6 +157,7 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 2. 编译 → 测试 → 小步提交。尽可能每个逻辑阶段对应一次提交。
 3. 进行任何非琐碎更改前，重新阅读相关的 `lag_docs/` 文件。如有结构性变更，请同步更新文档。
 4. 切勿在提交中重写 `LsmAgentGame.conf`、`server.crt` 或 `server.key`。
+5. commit message 只写业务描述，**禁止任何 AI 署名 trailer**（见 §10.3）。
 
 ### 10.1 所有改动保持在 `main` 分支
 
@@ -182,6 +183,35 @@ Vite 是打包工具。规范中写的是 "Webpack/Rollup"——Vite 在**生产
 - `AGENTS.md` **必须**是 `ln -s CLAUDE.md AGENTS.md` 创建的符号链接 — 修改一次,所有工具同步生效。
 - **若发现 `AGENTS.md` 是普通文件而非符号链接**:立刻 `rm AGENTS.md && ln -s CLAUDE.md AGENTS.md` 修正。
 - CI 可加一步 `test -L AGENTS.md` 防止误把符号链接替换为普通文件。
+
+### 10.3 Git 提交消息规范（禁止 AI 署名）
+
+> **2026-10-10 起的硬约束**。本仓库的 commit message **只承载业务描述**，
+> 不携带任何 AI 生成/协作署名。适用于主仓库 `main` 与所有子模块
+> （`lag_docs/`、`python-generate-image-tool/`、`go-web-debug-tool/`）。
+
+**三条硬禁令**：
+
+| # | 禁止项 | 说明 |
+|---|--------|------|
+| 1 | **`Co-Authored-By: Claude Code <noreply@anthropic.com>`** | 禁止添加任何 `Co-Authored-By:` 行（含 AI 名 + AI 邮箱的任何变体） |
+| 2 | **"Generated with Claude Code" / "🤖 Generated with..."** | 禁止追加此类 AI 生成署名文本（含中英文变体、emoji 前缀） |
+| 3 | **任何 AI attribution 尾部注释** | 禁止在 message 末尾追加 AI 相关 trailer（`Co-authored-by`、`Generated with`、`Signed-off-by: AI`、模型名等） |
+
+**正确形态**：
+
+```
+feat(虚拟城市/批次54): <业务变更摘要>
+
+- <改动要点 1>
+- <改动要点 2>
+```
+
+**要点**：
+- 正文里出现 `Claude Code`、`§<编号>`、`AGENTS.md` 等**词条本身不算署名**——那是业务上下文；
+  被禁的是**署名行/trailer 形态**。
+- 不要为了"合规"而改写业务描述（保留 `§编号`、`CLAUDE.md` 等引用），只删署名。
+- 用户显式要求加署名时才例外；默认一律不加。
 
 ## 11. 常见陷阱
 
