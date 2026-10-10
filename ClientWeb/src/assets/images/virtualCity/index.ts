@@ -346,8 +346,16 @@ export function signUrlExt(name: SignNameExt): string {
 
 const skyImgs = import.meta.glob<string>('./sky/*.png', { eager: true, import: 'default' });
 
-/** 天空贴图字面量（与 3d_script/procedural_city_textures.py::gen_cloud_puff 对齐）。 */
-export type SkyName = 'cloud_puff';
+/**
+ * 天空贴图字面量。
+ * - `cloud_puff` 积云（底平顶蓬松，顶部亮白/底部冷灰背光）
+ * - `cloud_layer` 层云（横向延展灰层，无立体感）
+ * - `cloud_cirrus` 卷云（高空横向丝缕，薄半透明）
+ *
+ * 三者同源 `python-generate-image-tool/generate_virtual_city_cloud_assets.py`
+ * （批次 58，seed 固定可复现）。旧名 cloud_puff 保留为积云，兼容既有引用。
+ */
+export type SkyName = 'cloud_puff' | 'cloud_layer' | 'cloud_cirrus';
 
 /**
  * 天空贴图 URL（缺失 = ''，CloudLayer 降级白色扁球兜底）。
