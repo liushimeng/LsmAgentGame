@@ -1,12 +1,16 @@
 /**
- * roadNetwork — 批次 31「混合式路网与一环路」：全城道路网单一事实来源（纯函数，无随机）。
+ * roadNetwork — 批次 31「混合式路网与一环路」+ 批次 59「邻接次干道正交化」：全城道路网单一事实来源（纯函数，无随机）。
  *
  * 设计文档：lag_docs/虚拟城市/已实现/31-混合式路网与一环路/01-方案设计.md
+ *           lag_docs/虚拟城市/已实现/59-邻接次干道正交化/01-方案与实施记录.md
  *
- * 四层混合路网（方格网式 + 鱼骨式 + 环形；2026-09-28 用户反馈删 CBD 星型放射后）：
- *   1. connector 邻接次干道 ×≤36：每区连 2 最近邻（8u ≤ len ≤ 34u），居民区互联互通（方格/鱼骨感）
+ * 四层混合路网（方格网式 + 鱼骨式 + 环形；2026-09-28 用户反馈删 CBD 星型放射后；
+ * 2026-10-20 批次 59：connector 斜向段 L 形正交化，全城无斜路）：
+ *   1. connector 邻接次干道 ×≤36：每区连 2 最近邻（8u ≤ len ≤ 34u），**曼哈顿 L 形
+ *      正交走线**（斜向段拆两条轴对齐腿，转角=T 型口；共线腿合并成共用段）
  *   2. arterial  方格骨干 ×4：x=±18 / z=±26 贯穿 ±48（选线已核对 32 区底板重叠 ≤1 块/条）
  *   3. edgeLink  高速联络线 ×≤17：中心 r>30 的区，向外延长至高速环内缘 r=57.2
+ *      （**保留放射** —— 绕城高速联络线真实语义，批次 59 显式裁决，见批次 59 文档 §2.4）
  *   4. gates     收费站 ×≤17：联络线 r=55 径向（龙门架 + 双收费亭，props/HighwayGates 渲染）
  *
  * ~~spoke 放射主干道 ×31~~：**已删除**（2026-09-28 用户反馈：CBD 向外星型辐射路
@@ -23,7 +27,30 @@
  */
 
 import { districtCenter, type VirtualCityDistrictDef } from '@/types/virtualCity';
-import { trimSegmentToLandmarks } from './cityLandmarks';
+import { segHitsLandmark, trimSegmentToLandmarks } from './cityLandmarks';
+import { ROAD_WIDTH_SIDE } from './cityScale';
+
+// ── 批次 59 · 邻接次干道正交化（L 形曼哈顿走线）选线常量 ──────────────
+/**
+ * 第三区街墙带半径（镜像 building_layout.ts 街墙几何：EDGE_CENTER 2.85 ± 最大进深
+ * 半 0.8 ⇒ 楼面内缘 2.05 / 外缘 3.65）。roadNetwork 不能 import building_layout
+ * （反向会成环：building_layout → cityObstacles → roadNetwork），此处登记镜像副本。
+ * ⚠ 漂移风险由批次 59 文档 §5 登记：改 building_layout.EDGE_CENTER / 进深上限时
+ * 须同步本组常量；本组仅用于选线软评分（非正确性门），漂移影响仅限「腿擦街墙」观感。
+ */
+const WALL_INNER = 2.05;
+const WALL_OUTER = 3.65;
+/** 次干道路廊半宽 = 路面半宽 0.45 + 人行道 0.25（与 cityObstacles.SIDEWALK_W 同值）。 */
+const CONNECTOR_CORRIDOR_HALF = ROAD_WIDTH_SIDE / 2 + 0.25;
+/** 腿从第三区**庭院**穿过（不碰街墙）的最大区心距。 */
+const WALL_PASS_MAX = WALL_INNER - CONNECTOR_CORRIDOR_HALF;
+/** 腿完全**避开**第三区的最小区心距。 */
+const WALL_CLEAR_MIN = WALL_OUTER + CONNECTOR_CORRIDOR_HALF;
+/** 角点落第三区街墙带 ±容差的判定带（角点压在楼上比腿擦楼更显眼 ⇒ 容差更严）。 */
+const CORNER_BAND_TOL = 0.3;
+/** 共线腿合并的区间重叠下限（u）：重叠 >0.5 视为「同一条街道被两条 connector 共用」；
+ *  小于等于则视为路口贴邻，保留各自腿（独立路幅，互不 z-fight）。 */
+const MERGE_MIN_OVERLAP = 0.5;
 
 // ── 一环路常量（FirstRingRoad 组件同读此处，单一事实来源）────────────────
 /** 一环路半径（世界单位；内圈含 5 个内城区 tech/industry/oldtown/commerce/residential）。 */
@@ -120,6 +147,117 @@ function len2(a: [number, number], b: [number, number]): number {
 }
 
 /**
+ * 生成一条 connector 的**轴对齐**段序列（批次 59 · L 形曼哈顿正交化）。
+ *
+ * 候选角点 C1=(a.x,b.z)（先竖后横）/ C2=(b.x,a.z)（先横后竖）；两腿总长恒为
+ * |dx|+|dz|（曼哈顿距离）⇒ 两候选等长，选线只看约束评分（分数越低越好）：
+ *   +10 腿穿 CBD 禁入圆（CONNECTOR_CBD_KEEP_OUT）
+ *    +1 腿擦第三区街墙带（区心到腿距 ∈ (WALL_PASS_MAX, WALL_CLEAR_MIN)）/ 区 / 腿
+ *    +5 腿穿越场馆保留地（复用 cityLandmarks.segHitsLandmark 精确求交）
+ *    +2 角点落第三区街墙带 ±CORNER_BAND_TOL
+ * 平局按 (score, corner.x, corner.z) 字典序取最小 ⇒ 表序遍历下完全确定。
+ * 已是正交对齐全称（dx==0 或 dz==0）返回原样单段（key 不带腿后缀）。
+ */
+function connectorLegs(
+  a: [number, number],
+  b: [number, number],
+  pair: string,
+  centers: readonly { id: string; c: { x: number; z: number } }[],
+  idA: string,
+  idB: string,
+): RoadSegment[] {
+  const mk = (from: [number, number], to: [number, number], key: string): RoadSegment => ({
+    key, from, to, kind: 'side', cls: 'connector', yOffset: Y_CONNECTOR,
+  });
+  if (a[0] === b[0] || a[1] === b[1]) {
+    return [mk(a, b, `conn-${pair}`)];
+  }
+  const candidates: Array<[number, number]> = [
+    [a[0], b[1]], // C1 先竖后横
+    [b[0], a[1]], // C2 先横后竖
+  ];
+  const scoreCorner = (corner: [number, number]): number => {
+    let s = 0;
+    const legPairs: Array<[[number, number], [number, number]]> = [[a, corner], [corner, b]];
+    for (const [p, q] of legPairs) {
+      if (pointSegDist(0, 0, p, q) < CONNECTOR_CBD_KEEP_OUT) s += 10;
+      for (const o of centers) {
+        if (o.id === idA || o.id === idB) continue;
+        const d = pointSegDist(o.c.x, o.c.z, p, q);
+        if (d > WALL_PASS_MAX && d < WALL_CLEAR_MIN) s += 1;
+      }
+      if (segHitsLandmark(p, q)) s += 5;
+    }
+    for (const o of centers) {
+      if (o.id === idA || o.id === idB) continue;
+      const dc = Math.hypot(corner[0] - o.c.x, corner[1] - o.c.z);
+      if (dc > WALL_INNER - CORNER_BAND_TOL && dc < WALL_OUTER + CORNER_BAND_TOL) s += 2;
+    }
+    return s;
+  };
+  let best = candidates[0];
+  let bestScore = scoreCorner(candidates[0]);
+  for (let i = 1; i < candidates.length; i++) {
+    const sc = scoreCorner(candidates[i]);
+    const c = candidates[i];
+    if (
+      sc < bestScore ||
+      (sc === bestScore && (c[0] < best[0] || (c[0] === best[0] && c[1] < best[1])))
+    ) {
+      best = c;
+      bestScore = sc;
+    }
+  }
+  return [mk(a, best, `conn-${pair}-L1`), mk(best, b, `conn-${pair}-L2`)];
+}
+
+/**
+ * 共线 connector 腿合并（批次 59）。
+ *
+ * L 化后不同 connector 可能产出共线重叠腿（实测 10 处，如 edu_district~residential
+ * 与 medical_city~residential 共享全等腿）。按表序接受腿，新腿与已接受腿同轴同线
+ * 且区间重叠 >MERGE_MIN_OVERLAP 时并入（区间取并集、保留先到的 key）——
+ * 合并结果即「两条支路共用一段街道」，与真实方格网 T 型共用段一致。
+ * 安全性：合并区间是两个**各自通过约束评分**的区间的并集 ⇒ 不可能引入未检查过的走廊。
+ * 仅处理 connector 腿；arterial / edgeLink 全局长度唯一，不参与。
+ */
+function mergeCollinearLegs(legs: RoadSegment[]): RoadSegment[] {
+  interface Rec { seg: RoadSegment; vertical: boolean; at: number; lo: number; hi: number; }
+  const accepted: Rec[] = [];
+  const out: RoadSegment[] = [];
+  const EPS = 1e-9;
+  for (const leg of legs) {
+    const vertical = Math.abs(leg.from[0] - leg.to[0]) < EPS;
+    if (!vertical && Math.abs(leg.from[1] - leg.to[1]) > EPS) {
+      out.push(leg); // 非轴对齐（理论上不存在）原样放行
+      continue;
+    }
+    const at = vertical ? leg.from[0] : leg.from[1];
+    const lo = vertical ? Math.min(leg.from[1], leg.to[1]) : Math.min(leg.from[0], leg.to[0]);
+    const hi = vertical ? Math.max(leg.from[1], leg.to[1]) : Math.max(leg.from[0], leg.to[0]);
+    const hit = accepted.find(
+      (r) => r.vertical === vertical && Math.abs(r.at - at) < EPS
+        && Math.min(hi, r.hi) - Math.max(lo, r.lo) > MERGE_MIN_OVERLAP,
+    );
+    if (!hit) {
+      accepted.push({ seg: leg, vertical, at, lo, hi });
+      out.push(leg);
+      continue;
+    }
+    hit.lo = Math.min(lo, hit.lo);
+    hit.hi = Math.max(hi, hit.hi);
+    if (vertical) {
+      hit.seg.from = [hit.at, hit.lo];
+      hit.seg.to = [hit.at, hit.hi];
+    } else {
+      hit.seg.from = [hit.lo, hit.at];
+      hit.seg.to = [hit.hi, hit.at];
+    }
+  }
+  return out;
+}
+
+/**
  * 生成全城道路网（确定性：城区表序 + 几何距离，无随机）。
  * @param districts    城区静态表（VIRTUAL_CITY_DISTRICTS）
  * @param _mainRoadMinLen 保留兼容（放射路删除后不再使用主干道阈值；调用方仍传
@@ -153,11 +291,13 @@ export function buildRoadNetwork(
     );
   };
 
-  // ── ① 邻接次干道（k 近邻互通；去重；长度/总量双上限）──
+  // ── ① 邻接次干道（k 近邻互通；去重；长度/总量双上限；批次 59：斜向 L 形正交化）──
   const centers = nonCbd.map((d) => ({ id: d.id, c: districtCenter(d.id) }));
   const seen = new Set<string>();
+  let connectorCount = 0;
+  const rawConnectorLegs: RoadSegment[] = [];
   for (const { id, c } of centers) {
-    if (segments.filter((s) => s.cls === 'connector').length >= CONNECTOR_CAP) break;
+    if (connectorCount >= CONNECTOR_CAP) break;
     const neighbors = centers
       .filter((o) => o.id !== id)
       .map((o) => ({ id: o.id, d: len2([c.x, c.z], [o.c.x, o.c.z]) }))
@@ -171,16 +311,13 @@ export function buildRoadNetwork(
       // CBD 禁入：穿金融 CBD 建筑区的邻接路拒绝（防 3D 重叠，用户反馈 2026-09-28）
       if (pointSegDist(0, 0, [c.x, c.z], [nc.x, nc.z]) < CONNECTOR_CBD_KEEP_OUT) continue;
       seen.add(pair);
-      pushSegment({
-        key: `conn-${pair}`,
-        from: [c.x, c.z],
-        to: [nc.x, nc.z],
-        kind: 'side',
-        cls: 'connector',
-        yOffset: Y_CONNECTOR,
-      });
+      connectorCount++;
+      // 批次 59：斜向段拆曼哈顿 L 形两腿（转角=T 型口），正交对齐全称保留单段
+      rawConnectorLegs.push(...connectorLegs([c.x, c.z], [nc.x, nc.z], pair, centers, id, n.id));
     }
   }
+  // 共线腿合并（两条支路共用一段街道，T 型共用段），再过场地截断入总表
+  for (const leg of mergeCollinearLegs(rawConnectorLegs)) pushSegment(leg);
 
   // ── ② 方格骨干（x=±18 / z=±26，贯穿 ±48）──
   for (const line of ARTERIAL_LINES) {
