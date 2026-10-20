@@ -45,7 +45,7 @@ export function FireStation() {
         <Model
           url={url}
           sizeTarget={FIRE_SIZE_TARGET}
-          position={[8, 0, -12]}
+          position={[0, 0, -36]}
           castShadow
           receiveShadow
         >
@@ -57,7 +57,7 @@ export function FireStation() {
           站局部坐标系与 fallback 同源（外层 group position=[8,0,-12]）。
           from===to、speed=0：组件内 len 兜底 1、角度 0，静态摆放不占路网车流；
           无 GLB 分支同样渲染（Vehicle 自行走几何/sprite fallback 简版，可接受）。 */}
-      <group position={[8, 0, -12]}>
+      <group position={[0, 0, -36]}>
         <Vehicle from={[-u(6), u(5.5)]} to={[-u(6), u(5.5)]} variant="truck" speed={0} />
         {/* 车顶警灯 ×2（驾驶室上方；材质名约定 'Beacon'，供未来 GLB 化后接入批次 41
             B2 的昼夜调制）。y = 车顶 0.36u（VEHICLE_GROUND_Y 0.02 + 车高 0.34）+ 半高。 */}
@@ -75,7 +75,7 @@ export function FireStation() {
 /** 程序化几何 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。 */
 function FireStationFallback() {
   return (
-    <group position={[8, 0, -12]}>
+    <group position={[0, 0, -36]}>
       {/* 主屋：占地 = 表值轮廓 − 腰线外挑，高 = 构图常量 7 m（车库层） */}
       <mesh position={[0, BODY_H / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[FIRE.x - BELT_EAVE * 2, BODY_H, FIRE.z]} />

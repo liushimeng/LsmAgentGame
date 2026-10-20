@@ -88,6 +88,11 @@ type ToolRunner interface {
 	PlanInheritance(seat int) (string, error)
 	PaySupportExtra(seat int, amountCNY int64) error
 	UpgradeEducation(seat int, childIdx int) error
+	// 批次62(§20261020-62): 行为金融三工具(查询 / 反思 / 延期支付)。
+	QueryBehavior(seat int) (string, error)
+	Reflect(seat int, mode string) error
+	DeferPayment(seat int, amountCNY int64, reason string) error
+	MergeAccounts(seat int) error
 	// P2(2026-09-16 §财商流P2): 玩家间交易与财富流动系统 12 工具。
 	ListAsset(seat int, assetIndex int, askCNY, minCNY int64) error
 	CancelListing(seat int, listingID string) error
@@ -143,6 +148,11 @@ const (
 	// ToolSideBusiness 吸收 start_side_business + stop_side_business +
 	// set_side_price(3→1)。
 	ToolSideBusiness = "side_business"
+	// ToolBehavior 批次62 §20261020-62:行为金融分组工具,下辖 3 个 sub-command:
+	// query(查询本人偏差画像/羊群指数/锚定指数,不耗预算)/
+	// reflect(主动反思,耗 1 预算:light|deep|preview)/
+	// defer(延期支付,耗 1 预算:本月免付,3 个月后 ×1.3)。
+	ToolBehavior = "behavior"
 
 	// ── 原样保留(名字未改)──
 	ToolSetConsumption = "set_consumption"
@@ -330,6 +340,28 @@ func BuildTools() []llmtypes.ToolDef {
 			},
 		},
 		{
+			Name: ToolBehavior,
+			Description: "行为金融(批次62,三 op)。query=查看本人行为画像(已识破的偏差/锚定指数/羊群指数/" +
+				"心理账户余额/延期支付,不消耗动作预算)。reflect=主动反思(耗 1 次动作预算,每月限 1 次,认知≤1 不可用):" +
+				"light 轻度反思(认知−1,解除 1 项正在生效的偏差);deep 深度反思(认知−2,解除全部偏差且本回合免疫);" +
+				"preview 复盘预习(认知−1,下一回合偏差效果减弱 50% 且可被识破)。" +
+				"defer=延期支付(耗 1 次动作预算):amount_cny 本月免付,3 个月后按 ×1.3 扣款(信用卡分期的贴现成本);" +
+				"仅当你有「双曲贴现」倾向时可用。merge=合并心理账户(耗 1 次动作预算):把资金来源标签归并为" +
+				"统一资金池,合并后「意外之财」的消费放大效果立即消失(钱就是钱)。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"op": enumStrSchema([]string{"query", "reflect", "defer", "merge"},
+						"query=查行为画像 / reflect=主动反思 / defer=延期支付 / merge=合并心理账户"),
+					"mode": enumStrSchema([]string{"light", "deep", "preview"},
+						"反思模式(op=reflect 必填):light=轻度(认知−1) / deep=深度(认知−2) / preview=复盘预习(认知−1)"),
+					"amount_cny": intSchema(1, "金额(元;op=defer 必填)"),
+					"reason":     map[string]any{"type": "string", "maxLength": 40, "description": "延期支付的用途备注(≤40字,op=defer 可选)"},
+				},
+				"required": []string{"op"},
+			},
+		},
+		{
 			Name:        ToolSetConsumption,
 			Description: "设置消费档位(耗 1 次动作预算,立即生效):0 节俭(生活支出×0.6/精力−1)/1 标准(×1.0)/2 精致(×1.5/精力+1)/3 奢侈(×2.2/精力+2)。你的消费决定全城物价与就业;现金 < 2×月生活支出时会被强制降为节俭档。",
 			InputSchema: map[string]any{
@@ -388,6 +420,7 @@ func ToolNames() []string {
 		ToolAssetTrade, ToolBankLoan, ToolSavings, ToolQueryFinance, ToolInsurance,
 		ToolFamily,
 		ToolActivity, ToolSetConsumption, ToolAnswerSurvey, ToolSideBusiness,
+		ToolBehavior,
 		ToolMarketListing, ToolNegotiate, ToolP2PLending, ToolAuctionBid, ToolInfoMarket,
 		ToolSee, ToolHear, ToolSmell, ToolMove,
 	}
@@ -600,6 +633,25 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 			return failOr(a.runner.SetSidePrice(seat, int(getInt("tier"))), "副业改价完成", res)
 		default: // start
 			return failOr(a.runner.StartSideBusiness(seat, getStr("kind"), int(getInt("tier"))), "副业已启动", res)
+		}
+	case ToolBehavior:
+		// 批次62:query 不耗预算;reflect / defer 各耗 1 次。
+		switch getStr("op") {
+		case "reflect":
+			res.Budget = true
+			return failOr(a.runner.Reflect(seat, getStr("mode")), "已完成反思", res)
+		case "defer":
+			res.Budget = true
+			return failOr(a.runner.DeferPayment(seat, int64(getInt("amount_cny")), getStr("reason")), "已延期支付", res)
+		case "merge":
+			res.Budget = true
+			return failOr(a.runner.MergeAccounts(seat), "心理账户已合并", res)
+		default: // query
+			s, err := a.runner.QueryBehavior(seat)
+			if err != nil {
+				return fail(err)
+			}
+			return ok(s)
 		}
 	case ToolSetConsumption:
 		res.Budget = true

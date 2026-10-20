@@ -7,6 +7,8 @@ import virtualCityLinePool from './virtualCityLinePool-ja';
 import virtualCityCityClock from './virtualCityCityClock-ja';
 import virtualCityTimeWeather from './virtualCityTimeWeather-ja';
 import virtualCityFamily from './virtualCityFamily-ja';
+import virtualCityDashboard from './virtualCityDashboard-ja';
+import virtualCityBehavior from './virtualCityBehavior-ja';
 
 // 日本語 — ja
 const ja: Dict = {
@@ -1730,7 +1732,7 @@ const ja: Dict = {
   'virtualCity.consumption.invalid': '消費水準が不正です（0-3）',
 
   // ── virtualCity 分割ファイル（≤1800 行制約）：P2 取引 / P1-4 保険 / 住民档案 / バッチ20 / ラインプール ──
-  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily,
+  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily, ...virtualCityDashboard, ...virtualCityBehavior,
 
   // ── P1 ミンスキーエンジン + LPR リプライシング + 早期返済 ──
   'minsky.title': 'ミンスキー融資状態',
@@ -1767,33 +1769,6 @@ const ja: Dict = {
   'earlyrepay.partialAmount': '一部返済額',
   'earlyrepay.dangerTitle': '危険な操作の確認',
   'earlyrepay.dangerBody': '住宅ローンを ¥{amount} で一括完済します。この操作は取り消せません。',
-  // ── P2 v2 财富流動可視化(2026-09-19 §P2-viz §13.4) ──
-  'virtualCity.dashboard.structure': '富の構造',
-  'virtualCity.dashboard.lorenz.title': 'ローレンツ曲線',
-  'virtualCity.dashboard.lorenz.myPos': '自分の位置',
-  'virtualCity.dashboard.lorenz.myRank': '順位 {rank}/{total}',
-  'virtualCity.dashboard.lorenz.equalLine': '完全平等線',
-  'virtualCity.dashboard.lorenz.lorenzCurve': '実際の分布',
-  'virtualCity.dashboard.lorenz.giniBadge': 'Gini = {value}',
-  'virtualCity.dashboard.lorenz.empty': '富のデータ未取得',
-  'virtualCity.dashboard.pyramid.title': '富のピラミッド',
-  'virtualCity.dashboard.pyramid.survival': '生存圏',
-  'virtualCity.dashboard.pyramid.accumulation': '蓄積圏',
-  'virtualCity.dashboard.pyramid.freedom': '自由圏',
-  'virtualCity.dashboard.pyramid.peopleCount': '{n}人',
-  'virtualCity.dashboard.pyramid.virtualCityPct': '総富の {pct}',
-  'virtualCity.dashboard.flow.title': '資金フロー(本月)',
-  'virtualCity.dashboard.flow.in': '総流入',
-  'virtualCity.dashboard.flow.out': '総流出',
-  'virtualCity.dashboard.flow.empty': '今月の資金フローなし',
-  'virtualCity.dashboard.flow.node.salary': '給料',
-  'virtualCity.dashboard.flow.node.firms': '企業',
-  'virtualCity.dashboard.flow.node.market': '市場',
-  'virtualCity.dashboard.flow.node.bank': '銀行',
-  'virtualCity.dashboard.flow.node.gov': '政府',
-  'virtualCity.dashboard.flow.node.player': '住民',
-  'virtualCity.dashboard.flow.node.world': 'システム外',
-  'virtualCity.dashboard.flow.tooltip': '{from} → {to}：¥{amount}',
 };
 
 export default ja;

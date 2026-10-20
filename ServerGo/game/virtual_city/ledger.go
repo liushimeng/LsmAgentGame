@@ -92,6 +92,9 @@ const (
 	CatFamilySupport = "family_support" // 赡养支出(seat→family;含自愿加赡养)
 	CatEduTuition    = "education"      // 教育投入(seat→family;升级一次性 + 月度)
 	CatChildSupport  = "child_support"  // 子女成年回流(family→seat,收入侧)
+	// 批次62: 行为金融偏差引擎(2026-10-20 §20261020-62)。
+	CatBiasCost = "bias_cost"       // 偏差成本(seat→market):追高溢价 / 跟风滑点 / 沉没追加
+	CatBehaviorBonus = "behavior_bonus" // 储蓄纪律奖励(bank→seat):月结余 × 2%
 )
 
 // Entry 单条双式流水。

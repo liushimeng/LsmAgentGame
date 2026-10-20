@@ -78,6 +78,15 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 	// 计算,供 ③ 结算与竞争播报共用,不随破产/死亡中途重算(确定性)。
 	sideShares := sideMarketShares(w)
 
+	// ⓪C 批次62 行为金融:回合操作摘要结算 + 泡沫状态机推进。
+	// 必须早于 ③ 逐座位月结:
+	//   - 逆势奖励(§3.4.3)判定依赖**本回合**的同向人数(摘要此刻才完整);
+	//   - 爆仓清算(§11.2)依赖本回合的泡沫状态(此刻才推进到 burst)。
+	// 泡沫状态机同时设置 Market.DriftMultiplier/DriftExtra,供 ④ 月度漂移
+	// 使用(过热期涨幅 ×1.5 / 泡沫后衰退期阴跌 −2%/月)。
+	turnSummary := w.closeTurnSummary()
+	w.bubbleMonthlyStep()
+
 	// ① 央行月度决策(P1:在月度事件之前,内生 CPI/LPR/信贷约束)。
 	if w.CB != nil {
 		w.CB.MonthlyDecision(w, w.Rand)
@@ -106,6 +115,8 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 			continue
 		}
 		cashBefore := p.Cash
+		// 批次62:逆势奖励需要"本回合净资产变动" ⇒ 记录月结前的净资产。
+		netBefore := p.NetWorth(w.Market)
 		if p.Alive {
 			w.settlePlayer(p, age, sideShares)
 			// P1: 月结后按最新收入重算明斯基分级(工资/收入可能变化)(v2.60 N11-4)。
@@ -114,6 +125,13 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 			p.MinskyMomentTriggered = false
 		}
 		net := p.NetWorth(w.Market)
+		// 批次62:泡沫爆仓清算(§11.2)—— 复用既有 liquidate 流程,不自写清算。
+		if p.Alive && w.bubbleBustCheck(p) {
+			w.liquidate(p)
+		} else if p.Alive {
+			// 批次62:逆势奖励(§3.4.3)—— 同向 ≥3 人且本人逆势获利 ⇒ 认知 +2。
+			w.counterTrendReward(p, netBefore, net, turnSummary)
+		}
 		p.NetWorthHistory = append(p.NetWorthHistory, net)
 		sum := MonthSummary{
 			Seat: seat, CashDelta: p.Cash - cashBefore, NetWorth: net,
@@ -370,11 +388,14 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 	}
 	if salary > 0 {
 		w.Pay(seat, EntityBank, SeatEntity(seat), salary, CatSalary, "工资")
+		// 批次62 心理账户:工资来源标签(§3.2.1;标签不影响购买力)。
+		p.tagIncome(MoneyTagSalary, salary)
 		addIncome(salary, "salary", "工资", false)
 		if p.OvertimeThisMonth {
 			bonus := int64(float64(salary)*overtimeBonusRate + 0.5)
 			if bonus > 0 {
 				w.Pay(seat, EntityBank, SeatEntity(seat), bonus, CatOvertime, "加班奖金")
+				p.tagIncome(MoneyTagSalary, bonus)
 				addIncome(bonus, "overtime", "加班奖金", false)
 			}
 			p.OvertimeThisMonth = false
@@ -384,6 +405,7 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 		if p.Family.Marital == "married" && p.Family.SpouseIncome > 0 {
 			w.Pay(seat, EntityBank, SeatEntity(seat), p.Family.SpouseIncome, CatSpouse, "配偶收入")
 			addIncome(p.Family.SpouseIncome, "spouse", "配偶收入", false)
+			p.tagIncome(MoneyTagSalary, p.Family.SpouseIncome)
 		}
 		if p.SideBusiness != nil {
 			sb := p.SideBusiness
@@ -410,6 +432,7 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 				if side > 0 {
 					text := "副业收入" + sidePriceTextSuffix(sb.PriceTier, share) + halfNote
 					w.Pay(seat, EntityMarket, SeatEntity(seat), side, CatSide, text)
+					p.tagIncome(MoneyTagSide, side)
 					addIncome(side, "side", text, false)
 				}
 			}
@@ -430,17 +453,20 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 			if rent > 0 {
 				w.Pay(seat, EntityMarket, SeatEntity(seat), rent, CatRent, "住宅租金")
 				addIncome(rent, "rent", "住宅租金 "+DistrictCN(a.AssetDistrict()), true)
+				p.tagIncome(MoneyTagInvestment, rent)
 			}
 		case isShopKind(a.Kind):
 			rent := w.Market.ShopRent(a.AssetDistrict())
 			if rent > 0 {
 				w.Pay(seat, EntityMarket, SeatEntity(seat), rent, CatRent, "商铺租金")
 				addIncome(rent, "rent", "商铺租金 "+DistrictCN(a.AssetDistrict()), true)
+				p.tagIncome(MoneyTagInvestment, rent)
 			}
 		case a.Kind == AssetBond:
 			interest := int64(a.Units * a.AssetRate() / 12)
 			if interest > 0 {
 				w.Pay(seat, EntityMarket, SeatEntity(seat), interest, CatBondInterest, "债券利息")
+				p.tagIncome(MoneyTagInvestment, interest)
 				addIncome(interest, "bond_interest", "债券利息", true)
 			}
 		}
@@ -449,6 +475,7 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 		pension := int64(float64(p.PensionCNY) * 0.04 / 12)
 		if pension > 0 {
 			w.Pay(seat, EntityGov, SeatEntity(seat), pension, CatPension, "养老金")
+			p.tagIncome(MoneyTagSalary, pension)
 			addIncome(pension, "pension", "养老金", true)
 		}
 	}
@@ -642,6 +669,17 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 		p.Energy++
 	}
 
+	// 批次62 行为金融月结(延期支付到期 / 储蓄纪律奖励 / 锚点刷新 / 计数器复位)。
+	// 放在 MonthlyResult 之前,使行为收支并入本月收支口径。
+	if bInc, bExp, bNote := w.settleBehaviorMonth(p, income-expense); true {
+		if bInc > 0 {
+			addIncome(bInc, "behavior_bonus", bNote, false)
+		}
+		if bExp > 0 {
+			addExpense(bExp, "behavior_defer", bNote)
+		}
+	}
+
 	p.Monthly = MonthlyResult{
 		Income: income, Expense: expense, Net: income - expense,
 		Tax: tax, Social: social, PassiveIncome: passive, SideIncome: side,
@@ -795,6 +833,10 @@ func (w *World) AnnualAdjust() {
 		p.OnTimeStreak = 0 // 年度滚动
 		// P1-4(§财商流P1-4 §4.3): 年结保费重定价(年龄档上浮 + CPI 累积上浮)。
 		w.RepricePolicies(p)
+		// 批次62 §3.3.3:年度延迟满足评分(指数 ≥0.6 ⇒ 认知 +1;≤0.3 ⇒ 复盘重点)。
+		if note := w.annualBehaviorAdjust(p); note != "" {
+			w.emitEvent("settle", seat, fmt.Sprintf("%d 号位年度行为结算:%s", seat, note))
+		}
 		w.emitEvent("settle", seat, fmt.Sprintf("%d 号位年度调整:工资 %+d%%", seat, int(g*100)))
 	}
 
@@ -955,9 +997,11 @@ func (w *World) finalReport(p *Player, netWorth int64, fi float64) string {
 		}
 	}
 	return fmt.Sprintf("%s(%s)的 35 年:终局净资产 ¥%d(FI %.2f),峰值 ¥%d / 谷底 ¥%d;"+
-		"最大单笔买入 ¥%d、最大单笔变现 ¥%d;累计捐赠 ¥%d。%s",
+		"最大单笔买入 ¥%d、最大单笔变现 ¥%d;累计捐赠 ¥%d。%s%s",
 		p.Card.Title, p.Card.ID, netWorth, fi, peak, trough, maxGain, maxLoss, p.DonationTotalCNY,
-		familySupportRatioNote(p))
+		familySupportRatioNote(p),
+		// 批次62 §4.4.1:认知跨局继承 —— 本局认知的 30% 带入下一局(向下取整)。
+		fmt.Sprintf("认知 %d(其中 %d 点可带入下一局)。", p.Cognition, p.cognitionCarryOver()))
 }
 
 func clamp(v, lo, hi int) int {

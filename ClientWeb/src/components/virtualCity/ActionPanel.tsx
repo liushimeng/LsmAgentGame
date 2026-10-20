@@ -828,6 +828,12 @@ export function ActionPanel({ roomId, gameState, mySeat, sendAction, onTradeTab 
         </div>
       </div>
 
+      {/* 批次 63 L4：动作按钮组组首小标签 + 分隔线（消费档位组有
+          __consumption__label、交易组有 __trade-label，动作组此前无标签
+          ⇒ 用户面对两排按钮不知道区别）。 */}
+      <div className="virtualCity-actionbar__actions-head">
+        <span className="virtualCity-actionbar__actions-label">⚡ 动作</span>
+      </div>
       <div className="virtualCity-actionbar__buttons">
         {WEALTH_ACTIONS.filter((meta) => meta.form !== 'consumption_level').map((meta) => {
           const disabled = actionsDisabled || stopped ||

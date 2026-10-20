@@ -17,22 +17,31 @@
 import {
   buildRoadNetwork,
   pointSegDist,
-  FIRST_RING_RADIUS,
-  FIRST_RING_WIDTH,
   type RoadNetwork,
 } from './roadNetwork';
 import { VIRTUAL_CITY_DISTRICTS } from '@/types/virtualCity';
 import { LANDMARK_FIELDS } from './cityLandmarks';
+import { CANAL_STREET_Z, CANAL_HALF_WIDTH } from './cityGrid';
 import { ROAD_WIDTH_MAIN, ROAD_WIDTH_SIDE } from './cityScale';
 
 // ── 水域常量（唯一事实来源；原 VirtualCityCityMap::WaterLayer 持有）──────────
 
-/** 运河中心 z（东西走向直线 z=CANAL_Z）。 */
-export const CANAL_Z = 17;
-/** 运河 x 半跨（水面横贯 x ∈ [-CANAL_HALF_X, CANAL_HALF_X]）。 */
-export const CANAL_HALF_X = 48;
-/** 运河半宽（河宽 3u ⇒ z ∈ [CANAL_Z-1.5, CANAL_Z+1.5]）。 */
-export const CANAL_HALF_WIDTH = 1.5;
+/**
+ * 运河中心 z（东西走向直线 z=CANAL_Z）。
+ *
+ * 批次 61：17 → **18**。理由：`z=18` 恰是方格网的一条东西向街道线，也是街区行 12
+ * （z∈[8,16]）与行 24（z∈[20,28]）之间 4u 空隙的中线 ⇒ 运河带 [16.5, 19.5]
+ * **不切任何街区**；该行**不生成街道**，南北向街道在此架桥通过（设计文档 §2.3）。
+ */
+export const CANAL_Z = CANAL_STREET_Z;
+/** 运河 x 半跨（水面横贯 x ∈ [-CANAL_HALF_X, CANAL_HALF_X]）。批次 61：48 → 46。 */
+export const CANAL_HALF_X = 46;
+/**
+ * 运河半宽（河宽 3u）。**唯一事实来源在 `cityGrid.ts`**（批次 61）——
+ * `roadNetwork.ts` 需在运河处把南北向街道拆成两段，而本模块依赖 roadNetwork
+ * ⇒ 常量下沉到 leaf 模块 `cityGrid.ts`，此处仅 re-export（§130 防双写漂移）。
+ */
+export { CANAL_HALF_WIDTH };
 
 /** 运河（轴对齐矩形水域）。 */
 export const CANAL_WATER: WaterBody = {
@@ -42,12 +51,16 @@ export const CANAL_WATER: WaterBody = {
   maxZ: CANAL_Z + CANAL_HALF_WIDTH,
 };
 
-/** 物流港港池（6×8，中心 (-30,-4)；WaterLayer 同源）。 */
+/**
+ * 物流港港池（批次 61：移到方格网西侧外沿，7×15，中心 (-46.5,-1.5)）。
+ * 东缘 -43 在外沿街道 x=-42（路缘 -42.7）**以西** ⇒ 港池不压街道；
+ * 物流港码头陆侧用地（`cityLandmarks.PORT_TERMINAL_AREA`）落在街区 (-36,0) 内。
+ */
 export const PORT_POOL_WATER: WaterBody = {
-  minX: -33,
-  maxX: -27,
-  minZ: -8,
-  maxZ: 0,
+  minX: -50,
+  maxX: -43,
+  minZ: -9,
+  maxZ: 6,
 };
 
 /** 全部水域（布点 keep-out 与桥位过滤共用）。 */
@@ -99,22 +112,10 @@ export interface WaterBody {
   maxZ: number;
 }
 
-/** 一环带域（环形廊道）—— 一环路是圆，不能用线段表达。 */
-export interface RingCorridor {
-  radius: number;
-  halfWidth: number;
-}
-
 // ── 廊道几何 ─────────────────────────────────────────────────────────────
 
 /** 人行道每侧宽（RoadMarkings.SIDEWALK_WIDTH 同值；keep-out 计入路廊半宽）。 */
 const SIDEWALK_W = 0.25;
-
-/** 一环带域（r=20 圆环；半宽含人行道）。 */
-export const FIRST_RING_CORRIDOR: RingCorridor = {
-  radius: FIRST_RING_RADIUS,
-  halfWidth: FIRST_RING_WIDTH / 2 + SIDEWALK_W,
-};
 
 /**
  * 由 RoadNetwork 生成全部道路廊道（确定性：按 segments 表序）。
@@ -153,12 +154,6 @@ export function onRoadCorridor(x: number, z: number, margin = 0, corridors?: rea
   return false;
 }
 
-/** 点是否落入一环带域 |dist(point,0) − radius| < halfWidth + margin。 */
-export function onFirstRing(x: number, z: number, margin = 0): boolean {
-  const d = Math.sqrt(x * x + z * z);
-  return Math.abs(d - FIRST_RING_CORRIDOR.radius) < FIRST_RING_CORRIDOR.halfWidth + margin;
-}
-
 /** 点是否落入任一**地面保留地**（水域 + 体育场等场馆；含 margin 外扩）。 */
 export function inReservedField(x: number, z: number, margin = 0): boolean {
   for (const w of RESERVED_FIELDS) {
@@ -171,7 +166,9 @@ export function inReservedField(x: number, z: number, margin = 0): boolean {
 
 /**
  * 综合判定：该点可否放置「地面实体」（建筑 / 树 / 灯 / 桶）。
- * = !inWater && !inReservedField && !onRoadCorridor && !onFirstRing
+ * = !inWater && !inReservedField && !onRoadCorridor
+ *
+ * 批次 61：一环路（r=20 圆环）与 CBD 环路已随方格网一并删除 ⇒ 少一重净空判定。
  */
 export function isBuildable(
   x: number,
@@ -181,8 +178,7 @@ export function isBuildable(
 ): boolean {
   return !inWater(x, z, margin)
     && !inReservedField(x, z, margin)
-    && !onRoadCorridor(x, z, margin, corridors)
-    && !onFirstRing(x, z, margin);
+    && !onRoadCorridor(x, z, margin, corridors);
 }
 
 /**
@@ -309,11 +305,12 @@ export function roadCorridors(): readonly RoadCorridor[] {
 }
 
 /**
- * 仅 main 级路廊（arterial / edgeLink；不含 connector）。
- * 建筑退让用：connector 走街区**庭院**（区心↔区心），街墙楼在底板边缘
- * （中心距 2.85、进深 ≤1.6）与之天然不重叠；若把 connector 也纳入
- * 「中心点 + 外接圆」保守判定，会把全区楼误杀（批次 38 实测 14/32 区 <4 栋）。
- * 一环 / 水域 keep-out 不受影响（onFirstRing / inWater 独立判定）。
+ * 仅 main 级路廊（主干道 / 外环快速路；不含次干道）。
+ *
+ * 建筑退让用：方格网下**全部街道都在街区之外**（街区中心到街道中心线恒为 6u，
+ * 街区半宽 4 + 路廊半宽 0.7 = 4.7 ⇒ 余量 1.3u），建筑与路廊天然不重叠；
+ * 但保守起见仍按「main 级」判定（次干道路廊半宽更小，纳入反而更严）。
+ * 水域 keep-out 不受影响（inWater 独立判定）。
  */
 export function mainRoadCorridors(): readonly RoadCorridor[] {
   return ensureCorridors().filter((c) => c.kind === 'main');

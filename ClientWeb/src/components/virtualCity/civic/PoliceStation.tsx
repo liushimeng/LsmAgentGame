@@ -40,7 +40,7 @@ export function PoliceStation() {
         <Model
           url={url}
           sizeTarget={POLICE_SIZE_TARGET}
-          position={[-5.8, 0, -8.5]}
+          position={[-36, 0, 12]}
           castShadow
           receiveShadow
         >
@@ -52,7 +52,7 @@ export function PoliceStation() {
           站局部坐标系与 fallback 同源（外层 group position=[-5.8,0,-8.5]）。
           from===to、speed=0：组件内 len 兜底 1、角度 0，静态摆放不占路网车流；
           无 GLB 分支同样渲染（Vehicle 自行走几何/sprite fallback 简版，可接受）。 */}
-      <group position={[-5.8, 0, -8.5]}>
+      <group position={[-36, 0, 12]}>
         <Vehicle from={[u(4), u(4.5)]} to={[u(4), u(4.5)]} variant="sedan" glbName="sedan_silver" speed={0} />
         {/* 车顶蓝白灯条（材质名约定 'Beacon'，供未来 GLB 化后接入批次 41 B2 昼夜调制）：
             0.10 长 × 0.03 高 × 0.025 厚 u，长轴沿车宽 Z；y = 车顶 0.165u + 半高 0.015。 */}
@@ -68,7 +68,7 @@ export function PoliceStation() {
 /** 程序化几何 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。 */
 function PoliceStationFallback() {
   return (
-    <group position={[-5.8, 0, -8.5]}>
+    <group position={[-36, 0, 12]}>
       {/* 主屋：占地 = 表值轮廓（腰线外挑 2×0.05），高 = 表值总高 6.6 m */}
       <mesh position={[0, POLICE.y / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[POLICE.x - BELT_EAVE * 2, POLICE.y, POLICE.z]} />

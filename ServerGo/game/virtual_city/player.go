@@ -246,6 +246,57 @@ type Player struct {
 	MinskyByLoan          map[string]*MinskyStatus // loanID -> 分级
 	MinskyMomentTriggered bool                     // 本回合明斯基时刻是否已触发(用于 UI 高亮)
 
+	// ── 批次62 行为金融偏差引擎(《行为金融与投资心理机制设计》§3/§4)──
+	// BiasProfile 本局偏差画像(2~3 个 code;开局按 seat 确定性采样,整局稳定)。
+	BiasProfile []string
+	// ResolvedBiases 已被"主动反思"解除的偏差 code(§4.3;解除后不再参与 hook)。
+	ResolvedBiases map[string]bool
+	// BiasImmunity 每类偏差的免疫进度 0~1(§4.4.2;≥0.80 ⇒ 该偏差本回合不生效)。
+	BiasImmunity map[string]float64
+	// BiasImmuneThisTurn 本回合免疫(深度反思,§4.3)。
+	BiasImmuneThisTurn bool
+	// BiasPreviewNextTurn 下一回合偏差一律视为"通过"(复盘预习,§4.3)。
+	BiasPreviewNextTurn bool
+	// BiasPreviewNextTurnMonth 设置"复盘预习"的月份(用于到期清理:设置月的
+	// 月结不清理,下一月的月结才清理 —— 预习作用覆盖的是**下一个**行动回合)。
+	BiasPreviewNextTurnMonth int
+	// ReflectCountThisMonth 本月反思次数(每回合最多 1 次,§4.3)。
+	ReflectCountThisMonth int
+	// LastReflect 最近一次反思模式(none|light|deep|preview)。
+	LastReflect string
+	// DeferredPayments 延期支付明细(§3.3.1;本月免付,3 个月后 ×1.3)。
+	DeferredPayments []DeferredPayment
+	// DelayedConsumeCount / ImmediateConsumeCount 延迟/即时消费次数(§3.3.3 延迟满足指数)。
+	DelayedConsumeCount   int
+	ImmediateConsumeCount int
+	// DeferredDefaultCount 延期支付违约次数(现金不足扣到 0)。
+	DeferredDefaultCount int
+	// MentalAccount 心理账户资金来源标签累计金额(§3.2.1;不影响购买力)。
+	MentalAccount map[string]int64
+	// MentalAccountMerged 是否已"合并账户"(合并后心理账户放大效果消失,§3.2.3)。
+	MentalAccountMerged bool
+	// AnchorSamples 锚定样本(滚动窗口;§3.1.4 锚定指数)。
+	AnchorSamples []AnchorSample
+	// AnchorMarks 资产 → 上月末观测价(买入时的"决策价"来源;§3.1)。
+	AnchorMarks map[string]float64
+	// HerdFollowCount / HerdCounterCount / HerdNeutralCount 羊群指数计数(§3.4.4)。
+	HerdFollowCount  int
+	HerdCounterCount int
+	HerdNeutralCount int
+	// HerdCounterMovesThisMonth 本月逆势操作次数(逆势奖励判定,§3.4.3)。
+	HerdCounterMovesThisMonth int
+	// SavingsStreakMonths 连续正储蓄月数(储蓄纪律奖励,§3.3.2)。
+	SavingsStreakMonths int
+	// LastMonthSurplusCNY 上月月结余(储蓄纪律奖励的计奖基数,§3.3.2)。
+	LastMonthSurplusCNY int64
+	// DelayedPayIndex 年度延迟满足指数(§3.3.3)。
+	DelayedPayIndex float64
+	// LastConsecutiveLossCount 连续投资亏损次数(赌徒谬误触发条件,§1 表第 10 项)。
+	LastConsecutiveLossCount int
+	// LastFinancialAssetValue 上月末金融类资产(股/债/金)市值 —— 投资表现的
+	// 跨月比较基准(批次62;不含现金 ⇒ 不受收支影响,纯价格损益)。
+	LastFinancialAssetValue int64
+
 	// P1: 真实经济循环(2026-09-16 §财商流P1-2 契约 §3.1)。
 	ConsumptionLevel   int                // 0 节俭/1 标准/2 精致/3 奢侈;默认 1(newPlayerFromCard 显式置 1)
 	ConsumptionByGoods map[string]float64 // 上月消费结构(元,id→金额;nil=未初始化,视为档位 1)

@@ -115,18 +115,16 @@ import { TrafficSignals } from './props/TrafficSignals';
 import { PedestrianSignals } from './props/PedestrianSignals';
 import { MastArmSignals } from './props/MastArmSignals';
 import { RoadsideBins } from './props/RoadsideBins';
-import { HighwayGates } from './props/HighwayGates';
 import { WaterPlane } from './props/WaterPlane';
 import { WaterMist } from './props/WaterMist';
 import { AtmosphereLayer } from './AtmosphereLayer';
 import { CityEdgeLayer } from './edge/CityEdgeLayer';
-import { RingRoad } from './RingRoad';
-import { FirstRingRoad } from './FirstRingRoad';
 import { RoadMarkings } from './RoadMarkings';
 import { buildRoadNetwork } from './roadNetwork';
 import { CANAL_Z, CANAL_HALF_X, installRoadCorridors } from './cityObstacles';
 import { CanalBridges } from './CanalBridge';
 import { LandmarksLayer } from './LandmarksLayer';
+import { UrbanFillLayer } from './UrbanFillLayer';
 import { CloudLayer } from './props/CloudLayer';
 import { CivicLayer } from './CivicLayer';
 import { PerfHud } from './PerfHud';
@@ -266,10 +264,13 @@ function Ground() {
 }
 
 /**
- * 道路层：批次 31「混合式路网」（三轮：CBD 放射路已删）——邻接次干道 +
- * 方格骨干 + 高速联络线（ROAD_NETWORK 单一事实来源，模块级一次性计算），
- * 另挂 CBD 环路（RingRoad）、一环路（FirstRingRoad r=20）与高速收费站（HighwayGates）。
- * 主干道 vs 次干道按 kind 字段（批次 20 §3.2 派生阈值在 buildRoadNetwork 内应用）。
+ * 道路层：批次 61「全城连续正交方格路网」——**方格网**（8 条南北向 + 7 条东西向
+ * 街道，每条一条整长线段；ROAD_NETWORK 单一事实来源，模块级一次性计算）。
+ *
+ * 批次 61 删除：CBD 环路（RingRoad）、一环路（FirstRingRoad r=20）、高速联络线
+ * （edgeLink 径向斜线）与高速收费站（HighwayGates）—— 前三者与方格网互斥或制造斜向，
+ * 环城高速（r=58，城外）改由外沿街道 `x=±42` / `z=±42` 的 8 处正交交叉自然形成互通。
+ * 主干道 vs 次干道按 kind 字段（'main' = 主干道 / 外环快速路；'side' = 次干道）。
  */
 const ROAD_NETWORK = buildRoadNetwork(VIRTUAL_CITY_DISTRICTS, MAIN_ROAD_MIN_LEN);
 // 批次 38 §4.1：路廊表注入 cityObstacles（建筑/街具/桥 keep-out 唯一入口）
@@ -281,17 +282,13 @@ function RoadsLayer() {
     const lampList = ROAD_NETWORK.segments.flatMap((r) =>
       lampsForRoad(r.from, r.to, r.kind),
     );
-    // 批次 24：红绿灯（双端 + 环岛对角，A/B 相位组）+ 批次 31 一环路口；
-    // 路侧垃圾桶布点汇总，交 <TrafficSignals> / <RoadsideBins> 全局实例化渲染。
-    const signalList = trafficSignalsForCity(
-      ROAD_NETWORK.firstRingJunctionAngles,
-      ROAD_NETWORK.arterialIntersections,
-    );
+    // 批次 61：红绿灯改由**方格交叉口**驱动（主次干道相交处布灯，次干道 × 次干道不布）。
+    const signalList = trafficSignalsForCity(ROAD_NETWORK.junctions);
     // 批次 43 C1：行人信号灯以机动车灯为锚并立（灯面反向，正对过街行人），
     // 相位由 PedestrianSignals 内部取机动车相位反色 ⇒ 两端永不同时放行。
     const pedSignalList = pedestrianSignalsForCity(signalList);
-    // 批次 43 C3：悬臂式信号灯只布宽路口（方格骨干互交点），横臂伸过路口上空。
-    const mastArmList = mastArmSignalsForCity(ROAD_NETWORK.arterialIntersections, signalList);
+    // 批次 43 C3 / 61：悬臂式信号灯只布**宽路口**（两侧皆主干道/快速路），横臂伸过路口上空。
+    const mastArmList = mastArmSignalsForCity(ROAD_NETWORK.junctions, signalList);
     const binList = roadsideBinsForNetwork(
       ROAD_NETWORK.segments,
       busStopsForNetwork(ROAD_NETWORK.segments),
@@ -316,12 +313,8 @@ function RoadsLayer() {
           yOffset={r.yOffset}
         />
       ))}
-      {/* 批次 31：一环路（r=20 主路环 + 放射主路交点停止线，段合并 3 mesh） */}
-      <FirstRingRoad junctionAngles={ROAD_NETWORK.firstRingJunctionAngles} />
       {/* 批次 31：全路网标线/人行道合并层（5 draw call，见 RoadMarkings） */}
-      <RoadMarkings segments={ROAD_NETWORK.segments} />
-      {/* 批次 31：高速联络线收费站（17 座龙门架 + 双亭，实例化 ≈5 draw call） */}
-      <HighwayGates gates={ROAD_NETWORK.gates} />
+      <RoadMarkings segments={ROAD_NETWORK.segments} junctions={ROAD_NETWORK.junctions} />
       <StreetLightsInstanced lamps={lamps} />
       {/* 批次 24：全城红绿灯（≈6 draw call，16s 相位：绿 6/黄 2/红 8，A/B 组错半周期） */}
       <TrafficSignals signals={signals} />
@@ -342,10 +335,10 @@ export { CANAL_Z, CANAL_HALF_X };
  * 水系层（14-3D城市渲染深化 · 阶段 I + 15-3D城市全面真实感深化 · 阶段 P）：
  *   - 城市运河 + 物流港港池 + 两岸草皮收边（14 阶段 I）
  *   - 水面岸雾 WaterMist（15 阶段 P）：沿运河/港池两岸各加半透明雾 plane
- * 位置契约 01 文档 §3.1：运河 z=+17（滨河新区 riverside(14,10) 与教育/医疗城 z=22 之间），
- * 港池 (-30,-4) 物流港西侧。贴图缺失降级纯色水面（WaterPlane 内处理）。
- * 批次 20（文档 1 §3.4）：运河 x 半跨 32 → 48（东延入 software_park/airport_town 之间空隙；
- * 与 fin_sub/sports/bay/university 底板 z≥22 不交，CanalBridge 常量同源 import）。
+ * 位置契约（批次 61 方格网）：运河 z=+18（街区行 12 与行 24 之间的 4u 空隙中线，
+ * 恰在方格网的一条东西向街道线上，该行不生成街道），x 半跨 46；
+ * 港池 x∈[-50,-43]、z∈[-9,6]（方格网西侧外沿，物流港 (-36,0) 街区正西）。
+ * 贴图缺失降级纯色水面（WaterPlane 内处理）。
  */
 function WaterLayer() {
   const bankTex = useSharedTexture(streetTileUrl('sidewalk_side'), {
@@ -355,12 +348,17 @@ function WaterLayer() {
   const canalLen = CANAL_HALF_X * 2;
   // 批次 28 B2：两岸草皮收边并入 water.canal 语义（运河岸线的一部分）。
   const bankInfo = useObjectInfoProps('water.canal', { anchorY: 0.3 });
+  // 港池（cityObstacles.PORT_POOL_WATER 同源；此处只消费不重定义）
+  const poolW = 7;
+  const poolD = 15;
+  const poolX = -46.5;
+  const poolZ = -1.5;
   return (
     <>
-      {/* 城市运河（96×3，横贯 x ∈ [-48, 48]；批次 20 东延） */}
+      {/* 城市运河（92×3，横贯 x ∈ [-46, 46]） */}
       <WaterPlane x={0} z={CANAL_Z} w={canalLen} d={3} />
-      {/* 物流港港池（6×8） */}
-      <WaterPlane x={-30} z={-4} w={6} d={8} infoId="water.harbour" />
+      {/* 物流港港池（7×15，方格网西侧外沿） */}
+      <WaterPlane x={poolX} z={poolZ} w={poolW} d={poolD} infoId="water.harbour" />
       {/* 两岸草皮收边（窄条，色 #3f7a3a 与中央公园草地呼应） */}
       {[-1, 1].map((side) => (
         <mesh
@@ -382,10 +380,10 @@ function WaterLayer() {
       <WaterMist x={0} z={CANAL_Z + 2.35} w={canalLen} d={1.5} opacity={0.18} />
       <WaterMist x={0} z={CANAL_Z - 2.35} w={canalLen} d={1.5} opacity={0.18} />
       {/* 港池四周薄雾 */}
-      <WaterMist x={-30 + 3.85} z={-4} w={1.5} d={8} opacity={0.15} />
-      <WaterMist x={-30 - 3.85} z={-4} w={1.5} d={8} opacity={0.15} />
-      <WaterMist x={-30} z={-4 + 4.85} w={6} d={1.5} opacity={0.15} />
-      <WaterMist x={-30} z={-4 - 4.85} w={6} d={1.5} opacity={0.15} />
+      <WaterMist x={poolX + poolW / 2 + 0.85} z={poolZ} w={1.5} d={poolD} opacity={0.15} />
+      <WaterMist x={poolX - poolW / 2 - 0.85} z={poolZ} w={1.5} d={poolD} opacity={0.15} />
+      <WaterMist x={poolX} z={poolZ + poolD / 2 + 0.85} w={poolW} d={1.5} opacity={0.15} />
+      <WaterMist x={poolX} z={poolZ - poolD / 2 - 0.85} w={poolW} d={1.5} opacity={0.15} />
     </>
   );
 }
@@ -538,11 +536,15 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
             onSelect={onSelectDistrict}
           />
         ))}
-        {/* P1-A：单 plane → 分层 <Road /> 道路（含路灯阵列）；16 · 阶段 S：CBD 环形路 + 运河跨河桥 */}
+        {/* P1-A：单 plane → 分层 <Road /> 道路（含路灯阵列）；批次 61：方格网 + 运河跨河桥 */}
         <group userData={{ bucket: 'roads' }}>
           <RoadsLayer />
-          <RingRoad junctionAngles={ROAD_NETWORK.cbdRingJunctionAngles} />
           <CanalBridges net={ROAD_NETWORK} />
+        </group>
+        {/* 批次 61：空街区单元填充城市功能用地（绿地 / 停车场 / 市政设施）——
+            避免方格化后出现「大片空地」，同时给搬迁后的市政设施留位 */}
+        <group userData={{ bucket: 'urban-fill' }}>
+          <UrbanFillLayer />
         </group>
         {/* P1-C：街道道具层（树 / 车辆 / 行人 / 标识 / 屋顶杂物）；
             v2.12 阶段 2：districts 由父层注入（props 化，适配 16 城区） */}

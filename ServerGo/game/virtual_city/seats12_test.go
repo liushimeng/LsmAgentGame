@@ -205,27 +205,33 @@ func TestSeats12_DistrictsEightUnchanged(t *testing.T) {
 // 《虚拟城市-批次20-32城区地图扩展与渲染性能-设计v1.md》§2 表。
 // 补齐批次 11 §7 欠账:扩展区此前无逐字守卫,本测试之后任何改写表序/改值
 // 都会在这里失败(四方 grep 逐字一致纪律的测试侧执行)。
+//
+// ⚠ **批次 61(2026-10-20)坐标改版**:本表的 X/Z 已按「全城连续正交方格路网」
+// 更新为 12 的整数倍(= 街区中心),这是**契约的显式修订**(不是绕过守卫):
+// 旧坐标是散点,导致全城不存在能连续贯穿的街道线(用户反馈「街道不连续、
+// 一块块还是斜向的」)。id/顺序/Beta/基准价/颜色**仍逐字冻结**。
+// 方格不变量另由 `districts_grid_test.go` 独立守护。
 func TestSeats12_DistrictsRingTwoFrozen(t *testing.T) {
 	if DistrictCount != len(DistrictDefs) || DistrictCount != 32 {
 		t.Fatalf("DistrictCount = %d, len(DistrictDefs) = %d, want 两者皆 32", DistrictCount, len(DistrictDefs))
 	}
 	wantRing2 := []DistrictDef{
-		{ID: "fin_sub_center", NameCN: "金融副中心", X: 24, Z: 30, Beta: 1.3, BasePriceWan: 650, Color: "#1e40af"},
-		{ID: "software_park", NameCN: "软件园", X: 38, Z: 14, Beta: 1.2, BasePriceWan: 520, Color: "#0d9488"},
-		{ID: "airport_town", NameCN: "空港小镇", X: 44, Z: -20, Beta: 1.05, BasePriceWan: 300, Color: "#0369a1"},
-		{ID: "air_logistics", NameCN: "航空物流园", X: 36, Z: -38, Beta: 0.95, BasePriceWan: 260, Color: "#334155"},
-		{ID: "auto_city", NameCN: "汽车城", X: 8, Z: -40, Beta: 1.0, BasePriceWan: 300, Color: "#a16207"},
-		{ID: "mountain_resort", NameCN: "山居民宿区", X: -8, Z: -44, Beta: 0.9, BasePriceWan: 180, Color: "#4d7c0f"},
-		{ID: "chem_park", NameCN: "化工园区", X: -20, Z: -44, Beta: 0.7, BasePriceWan: 130, Color: "#52525b"},
-		{ID: "agri_park", NameCN: "现代农业园", X: -40, Z: -36, Beta: 0.8, BasePriceWan: 160, Color: "#ca8a04"},
-		{ID: "health_town", NameCN: "康养小镇", X: -44, Z: -10, Beta: 0.8, BasePriceWan: 200, Color: "#fb7185"},
-		{ID: "steel_town", NameCN: "特钢镇", X: -46, Z: 2, Beta: 0.75, BasePriceWan: 150, Color: "#44403c"},
-		{ID: "old_city_culture", NameCN: "古城文化区", X: -44, Z: 22, Beta: 0.85, BasePriceWan: 240, Color: "#9a3412"},
-		{ID: "university_town", NameCN: "大学城", X: -32, Z: 34, Beta: 0.95, BasePriceWan: 300, Color: "#6366f1"},
-		{ID: "wetland_park", NameCN: "湿地公园", X: -12, Z: 40, Beta: 0.9, BasePriceWan: 280, Color: "#14b8a6"},
-		{ID: "sports_new_city", NameCN: "体育新城", X: 10, Z: 40, Beta: 1.05, BasePriceWan: 340, Color: "#facc15"},
-		{ID: "bay_new_town", NameCN: "湾区新城", X: 40, Z: 28, Beta: 1.25, BasePriceWan: 580, Color: "#7e22ce"},
-		{ID: "highspeed_rail_town", NameCN: "高铁新城", X: 46, Z: 2, Beta: 1.15, BasePriceWan: 380, Color: "#c2410c"},
+		{ID: "fin_sub_center", NameCN: "金融副中心", X: 24, Z: 24, Beta: 1.3, BasePriceWan: 650, Color: "#1e40af"},
+		{ID: "software_park", NameCN: "软件园", X: 36, Z: 12, Beta: 1.2, BasePriceWan: 520, Color: "#0d9488"},
+		{ID: "airport_town", NameCN: "空港小镇", X: 36, Z: -24, Beta: 1.05, BasePriceWan: 300, Color: "#0369a1"},
+		{ID: "air_logistics", NameCN: "航空物流园", X: 36, Z: -36, Beta: 0.95, BasePriceWan: 260, Color: "#334155"},
+		{ID: "auto_city", NameCN: "汽车城", X: 12, Z: -36, Beta: 1.0, BasePriceWan: 300, Color: "#a16207"},
+		{ID: "mountain_resort", NameCN: "山居民宿区", X: -12, Z: -36, Beta: 0.9, BasePriceWan: 180, Color: "#4d7c0f"},
+		{ID: "chem_park", NameCN: "化工园区", X: -24, Z: -36, Beta: 0.7, BasePriceWan: 130, Color: "#52525b"},
+		{ID: "agri_park", NameCN: "现代农业园", X: -36, Z: -36, Beta: 0.8, BasePriceWan: 160, Color: "#ca8a04"},
+		{ID: "health_town", NameCN: "康养小镇", X: -36, Z: -24, Beta: 0.8, BasePriceWan: 200, Color: "#fb7185"},
+		{ID: "steel_town", NameCN: "特钢镇", X: -36, Z: -12, Beta: 0.75, BasePriceWan: 150, Color: "#44403c"},
+		{ID: "old_city_culture", NameCN: "古城文化区", X: -36, Z: 24, Beta: 0.85, BasePriceWan: 240, Color: "#9a3412"},
+		{ID: "university_town", NameCN: "大学城", X: -36, Z: 36, Beta: 0.95, BasePriceWan: 300, Color: "#6366f1"},
+		{ID: "wetland_park", NameCN: "湿地公园", X: -12, Z: 36, Beta: 0.9, BasePriceWan: 280, Color: "#14b8a6"},
+		{ID: "sports_new_city", NameCN: "体育新城", X: 12, Z: 36, Beta: 1.05, BasePriceWan: 340, Color: "#facc15"},
+		{ID: "bay_new_town", NameCN: "湾区新城", X: 36, Z: 24, Beta: 1.25, BasePriceWan: 580, Color: "#7e22ce"},
+		{ID: "highspeed_rail_town", NameCN: "高铁新城", X: 36, Z: 0, Beta: 1.15, BasePriceWan: 380, Color: "#c2410c"},
 	}
 	// id 序列逐字冻结(契约 §2 表序)。
 	for i, want := range wantRing2 {

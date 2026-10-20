@@ -550,6 +550,43 @@ func (a *AgentRunner) UpgradeEducation(seat int, childIdx int) error {
 	})
 }
 
+// ── 批次62 §20261020-62:行为金融三工具 ──
+
+// QueryBehavior 查询本人行为画像(不耗动作预算;锁内读引擎,返回人读文本)。
+func (a *AgentRunner) QueryBehavior(seat int) (string, error) {
+	a.room.mu.Lock()
+	defer a.room.mu.Unlock()
+	if a.room.closed || a.room.Status != StatusPlaying || a.room.World == nil {
+		return "", errcode.Code(errcode.ErrVirtualCityNotPlaying)
+	}
+	p := a.room.World.Players[seat]
+	if p == nil {
+		return "", errcode.Code(errcode.ErrVirtualCityPlayerInactive)
+	}
+	return a.room.World.behaviorStatusText(p), nil
+}
+
+// Reflect 主动反思(耗 1 次动作预算;照 PaySupportExtra 的 apply 模式)。
+func (a *AgentRunner) Reflect(seat int, mode string) error {
+	return a.apply(seat, vcplayer.ToolBehavior, "", func() (string, error) {
+		return a.room.World.ApplyAction(seat, Action{Type: ActReflect, ReflectMode: mode})
+	})
+}
+
+// DeferPayment 延期支付(耗 1 次动作预算)。
+func (a *AgentRunner) DeferPayment(seat int, amountCNY int64, reason string) error {
+	return a.apply(seat, vcplayer.ToolBehavior, "", func() (string, error) {
+		return a.room.World.ApplyAction(seat, Action{Type: ActDeferPayment, AmountCNY: amountCNY, Reason: reason})
+	})
+}
+
+// MergeAccounts 合并心理账户(耗 1 次动作预算;§3.2.3)。
+func (a *AgentRunner) MergeAccounts(seat int) error {
+	return a.apply(seat, vcplayer.ToolBehavior, "", func() (string, error) {
+		return a.room.World.ApplyAction(seat, Action{Type: ActMergeAccounts})
+	})
+}
+
 func (a *AgentRunner) Speak(seat int, text, internalThought string) error {
 	// speak 走 chat sender,不耗动作预算。
 	a.room.mu.Lock()
@@ -1201,6 +1238,11 @@ func BuildContextForAgent(r *VirtualCityRoom, seat int) (*vctypes.GameContext, b
 		SideMarketBrief: sideMarketBriefLocked(r, seat),
 		ElectionBrief:   electionBriefLocked(r.World, seat),
 		MicroPriceBrief: microPriceBriefLocked(r.World, p),
+		// 批次62 §20261020-62:行为偏差 / 羊群 / 泡沫 / 流动性价差四小节。
+		BehaviorBrief:   behaviorBriefLocked(p),
+		HerdBrief:       herdBriefLocked(r.World),
+		BubbleBrief:     bubbleBriefLocked(r.World),
+		LiquidityBrief:  liquidityBriefLocked(r.World),
 		RoomID:          r.RoomID, GameKind: "virtual_city",
 		MySeat: seat, MyUserID: r.Seats[seat], ModelKey: r.SeatModelKeys[seat],
 		Month: month, Age: age, Phase: r.Phase,

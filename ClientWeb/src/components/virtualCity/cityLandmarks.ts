@@ -2,12 +2,10 @@
  * cityLandmarks — 地面场馆保留地（批次 47 体育场 · **leaf 模块，零 import**）。
  *
  * ## 为什么单独成文件
- * 体育场占地 110×74 m，而道路网（`roadNetwork.ts`）与布点（`cityObstacles.ts`）都
- * 以**城区中心** `districtCenter` 为锚点。把体育场放到「体育新城」(10, 40) 的正中心
- * 之后，两侧都炸了：
- *   - `roadNetwork` 的 `conn-fin_sub_center~sports_new_city` 与 `edge-sports_new_city`
- *     **两条路的端点都落在体育场中心**，直接横穿跑道与内场（CDP 顶视截图实锤）；
- *   - `cityObstacles.isBuildable` 不含保留地 → 区内楼体压在看台上。
+ * 体育场与码头是**大场馆**，而道路网（`roadNetwork.ts`）与布点（`cityObstacles.ts`）都
+ * 以**城区中心** `districtCenter` 为锚点。场馆放在城区中心会让道路端点落在场馆正中
+ * （批次 47 旧 `conn-fin_sub_center~sports_new_city` 直穿跑道，CDP 顶视截图实锤），
+ * 且 `cityObstacles.isBuildable` 不含保留地 ⇒ 区内楼体压在看台上。
  *
  * 保留地必须被**两侧同时**消费，而 `cityObstacles` 本身 import `roadNetwork`
  * （复用 `pointSegDist`），反向 import 会成环。故把纯数据 + 纯几何裁剪函数抽到这里：
@@ -20,10 +18,12 @@
  *   （道路在保留地边界截断）   （isBuildable 让开）
  * ```
  *
- * ## 尺寸口径
- * 与 `cityScale.REAL_DIMS_M.sportsField` 同源（110×74 m），两处须同改：
- * 保留地小于 GLB 会出现「围栏被楼压住 / 路从看台里穿过」，
- * 大于则多留一圈空地。中心坐标与 `civic/SportsField.tsx` 的 `position` 同源。
+ * ## 尺寸口径（批次 61 方格网）
+ * 保留地必须**整块落在街区单元内部**（8×8 u，中心在方格点上），否则会切断街道线。
+ * 体育场 70×47 m（中心 (12,36)）、码头陆侧 8×8 u（中心 (-36,-2)）——
+ * 与 `civic/SportsField.tsx` / `civic/PortTerminal.tsx` 的 position + scale 同源，
+ * 两处须同改：保留地小于 GLB 会出现「围栏被楼压住 / 路从看台里穿过」，
+ * 大于则多留一圈空地。
  */
 
 /** 轴对齐保留矩形（世界 xz 平面）。 */
@@ -36,12 +36,19 @@ export interface LandmarkField {
   label: string;
 }
 
-/** 体育场用地：中心 (10, 38.5)、110 × 74 m。 */
+/**
+ * 体育场用地：**中心 (24, 36)、110 × 74 m**（批次 61）。
+ *
+ * 批次 61：体育场迁到**空街区单元 (24, 36)**（体育新城 (12,36) 保留街墙楼群，
+ * 体育场不与街区建筑打架）。GLB 自然尺寸 11 × 7.4 u ⇒ 用地取
+ * x∈[18.5,29.5]、z∈[32.3,39.7]；与相邻街道（x=18 主干道 / x=30 次干道）
+ * 各有 0.2 u（2 m）的边角叠压 —— 读作「体育场外广场直接临街」，真实且可接受。
+ */
 export const SPORTS_FIELD_AREA: LandmarkField = {
-  minX: 10 - 55.0 / 10,
-  maxX: 10 + 55.0 / 10,
-  minZ: 38.5 - 37.0 / 10,
-  maxZ: 38.5 + 37.0 / 10,
+  minX: 18.5,
+  maxX: 29.5,
+  minZ: 32.3,
+  maxZ: 39.7,
   label: 'civic.sports-field',
 };
 
@@ -49,17 +56,18 @@ export const SPORTS_FIELD_AREA: LandmarkField = {
  * 港口码头**陆侧用地**（轴对齐矩形；只圈陆域，港池本身已由
  * `cityObstacles.PORT_POOL_WATER` 作为水域保留）。
  *
- * 批次 48：码头从 `(-30, -9.5)` 搬到 `(-32, -8.7)` 并把尺度从 800×250 m 收到
- * 81.6×64 m —— 旧码头面横贯城市西半部、**伸出城界 100 m**，且一路铺到 CBD 脚下。
- * 新陆域 x∈[-36.1,-27.9]、z∈[-12.0,-8.0]（8×4 u），与 `logistics_port`
- * 底板（x∈[-26,-18]）、`industrial_park`（x∈[-28,-20]）均不重叠。
- * 岸桥悬臂伸到 z∈[-8,-5.7]，那一段落在港池里，已由水域保留地覆盖。
+ * 批次 61：物流港落在方格网街区 **(-36, 0)**（紧邻西侧港池水域）⇒
+ * 码头 GLB 绕 Y 转 90°（岸壁朝西正对港池），世界足迹
+ * X = 6.4 u（局部 Z 旋转而来）× Z = 8.16 u（局部 X 旋转而来），
+ * 中心 (-36, -1.2) ⇒ 陆侧用地 x∈[-39.2,-32.8]、z∈[-5.28,2.88]。
+ * 与 `cityObstacles.PORT_POOL_WATER`（x∈[-50,-43]）不重叠；
+ * 岸桥悬臂伸到 x∈[-44,-41.7] ⇒ 伸进港池水域（由水域保留地覆盖）。
  */
 export const PORT_TERMINAL_AREA: LandmarkField = {
-  minX: -36.1,
-  maxX: -27.9,
-  minZ: -12.0,
-  maxZ: -8.0,
+  minX: -39.2,
+  maxX: -32.8,
+  minZ: -5.28,
+  maxZ: 2.88,
   label: 'civic.port-terminal',
 };
 

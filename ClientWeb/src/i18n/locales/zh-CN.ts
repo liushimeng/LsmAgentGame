@@ -7,6 +7,8 @@ import virtualCityLinePool from './virtualCityLinePool-zh';
 import virtualCityCityClock from './virtualCityCityClock-zh';
 import virtualCityTimeWeather from './virtualCityTimeWeather-zh';
 import virtualCityFamily from './virtualCityFamily-zh';
+import virtualCityDashboard from './virtualCityDashboard-zh';
+import virtualCityBehavior from './virtualCityBehavior-zh';
 
 // 中文 (默认) — zh-CN
 const zhCN: Dict = {
@@ -1731,7 +1733,7 @@ const zhCN: Dict = {
 
 
   // ── virtualCity 拆分文件（≤1800 行约束）：P2 交易 / P1-4 保险 / 居民档案 / 批次20 / 线路池 ──
-  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily,
+  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily, ...virtualCityDashboard, ...virtualCityBehavior,
 
   // ── P1 明斯基引擎 + LPR 重定价 + 提前还款 ──
   'minsky.title': '明斯基融资状态',
@@ -1768,33 +1770,6 @@ const zhCN: Dict = {
   'earlyrepay.partialAmount': '部分还款金额',
   'earlyrepay.dangerTitle': '危险操作确认',
   'earlyrepay.dangerBody': '即将一次性支付 ¥{amount} 结清房贷，此操作不可撤销。',
-  // ── P2 v2 财富流动可视化(2026-09-19 §P2-可视化 §13.4) ──
-  'virtualCity.dashboard.structure': '财富结构',
-  'virtualCity.dashboard.lorenz.title': '洛伦兹曲线',
-  'virtualCity.dashboard.lorenz.myPos': '我的位置',
-  'virtualCity.dashboard.lorenz.myRank': '我排第 {rank}/{total}',
-  'virtualCity.dashboard.lorenz.equalLine': '完全平等线',
-  'virtualCity.dashboard.lorenz.lorenzCurve': '实际分配曲线',
-  'virtualCity.dashboard.lorenz.giniBadge': 'Gini = {value}',
-  'virtualCity.dashboard.lorenz.empty': '财富数据尚未就绪',
-  'virtualCity.dashboard.pyramid.title': '财富金字塔',
-  'virtualCity.dashboard.pyramid.survival': '生存圈',
-  'virtualCity.dashboard.pyramid.accumulation': '积累圈',
-  'virtualCity.dashboard.pyramid.freedom': '自由圈',
-  'virtualCity.dashboard.pyramid.peopleCount': '{n}人',
-  'virtualCity.dashboard.pyramid.virtualCityPct': '占总财富 {pct}',
-  'virtualCity.dashboard.flow.title': '资金流向(本月)',
-  'virtualCity.dashboard.flow.in': '流入合计',
-  'virtualCity.dashboard.flow.out': '流出合计',
-  'virtualCity.dashboard.flow.empty': '本月暂无资金流动',
-  'virtualCity.dashboard.flow.node.salary': '工资',
-  'virtualCity.dashboard.flow.node.firms': '企业',
-  'virtualCity.dashboard.flow.node.market': '市场',
-  'virtualCity.dashboard.flow.node.bank': '银行',
-  'virtualCity.dashboard.flow.node.gov': '政府',
-  'virtualCity.dashboard.flow.node.player': '居民',
-  'virtualCity.dashboard.flow.node.world': '系统外',
-  'virtualCity.dashboard.flow.tooltip': '{from} → {to}：¥{amount}',
 };
 
 export default zhCN;

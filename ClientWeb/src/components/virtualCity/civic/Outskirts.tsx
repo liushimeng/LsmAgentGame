@@ -133,7 +133,11 @@ export function Outskirts() {
       const a = (i * Math.PI * 2) / segments;
       parts.push({
         geo: new THREE.PlaneGeometry(segmentWidth, segmentLen),
-        matrix: partMatrix(Math.cos(a) * 58, 0.018, Math.sin(a) * 58, 0, -a + Math.PI / 2, 0),
+        // 批次 61 必修项 D：原 rx=0 ⇒ PlaneGeometry 法线仍是水平的 ⇒ 32 段拼成一圈
+        // **12 单位（120 m）高的环形高墙**把城市围起来（实测 bbox y=−5.98..6.02）。
+        // 修法：补 rx=−π/2 把面片躺平（rx=0 时法线 +Z，绕 Y 转不改变法线朝向）。
+        // ry=−a+π/2 不动 —— 它本就为「躺平后长轴沿切向」而设。
+        matrix: partMatrix(Math.cos(a) * 58, 0.018, Math.sin(a) * 58, -Math.PI / 2, -a + Math.PI / 2, 0),
       });
     }
     return mergeParts(parts);
@@ -147,7 +151,8 @@ export function Outskirts() {
       const a = (i * Math.PI * 2) / segments;
       parts.push({
         geo: new THREE.PlaneGeometry(0.08, segmentLen * 0.95),
-        matrix: partMatrix(Math.cos(a) * 58, 0.02, Math.sin(a) * 58, 0, -a + Math.PI / 2, 0),
+        // 批次 61 必修项 D：同路面，补 rx=−π/2 躺平（否则标线也是竖片）。
+        matrix: partMatrix(Math.cos(a) * 58, 0.02, Math.sin(a) * 58, -Math.PI / 2, -a + Math.PI / 2, 0),
       });
     }
     return mergeParts(parts);

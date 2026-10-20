@@ -82,6 +82,20 @@ type GameContext struct {
 	ElectionBrief string
 	// MicroPriceBrief 股票微观结构现价小节(文档3 B4;≤120B;无信息 → "")。
 	MicroPriceBrief string
+
+	// ── 批次62 §20261020-62:行为金融与泡沫反身性 ──
+	// BehaviorBrief 本人行为偏差小节(≤400B;空串 = 无可展示内容)。
+	// ⚠ **只包含"已识破"(认知检定通过)的偏差**;未识破的偏差名绝不可
+	//   出现在上下文里 —— 否则教学闭环失效(§4.1)。
+	BehaviorBrief string
+	// HerdBrief 羊群效应小节(本回合多数方向 + 同向人数;≤160B)。
+	// 制造社交压力("大家都在买")但不泄露任何金额(§3.4.1)。
+	HerdBrief string
+	// BubbleBrief 泡沫/集体杠杆小节(状态 + 三项集体指标;≤220B)。
+	// 让 Agent 感知宏观由居民集体行为反作用(§11)。
+	BubbleBrief string
+	// LiquidityBrief 资产流动性价差小节(各资产类别买卖价差;≤200B)。
+	LiquidityBrief string
 }
 
 // NeighborBrief 是 see/hear 感知结果中「人」的摘要(全部来自已锚定真实档案;

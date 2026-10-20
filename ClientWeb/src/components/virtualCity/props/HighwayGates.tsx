@@ -1,8 +1,9 @@
 /**
  * HighwayGates — 批次 31「混合式路网与一环路」：高速联络线收费站（城市出入口）。
  *
- * 16 个外环区的放射联络线（roadNetwork edgeLink）在 r=55 处穿城而出，每线 1 座
+ * 原为 16 个外环区的放射联络线（roadNetwork edgeLink）在 r=55 处穿城而出，每线 1 座
  * 收费站：门式龙门架（双柱 + 横梁）+ 右侧双收费亭（绿顶白身，中国高速收费站风格）。
+ * **批次 61**：edgeLink（径向斜线）已删除 ⇒ 本组件不再挂载（见下方 GateSpot 注释）。
  *
  * 渲染：drei <Instances> 实例化 —— 柱 ×2/座、横梁 ×1/座、亭身 ×2/座、亭顶 ×2/座，
  * 全城 ≈ 5 draw call（照 TrafficSignals 静态件模式，批次 24 §6 同款裁决：
@@ -18,7 +19,6 @@
 
 import { Instances, Instance } from '@react-three/drei';
 import { u } from '../cityScale';
-import type { GateSpot } from '../roadNetwork';
 import {
   useObjectInfoProps,
   instancedEventsRaycast,
@@ -45,8 +45,24 @@ const BOOTH_SIDE_OFF = u(7 + 1.2);
 /** 收费亭沿路向前后错开 ±1.2m（双亭分列）。 */
 const BOOTH_ALONG_OFF = u(1.2);
 
+/**
+ * 收费站点位规格（**批次 61 起本组件不再挂载**）。
+ *
+ * 批次 61：径向高速联络线（edgeLink，**斜向**）随方格网一并删除 ⇒ 环城高速
+ * （r=58，城外）改由外沿街道 `x=±42` / `z=±42` 的 8 处**正交交叉**自然形成互通，
+ * 不再需要径向收费站布点。组件保留（供未来「方格式环城高速出入口」复用），
+ * 但 `VirtualCityCityMap` 已不再挂载它 —— 单一事实来源：方格网没有径向联络线，
+ * 就没有径向收费站。
+ */
+export interface GateSpot {
+  x: number;
+  z: number;
+  /** 绕 Y 旋转：local +z 指向径向外（横梁横跨联络线）。 */
+  rotation: number;
+}
+
 interface Props {
-  /** 布点（roadNetwork.buildRoadNetwork 产出）。 */
+  /** 布点（批次 61 起恒为空数组 —— 无径向联络线）。 */
   gates: GateSpot[];
 }
 

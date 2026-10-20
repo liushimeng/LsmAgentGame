@@ -66,6 +66,12 @@ type fakeTradeRunner struct {
 		amount   int64
 		childIdx int
 	}
+	// 批次62:行为金融工具参数。
+	behaviorArgs struct {
+		mode      string
+		amountCNY int64
+		reason    string
+	}
 	consumeArgs struct {
 		amount int64
 		reason string
@@ -282,6 +288,30 @@ func (f *fakeTradeRunner) UpgradeEducation(seat int, childIdx int) error {
 	return nil
 }
 
+// ── 批次62 §20261020-62:行为金融三工具(fake 实现)──
+func (f *fakeTradeRunner) QueryBehavior(seat int) (string, error) {
+	f.lastTool, f.lastSeat = "QueryBehavior", seat
+	return "behavior query", nil
+}
+
+func (f *fakeTradeRunner) Reflect(seat int, mode string) error {
+	f.lastTool, f.lastSeat = "Reflect", seat
+	f.behaviorArgs.mode = mode
+	return nil
+}
+
+func (f *fakeTradeRunner) DeferPayment(seat int, amountCNY int64, reason string) error {
+	f.lastTool, f.lastSeat = "DeferPayment", seat
+	f.behaviorArgs.amountCNY = amountCNY
+	f.behaviorArgs.reason = reason
+	return nil
+}
+
+func (f *fakeTradeRunner) MergeAccounts(seat int) error {
+	f.lastTool, f.lastSeat = "MergeAccounts", seat
+	return nil
+}
+
 // P2 实现。
 func (f *fakeTradeRunner) ListAsset(seat int, assetIndex int, askCNY, minCNY int64) error {
 	f.lastTool, f.lastSeat = "ListAsset", seat
@@ -384,11 +414,11 @@ func TestTradeTools_InputSchema(t *testing.T) {
 	}
 }
 
-// TestToolNames_IncludesTrade 合并交易工具已并入 ToolNames()(总计 22)。
+// TestToolNames_IncludesTrade 合并交易工具已并入 ToolNames()(总计 23)。
 func TestToolNames_IncludesTrade(t *testing.T) {
 	names := ToolNames()
-	if len(names) != 22 {
-		t.Errorf("names count: got %d, want 22 (批次35 §3.2 + 批次52 family)", len(names))
+	if len(names) != 23 {
+		t.Errorf("names count: got %d, want 23 (批次35 §3.2 + 批次52 family + 批次62 behavior)", len(names))
 	}
 	for _, tn := range TradeToolNames() {
 		found := false

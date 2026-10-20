@@ -99,7 +99,7 @@ export function HeliPad() {
       dimsKey="heliPad"
       infoId="civic.heli-pad"
       anchorY={1.4}
-      position={[15.5, 0.05, 22]}
+      position={[24, 0.05, -36]}
       litMaterials={LIT}
       fallback={
         <>

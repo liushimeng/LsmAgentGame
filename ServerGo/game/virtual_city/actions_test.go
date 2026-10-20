@@ -16,9 +16,11 @@ func TestActions_BuySellStock(t *testing.T) {
 	w.StartGame()
 	w.Month = 1
 
-	// 买 10000 元:成交价 = ask 单边(recovery 价差 4bp → idx×1.0002)。
+	// 买 10000 元:成交价 = ask 单边(recovery 价差 4bp → idx×1.0002)
+	// **叠加批次62 流动性价差**(§7.2 股票 2%)⇒ 实际成交单价 = ask×(1+spread/2)。
 	ask := w.Market.StockBuyUnit()
-	wantUnits := float64(int64(10000 / ask)) // floor 口径复核用
+	askEff := ask * (1 + w.LiquiditySpread(ClassStock)/2)
+	wantUnits := float64(int64(10000 / askEff)) // floor 口径复核用
 	text, err := w.ApplyAction(0, Action{Type: ActBuyAsset, Asset: AssetStockIndex, AmountCNY: 10000})
 	if err != nil {
 		t.Fatalf("buy stock: %v", err)

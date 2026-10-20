@@ -50,7 +50,7 @@ export function CommTower() {
   }
   return (
     <group {...info}>
-      <Model url={url} sizeTarget={COMM_TOWER_SIZE_TARGET} position={[-6, 0, 10]} castShadow>
+      <Model url={url} sizeTarget={COMM_TOWER_SIZE_TARGET} position={[24, 0, 0]} castShadow>
         <CommTowerFallback />
       </Model>
     </group>
@@ -60,7 +60,7 @@ export function CommTower() {
 /** 程序化几何 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。 */
 function CommTowerFallback() {
   return (
-    <group position={[-6, 0, 10]}>
+    <group position={[24, 0, 0]}>
       {/* 塔基垫脚 ×4（外缘 = ±FOOT ⇒ 定义表值占地 10×10） */}
       {[-1, 1].map((sx) =>
         [-1, 1].map((sz) => (

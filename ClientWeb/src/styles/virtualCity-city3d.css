@@ -14,29 +14,36 @@
  * toggle 按钮文字继承面板正文色 ≥ 4.5:1。
  */
 
-/* ── Tab 分组（契约 §2）────────────────────────────── */
+/* ── Tab 分组（契约 §2；批次 63 改「分组块」结构）──────────────
+   批次 63 修复 L1/L3：旧结构里分组标签与按钮混排同一 flex 行，折行点由内容宽度
+   决定 ⇒ 视觉上「数据 / 财务 行情 流水 经济 行为 宏观」一行、「交易 / 市场 保险」
+   另一行，分组语义断裂；且 sidebar 是 column flex，tabs 默认 flex-shrink:1 会被
+   压成 6px 高 / 内容 115px 溢出（批次 62 实测）。现改为：
+     - .virtualCity-tabs  flex: 0 0 auto（导航不该被压缩，可压缩的是面板区）
+     - .virtualCity-tabs__group  内两行：第 1 行分组小标签，第 2 行该组按钮
+     - group flex:1 1 0 平分宽度 ⇒ 换行只发生在组内，标签永远与自己的按钮同块 */
 .virtualCity-tabs {
-  flex-wrap: wrap;
-  /* 18/04 AB-4：96→112px —— 300px 侧栏下两组 6 按钮换到 3–4 行不再被裁切。 */
-  max-height: 112px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  row-gap: 2px;
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px 0;
+  /* 移除旧 max-height:112px / overflow-y:auto：分组块 + flex:0 0 auto 后不需要
+     滚动，组内换行自然撑高（标签行 16px + 按钮行 44px ≈ 72px），不会被压扁。 */
 }
 .virtualCity-tabs__group {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 2px 4px;
+  flex: 1 1 0;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .virtualCity-tabs__group-label {
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
   color: #b8bfca; /* 对深底 ≈ 8.6:1（§26.1 正文 ≥4.5:1） */
-  padding: 0 4px 0 2px;
+  padding: 0 2px;
   user-select: none;
 }
 .virtualCity-tabs__group-btns {

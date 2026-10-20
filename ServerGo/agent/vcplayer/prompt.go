@@ -148,6 +148,26 @@ func SystemPromptBlocks(card vctypes.CardBrief) []llmtypes.SystemBlock {
   私立月费¥3,000 至 18 岁,子女≥22 岁后月度回流 1500×1.2(私立加成 20%)。
 - 代际贡献分 = (教育总投入 + 赡养总支出×0.3)/20000,占终局 15% —— 上有老下有小也是人生成就。`
 
+	// 批次62 §20261020-62:行为金融工具说明注入(与 ToolBehavior 分组对应)。
+	// 置于末段 ⇒ 不影响 §14.3 三段式头部的 prompt cache 前缀命中。
+	seg9 := `【第 9 段 · 行为金融与集体行为(批次62)】
+你的决策会受自己的行为偏差影响,也会被其他居民的选择反过来影响:
+- 行为偏差(损失厌恶/处置效应/过度自信/锚定/羊群/心理账户/沉没成本/赌徒谬误/双曲贴现)
+  会按你"已识破"的程度打折:认知检定通过 ⇒ 效果减弱 50% 且你能看见偏差名;
+  未通过 ⇒ 效果全额(可能更重)且**你看不见偏差名** —— 你只会发现结果不对劲。
+- behavior(op=query):查本人行为画像(已识破的偏差 / 锚定指数 / 羊群指数 / 心理账户 / 延期支付),不耗预算。
+- behavior(op=reflect):主动反思(耗 1 预算,每月限 1 次,认知≤1 不可用):light 认知−1 解除 1 项偏差;
+  deep 认知−2 解除全部偏差且本回合免疫;preview 认知−1 下一回合偏差减半且可识破。
+- behavior(op=defer):延期支付(耗 1 预算):本月免付,3 个月后按 ×1.3 扣款 —— 贴现成本就是双曲贴现的价格。
+- behavior(op=merge):合并心理账户(耗 1 预算):把资金来源标签归并为统一资金池,合并后「意外之财」的
+  消费放大效果立即消失 —— 钱就是钱,标签只是标签。
+- 羊群:每回合末你会看到"大家多数在买还是卖"(不含金额)。跟风会让你多付滑点;
+  逆势且获利 ⇒ 认知 +2(独立思考有回报)。
+- 集体反身性:全场平均杠杆率 >60% ⇒ 信贷过热(资产涨得比基本面快);过热持续 ⇒ 泡沫破裂,
+  资产一次性下跌 20%~40%,杠杆者爆仓;随后进入 2~4 个月强制衰退。控制杠杆就是控制风险。
+- 流动性成本:买卖价差(股票 2%/债券 3%/黄金 5%/房产 10%/企业股权 20%)是隐性成本 ——
+  房产涨 20% 但买卖一次就吃掉 10%;繁荣期价差 ×0.7,衰退期 ×1.8。`
+
 	return []llmtypes.SystemBlock{
 		{Type: "text", Text: seg1},
 		{Type: "text", Text: seg2},
@@ -157,6 +177,7 @@ func SystemPromptBlocks(card vctypes.CardBrief) []llmtypes.SystemBlock {
 		{Type: "text", Text: seg6},
 		{Type: "text", Text: seg7},
 		{Type: "text", Text: seg8},
+		{Type: "text", Text: seg9},
 	}
 }
 
@@ -198,6 +219,30 @@ func UserPrompt(ctx *vctypes.GameContext, memText string) string {
 	if ctx.SideMarketBrief != "" {
 		b.WriteString("■ 副业定价市场(可用 side_business(op=set_price) 改档,每月限 1 次)\n")
 		b.WriteString(ctx.SideMarketBrief)
+		b.WriteString("\n\n")
+	}
+
+	// 批次62 §20261020-62:羊群 / 泡沫 / 行为偏差 / 流动性价差四小节。
+	// 顺序:先"社会压力"(羊群)与"宏观"(泡沫),再"个体"(行为偏差)——
+	// 与真实决策顺序一致(环境 → 群体 → 自我)。
+	if ctx.HerdBrief != "" {
+		b.WriteString("■ 市场情绪(羊群)\n")
+		b.WriteString(ctx.HerdBrief)
+		b.WriteString("\n\n")
+	}
+	if ctx.BubbleBrief != "" {
+		b.WriteString("■ 宏观反身性(集体杠杆)\n")
+		b.WriteString(ctx.BubbleBrief)
+		b.WriteString("\n\n")
+	}
+	if ctx.BehaviorBrief != "" {
+		b.WriteString("■ 你的行为倾向(已识破)\n")
+		b.WriteString(ctx.BehaviorBrief)
+		b.WriteString("\n\n")
+	}
+	if ctx.LiquidityBrief != "" {
+		b.WriteString("■ 流动性成本\n")
+		b.WriteString(ctx.LiquidityBrief)
 		b.WriteString("\n\n")
 	}
 

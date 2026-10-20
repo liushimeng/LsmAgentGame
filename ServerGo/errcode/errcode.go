@@ -172,6 +172,14 @@ const (
 	// 35045–35046 — 虚拟城市批次52 代际财富转移引擎(2026-10-02 §批次52)。
 	ErrVirtualCityFamilyDisabled = 35045 // family_enabled=false 引擎关闭(工具拒绝/月结零接线)
 	ErrVirtualCityFamilyInvalid  = 35046 // 家庭工具参数非法(child_idx 越界/年龄窗不符/加赡养超上限)
+	// 35047–35050 — 虚拟城市批次62 行为金融偏差引擎(2026-10-20 §20261020-62)。
+	ErrVirtualCityReflectCognitionLow   = 35047 // 主动反思不可执行(认知 ≤ 1,防归零恶性循环)
+	ErrVirtualCityReflectLimit           = 35048 // 主动反思本月次数用尽(每回合最多 1 次)
+	ErrVirtualCityReflectModeInvalid     = 35049 // reflect_mode 非法(须 light|deep|preview)
+	ErrVirtualCityReflectNothingToResolve = 35050 // 轻度反思无可解除的生效偏差
+	// 35051–35052 — 虚拟城市批次62 延期支付与心理账户(§3.3.1 / §3.2.3)。
+	ErrVirtualCityDeferNotAvailable = 35051 // 延期支付不可用(画像不含双曲贴现偏差)
+	ErrVirtualCityMergeAlreadyDone   = 35052 // 心理账户已合并(不可重复合并)
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
 	// 契约: lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md §4.4。
 	ErrVirtualCitySenseInvalid  = 35100 // 感知/移动工具参数非法(未知城区、未知 mode、目标不存在)
@@ -310,6 +318,13 @@ var DefaultMessages = map[int]string{
 	// 35043–35044 — 虚拟城市批次20 股票交易微观结构(2026-09-24 文档3 B3)。
 	ErrVirtualCityMarketCircuitBreak: "virtual_city stock trading suspended by monthly circuit breaker",
 	ErrVirtualCityStockT1Locked:      "virtual_city stock units bought this month are T+1 locked and not sellable",
+	// 35047–35051 — 虚拟城市批次62 行为金融偏差引擎(2026-10-20 §20261020-62)。
+	ErrVirtualCityReflectCognitionLow:   "主动反思需要认知 ≥ 2（认知过低时不可反思）",
+	ErrVirtualCityReflectLimit:           "本月反思次数已用尽（每回合最多 1 次）",
+	ErrVirtualCityReflectModeInvalid:     "reflect_mode 非法（须 light|deep|preview）",
+	ErrVirtualCityReflectNothingToResolve: "当前没有可解除的行为偏差",
+	ErrVirtualCityDeferNotAvailable:      "当前不可延期支付（未触发双曲贴现倾向）",
+	ErrVirtualCityMergeAlreadyDone:       "心理账户已合并，无需重复合并",
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
 	ErrVirtualCitySenseInvalid:  "virtual_city sense/move params invalid (unknown district/mode/target)",
 	ErrVirtualCitySenseLimit:    "virtual_city sense/speak monthly limit reached",

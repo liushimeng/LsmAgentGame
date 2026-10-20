@@ -59,7 +59,10 @@ export function MonthTicker({ gameState, eventFeed, lastMonth }: Props) {
   if (remainSec > maxRemainSec.current) maxRemainSec.current = remainSec;
   const pct = Math.max(0, Math.min(100, (remainSec / maxRemainSec.current) * 100));
 
-  const recentEvents = useMemo(() => [...eventFeed].slice(-30).reverse(), [eventFeed]);
+  // 批次 63 L4：事件流限 3 条（旧 slice(-30) 在事件密集时横向滚动区被撑满，
+  // 且与 month/countdown/summary 四块 flex-wrap 叠加占底部约 380px）。
+  // 现限 3 条 + ticker 本体 max-height:140px，3D 视口拿到其余全部高度。
+  const recentEvents = useMemo(() => [...eventFeed].slice(-3).reverse(), [eventFeed]);
 
   return (
     <div className="virtualCity-ticker">

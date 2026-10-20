@@ -1,0 +1,692 @@
+/* ─── 虚拟城市 批次62 行为金融与泡沫反身性引擎（BehaviorPanel / MacroPanel）样式 ───
+ *
+ * 独立成文件：virtualCity.css 已逼近 CLAUDE.md §4 的 1800 行硬上限，
+ * 经 globals.css **链尾** @import 加载（只追加不改序，§2.1 约束 4）。
+ * 选择器全部为新增 .virtualCity-behavior-* / .virtualCity-macro-* 前缀，
+ * 与既有规则零级联冲突。
+ *
+ * 对比度硬阈值（CLAUDE.md §26）：
+ *   - 正文 / 列表文本 ≥ 4.5:1（用 --virtualCity-text #e5e7eb / --virtualCity-text-dim #b7bfcc）
+ *   - 状态徽章 ≥ 5:1（全部**实底白字**，不触碰 §26.2 反模式 #1/#2）
+ *   - 选中 / 焦点态 ≥ 6:1（金底深字 + 光晕双通道）
+ *   - 禁用态用**独立灰底 + cursor:not-allowed**，**不用** opacity:0.4（反模式 #5）
+ *   - 阈值标线 ≥ 3:1（非文本图形元素下限），用亮橙实色
+ * 自写 @keyframes 均带 prefers-reduced-motion 兜底（§26.3 三件套）。
+ */
+
+/* ── 面板骨架（两个面板共用）── */
+.virtualCity-behavior,
+.virtualCity-macro {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.virtualCity-behavior__head,
+.virtualCity-macro__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--virtualCity-border);
+}
+
+.virtualCity-behavior__title,
+.virtualCity-macro__title {
+  font-weight: 700;
+  color: var(--virtualCity-text);
+  white-space: nowrap;
+}
+
+/* 观战 / 全 Agent 模式只读提示（紫底白字 ≈ 8:1） */
+.virtualCity-behavior__hint {
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #ffffff;
+  background: #4c1d95;
+}
+
+/* ── 通用分节 ── */
+.virtualCity-behavior__section,
+.virtualCity-macro__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+  background: var(--virtualCity-panel-2);
+}
+
+.virtualCity-behavior__section-title,
+.virtualCity-macro__section-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #cbd5e1; /* ≈ 9:1 */
+}
+
+.virtualCity-behavior__empty,
+.virtualCity-macro__empty {
+  font-size: 12px;
+  color: var(--virtualCity-text-dim);
+}
+
+/* ── 认知点 + 心智状态条 ── */
+.virtualCity-behavior__cognition {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.virtualCity-behavior__cognition-label {
+  font-size: 12px;
+  color: var(--virtualCity-text-dim);
+  white-space: nowrap;
+}
+
+.virtualCity-behavior__cognition-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--virtualCity-accent-strong);
+}
+
+.virtualCity-behavior__cognition-hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--virtualCity-text-dim);
+}
+
+/* ── 指标卡（锚定 / 羊群 / 储蓄 / 延迟满足）── */
+.virtualCity-behavior__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.virtualCity-behavior__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 6px;
+  background: #121926;
+}
+
+.virtualCity-behavior__metric-label {
+  font-size: 11px;
+  color: var(--virtualCity-text-dim);
+}
+
+.virtualCity-behavior__metric-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--virtualCity-text);
+}
+
+.virtualCity-behavior__metric-hint {
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: #9aa5b4; /* ≈ 6.4:1 on #121926 */
+}
+
+/* ── 偏差条目 ── */
+.virtualCity-behavior__bias-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.virtualCity-behavior__bias {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 9px;
+  border: 1px solid var(--virtualCity-border);
+  border-left: 3px solid #64748b; /* 未识破 = 中性灰 */
+  border-radius: 6px;
+  background: #121926;
+}
+
+.virtualCity-behavior__bias--detected {
+  border-left-color: var(--virtualCity-accent-strong);
+}
+
+.virtualCity-behavior__bias--immune {
+  border-left-color: #22c55e;
+}
+
+.virtualCity-behavior__bias-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.virtualCity-behavior__bias-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--virtualCity-text);
+}
+
+.virtualCity-behavior__bias--unknown .virtualCity-behavior__bias-name {
+  color: var(--virtualCity-text-dim);
+  font-style: italic;
+}
+
+.virtualCity-behavior__bias-badge {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #475569; /* 灰底白字 ≈ 5.9:1 */
+}
+
+.virtualCity-behavior__bias-badge--detected {
+  background: #15803d; /* 绿底白字 ≈ 5.1:1 */
+}
+
+.virtualCity-behavior__bias-badge--immune {
+  background: #15803d;
+}
+
+.virtualCity-behavior__bias-meta {
+  font-size: 11px;
+  color: var(--virtualCity-text-dim);
+}
+
+.virtualCity-behavior__bias-explain {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #9aa5b4;
+}
+
+/* ── 免疫进度条 ── */
+.virtualCity-behavior__immunity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.virtualCity-behavior__immunity-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--virtualCity-text-dim);
+}
+
+.virtualCity-behavior__immunity-name {
+  flex: 0 0 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.virtualCity-behavior__bar {
+  position: relative;
+  flex: 1 1 auto;
+  height: 8px;
+  min-width: 40px;
+  border-radius: 999px;
+  background: #0b1220;
+  overflow: hidden;
+}
+
+.virtualCity-behavior__bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #b45309, #d4a017);
+}
+
+.virtualCity-behavior__bar-fill--ok {
+  background: linear-gradient(90deg, #15803d, #22c55e);
+}
+
+.virtualCity-behavior__bar-pct {
+  flex: 0 0 38px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--virtualCity-text);
+}
+
+/* ── 心理账户 ── */
+.virtualCity-behavior__mental-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.virtualCity-behavior__mental-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--virtualCity-text);
+}
+
+.virtualCity-behavior__mental-row b {
+  font-variant-numeric: tabular-nums;
+}
+
+.virtualCity-behavior__mental-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--virtualCity-text-dim);
+}
+
+/* ── 延期支付 ── */
+.virtualCity-behavior__defer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.virtualCity-behavior__defer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--virtualCity-border);
+  background: #121926;
+  font-size: 12px;
+  color: var(--virtualCity-text);
+}
+
+.virtualCity-behavior__defer-row--overdue {
+  border-color: var(--virtualCity-neg);
+  background: #3f1418; /* 深红底 ≈ 5.2:1 配白字 */
+  color: #ffffff;
+}
+
+.virtualCity-behavior__defer-sub {
+  font-size: 10.5px;
+  color: var(--virtualCity-text-dim);
+}
+
+.virtualCity-behavior__defer-row--overdue .virtualCity-behavior__defer-sub {
+  color: #fecaca;
+}
+
+/* ── 反思按钮组 ── */
+.virtualCity-behavior__reflect-btns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.virtualCity-behavior__reflect-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: var(--virtualCity-touch-target);
+  padding: 6px 4px;
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+  background: var(--virtualCity-panel);
+  color: var(--virtualCity-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.virtualCity-behavior__reflect-btn:hover:not(:disabled) {
+  border-color: var(--virtualCity-accent-strong);
+  box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.35);
+}
+
+.virtualCity-behavior__reflect-btn:disabled {
+  /* §26.2 反模式 #5：不用 opacity，改独立灰底 + 禁用手势 */
+  background: #1b2230;
+  color: #7c8697;
+  cursor: not-allowed;
+}
+
+.virtualCity-behavior__reflect-cost {
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--virtualCity-text-dim);
+  text-align: center;
+}
+
+.virtualCity-behavior__reflect-btn:disabled .virtualCity-behavior__reflect-cost {
+  color: #7c8697;
+}
+
+.virtualCity-behavior__reflect-note {
+  margin: 0;
+  font-size: 11px;
+  color: #fbbf24; /* 黄字 ≈ 9:1 on #1c2431 */
+}
+
+/* ── 错误条（§7.1 内联最高层级）── */
+.virtualCity-behavior__error,
+.virtualCity-macro__error {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #7f1d1d;
+  background: #450a0a; /* 深红底白字 ≈ 9:1 */
+  color: #ffffff;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── 宏观：泡沫状态徽章 ── */
+.virtualCity-macro__state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.virtualCity-macro__state-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #334155; /* 常态：石板灰底白字 ≈ 7:1 */
+}
+
+.virtualCity-macro__state-badge--overheat {
+  background: #b45309; /* 橙底白字 ≈ 4.9:1 */
+}
+
+.virtualCity-macro__state-badge--burst {
+  background: #991b1b; /* 深红底白字 ≈ 8:1 */
+}
+
+.virtualCity-macro__state-badge--recession {
+  background: #1e40af; /* 深蓝底白字 ≈ 8.6:1 */
+}
+
+.virtualCity-macro__state-months {
+  font-size: 11.5px;
+  color: var(--virtualCity-text-dim);
+}
+
+/* ── 宏观：三项集体指标（带阈值标线）── */
+.virtualCity-macro__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.virtualCity-macro__metric-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--virtualCity-text);
+}
+
+.virtualCity-macro__metric-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.virtualCity-macro__metric--warn .virtualCity-macro__metric-value {
+  color: #fb923c; /* 橙字 ≈ 7:1 on #1c2431 */
+}
+
+.virtualCity-macro__metric--hit .virtualCity-macro__metric-value {
+  color: #fca5a5; /* 浅红字 ≈ 8:1 */
+}
+
+.virtualCity-macro__metric-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: #0b1220;
+  overflow: hidden;
+}
+
+.virtualCity-macro__metric-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: #2563eb;
+}
+
+.virtualCity-macro__metric--warn .virtualCity-macro__metric-fill {
+  background: #b45309;
+}
+
+.virtualCity-macro__metric--hit .virtualCity-macro__metric-fill {
+  background: #991b1b;
+}
+
+/* 阈值标线（图形元素 ≥3:1） */
+.virtualCity-macro__metric-threshold {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #fbbf24;
+}
+
+.virtualCity-macro__metric-hint {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: #9aa5b4;
+}
+
+/* ── 宏观：破裂播报 ── */
+.virtualCity-macro__burst {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #991b1b;
+  background: #450a0a;
+  color: #ffffff;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.virtualCity-macro__burst-title {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 700;
+  font-size: 12px;
+  color: #fca5a5;
+}
+
+/* ── 宏观：流动性价差表 ── */
+.virtualCity-macro__spread-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.virtualCity-macro__spread-table th,
+.virtualCity-macro__spread-table td {
+  padding: 3px 4px;
+  text-align: left;
+  border-bottom: 1px solid var(--virtualCity-border);
+}
+
+.virtualCity-macro__spread-table th {
+  font-size: 11px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.virtualCity-macro__spread-table td {
+  color: var(--virtualCity-text);
+}
+
+.virtualCity-macro__spread-table td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #fbbf24;
+}
+
+.virtualCity-macro__spread-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--virtualCity-text-dim);
+}
+
+.virtualCity-macro__phase {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--virtualCity-text-dim);
+}
+
+/* ── 窄侧栏（≤360px）回落单列 ── */
+@media (max-width: 360px) {
+  .virtualCity-behavior__metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .virtualCity-behavior__reflect-btns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── 延期支付输入行 ── */
+.virtualCity-behavior__defer-label {
+  font-size: 11.5px;
+  color: var(--virtualCity-text-dim);
+}
+
+.virtualCity-behavior__defer-input {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 6px;
+  background: #0b1220;
+  color: var(--virtualCity-text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.virtualCity-behavior__defer-input:focus {
+  outline: 2px solid var(--virtualCity-accent-strong);
+  outline-offset: 1px;
+}
+
+.virtualCity-behavior__defer-input:disabled {
+  background: #1b2230;
+  color: #7c8697;
+  cursor: not-allowed;
+}
+
+/* ── Tab 条紧凑化（批次62：新增「行为」「宏观」两个 Tab 后防溢出）──
+ *
+ * 侧栏 380px 内要放 8 个 Tab（财务/行情/流水/经济/行为/宏观 + 市场/保险）。
+ * `.virtualCity-tabs__btn` 原本没有 `white-space: nowrap`：标签一旦长于按钮
+ * 宽度就会**在按钮内换行**，按钮被撑成 2~3 行高，超出
+ * `.virtualCity-tabs` 的 `max-height: 112px` ⇒ 底部 Tab 被裁成竖排文字
+ * （批次62 CDP 实测：「行为与认知」被裁成 3 行竖字，看不清也点不准）。
+ *
+ * 修法（两条同时）：
+ *   ① Tab 标签改短名（「行为」/「宏观」，全称在面板标题里）；
+ *   ② 按钮禁止换行 + 允许收缩，配合既有 flex-wrap 自然排成 2 行。
+ */
+.virtualCity-tabs__btn {
+  white-space: nowrap;
+  min-width: 0;
+  flex: 0 1 auto;
+  padding: 4px 6px;
+}
+
+.virtualCity-tabs__group-btns {
+  flex: 1 1 auto;
+}
+
+/* ── Tab 条禁止被侧栏纵向压缩（批次62 实测回归）──
+ *
+ * `.virtualCity-sidebar` 是 `flex-direction: column`，其子节点默认 `flex-shrink: 1`。
+ * 视口较矮时（本环境 headless Chrome viewport 高 801px，比设计基线 884px 矮），
+ * 侧栏总高被压到 ~284px，于是 `.virtualCity-tabs` 被压成 **6px 高**、内容 115px
+ * 溢出（overflow-y:auto）⇒ 8 个 Tab 里后半截根本看不见也点不到
+ * （批次62 CDP 实测：tabs.h=6 / tabs.scrollHeight=115）。
+ *
+ * 修法：Tab 条是**导航**，不该被压缩 ⇒ `flex: 0 0 auto` 保持自然高度；
+ * 可压缩的是面板区（`.virtualCity-sidebar__panels`，既有 `flex: 1 1 auto` +
+ * `overflow-y: auto`，本来就该滚动）。这与 §7.1「控件不出显示界面」一致。
+ *
+ * 作用域天然限定虚拟城市（`.virtualCity-tabs` 只存在于对局页）。
+ */
+.virtualCity-tabs {
+  flex: 0 0 auto;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   批次 63 对局界面布局治理（L1/L2/L4/L6）
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── L1：Tab 按钮每行最多 4 个 ──
+   批次 62 在此文件定义了 `.virtualCity-tabs__btn { flex: 0 1 auto; white-space: nowrap }`
+   （优先级高于 virtualCity.css，会覆盖）。批次 63 改「分组块」后，group 内两行
+   （标签行 + 按钮行），按钮行要每行最多 4 个（380px 侧栏 ÷ ~86px）⇒
+   flex-basis:calc(25% - 4px)。同时移除 nowrap（窄按钮里文字要能换行/收缩，
+   否则「market-trade」等长标签会溢出按钮边界）。 */
+.virtualCity-tabs__btn {
+  flex: 1 1 calc(25% - 4px);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* ── L2：BehaviorPanel 空态占位块 ──
+   观战态下行为面板只有空态提示，旧结构 `.virtualCity-panel__empty` 只是
+   padding:22px 的文本块，下方整片空白。现加图标 + 最小高度，
+   与面板其它 section 同宽同内边距，视觉上不突兀。
+   对比度：--virtualCity-text-dim 对深底 ≥4.5:1（§26.1）。 */
+.virtualCity-behavior__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 140px;
+  padding: 22px 12px;
+  text-align: center;
+}
+.virtualCity-behavior__empty-icon {
+  font-size: 28px;
+  line-height: 1;
+  opacity: 0.6; /* 装饰性图标，不参与对比度阈值（§26.2-5 禁 opacity:0.4 表 disabled） */
+}
+
+/* ── L6：小指标卡文本兜底 ──
+   金额（¥1,234,567）与百分比在小指标卡里可能撑破容器。
+   统一 min-width:0 + overflow-wrap:anywhere + tabular-nums。 */
+.virtualCity-behavior__stat,
+.virtualCity-behavior__metric,
+.virtualCity-macro__cell,
+.virtualCity-macro__spread {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}

@@ -8,10 +8,12 @@
  * 新契约：
  *   - `canalBridgeSpots(net)` 接收真实 `RoadNetwork`，对**全部**路段与 z=CANAL_Z
  *     求交（南岸不再跳过），交点落在河道内即建桥；
- *   - **桥轴强制垂直河道**：运河东西走向（z=17 直线）⇒ rotation 恒为 0（桥长沿 +Z）；
+ *   - **桥轴强制垂直河道**：运河东西走向（z=18 直线）⇒ rotation 恒为 0（桥长沿 +Z）；
  *   - 桥长按路段与河道法线（+Z）夹角派生：`max(3/cos(夹角) + 1.8, 4.2)`；
- *   - 桥宽取过河路段路幅（main 1.4 / side 0.9 / 一环 1.4）；
- *   - 距离 <2u 的过河点合并；一环路过河点（r=20 × z=17）一并出桥（§4.6）。
+ *   - 桥宽取过河路段路幅（main 1.4 / side 0.9）；
+ *   - 距离 <2u 的过河点合并。
+ *   - **批次 61**：方格网下南北向街道恒与运河正交（8 条），`z=18` 那一行东西向
+ *     街道不生成 ⇒ 桥位天然唯一；旧「一环路（r=20）与运河的两个交点」随环路删除。
  *
  * 桥面 y_top 0.035 高于水面 0.028；过河路段本身不渲染路面（Road.tsx §4.6），
  * 视觉上「桥就是路的延续」。
@@ -40,12 +42,10 @@ import { collectGlbPairs, GlbInstances, type GlbRenderPair } from './glbInstance
 import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 import {
   buildRoadNetwork,
-  FIRST_RING_RADIUS,
-  FIRST_RING_WIDTH,
   type RoadNetwork,
 } from './roadNetwork';
 import { ROAD_WIDTH_MAIN, ROAD_WIDTH_SIDE } from './cityScale';
-import { CANAL_Z, CANAL_HALF_X, inWater } from './cityObstacles';
+import { CANAL_Z, CANAL_HALF_X, CANAL_HALF_WIDTH, inWater } from './cityObstacles';
 
 /** 桥面厚。顶面 = DECK_TOP_Y + DECK_H/2 ≈ 0.035：高于水面 0.028、仅高于路面一线。 */
 const DECK_H = 0.03;
@@ -216,9 +216,13 @@ export interface BridgeSpot {
 }
 
 /**
- * 通式求桥位（批次 38 §4.4）：对**全部**路段（含南岸）与运河 z=CANAL_Z 求交，
- * 交点落在河道内即建桥；一环路（r=20）与 z=17 的两个交点一并出桥。
- * 桥轴强制垂直河道（rotation 恒 0），桥长按路段与河道法线夹角派生。
+ * 通式求桥位（批次 38 §4.4；批次 61 简化）：对**全部**路段与运河 z=CANAL_Z 求交，
+ * 交点落在河道内即建桥。桥轴强制垂直河道（rotation 恒 0），桥长按路段与河道法线
+ * 夹角派生。
+ *
+ * 批次 61：方格网下**南北向街道恒与运河正交**（8 条：x = ±6/±18/±30/±42），
+ * 而 `z = 18` 那一行东西向街道**不生成**（让位给运河）⇒ 桥位天然唯一、无歧义，
+ * 且旧「一环路（r=20）与运河的两个交点」随一环路一并删除。
  *
  * **禁止**再用径向口径 `atan2(-c.x,-c.z)` / `xAt = c.x*(CANAL_Z/c.z)`（§5.3-4）。
  */
@@ -252,27 +256,18 @@ export function canalBridgeSpots(net: RoadNetwork): BridgeSpot[] {
     });
   };
 
-  // ① 真实过河路段（connector / arterial / edgeLink 全部；南岸不再跳过）
+  // ① 过河点识别（批次 61）：南北向街道在运河处**已按两岸线拆成两段**
+  //    （`roadNetwork.buildRoadNetwork`），故不再存在「整段穿过运河」的线段 ——
+  //    改为识别**端点恰落在运河岸线**（|z − CANAL_Z| = CANAL_HALF_WIDTH）的线段，
+  //    该端点即过河点（桥面在此跨过 3u 的河面）。
+  //    ⚠ 旧实现 `if (crossesCanal) return null` 会让整条 84u 街道**凭空消失**
+  //    （8 条 × 84u ≈ 67 km 路面不画）—— 批次 61 必修项 A。
   for (const s of net.segments) {
-    const [ax, az] = s.from;
-    const [bx, bz] = s.to;
-    const dz = bz - az;
-    if (Math.abs(dz) < 1e-9) continue; // 平行河道，无交点
-    const t = (zLine - az) / dz;
-    if (t <= 0.001 || t >= 0.999) continue; // 端点恰在河上不算独立过河点
-    const x = ax + (bx - ax) * t;
     const width = s.kind === 'main' ? ROAD_WIDTH_MAIN : ROAD_WIDTH_SIDE;
-    push(x, bx - ax, dz, width, s.key, `bridge-${s.key}`);
-  }
-
-  // ② 一环路过河点（r=20 圆 × z=17 ⇒ x=±√(r²−17²)；§4.6「该两段由桥承载」）
-  const disc = FIRST_RING_RADIUS * FIRST_RING_RADIUS - zLine * zLine;
-  if (disc > 0) {
-    const xr = Math.sqrt(disc);
-    for (const sx of [-1, 1]) {
-      const x = sx * xr;
-      // 交点处切向（圆上逆时针）：(-z, x)/r —— 路段方向即切向
-      push(x, -zLine, x, FIRST_RING_WIDTH, 'first-ring', `bridge-first-ring-${sx > 0 ? 'e' : 'w'}`);
+    for (const end of [s.from, s.to]) {
+      if (Math.abs(end[1] - zLine) > CANAL_HALF_WIDTH + 1e-6) continue;
+      // 该端点落在运河岸线上 ⇒ 过河点（南北向街道，桥轴沿 +Z 垂直河道）
+      push(end[0], 0, 1, width, s.key, `bridge-${s.key}`);
     }
   }
 

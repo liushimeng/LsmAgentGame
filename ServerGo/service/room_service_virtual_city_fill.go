@@ -47,3 +47,27 @@ func wealthDeepSeats(residentCount int) []AgentSeatConfig {
 	}
 	return seats
 }
+
+// virtualCityAgentSeatsFor 决定 wealth 房间**开场时注入哪些 Agent 座位**。
+//
+// ⚠ **批次 63 修复(§130:full_agent 三态接线声明了却从不接线)**:
+// 修复前 `CreateRoomWithAgents` **无条件**用 `wealthDeepSeats(residentCount)`
+// 覆盖 `agentSeats`,完全无视 full_agent 开关 —— 于是即便客户端显式传
+// `full_agent=false`(等价于 `wealthCfg.FullAgent=false`),房间仍被 10 个居民 bot
+// 占满,人类 `POST /api/rooms/:id/join` 恒返回 `ErrRoomFull`(30002「room is full」)。
+// 已用 HTTP 直发复现:create `{"full_agent":false,"resident_count":10}` → join 30002。
+//
+// 语义(与 `creatorShouldBeSpectator` / `prepareVirtualCityAgentRoom` 的
+// `virtualCityFullAgent` 参数对齐):
+//   - fullAgent=true  ⇒ 全 Agent 城市场景:按 resident_count 注入居民 bot 座位
+//     (clamp [1,12]),与人类不可入座;
+//   - fullAgent=false ⇒ 人类可玩房:**不注入任何居民 bot 座位**,空位留给人类
+//     (`JoinRoom` 的 `IsFullAgentRoom` 守卫也随之放行)。
+//
+// 单独抽出纯函数是为了**可单测**:`CreateRoomWithAgents` 需要 DB/GORM 无法离线覆盖。
+func virtualCityAgentSeatsFor(fullAgent bool, residentCount int) []AgentSeatConfig {
+	if !fullAgent {
+		return nil
+	}
+	return wealthDeepSeats(residentCount)
+}

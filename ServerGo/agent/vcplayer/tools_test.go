@@ -10,13 +10,13 @@ import (
 	"LsmAgentGame/game/virtual_city/profession"
 )
 
-// TestBuildTools_22Tools 批次35 §3.2:工具收敛 47 → 21,感知四件套与
+// TestBuildTools_23Tools 批次35 §3.2:工具收敛 47 → 21,感知四件套与
 // speak/check_state/submit_month 原样保留(V2 验收);批次52 §2 裁决 D13
-// 增 ToolFamily 分组工具 → 合计 22。
-func TestBuildTools_22Tools(t *testing.T) {
+// 增 ToolFamily 分组工具 → 22;批次62 §20261020-62 增 ToolBehavior → 23。
+func TestBuildTools_23Tools(t *testing.T) {
 	tools := BuildTools()
-	if len(tools) != 22 {
-		t.Errorf("tools count: got %d, want 22", len(tools))
+	if len(tools) != 23 {
+		t.Errorf("tools count: got %d, want 23", len(tools))
 	}
 	want := map[string]bool{
 		// 感知与基础(7,原样保留)。
@@ -27,6 +27,8 @@ func TestBuildTools_22Tools(t *testing.T) {
 		ToolQueryFinance: false, ToolInsurance: false,
 		// 代际财富(1,批次52 裁决 D13)。
 		ToolFamily: false,
+		// 行为金融(1,批次62 §20261020-62)。
+		ToolBehavior: false,
 		// 生活(3)。
 		ToolActivity: false, ToolSetConsumption: false, ToolAnswerSurvey: false,
 		// 副业(1)。
@@ -85,11 +87,11 @@ func TestBuildTools_RequiredFields(t *testing.T) {
 	}
 }
 
-// TestToolNames_Returns22Names 工具名列表 = 22(测试/lint 口径;批次52 起)。
-func TestToolNames_Returns22Names(t *testing.T) {
+// TestToolNames_Returns23Names 工具名列表 = 23(测试/lint 口径;批次62 起)。
+func TestToolNames_Returns23Names(t *testing.T) {
 	names := ToolNames()
-	if len(names) != 22 {
-		t.Errorf("names count: got %d, want 22", len(names))
+	if len(names) != 23 {
+		t.Errorf("names count: got %d, want 23", len(names))
 	}
 	seen := map[string]bool{}
 	for _, n := range names {

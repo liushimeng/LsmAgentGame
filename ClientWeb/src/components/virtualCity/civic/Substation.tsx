@@ -176,7 +176,7 @@ export function Substation() {
       dimsKey="substation"
       infoId="civic.substation"
       anchorY={2.45}
-      position={[-18.5, 0, -11]}
+      position={[-24, 0, 0]}
       litMaterials={LIT}
       fallback={
         <mesh geometry={geo}>

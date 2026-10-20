@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import { persist, type StorageValue } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import { authService } from '@/services/auth.service';
 import { setAuthToken } from '@/services/http';
 import { useI18nStore } from '@/store/i18n.store';
+import { safeLocalStorage, type AuthPersistedShape } from '@/store/authStorage';
 
 export interface LoginPayload {
   account?: string;
@@ -43,18 +44,11 @@ export interface AuthState {
   hydrateFromStorage: () => void;
 }
 
-/**
- * auth persist 落盘字段形状（与下方 partialize 一一对应；persist 泛型 U 的锚点，
- * 供自定义 deserialize 的返回类型引用）。
+/*
+ * auth persist 落盘字段形状（与下方 partialize 一一对应）现由
+ * `./authStorage` 统一导出（批次 62 前置加固 · 2026-10-20）——
+ * 存储层拆到零依赖模块，便于 Node 侧直接做回归验证。
  */
-interface AuthPersistedShape {
-  userId: string | null;
-  token: string | null;
-  expiresAt: number | null;
-  isAuthenticated: boolean;
-  userType: number | null;
-  myInviteCode: string | null;
-}
 
 /**
  * Defensive sanity-check on the `expires_at` Unix-seconds returned by
@@ -184,30 +178,32 @@ export const useAuthStore = create<AuthState>()(
         userType: s.userType,
         myInviteCode: s.myInviteCode,
       }),
-      // 健壮性安全网（lsm.auth 损坏防黑屏）：persist 默认 deserialize 就是
-      // JSON.parse，localStorage 被写成非 JSON（如 '[object Object]'）时抛错。
-      // zustand 4.5.7 persistImpl（esm/middleware.mjs）此时走链尾
-      // .catch((e) => postRehydrationCallback(undefined, e))：回调首参 state
-      // 为 undefined，下方 state?.setHasHydrated(true) 静默空转，且 .catch
-      // 吞错不打日志 → hasHydrated 永假 → App.tsx 的 hydration 闸门
-      //（if (!hasHydrated) return <div className="app-shell" />）永久卡住黑屏。
-      // 改为损坏时返回 null：4.5.7 对 falsy 反序列化值走「无持久化状态」成功路径
-      //（merge(undefined, 当前 state) 原样保留默认值，链尾 setItem() 还会用
-      // 干净默认值覆盖损坏的 lsm.auth 自愈）。
-      // ⚠️ 实测结论（node 同构真实 zustand 4.5.7）：此路径下后置回调虽执行、
-      // setHasHydrated(true) 虽被调用，但 deprecated options shim 双重包装下该 set
-      // 写入被后续覆盖，getState().hasHydrated 仍永假 —— 本 deserialize 的价值
-      // 仅是 console.warn + 触发 setItem 自愈覆盖坏 key；真正抬闸依赖 App.tsx 的
-      // 超时兜底（见 App.tsx mount 副作用）。null 不在声明返回类型内，按运行时
-      // 行为断言（依据 4.5.7 源码，见上）。
-      deserialize: (str) => {
-        try {
-          return JSON.parse(str) as StorageValue<AuthPersistedShape>;
-        } catch {
-          console.warn('[auth] lsm.auth 内容损坏（非 JSON），忽略持久化状态按未登录启动');
-          return null as unknown as StorageValue<AuthPersistedShape>;
-        }
-      },
+      // 落盘读取容错（批次 62 前置加固 · 2026-10-20）：
+      //
+      // 【为什么改】此前这里用 zustand 的**已废弃** `deserialize` 选项做
+      // 「坏 key 防黑屏」。实测（CDP + zustand 4.5.7 源码核对）**原实现没有功能
+      // 缺陷**：`deserialize` 一旦出现在 options 里，persistImpl 会切到
+      // **oldImpl**（esm/middleware.mjs 第 571~578 行），oldImpl 用原始
+      // `localStorage`（`getItem` 返回**未解析的字符串**）⇒ `JSON.parse(str)`
+      // 正常工作 ⇒ 刷新后登录态正常保留。已用 CDP 实测确认。
+      //
+      // 但这条路径有三个隐患：
+      //   1. oldImpl **完全忽略 `storage` 选项** ⇒ 同时写的 `storage:` 是死代码；
+      //   2. 每次页面加载都打 zustand 的 `[DEPRECATED] ...` 警告；
+      //   3. **zustand v5 删除了 `deserialize`** ⇒ 升级后自动落回
+      //      `createJSONStorage`，其 `getItem` 内部 `JSON.parse` **无 try/catch**
+      //      ⇒ 坏 key 同步抛错 ⇒ persist 链尾 `.catch` 吞错 ⇒ hasHydrated 永假
+      //      ⇒ App.tsx 的 hydration 闸门永久卡住 ⇒ **全站黑屏**
+      //      （正是 a6197523fe 当初想防的场景，但它靠 deprecated 选项实现，
+      //        升级即失效）。
+      //
+      // 【现在的做法】把「读时容错」下沉到 **storage 层**（现代、非废弃 API），
+      // 并**移除 `deserialize` 选项** ⇒ zustand 走 newImpl ⇒ 真正使用我们的
+      // storage：解析失败**不抛**、清除坏 key、返回 null ⇒ persist 走成功路径、
+      // hasHydrated 正常置位、**不黑屏**、坏 key 立即自愈。详见 authStorage.ts。
+      //
+      // 【保住的能力】App.tsx 的 1500ms 超时兜底闸门（第二道保险）**保留不动**。
+      storage: safeLocalStorage,
       onRehydrateStorage: () => (state) => {
         // Mark hydration complete once persist has read storage.
         state?.setHasHydrated(true);

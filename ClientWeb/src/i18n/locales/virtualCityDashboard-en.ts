@@ -1,0 +1,31 @@
+// Virtual City P2 v2 Wealth-Flow Visualization i18n (en) — split from en.ts to satisfy the ≤1800-line cap.
+const virtualCityDashboardEN = {
+  'virtualCity.dashboard.structure': 'VirtualCity Structure',
+  'virtualCity.dashboard.lorenz.title': 'Lorenz Curve',
+  'virtualCity.dashboard.lorenz.myPos': 'My Position',
+  'virtualCity.dashboard.lorenz.myRank': 'My Rank {rank}/{total}',
+  'virtualCity.dashboard.lorenz.equalLine': 'Perfect Equality Line',
+  'virtualCity.dashboard.lorenz.lorenzCurve': 'Actual Distribution',
+  'virtualCity.dashboard.lorenz.giniBadge': 'Gini = {value}',
+  'virtualCity.dashboard.lorenz.empty': 'VirtualCity data not yet available',
+  'virtualCity.dashboard.pyramid.title': 'VirtualCity Pyramid',
+  'virtualCity.dashboard.pyramid.survival': 'Survival Circle',
+  'virtualCity.dashboard.pyramid.accumulation': 'Accumulation Circle',
+  'virtualCity.dashboard.pyramid.freedom': 'Freedom Circle',
+  'virtualCity.dashboard.pyramid.peopleCount': '{n} people',
+  'virtualCity.dashboard.pyramid.virtualCityPct': '{pct} of total virtualCity',
+  'virtualCity.dashboard.flow.title': 'Fund Flow (This Month)',
+  'virtualCity.dashboard.flow.in': 'Total Inflow',
+  'virtualCity.dashboard.flow.out': 'Total Outflow',
+  'virtualCity.dashboard.flow.empty': 'No fund flow this month',
+  'virtualCity.dashboard.flow.node.salary': 'Salary',
+  'virtualCity.dashboard.flow.node.firms': 'Firms',
+  'virtualCity.dashboard.flow.node.market': 'Market',
+  'virtualCity.dashboard.flow.node.bank': 'Bank',
+  'virtualCity.dashboard.flow.node.gov': 'Government',
+  'virtualCity.dashboard.flow.node.player': 'Resident',
+  'virtualCity.dashboard.flow.node.world': 'System',
+  'virtualCity.dashboard.flow.tooltip': '{from} → {to}: ¥{amount}',
+};
+
+export default virtualCityDashboardEN;

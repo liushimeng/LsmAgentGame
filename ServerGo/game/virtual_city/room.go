@@ -553,6 +553,8 @@ func (r *VirtualCityRoom) JoinGame(userID, nickname string) (int, bool, *errcode
 		p.Domain = domain // 批次35 §4.1:avatar 外观推导用。
 		p.Submitted = true
 		p.ActionBudget = 0
+		// 批次62:中途入座同样要有偏差画像(否则该座位无偏差机制)。
+		assignBiasProfile(seat, p)
 		r.World.Players[seat] = p
 	}
 	// 2026-09-16 §12 座扩容:「满员自动开局」阈值从 MaxSeats(12) 下调到

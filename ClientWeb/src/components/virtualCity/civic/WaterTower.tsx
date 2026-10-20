@@ -37,7 +37,7 @@ export function WaterTower() {
   }
   return (
     <group {...info}>
-      <Model url={url} sizeTarget={WATER_TOWER_SIZE_TARGET} position={[-22, 0, 2]} castShadow>
+      <Model url={url} sizeTarget={WATER_TOWER_SIZE_TARGET} position={[36, 0, -12]} castShadow>
         <WaterTowerFallback />
       </Model>
     </group>
@@ -47,7 +47,7 @@ export function WaterTower() {
 /** 程序化几何 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。 */
 function WaterTowerFallback() {
   return (
-    <group position={[-22, 0, 2]}>
+    <group position={[36, 0, -12]}>
       {/* 锥形支架：4 斜腿 + 顶部圈梁 */}
       {[-1, 1].map((sx) =>
         [-1, 1].map((sz) => (

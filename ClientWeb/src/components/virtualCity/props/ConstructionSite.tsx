@@ -43,8 +43,8 @@ import { CivicGlbPiece } from '../civic/CivicGlb';
 
 /** 场坪中心与尺寸（米 → 世界单位由 `u()` 换算；护栏 `check_site_clearance.mjs`
  *  从**本文件源码**取这四个常量，改这里脚本就会红）。 */
-const SITE_X = 30.5;
-const SITE_Z = -1.5;
+const SITE_X = -24;
+const SITE_Z = 36;
 const SITE_W = 5.0;
 const SITE_D = 4.4;
 

@@ -255,7 +255,9 @@ func TestStockSpreadExecution_LedgerParity(t *testing.T) {
 		t.Fatalf("buy: %v", e)
 	}
 	at := w.Players[0].assetOf(AssetStockIndex)
-	wantCost := int64(at.Units*ask + 0.5)
+	// 批次62 §7.2:流动性价差(股票 2%)叠加在微观结构 ask 之上。
+	askEff := ask * (1 + w.LiquiditySpread(ClassStock)/2)
+	wantCost := int64(at.Units*askEff + 0.5)
 	feeWant := commissionStock(wantCost)
 	var buy *Entry
 	for i := range w.Ledger.Entries {
@@ -288,7 +290,9 @@ func TestStockSpreadExecution_LedgerParity(t *testing.T) {
 			sell = e
 		}
 	}
-	wantGross := int64(100*bid + 0.5)
+	// 批次62 §7.2:卖出侧同样叠加流动性价差(×(1−spread/2))。
+	bidEff := bid * (1 - w.LiquiditySpread(ClassStock)/2)
+	wantGross := int64(100*bidEff + 0.5)
 	if sell == nil || sell.AmountCNY != wantGross {
 		t.Errorf("ledger sell amount: got %+v want %d (bid=%f)", sell, wantGross, bid)
 	}

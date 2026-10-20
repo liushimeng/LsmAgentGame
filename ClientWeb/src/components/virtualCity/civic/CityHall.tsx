@@ -22,7 +22,7 @@ const GOLD = '#d4a017';
  * 批次 23 起导出为市民之声气泡锚点基准（CityVoiceBubbleLayer），
  * CityHall 本体的两处落位（Model / fallback group）同用一份，防止坐标漂移。
  */
-export const CITY_HALL_POSITION = { x: -9.0, z: -1.7 } as const;
+export const CITY_HALL_POSITION = { x: 0, z: 36 } as const;
 
 /**
  * 建筑尺寸（批次 29）：取 cityScale.REAL_DIMS_M.cityHall = 14.4 × 8.4（占地）× 20.0（总高）。

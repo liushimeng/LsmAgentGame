@@ -269,7 +269,7 @@ export function SportsField() {
       dimsKey="sportsField"
       infoId="civic.sports-field"
       anchorY={1.5}
-      position={[10, 0, 38.5]}
+      position={[24, 0, 36]}
       litMaterials={LIT}
       fallback={
         <mesh geometry={geo} receiveShadow>

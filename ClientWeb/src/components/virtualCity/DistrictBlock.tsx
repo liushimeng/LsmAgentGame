@@ -152,11 +152,16 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
       onPointerOut={handleOut}
       onClick={info.onClick}
     >
-      {/* 底板 8×8（纹理缺失降级主色）。
-          批次 38 §4.6：y 0.02 → DISTRICT_SURFACE_Y(0.010)，低于路面 0.015 ⇒
-          「路在板上」—— 街区内部道路不再被底板吞没（降级方案优先，零几何开口）。 */}
+      {/* 底板 10×10（**批次 61**：8×8 → 10×10）。
+          旧 8×8 底板（半宽 4.0）在街道中心线 ±6 处留出 1.55u **裸地**（底板边缘
+          4.0 → 路缘 5.3），读作「楼前一片没铺装的空地」；放大到半宽 5.0 后
+          铺装一直铺到人行道缘石（主路缘 5.05 / 次路缘 5.3）。
+          街区中心距 12 ⇒ 相邻底板间隙 2u（正好容下 1.4u 路幅 + 两侧人行道），
+          底板之间不重叠（批次 61 验收项 C）。
+          y：批次 38 §4.6 口径 0.02 → DISTRICT_SURFACE_Y(0.010)，低于路面 0.015 ⇒
+          「路在板上」—— 路面不被底板吞没。 */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, DISTRICT_SURFACE_Y, 0]} receiveShadow>
-        <planeGeometry args={[8, 8]} />
+        <planeGeometry args={[10, 10]} />
         {texture ? (
           <meshStandardMaterial {...withPBR({ map: texture, roughness: 0.9 }, boardPbr)} />
         ) : (
@@ -166,7 +171,7 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
       {/* 14-3D渲染深化：中央公园草地覆盖层（y=0.026 防 z-fighting） */}
       {isPark && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.026, 0]} receiveShadow>
-          <planeGeometry args={[7.8, 7.8]} />
+          <planeGeometry args={[9.8, 9.8]} />
           <meshStandardMaterial
             {...withPBR(
               { map: grassTex ?? undefined, color: grassTex ? '#ffffff' : '#3f7a3a', roughness: 0.95 },

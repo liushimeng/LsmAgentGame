@@ -6,6 +6,12 @@ import type {
   VirtualCityFamilyStats,
   VirtualCityInheritanceEvent,
 } from './virtualCityFamily';
+import type {
+  VirtualCityBehaviorSnapshot,
+  VirtualCityBubbleSnapshot,
+  VirtualCityLiquiditySpreadSnapshot,
+  VirtualCityReflectMode,
+} from './virtualCityBehavior';
 
 // ─── 虚拟城市 (VirtualCity) types ───
 //
@@ -170,6 +176,11 @@ export interface VirtualCityPlayer {
   alive: boolean;
   /** P0 恒 false（P1 提前退休预留）。 */
   retired: boolean;
+  /**
+   * 羊群指数（批次62 §3.4.4）：跟风次数 ÷ 全部决策次数。
+   * **只暴露指数**，不暴露他人的偏差画像 / 心理账户明细（信息分层，后端已裁剪）。
+   */
+  herding_index?: number;
   /** 个人年龄（文档池差异卡展示用）。 */
   age: number;
   resources: VirtualCityResources;
@@ -393,6 +404,11 @@ export interface VirtualCityMyState {
   insurance?: VirtualCityInsuranceState;
   /** 板外继承收入（批次52 §7 D7：恒 0，字段保留；座位间继承未来扩展时非零）。 */
   inheritance_cny?: number;
+  /**
+   * 行为画像快照（批次62 §3；仅本人座位下发，观战 / 全 Agent 模式 omit）。
+   * 未识破的偏差其 name_cn / effect / explanation 已由后端置空 —— 前端不得反查补全。
+   */
+  behavior?: VirtualCityBehaviorSnapshot;
 }
 
 /** Agent 思维可见性：本人座位 + 观战者可见；其他玩家不可见。 */
@@ -737,6 +753,10 @@ export interface VirtualCityGameState {
   family?: VirtualCityFamilyStats;
   /** 最近 5 条遗产继承（批次52 §7，降序；无继承 omit）。 */
   inheritance_log?: VirtualCityInheritanceEvent[];
+  /** 集体杠杆泡沫快照（批次62 §5；房间级，所有人可见）。 */
+  bubble?: VirtualCityBubbleSnapshot;
+  /** 资产流动性买卖价差表（批次62 §6；房间级，所有人可见）。 */
+  liquidity_spreads?: VirtualCityLiquiditySpreadSnapshot;
 }
 
 // ── 市长选举（批次 20 文档 3 A1/A3；game.state.public_services 选举段）────
@@ -1313,7 +1333,9 @@ export type VirtualCityActionType =
   | 'set_consumption'
   | 'buy_insurance' | 'cancel_insurance'
   // 批次52 §2 D13：家庭/代际动作（upgrade_education / pay_support_extra）。
-  | 'upgrade_education' | 'pay_support_extra';
+  | 'upgrade_education' | 'pay_support_extra'
+  // 批次62 §3/§4：行为金融动作（反思 / 延期支付 / 心理账户合并）。
+  | 'reflect' | 'defer_payment' | 'merge_accounts';
 
 export type VirtualCityAction =
   | { type: 'buy_asset'; asset: 'stock_index' | 'bond' | 'gold'; amount_cny: number }
@@ -1337,7 +1359,13 @@ export type VirtualCityAction =
   | { type: 'buy_insurance'; kind: VirtualCityInsuranceKind }
   | { type: 'cancel_insurance'; kind: VirtualCityInsuranceKind }
   | { type: 'upgrade_education'; child_idx: number }
-  | { type: 'pay_support_extra'; amount_cny: number };
+  | { type: 'pay_support_extra'; amount_cny: number }
+  // 批次62：reflect_mode = light|deep|preview（后端 bias.go::actReflect）。
+  | { type: 'reflect'; reflect_mode: VirtualCityReflectMode }
+  // 批次62：双曲贴现延期支付（后端 bias.go::actDeferPayment，reason ≤40 字备注）。
+  | { type: 'defer_payment'; amount_cny: number; reason?: string }
+  // 批次62：心理账户归并（后端 bias.go::actMergeAccounts，无参）。
+  | { type: 'merge_accounts' };
 
 // ── P2 交易系统：交易类动作（走 game.virtualCity_xxx 帧）──────────────────────
 
@@ -1551,43 +1579,52 @@ export interface VirtualCityDistrictDef {
 
 /** 32 城区静态表（后端架构文档 §4 DistrictDefs，顺序即数组下标）。
  *  前 8 区为 P0 原有城区（id/顺序不可修改）；中 8 区为 v2.12 阶段 2 扩展
- *  （地图 40×40 → 80×80，位置均在 ±30 单位内）；后 16 区为批次 20 城市扩张
- *  （地图 80×80 → 120×120，位置均在 |x|≤50、|z|≤48 内，契约=文档 1 §2）。 */
+ *  （地图 40×40 → 80×80）；后 16 区为批次 20 城市扩张。
+ *
+ *  **批次 61「全城连续正交方格路网」坐标改版**：全部 32 区坐标落在 **12 的整数倍**
+ *  上（= 方格网的街区中心，7×7 = 49 单元铺满 [-36,36]²），街道中心线恒在
+ *  `6 + 12k`（[-42,-30,-18,-6,6,18,30,42]）。旧坐标是散点（相邻值之差 < 9），
+ *  导致全城**不存在任何一条能连续贯穿、又不切进任何街区**的街道线——
+ *  这正是「街道不连续、街区还是斜的」的根因（详见
+ *  `components/virtualCity/cityGrid.ts` 头注释与
+ *  `lag_docs/虚拟城市/已实现/61-全城连续正交方格路网/01-方案设计.md` §1）。
+ *  ⚠ 本表 x/z 与后端 `ServerGo/game/virtual_city/districts.go::DistrictDefs` 必须
+ *  **逐字段一致**（后端有 `districts_grid_test.go` 断言方格不变量）。 */
 export const VIRTUAL_CITY_DISTRICTS: VirtualCityDistrictDef[] = [
-  { id: 'finance',     nameZh: '金融CBD', color: '#1d4ed8', x: 0,   z: 0,   houseBeta: 1.3,  basePriceWan: 800 },
-  { id: 'tech',        nameZh: '科技园',  color: '#0e7490', x: -10, z: 4,   houseBeta: 1.15, basePriceWan: 500 },
-  { id: 'industry',    nameZh: '工业区',  color: '#57534e', x: -12, z: -8,  houseBeta: 0.85, basePriceWan: 200 },
-  { id: 'oldtown',     nameZh: '老城区',  color: '#92400e', x: 2,   z: -12, houseBeta: 0.8,  basePriceWan: 180 },
-  { id: 'commerce',    nameZh: '商业中心', color: '#b91c1c', x: 10,  z: -2,  houseBeta: 1.1,  basePriceWan: 400 },
-  { id: 'residential', nameZh: '居住区',  color: '#15803d', x: 0,   z: 12,  houseBeta: 1.0,  basePriceWan: 300 },
-  { id: 'suburb',      nameZh: '郊区',    color: '#65a30d', x: -14, z: 14,  houseBeta: 0.7,  basePriceWan: 120 },
-  { id: 'riverside',   nameZh: '滨河新区', color: '#7c3aed', x: 14,  z: 10,  houseBeta: 1.25, basePriceWan: 450 },
+  { id: 'finance',     nameZh: '金融CBD', color: '#1d4ed8', x: 0, z: 0,   houseBeta: 1.3,  basePriceWan: 800 },
+  { id: 'tech',        nameZh: '科技园',  color: '#0e7490', x: -12, z: 0,   houseBeta: 1.15, basePriceWan: 500 },
+  { id: 'industry',    nameZh: '工业区',  color: '#57534e', x: -12, z: -12,  houseBeta: 0.85, basePriceWan: 200 },
+  { id: 'oldtown',     nameZh: '老城区',  color: '#92400e', x: 0, z: -12, houseBeta: 0.8,  basePriceWan: 180 },
+  { id: 'commerce',    nameZh: '商业中心', color: '#b91c1c', x: 12, z: 0,  houseBeta: 1.1,  basePriceWan: 400 },
+  { id: 'residential', nameZh: '居住区',  color: '#15803d', x: 0, z: 12,  houseBeta: 1.0,  basePriceWan: 300 },
+  { id: 'suburb',      nameZh: '郊区',    color: '#65a30d', x: -12, z: 12,  houseBeta: 0.7,  basePriceWan: 120 },
+  { id: 'riverside',   nameZh: '滨河新区', color: '#7c3aed', x: 12, z: 12,  houseBeta: 1.25, basePriceWan: 450 },
   // ── v2.12 阶段 2 扩展城区（80×80 地图外圈；顺序与后端 DistrictDefs 一致）──
-  { id: 'logistics_port',    nameZh: '物流港',   color: '#475569', x: -22, z: -4,  houseBeta: 0.9,  basePriceWan: 250 },
-  { id: 'hightech_park',     nameZh: '高新园区', color: '#0891b2', x: -22, z: 12,  houseBeta: 1.2,  basePriceWan: 600 },
-  { id: 'edu_district',      nameZh: '教育园区', color: '#7c3aed', x: -8,  z: 22,  houseBeta: 0.95, basePriceWan: 350 },
-  { id: 'medical_city',      nameZh: '医疗城',   color: '#db2777', x: 8,   z: 22,  houseBeta: 1.05, basePriceWan: 450 },
-  { id: 'industrial_park',   nameZh: '产业基地', color: '#78716c', x: -24, z: -20, houseBeta: 0.7,  basePriceWan: 150 },
-  { id: 'central_park',      nameZh: '中央公园', color: '#16a34a', x: 0,   z: -22, houseBeta: 1.0,  basePriceWan: 500 },
-  { id: 'transport_hub',     nameZh: '交通枢纽', color: '#ea580c', x: 22,  z: -14, houseBeta: 0.85, basePriceWan: 280 },
-  { id: 'cultural_creative', nameZh: '文创区',   color: '#e11d48', x: 24,  z: 8,   houseBeta: 1.1,  basePriceWan: 380 },
+  { id: 'logistics_port',    nameZh: '物流港',   color: '#475569', x: -36, z: 0,  houseBeta: 0.9,  basePriceWan: 250 },
+  { id: 'hightech_park',     nameZh: '高新园区', color: '#0891b2', x: -24, z: 12,  houseBeta: 1.2,  basePriceWan: 600 },
+  { id: 'edu_district',      nameZh: '教育园区', color: '#7c3aed', x: -12, z: 24,  houseBeta: 0.95, basePriceWan: 350 },
+  { id: 'medical_city',      nameZh: '医疗城',   color: '#db2777', x: 12, z: 24,  houseBeta: 1.05, basePriceWan: 450 },
+  { id: 'industrial_park',   nameZh: '产业基地', color: '#78716c', x: -24, z: -24, houseBeta: 0.7,  basePriceWan: 150 },
+  { id: 'central_park',      nameZh: '中央公园', color: '#16a34a', x: 0, z: -24, houseBeta: 1.0,  basePriceWan: 500 },
+  { id: 'transport_hub',     nameZh: '交通枢纽', color: '#ea580c', x: 24, z: -12, houseBeta: 0.85, basePriceWan: 280 },
+  { id: 'cultural_creative', nameZh: '文创区',   color: '#e11d48', x: 24, z: 12,   houseBeta: 1.1,  basePriceWan: 380 },
   // ── 批次 20 城市扩张新增 16 区（下标 16–31；id/顺序/坐标/颜色逐字 = 文档 1 §2 表）──
-  { id: 'fin_sub_center',    nameZh: '金融副中心', color: '#1e40af', x: 24,  z: 30,  houseBeta: 1.30, basePriceWan: 650 },
-  { id: 'software_park',     nameZh: '软件园',   color: '#0d9488', x: 38,  z: 14,  houseBeta: 1.20, basePriceWan: 520 },
-  { id: 'airport_town',      nameZh: '空港小镇', color: '#0369a1', x: 44,  z: -20, houseBeta: 1.05, basePriceWan: 300 },
-  { id: 'air_logistics',     nameZh: '航空物流园', color: '#334155', x: 36,  z: -38, houseBeta: 0.95, basePriceWan: 260 },
-  { id: 'auto_city',         nameZh: '汽车城',   color: '#a16207', x: 8,   z: -40, houseBeta: 1.00, basePriceWan: 300 },
-  { id: 'mountain_resort',   nameZh: '山居民宿区', color: '#4d7c0f', x: -8,  z: -44, houseBeta: 0.90, basePriceWan: 180 },
-  { id: 'chem_park',         nameZh: '化工园区', color: '#52525b', x: -20, z: -44, houseBeta: 0.70, basePriceWan: 130 },
-  { id: 'agri_park',         nameZh: '现代农业园', color: '#ca8a04', x: -40, z: -36, houseBeta: 0.80, basePriceWan: 160 },
-  { id: 'health_town',       nameZh: '康养小镇', color: '#fb7185', x: -44, z: -10, houseBeta: 0.80, basePriceWan: 200 },
-  { id: 'steel_town',        nameZh: '特钢镇',   color: '#44403c', x: -46, z: 2,   houseBeta: 0.75, basePriceWan: 150 },
-  { id: 'old_city_culture',  nameZh: '古城文化区', color: '#9a3412', x: -44, z: 22,  houseBeta: 0.85, basePriceWan: 240 },
-  { id: 'university_town',   nameZh: '大学城',   color: '#6366f1', x: -32, z: 34,  houseBeta: 0.95, basePriceWan: 300 },
-  { id: 'wetland_park',      nameZh: '湿地公园', color: '#14b8a6', x: -12, z: 40,  houseBeta: 0.90, basePriceWan: 280 },
-  { id: 'sports_new_city',   nameZh: '体育新城', color: '#facc15', x: 10,  z: 40,  houseBeta: 1.05, basePriceWan: 340 },
-  { id: 'bay_new_town',      nameZh: '湾区新城', color: '#7e22ce', x: 40,  z: 28,  houseBeta: 1.25, basePriceWan: 580 },
-  { id: 'highspeed_rail_town', nameZh: '高铁新城', color: '#c2410c', x: 46, z: 2,   houseBeta: 1.15, basePriceWan: 380 },
+  { id: 'fin_sub_center',    nameZh: '金融副中心', color: '#1e40af', x: 24, z: 24,  houseBeta: 1.30, basePriceWan: 650 },
+  { id: 'software_park',     nameZh: '软件园',   color: '#0d9488', x: 36, z: 12,  houseBeta: 1.20, basePriceWan: 520 },
+  { id: 'airport_town',      nameZh: '空港小镇', color: '#0369a1', x: 36, z: -24, houseBeta: 1.05, basePriceWan: 300 },
+  { id: 'air_logistics',     nameZh: '航空物流园', color: '#334155', x: 36, z: -36, houseBeta: 0.95, basePriceWan: 260 },
+  { id: 'auto_city',         nameZh: '汽车城',   color: '#a16207', x: 12, z: -36, houseBeta: 1.00, basePriceWan: 300 },
+  { id: 'mountain_resort',   nameZh: '山居民宿区', color: '#4d7c0f', x: -12, z: -36, houseBeta: 0.90, basePriceWan: 180 },
+  { id: 'chem_park',         nameZh: '化工园区', color: '#52525b', x: -24, z: -36, houseBeta: 0.70, basePriceWan: 130 },
+  { id: 'agri_park',         nameZh: '现代农业园', color: '#ca8a04', x: -36, z: -36, houseBeta: 0.80, basePriceWan: 160 },
+  { id: 'health_town',       nameZh: '康养小镇', color: '#fb7185', x: -36, z: -24, houseBeta: 0.80, basePriceWan: 200 },
+  { id: 'steel_town',        nameZh: '特钢镇',   color: '#44403c', x: -36, z: -12,   houseBeta: 0.75, basePriceWan: 150 },
+  { id: 'old_city_culture',  nameZh: '古城文化区', color: '#9a3412', x: -36, z: 24,  houseBeta: 0.85, basePriceWan: 240 },
+  { id: 'university_town',   nameZh: '大学城',   color: '#6366f1', x: -36, z: 36,  houseBeta: 0.95, basePriceWan: 300 },
+  { id: 'wetland_park',      nameZh: '湿地公园', color: '#14b8a6', x: -12, z: 36,  houseBeta: 0.90, basePriceWan: 280 },
+  { id: 'sports_new_city',   nameZh: '体育新城', color: '#facc15', x: 12, z: 36,  houseBeta: 1.05, basePriceWan: 340 },
+  { id: 'bay_new_town',      nameZh: '湾区新城', color: '#7e22ce', x: 36, z: 24,  houseBeta: 1.25, basePriceWan: 580 },
+  { id: 'highspeed_rail_town', nameZh: '高铁新城', color: '#c2410c', x: 36, z: 0,   houseBeta: 1.15, basePriceWan: 380 },
 ];
 
 export const WEALTH_DISTRICT_IDS: VirtualCityDistrictId[] =
@@ -1635,7 +1672,8 @@ export type VirtualCityActionFormKind =
   | 'none'                       // 无参确认（study / socialize / rest / work_overtime / stop_side_business / submit_month）
   | 'buy_asset' | 'sell_asset' | 'buy_house' | 'take_loan' | 'repay_loan'
   | 'side_business' | 'move_district' | 'amount' | 'amount_reason'
-  | 'consumption_level';         // 消费档位 4 按钮组（ActionPanel 专属渲染，不走通用弹窗）
+  | 'consumption_level'          // 消费档位 4 按钮组（ActionPanel 专属渲染，不走通用弹窗）
+  | 'reflect' | 'defer_payment'; // 批次62：反思三档按钮组 / 延期支付金额表单
 
 export interface VirtualCityActionMeta {
   type: VirtualCityActionType;
@@ -1665,6 +1703,23 @@ export const WEALTH_ACTIONS: VirtualCityActionMeta[] = [
   { type: 'consume',    icon: '🛍', i18nKey: 'consume',    form: 'amount_reason', hint: '自由消费（记事，无机制效果）' },
   { type: 'donate',     icon: '❤',  i18nKey: 'donate',     form: 'amount',       hint: '每万元 1 社会贡献分；人脉+1（累计前 3 次）' },
   { type: 'set_consumption', icon: '🧾', i18nKey: 'setConsumption', form: 'consumption_level', hint: '消费档位：0 节俭(×0.6/精力-1) / 1 标准 / 2 精致(×1.5/+1) / 3 奢侈(×2.2/+2)' },
+];
+
+/**
+ * 批次62 行为金融动作元数据（反思 / 延期支付 / 心理账户合并）。
+ *
+ * ⚠ **刻意不放进 `WEALTH_ACTIONS`（动作条主按钮组）**：动作条已有 14 个按钮，
+ *   再塞 3 个会加剧用户的「控件拥挤/溢出」反馈（2026-10-20）。这三个动作是
+ *   **情境化**的（反思只在有生效偏差时值得做、延期支付只在有「双曲贴现」倾向时
+ *   可用、合并账户只在心理账户未合并时可用），放进行为面板更合语义也更省空间。
+ *
+ * 形状仍是 `VirtualCityActionMeta`（与动作条同一套元数据契约），i18n 键
+ * `virtualCity.action.<i18nKey>`。
+ */
+export const WEALTH_BEHAVIOR_ACTIONS: VirtualCityActionMeta[] = [
+  { type: 'reflect', icon: '🧘', i18nKey: 'reflect', form: 'reflect', hint: '消耗认知点解除已生效的行为偏差（每回合限 1 次）' },
+  { type: 'defer_payment', icon: '⏳', i18nKey: 'deferPayment', form: 'defer_payment', hint: '双曲贴现：本月免付，3 个月后按 ×1.3 扣款' },
+  { type: 'merge_accounts', icon: '🧺', i18nKey: 'mergeAccounts', form: 'none', hint: '心理账户归并：合并后「意外之财」的冲动放大立即消失' },
 ];
 
 // ── 消费档位静态表（P1 真实经济循环引擎 §3.2）────────────────────────────
@@ -1722,45 +1777,13 @@ export const WEALTH_SUBMIT_MONTH: VirtualCityActionMeta = {
   hint: '标记本月完成；全员提交提前进入月结（不耗动作预算）',
 };
 
-// ── 展示辅助 ──────────────────────────────────────────────────────────
-
-/** 人民币金额人读化：≥1 亿 → "x.xx亿"；≥1 万 → "x.x万"；否则整数千分位。 */
-export function formatCny(n: number | undefined | null): string {
-  if (n === undefined || n === null || Number.isNaN(n)) return '—';
-  const abs = Math.abs(n);
-  const sign = n < 0 ? '-' : '';
-  if (abs >= 1e8) return `${sign}${(abs / 1e8).toFixed(2)}亿`;
-  if (abs >= 1e4) return `${sign}${(abs / 1e4).toFixed(1)}万`;
-  return `${sign}${Math.round(abs).toLocaleString('zh-CN')}`;
-}
-
-/** 带符号差额（+/-）用于涨跌箭头。 */
-export function formatDelta(n: number | undefined | null): string {
-  if (n === undefined || n === null || Number.isNaN(n)) return '—';
-  if (n > 0) return `+${formatCny(n)}`;
-  return formatCny(n);
-}
-
-/** 百分比展示（0.035 → "3.5%"）。 */
-export function formatPct(v: number | undefined | null, digits = 1): string {
-  if (v === undefined || v === null || Number.isNaN(v)) return '—';
-  return `${(v * 100).toFixed(digits)}%`;
-}
-
-/** FI Index 档位色（前端架构文档 §5：<0.5 灰 / 0.5–1 蓝 / ≥1 绿 / ≥1.5 金）。 */
-export function fiIndexColor(fi: number): string {
-  if (fi >= 1.5) return '#d4a017';
-  if (fi >= 1) return '#34d399';
-  if (fi >= 0.5) return '#60a5fa';
-  return '#9ca3af';
-}
-
-/** 明斯基融资等级色（暗色主题 ≥5:1）。 */
-export function minskyTierColor(tier: VirtualCityMinskyTier | undefined | null): string {
-  switch (tier) {
-    case 'hedge': return '#4caf50';       // 对冲 — 绿（白字 ≈ 5.4:1）
-    case 'speculative': return '#ff9800'; // 投机 — 橙（白字 ≈ 4.6:1 on #10151d）
-    case 'ponzi': return '#f44336';       // 庞氏 — 红（白字 ≈ 5.7:1）
-    default: return '#9ca3af';
-  }
-}
+// ── 展示辅助（批次62 拆出到 virtualCityFormat.ts，此处 re-export 保持既有导出名）──
+// virtualCity.ts 已达 §4 的 1800 行硬上限（批次61 城区坐标 + 批次62 动作类型追加），
+// 展示函数与类型定义无回环依赖 ⇒ 纯搬移 + re-export，29 个 import 方零改动。
+export {
+  formatCny,
+  formatDelta,
+  formatPct,
+  fiIndexColor,
+  minskyTierColor,
+} from './virtualCityFormat';

@@ -7,7 +7,6 @@ package virtual_city
 
 import (
 	"fmt"
-	"math"
 	"strings"
 
 	"LsmAgentGame/errcode"
@@ -42,6 +41,10 @@ type Action struct {
 	Tier int `json:"tier,omitempty"`
 	// upgrade_education(批次52 §2 裁决 D11/D13):子女序下标(0 起)。
 	ChildIdx int `json:"child_idx,omitempty"`
+	// reflect(批次62 §4.3):反思模式 light|deep|preview。
+	ReflectMode string `json:"reflect_mode,omitempty"`
+	// defer_payment(批次62 §3.3.1):延期支付的备注/用途标签。
+	PaymentTag string `json:"payment_tag,omitempty"`
 }
 
 // 动作类型常量(协议 §4)。
@@ -79,6 +82,10 @@ const (
 	// 批次52 新增(§2 裁决 D13):代际财富两动作 {amount_cny}/{child_idx},预算各 1。
 	ActPaySupportExtra  = "pay_support_extra"
 	ActUpgradeEducation = "upgrade_education"
+	// 批次62 新增(§4.3 主动反思 / §3.3.1 延期支付 / §3.2.3 合并账户):各耗 1 次动作预算。
+	ActReflect      = "reflect"        // reflect_mode = light|deep|preview
+	ActDeferPayment = "defer_payment"  // 双曲贴现:本月免付,3 个月后 ×1.3
+	ActMergeAccounts = "merge_accounts" // 心理账户归并(合并后放大效果消失)
 )
 
 // 信用贷档位面额(协议 §4:credit 档位必须是 50000/100000/200000 之一)。
@@ -87,6 +94,9 @@ var creditTierAmounts = map[int64]string{
 	100000: LoanCreditT2,
 	200000: LoanCreditT3,
 }
+
+// studyCostCNY 学习进修固定费用(¥2000;批次62 沉没成本偏差可放大该金额)。
+const studyCostCNY = 2000
 
 // 副业档位(协议 §4)。Kind 批次20 补入:sideTierGate 按品类差异化门槛
 // (tutoring/freelance 高价认知 +1),见 side_market.go。
@@ -163,6 +173,12 @@ func (w *World) ApplyAction(seat int, a Action) (string, *errcode.Error) {
 		return w.actPaySupportExtra(p, a)
 	case ActUpgradeEducation:
 		return w.actUpgradeEducation(p, a)
+	case ActReflect:
+		return w.actReflect(p, a)
+	case ActDeferPayment:
+		return w.actDeferPayment(p, a)
+	case ActMergeAccounts:
+		return w.actMergeAccounts(p)
 	default:
 		return "", errcode.CodeMsg(errcode.ErrValidationFailed, "unknown wealth action: "+a.Type)
 	}
@@ -194,38 +210,62 @@ func (w *World) actBuyAsset(p *Player, a Action) (string, *errcode.Error) {
 			return "", errcode.CodeMsg(errcode.ErrVirtualCityMarketCircuitBreak,
 				fmt.Sprintf("熔断期股票交易暂停至第 %d 月", w.Market.BreakerUntilMonth))
 		}
-		buyUnit := w.Market.StockBuyUnit()
-		units := math.Floor(float64(a.AmountCNY) / buyUnit)
-		if units < 1 {
+		// 批次62:偏差修正(过度自信/赌徒谬误放大金额、锚定抬价、羊群滑点)
+		// + 流动性价差(§7.2 股票 2%,叠加在微观结构 ask 价之上)。
+		plan := planBuyBias(p, a.AmountCNY)
+		liq := w.LiquiditySpread(ClassStock)
+		buyUnit := w.Market.StockBuyUnit() * (1 + liq/2) * plan.PriceMul
+		ex := w.executeBuy(p, plan, buyUnit, commissionStock)
+		if ex.Units < 1 {
 			return "", errcode.CodeMsg(errcode.ErrVirtualCityAssetInvalid, "amount too small for 1 unit")
 		}
-		cost := int64(units*buyUnit + 0.5)
-		fee := commissionStock(cost)
-		if p.Cash < cost+fee {
+		if ex.Total > p.Cash {
 			return "", errcode.Code(errcode.ErrVirtualCityInsufficientCash)
 		}
-		w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, cost+fee, CatBuy, "买入指数基金")
-		if at := p.assetOf(AssetStockIndex); at != nil {
-			at.Units += units
-			at.CostCNY += cost
-		} else {
-			p.Assets = append(p.Assets, Asset{Kind: AssetStockIndex, Units: units, CostCNY: cost, OpenMonth: w.Month})
+		w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, ex.Cost+ex.Fee, CatBuy, "买入指数基金")
+		if ex.Extra > 0 {
+			w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, ex.Extra, CatBiasCost, "跟风滑点")
 		}
-		p.StockT1Locked += int64(units)
-		text := fmt.Sprintf("买入指数基金 %.0f 份(¥%d)", units, cost+fee)
+		if at := p.assetOf(AssetStockIndex); at != nil {
+			at.Units += ex.Units
+			at.CostCNY += ex.Cost
+		} else {
+			p.Assets = append(p.Assets, Asset{Kind: AssetStockIndex, Units: ex.Units, CostCNY: ex.Cost, OpenMonth: w.Month})
+		}
+		p.StockT1Locked += int64(ex.Units)
+		p.recordBuyAnchor(AssetStockIndex, w.Market.StockIndex, buyUnit)
+		w.recordTradeDirection(p, "buy")
+		w.TurnBuyCount++
+		w.TurnTradeCount++
+		// 批次62 §4.1:未识破的偏差**不报名字**,只报"决策出现非理性偏移"(教学闭环)。
+		if ev := biasEventText(p.Seat, plan.Detected, plan.Hidden); ev != "" {
+			w.emitEvent("settle", p.Seat, ev)
+		}
+		text := fmt.Sprintf("买入指数基金 %.0f 份(¥%d)%s", ex.Units, ex.Total, biasAuditText(plan.Detected))
 		w.spendBudget(p, "trading", text)
 		return text, nil
 	case AssetBond:
-		units := float64(a.AmountCNY) // 面值 1.00 元/份
+		// 批次62:债券流动性价差 3% + 偏差修正(债券按面值 1.00 计)。
+		plan := planBuyBias(p, a.AmountCNY)
+		liq := w.LiquiditySpread(ClassBond)
+		unitPrice := 1.0 * (1 + liq/2) * plan.PriceMul
 		rate := w.Market.Params().BondRate
-		if p.Cash < a.AmountCNY {
+		ex := w.executeBuy(p, plan, unitPrice, func(int64) int64 { return 0 })
+		if ex.Units < 1 {
+			return "", errcode.CodeMsg(errcode.ErrVirtualCityAssetInvalid, "amount too small for 1 unit")
+		}
+		if ex.Total > p.Cash {
 			return "", errcode.Code(errcode.ErrVirtualCityInsufficientCash)
 		}
-		w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, a.AmountCNY, CatBuy, "买入债券理财")
+		units := ex.Units
+		w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, ex.Cost, CatBuy, "买入债券理财")
+		if ex.Extra > 0 {
+			w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, ex.Extra, CatBiasCost, "跟风滑点")
+		}
 		if at := p.assetOf(AssetBond); at != nil {
 			// 追加买入按加权平均锁定利率近似:新份额单独记账(拆分多头)。
 			at.Units += units
-			at.CostCNY += a.AmountCNY
+			at.CostCNY += ex.Cost
 			// 追加部分利率并入加权平均。
 			oldRate := at.AssetRate()
 			oldUnits := at.Units - units
@@ -234,29 +274,44 @@ func (w *World) actBuyAsset(p *Player, a Action) (string, *errcode.Error) {
 			}
 			at.Extra["rate"] = (oldRate*oldUnits + rate*units) / at.Units
 		} else {
-			p.Assets = append(p.Assets, Asset{Kind: AssetBond, Units: units, CostCNY: a.AmountCNY, OpenMonth: w.Month,
+			p.Assets = append(p.Assets, Asset{Kind: AssetBond, Units: units, CostCNY: ex.Cost, OpenMonth: w.Month,
 				Extra: map[string]any{"rate": rate}})
 		}
-		text := fmt.Sprintf("买入债券 ¥%d(锁定年化 %.1f%%)", a.AmountCNY, rate*100)
+		p.recordBuyAnchor(AssetBond, 1.0, unitPrice)
+		w.recordTradeDirection(p, "buy")
+		w.TurnBuyCount++
+		w.TurnTradeCount++
+		text := fmt.Sprintf("买入债券 ¥%d(锁定年化 %.1f%%)%s", ex.Cost, rate*100, biasAuditText(plan.Detected))
 		w.spendBudget(p, "trading", text)
 		return text, nil
 	case AssetGold:
-		units := math.Floor(float64(a.AmountCNY) / w.Market.GoldPrice)
-		if units < 1 {
+		// 批次62:贵金属流动性价差 5% + 偏差修正。
+		plan := planBuyBias(p, a.AmountCNY)
+		liq := w.LiquiditySpread(ClassGold)
+		unitPrice := w.Market.GoldPrice * (1 + liq/2) * plan.PriceMul
+		ex := w.executeBuy(p, plan, unitPrice, func(int64) int64 { return 0 })
+		if ex.Units < 1 {
 			return "", errcode.CodeMsg(errcode.ErrVirtualCityAssetInvalid, "amount too small for 1 gram")
 		}
-		cost := int64(units*w.Market.GoldPrice + 0.5)
-		if p.Cash < cost {
+		if ex.Total > p.Cash {
 			return "", errcode.Code(errcode.ErrVirtualCityInsufficientCash)
 		}
-		w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, cost, CatBuy, "买入黄金")
+		units := ex.Units
+		w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, ex.Cost, CatBuy, "买入黄金")
+		if ex.Extra > 0 {
+			w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, ex.Extra, CatBiasCost, "跟风滑点")
+		}
 		if at := p.assetOf(AssetGold); at != nil {
 			at.Units += units
-			at.CostCNY += cost
+			at.CostCNY += ex.Cost
 		} else {
-			p.Assets = append(p.Assets, Asset{Kind: AssetGold, Units: units, CostCNY: cost, OpenMonth: w.Month})
+			p.Assets = append(p.Assets, Asset{Kind: AssetGold, Units: units, CostCNY: ex.Cost, OpenMonth: w.Month})
 		}
-		text := fmt.Sprintf("买入黄金 %.0f 克(¥%d)", units, cost)
+		p.recordBuyAnchor(AssetGold, w.Market.GoldPrice, unitPrice)
+		w.recordTradeDirection(p, "buy")
+		w.TurnBuyCount++
+		w.TurnTradeCount++
+		text := fmt.Sprintf("买入黄金 %.0f 克(¥%d)%s", units, ex.Total, biasAuditText(plan.Detected))
 		w.spendBudget(p, "trading", text)
 		return text, nil
 	default:
@@ -298,15 +353,31 @@ func (w *World) actSellAsset(p *Player, a Action) (string, *errcode.Error) {
 				fmt.Sprintf("可卖 %d 份,当月买入 %d 份 T+1 冻结",
 					int(at.Units-float64(p.StockT1Locked)+0.5), p.StockT1Locked))
 		}
-		gross := int64(a.Units*w.Market.StockSellUnit() + 0.5)
+		// 批次62:流动性价差(§7.2)+ 偏差(损失厌恶/处置效应折价、羊群滑点)。
+		avgCost := 0.0
+		if at.Units > 0 {
+			avgCost = float64(at.CostCNY) / at.Units
+		}
+		plan := planSellBias(p, biasCtxForAsset(int64(avgCost+0.5), w.Market.StockIndex))
+		liq := w.LiquiditySpread(ClassStock)
+		sellUnit := w.Market.StockSellUnit() * (1 - liq/2) * plan.PriceMul
+		gross := int64(a.Units*sellUnit + 0.5)
+		extra := int64(float64(gross)*(plan.CostMul-1) + 0.5)
+		net := gross - extra
 		fee := commissionStock(gross)
-		w.Pay(p.Seat, EntityMarket, SeatEntity(p.Seat), gross, CatSell, "卖出指数基金")
+		w.Pay(p.Seat, EntityMarket, SeatEntity(p.Seat), net, CatSell, "卖出指数基金")
+		if extra > 0 {
+			w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, extra, CatBiasCost, "跟风滑点")
+		}
 		w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, fee, CatFee, "卖出佣金")
 		at.Units -= a.Units
 		if at.Units <= 0.000001 {
 			w.removeAsset(p, AssetStockIndex, 0)
 		}
-		text := fmt.Sprintf("卖出指数基金 %.0f 份,入账 ¥%d", a.Units, gross-fee)
+		w.recordTradeDirection(p, "sell")
+		w.TurnSellCount++
+		w.TurnTradeCount++
+		text := fmt.Sprintf("卖出指数基金 %.0f 份,入账 ¥%d%s", a.Units, net-fee, biasAuditText(plan.Detected))
 		w.spendBudget(p, "trading", text)
 		return text, nil
 	case a.Asset == AssetBond:
@@ -314,13 +385,27 @@ func (w *World) actSellAsset(p *Player, a Action) (string, *errcode.Error) {
 		if at == nil || at.Units < a.Units {
 			return "", errcode.Code(errcode.ErrVirtualCityAssetInvalid)
 		}
-		// 免费赎回(面值,协议 §4)。
-		w.Pay(p.Seat, EntityMarket, SeatEntity(p.Seat), int64(a.Units+0.5), CatSell, "赎回债券理财")
+		// 免费赎回(面值,协议 §4);批次62:债券流动性价差 3% + 偏差折价。
+		avgCost := 0.0
+		if at.Units > 0 {
+			avgCost = float64(at.CostCNY) / at.Units
+		}
+		plan := planSellBias(p, biasCtxForAsset(int64(avgCost+0.5), 1.0))
+		liq := w.LiquiditySpread(ClassBond)
+		gross := int64(a.Units * 1.0 * (1 - liq/2) * plan.PriceMul)
+		extra := int64(float64(gross)*(plan.CostMul-1) + 0.5)
+		w.Pay(p.Seat, EntityMarket, SeatEntity(p.Seat), gross-extra, CatSell, "赎回债券理财")
+		if extra > 0 {
+			w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, extra, CatBiasCost, "跟风滑点")
+		}
 		at.Units -= a.Units
 		if at.Units <= 0.000001 {
 			w.removeAsset(p, AssetBond, 0)
 		}
-		text := fmt.Sprintf("赎回债券 ¥%d", int64(a.Units+0.5))
+		w.recordTradeDirection(p, "sell")
+		w.TurnSellCount++
+		w.TurnTradeCount++
+		text := fmt.Sprintf("赎回债券 ¥%d%s", gross-extra, biasAuditText(plan.Detected))
 		w.spendBudget(p, "trading", text)
 		return text, nil
 	case a.Asset == AssetGold:
@@ -328,15 +413,30 @@ func (w *World) actSellAsset(p *Player, a Action) (string, *errcode.Error) {
 		if at == nil || at.Units < a.Units {
 			return "", errcode.Code(errcode.ErrVirtualCityAssetInvalid)
 		}
-		gross := int64(a.Units*w.Market.GoldPrice + 0.5)
+		// 批次62:贵金属流动性价差 5% + 偏差(损失厌恶/处置效应折价、羊群滑点)。
+		avgCost := 0.0
+		if at.Units > 0 {
+			avgCost = float64(at.CostCNY) / at.Units
+		}
+		plan := planSellBias(p, biasCtxForAsset(int64(avgCost+0.5), w.Market.GoldPrice))
+		liq := w.LiquiditySpread(ClassGold)
+		sellUnit := w.Market.GoldPrice * (1 - liq/2) * plan.PriceMul
+		gross := int64(a.Units*sellUnit + 0.5)
+		extra := int64(float64(gross)*(plan.CostMul-1) + 0.5)
 		fee := int64(float64(gross)*0.005 + 0.5) // 0.5% 手续费(I7)
-		w.Pay(p.Seat, EntityMarket, SeatEntity(p.Seat), gross, CatSell, "卖出黄金")
+		w.Pay(p.Seat, EntityMarket, SeatEntity(p.Seat), gross-extra, CatSell, "卖出黄金")
+		if extra > 0 {
+			w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, extra, CatBiasCost, "跟风滑点")
+		}
 		w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, fee, CatFee, "黄金手续费")
 		at.Units -= a.Units
 		if at.Units <= 0.000001 {
 			w.removeAsset(p, AssetGold, 0)
 		}
-		text := fmt.Sprintf("卖出黄金 %.0f 克,入账 ¥%d", a.Units, gross-fee)
+		w.recordTradeDirection(p, "sell")
+		w.TurnSellCount++
+		w.TurnTradeCount++
+		text := fmt.Sprintf("卖出黄金 %.0f 克,入账 ¥%d%s", a.Units, gross-extra-fee, biasAuditText(plan.Detected))
 		w.spendBudget(p, "trading", text)
 		return text, nil
 	case isHouseKind(a.Asset) || isShopKind(a.Asset):
@@ -403,7 +503,12 @@ func (w *World) sellProperty(p *Player, district string, shop bool) (string, *er
 		return "", errcode.Code(errcode.ErrVirtualCityAssetInvalid)
 	}
 	at := &p.Assets[idx]
-	price := w.Market.HousePrice(district)
+	// 批次62:房产流动性价差 10%(§7.2)+ 偏差(损失厌恶/处置效应折价、羊群滑点)。
+	fair := w.Market.HousePrice(district)
+	plan := planSellBias(p, biasCtxForAsset(at.CostCNY, float64(fair)))
+	price := w.liquiditySellPrice(fair, ClassHouse)
+	price = int64(float64(price)*plan.PriceMul + 0.5)
+	extra := int64(float64(price)*(plan.CostMul-1) + 0.5)
 
 	// 满 5 年唯一免增值税:持有 ≥60 月 且 名下唯一住宅(商铺不适用)。
 	vatFree := false
@@ -417,10 +522,13 @@ func (w *World) sellProperty(p *Player, district string, shop bool) (string, *er
 		tax = int64(float64(price) * 0.05)
 	}
 	agentFee := int64(float64(price) * 0.02)
-	net := price - tax - agentFee
+	net := price - tax - agentFee - extra
 
 	// Ledger:market→seat(gross) + seat→gov(tax) + seat→market(中介)。
-	w.Pay(p.Seat, EntityMarket, SeatEntity(p.Seat), price, CatSell, "出售"+label)
+	w.Pay(p.Seat, EntityMarket, SeatEntity(p.Seat), price-extra, CatSell, "出售"+label)
+	if extra > 0 {
+		w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, extra, CatBiasCost, "跟风滑点")
+	}
 	if tax > 0 {
 		w.Pay(p.Seat, SeatEntity(p.Seat), EntityGov, tax, CatTax, "房产增值税")
 	}
@@ -453,8 +561,11 @@ func (w *World) sellProperty(p *Player, district string, shop bool) (string, *er
 	if wasSelfOccupied {
 		p.HomeDistrict = p.District // 回到租房状态
 	}
-	text := fmt.Sprintf("出售%s%s ¥%d(税¥%d 中介¥%d%s)",
-		DistrictCN(district), label, price, tax, agentFee, repaySuffix(repaid))
+	w.recordTradeDirection(p, "sell")
+	w.TurnSellCount++
+	w.TurnTradeCount++
+	text := fmt.Sprintf("出售%s%s ¥%d(税¥%d 中介¥%d%s)%s",
+		DistrictCN(district), label, price, tax, agentFee, repaySuffix(repaid), biasAuditText(plan.Detected))
 	w.spendBudget(p, "trading", text)
 	return text, nil
 }
@@ -496,7 +607,14 @@ func (w *World) actBuyHouse(p *Player, a Action) (string, *errcode.Error) {
 	if a.Asset != "house" && a.Asset != "shop" {
 		return "", errcode.CodeMsg(errcode.ErrVirtualCityAssetInvalid, "asset must be house|shop")
 	}
-	price := w.Market.HousePrice(a.District)
+	// 批次62:房产流动性价差 10%(§7.2:买卖一次吃掉 10% 价差 + 税费)
+	// + 偏差修正(锚定追高 / 羊群滑点)。房价是首付与贷款的计费基准,
+	// 故价差与偏差必须作用在 price 上,而不是只作用在首付上。
+	plan := planBuyBias(p, 0)
+	fair := w.Market.HousePrice(a.District)
+	price := w.liquidityBuyPrice(fair, ClassHouse)
+	price = int64(float64(price)*plan.PriceMul + 0.5)
+	extra := int64(float64(price)*(plan.CostMul-1) + 0.5)
 	downpay := int64(float64(price)*a.DownpayRatio + 0.5)
 
 	if a.Asset == "house" {
@@ -517,10 +635,13 @@ func (w *World) actBuyHouse(p *Player, a Action) (string, *errcode.Error) {
 				rate = w.CB.MortgageRate() + p.CreditMarkup()
 			}
 			payment := AnnuityPayment(loanAmount, rate, 360)
-			if p.Cash < downpay {
+			if p.Cash < downpay+extra {
 				return "", errcode.Code(errcode.ErrVirtualCityInsufficientCash)
 			}
 			w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, downpay, CatBuy, "购房首付")
+			if extra > 0 {
+				w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, extra, CatBiasCost, "跟风滑点")
+			}
 			w.Pay(p.Seat, EntityBank, SeatEntity(p.Seat), loanAmount, CatLoan, "房贷放款")
 			// P1: 锁定加点 = 银行侧加点(MortgageSpread + CreditSpread)(不含玩家信用加点,
 			// 玩家在重定价时按最新信用等级重新计算),用于 LPR 重定价(v2.60 N12-3)。
@@ -538,19 +659,30 @@ func (w *World) actBuyHouse(p *Player, a Action) (string, *errcode.Error) {
 			w.applyMinskyRateAdjustment(p, &p.Loans[len(p.Loans)-1])
 			p.Assets = append(p.Assets, w.newPropertyAsset(AssetKindHouse(a.District), price))
 			w.autoSelfOccupy(p)
-			text := fmt.Sprintf("购入%s住宅 ¥%d(首付 ¥%d,月供 ¥%d)",
-				DistrictCN(a.District), price, downpay, payment)
+			p.recordBuyAnchor(AssetKindHouse(a.District), float64(fair), float64(price))
+			w.recordTradeDirection(p, "buy")
+			w.TurnBuyCount++
+			w.TurnTradeCount++
+			text := fmt.Sprintf("购入%s住宅 ¥%d(首付 ¥%d,月供 ¥%d)%s",
+				DistrictCN(a.District), price, downpay, payment, biasAuditText(plan.Detected))
 			w.spendBudget(p, "trading", text)
 			return text, nil
 		}
 		// 全款。
-		if p.Cash < price {
+		if p.Cash < price+extra {
 			return "", errcode.Code(errcode.ErrVirtualCityInsufficientCash)
 		}
 		w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, price, CatBuy, "全款购房")
+		if extra > 0 {
+			w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, extra, CatBiasCost, "跟风滑点")
+		}
 		p.Assets = append(p.Assets, w.newPropertyAsset(AssetKindHouse(a.District), price))
 		w.autoSelfOccupy(p)
-		text := fmt.Sprintf("全款购入%s住宅 ¥%d", DistrictCN(a.District), price)
+		p.recordBuyAnchor(AssetKindHouse(a.District), float64(fair), float64(price))
+		w.recordTradeDirection(p, "buy")
+		w.TurnBuyCount++
+		w.TurnTradeCount++
+		text := fmt.Sprintf("全款购入%s住宅 ¥%d%s", DistrictCN(a.District), price, biasAuditText(plan.Detected))
 		w.spendBudget(p, "trading", text)
 		return text, nil
 	}
@@ -562,12 +694,19 @@ func (w *World) actBuyHouse(p *Player, a Action) (string, *errcode.Error) {
 	if a.DownpayRatio < 1.0 {
 		return "", errcode.CodeMsg(errcode.ErrVirtualCityAssetInvalid, "shop requires full payment in P0")
 	}
-	if p.Cash < price {
+	if p.Cash < price+extra {
 		return "", errcode.Code(errcode.ErrVirtualCityInsufficientCash)
 	}
 	w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, price, CatBuy, "全款购铺")
+	if extra > 0 {
+		w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, extra, CatBiasCost, "跟风滑点")
+	}
 	p.Assets = append(p.Assets, w.newPropertyAsset(AssetKindShop(a.District), price))
-	text := fmt.Sprintf("全款购入%s商铺 ¥%d", DistrictCN(a.District), price)
+	p.recordBuyAnchor(AssetKindShop(a.District), float64(fair), float64(price))
+	w.recordTradeDirection(p, "buy")
+	w.TurnBuyCount++
+	w.TurnTradeCount++
+	text := fmt.Sprintf("全款购入%s商铺 ¥%d%s", DistrictCN(a.District), price, biasAuditText(plan.Detected))
 	w.spendBudget(p, "trading", text)
 	return text, nil
 }
@@ -948,13 +1087,18 @@ func (w *World) actStudy(p *Player) (string, *errcode.Error) {
 	if p.Energy < 1 {
 		return "", errcode.Code(errcode.ErrVirtualCityGateFailed)
 	}
-	if p.Cash < 2000 {
+	if p.Cash < studyCostCNY {
 		return "", errcode.Code(errcode.ErrVirtualCityInsufficientCash)
 	}
-	w.Pay(p.Seat, SeatEntity(p.Seat), w.consumerPayTo(), 2000, CatStudy, "学习进修")
+	// 批次62:沉没成本偏差(§1)——明知道学不动仍追加投入。
+	cost, det, _ := planInvest(p, studyCostCNY)
+	if cost > p.Cash {
+		cost = p.Cash
+	}
+	w.Pay(p.Seat, SeatEntity(p.Seat), w.consumerPayTo(), cost, CatStudy, "学习进修")
 	p.Energy--
 	p.Cognition++
-	text := "学习进修(¥2000,认知 +1)"
+	text := fmt.Sprintf("学习进修(¥%d,认知 +1)%s", cost, biasAuditText(det))
 	w.spendBudget(p, "resting", text)
 	return text, nil
 }
@@ -1164,13 +1308,23 @@ func (w *World) actConsume(p *Player, a Action) (string, *errcode.Error) {
 	if note == "" {
 		note = "自由消费"
 	}
-	w.Pay(p.Seat, SeatEntity(p.Seat), w.consumerPayTo(), a.AmountCNY, CatConsume, note)
+	// 批次62:心理账户偏差(§3.2.2)——用"意外之财"标签资金消费时冲动被放大。
+	plan := planConsume(p, a.AmountCNY)
+	amount := plan.Amount
+	if amount < 1 {
+		amount = a.AmountCNY
+	}
+	if p.Cash < amount {
+		amount = p.Cash
+	}
+	w.Pay(p.Seat, SeatEntity(p.Seat), w.consumerPayTo(), amount, CatConsume, note)
 	// P1: 自由消费同时计入消费篮子 misc(与步骤5 恩格尔分配同口径,§3.6)。
 	if p.ConsumptionByGoods == nil {
 		p.ConsumptionByGoods = map[string]float64{}
 	}
-	p.ConsumptionByGoods["misc"] += float64(a.AmountCNY)
-	text := fmt.Sprintf("消费 ¥%d(%s)", a.AmountCNY, note)
+	p.ConsumptionByGoods["misc"] += float64(amount)
+	p.ImmediateConsumeCount++
+	text := fmt.Sprintf("消费 ¥%d(%s)%s", amount, note, biasAuditText(plan.Detected))
 	w.spendBudget(p, "idle", text)
 	return text, nil
 }

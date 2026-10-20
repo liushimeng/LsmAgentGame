@@ -49,9 +49,9 @@ import type { VirtualCityCrowdSnapshot, VirtualCityDistrictDef } from '@/types/v
 import { detectQualityTier } from '@/engine3d';
 import { DISTRICT_SURFACE_Y, buildingTopY, spacing, u, worldDims } from './cityScale';
 import { MAIN_ROAD_MIN_LEN } from './VirtualCityCityMap';
-import { ROAD_WIDTH_MAIN } from './Road';
-import { FIRST_RING_RADIUS, type RoadJunction, type RoadSegment } from './roadNetwork';
-import { inWater, isBuildable, onFirstRing } from './cityObstacles';
+import { ROAD_WIDTH_MAIN, ROAD_WIDTH_SIDE } from './Road';
+import { type RoadJunction, type RoadSegment } from './roadNetwork';
+import { inWater, isBuildable } from './cityObstacles';
 import { buildingsFor, type BuildingSpec } from './building_layout';
 import { outdoorCount, crowdCapFor, synthCrowdEntry } from './crowdFormula';
 import { layoutCrowd, type CrowdPedestrian } from './crowdLayout';
@@ -232,7 +232,7 @@ export const PEDESTRIAN_TOTAL_CAP_LOW = 60;
 /** 全城树（行道 + 区内）实例总量上限（超出按 hash 种子稳定截断，§3.3）。
  *  批次 30 A5：行道树株距 25 m → 真实 9 m（REAL_SPACING_M.streetTree），
  *  总量 550 → 1800（实例化 3+2 draw call 不变，仅实例数增加）。 */
-export const TREE_TOTAL_CAP = 1800;
+export const TREE_TOTAL_CAP = 2600;
 /**
  * 批次 38 审计 A4b：区内树 / 街具 / 标识的 keep-out 余量（世界单位 0.3 = 3 m）。
  * 判定走 `isBuildable`（水域 + **全部**路廊 + 一环带域）—— 与建筑的 main-only
@@ -567,16 +567,16 @@ function vehiclesForNetwork(segments: RoadSegment[], withExtra: boolean): RoadVe
   /** 全局产车序号（变体轮转 / 速度相位涂装扰动 / 涂装 i%3 的确定性种子）。 */
   let i = 0;
 
-  // ── C2：arterial 交点推导 ──────────────────────────────────────────
-  // 收集 arterial 段按行进轴分类：Z 跑段（|dx|<ε，x=const）× X 跑段（|dz|<ε，z=const）
+  // ── C2：主干道交点推导（批次 61：改由「main 级方格街道」互交点驱动）──
+  // 收集 main 段按行进轴分类：Z 跑段（|dx|<ε，x=const）× X 跑段（|dz|<ε，z=const）
   // 两两求交点，按 Math.atan2(z,x) 升序 idx —— 与 roadNetwork.arterialIntersections
   // （trafficSignalsForCity 消费）同点集合同排序。
   // 相位规则（几何口径）：phaseOf(idx)=idx%2===0?'A':'B' 管控**沿 X 跑的路（z=const）**，
   // 沿 Z 跑的路（x=const）受 opposite 管控。依据 = trafficSignalsForCity 产出的
   // `rotation: atan2(-1,0)`（灯面朝 −x）灯携带 phase(idx)，它服务于沿 +x 行驶的车
   // —— 即沿 X 跑的路（该函数内「纵路/横路」注释命名与几何相反，以几何为准）。
-  const zRun = segments.filter((s) => s.cls === 'arterial' && Math.abs(s.to[0] - s.from[0]) < 1e-6);
-  const xRun = segments.filter((s) => s.cls === 'arterial' && Math.abs(s.to[1] - s.from[1]) < 1e-6);
+  const zRun = segments.filter((s) => s.kind === 'main' && Math.abs(s.to[0] - s.from[0]) < 1e-6);
+  const xRun = segments.filter((s) => s.kind === 'main' && Math.abs(s.to[1] - s.from[1]) < 1e-6);
   const intersections = zRun
     .flatMap((a) => xRun.map((b) => ({ x: a.from[0], z: b.from[1] })))
     .sort((p, q) => Math.atan2(p.z, p.x) - Math.atan2(q.z, q.x))
@@ -664,28 +664,26 @@ function vehiclesForNetwork(segments: RoadSegment[], withExtra: boolean): RoadVe
     const dx = tx - fx;
     const dz = tz - fz;
     const len = Math.sqrt(dx * dx + dz * dz);
+    if (len < 1) continue;
 
-    if (seg.cls === 'connector') {
-      // C1：去 20 上限（36 条全量；B1 修复后 GLB 模式不再叠加附件 mesh，DC 增量可控）
-      if (!withExtra || len < 1) continue;
-      const variant = CONNECTOR_VARIANTS[i % CONNECTOR_VARIANTS.length];
-      pushVehicle([fx, fz], [tx, tz], variant, len);
+    if (seg.kind === 'side') {
+      // 批次 61：次干道（方格网内 8 条）——窄路无公交，按段长**加权**布车。
+      // 旧口径每条 connector 恒 1 辆；方格网的次干道长达 84u，恒 1 辆会显得空荡。
+      if (!withExtra) continue;
+      const perDir = Math.max(1, Math.round(len / 40));
+      for (let k = 0; k < perDir; k++) {
+        const variant = CONNECTOR_VARIANTS[i % CONNECTOR_VARIANTS.length];
+        pushVehicle([fx, fz], [tx, tz], variant, len, { extraPhase: k * 0.5 });
+      }
       continue;
     }
 
-    // 批次 31 二轮：edgeLink 车流仅 high 档（low 档控 draw call）
-    if (seg.cls === 'edgeLink') {
-      if (!withExtra || len < 1) continue;
-      const variant = VEHICLE_VARIANTS[i % VEHICLE_VARIANTS.length];
-      pushVehicle([fx, fz], [tx, tz], variant, len);
-      continue;
-    }
-
-    if (seg.cls !== 'arterial') continue;
-    // C1：high 每方向 2 辆 / low 保底每方向 1 辆；双向各排独立队列槽位（C3）。
+    // 主干道 / 外环快速路：每方向多辆，双向各排独立队列槽位（C3）。
+    // 批次 61：方格网的 main 段长达 84u（旧 arterial 也是 96u），
+    // 恒定「每方向 2 辆」会变成 1 辆 / 240m 的稀疏车流 ⇒ 改为**按段长**定量。
     // laneOffset 取「行进方向右侧」语义，方向反转后世界侧自动翻转，因此对向车传
     // 同样的正值（取负会落到同侧 → 对撞）。
-    const perDir = withExtra ? 2 : 1;
+    const perDir = withExtra ? Math.max(1, Math.round(len / 28)) : 1;
     for (let k = 0; k < perDir; k++) {
       const variant = VEHICLE_VARIANTS[i % VEHICLE_VARIANTS.length];
       pushVehicle([fx, fz], [tx, tz], variant, len, {
@@ -705,17 +703,16 @@ function vehiclesForNetwork(segments: RoadSegment[], withExtra: boolean): RoadVe
 }
 
 /**
- * 阶段 L 行道树：沿主干道等距布点（与路灯错相位 π/2 避免冲突）。
+ * 阶段 L 行道树：沿街道等距布点（与路灯错相位 π/2 避免冲突）。
  * 批次 30 A5：株距 25 m（2.5u）→ 真实 9 m（REAL_SPACING_M.streetTree）。
- * 批次 31：扩展到全路网 main 段（spoke + arterial + edgeLink；connector 为
- * 9m 窄路不布树，防与对路树/楼群过密）。
  * 批次 38 R4：单侧交替 → **双侧平行行列**（同 t 处左右各一棵，与真实街道一致）；
  * R3：水域净空 —— `inWater` 点跳过（修「树长在运河上」）。
- * 批次 38 审计 A4b：增补 `onFirstRing` 净空（修「树冠顶球立在一环路面正中」——
- * 环带内 r≈20 处约 50 棵）。**刻意不挂 `onRoadCorridor`**：行道树的定义就是
- * 站在**自己那条路**的路缘外 1.35 u，而该值只比 main 路廊半宽 +margin
- * （0.95+0.3=1.25）多 0.1 u —— 一旦某条 connector / 交叉口靠近，保守判定
- * 就会把本该保留的路缘树连坐掉（实测多杀 107 棵，见 02-实施记录）。
+ * 批次 61：**方格网**下改为「主干道 9 m 株距 / 次干道 27 m（3 倍株距）」——
+ * 窄路树少但连续成行（真实城市次干道树量本就少于主干道），
+ * 全城树量 ≈ 1900 棵，仍在 `TREE_TOTAL_CAP`（2600）之内且**不分段截断**
+ * （截断会造出「有的段有树有的段没有」的不对称）。一环路随方格网删除，
+ * 原 `onFirstRing` 净空判定一并移除。**刻意不挂 `onRoadCorridor`**：
+ * 行道树的定义就是站在**自己那条路**的路缘外 1.35 u，保守判定会连坐掉路缘树。
  */
 function roadTreesForNetwork(segments: RoadSegment[]): RoadTree[] {
   const trees: RoadTree[] = [];
@@ -728,17 +725,18 @@ function roadTreesForNetwork(segments: RoadSegment[]): RoadTree[] {
   };
 
   for (const s of segments) {
-    if (s.kind !== 'main') continue;
     const [fx, fz] = s.from;
     const [tx, tz] = s.to;
     const dx = tx - fx;
     const dz = tz - fz;
     const len = Math.sqrt(dx * dx + dz * dz);
-    const treeSpacing = spacing('streetTree');
+    // 批次 61：主干道按 9 m 株距（真实行道树），次干道按 27 m（3 倍株距，
+    // 窄路树少但连续成行 —— 方格网次干道合计 672u，全按 9m 会超树量上限）。
+    const treeSpacing = s.kind === 'main' ? spacing('streetTree') : spacing('streetTree') * 3;
     const count = Math.max(2, Math.floor(len / treeSpacing));
     const nx = -dz / len;
     const nz = dx / len;
-    const sideOffset = ROAD_WIDTH_MAIN / 2 + 0.35 + 0.3; // 道路外 + 路灯偏移 + 树位
+    const sideOffset = (s.kind === 'main' ? ROAD_WIDTH_MAIN : ROAD_WIDTH_SIDE) / 2 + 0.35 + 0.3;
     for (let i = 1; i <= count; i++) {
       const t = i / (count + 1) + 0.25; // 错相位 π/2（路灯在 0.25 t 起步）
       if (t >= 1) continue;
@@ -748,8 +746,6 @@ function roadTreesForNetwork(segments: RoadSegment[]): RoadTree[] {
         const z = fz + dz * t + nz * sideOffset * side;
         // 批次 38 R3：水域净空（运河/港池上不种树）
         if (inWater(x, z, 0.3)) continue;
-        // 批次 38 审计 A4b：一环带域净空（骑环城区 suburb/oldtown 的行道树立在一环路上）
-        if (onFirstRing(x, z, 0.3)) continue;
         if (trees.length >= TREE_TOTAL_CAP) return trees; // 段顺序确定性截断
         trees.push({
           x,
@@ -786,58 +782,35 @@ export interface TrafficSignalSpot {
 const SIGNAL_SIDE_OFFSET = ROAD_WIDTH_MAIN / 2 + 0.25;
 
 /**
- * 全城红绿灯布点（批次 24 §6.2 → 批次 31 → 批次 31 三轮修订）：
- *   - ~~主干道双端 t=0.90/0.10~~ **已删**（CBD 放射路整体移除，双端灯无受控对象）；
- *   - ~~CBD 环岛放射来车灯~~ **已删**（零放射路，CBD 环为纯环岛）；
- *   - 一环路路口：线段与一环路真实交点（network.firstRingJunctionAngles），
- *     对角 2 座（面向来向车流 = A 组、面向环道车流 = B 组；公式照批次 24 §6.2）；
- *   - 方格骨干互交点（arterial × arterial，城内 4 处）：对角 2 座——
- *     一座面向纵路（x=常数）来车、一座面向横路（z=常数）来车，A/B 交错；
- *   - 相位组：路口序奇偶定 A/B；每路口 2 座固定对置。
+ * 全城红绿灯布点（批次 61 方格网重写）。
+ *
+ * 真实规律（GB 14886）：**主次干道相交处设信号灯，次干道相交处只设让行/人行横道**。
+ * 方格网下路口全部是**正交十字**，且路口序稳定 ⇒ 对角布 2 座（各服务一个进口道方向），
+ * 相位组按路口序奇偶定 A/B。
+ *
+ * - `junctions` 来自 `roadNetwork.buildRoadNetwork`（56 个正交交叉口）；
+ * - 只在 `major`（至少一侧是主干道）的路口布灯 ⇒ 次干道 × 次干道不布（避免灯海）；
+ * - 水域净空：运河上的路口不立杆（杆位在桥面之外会浮空）。
  */
 export function trafficSignalsForCity(
-  firstRingJunctionAngles: number[] = [],
-  arterialIntersections: RoadJunction[] = [],
+  junctions: RoadJunction[] = [],
 ): TrafficSignalSpot[] {
   const out: TrafficSignalSpot[] = [];
 
-  // ① 一环路路口：交点 = (cos·R, sin·R)；径向 o、环道逆时针切向 t = (−oz, ox)
-  for (const ang of firstRingJunctionAngles) {
-    const ox = Math.cos(ang);
-    const oz = Math.sin(ang);
-    const jx = ox * FIRST_RING_RADIUS;
-    const jz = oz * FIRST_RING_RADIUS;
-    const tx = -oz;
-    const tz = ox;
-    // 面向来向车流（A 组）：位于右行侧（junction − t·off），灯面朝径向外 o
-    // 批次 38 审计 R3 残留：过河交点的信号杆会浮在运河上（杆位在桥面之外）→ 跳过
-    const ax = jx - tx * SIGNAL_SIDE_OFFSET;
-    const az = jz - tz * SIGNAL_SIDE_OFFSET;
-    if (!inWater(ax, az, 0.3)) {
-      out.push({ x: ax, z: az, rotation: Math.atan2(ox, oz), phase: 'A' });
-    }
-    // 面向环道车流（B 组）：位于环道车右行侧（junction + o·off），灯面朝 −t
-    const bx = jx + ox * SIGNAL_SIDE_OFFSET;
-    const bz = jz + oz * SIGNAL_SIDE_OFFSET;
-    if (!inWater(bx, bz, 0.3)) {
-      out.push({ x: bx, z: bz, rotation: Math.atan2(-tx, -tz), phase: 'B' });
-    }
-  }
-
-  // ② 方格骨干互交点：纵路灯面向 ±x 来车、横路灯面向 ±z 来车（对角布置）
-  arterialIntersections.forEach((j, idx) => {
-    const phase: TrafficSignalSpot['phase'] = idx % 2 === 0 ? 'A' : 'B';
-    const off = SIGNAL_SIDE_OFFSET;
-    // 纵路（x = j.x）来车自 ±x：灯立于路口对角 (j.x+off, j.z+off)，面朝 −x
-    // 批次 38 审计 R3 残留：方格骨干 × 运河交点的信号杆会浮在水上 → 跳过
-    if (!inWater(j.x + off, j.z + off, 0.3)) {
-      out.push({ x: j.x + off, z: j.z + off, rotation: Math.atan2(-1, 0), phase });
-    }
-    // 横路（z = j.z）来车自 ±z：灯立于对角 (j.x−off, j.z−off)，面朝 −z
-    if (!inWater(j.x - off, j.z - off, 0.3)) {
-      out.push({ x: j.x - off, z: j.z - off, rotation: Math.atan2(0, -1), phase: phase === 'A' ? 'B' : 'A' });
-    }
-  });
+  junctions
+    .filter((j) => j.major)
+    .forEach((j, idx) => {
+      const phase: TrafficSignalSpot['phase'] = idx % 2 === 0 ? 'A' : 'B';
+      const off = SIGNAL_SIDE_OFFSET;
+      // 纵路（x = j.x）来车自 ±x：灯立于路口对角 (j.x+off, j.z+off)，面朝 −x
+      if (!inWater(j.x + off, j.z + off, 0.3)) {
+        out.push({ x: j.x + off, z: j.z + off, rotation: Math.atan2(-1, 0), phase });
+      }
+      // 横路（z = j.z）来车自 ±z：灯立于对角 (j.x−off, j.z−off)，面朝 −z
+      if (!inWater(j.x - off, j.z - off, 0.3)) {
+        out.push({ x: j.x - off, z: j.z - off, rotation: Math.atan2(0, -1), phase: phase === 'A' ? 'B' : 'A' });
+      }
+    });
 
   return out;
 }
@@ -854,48 +827,49 @@ export interface MastArmSignalSpot {
 const MAST_ARM_OFFSET = 0.75;
 
 /**
- * 全城悬臂式（横杆式）信号灯布点（批次 43 C3，方案 §6）。
+ * 全城悬臂式（横杆式）信号灯布点（批次 43 C3，方案 §6；批次 61 改由方格路口驱动）。
  *
  * 真实规律（GB 14886 §4.3 + 城市道路交通设施设计规范）：
  *   · 悬臂式信号灯用于**路面较宽、车道数多、驾驶员视线易被遮挡**的路口；
  *   · 立柱立于路口**外侧人行道缘石之后**，横臂自柱顶**水平伸过路口上空**，
- *     灯头悬于**对向进口道（或本进口道）车道中心线上方**，保证远处驾驶员
- *     提前看到信号（这是立杆式做不到的）；
- *   · 一个大型路口通常布 2~4 座悬臂灯，分别服务各进口道。
+ *     灯头悬于**对向进口道（或本进口道）车道中心线上方**。
  *
- * 本实现：仅布在**方格骨干互交点**（arterial × arterial，路面最宽、车道最多，
- * 是全城唯一满足「宽路口」判据的位置 —— 一环路交点与次干道过窄，用立杆式）。
+ * 本实现：仅布在**两侧都是主干道 / 外环快速路的宽路口**（`wide` 判据）——
+ * 方格网下即「主干道 × 主干道」与「主干道 × 快速路」共 10 处；次干道交叉口
+ * 用立杆式即可（真实城市同样只在宽路口设悬臂）。
  * 每个交点布 2 座（对角），横臂分别伸向两个进口道方向。
  */
 export function mastArmSignalsForCity(
-  arterialIntersections: RoadJunction[],
-  vehicleSignals: TrafficSignalSpot[],
+  junctions: RoadJunction[] = [],
+  vehicleSignals: TrafficSignalSpot[] = [],
 ): MastArmSignalSpot[] {
   // 复用机动车灯的水域净空口径：河上/水上不立柱。
   const isWet = (x: number, z: number) => inWater(x, z, 0.3);
   const out: MastArmSignalSpot[] = [];
 
-  arterialIntersections.forEach((j) => {
-    // 对角两座：立柱在 (j.x±off, j.z±off)，横臂分别朝 −x / −z 两个进口道方向伸。
-    const off = MAST_ARM_OFFSET;
-    const cands: Array<{ dx: number; dz: number; armDirX: number; armDirZ: number }> = [
-      // 立柱在东北角，横臂朝 −x（伸向自东向西的进口道）
-      { dx: off, dz: off, armDirX: -1, armDirZ: 0 },
-      // 立柱在西南角，横臂朝 −z（伸向自北向南的进口道）
-      { dx: -off, dz: -off, armDirX: 0, armDirZ: -1 },
-    ];
-    for (const c of cands) {
-      const cx = j.x + c.dx;
-      const cz = j.z + c.dz;
-      if (isWet(cx, cz)) continue;
-      // 悬臂臂端落点也要在陆地（臂伸到路中央，不该探进河里）。
-      if (isWet(cx + c.armDirX * 0.4, cz + c.armDirZ * 0.4)) continue;
-      // 横臂沿 local +X 悬挑 ⇒ 组件局部 +X 对齐世界 (armDirX, armDirZ)。
-      // 绕 Y 旋转 θ 使 local +X = (cosθ, −sinθ) ⇒ θ = atan2(−armDirZ, armDirX)。
-      const rotation = Math.atan2(-c.armDirZ, c.armDirX);
-      out.push({ x: cx, z: cz, rotation });
-    }
-  });
+  junctions
+    .filter((j) => j.wide)
+    .forEach((j) => {
+      // 对角两座：立柱在 (j.x±off, j.z±off)，横臂分别朝 −x / −z 两个进口道方向伸。
+      const off = MAST_ARM_OFFSET;
+      const cands: Array<{ dx: number; dz: number; armDirX: number; armDirZ: number }> = [
+        // 立柱在东北角，横臂朝 −x（伸向自东向西的进口道）
+        { dx: off, dz: off, armDirX: -1, armDirZ: 0 },
+        // 立柱在西南角，横臂朝 −z（伸向自北向南的进口道）
+        { dx: -off, dz: -off, armDirX: 0, armDirZ: -1 },
+      ];
+      for (const c of cands) {
+        const cx = j.x + c.dx;
+        const cz = j.z + c.dz;
+        if (isWet(cx, cz)) continue;
+        // 悬臂臂端落点也要在陆地（臂伸到路中央，不该探进河里）。
+        if (isWet(cx + c.armDirX * 0.4, cz + c.armDirZ * 0.4)) continue;
+        // 横臂沿 local +X 悬挑 ⇒ 组件局部 +X 对齐世界 (armDirX, armDirZ)。
+        // 绕 Y 旋转 θ 使 local +X = (cosθ, −sinθ) ⇒ θ = atan2(−armDirZ, armDirX)。
+        const rotation = Math.atan2(-c.armDirZ, c.armDirX);
+        out.push({ x: cx, z: cz, rotation });
+      }
+    });
 
   void vehicleSignals; // 预留：未来按车流方向挑进口道（本批按路口几何固定对角）
   return out;
@@ -1040,7 +1014,7 @@ export function busStopsForNetwork(segments: RoadSegment[]): Layout['busStops'] 
   const out: Layout['busStops'] = [];
   let seq = 0;
   for (const seg of segments) {
-    if (seg.cls !== 'arterial') continue;
+    if (seg.kind !== 'main') continue;
     const dx = seg.to[0] - seg.from[0];
     const dz = seg.to[1] - seg.from[1];
     const len = Math.sqrt(dx * dx + dz * dz);
@@ -1048,7 +1022,13 @@ export function busStopsForNetwork(segments: RoadSegment[]): Layout['busStops'] 
     const nx = -dz / len;
     const nz = dx / len;
     const sideOffset = ROAD_WIDTH_MAIN / 2 + 0.35;
-    for (const t of [0.3, 0.7]) {
+    // 批次 61：方格网主干道长 84u，恒定 2 个站台会显得空 ⇒ 改为**按段长**每 16u 一处，
+    // 且**避开路口**（路口前后 4u 内不设站台，真实城市同理：站台不占交叉口）。
+    const spacingAlong = 16;
+    const count = Math.max(2, Math.floor((len - 8) / spacingAlong));
+    for (let k = 0; k < count; k++) {
+      const t = (4 + (k + 0.5) * ((len - 8) / count)) / len;
+      if (t <= 0.02 || t >= 0.98) continue;
       const side = seq % 2 === 0 ? 1 : -1; // 沿线两侧交替
       const bx = seg.from[0] + dx * t + nx * sideOffset * side;
       const bz = seg.from[1] + dz * t + nz * sideOffset * side;
@@ -1097,8 +1077,9 @@ const METER_TOTAL_CAP = 48;
  *     sideOffset 0.88 u，isBuildable 会把**全部路缘咪表**当违例清零（§130 静默断线）。
  */
 export function parkingMetersForNetwork(segments: RoadSegment[]): ParkingMeterSpot[] {
-  const primary = segments.filter((s) => s.cls === 'arterial');
-  const use = primary.length ? primary : segments.filter((s) => s.cls === 'connector');
+  // 批次 61：方格网下主干道 = kind 'main'（主干道 + 外环快速路），次干道补位。
+  const primary = segments.filter((s) => s.kind === 'main');
+  const use = primary.length ? primary : segments.filter((s) => s.kind === 'side');
   const step = spacing('parkingMeter');
   const sideOffset = ROAD_WIDTH_MAIN / 2 + 0.18;
   // 站位（未抽稀）：沿段线 sAlong = 0.6 + i·step

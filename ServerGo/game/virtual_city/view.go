@@ -87,6 +87,10 @@ type ClientGameState struct {
 	// family_enabled=false → omit)。
 	Family         *FamilyStatsJSON       `json:"family,omitempty"`
 	InheritanceLog []InheritanceEventJSON `json:"inheritance_log,omitempty"`
+	// 批次62 §20261020-62:泡沫状态机快照(集体杠杆 / 换手率 / 现金占比)+ 资产
+	// 流动性价差表。观战者与玩家全量可见(宏观信息,非隐私)。
+	Bubble           *BubbleSnapshot           `json:"bubble,omitempty"`
+	LiquiditySpreads *LiquiditySpreadSnapshot  `json:"liquidity_spreads,omitempty"`
 }
 
 // ConsumerMarketJSON 是 consumer_market 子结构(P1 §6.1)。
@@ -577,6 +581,9 @@ type PlayerJSON struct {
 	DebtToIncome float64 `json:"debt_to_income"` // 主导贷款月供/月收入(0-1+)
 	// P1(§财商流P1-2 §6.2):消费档位(0-3,档位是公开生活方式)。
 	ConsumptionLevel int `json:"consumption_level"`
+	// 批次62 §20261020-62:羊群指数(公开信息;0~1,越高越爱跟风)。
+	// ⚠ 只公开指数,**不**公开他人的偏差画像 / 心理账户明细(信息分层)。
+	HerdingIndex float64 `json:"herding_index"`
 	// P1-4(§财商流P1-4 §8.2):该座位 Active 保单险种列表(是否投保是公开信息)。
 	InsuredKinds []string `json:"insured_kinds,omitempty"`
 	// 批次35 §4.1:区内归一化坐标 [0,1]²(全座位公开;与 my.local_pos /
@@ -672,6 +679,58 @@ type MyJSON struct {
 	// InheritanceCNY 本月遗产收入(批次52 §7 裁决 D7:板外继承恒 0,字段保留;
 	// 仅未来座位间继承扩展时非零 → omitempty 下恒 omit)。
 	InheritanceCNY int64 `json:"inheritance_cny,omitempty"`
+	// 批次62 §20261020-62:行为金融画像(仅本人可见)。他人偏差画像与心理
+	// 账户明细**不外泄**(信息分层);PlayerJSON 只暴露羊群指数。
+	Behavior *BehaviorJSON `json:"behavior,omitempty"`
+}
+
+// BehaviorJSON 是 my.behavior 子结构(批次62 §20261020-62)。
+type BehaviorJSON struct {
+	Cognition          int                  `json:"cognition"`
+	BiasProfile        []BiasProfileJSON    `json:"bias_profile"`
+	BiasImmunity       []BiasImmunityJSON   `json:"bias_immunity"`
+	AnchoringIndex     float64              `json:"anchoring_index"`
+	HerdingIndex       float64              `json:"herding_index"`
+	SavingsStreakMonths int                 `json:"savings_streak_months"`
+	DeferredPayments   []DeferredPaymentJSON `json:"deferred_payments"`
+	DelayedPayIndex    float64              `json:"delayed_pay_index"`
+	MentalAccounts     []MentalAccountJSON  `json:"mental_accounts"`
+	MentalAccountMerged bool                `json:"mental_account_merged"`
+	LastReflect        string               `json:"last_reflect"`
+}
+
+// BiasProfileJSON 是行为偏差画像单项(批次62)。
+//
+// ⚠ **未识破**(detected=false)的偏差:name_cn / effect / explanation 留空 ——
+// 教学闭环要求"玩家到复盘才知道自己踩了什么坑"(§4.1)。
+type BiasProfileJSON struct {
+	Code        string `json:"code"`
+	NameCN      string `json:"name_cn"`
+	Category    string `json:"category"`
+	Threshold   int    `json:"threshold"`
+	Detected    bool   `json:"detected"`
+	Effect      string `json:"effect"`
+	Explanation string `json:"explanation"`
+}
+
+// BiasImmunityJSON 是单类偏差的免疫进度(§4.4.2;0~1)。
+type BiasImmunityJSON struct {
+	Code     string  `json:"code"`
+	Progress float64 `json:"progress"`
+}
+
+// DeferredPaymentJSON 是延期支付明细(§3.3.1)。
+type DeferredPaymentJSON struct {
+	AmountCNY   int64   `json:"amount_cny"`
+	DueMonth    int     `json:"due_month"`
+	PenaltyRate float64 `json:"penalty_rate"`
+}
+
+// MentalAccountJSON 是资金来源标签余额(§3.2.1;不影响购买力)。
+type MentalAccountJSON struct {
+	Tag      string `json:"tag"`
+	LabelCN  string `json:"label_cn"`
+	AmountCNY int64 `json:"amount_cny"`
 }
 
 // MySideBusinessJSON 是 my.side_business 子结构(批次20 文档2 §3:定价档 +
@@ -932,6 +991,12 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 	}
 	cs.CentralBank = cj
 
+	// 批次62 §20261020-62:泡沫状态机快照 + 资产流动性价差表(宏观信息,
+	// 观战者与玩家全量可见)。
+	cs.Bubble = world.bubbleSnapshot()
+	liq := world.liquiditySpreadSnapshotOf()
+	cs.LiquiditySpreads = &liq
+
 	// Treasury 子结构(阶段4 2026-09-21 §城市扩张v2.12;nil → omitempty
 	// 不下发,阶段4 前对局兼容)。
 	if world.Treasury != nil {
@@ -1014,6 +1079,9 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 			MinskyTier:       minskyTier,
 			DebtToIncome:     dti,
 			ConsumptionLevel: pp.ConsumptionLevelSafe(),
+			// 批次62:羊群指数(公开 —— "谁在跟风"是社交信号);
+			// 但**不**暴露他人的偏差画像与心理账户明细(信息分层)。
+			HerdingIndex: pp.herdingIndex(),
 			// P1-4 §8.2:insurance_enabled=false 时 insured_kinds 恒空(与
 			// my.insurance omit 同口径,防中途关开关后冻结保单泄漏公开字段)。
 			InsuredKinds: world.insuredKindsOf(pp),
@@ -1306,6 +1374,8 @@ func myJSONFor(p *Player, sideShares map[string]map[int]float64) *MyJSON {
 		Loans:  make([]MyLoanJSON, 0, len(p.Loans)),
 		// §CityHuman重构:区内坐标(walk/run 区内移动更新)。
 		LocalPos: []float64{p.LocalPos[0], p.LocalPos[1]},
+		// 批次62 行为金融画像(仅本人;他人不外泄)。
+		Behavior: behaviorJSONFor(p),
 	}
 	// 批次20 文档2 §3:副业侧栏(定价档 + 当前客群份额;独占 = 1.0)。
 	if p.SideBusiness != nil {
@@ -1378,6 +1448,8 @@ type MyMy struct {
 	SideBusiness *MySideBusinessJSON
 	// StockT1Locked 当月买入冻结份数(批次20 文档3 B2-3)。
 	StockT1Locked int64
+	// Behavior 批次62 行为金融画像(仅本人)。
+	Behavior *BehaviorJSON
 }
 
 // jsonMy 把 MyMy 转成 *MyJSON(避免在 MyMy 上重复 JSON 标签)。
@@ -1397,6 +1469,7 @@ func jsonMy(m *MyMy) *MyJSON {
 		LocalPos:           m.LocalPos,
 		SideBusiness:       m.SideBusiness,
 		StockT1Locked:      m.StockT1Locked,
+		Behavior:           m.Behavior,
 	}
 }
 

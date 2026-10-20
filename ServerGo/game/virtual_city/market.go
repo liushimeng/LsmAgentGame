@@ -82,6 +82,15 @@ type MarketState struct {
 	// 最近播报月;仅事件去重,不影响任何金额与 rand)。
 	SideCompetitionTracked    map[string]bool
 	SideCompetitionEventMonth map[string]int
+
+	// ── 批次62 泡沫反身性(2026-10-20):价格漂移的宏观乘子/加成 ──
+	// DriftMultiplier 作用于**漂移项**(阶段年化/12),默认 1.0;
+	//   过热期 = 1.5(信贷推高资产价格,§11.2 状态表)。
+	// DriftExtra 作用于月度漂移的**加法项**(默认 0);
+	//   泡沫后衰退期 = −0.02(阴跌 2%/月)。
+	// ⚠ 只作用于杠杆资产(股票 + 房产指数);黄金由 PhaseTable 决定(避险属性)。
+	DriftMultiplier float64
+	DriftExtra      float64
 }
 
 // NewMarket 构造初始市场(开局默认 recovery,阶段时长 U(24,48) 月)。
@@ -95,6 +104,9 @@ func NewMarket(rng *rand.Rand) *MarketState {
 		// stepSideMarketEvents 惰性初始化兜底)。
 		SideCompetitionTracked:    map[string]bool{},
 		SideCompetitionEventMonth: map[string]int{},
+		// 批次62:泡沫漂移乘子默认 1.0(常态)。
+		DriftMultiplier: 1.0,
+		DriftExtra:      0,
 	}
 	for _, d := range DistrictDefs {
 		m.DistrictIdx[d.ID] = 1.0
@@ -148,11 +160,19 @@ func (m *MarketState) ShopRent(districtID string) int64 {
 // 在月结完成后、进入下一月前调用(§14 时序步骤③)。
 func (m *MarketState) MonthStep(rng *rand.Rand) {
 	p := m.Params()
+	// 批次62 泡沫反身性:漂移乘子(过热 ×1.5)/ 加法项(衰退阴跌 −2%/月)。
+	// ⚠ 零回归契约:常态下 mult=1.0 且 extra=0 ⇒ 本函数与批次 61 之前的
+	// 实现**逐位一致**(固定种子存量对局零偏移)。
+	mult := m.DriftMultiplier
+	if mult <= 0 {
+		mult = 1.0
+	}
+	extra := m.DriftExtra
 	// 股票(批次20 文档3 B2-1/B2-4:记录 clamp 前原始 Δ 供熔断判定,再做
 	// ±10% 保号截断。带内月份乘式与旧实现 `m *= 1+drift` 逐位一致 →
 	// 旧 seed 对局零偏移;σ=3% 月波动 p99 <10%,绝大多数月份走此路径)。
 	oldIdx := m.StockIndex
-	raw := oldIdx * (1 + p.StockAnnual/12 + stockMonthlySigma*normFloat64(rng))
+	raw := oldIdx * (1 + p.StockAnnual/12*mult + extra + stockMonthlySigma*normFloat64(rng))
 	if oldIdx > 0 {
 		m.LastStockRawDelta = raw/oldIdx - 1
 	}
@@ -161,7 +181,7 @@ func (m *MarketState) MonthStep(rng *rand.Rand) {
 		next = 0.01
 	}
 	m.StockIndex = next
-	// 黄金
+	// 黄金(避险属性 ⇒ 不受泡沫漂移乘子影响,只吃 PhaseTable 的年化)。
 	m.GoldPrice *= 1 + p.GoldAnnual/12 + goldMonthlySigma*normFloat64(rng)
 	if m.GoldPrice < 1 {
 		m.GoldPrice = 1
@@ -169,7 +189,7 @@ func (m *MarketState) MonthStep(rng *rand.Rand) {
 	// 房产: idx_d(m) = idx_d(m-1) × (1 + house_annual×beta/12 + 0.008×beta×N(0,1))
 	for _, d := range DistrictDefs {
 		idx := m.DistrictIdx[d.ID]
-		next := idx * (1 + p.HouseAnnual*d.Beta/12 + houseMonthlySigma*d.Beta*normFloat64(rng))
+		next := idx * (1 + p.HouseAnnual*d.Beta/12*mult + extra + houseMonthlySigma*d.Beta*normFloat64(rng))
 		if next < 0.05 {
 			next = 0.05
 		}

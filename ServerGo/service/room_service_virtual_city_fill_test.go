@@ -91,3 +91,39 @@ func TestCreatorShouldBeSpectator_VirtualCityDeepSeats(t *testing.T) {
 		})
 	}
 }
+
+// TestVirtualCityAgentSeatsFor_FullAgentGate 批次 63 修复守卫:
+// full_agent 开关**必须**决定开场是否注入居民 bot 座位 ——
+// 否则 `full_agent=false` 的房仍被 bot 占满,人类 join 恒 ErrRoomFull(30002)。
+func TestVirtualCityAgentSeatsFor_FullAgentGate(t *testing.T) {
+	cases := []struct {
+		name         string
+		fullAgent    bool
+		residentCount int
+		wantSeats    int
+	}{
+		{"full agent + 10 residents gives 10 seats", true, 10, 10},
+		{"full agent + 11 residents gives 11 seats", true, 11, 11},
+		{"full agent + 1 resident gives 1 seat", true, 1, 1},
+		{"full agent + 0 residents keeps legacy 12", true, 0, 12},
+		{"full agent + huge count clamps to 12", true, 10000, 12},
+		// 本批核心:false ⇒ 一个 bot 座位都不注入(空位留给人类)。
+		{"full_agent=false + 10 residents injects nothing", false, 10, 0},
+		{"full_agent=false + 1 resident injects nothing", false, 1, 0},
+		{"full_agent=false + 0 residents injects nothing", false, 0, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			seats := virtualCityAgentSeatsFor(tc.fullAgent, tc.residentCount)
+			if len(seats) != tc.wantSeats {
+				t.Fatalf("virtualCityAgentSeatsFor(%v, %d) seats = %d, want %d",
+					tc.fullAgent, tc.residentCount, len(seats), tc.wantSeats)
+			}
+			for i, a := range seats {
+				if a.Seat != i || a.ModelKey != "" || a.Role != "" {
+					t.Errorf("seats[%d] = %+v, want {Seat:%d, ModelKey:\"\", Role:\"\"}", i, a, i)
+				}
+			}
+		})
+	}
+}

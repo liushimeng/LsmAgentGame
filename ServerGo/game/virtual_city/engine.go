@@ -225,6 +225,27 @@ type World struct {
 	// P2 v2: 资金流向缓存(2026-09-19 §财商流P2-可视化)。SettleMonth ⑨ 之后
 	// 调用 RecordFlowStat 刷新,只保留本月。
 	LastFlowStat *FlowStat
+
+	// ── 批次62 行为金融与泡沫反身性引擎(2026-10-20)──
+	// 泡沫状态机(与 Market.CyclePhase 正交):none|overheat|burst|recession。
+	BubbleState          BubbleState
+	BubbleMonths         int  // 当前状态已持续月数
+	BubbleRecessionMonths int // 泡沫后衰退期的锁定月数(2~4,确定性)
+	BubbleLeverage       float64 // 市场杠杆率(总负债/总净资产)
+	BubbleTurnover       float64 // 资产换手率
+	BubbleCash           float64 // 现金占比
+	BubbleMessage        string  // 最近一次破裂播报(§11.3)
+	BubbleBurstMonth     int     // 最近一次破裂发生的月份(爆仓判定用)
+	BubbleRateShiftApplied bool  // 泡沫利率位移是否已施加(每周期只一次)
+
+	// 羊群效应(§3.4):回合操作摘要历史(最近 12 回合)。
+	TurnSummaries []TurnSummary
+	// 本回合累计:买入 / 卖出 / 观望人数(回合末 closeTurnSummary 归零)。
+	TurnBuyCount  int
+	TurnSellCount int
+	TurnHoldCount int
+	// 本回合成交资产笔数(资产换手率分子)。
+	TurnTradeCount int
 }
 
 // NewWorld 构造世界(seed=0 时用时间随机;cards[seat] 可为零值 Card 表示空座)。
@@ -273,6 +294,8 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		// P2: 玩家间交易与财富流动系统(2026-09-16 §财商流P2)。
 		ListingBook:  NewListingBook(),
 		AuctionHouse: NewAuctionHouse(),
+		// 批次62:泡沫状态机初始为"常态"(零值是空串,view 快照要显式 none)。
+		BubbleState: BubbleNone,
 	}
 	for seat := 0; seat < MaxSeats; seat++ {
 		if cards[seat].ID == "" {
@@ -280,6 +303,8 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		}
 		w.Players[seat] = newPlayerFromCard(seat, cards[seat])
 	}
+	// 批次62:偏差画像分配(确定性;按 seat 派生,同 seat 每次对局一致)。
+	w.assignBiasProfiles()
 	// 阶段6: CD 票面基准锚当前 SHIBOR(首次 ⑥B 之前 view/申购即可用)。
 	w.CDMarket.refreshRates(w)
 	return w

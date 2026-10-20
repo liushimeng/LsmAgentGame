@@ -198,12 +198,45 @@ function slotBuildable(def: VirtualCityDistrictDef, spec: BuildingSpec, margin: 
 export function buildingsFor(def: VirtualCityDistrictDef): BuildingSpec[] {
   const rnd = mulberry32(hashStr(def.id));
   const isPark = def.id === 'central_park';
+  const isPort = def.id === 'logistics_port';
   const count = isPark
     ? 2 + Math.floor(rnd() * 3)
     // 槽位数是硬上限（批次 39 C1 改 3 槽/边 ⇒ 12 槽）：抽超了只取前 count 个，
     // 不生成不存在的槽位（旧 4 槽/边 = 16 槽时 count ≤ 14，这条分支恒不触发）。
     : Math.min(SLOTS_PER_SIDE * 4, 8 + Math.floor(rnd() * 7));
   const candidates: BuildingSpec[] = [];
+
+  if (isPort) {
+    // **批次 61**：物流港走**仓储专用布局**（不再用通用街墙）。
+    //
+    // 原因：码头陆侧保留地（`cityLandmarks.PORT_TERMINAL_AREA`，绕 Y 转 90° 后
+    // 世界足迹 x[-39.2,-32.8] × z[-5.28,2.88]）几乎盖住整个 8×8 街区 ——
+    // 通用街墙的 12 个槽位（街墙环在 ±2.85）**全部**落进保留地（含 keep-out
+    // 余量外扩）⇒ 街墙分支产出 **0 栋**（CDP 控制台告警实锤）。
+    //
+    // 真实港口的形态：**堆场/仓储沿陆侧成排，码头面朝水域**。故本分支沿街区
+    // **南缘**（z = +4.2，码头保留地南界 2.88 + keep-out 外扩 1.05 = 3.93 之外）
+    // 排 4 栋低矮仓库（'shed' 形制，见 `building_shapes` 的 archetype 表），
+    // 临街面朝南（面向 z=+6 的次干道），与码头堆场一脉相承。
+    const WAREHOUSE_X = [-3.3, -1.1, 1.1, 3.3];
+    for (let i = 0; i < WAREHOUSE_X.length; i++) {
+      candidates.push({
+        x: WAREHOUSE_X[i],
+        z: 4.2,
+        w: 1.6,
+        d: 1.2,
+        factor: sampleFactor(rnd),
+        // 批次 39 C3：临街面 = 所在那一边（z>0 ⇒ 面朝 +Z 即南侧次干道）
+        streetAxis: 'z',
+        streetSign: 1,
+        idx: i,
+      });
+    }
+    return filterNoOverlap(
+      candidates.filter((s) => slotBuildable(def, s, KEEP_OUT_MARGIN)),
+      MIN_GAP,
+    );
+  }
 
   if (isPark) {
     // 公园景观小品：中心附近散布（半径 1.2~2.8），尺度小

@@ -282,6 +282,11 @@ func (cb *CentralBankState) MonthlyDecision(w *World, rng *rand.Rand) {
 	}
 	cb.RediscountRate = cb.PolicyRate + 0.005
 
+	// 批次62 §11.2:泡沫反身性对政策利率的影响(水平位移,每个泡沫周期一次):
+	// 过热期 +20bp(信贷过热 → 加息压力);泡沫后衰退期 −20bp(需求萎缩 → 降息)。
+	// 叠加在既有 CPI 逆周期调节之后、LPR 重算之前 ⇒ LPR 同步反映。
+	w.applyBubbleRateShift(cb)
+
 	// g. 内生 LPR。
 	cb.ComputeLPR()
 

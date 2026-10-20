@@ -252,12 +252,22 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	// 替换必须发生在 agentSeatSet 构建/校验/落库之前,使 bot 用户行、
 	// FullAgentMode 判定、ws 层 RegisterBotSeats、自动开局看到同一座位集;
 	// werewolf 等其他游戏路径零变化。
+	//
+	// ⚠ **批次 63 修复(§130:full_agent 三态接线声明了却从不接线)**:
+	// 旧代码**无条件**用 resident_count 派生 bot 座位并覆盖 agentSeats,完全无视
+	// 上面的 `virtualCityFullAgent` —— 于是即便客户端显式传 `full_agent=false`
+	// (等价于 `wealthCfg.FullAgent=false`),房间仍被 10 个 bot 占满,
+	// 人类 POST /api/rooms/:id/join 恒返回 `ErrRoomFull`(30002「room is full」)。
+	// 已实测复现(HTTP 直发):create `{"full_agent":false,"resident_count":10}` → join 30002。
+	// 现按 `virtualCityFullAgent` 闸口:非全 Agent 房**不**注入居民 bot 座位,
+	// 空位留给人类;`prepareVirtualCityAgentRoom` 仍会把 FullAgentMode 置 false,
+	// JoinRoom 的 `IsFullAgentRoom` 守卫随之放行。
 	if gameKind == "virtual_city" {
 		residentN := 0
 		if wealthCfg != nil {
 			residentN = wealthCfg.ResidentCount
 		}
-		agentSeats = wealthDeepSeats(residentN)
+		agentSeats = virtualCityAgentSeatsFor(virtualCityFullAgent, residentN)
 	}
 
 	// Validate agent-seat requests up front, failing fast before any DB writes.

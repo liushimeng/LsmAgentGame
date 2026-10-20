@@ -7,6 +7,8 @@ import virtualCityLinePool from './virtualCityLinePool-en';
 import virtualCityCityClock from './virtualCityCityClock-en';
 import virtualCityTimeWeather from './virtualCityTimeWeather-en';
 import virtualCityFamily from './virtualCityFamily-en';
+import virtualCityDashboard from './virtualCityDashboard-en';
+import virtualCityBehavior from './virtualCityBehavior-en';
 
 // English — en
 const en: Dict = {
@@ -1731,7 +1733,7 @@ const en: Dict = {
   'virtualCity.consumption.invalid': 'Invalid consumption level (must be 0-3)',
 
   // ── virtualCity split files (≤1800 line cap): P2 trading / P1-4 insurance / residents / batch20 / line pool ──
-  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily,
+  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily, ...virtualCityDashboard, ...virtualCityBehavior,
 
   // ── P1 Minsky Engine + LPR Reprice + Early Repayment ──
   'minsky.title': 'Minsky Financing Status',
@@ -1769,32 +1771,6 @@ const en: Dict = {
   'earlyrepay.dangerTitle': 'Dangerous Operation',
   'earlyrepay.dangerBody': 'You are about to pay ¥{amount} in full to close your mortgage. This action is irreversible.',
   // ── P2 v2 VirtualCity Flow Visualization (2026-09-19 §P2-viz §13.4) ──
-  'virtualCity.dashboard.structure': 'VirtualCity Structure',
-  'virtualCity.dashboard.lorenz.title': 'Lorenz Curve',
-  'virtualCity.dashboard.lorenz.myPos': 'My Position',
-  'virtualCity.dashboard.lorenz.myRank': 'My Rank {rank}/{total}',
-  'virtualCity.dashboard.lorenz.equalLine': 'Perfect Equality Line',
-  'virtualCity.dashboard.lorenz.lorenzCurve': 'Actual Distribution',
-  'virtualCity.dashboard.lorenz.giniBadge': 'Gini = {value}',
-  'virtualCity.dashboard.lorenz.empty': 'VirtualCity data not yet available',
-  'virtualCity.dashboard.pyramid.title': 'VirtualCity Pyramid',
-  'virtualCity.dashboard.pyramid.survival': 'Survival Circle',
-  'virtualCity.dashboard.pyramid.accumulation': 'Accumulation Circle',
-  'virtualCity.dashboard.pyramid.freedom': 'Freedom Circle',
-  'virtualCity.dashboard.pyramid.peopleCount': '{n} people',
-  'virtualCity.dashboard.pyramid.virtualCityPct': '{pct} of total virtualCity',
-  'virtualCity.dashboard.flow.title': 'Fund Flow (This Month)',
-  'virtualCity.dashboard.flow.in': 'Total Inflow',
-  'virtualCity.dashboard.flow.out': 'Total Outflow',
-  'virtualCity.dashboard.flow.empty': 'No fund flow this month',
-  'virtualCity.dashboard.flow.node.salary': 'Salary',
-  'virtualCity.dashboard.flow.node.firms': 'Firms',
-  'virtualCity.dashboard.flow.node.market': 'Market',
-  'virtualCity.dashboard.flow.node.bank': 'Bank',
-  'virtualCity.dashboard.flow.node.gov': 'Government',
-  'virtualCity.dashboard.flow.node.player': 'Resident',
-  'virtualCity.dashboard.flow.node.world': 'System',
-  'virtualCity.dashboard.flow.tooltip': '{from} → {to}: ¥{amount}',
 };
 
 export default en;

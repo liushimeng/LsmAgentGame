@@ -186,7 +186,8 @@ export function PortTerminal() {
       dimsKey="portTerminal"
       infoId="civic.port-terminal"
       anchorY={6}
-      position={[-32, 0, -8.7]}
+      position={[-36, 0, -1.2]}
+      rotation={[0, Math.PI / 2, 0]}
       litMaterials={LIT}
       fallback={
         <mesh geometry={geo} receiveShadow>

@@ -32,7 +32,9 @@ import { VIRTUAL_CITY_MIN_SEATS, virtualCityOccupiedSeats, virtualCitySeatCapaci
  */
 export type VirtualCityPanelTab =
   | 'finance' | 'market' | 'ledger' | 'economy'
-  | 'market-trade' | 'insurance';
+  | 'market-trade' | 'insurance'
+  // 批次62：行为金融（本人画像 + 反思）与宏观（集体泡沫 + 流动性价差）两个新面板。
+  | 'behavior' | 'macro';
 
 /** 市场快照（走势迷你图 + 相对上月箭头用）。 */
 export interface VirtualCityMarketPoint {

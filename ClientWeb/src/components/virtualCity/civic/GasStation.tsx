@@ -199,7 +199,7 @@ export function GasStation() {
       dimsKey="gasStation"
       infoId="civic.gas-station"
       anchorY={5.58}
-      position={[5.8, 0, 6.7]}
+      position={[-24, 0, -12]}
       litMaterials={LIT}
       fallback={
         <mesh geometry={geo}>

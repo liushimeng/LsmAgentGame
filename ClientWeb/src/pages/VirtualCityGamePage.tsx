@@ -48,6 +48,8 @@ import { ActionPanel } from '@/components/virtualCity/ActionPanel';
 import { MonthTicker } from '@/components/virtualCity/MonthTicker';
 import { MarketTradePanel } from '@/components/virtualCity/MarketTradePanel';
 import { InsurancePanel } from '@/components/virtualCity/InsurancePanel';
+import { BehaviorPanel } from '@/components/virtualCity/BehaviorPanel';
+import { MacroPanel } from '@/components/virtualCity/MacroPanel';
 import { GameOverModal } from '@/components/virtualCity/GameOverModal';
 import { CityStatsPanel } from '@/components/virtualCity/CityStatsPanel';
 import { CivicElectionBanner } from '@/components/virtualCity/CivicElectionBanner';
@@ -272,7 +274,10 @@ export function VirtualCityGamePage() {
   // 15-3D城市全面真实感深化 · 阶段 Q：合并 Tab 9 → 6（economy + survey → economy 含调研入口；
   // listing + loan + infomarket → market-trade 含子导航）。
   type TabGroup = 'data' | 'trade';
-  type PanelTab = 'finance' | 'market' | 'ledger' | 'economy' | 'market-trade' | 'insurance';
+  type PanelTab =
+    | 'finance' | 'market' | 'ledger' | 'economy' | 'market-trade' | 'insurance'
+    // 批次62：行为金融 / 宏观泡沫两个新面板。
+    | 'behavior' | 'macro';
   // 同步 store 类型（局部重新声明避免扩大 store.ts 类型）
   const tabs: { key: PanelTab; label: string; group: TabGroup }[] = [
     { key: 'finance', label: t('virtualCity.tab.finance' as TKey), group: 'data' },
@@ -281,6 +286,12 @@ export function VirtualCityGamePage() {
     { key: 'economy', label: `📊 ${t('virtualCity.tab.economy' as TKey)}`, group: 'data' },
     { key: 'market-trade', label: `💼 市场`, group: 'trade' },
     { key: 'insurance', label: `🛡 ${t('virtualCity.tab.insurance' as TKey)}`, group: 'trade' },
+    // 批次62：行为（本人画像，房间级宏观之外）与宏观（**所有人可见**，含观战者）。
+    // 标签用**短名**（面板内标题仍是全称）：侧栏 380px 内 8 个 Tab，
+    // 长标签会在窄按钮里换行 ⇒ 按钮变 3 行高 ⇒ 溢出 .virtualCity-tabs 的
+    // max-height:112px 被裁切（批次62 实测：标签写成「行为与认知」即被裁成竖排）。
+    { key: 'behavior', label: `🧠 ${t('virtualCity.behavior.tab' as TKey)}`, group: 'data' },
+    { key: 'macro', label: `🌐 ${t('virtualCity.macro.tab' as TKey)}`, group: 'data' },
   ];
   const tabGroups: { key: TabGroup; labelKey: TKey }[] = [
     { key: 'data', labelKey: 'virtualCity.tabgroup.data' as TKey },
@@ -529,6 +540,21 @@ export function VirtualCityGamePage() {
               />
             )}
             {/* P1 第四期：商业保险（my.insurance 驱动；观战 / 全 Agent 模式只读）。 */}
+            {/* 批次62：行为金融面板（本人画像；观战 / 全 Agent 模式只读空态）。 */}
+            {panelTab === 'behavior' && (
+              <BehaviorPanel
+                behavior={gameState?.my?.behavior ?? null}
+                spectator={spectator || (gameState?.my_seat ?? -1) < 0}
+                onAction={sendAction}
+              />
+            )}
+            {/* 批次62：宏观泡沫面板（房间级 ⇒ 观战者也能看到集体杠杆率）。 */}
+            {panelTab === 'macro' && (
+              <MacroPanel
+                bubble={gameState?.bubble ?? null}
+                spreads={gameState?.liquidity_spreads ?? null}
+              />
+            )}
             {panelTab === 'insurance' && (
               <InsurancePanel
                 insurance={gameState?.my?.insurance ?? null}
