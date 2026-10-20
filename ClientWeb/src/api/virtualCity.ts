@@ -8,6 +8,7 @@
 
 import { http, ApiError, isSessionExpiredError } from '@/services/http';
 import type { VirtualCityCityProfileProgress, VirtualCityCityResidentProfile, VirtualCitySurvey } from '@/types/virtualCity';
+import type { RealtimeBoardRefreshResult, RealtimeFeed } from '@/types/virtualCityRealtime';
 
 // 2026-09-22 §CityHuman全民驱动 — GET /api/games/virtual-city/professions 已随
 // 职业卡精选层退役（03 号契约）：原拉取接口及其三个类型一并删除。
@@ -104,4 +105,34 @@ export async function fetchCityResident(
     if (isSessionExpiredError(e)) return null; // 会话过期已由全局弹层接管
     throw e;
   }
+}
+
+// ── 批次 65 · City-Chrome 实时数据通道（lag_docs/虚拟城市/已实现/
+//    65-CityChrome实时数据通道与实时看板/01-方案设计.md §3.5）──────────────
+
+/**
+ * GET /api/virtual_city/realtime_board（需登录）— 实时看板快照。
+ *
+ * 返回 {code:0, data:{feed: Feed}}；late-joiner 首屏靠它补齐
+ * game.realtime_feed 帧间隙。数据是全局的（与房间无关）。
+ * §7.1：首屏拉取失败不算操作错误 —— 调用方静默兜底置空即可。
+ */
+export function fetchRealtimeBoard(): Promise<{ feed: RealtimeFeed }> {
+  return http<{ feed: RealtimeFeed }>('/api/virtual_city/realtime_board');
+}
+
+/**
+ * POST /api/virtual_city/realtime_board/refresh（需登录）— 人工触发一次采集。
+ *
+ * body {category?}（缺省 = 调度器当前轮转类目）；入任务队列立即调度一次 mission。
+ * 限流：同 category 60s 内重复请求返回 429 语义错误码（抛 ApiError，§7.1 面板内联红条）。
+ * 返回 {code:0, data:{accepted:true, queued_category}}。
+ */
+export function refreshRealtimeBoard(
+  category?: string,
+): Promise<RealtimeBoardRefreshResult> {
+  return http<RealtimeBoardRefreshResult>('/api/virtual_city/realtime_board/refresh', {
+    method: 'POST',
+    body: JSON.stringify(category ? { category } : {}),
+  });
 }

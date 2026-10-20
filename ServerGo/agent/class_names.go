@@ -161,6 +161,8 @@ func AllAgentClassNames() []AgentClassName {
 		AgentClassDebateCommentator,
 		// 2026-09-22 §CityHuman重构 — 虚拟城市居民 Agent(五类合一)
 		AgentClassCityHuman,
+		// 2026-10-20 §批次65 — City-Chrome 数据采集 Agent
+		AgentClassCityChrome,
 		// 2026-10-05 §LsmKLBaseServer 知识库引擎 — LLM 特征抽取
 		AgentClassKnowledgeExtractor,
 	}
@@ -221,4 +223,13 @@ const (
 	// 不再新增 AgentClass(§130: 零消费方常量已删除)。
 	// 详见 lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md。
 	AgentClassCityHuman AgentClassName = "LsmAgentGame-City-Human"
+
+	// AgentClassCityChrome 是虚拟城市「数据采集员」的 AgentClassName
+	// (2026-10-20 §批次65):由 ServerGo/citychrome/ 的 Agent struct 实现;
+	// 经 go-web-debug-tool(内存 Chrome/CDP)访问真实金融站点,采集
+	// A股/港股/美股/贵金属/期货/加密货币行情与热点新闻入 FeedStore,
+	// 供实时看板(WS game.realtime_feed + HTTP 快照)与 City-Human 工具
+	// realworld_info 消费。详见 lag_docs/虚拟城市/已实现/
+	// 65-CityChrome实时数据通道与实时看板/01-方案设计.md。
+	AgentClassCityChrome AgentClassName = "LsmAgentGame-City-Chrome"
 )

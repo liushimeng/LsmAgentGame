@@ -37,6 +37,7 @@ import (
 	"LsmAgentGame/agent/debaterun"
 	"LsmAgentGame/agent/wwjudge"
 	"LsmAgentGame/api"
+	"LsmAgentGame/citychrome"
 	"LsmAgentGame/config"
 	"LsmAgentGame/db"
 	"LsmAgentGame/errcode"
@@ -1030,6 +1031,15 @@ func main() {
 	// 2026-09-21 §档案锚定契约 §7 — 居民人物卡档案两端点(房间源 = vcMgr)。
 	vcCityAPI := api.NewVirtualCityAPI(vcMgr)
 
+	// 2026-10-20 §批次65 — City-Chrome 实时数据通道:全局单例启动(enabled=false
+	// 时也是离线占位实例,HTTP 快照可用、refresh 返回 35053);空闲降载探针
+	// 注入 vcMgr(无 virtual_city 房间时暂停自动轮转);WS 广播经 OnFeed
+	// listener 注入接线(game.realtime_feed,节流合并 ≥10s)。
+	cityChromeSvc := citychrome.Start(cfg.CityChrome, llmRegistry)
+	cityChromeSvc.SetRoomPresence(func() bool { return len(vcMgr.RoomIDs()) > 0 })
+	gameSvcWs.WireCityChromeFeed(cityChromeSvc)
+	vcRealtimeAPI := api.NewVirtualCityRealtimeAPI(cityChromeSvc)
+
 	// 2026-10-05 §LsmKLBaseServer 知识库引擎 — 特征抽取 + MCP + Graph 检索。
 	// 装配: Loader(MySQL) + FeatureExtractor(LLM) + KnowledgeGraph + KnowledgeAPI。
 	// 抽取失败时回退到 profession.Loader 的 frontmatter 解析(零回归)。
@@ -1041,7 +1051,7 @@ func main() {
 	_ = kbRetrievalChain // 预留给未来 MCP tools/call 内部使用
 	kbAPI := api.NewKnowledgeAPI(kbLoader)
 
-	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, vcSurveyAPI, vcCityAPI, kbAPI)
+	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, vcSurveyAPI, vcCityAPI, vcRealtimeAPI, kbAPI)
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.
@@ -1145,6 +1155,8 @@ func main() {
 	close(captchaJanitorStop)
 	close(securityJanitorStop)
 	close(janitorStop)
+	// 2026-10-20 §批次65 — 停 City-Chrome 调度循环(单飞 mission 自然退出)。
+	citychrome.Stop()
 
 	// BUG-WEREWOLF-RESTART-CLEANUP (Round 34): on a clean shutdown, fan a
 	// `game.removed` envelope to every still-connected werewolf client BEFORE

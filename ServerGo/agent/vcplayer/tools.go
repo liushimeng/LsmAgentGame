@@ -154,6 +154,11 @@ const (
 	// defer(延期支付,耗 1 预算:本月免付,3 个月后 ×1.3)。
 	ToolBehavior = "behavior"
 
+	// ToolRealworldInfo 批次65 §批次65:真实世界金融行情/新闻只读查询
+	// (op=overview|quotes|news,category 可选),读 citychrome FeedStore,
+	// 不耗动作预算,零额外 LLM 成本;引擎语义零改动(不产生游戏内动作)。
+	ToolRealworldInfo = "realworld_info"
+
 	// ── 原样保留(名字未改)──
 	ToolSetConsumption = "set_consumption"
 	ToolAnswerSurvey   = "answer_survey"
@@ -188,6 +193,7 @@ func enumStrSchema(values []string, desc string) map[string]any {
 // 本文件合并 7 + 原样 2(set_consumption/answer_survey)+
 // tools_trade.go 合并 5 + tools_sense.go 感知 4。
 // 批次52 §2 裁决 D13:+ToolFamily(代际财富分组)→ 合计 22。
+// 批次65:+ToolRealworldInfo(真实世界数据只读)→ 合计 24。
 func BuildTools() []llmtypes.ToolDef {
 	base := []llmtypes.ToolDef{
 		{
@@ -386,6 +392,21 @@ func BuildTools() []llmtypes.ToolDef {
 			},
 		},
 		{
+			Name: ToolRealworldInfo,
+			Description: "查询真实世界金融行情与热点新闻(批次65,只读,不耗动作预算,零 LLM 成本)。" +
+				"op=overview(通道状态+各类目最近更新+头条 3 条,默认)/quotes(行情,各类目前 5 条)/" +
+				"news(最近 10 条新闻)。category 可选:a_share|hk|us|metal|futures|crypto;" +
+				"不传 = 全部类目。真实世界数据仅供你参考叙事与聊天谈资,不影响游戏内市场机制。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"op":       enumStrSchema([]string{"overview", "quotes", "news"}, "overview=总览 / quotes=行情 / news=新闻"),
+					"category": enumStrSchema([]string{"a_share", "hk", "us", "metal", "futures", "crypto"}, "类目过滤(可选,缺省全部)"),
+				},
+				"required": []string{},
+			},
+		},
+		{
 			Name:        ToolSpeak,
 			Description: "说话(每月 area+private 合计最多 2 次):像真人聊天,谈行情/吐槽生活/分享买卖心得;不要复述工具参数。scope=area(默认) 同城区公开放话;scope=private 对 target_seat 指定居民耳语(仅对方可见)。",
 			InputSchema: map[string]any{
@@ -412,8 +433,9 @@ func BuildTools() []llmtypes.ToolDef {
 	return base
 }
 
-// ToolNames 返回全部工具名(测试/lint 用;批次52 §2 裁决 D13 起合计 22)。
-// 基础 3 + 金融合并 5 + 代际 1 + 生活 3 + 副业 1 + 交易合并 5 + 感知 4 = 22。
+// ToolNames 返回全部工具名(测试/lint 用;批次65 起合计 24)。
+// 基础 3 + 金融合并 5 + 代际 1 + 生活 3 + 副业 1 + 行为 1 + 真实世界 1 +
+// 交易合并 5 + 感知 4 = 24。
 func ToolNames() []string {
 	return []string{
 		ToolCheckState, ToolSpeak, ToolSubmitMonth,
@@ -421,6 +443,7 @@ func ToolNames() []string {
 		ToolFamily,
 		ToolActivity, ToolSetConsumption, ToolAnswerSurvey, ToolSideBusiness,
 		ToolBehavior,
+		ToolRealworldInfo,
 		ToolMarketListing, ToolNegotiate, ToolP2PLending, ToolAuctionBid, ToolInfoMarket,
 		ToolSee, ToolHear, ToolSmell, ToolMove,
 	}
@@ -490,6 +513,21 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 		res.IsErr = true
 		res.Text = "失败:" + err.Error()
 		return res
+	}
+
+	if name == ToolRealworldInfo {
+		// 批次65:只读真实世界快照,不耗动作预算,不产生游戏内动作;
+		// 不依赖引擎 ToolRunner(citychrome 全局单例直读),故在 runner
+		// 绑定检查之前返回。
+		op := getStr("op")
+		if op == "" {
+			op = "overview"
+		}
+		text, rerr := realworldInfoText(op, getStr("category"))
+		if rerr != nil {
+			return fail(rerr)
+		}
+		return ok(text)
 	}
 
 	if a.runner == nil {

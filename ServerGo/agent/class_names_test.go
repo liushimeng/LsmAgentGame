@@ -53,6 +53,30 @@ func TestAgentClassCityHuman_Wired(t *testing.T) {
 		t.Error("AgentClassCityHuman must pass IsValidAgentClassName")
 	}
 }
+// TestAgentClassCityChrome_Wired 校验批次65 City-Chrome 数据采集 Agent 的
+// AgentClassName 已按 §24 登记(常量 + AllAgentClassNames + IsValidAgentClassName)。
+func TestAgentClassCityChrome_Wired(t *testing.T) {
+	if AgentClassCityChrome == "" {
+		t.Fatal("AgentClassCityChrome must be non-empty (§24)")
+	}
+	if string(AgentClassCityChrome) != "LsmAgentGame-City-Chrome" {
+		t.Errorf("unexpected AgentClassName: %q", AgentClassCityChrome)
+	}
+	found := false
+	for _, c := range AllAgentClassNames() {
+		if c == AgentClassCityChrome {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("AgentClassCityChrome must be registered in AllAgentClassNames()")
+	}
+	if !IsValidAgentClassName(string(AgentClassCityChrome)) {
+		t.Error("AgentClassCityChrome must pass IsValidAgentClassName")
+	}
+}
+
 // TestAllAgentClassNames_NonEmptyAndUnique 是 §24 的通用不变量:所有登记进
 // AllAgentClassNames 的常量必须非空且互不重复(防将来复制粘贴出同名/空常量)。
 func TestAllAgentClassNames_NonEmptyAndUnique(t *testing.T) {

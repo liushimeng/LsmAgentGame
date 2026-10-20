@@ -28,6 +28,7 @@ import { useVirtualCityActionBubbles } from '@/hooks/useVirtualCityActionBubbles
 import { useSpectatorMode } from '@/hooks/useSpectatorMode';
 import { wsClient } from '@/services/ws';
 import { roomService } from '@/services/auth.service';
+import { fetchRealtimeBoard } from '@/api/virtualCity';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import { districtCenter, formatPct, timeRatioPresetKey, type VirtualCityDistrictId } from '@/types/virtualCity';
@@ -50,6 +51,7 @@ import { MarketTradePanel } from '@/components/virtualCity/MarketTradePanel';
 import { InsurancePanel } from '@/components/virtualCity/InsurancePanel';
 import { BehaviorPanel } from '@/components/virtualCity/BehaviorPanel';
 import { MacroPanel } from '@/components/virtualCity/MacroPanel';
+import { RealtimeBoard } from '@/components/virtualCity/RealtimeBoard/RealtimeBoard';
 import { GameOverModal } from '@/components/virtualCity/GameOverModal';
 import { CityStatsPanel } from '@/components/virtualCity/CityStatsPanel';
 import { CivicElectionBanner } from '@/components/virtualCity/CivicElectionBanner';
@@ -147,6 +149,7 @@ export function VirtualCityGamePage() {
   const setPanelTab = useVirtualCityStore((s) => s.setPanelTab);
   const selectedDistrict = useVirtualCityStore((s) => s.selectedDistrict);
   const setSelectedDistrict = useVirtualCityStore((s) => s.setSelectedDistrict);
+  const setRealtimeFeed = useVirtualCityStore((s) => s.setRealtimeFeed);
   const reset = useVirtualCityStore((s) => s.reset);
   // 2026-09-16 §财商流10–12座位 — 座位占用三件套（返回原语 → 不引发多余重渲染；
   // 实现见 store/virtualCity.store.ts 对应的 selectSeatedCount / selectSeatCapacity /
@@ -226,6 +229,23 @@ export function VirtualCityGamePage() {
     };
   }, [roomId, spectator, spectate, unspectate, requestState, reset]);
 
+  // 批次65：实时看板首屏快照（late-joiner 补齐 game.realtime_feed 帧间隙；
+  // 数据全局、与房间无关）。失败静默置空（§7.1：首屏拉取失败不算操作错误），
+  // 后续由 WS 帧 / 面板刷新按钮补齐。
+  useEffect(() => {
+    let cancelled = false;
+    fetchRealtimeBoard()
+      .then((r) => {
+        if (!cancelled) setRealtimeFeed(r?.feed ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setRealtimeFeed(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [setRealtimeFeed]);
+
   const handleSelectDistrict = useCallback(
     (id: VirtualCityDistrictId) => {
       setSelectedDistrict(id);
@@ -277,7 +297,9 @@ export function VirtualCityGamePage() {
   type PanelTab =
     | 'finance' | 'market' | 'ledger' | 'economy' | 'market-trade' | 'insurance'
     // 批次62：行为金融 / 宏观泡沫两个新面板。
-    | 'behavior' | 'macro';
+    | 'behavior' | 'macro'
+    // 批次65：实时看板（全局真实世界行情/新闻）。
+    | 'realtime';
   // 同步 store 类型（局部重新声明避免扩大 store.ts 类型）
   const tabs: { key: PanelTab; label: string; group: TabGroup }[] = [
     { key: 'finance', label: t('virtualCity.tab.finance' as TKey), group: 'data' },
@@ -292,6 +314,8 @@ export function VirtualCityGamePage() {
     // max-height:112px 被裁切（批次62 实测：标签写成「行为与认知」即被裁成竖排）。
     { key: 'behavior', label: `🧠 ${t('virtualCity.behavior.tab' as TKey)}`, group: 'data' },
     { key: 'macro', label: `🌐 ${t('virtualCity.macro.tab' as TKey)}`, group: 'data' },
+    // 批次65：实时看板（全局数据，数据组第 9 个按钮；组内 flex-wrap 自动两行）。
+    { key: 'realtime', label: `⚡ ${t('virtualCity.rt.tab' as TKey)}`, group: 'data' },
   ];
   const tabGroups: { key: TabGroup; labelKey: TKey }[] = [
     { key: 'data', labelKey: 'virtualCity.tabgroup.data' as TKey },
@@ -563,6 +587,8 @@ export function VirtualCityGamePage() {
                 onAction={sendAction}
               />
             )}
+            {/* 批次65：实时看板（全局真实世界行情/新闻；不依赖对局状态）。 */}
+            {panelTab === 'realtime' && <RealtimeBoard />}
           </div>
           {gameState && !spectator && gameState.my_seat < 0 && (
             <div className="virtualCity-join-hint">{t('virtualCity.joinHint' as TKey)}</div>

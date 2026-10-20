@@ -180,6 +180,10 @@ const (
 	// 35051–35052 — 虚拟城市批次62 延期支付与心理账户(§3.3.1 / §3.2.3)。
 	ErrVirtualCityDeferNotAvailable = 35051 // 延期支付不可用(画像不含双曲贴现偏差)
 	ErrVirtualCityMergeAlreadyDone   = 35052 // 心理账户已合并(不可重复合并)
+	// 35053–35054 — 虚拟城市批次65 City-Chrome 实时数据通道
+	// (2026-10-20 §批次65,契约 §3.5)。
+	ErrCityChromeChannelOffline     = 35053 // 数据通道离线(enabled=false 或底座不可达)
+	ErrCityChromeRefreshTooFrequent = 35054 // 同类目刷新过于频繁(60s 内重复,429 语义)
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
 	// 契约: lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md §4.4。
 	ErrVirtualCitySenseInvalid  = 35100 // 感知/移动工具参数非法(未知城区、未知 mode、目标不存在)
@@ -332,6 +336,9 @@ var DefaultMessages = map[int]string{
 	ErrVirtualCityWhisperTarget: "virtual_city whisper target unreachable",
 	// 中文文案(前端 i18n 落地):虚拟城市房间已停用文字聊天，居民发言请在 3D 地图查看。
 	ErrVirtualCityRoomChatDisabled: "virtual_city room chat is disabled",
+	// 批次65 City-Chrome 实时数据通道(契约 §3.5)。
+	ErrCityChromeChannelOffline:     "realtime data channel offline",
+	ErrCityChromeRefreshTooFrequent: "refresh too frequent for this category, retry later",
 }
 
 // Code constructs a Coded error.

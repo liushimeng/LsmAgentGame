@@ -31,6 +31,7 @@ type Config struct {
 	Werewolf    WerewolfConfig    `json:"werewolf"`
 	TexasHoldem TexasHoldemConfig `json:"texasholdem"`
 	VirtualCity VirtualCityConfig `json:"virtual_city"`
+	CityChrome  CityChromeConfig  `json:"city_chrome"`
 }
 
 // §128 对话即思考重构:AgentParallelConfig 已删除(原 §122)。
@@ -696,6 +697,32 @@ type LLMConfig struct {
 	StreamIdleTimeoutMs int `json:"stream_idle_timeout_ms,omitempty"`
 }
 
+// CityChromeConfig 是 city_chrome{} 顶级段(批次65,2026-10-20 §批次65;
+// 契约 §3.1):City-Chrome 实时数据通道。enabled=false 或底座不可达 ⇒
+// 服务空转,接口返回 channel.status="offline",绝不阻塞对局。
+// auth_token 是密钥类,只进 LsmAgentGame.conf(已 gitignore),example 用占位符。
+type CityChromeConfig struct {
+	// Enabled 总开关。默认 false(applyDefaults 不翻 true —— 显式开启,
+	// 与 agent_enabled 等「零值强制 true」开关语义不同)。
+	Enabled bool `json:"enabled"`
+	// DebugToolURL go-web-debug-tool HTTP 地址(默认 http://127.0.0.1:29008)。
+	DebugToolURL string `json:"debug_tool_url"`
+	// AuthToken 底座认证 token;空 = 不带 Authorization 头(仅本机可信)。
+	AuthToken string `json:"auth_token"`
+	// ModelKey City-Chrome Agent 的 LLM 模型 key(registry.Get)。
+	ModelKey string `json:"model_key"`
+	// RefreshSeconds 6 类目轮转间隔秒(默认 1800)。
+	RefreshSeconds int `json:"refresh_seconds"`
+	// MaxStepsPerMission 单 mission 步数上限(默认 14)。
+	MaxStepsPerMission int `json:"max_steps_per_mission"`
+	// SymbolsPerCategory 单类目报价条数上限(默认 12)。
+	SymbolsPerCategory int `json:"symbols_per_category"`
+	// NewsLimit 全局新闻条数上限(默认 20,新→旧)。
+	NewsLimit int `json:"news_limit"`
+	// RequestTimeoutMs 底座 HTTP 请求超时(默认 90000)。
+	RequestTimeoutMs int `json:"request_timeout_ms"`
+}
+
 var (
 	once sync.Once
 	cfg  *Config
@@ -1315,6 +1342,34 @@ func applyDefaults(c *Config) {
 		c.VirtualCity.AgentLLMMinIntervalMs = 300000
 	}
 	// §128 对话即思考重构:AgentParallel 默认值已删除(原 §122)。
+
+	// ── 2026-10-20 §批次65 — city_chrome 段默认值 ─────────────────────
+	// Enabled 默认 false(显式开启;零值不得强制 true —— 通道默认关闭,
+	// 与 agent_enabled 等开关语义不同)。密钥类 auth_token 无默认值。
+	if c.CityChrome.DebugToolURL == "" {
+		c.CityChrome.DebugToolURL = "http://127.0.0.1:29008"
+	}
+	if c.CityChrome.ModelKey == "" {
+		c.CityChrome.ModelKey = "DeepSeek-model"
+	}
+	if c.CityChrome.RefreshSeconds == 0 {
+		c.CityChrome.RefreshSeconds = 1800
+	}
+	if c.CityChrome.RefreshSeconds < 60 {
+		c.CityChrome.RefreshSeconds = 60
+	}
+	if c.CityChrome.MaxStepsPerMission == 0 {
+		c.CityChrome.MaxStepsPerMission = 14
+	}
+	if c.CityChrome.SymbolsPerCategory == 0 {
+		c.CityChrome.SymbolsPerCategory = 12
+	}
+	if c.CityChrome.NewsLimit == 0 {
+		c.CityChrome.NewsLimit = 20
+	}
+	if c.CityChrome.RequestTimeoutMs == 0 {
+		c.CityChrome.RequestTimeoutMs = 90000
+	}
 
 	// 2026-07-12 §127 增强 — agent 外层 LLM 调用重试次数。
 	// 2026-07-15 R131 修复: 默认 7→5(累计 backoff 1+2+4+8+8 cap=23s,留 97s

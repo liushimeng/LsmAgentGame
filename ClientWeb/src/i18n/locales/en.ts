@@ -9,6 +9,7 @@ import virtualCityTimeWeather from './virtualCityTimeWeather-en';
 import virtualCityFamily from './virtualCityFamily-en';
 import virtualCityDashboard from './virtualCityDashboard-en';
 import virtualCityBehavior from './virtualCityBehavior-en';
+import virtualCityRealtime from './virtualCityRealtime-en';
 
 // English — en
 const en: Dict = {
@@ -1733,7 +1734,7 @@ const en: Dict = {
   'virtualCity.consumption.invalid': 'Invalid consumption level (must be 0-3)',
 
   // ── virtualCity split files (≤1800 line cap): P2 trading / P1-4 insurance / residents / batch20 / line pool ──
-  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily, ...virtualCityDashboard, ...virtualCityBehavior,
+  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily, ...virtualCityDashboard, ...virtualCityBehavior, ...virtualCityRealtime,
 
   // ── P1 Minsky Engine + LPR Reprice + Early Repayment ──
   'minsky.title': 'Minsky Financing Status',

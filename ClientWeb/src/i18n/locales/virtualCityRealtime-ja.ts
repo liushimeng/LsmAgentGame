@@ -1,0 +1,35 @@
+// 仮想都市 バッチ65 City-Chrome リアルタイムデータチャネル + リアルタイムボード i18n（ja）。
+// キー出典：lag_docs/虚拟城市/已实现/65-CityChrome实时数据通道与实时看板/01-方案设计.md §5。
+const virtualCityRealtimeJA = {
+  'virtualCity.rt.tab': 'リアルタイム',
+  'virtualCity.rt.channel.online': 'チャンネル接続中',
+  'virtualCity.rt.channel.offline': 'チャンネルオフライン',
+  'virtualCity.rt.channel.updating': '収集中',
+  'virtualCity.rt.updated.just': '更新済み（たった今）',
+  'virtualCity.rt.updated.min': '{n} 分前に更新',
+  'virtualCity.rt.updated.hour': '{n} 時間前に更新',
+  'virtualCity.rt.updated.day': '{n} 日前に更新',
+  'virtualCity.rt.refresh': '更新',
+  'virtualCity.rt.refreshFail': '更新に失敗しました：{msg}',
+  'virtualCity.rt.sub.overview': '概要',
+  'virtualCity.rt.sub.a_share': 'A株',
+  'virtualCity.rt.sub.hk': '香港株',
+  'virtualCity.rt.sub.us': '米国株',
+  'virtualCity.rt.sub.metal': '貴金属',
+  'virtualCity.rt.sub.futures': '先物',
+  'virtualCity.rt.sub.crypto': 'BTC',
+  'virtualCity.rt.sub.news': 'ニュース',
+  'virtualCity.rt.col.name': '名称',
+  'virtualCity.rt.col.price': '価格',
+  'virtualCity.rt.col.change': '変動率',
+  'virtualCity.rt.col.trend': '推移',
+  'virtualCity.rt.source': '出典',
+  'virtualCity.rt.collecting': '収集中',
+  'virtualCity.rt.candleAlt': '5分足ローソク足（サンプリング価格の集計）',
+  'virtualCity.rt.headline': '最新ヘッドライン',
+  'virtualCity.rt.empty.feed': 'リアルタイムデータはまだありません：右上の更新ボタンで収集を開始してください',
+  'virtualCity.rt.empty.category': 'このカテゴリのデータはまだありません',
+  'virtualCity.rt.empty.news': 'ニュースはまだありません',
+};
+
+export default virtualCityRealtimeJA;

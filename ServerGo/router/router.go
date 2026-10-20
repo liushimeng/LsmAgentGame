@@ -28,7 +28,7 @@ import (
 )
 
 // New constructs the *gin.Engine.
-func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcCityAPI *api.VirtualCityAPI, knowledgeAPI *api.KnowledgeAPI) *gin.Engine {
+func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcCityAPI *api.VirtualCityAPI, vcRealtimeAPI *api.VirtualCityRealtimeAPI, knowledgeAPI *api.KnowledgeAPI) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 
@@ -276,6 +276,16 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		vcGames.GET("/rooms/:id/surveys", vcSurveyAPI.List)
 		vcGames.GET("/rooms/:id/city/residents", vcCityAPI.ListResidents)
 		vcGames.GET("/rooms/:id/city/residents/:cardId", vcCityAPI.GetResident)
+	}
+
+	// 2026-10-20 §批次65 — City-Chrome 实时看板(需登录;契约 §3.5)。
+	// 注意路径是 /api/virtual_city/*(不是 /api/games/virtual_city/*),
+	// 数据全局与房间无关。
+	vcRt := r.Group("/api/virtual_city")
+	vcRt.Use(middleware.AuthRequired(cfg))
+	{
+		vcRt.GET("/realtime_board", vcRealtimeAPI.Board)
+		vcRt.POST("/realtime_board/refresh", vcRealtimeAPI.Refresh)
 	}
 
 	// 2026-10-05 §LsmKLBaseServer 知识库引擎 — 知识卡特征查询 + MCP 端点。

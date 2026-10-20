@@ -414,11 +414,11 @@ func TestTradeTools_InputSchema(t *testing.T) {
 	}
 }
 
-// TestToolNames_IncludesTrade 合并交易工具已并入 ToolNames()(总计 23)。
+// TestToolNames_IncludesTrade 合并交易工具已并入 ToolNames()(总计 24)。
 func TestToolNames_IncludesTrade(t *testing.T) {
 	names := ToolNames()
-	if len(names) != 23 {
-		t.Errorf("names count: got %d, want 23 (批次35 §3.2 + 批次52 family + 批次62 behavior)", len(names))
+	if len(names) != 24 {
+		t.Errorf("names count: got %d, want 24 (批次35 §3.2 + 批次52 family + 批次62 behavior + 批次65 realworld_info)", len(names))
 	}
 	for _, tn := range TradeToolNames() {
 		found := false

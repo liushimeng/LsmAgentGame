@@ -1,0 +1,180 @@
+/**
+ * RealtimeBoard — 批次 65 实时看板容器。
+ *
+ * 顶部 = 通道状态徽章（online 绿 / offline 灰底深字 / updating 黄，徽章文字 ≥5:1，
+ * 禁 opacity 表状态）+「更新于 N 分钟前」+ 刷新按钮（点击 POST
+ * /api/virtual_city/realtime_board/refresh，转圈；失败按 §7.1 在面板内联红条
+ * 展示，不吞 console）。
+ * 子 Tab 8 个（.virtualCity-subtabs 手写范式，可横向滚动）：总览 / A股 / 港股 /
+ * 美股 / 贵金属 / 期货 / 比特币 / 新闻。
+ *
+ * 数据源：store.realtimeFeed（首屏 HTTP 快照 + game.realtime_feed 帧增量，
+ * 见 useVirtualCity / VirtualCityGamePage）。
+ */
+
+import { useEffect, useState } from 'react';
+import { useT } from '@/hooks/useT';
+import type { TKey } from '@/i18n';
+import { useVirtualCityStore } from '@/store/virtualCity.store';
+import { fetchRealtimeBoard, refreshRealtimeBoard } from '@/api/virtualCity';
+import { getCategory, timeAgoKey, timeAgoParts } from './boardUtils';
+import { BoardOverview } from './BoardOverview';
+import { QuoteTable } from './QuoteTable';
+import { NewsList } from './NewsList';
+
+type RtSubTab = 'overview' | 'a_share' | 'hk' | 'us' | 'metal' | 'futures' | 'crypto' | 'news';
+
+/** 行情子 Tab → feed.categories 键（overview / news 无类目数据）。 */
+const QUOTE_SUBTABS: RtSubTab[] = ['a_share', 'hk', 'us', 'metal', 'futures', 'crypto'];
+
+/** 1 分钟粒度重渲染「更新于 N 分钟前」。 */
+function useMinuteTick(): number {
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
+}
+
+export function RealtimeBoard() {
+  const t = useT();
+  const feed = useVirtualCityStore((s) => s.realtimeFeed);
+  const [sub, setSub] = useState<RtSubTab>('overview');
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const nowSec = useMinuteTick();
+
+  const status = refreshing ? 'updating' : (feed?.channel.status ?? 'offline');
+  const ago = feed ? timeAgoParts(feed.updated_at, nowSec) : null;
+
+  const handleRefresh = async (category?: string) => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setError(null);
+    try {
+      await refreshRealtimeBoard(category);
+      // 快照不回读：mission 是异步的，数据经 game.realtime_feed 帧落库；
+      // 拉一次快照让 accepted 后的通道状态即时可见（失败静默，等 WS 帧）。
+      try {
+        const r = await fetchRealtimeBoard();
+        useVirtualCityStore.getState().setRealtimeFeed(r.feed ?? null);
+      } catch {
+        // best-effort：WS 帧会补齐
+      }
+    } catch (e) {
+      // §7.1：面板内联红条展示，不吞进 console。
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(t('virtualCity.rt.refreshFail' as TKey, { msg }));
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const badgeClass =
+    status === 'online'
+      ? 'virtualCity-rt__badge virtualCity-rt__badge--online'
+      : status === 'updating'
+        ? 'virtualCity-rt__badge virtualCity-rt__badge--updating'
+        : 'virtualCity-rt__badge virtualCity-rt__badge--offline';
+  const badgeKey =
+    status === 'online'
+      ? 'virtualCity.rt.channel.online'
+      : status === 'updating'
+        ? 'virtualCity.rt.channel.updating'
+        : 'virtualCity.rt.channel.offline';
+
+  const subs: Array<{ key: RtSubTab; labelKey: string }> = [
+    { key: 'overview', labelKey: 'virtualCity.rt.sub.overview' },
+    { key: 'a_share', labelKey: 'virtualCity.rt.sub.a_share' },
+    { key: 'hk', labelKey: 'virtualCity.rt.sub.hk' },
+    { key: 'us', labelKey: 'virtualCity.rt.sub.us' },
+    { key: 'metal', labelKey: 'virtualCity.rt.sub.metal' },
+    { key: 'futures', labelKey: 'virtualCity.rt.sub.futures' },
+    { key: 'crypto', labelKey: 'virtualCity.rt.sub.crypto' },
+    { key: 'news', labelKey: 'virtualCity.rt.sub.news' },
+  ];
+
+  return (
+    <div className="virtualCity-rt">
+      <div className="virtualCity-rt__head">
+        <span className={badgeClass} data-testid="virtualCity-rt-channel">
+          {t(badgeKey as TKey)}
+        </span>
+        {ago && (
+          <span className="virtualCity-rt__time">
+            {t(timeAgoKey(ago) as TKey, { n: ago.n })}
+          </span>
+        )}
+        <button
+          type="button"
+          className="virtualCity-rt__refresh"
+          onClick={() => void handleRefresh()}
+          disabled={refreshing}
+          title={t('virtualCity.rt.refresh' as TKey)}
+          data-testid="virtualCity-rt-refresh"
+        >
+          <span className={refreshing ? 'virtualCity-rt__spin' : ''} aria-hidden="true">⟳</span>
+          {' '}{t('virtualCity.rt.refresh' as TKey)}
+        </button>
+      </div>
+
+      {/* 通道离线原因（服务端权威文案，有则显示）。 */}
+      {feed && feed.channel.status === 'offline' && feed.channel.detail && (
+        <div className="virtualCity-rt__offline" role="status">
+          {feed.channel.detail}
+        </div>
+      )}
+
+      {/* §7.1：刷新失败面板内联红条。 */}
+      {error && (
+        <div className="virtualCity-rt__error" role="alert">
+          <span>⚠️ {error}</span>
+          <button type="button" onClick={() => setError(null)} aria-label="dismiss">×</button>
+        </div>
+      )}
+
+      <div className="virtualCity-subtabs">
+        {subs.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            className={
+              'virtualCity-subtabs__btn' + (sub === s.key ? ' virtualCity-subtabs__btn--active' : '')
+            }
+            onClick={() => setSub(s.key)}
+          >
+            {t(s.labelKey as TKey)}
+          </button>
+        ))}
+      </div>
+
+      {/* 首屏快照未到且无 feed：整板空态。 */}
+      {!feed ? (
+        <div className="virtualCity-panel__empty virtualCity-rt__empty">
+          <span className="virtualCity-rt__empty-icon" aria-hidden="true">📡</span>
+          <p>{t('virtualCity.rt.empty.feed' as TKey)}</p>
+        </div>
+      ) : (
+        <>
+          {sub === 'overview' && <BoardOverview feed={feed} />}
+          {sub === 'news' && <NewsList news={feed.news} />}
+          {QUOTE_SUBTABS.includes(sub) && (() => {
+            const cat = getCategory(feed.categories, sub);
+            if (!cat || !cat.quotes.length) {
+              return (
+                <div className="virtualCity-panel__empty virtualCity-rt__empty">
+                  <span className="virtualCity-rt__empty-icon" aria-hidden="true">📈</span>
+                  <p>{t('virtualCity.rt.empty.category' as TKey)}</p>
+                </div>
+              );
+            }
+            return <QuoteTable category={cat} />;
+          })()}
+        </>
+      )}
+    </div>
+  );
+}
+
+export default RealtimeBoard;

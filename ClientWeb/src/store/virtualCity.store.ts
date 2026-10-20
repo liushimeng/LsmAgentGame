@@ -18,6 +18,7 @@ import type {
   VirtualCitySurvey,
 } from '@/types/virtualCity';
 import { VIRTUAL_CITY_MIN_SEATS, virtualCityOccupiedSeats, virtualCitySeatCapacity } from '@/types/virtualCity';
+import type { RealtimeFeed } from '@/types/virtualCityRealtime';
 
 /**
  * 右侧面板 Tab（聊天 / Agent 思维独立于 Tab 栈之外）。
@@ -34,7 +35,9 @@ export type VirtualCityPanelTab =
   | 'finance' | 'market' | 'ledger' | 'economy'
   | 'market-trade' | 'insurance'
   // 批次62：行为金融（本人画像 + 反思）与宏观（集体泡沫 + 流动性价差）两个新面板。
-  | 'behavior' | 'macro';
+  | 'behavior' | 'macro'
+  // 批次65：实时看板（真实世界行情/新闻，全局数据，与房间无关）。
+  | 'realtime';
 
 /** 市场快照（走势迷你图 + 相对上月箭头用）。 */
 export interface VirtualCityMarketPoint {
@@ -113,6 +116,9 @@ interface VirtualCityStore {
   // ── P2 交易（挂单簿 / 议价 / 借贷 / 拍卖；game.state.listing_book 快照驱动）──
   listingBook: VirtualCityListingBook | null;
 
+  // ── 批次65：实时看板（首屏 HTTP 快照 + game.realtime_feed 帧全量覆盖）──
+  realtimeFeed: RealtimeFeed | null;
+
   // ── UI ──
   panelTab: VirtualCityPanelTab;
   selectedDistrict: VirtualCityDistrictId | null;
@@ -142,6 +148,8 @@ interface VirtualCityStore {
   setListingBook: (book: VirtualCityListingBook | null) => void;
   /** 单帧内局部挂单/议价/借贷更新（game.listing_created 等增量帧）。 */
   mergeListingBook: (patch: Partial<VirtualCityListingBook>) => void;
+  /** 批次65：实时看板 feed 整表替换（快照 / WS 帧同形状，全量覆盖）。 */
+  setRealtimeFeed: (feed: RealtimeFeed | null) => void;
   reset: () => void;
 }
 
@@ -160,6 +168,7 @@ export const useVirtualCityStore = create<VirtualCityStore>((set) => ({
   lastError: null,
   surveys: [],
   listingBook: null,
+  realtimeFeed: null,
   panelTab: 'finance',
   selectedDistrict: null,
 
@@ -256,6 +265,8 @@ export const useVirtualCityStore = create<VirtualCityStore>((set) => ({
         },
       };
     }),
+
+  setRealtimeFeed: (feed) => set({ realtimeFeed: feed }),
 
   reset: () =>
     set({

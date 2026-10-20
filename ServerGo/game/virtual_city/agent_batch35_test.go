@@ -246,15 +246,15 @@ func TestBatch35_MoveEventAndOnState(t *testing.T) {
 	}
 }
 
-// TestBatch62_ToolNames23 引用 vcplayer 断言工具口径(防两包漂移;
+// TestBatch62_ToolNames24 引用 vcplayer 断言工具口径(防两包漂移;
 // 批次35 §3.2 = 21,批次52 §2 裁决 D13 增 family → 22,
-// 批次62 §20261020-62 增 behavior → 23)。
-func TestBatch62_ToolNames23(t *testing.T) {
+// 批次62 §20261020-62 增 behavior → 23,批次65 增 realworld_info → 24)。
+func TestBatch62_ToolNames24(t *testing.T) {
 	names := vcplayer.ToolNames()
-	if len(names) != 23 {
-		t.Fatalf("vcplayer.ToolNames() = %d, want 23 (批次35 §3.2 + 批次52 family + 批次62 behavior)", len(names))
+	if len(names) != 24 {
+		t.Fatalf("vcplayer.ToolNames() = %d, want 24 (批次35 §3.2 + 批次52 family + 批次62 behavior + 批次65 realworld_info)", len(names))
 	}
-	if len(vcplayer.BuildTools()) != 23 {
-		t.Fatalf("vcplayer.BuildTools() = %d, want 23", len(vcplayer.BuildTools()))
+	if len(vcplayer.BuildTools()) != 24 {
+		t.Fatalf("vcplayer.BuildTools() = %d, want 24", len(vcplayer.BuildTools()))
 	}
 }

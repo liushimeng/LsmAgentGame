@@ -30,6 +30,7 @@ import type {
   VirtualCitySurvey,
   VirtualCityTradeAction,
 } from '@/types/virtualCity';
+import type { RealtimeFeed } from '@/types/virtualCityRealtime';
 
 export function useVirtualCity(roomId: string) {
   const {
@@ -43,6 +44,7 @@ export function useVirtualCity(roomId: string) {
     mergeSurvey,
     setListingBook,
     mergeListingBook,
+    setRealtimeFeed,
   } = useVirtualCityStore();
 
   const roomIdRef = useRef(roomId);
@@ -134,6 +136,13 @@ export function useVirtualCity(roomId: string) {
           if (auction) mergeListingBook({ auctions: [auction] });
           break;
         }
+        // ── 批次65 实时看板帧（§3.3）：{feed: Feed} 全量快照，无 room_id（全局数据）。
+        //    节流合并由服务端保证；写 store 新 slice 即完成看板刷新。
+        case 'game.realtime_feed': {
+          const f = (p as { feed?: unknown }).feed;
+          if (f) setRealtimeFeed(f as RealtimeFeed);
+          break;
+        }
         case 'game.over': {
           setGameOver(p as unknown as VirtualCityOverFrame);
           break;
@@ -165,7 +174,7 @@ export function useVirtualCity(roomId: string) {
   }, [
     setGameState, setMySeat, setStartedInfo, pushEvent,
     applyMonthFrame, setGameOver, setLastError, mergeSurvey,
-    setListingBook, mergeListingBook, navigate,
+    setListingBook, mergeListingBook, setRealtimeFeed, navigate,
   ]);
 
   // ── 操作函数 ──

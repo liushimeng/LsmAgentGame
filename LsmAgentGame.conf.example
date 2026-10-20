@@ -274,5 +274,31 @@
     "city_driver_workers": 4,
     // 每月驱动居民数(缺省 8,clamp [0,64];0 = 仅深度层)。
     "city_driver_per_month": 8
+  },
+
+  // ============================================================================
+  // 2026-10-20 §批次65 — City-Chrome 实时数据通道(city_chrome 顶级段)。
+  // 全部占位默认值,无任何密钥;auth_token 真实值只进 LsmAgentGame.conf(§5 安全)。
+  // enabled=false 或底座不可达 ⇒ 通道 offline,绝不阻塞对局。
+  // ============================================================================
+  "city_chrome": {
+    // 总开关(默认 false;需本机起 go-web-debug-tool 后才建议开启)。
+    "enabled": false,
+    // go-web-debug-tool HTTP 地址。
+    "debug_tool_url": "http://127.0.0.1:29008",
+    // 底座认证 token(占位符;生产配置真实 token,仅入 LsmAgentGame.conf)。
+    "auth_token": "CITY_CHROME_AUTH_TOKEN_PLACEHOLDER",
+    // City-Chrome Agent 的 LLM 模型 key。
+    "model_key": "DeepSeek-model",
+    // 6 类目轮转间隔秒(默认 1800)。
+    "refresh_seconds": 1800,
+    // 单 mission 步数上限(默认 14)。
+    "max_steps_per_mission": 14,
+    // 单类目报价条数上限(默认 12)。
+    "symbols_per_category": 12,
+    // 全局新闻条数上限(默认 20,新→旧)。
+    "news_limit": 20,
+    // 底座 HTTP 请求超时毫秒(默认 90000)。
+    "request_timeout_ms": 90000
   }
 }

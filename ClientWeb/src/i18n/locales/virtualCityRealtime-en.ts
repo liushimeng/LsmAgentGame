@@ -1,0 +1,35 @@
+// Virtual City batch 65 City-Chrome realtime channel + realtime board i18n (en).
+// Keys: lag_docs/虚拟城市/已实现/65-CityChrome实时数据通道与实时看板/01-方案设计.md §5.
+const virtualCityRealtimeEN = {
+  'virtualCity.rt.tab': 'Live',
+  'virtualCity.rt.channel.online': 'Channel online',
+  'virtualCity.rt.channel.offline': 'Channel offline',
+  'virtualCity.rt.channel.updating': 'Collecting',
+  'virtualCity.rt.updated.just': 'Updated just now',
+  'virtualCity.rt.updated.min': 'Updated {n} min ago',
+  'virtualCity.rt.updated.hour': 'Updated {n} h ago',
+  'virtualCity.rt.updated.day': 'Updated {n} d ago',
+  'virtualCity.rt.refresh': 'Refresh',
+  'virtualCity.rt.refreshFail': 'Refresh failed: {msg}',
+  'virtualCity.rt.sub.overview': 'Overview',
+  'virtualCity.rt.sub.a_share': 'A-Share',
+  'virtualCity.rt.sub.hk': 'HK',
+  'virtualCity.rt.sub.us': 'US',
+  'virtualCity.rt.sub.metal': 'Metals',
+  'virtualCity.rt.sub.futures': 'Futures',
+  'virtualCity.rt.sub.crypto': 'BTC',
+  'virtualCity.rt.sub.news': 'News',
+  'virtualCity.rt.col.name': 'Name',
+  'virtualCity.rt.col.price': 'Price',
+  'virtualCity.rt.col.change': 'Change',
+  'virtualCity.rt.col.trend': 'Trend',
+  'virtualCity.rt.source': 'Source',
+  'virtualCity.rt.collecting': 'Collecting data',
+  'virtualCity.rt.candleAlt': '5-minute candlestick (aggregated from sampled prices)',
+  'virtualCity.rt.headline': 'Top headlines',
+  'virtualCity.rt.empty.feed': 'No realtime data yet: click Refresh above to start a collection mission',
+  'virtualCity.rt.empty.category': 'No data for this category yet',
+  'virtualCity.rt.empty.news': 'No news yet',
+};
+
+export default virtualCityRealtimeEN;

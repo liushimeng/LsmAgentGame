@@ -906,4 +906,40 @@ export interface VirtualCityDict {
   'virtualCity.behavior.mentalAlreadyMerged': string;
   'virtualCity.behavior.tab': string;
   'virtualCity.macro.tab': string;
+  // ── 批次65 · City-Chrome 实时数据通道 + 实时看板 ──
+  // 键文案出处：lag_docs/虚拟城市/已实现/65-CityChrome实时数据通道与实时看板/01-方案设计.md §5。
+  /** 侧栏 Tab 短名（数据组第 9 个按钮）。 */
+  'virtualCity.rt.tab': string;
+  'virtualCity.rt.channel.online': string;
+  'virtualCity.rt.channel.offline': string;
+  'virtualCity.rt.channel.updating': string;
+  /** 「更新于」时间差四档（just 无 {n} 占位）。 */
+  'virtualCity.rt.updated.just': string;
+  'virtualCity.rt.updated.min': string;
+  'virtualCity.rt.updated.hour': string;
+  'virtualCity.rt.updated.day': string;
+  'virtualCity.rt.refresh': string;
+  /** 刷新失败内联红条文案（{msg} = 服务端错误消息）。 */
+  'virtualCity.rt.refreshFail': string;
+  'virtualCity.rt.sub.overview': string;
+  'virtualCity.rt.sub.a_share': string;
+  'virtualCity.rt.sub.hk': string;
+  'virtualCity.rt.sub.us': string;
+  'virtualCity.rt.sub.metal': string;
+  'virtualCity.rt.sub.futures': string;
+  'virtualCity.rt.sub.crypto': string;
+  'virtualCity.rt.sub.news': string;
+  'virtualCity.rt.col.name': string;
+  'virtualCity.rt.col.price': string;
+  'virtualCity.rt.col.change': string;
+  'virtualCity.rt.col.trend': string;
+  'virtualCity.rt.source': string;
+  /** K 线聚合桶数不足时的降级标注。 */
+  'virtualCity.rt.collecting': string;
+  /** 蜡烛图 aria 标注。 */
+  'virtualCity.rt.candleAlt': string;
+  'virtualCity.rt.headline': string;
+  'virtualCity.rt.empty.feed': string;
+  'virtualCity.rt.empty.category': string;
+  'virtualCity.rt.empty.news': string;
 }

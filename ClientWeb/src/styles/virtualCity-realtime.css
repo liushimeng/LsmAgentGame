@@ -1,0 +1,414 @@
+/* 虚拟城市 批次65 · City-Chrome 实时数据通道 + 实时看板（RealtimeBoard/）。
+ *
+ * 独立成文件：virtualCity.css 已 1777/1800 行触顶（§4 硬上限，一字不加）。
+ * 选择器全部为新增 .virtualCity-rt* 前缀，与既有规则零级联冲突。
+ * 只追加在 globals.css 链尾，不调整既有 @import 顺序（§2.1 约束 4）。
+ *
+ * 布局遵守批次 63 基线：面板内容 flex column + gap:8px、报价表行高 ≥36px、
+ * 无溢出留白；§26 对比度：正文 ≥4.5:1、徽章文字 ≥5:1、禁用/离线态用
+ * 实色灰底（禁 opacity 表状态）。
+ */
+
+/* ── 容器（批次 63 基线：flex column + gap:8px）────────────────────────── */
+.virtualCity-rt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12.5px;
+  padding-bottom: 8px;
+  min-height: 0;
+}
+
+/* ── 顶栏：通道徽章 + 更新时间 + 刷新按钮 ─────────────────────────────── */
+.virtualCity-rt__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 36px;
+}
+
+.virtualCity-rt__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* online=绿底深字（深字 on #4ade80 ≈ 9:1）。 */
+.virtualCity-rt__badge--online {
+  background: #4ade80;
+  color: #0f172a;
+}
+
+/* offline=实色灰底浅字（#f9fafb on #4b5563 ≈ 7:1；禁 opacity 表禁用）。 */
+.virtualCity-rt__badge--offline {
+  background: #4b5563;
+  color: #f9fafb;
+}
+
+/* updating=黄底深字（#0f172a on #fbbf24 ≈ 10:1）。 */
+.virtualCity-rt__badge--updating {
+  background: #fbbf24;
+  color: #0f172a;
+}
+
+.virtualCity-rt__time {
+  color: var(--virtualCity-text-dim, #9ca3af);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.virtualCity-rt__refresh {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #475569;
+  background: #1e293b;
+  color: #e5e7eb;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.virtualCity-rt__refresh:hover:not(:disabled) {
+  background: #334155;
+  border-color: #64748b;
+}
+
+/* 禁用态：实色灰底（§26.2 反模式⑤——不用 opacity）。 */
+.virtualCity-rt__refresh:disabled {
+  background: #374151;
+  border-color: #4b5563;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.virtualCity-rt__spin {
+  display: inline-block;
+  animation: virtualCity-rt-spin 0.9s linear infinite;
+}
+
+@keyframes virtualCity-rt-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* prefers-reduced-motion 兜底（§26.3 三件套）。 */
+@media (prefers-reduced-motion: reduce) {
+  .virtualCity-rt__spin {
+    animation: none;
+  }
+}
+
+/* 通道离线原因（服务端权威文案，灰底提示块）。 */
+.virtualCity-rt__offline {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #374151;
+  color: #e5e7eb;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── 刷新失败内联红条（§7.1；红底白字 ≈ 9:1，同 .virtualCity-error-banner 口径）── */
+.virtualCity-rt__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #7f1d1d;
+  color: #fff;
+  font-size: 12.5px;
+}
+
+.virtualCity-rt__error button {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+/* ── 总览：核心指数卡网格 ─────────────────────────────────────────────── */
+.virtualCity-rt__overview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.virtualCity-rt__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+}
+
+.virtualCity-rt__card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #16213a;
+  border: 1px solid #2a3654;
+  min-height: 36px;
+}
+
+.virtualCity-rt__card-name {
+  font-size: 11.5px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.virtualCity-rt__card-price {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f9fafb;
+  font-variant-numeric: tabular-nums;
+}
+
+.virtualCity-rt__card-price small {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--virtualCity-text-dim, #9ca3af);
+}
+
+/* ── 涨跌徽章（A 股惯例：涨红跌绿；实色浅字底 ≥5:1）────────────────────── */
+.virtualCity-rt__chg {
+  display: inline-flex;
+  justify-content: flex-end;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: #d1d5db;
+  background: #374151;
+}
+
+.virtualCity-rt__chg--up {
+  background: rgba(248, 113, 113, 0.18);
+  color: #fca5a5;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+}
+
+.virtualCity-rt__chg--down {
+  background: rgba(74, 222, 128, 0.14);
+  color: #86efac;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+}
+
+/* ── 头条（总览）────────────────────────────────────────────────────── */
+.virtualCity-rt__section-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.virtualCity-rt__headlines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.virtualCity-rt__headline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #16213a;
+  border: 1px solid #2a3654;
+  text-decoration: none;
+  min-height: 36px;
+}
+
+.virtualCity-rt__headline:hover {
+  border-color: #4b6cb7;
+}
+
+.virtualCity-rt__headline-title {
+  font-size: 12.5px;
+  color: #e5e7eb;
+  line-height: 1.45;
+}
+
+.virtualCity-rt__headline-meta {
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 报价表（行高 ≥36px；名称/价格/涨跌/走势 四列网格）────────────────── */
+.virtualCity-rt__quotes {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.virtualCity-rt__qrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px 76px 64px;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 6px;
+  border: none;
+  border-bottom: 1px solid #263250;
+  background: transparent;
+  color: #e5e7eb;
+  font-size: 12.5px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.virtualCity-rt__qrow:hover {
+  background: #1c2946;
+}
+
+.virtualCity-rt__qrow--open {
+  background: #1c2946;
+}
+
+/* 表头行：不可点击。 */
+.virtualCity-rt__qrow--head {
+  cursor: default;
+  min-height: 28px;
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+  border-bottom: 1px solid #33415e;
+}
+
+.virtualCity-rt__qrow--head:hover {
+  background: transparent;
+}
+
+.virtualCity-rt__qname {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.virtualCity-rt__qcur {
+  font-size: 10px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+}
+
+.virtualCity-rt__qprice {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.virtualCity-rt__qspark {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* 展开行的 K 线图容器。 */
+.virtualCity-rt__qdetail {
+  padding: 6px 8px 10px;
+  border-bottom: 1px solid #263250;
+  background: #131c33;
+}
+
+/* ── 蜡烛图 ─────────────────────────────────────────────────────────── */
+.virtualCity-rt__candle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.virtualCity-rt__candle-tag {
+  font-size: 11px;
+  color: #fbbf24;
+}
+
+.virtualCity-rt__candle-axis {
+  font-size: 9px;
+  fill: var(--virtualCity-text-dim, #9ca3af);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 新闻列表 ───────────────────────────────────────────────────────── */
+.virtualCity-rt__news {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.virtualCity-rt__news-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #16213a;
+  border: 1px solid #2a3654;
+}
+
+.virtualCity-rt__news-link {
+  font-size: 12.5px;
+  color: #93c5fd;
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+.virtualCity-rt__news-link:hover {
+  color: #bfdbfe;
+  text-decoration: underline;
+}
+
+.virtualCity-rt__news-meta {
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 空态（BehaviorPanel 范式：图标 + 说明占位块）────────────────────── */
+.virtualCity-rt__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  min-height: 96px;
+  justify-content: center;
+}
+
+.virtualCity-rt__empty-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.virtualCity-rt__empty p {
+  margin: 0;
+  color: var(--virtualCity-text-dim, #9ca3af);
+  font-size: 12.5px;
+  text-align: center;
+  line-height: 1.6;
+}
