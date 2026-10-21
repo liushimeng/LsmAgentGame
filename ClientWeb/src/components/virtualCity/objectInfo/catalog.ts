@@ -115,7 +115,8 @@ export const EXTRA_LABELS: Record<string, TriText> = {
   seat: { 'zh-CN': '座位', en: 'Seat', ja: '席' },
   variant: { 'zh-CN': '款式', en: 'Variant', ja: '型式' },
   category: { 'zh-CN': '分类', en: 'Category', ja: '分類' },
-  players: { 'zh-CN': '在区玩家', en: 'Players Here', ja: '区内プレイヤー' },
+  // 2026-10-21 §城市模拟定位 — 城市主体称谓统一为「居民」。
+  players: { 'zh-CN': '在区居民', en: 'Residents Here', ja: '区内住民' },
   housePrice: { 'zh-CN': '房价', en: 'House Price', ja: '住宅価格' },
   rent: { 'zh-CN': '租金', en: 'Rent', ja: '家賃' },
   beta: { 'zh-CN': '房价 β', en: 'Price β', ja: '価格 β' },

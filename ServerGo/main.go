@@ -1028,6 +1028,8 @@ func main() {
 	})
 	// 2026-09-16 §财商流P1-2 — 社会调研 HTTP 入口(房间源 = vcMgr)。
 	vcSurveyAPI := api.NewVirtualCitySurveyAPI(vcMgr)
+	// 2026-10-21 §场景推演 — 场景目录 + 条件注入/记录 HTTP 入口(房间源 = vcMgr)。
+	vcScenarioAPI := api.NewVirtualCityScenarioAPI(vcMgr)
 	// 2026-09-21 §档案锚定契约 §7 — 居民人物卡档案两端点(房间源 = vcMgr)。
 	vcCityAPI := api.NewVirtualCityAPI(vcMgr)
 
@@ -1072,7 +1074,7 @@ func main() {
 	_ = kbRetrievalChain // 预留给未来 MCP tools/call 内部使用
 	kbAPI := api.NewKnowledgeAPI(kbLoader)
 
-	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, vcSurveyAPI, vcCityAPI, vcRealtimeAPI, kbAPI)
+	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, vcSurveyAPI, vcScenarioAPI, vcCityAPI, vcRealtimeAPI, kbAPI)
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.

@@ -45,6 +45,7 @@ import { MarketPanel } from '@/components/virtualCity/MarketPanel';
 import { LedgerPanel } from '@/components/virtualCity/LedgerPanel';
 import { EconomyPanel } from '@/components/virtualCity/EconomyPanel';
 import { SurveyPanel } from '@/components/virtualCity/SurveyPanel';
+import { ScenarioPanel } from '@/components/virtualCity/ScenarioPanel';
 import { ActionPanel } from '@/components/virtualCity/ActionPanel';
 import { MonthTicker } from '@/components/virtualCity/MonthTicker';
 import { MarketTradePanel } from '@/components/virtualCity/MarketTradePanel';
@@ -169,6 +170,8 @@ export function VirtualCityGamePage() {
   useVirtualCityActionBubbles(roomId ?? '');
 
   const [leavePromptOpen, setLeavePromptOpen] = useState(false);
+  // 2026-10-21 §城市模拟定位 — 场景推演台（条件触发者；观察者同样可注入）。
+  const [scenarioOpen, setScenarioOpen] = useState(false);
   const viewRef = useRef<VirtualCityCameraView>({ x: 0, z: 0, dist: 34 });
   const focusRef = useRef<VirtualCityFocusTarget | null>(null);
   // 批次 25 §3.4 城市时钟帧锚点：帧内 city_clock_ms + 帧到达时刻；
@@ -453,6 +456,16 @@ export function VirtualCityGamePage() {
               ▶ {t('virtualCity.startEarly' as TKey)}
             </button>
           )}
+          {/* 2026-10-21 §城市模拟定位 — 条件触发者入口（所有观察者可用）。 */}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setScenarioOpen(true)}
+            title={t('virtualCity.scenario.subtitle' as TKey)}
+            data-testid="virtualCity-scenario-open"
+          >
+            🎛 {t('virtualCity.scenario.open' as TKey)}
+          </button>
           <button
             type="button"
             className="btn btn-danger"
@@ -633,6 +646,33 @@ export function VirtualCityGamePage() {
           mySeat={effectiveSeat}
           onViewLedger={() => setPanelTab('ledger')}
         />
+      )}
+
+      {/* 2026-10-21 §城市模拟定位 — 场景推演台模态（与调研面板同构：overlay + 三段结构）。 */}
+      {scenarioOpen && (
+        <div
+          className="virtualCity-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setScenarioOpen(false)}
+        >
+          <div className="virtualCity-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="virtualCity-modal__head">
+              <strong>🎛 {t('virtualCity.scenario.title' as TKey)}</strong>
+              <button
+                type="button"
+                className="virtualCity-tab-extra-btn"
+                onClick={() => setScenarioOpen(false)}
+                data-testid="virtualCity-scenario-close"
+              >
+                ✕ {t('virtualCity.scenario.close' as TKey)}
+              </button>
+            </div>
+            <div className="virtualCity-modal__body">
+              <ScenarioPanel roomId={roomId} playing={gameState?.status === 'playing'} />
+            </div>
+          </div>
+        </div>
       )}
 
       {leavePromptOpen && (

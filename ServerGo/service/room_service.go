@@ -86,10 +86,9 @@ type VirtualCityRoomOptions struct {
 	// LLMLines 2026-09-25 §LLM线路池配额 — 本房 Agent 并发线路数。[1,64] 的
 	// clamp 在 game 层 applyOpts 完成(还需与全局池总量取 min,池在 ws/main 侧)。
 	LLMLines int `json:"llm_lines,omitempty"`
-	// FullAgent 2026-09-26 §批次25 接线(25 文档 §3.2):三态全 Agent 开关。
-	// nil(未传)/true = 恒全 Agent 城市(人类不可入座,创建者降级为观战者);
-	// 显式 false = 允许人类加入空位(FullAgentMode=false,JoinGame 不再返回 35036)。
-	// 建房 body 顶层 full_agent 由 API 层并入本字段。
+	// FullAgent Deprecated(2026-10-21 §场景推演,定位 v3.0):虚拟城市恒
+	// 全 Agent,人类永不入座(创建者降级为观察者)。字段仅为旧载荷兼容保留,
+	// **任何值都被忽略**(API 层并入前已强制 true;service 层再兜底)。
 	FullAgent *bool `json:"full_agent,omitempty"`
 	// CityKey 批次 33(方案 §2.3)— 真实城市选择(仅 virtual_city 生效):
 	// "" / 缺省 = 默认城市(批次 27 行为);"random" = 按房间 seed 确定性抽取
@@ -112,6 +111,8 @@ type GameJoiner interface {
 	// 2026-09-19 §全Agent模式 新增。
 	SetFullAgentMode(gameKind, roomID string, enabled bool) *errcode.Error
 	// IsFullAgentRoom 查询房间是否为全 Agent 模式(仅 wealth 生效;其他游戏返回 false)。
+	// 2026-10-21 起虚拟城市 JoinRoom 守卫不再依赖本探针(内存房未加载时
+	// 返回 false 会造成人类入座竞态),保留接口供其他读路径使用。
 	IsFullAgentRoom(roomID string) (bool, *errcode.Error)
 }
 

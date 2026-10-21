@@ -646,6 +646,8 @@ export interface Dict extends VirtualCityDict {
   'sidebar.expand': string;
   'nav.group.traditional': string;
   'nav.group.agent': string;
+  /** 2026-10-21 §城市模拟定位 — 虚拟城市独立分组（非游戏）。 */
+  'nav.group.simulation': string;
 
   // 聊天 — chat
   'chat.lobbyTitle': string;
@@ -1079,6 +1081,9 @@ export interface Dict extends VirtualCityDict {
   'lobby.status.open': string;    // 等待中
   'lobby.status.playing': string; // 游戏中
   'lobby.status.over': string;    // 已结束
+  // 2026-10-21 §城市模拟定位 — RoomListTable simulationMode 专用（默认大厅不使用）。
+  'lobby.status.simulating': string; // 模拟中
+  'lobby.observeButton': string;     // 👁 观察
   // §2026-09-19 全Agent模式：房间列表徽章与提示
   'lobby.fullAgent': string;     // 全Agent 徽章
   'lobby.fullAgentHint': string; // 全 Agent 模式说明（仅可观战）

@@ -108,11 +108,11 @@ func (s *RoomService) ListRoomsForUser(ctx context.Context, gameKind, userID str
 				info.Winner = w
 			}
 		}
-		// 2026-09-19 §全Agent模式: wealth 房间 FullAgent 标志下发
-		if r.GameKind == "virtual_city" && s.gameJoiner != nil {
-			if isFullAgent, e := s.gameJoiner.IsFullAgentRoom(r.ID); e == nil && isFullAgent {
-				info.FullAgent = true
-			}
+		// 2026-10-21 §场景推演:虚拟城市恒全 Agent —— 大厅列表恒下发
+		// full_agent=true(前端据此只渲染「观察」,不渲染「加入」)。
+		// 内存房未加载时同样为 true(DB game_kind 即权威事实)。
+		if r.GameKind == "virtual_city" {
+			info.FullAgent = true
 		}
 		// 2026-09-21 §虚拟城市(契约 04 §1.3): wealth 房间居民数下发(🏙 徽标)。
 		if r.GameKind == "virtual_city" && s.virtualCityResidentCounter != nil {
@@ -237,12 +237,15 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		}
 		wealthCfg.ResidentCount = clampVirtualCityResidentCount(wealthCfg.ResidentCount, maxResidents)
 	}
-	// 2026-09-26 §批次25(25 文档 §3.2)full_agent 接线:createRoomRequest.FullAgent
-	// 原声明后从不被读取(§130)。三态解析:nil(缺省)/true = 恒全 Agent 城市
-	// (人类不可入座);显式 false = 允许人类加入空位(FullAgentMode=false)。
+	// 2026-10-21 §场景推演(定位 v3.0):虚拟城市 = 全 Agent 驱动的城市模拟,
+	// 不是游戏 —— 人类**永不入座**,只可观察(观战)或触发场景条件。
+	// body.full_agent 继续接受(旧客户端/旧载荷兼容,不让 DisallowUnknownFields
+	// 变 400),但值一律忽略:恒全 Agent。批次25 §3.2 的「显式 false = 允许人类
+	// 加入空位」三态旁路就此退役(创建 → applyOpts → JoinRoom 三处同时收敛)。
 	virtualCityFullAgent := gameKind == "virtual_city"
 	if wealthCfg != nil && wealthCfg.FullAgent != nil && !*wealthCfg.FullAgent {
-		virtualCityFullAgent = false
+		logger.L().Warn("virtual_city full_agent=false ignored: simulation is always full-agent",
+			zap.String("user_id", userID), zap.String("game_kind", gameKind))
 	}
 
 	// 2026-09-22 §17-CityHuman 全民驱动(契约 03 §3.1): wealth 建房**忽略**
@@ -253,15 +256,10 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	// FullAgentMode 判定、ws 层 RegisterBotSeats、自动开局看到同一座位集;
 	// werewolf 等其他游戏路径零变化。
 	//
-	// ⚠ **批次 63 修复(§130:full_agent 三态接线声明了却从不接线)**:
-	// 旧代码**无条件**用 resident_count 派生 bot 座位并覆盖 agentSeats,完全无视
-	// 上面的 `virtualCityFullAgent` —— 于是即便客户端显式传 `full_agent=false`
-	// (等价于 `wealthCfg.FullAgent=false`),房间仍被 10 个 bot 占满,
-	// 人类 POST /api/rooms/:id/join 恒返回 `ErrRoomFull`(30002「room is full」)。
-	// 已实测复现(HTTP 直发):create `{"full_agent":false,"resident_count":10}` → join 30002。
-	// 现按 `virtualCityFullAgent` 闸口:非全 Agent 房**不**注入居民 bot 座位,
-	// 空位留给人类;`prepareVirtualCityAgentRoom` 仍会把 FullAgentMode 置 false,
-	// JoinRoom 的 `IsFullAgentRoom` 守卫随之放行。
+	// 2026-10-21 §场景推演:虚拟城市恒按 resident_count 注入居民 Agent 座位
+	// (clamp [1,12]),空位不再留给人类;创建者由 creatorShouldBeSpectator
+	// 降级为观察者。注释保留历史:批次63 曾用 `virtualCityFullAgent` 闸口
+	// 支持 full_agent=false 的可玩房,该语义已随定位 v3.0 退役。
 	if gameKind == "virtual_city" {
 		residentN := 0
 		if wealthCfg != nil {
@@ -898,11 +896,9 @@ func clampVirtualCityResidentCount(v, maxResidents int) int {
 
 // prepareVirtualCityAgentRoom 是 wealth 专用的内存镜像顺序:先设置 FullAgentMode,
 // 再注册 bot seats。RegisterAgentSeats 到达 MinSeats 后可能立即自动开局,
-// 顺序反置会出现短暂人类可加入窗口。2026-09-22 §17:wealth 恒为全 Agent
-// 城市(抽样展示位),有任何 agent 座位即置位。2026-09-26 §批次25:fullAgent
-// 由建房请求 full_agent 字段决定(缺省/true=全 Agent;显式 false=允许人类
-// 加入空位),显式置 false 同样先于 RegisterAgentSeats 落地,使 ws 侧
-// EnsureFullAgentMode 防御门不会把它翻回 true。
+// 顺序反置会出现短暂人类可加入窗口。
+// 2026-10-21 §场景推演(定位 v3.0):虚拟城市恒全 Agent,fullAgent 形参在生产
+// 路径恒为 true(保留形参兼容既有单测);人类永不入座。
 func (s *RoomService) prepareVirtualCityAgentRoom(roomID string, agentSeats []AgentSeatConfig, fullAgent bool) {
 	if len(agentSeats) > 0 && s.gameJoiner != nil {
 		if e := s.gameJoiner.SetFullAgentMode("virtual_city", roomID, fullAgent); e != nil {
@@ -929,14 +925,18 @@ func (s *RoomService) JoinRoom(roomID, userID string) (*RoomDetail, *errcode.Err
 	if err := s.db.Where("id = ?", roomID).First(&room).Error; err != nil {
 		return nil, errcode.Code(errcode.ErrRoomNotFound)
 	}
+	// 2026-10-21 §场景推演(定位 v3.0):虚拟城市 = 全 Agent 城市模拟,
+	// 人类**永不入座**(35036),入口只保留观战(spectate)与条件触发(scenario)。
+	// ⚠ ① 本守卫**先于**状态判定:运行中的模拟房(playing)同样返回 35036,
+	// 而不是误导性的 30002「房间已满」;
+	// ⚠ ② 不再依赖 IsFullAgentRoom 探针:内存房未加载(服务重启后的首批请求 /
+	// 建房与注册竞态)时该探针返回 (false, nil),旧实现会在此放行人类入座 ——
+	// 正是本段要关闭的竞态。game_kind 是 DB 权威事实,足以判定。
+	if room.GameKind == "virtual_city" {
+		return nil, errcode.Code(errcode.ErrVirtualCityFullAgentReject)
+	}
 	if room.Status != "open" {
 		return nil, errcode.Code(errcode.ErrRoomFull)
-	}
-	// 2026-09-19 §全Agent模式: wealth 全 Agent 房间拒绝人类加入
-	if room.GameKind == "virtual_city" && s.gameJoiner != nil {
-		if isFullAgent, e := s.gameJoiner.IsFullAgentRoom(roomID); e == nil && isFullAgent {
-			return nil, errcode.Code(errcode.ErrVirtualCityFullAgentReject)
-		}
 	}
 
 	// Check if already in room — idempotent: return room detail for reconnecting users.
@@ -1229,13 +1229,8 @@ func (s *RoomService) GetRoomDetailForUser(ctx context.Context, roomID, userID s
 		finalStatus = status
 	}
 
-	// 2026-09-19 §全Agent模式: wealth 房间 FullAgent 标志下发
-	fullAgent := false
-	if room.GameKind == "virtual_city" && s.gameJoiner != nil {
-		if isFullAgent, e := s.gameJoiner.IsFullAgentRoom(roomID); e == nil && isFullAgent {
-			fullAgent = true
-		}
-	}
+	// 2026-10-21 §场景推演:虚拟城市恒全 Agent(详情同列表口径)。
+	fullAgent := room.GameKind == "virtual_city"
 	// 2026-09-21 §虚拟城市(契约 04 §1.3): wealth 房间居民数下发。
 	residentCount := 0
 	if room.GameKind == "virtual_city" && s.virtualCityResidentCounter != nil {

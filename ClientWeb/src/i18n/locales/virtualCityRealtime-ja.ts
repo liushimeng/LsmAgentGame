@@ -39,7 +39,7 @@ const virtualCityRealtimeJA = {
   'virtualCity.rt.exo.goldBias': '金ドリフト',
   'virtualCity.rt.exo.inactive': 'アンカー未活性',
   'virtualCity.rt.exo.updated': 'データ更新 {n} 分前',
-  'virtualCity.rt.exo.effectHint': 'ゲーム内への影響',
+  'virtualCity.rt.exo.effectHint': '都市シミュレーションへの影響',
 };
 
 export default virtualCityRealtimeJA;

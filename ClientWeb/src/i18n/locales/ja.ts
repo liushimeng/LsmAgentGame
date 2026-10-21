@@ -10,6 +10,7 @@ import virtualCityFamily from './virtualCityFamily-ja';
 import virtualCityDashboard from './virtualCityDashboard-ja';
 import virtualCityBehavior from './virtualCityBehavior-ja';
 import virtualCityRealtime from './virtualCityRealtime-ja';
+import virtualCityScenario from './virtualCityScenario-ja';
 
 // 日本語 — ja
 const ja: Dict = {
@@ -40,6 +41,8 @@ const ja: Dict = {
   'sidebar.expand': 'メニューを展開',
   'nav.group.traditional': 'トラディショナルゲーム',
   'nav.group.agent': 'Agent ゲーム',
+  // 2026-10-21 都市シミュレーション定位 — 仮想都市を独立グループへ。
+  'nav.group.simulation': '都市シミュレーション',
 
   'chat.lobbyTitle': 'ロビーチャット',
   'chat.roomTitle': 'ルーム #{id}',
@@ -104,7 +107,7 @@ const ja: Dict = {
   'lobby.full': '満員',
   // 2026-09-19 §全Agent模式
   'lobby.fullAgent': '全Agent',
-  'lobby.fullAgentHint': '全Agentモード：人間は参加不可、観戦のみ',
+  'lobby.fullAgentHint': '全Agent都市：人間は観察またはシナリオ条件の発動のみ可能',
   // BUG-R200-P2-05 (2026-07-30): リフレッシュ後にルーム再入室ボタン。
   'lobby.reenter': '入室',
   'lobby.copyId': 'IDコピー',
@@ -113,6 +116,9 @@ const ja: Dict = {
   'lobby.status.open': '待機中',
   'lobby.status.playing': 'プレイ中',
   'lobby.status.over': '終了',
+  // 2026-10-21 都市シミュレーション定位 — RoomListTable simulationMode。
+  'lobby.status.simulating': 'シミュレーション中',
+  'lobby.observeButton': '観察',
 
   // ゲーム別観戦ラベル。
   'xiangqi.spectating': '観戦中…',
@@ -1390,7 +1396,7 @@ const ja: Dict = {
   // ── 仮想都市 / virtualCity（2026-09-14 P0）──
   'nav.virtualCity': '仮想都市',
   'virtualCity.title': '仮想都市',
-  'virtualCity.subtitle': '全 Agent リアル都市シミュレーター · 住民が自律的に生活',
+  'virtualCity.subtitle': '研究グレードの全 Agent 都市シミュレーション · 住民が自律的に生活 · 観察者視点',
   'virtualCity.createRoom': '都市を作成',
   'virtualCity.roomName': '都市名',
   'virtualCity.seed': 'シード',
@@ -1400,7 +1406,7 @@ const ja: Dict = {
   'virtualCity.noRooms': '仮想都市はまだありません',
   'virtualCity.createFirst': '「都市を作成」で最初の都市シミュレーションを始動しよう',
   // 2026-09-22 §CityHuman 全住民駆動：全住民を LLM が駆動、作成すると自動開始。
-  'virtualCity.lobbyHint': '全住民を LLM が駆動 · 背景住民規模 1〜10万 · 作成すると自動でシミュレーション開始',
+  'virtualCity.lobbyHint': '全住民を LLM が駆動 · 背景住民規模 1〜10万 · 作成すると自動でシミュレーション開始 · 人間は観察者 / 条件トリガーとして参加',
   'virtualCity.startEarly': '今すぐ開始',
   'virtualCity.startHint': '住民 Agent の準備が整うと自動でシミュレーション開始',
   'virtualCity.month': '第{m}月',
@@ -1733,7 +1739,7 @@ const ja: Dict = {
   'virtualCity.consumption.invalid': '消費水準が不正です（0-3）',
 
   // ── virtualCity 分割ファイル（≤1800 行制約）：P2 取引 / P1-4 保険 / 住民档案 / バッチ20 / ラインプール ──
-  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily, ...virtualCityDashboard, ...virtualCityBehavior, ...virtualCityRealtime,
+  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily, ...virtualCityDashboard, ...virtualCityBehavior, ...virtualCityRealtime, ...virtualCityScenario,
 
   // ── P1 ミンスキーエンジン + LPR リプライシング + 早期返済 ──
   'minsky.title': 'ミンスキー融資状態',

@@ -10,6 +10,7 @@ import virtualCityFamily from './virtualCityFamily-en';
 import virtualCityDashboard from './virtualCityDashboard-en';
 import virtualCityBehavior from './virtualCityBehavior-en';
 import virtualCityRealtime from './virtualCityRealtime-en';
+import virtualCityScenario from './virtualCityScenario-en';
 
 // English — en
 const en: Dict = {
@@ -40,6 +41,8 @@ const en: Dict = {
   'sidebar.expand': 'Expand menu',
   'nav.group.traditional': 'Traditional Games',
   'nav.group.agent': 'Agent Games',
+  // 2026-10-21 city-simulation repositioning — Virtual City gets its own group.
+  'nav.group.simulation': 'City Simulation',
 
   'chat.lobbyTitle': 'Lobby chat',
   'chat.roomTitle': 'Room #{id}',
@@ -104,7 +107,7 @@ const en: Dict = {
   'lobby.full': 'Full',
   // 2026-09-19 §全Agent模式
   'lobby.fullAgent': 'Full Agent',
-  'lobby.fullAgentHint': 'Full Agent mode: humans cannot play, spectate only',
+  'lobby.fullAgentHint': 'Full Agent city: humans can only observe or trigger scenario conditions',
   // BUG-R200-P2-05 (2026-07-30): re-enter room button label after refresh.
   'lobby.reenter': 'Enter',
   'lobby.copyId': 'Copy ID',
@@ -113,6 +116,9 @@ const en: Dict = {
   'lobby.status.open': 'Waiting',
   'lobby.status.playing': 'In-Game',
   'lobby.status.over': 'Finished',
+  // 2026-10-21 city-simulation repositioning — RoomListTable simulationMode.
+  'lobby.status.simulating': 'Simulating',
+  'lobby.observeButton': 'Observe',
 
   // Per-game spectator labels.
   'xiangqi.spectating': 'Spectating…',
@@ -1390,7 +1396,7 @@ const en: Dict = {
   // ── Virtual City / virtualCity (2026-09-14 P0) ──
   'nav.virtualCity': 'Virtual City',
   'virtualCity.title': 'Virtual City',
-  'virtualCity.subtitle': 'Fully-agentic real-city simulator · residents live autonomously',
+  'virtualCity.subtitle': 'Research-grade fully-agentic city simulation · autonomous residents · observer view',
   'virtualCity.createRoom': 'Create City',
   'virtualCity.roomName': 'City Name',
   'virtualCity.seed': 'Random seed',
@@ -1401,7 +1407,7 @@ const en: Dict = {
   'virtualCity.createFirst': 'Click "Create City" to launch your first city simulation',
   // 2026-09-22 §CityHuman all-resident driving: every resident is LLM-driven;
   // simulation starts on creation.
-  'virtualCity.lobbyHint': 'All residents driven by LLMs · background population 1 ~ 100k · simulation auto-starts on creation',
+  'virtualCity.lobbyHint': 'All residents driven by LLMs · background population 1 ~ 100k · simulation auto-starts on creation · humans participate as observers / condition triggers',
   'virtualCity.startEarly': 'Start now',
   'virtualCity.startHint': 'Simulation starts automatically once resident Agents are ready',
   'virtualCity.month': 'Month {m}',
@@ -1734,7 +1740,7 @@ const en: Dict = {
   'virtualCity.consumption.invalid': 'Invalid consumption level (must be 0-3)',
 
   // ── virtualCity split files (≤1800 line cap): P2 trading / P1-4 insurance / residents / batch20 / line pool ──
-  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily, ...virtualCityDashboard, ...virtualCityBehavior, ...virtualCityRealtime,
+  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily, ...virtualCityDashboard, ...virtualCityBehavior, ...virtualCityRealtime, ...virtualCityScenario,
 
   // ── P1 Minsky Engine + LPR Reprice + Early Repayment ──
   'minsky.title': 'Minsky Financing Status',

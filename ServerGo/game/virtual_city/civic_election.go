@@ -48,16 +48,21 @@ type ElectionVote struct {
 
 // CivicElection 市长选举状态(挂 World.Election;阶段8)。
 type CivicElection struct {
-	Enabled           bool // 默认 false(R8-2 完全可选)
-	IntervalMonths    int  // 48(4 年一届);≤0 回落 ElectionIntervalMonths
-	LastElectionMonth int  // 最近一次选举的主钟月份(0 = 从未)
-	MayorSeat         int  // 当选者座位(-1 = 无市长)
-	MonthsRun         int  // Enabled 期间累计月步次数(§130 接线验证)
-	LastStepMonth     int  // 最近一次 MonthlyStep 的主钟月份
+	Enabled           bool           // 默认 false(R8-2 完全可选)
+	IntervalMonths    int            // 48(4 年一届);≤0 回落 ElectionIntervalMonths
+	LastElectionMonth int            // 最近一次选举的主钟月份(0 = 从未)
+	MayorSeat         int            // 当选者座位(-1 = 无市长)
+	MonthsRun         int            // Enabled 期间累计月步次数(§130 接线验证)
+	LastStepMonth     int            // 最近一次 MonthlyStep 的主钟月份
 	LastVotes         []ElectionVote // 最近一次得票明细(得分降序;view 下发)
 	// StipendStopped 上月津贴是否断发(批次20 文档3 A3:「市长津贴停发」
 	// event 只在 停→停 转换沿播一次,恢复发放后重新计)。
 	StipendStopped bool
+
+	// SentimentBias 选举满意度偏置(2026-10-21 §场景推演,scenario.go 写):
+	// 条件触发者注入的舆情/灾难场景通过它影响 ComputeVotes 的满意度项,
+	// 逐月线性衰减至 0。零值 ⇒ satisfaction 与旧实现逐位一致(零回归)。
+	SentimentBias float64
 }
 
 // NewCivicElection 构造:默认关闭、48 月一届、无市长。
@@ -183,11 +188,15 @@ func (ce *CivicElection) ComputeVotes(w *World) []ElectionVote {
 		return rows[i].seat < rows[j].seat
 	})
 	// 社会满意度(全城同值):100 − 基尼×100。
+	// 2026-10-21 §场景推演:叠加选举舆情偏置(SentimentBias=0 ⇒ 旧值逐位一致)。
 	gini := 0.0
 	if w.Society != nil {
 		gini = clamp01(w.Society.Gini)
 	}
 	satisfaction := 100 - gini*100
+	if ce != nil && ce.SentimentBias != 0 {
+		satisfaction = clampF(satisfaction+ce.SentimentBias, 0, 100)
+	}
 
 	votes := make([]ElectionVote, 0, n)
 	for rank, r := range rows {

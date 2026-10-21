@@ -50,10 +50,10 @@ type createRoomRequest struct {
 	// <10 → clamp 10;>上限由 service 层 clamp(默认 100000);负数 400。
 	// 并入 VirtualCity.ResidentCount 透传(virtual_city 子对象亦可显式携带,顶层优先)。
 	ResidentCount int `json:"resident_count,omitempty"`
-	// FullAgent 2026-09-19 §全Agent模式 — 是否全 Agent 模式(仅 wealth 生效)。
-	// 缺省 / true = 全 Agent 模式;false = 允许人类加入空位。
-	// 2026-09-26 §批次25 接线:显式 false 时 FullAgentMode=false,JoinGame
-	// 不再返回 35036(仅 wealth 生效,其他 kind 静默忽略)。
+	// FullAgent 2026-09-19 §全Agent模式 — 是否全 Agent 模式(仅 virtual_city 生效)。
+	// 2026-10-21 §场景推演(定位 v3.0):虚拟城市恒全 Agent,人类永不入座。
+	// 字段仅为旧客户端载荷兼容保留(不传/传 false 均按 true 处理),
+	// 其他 kind 静默忽略。
 	FullAgent *bool `json:"full_agent,omitempty"`
 	// CivicElectionEnabled 2026-09-24 §批次20(文档3 A2)— 市长选举启用开关
 	// (仅 wealth 生效,其他 kind 静默忽略;缺省/false = 关闭,R8-2 默认关闭
@@ -219,13 +219,15 @@ func mergeVirtualCityBodyFields(req createRoomRequest, kind string, cfg *service
 		}
 		cfg.LLMLines = req.LLMLines
 	}
-	// 2026-09-26 §批次25(25 文档 §3.2):full_agent 三态接线 —— 显式 false
-	// 允许人类加入空位;nil/true 保持恒全 Agent。原字段声明后从不被读取(§130)。
+	// 2026-10-21 §场景推演(定位 v3.0):虚拟城市 = 全 Agent 城市模拟,
+	// 人类永不入座 —— 建房 body.full_agent 继续解码(旧客户端兼容),但值一律
+	// 强制 true(显式 false 仅记日志,不再打开人类座位旁路)。
 	if req.FullAgent != nil {
+		enabled := true
 		if cfg == nil {
 			cfg = &service.VirtualCityRoomOptions{}
 		}
-		cfg.FullAgent = req.FullAgent
+		cfg.FullAgent = &enabled
 	}
 	return cfg, ""
 }

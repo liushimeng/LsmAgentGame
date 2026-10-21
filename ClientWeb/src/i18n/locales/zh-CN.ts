@@ -10,6 +10,7 @@ import virtualCityFamily from './virtualCityFamily-zh';
 import virtualCityDashboard from './virtualCityDashboard-zh';
 import virtualCityBehavior from './virtualCityBehavior-zh';
 import virtualCityRealtime from './virtualCityRealtime-zh';
+import virtualCityScenario from './virtualCityScenario-zh';
 
 // 中文 (默认) — zh-CN
 const zhCN: Dict = {
@@ -40,6 +41,8 @@ const zhCN: Dict = {
   'sidebar.expand': '展开菜单',
   'nav.group.traditional': '传统游戏',
   'nav.group.agent': 'Agent 游戏',
+  // 2026-10-21 §城市模拟定位 — 虚拟城市独立分组。
+  'nav.group.simulation': '城市模拟',
 
   'chat.lobbyTitle': '大厅聊天',
   'chat.roomTitle': '房间 #{id}',
@@ -104,7 +107,7 @@ const zhCN: Dict = {
   'lobby.full': '已满',
   // 2026-09-19 §全Agent模式: 全 Agent 房间标签
   'lobby.fullAgent': '全Agent',
-  'lobby.fullAgentHint': '全 Agent 模式：人类不能参与对局，仅可观战',
+  'lobby.fullAgentHint': '全 Agent 城市：人类仅可观察或触发场景条件',
   // BUG-R200-P2-05 (2026-07-30): 刷新后重新进入房间的按钮文案。
   'lobby.reenter': '进入房间',
   'lobby.copyId': '复制编号',
@@ -113,6 +116,9 @@ const zhCN: Dict = {
   'lobby.status.open': '等待中',
   'lobby.status.playing': '游戏中',
   'lobby.status.over': '已结束',
+  // 2026-10-21 §城市模拟定位 — 模拟观察模式（RoomListTable simulationMode）。
+  'lobby.status.simulating': '模拟中',
+  'lobby.observeButton': '观察',
 
   // Per-game spectator labels.
   'xiangqi.spectating': '观战中…',
@@ -1390,7 +1396,7 @@ const zhCN: Dict = {
   // ── 虚拟城市 / virtualCity（2026-09-14 P0）──
   'nav.virtualCity': '虚拟城市',
   'virtualCity.title': '虚拟城市',
-  'virtualCity.subtitle': '全 Agent 真实城市模拟器 · 居民自主生活的人生沙盘',
+  'virtualCity.subtitle': '科研级全 Agent 城市模拟系统 · 居民自主生活 · 观察者视角',
   'virtualCity.createRoom': '创建城市',
   'virtualCity.roomName': '城市名称',
   'virtualCity.seed': '随机种子',
@@ -1400,7 +1406,7 @@ const zhCN: Dict = {
   'virtualCity.noRooms': '暂无虚拟城市',
   'virtualCity.createFirst': '点击「创建城市」启动你的第一座城市模拟',
   // 2026-09-22 §CityHuman全民驱动：全体居民由大模型驱动，创建即自动启动模拟。
-  'virtualCity.lobbyHint': '全体居民由大模型驱动 · 背景居民规模 1 ~ 10 万 · 创建即自动启动模拟',
+  'virtualCity.lobbyHint': '全体居民由大模型驱动 · 背景居民规模 1 ~ 10 万 · 创建即自动启动模拟 · 人类以观察者 / 条件触发者身份参与',
   'virtualCity.startEarly': '提前开始',
   'virtualCity.startHint': '居民 Agent 就绪后自动启动模拟',
   'virtualCity.month': '第 {m} 月',
@@ -1734,7 +1740,7 @@ const zhCN: Dict = {
 
 
   // ── virtualCity 拆分文件（≤1800 行约束）：P2 交易 / P1-4 保险 / 居民档案 / 批次20 / 线路池 ──
-  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily, ...virtualCityDashboard, ...virtualCityBehavior, ...virtualCityRealtime,
+  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily, ...virtualCityDashboard, ...virtualCityBehavior, ...virtualCityRealtime, ...virtualCityScenario,
 
   // ── P1 明斯基引擎 + LPR 重定价 + 提前还款 ──
   'minsky.title': '明斯基融资状态',

@@ -12,7 +12,7 @@
  *   ③ 最近 closed：结果水平条形图（percents，选项文本 + 票数）+ TopReasons 引用块。
  *   ④ 历史列表：最近 4 个 closed（问题 + 理由摘录）。
  *
- * 数据：挂载时 GET /api/games/virtual-city/rooms/:id/surveys 全量 + store.surveys
+ * 数据：挂载时 GET /api/games/virtual_city/rooms/:id/surveys 全量 + store.surveys
  * （game.state 种子 / game.survey_result 增量，useVirtualCity.mergeSurvey 按 id 去重覆盖）。
  * 错误展示（CLAUDE.md §7.1）：表单内联红条优先（不关表单），未知/网络错误兜底
  * reportGlobalError 全局 toast；会话过期走 AuthModal 通道不重复展示。

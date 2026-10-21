@@ -173,17 +173,23 @@ const (
 	ErrVirtualCityFamilyDisabled = 35045 // family_enabled=false 引擎关闭(工具拒绝/月结零接线)
 	ErrVirtualCityFamilyInvalid  = 35046 // 家庭工具参数非法(child_idx 越界/年龄窗不符/加赡养超上限)
 	// 35047–35050 — 虚拟城市批次62 行为金融偏差引擎(2026-10-20 §20261020-62)。
-	ErrVirtualCityReflectCognitionLow   = 35047 // 主动反思不可执行(认知 ≤ 1,防归零恶性循环)
-	ErrVirtualCityReflectLimit           = 35048 // 主动反思本月次数用尽(每回合最多 1 次)
-	ErrVirtualCityReflectModeInvalid     = 35049 // reflect_mode 非法(须 light|deep|preview)
+	ErrVirtualCityReflectCognitionLow     = 35047 // 主动反思不可执行(认知 ≤ 1,防归零恶性循环)
+	ErrVirtualCityReflectLimit            = 35048 // 主动反思本月次数用尽(每回合最多 1 次)
+	ErrVirtualCityReflectModeInvalid      = 35049 // reflect_mode 非法(须 light|deep|preview)
 	ErrVirtualCityReflectNothingToResolve = 35050 // 轻度反思无可解除的生效偏差
 	// 35051–35052 — 虚拟城市批次62 延期支付与心理账户(§3.3.1 / §3.2.3)。
 	ErrVirtualCityDeferNotAvailable = 35051 // 延期支付不可用(画像不含双曲贴现偏差)
-	ErrVirtualCityMergeAlreadyDone   = 35052 // 心理账户已合并(不可重复合并)
+	ErrVirtualCityMergeAlreadyDone  = 35052 // 心理账户已合并(不可重复合并)
 	// 35053–35054 — 虚拟城市批次65 City-Chrome 实时数据通道
 	// (2026-10-20 §批次65,契约 §3.5)。
 	ErrCityChromeChannelOffline     = 35053 // 数据通道离线(enabled=false 或底座不可达)
 	ErrCityChromeRefreshTooFrequent = 35054 // 同类目刷新过于频繁(60s 内重复,429 语义)
+	// 35055–35057 — 虚拟城市场景推演 / 预测运行(2026-10-21 §场景推演)。
+	// 契约: tmpPlan/虚拟城市-模拟程序化与预测运行优化_20261021_095114.md §5.1。
+	// 房间未运行沿用 35002(ErrVirtualCityNotPlaying),与 LaunchSurvey 同口径。
+	ErrVirtualCityScenarioUnknown       = 35055 // 场景 kind 不在目录内
+	ErrVirtualCityScenarioParamsInvalid = 35056 // 强度/持续月数/target 非法
+	ErrVirtualCityScenarioActiveLimit   = 35057 // 同时生效的场景数达到上限(8)
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
 	// 契约: lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md §4.4。
 	ErrVirtualCitySenseInvalid  = 35100 // 感知/移动工具参数非法(未知城区、未知 mode、目标不存在)
@@ -323,12 +329,12 @@ var DefaultMessages = map[int]string{
 	ErrVirtualCityMarketCircuitBreak: "virtual_city stock trading suspended by monthly circuit breaker",
 	ErrVirtualCityStockT1Locked:      "virtual_city stock units bought this month are T+1 locked and not sellable",
 	// 35047–35051 — 虚拟城市批次62 行为金融偏差引擎(2026-10-20 §20261020-62)。
-	ErrVirtualCityReflectCognitionLow:   "主动反思需要认知 ≥ 2（认知过低时不可反思）",
-	ErrVirtualCityReflectLimit:           "本月反思次数已用尽（每回合最多 1 次）",
-	ErrVirtualCityReflectModeInvalid:     "reflect_mode 非法（须 light|deep|preview）",
+	ErrVirtualCityReflectCognitionLow:     "主动反思需要认知 ≥ 2（认知过低时不可反思）",
+	ErrVirtualCityReflectLimit:            "本月反思次数已用尽（每回合最多 1 次）",
+	ErrVirtualCityReflectModeInvalid:      "reflect_mode 非法（须 light|deep|preview）",
 	ErrVirtualCityReflectNothingToResolve: "当前没有可解除的行为偏差",
-	ErrVirtualCityDeferNotAvailable:      "当前不可延期支付（未触发双曲贴现倾向）",
-	ErrVirtualCityMergeAlreadyDone:       "心理账户已合并，无需重复合并",
+	ErrVirtualCityDeferNotAvailable:       "当前不可延期支付（未触发双曲贴现倾向）",
+	ErrVirtualCityMergeAlreadyDone:        "心理账户已合并，无需重复合并",
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
 	ErrVirtualCitySenseInvalid:  "virtual_city sense/move params invalid (unknown district/mode/target)",
 	ErrVirtualCitySenseLimit:    "virtual_city sense/speak monthly limit reached",
@@ -339,6 +345,10 @@ var DefaultMessages = map[int]string{
 	// 批次65 City-Chrome 实时数据通道(契约 §3.5)。
 	ErrCityChromeChannelOffline:     "realtime data channel offline",
 	ErrCityChromeRefreshTooFrequent: "refresh too frequent for this category, retry later",
+	// 35055–35057 — 虚拟城市场景推演(2026-10-21 §场景推演;中文文案)。
+	ErrVirtualCityScenarioUnknown:       "场景不存在：kind 不在场景目录内",
+	ErrVirtualCityScenarioParamsInvalid: "场景参数非法：强度须 1-5、持续 1-24 月、target 须为合法取值",
+	ErrVirtualCityScenarioActiveLimit:   "同时生效的场景已达上限（8 个），请等待现有场景消退后再注入",
 }
 
 // Code constructs a Coded error.

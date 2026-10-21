@@ -39,7 +39,7 @@ const virtualCityRealtimeEN = {
   'virtualCity.rt.exo.goldBias': 'Gold drift',
   'virtualCity.rt.exo.inactive': 'Anchor inactive',
   'virtualCity.rt.exo.updated': 'Updated {n} min ago',
-  'virtualCity.rt.exo.effectHint': 'In-game impact',
+  'virtualCity.rt.exo.effectHint': 'Impact on city simulation',
 };
 
 export default virtualCityRealtimeEN;

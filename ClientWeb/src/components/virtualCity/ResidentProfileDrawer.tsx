@@ -2,7 +2,7 @@
  * ResidentProfileDrawer — 城市居民人物卡档案抽屉（档案锚定设计 §8.3）。
  *
  * 右侧滑出抽屉（FactionDrawer 同款骨架：380px/30vw + overlay），数据源为
- * REST GET /api/games/virtual-city/rooms/:id/city/residents(/:cardId)（§7 契约）：
+ * REST GET /api/games/virtual_city/rooms/:id/city/residents(/:cardId)（§7 契约）：
  *   - 搜索框（q，300ms 防抖；姓名/职业/卡号包含匹配）
  *   - 分页列表（limit 50，上一页/下一页；行内展示姓名/职业/年龄/城区/收入/储蓄/就业徽章）
  *   - 点击行展开详情卡（opening_hook 引言块 / 人格词 chips / 5 年目标 /

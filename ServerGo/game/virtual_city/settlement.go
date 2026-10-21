@@ -99,6 +99,12 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 	// 个体失业概率消费最新 Unemployment。economy_enabled=false 跳过。
 	w.LaborMonthStep()
 
+	// ②.0B 场景推演月度衰减(2026-10-21 §场景推演,scenario.go):必须晚于
+	// ⓪C 泡沫月步(DriftExtra 已被重置)与 ②.0 劳动力月步(失业率基准已更新),
+	// 早于 ② MonthlyEvents(失业冲击本月即生效)与 ④/④.5(漂移/商品价格消费
+	// 本步写入的加成)。无活动场景时零开销、零 rand。
+	w.scenarioMonthStep()
+
 	// ②B 产业链月度调度(阶段5,2026-09-21 §城市扩张v2.12):需求自下而上
 	// 传导 → 生产/利用率/库存(R5-1 断供防护)→ 价格逐层传导 → 消费品价格
 	// 联动(在 ④.5 GoodsMonthStep 之前调整 PriceIdx,链条冲击进当月环比)。
@@ -1009,7 +1015,7 @@ func (w *World) finalReport(p *Player, netWorth int64, fi float64) string {
 		p.Card.Title, p.Card.ID, netWorth, fi, peak, trough, maxGain, maxLoss, p.DonationTotalCNY,
 		familySupportRatioNote(p),
 		// 批次62 §4.4.1:认知跨局继承 —— 本局认知的 30% 带入下一局(向下取整)。
-		fmt.Sprintf("认知 %d(其中 %d 点可带入下一局)。", p.Cognition, p.cognitionCarryOver()))
+		fmt.Sprintf("认知 %d(其中 %d 点可带入下一模拟周期)。", p.Cognition, p.cognitionCarryOver()))
 }
 
 func clamp(v, lo, hi int) int {

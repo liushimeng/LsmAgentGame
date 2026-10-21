@@ -30,8 +30,11 @@ const DEFAULT_PAGE_SIZE = 20;
 
 export interface RoomListTableProps {
   rooms: RoomInfo[];
-  /** 点击加入房间(业务侧负责导航 / 错误处理)。 */
-  onJoin: (roomId: string) => void;
+  /**
+   * 点击加入房间(业务侧负责导航 / 错误处理)。
+   * 2026-10-21 §城市模拟定位 — `simulationMode` 大厅无「加入」入口，可省略。
+   */
+  onJoin?: (roomId: string) => void;
   /** 点击观战。 */
   onSpectate: (roomId: string) => void;
   /**
@@ -57,6 +60,15 @@ export interface RoomListTableProps {
    * 避免刷新后 playing 状态房间只剩"已满"按钮、用户无法重新进入。
    */
   myRoles?: Record<string, 'player' | 'spectator'>;
+  /**
+   * 2026-10-21 §城市模拟定位（虚拟城市模拟程序化）：模拟观察模式。
+   * true 时：
+   *   - 任何分支都不渲染「加入」按钮，行点击/回车改为进入观察路由；
+   *   - 已知角色（含历史遗留 player）主按钮一律为观察/进入观察，不做入座导航；
+   *   - playing 状态显示「模拟中」（`lobby.status.simulating`）。
+   * 默认 false —— 其余 6 款游戏大厅行为逐字节不变。
+   */
+  simulationMode?: boolean;
 }
 
 /** 将 ISO 时间字符串格式化为 `YYYY-MM-DD HH:mm:ss`(本地时区)。 */
@@ -90,6 +102,7 @@ export function RoomListTable({
   emptyText,
   emptySub,
   myRoles,
+  simulationMode = false,
 }: RoomListTableProps) {
   const t = useT();
   const [sortKey, setSortKey] = useState<SortKey>('created_at');
@@ -215,19 +228,30 @@ export function RoomListTable({
             const knownRole = myRole !== undefined;
             // 2026-09-25 §观战35036修复 — 未知角色 + 全 Agent 房:后端硬性拒绝
             // 人类入座(35036),行点击也不应触发必然失败的 join。
-            const canJoin = !knownRole && !room.full_agent && joinable(room);
+            // 2026-10-21 §城市模拟定位 — 模拟模式恒不可加入（人类无座位）。
+            const canJoin = !simulationMode && !knownRole && !room.full_agent && joinable(room);
+            // 模拟模式行点击 = 进入观察（已知角色走路由，避免 playing 房 30001/30012）。
+            const openObserve = () => {
+              if (onNavigate) onNavigate(room.id, 'spectator');
+              else onSpectate(room.id);
+            };
+            const rowClickable = simulationMode || canJoin;
+            const activateRow = () => {
+              if (simulationMode) openObserve();
+              else if (canJoin) onJoin?.(room.id);
+            };
             const idShort = room.id.length > 10 ? `${room.id.slice(0, 8)}…` : room.id;
             return (
               <tr
                 key={room.id}
                 className="room-list-row"
-                onClick={() => canJoin && onJoin(room.id)}
-                role={canJoin ? 'button' : undefined}
-                tabIndex={canJoin ? 0 : undefined}
+                onClick={activateRow}
+                role={rowClickable ? 'button' : undefined}
+                tabIndex={rowClickable ? 0 : undefined}
                 onKeyDown={(e) => {
-                  if (canJoin && (e.key === 'Enter' || e.key === ' ')) {
+                  if (rowClickable && (e.key === 'Enter' || e.key === ' ')) {
                     e.preventDefault();
-                    onJoin(room.id);
+                    activateRow();
                   }
                 }}
               >
@@ -282,7 +306,7 @@ export function RoomListTable({
                     {room.status === 'open'
                       ? t('lobby.status.open')
                       : room.status === 'playing'
-                      ? t('lobby.status.playing')
+                      ? t(simulationMode ? 'lobby.status.simulating' : 'lobby.status.playing')
                       : room.status === 'over'
                       ? t('lobby.status.over')
                       : room.status}
@@ -297,6 +321,33 @@ export function RoomListTable({
                    * itself is now portalled to <body> in ConfirmModal.tsx,
                    * so the table layout stays clean either way. */}
                   <div className="room-list-actions">
+                    {/* 2026-10-21 §城市模拟定位 — 模拟模式：无「加入」，仅观察。
+                        已知 spectator → "进入"（走观察路由）；历史遗留 player /
+                        未知角色 → "👁 观察"（人类无座位，不给入座入口）。 */}
+                    {simulationMode ? (
+                      myRole === 'spectator' ? (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary room-list-spectate"
+                          onClick={() => (onNavigate ? onNavigate(room.id, 'spectator') : onSpectate(room.id))}
+                          disabled={busy}
+                          title={t('lobby.reenter')}
+                        >
+                          {t('lobby.reenter')}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary room-list-spectate"
+                          onClick={openObserve}
+                          disabled={busy}
+                          title={t('lobby.watchButton')}
+                        >
+                          👁 {t('lobby.observeButton')}
+                        </button>
+                      )
+                    ) : (
+                    <>
                     {/* BUG-R200-P2-05 (2026-07-30): 主按钮根据 myRoles 分流。
                         - myRoles[roomId] === 'player' → "进入房间"(走玩家路由)
                         - myRoles[roomId] === 'spectator' → "👁 观战"(走观众路由,幂等)
@@ -313,7 +364,7 @@ export function RoomListTable({
                           <button
                             type="button"
                             className="btn btn-sm btn-primary room-list-join"
-                            onClick={() => (onNavigate ? onNavigate(room.id, 'player') : onJoin(room.id))}
+                            onClick={() => (onNavigate ? onNavigate(room.id, 'player') : onJoin?.(room.id))}
                             disabled={busy}
                             title={t('lobby.reenter')}
                           >
@@ -357,7 +408,7 @@ export function RoomListTable({
                         <button
                           type="button"
                           className="btn btn-sm btn-primary room-list-join"
-                          onClick={() => onJoin(room.id)}
+                          onClick={() => onJoin?.(room.id)}
                           disabled={busy || !canJoin}
                           title={canJoin ? t('lobby.join') : t('lobby.full')}
                         >
@@ -381,6 +432,8 @@ export function RoomListTable({
                       >
                         👁 {t('lobby.watchButton')}
                       </button>
+                    )}
+                    </>
                     )}
                     <AdminDisbandButton
                       roomId={room.id}

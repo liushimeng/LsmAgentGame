@@ -156,6 +156,6 @@ func exoBriefLocked(w *World) string {
 		dir = "偏空"
 	}
 	return fmt.Sprintf(
-		"真实外盘风险情绪 %+.2f(%s):本月游戏内股票漂移 %+.2f%%、黄金 %+.2f%%(封顶 ±0.3%%)。行情详情可用 realworld_info(op=quotes|news) 查询(不耗动作预算)。",
+		"真实外盘风险情绪 %+.2f(%s):本月模拟城市内股票漂移 %+.2f%%、黄金 %+.2f%%(封顶 ±0.3%%)。行情详情可用 realworld_info(op=quotes|news) 查询(不耗动作预算)。",
 		e.Sentiment, dir, e.StockBias*100, e.GoldBias*100)
 }

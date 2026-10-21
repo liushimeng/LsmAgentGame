@@ -264,11 +264,12 @@ export const OBJECT_ENTRIES: ObjectInfoEntry[] = [
     id: 'actor.player',
     category: 'agent',
     icon: '🎯',
-    name: { 'zh-CN': '玩家代币', en: 'Player Token', ja: 'プレートークン' },
+    // 2026-10-21 §城市模拟定位 — 称谓清扫：玩家 → 居民；本局 → 本模拟周期。
+    name: { 'zh-CN': '居民代币', en: 'Resident Token', ja: '住民トークン' },
     desc: {
-      'zh-CN': '本局玩家在城市中的化身标记，落在所居城区，可查看其职业、昵称与资产概况。',
-      en: 'The in-city avatar marker of a player, sitting in their home district; inspect it for profession, nickname and assets.',
-      ja: '本局プレイヤーの街中アバター。居住区に置かれ、職業・ニックネーム・資産概況を確認できる。',
+      'zh-CN': '本模拟周期居民在城市中的化身标记，落在所居城区，可查看其职业、昵称与资产概况。',
+      en: 'The in-city avatar marker of a resident in this simulation cycle, sitting in their home district; inspect it for profession, nickname and assets.',
+      ja: 'このシミュレーション周期の住民の街中アバター。居住区に置かれ、職業・ニックネーム・資産概況を確認できる。',
     },
   },
 

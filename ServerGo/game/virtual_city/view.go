@@ -61,6 +61,9 @@ type ClientGameState struct {
 	LaborMarket    LaborMarketJSON    `json:"labor_market"`
 	Society        SocietyJSON        `json:"society"`
 	Surveys        []SurveyJSON       `json:"surveys"` // 调研契约 §5.1
+	// ScenariosRecent 2026-10-21 §场景推演:最近 20 条条件注入记录(旧→新;
+	// 恒为数组,空 = [])。观察者据此回看条件触发者做过什么。
+	ScenariosRecent []ScenarioAppliedRecord `json:"scenarios_recent"`
 	// P2 v2(2026-09-19 §P2-可视化):本月资金流向;omitempty 保证空月份不下发。
 	FlowStat *FlowStatJSON `json:"flow_stat,omitempty"`
 	// 阶段4(2026-09-21 §城市扩张v2.12):政府财政国库快照(nil → 不下发;
@@ -89,8 +92,8 @@ type ClientGameState struct {
 	InheritanceLog []InheritanceEventJSON `json:"inheritance_log,omitempty"`
 	// 批次62 §20261020-62:泡沫状态机快照(集体杠杆 / 换手率 / 现金占比)+ 资产
 	// 流动性价差表。观战者与玩家全量可见(宏观信息,非隐私)。
-	Bubble           *BubbleSnapshot           `json:"bubble,omitempty"`
-	LiquiditySpreads *LiquiditySpreadSnapshot  `json:"liquidity_spreads,omitempty"`
+	Bubble           *BubbleSnapshot          `json:"bubble,omitempty"`
+	LiquiditySpreads *LiquiditySpreadSnapshot `json:"liquidity_spreads,omitempty"`
 }
 
 // ConsumerMarketJSON 是 consumer_market 子结构(P1 §6.1)。
@@ -697,17 +700,17 @@ type MyJSON struct {
 
 // BehaviorJSON 是 my.behavior 子结构(批次62 §20261020-62)。
 type BehaviorJSON struct {
-	Cognition          int                  `json:"cognition"`
-	BiasProfile        []BiasProfileJSON    `json:"bias_profile"`
-	BiasImmunity       []BiasImmunityJSON   `json:"bias_immunity"`
-	AnchoringIndex     float64              `json:"anchoring_index"`
-	HerdingIndex       float64              `json:"herding_index"`
-	SavingsStreakMonths int                 `json:"savings_streak_months"`
-	DeferredPayments   []DeferredPaymentJSON `json:"deferred_payments"`
-	DelayedPayIndex    float64              `json:"delayed_pay_index"`
-	MentalAccounts     []MentalAccountJSON  `json:"mental_accounts"`
-	MentalAccountMerged bool                `json:"mental_account_merged"`
-	LastReflect        string               `json:"last_reflect"`
+	Cognition           int                   `json:"cognition"`
+	BiasProfile         []BiasProfileJSON     `json:"bias_profile"`
+	BiasImmunity        []BiasImmunityJSON    `json:"bias_immunity"`
+	AnchoringIndex      float64               `json:"anchoring_index"`
+	HerdingIndex        float64               `json:"herding_index"`
+	SavingsStreakMonths int                   `json:"savings_streak_months"`
+	DeferredPayments    []DeferredPaymentJSON `json:"deferred_payments"`
+	DelayedPayIndex     float64               `json:"delayed_pay_index"`
+	MentalAccounts      []MentalAccountJSON   `json:"mental_accounts"`
+	MentalAccountMerged bool                  `json:"mental_account_merged"`
+	LastReflect         string                `json:"last_reflect"`
 }
 
 // BiasProfileJSON 是行为偏差画像单项(批次62)。
@@ -739,9 +742,9 @@ type DeferredPaymentJSON struct {
 
 // MentalAccountJSON 是资金来源标签余额(§3.2.1;不影响购买力)。
 type MentalAccountJSON struct {
-	Tag      string `json:"tag"`
-	LabelCN  string `json:"label_cn"`
-	AmountCNY int64 `json:"amount_cny"`
+	Tag       string `json:"tag"`
+	LabelCN   string `json:"label_cn"`
+	AmountCNY int64  `json:"amount_cny"`
 }
 
 // MySideBusinessJSON 是 my.side_business 子结构(批次20 文档2 §3:定价档 +
@@ -917,9 +920,10 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		// 2026-09-14 §财商流P0-bugfix: 数组字段必须序列化为 [] 而非 null ——
 		// Go nil slice → JSON null,前端 xxx.map 直接 TypeError 整页崩溃
 		// (ErrorBoundary 兜底)。空集合统一初始化。
-		BotContexts:  make([]BotCtxJSON, 0),
-		LedgerRecent: make([]LedgerJSON, 0),
-		EventsRecent: make([]EventJSON, 0),
+		BotContexts:     make([]BotCtxJSON, 0),
+		LedgerRecent:    make([]LedgerJSON, 0),
+		EventsRecent:    make([]EventJSON, 0),
+		ScenariosRecent: make([]ScenarioAppliedRecord, 0),
 	}
 	// 批次 27(§3.4):时间比例/季节/天气现算。置于 world==nil 早退分支之前
 	// —— 未开局房同样下发纪元附近的占位值(前端仅渲染,无业务分支)。
@@ -1302,6 +1306,16 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		for i, l := range fs.Links {
 			cs.FlowStat.Links[i] = FlowLinkJSON{From: l.From, To: l.To, AmountCNY: l.AmountCNY, Pct: l.Pct}
 		}
+	}
+	// 2026-10-21 §场景推演:最近 20 条注入记录(旧→新,与 events_recent 同序;
+	// 数组必须序列化为 [] 而非 null —— nil slice → JSON null → 前端 map 崩溃)。
+	cs.ScenariosRecent = make([]ScenarioAppliedRecord, 0)
+	if n := len(world.ScenarioApplied); n > 0 {
+		start := 0
+		if n > scenarioRecordCap {
+			start = n - scenarioRecordCap
+		}
+		cs.ScenariosRecent = append(cs.ScenariosRecent, world.ScenarioApplied[start:]...)
 	}
 	// Surveys:open(≤1)+ 最近 4 个 closed(含 Result),倒序(调研契约 §5.1)。
 	cs.Surveys = make([]SurveyJSON, 0)

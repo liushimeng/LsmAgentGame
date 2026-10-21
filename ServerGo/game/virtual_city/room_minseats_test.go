@@ -30,6 +30,10 @@ func newRoomWithResidentsAndSeats(t *testing.T, residents, n int) *VirtualCityRo
 	if residents > 0 {
 		r.applyOpts(&service.VirtualCityRoomOptions{ResidentCount: residents})
 	}
+	// 2026-10-21 §场景推演:applyOpts 现在恒置 FullAgentMode=true(人类永不
+	// 入座)。本文件的用例只验证 minSeats 门槛/座位分配机制,故白盒放开该
+	// 标志 —— 生产房间不会走到这里(创建链路恒全 Agent)。
+	r.FullAgentMode = false
 	botUsers := make(map[int]string, n)
 	botModels := make(map[int]string, n)
 	for seat := 0; seat < n; seat++ {

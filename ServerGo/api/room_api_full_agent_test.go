@@ -10,8 +10,9 @@ import (
 	"testing"
 )
 
-// TestCreateRoom_FullAgentBodyBinding full_agent 三态绑定与并入:
-// 显式 false → cfg.FullAgent=&false(允许人类入座);true/nil(缺省)→ 全 Agent。
+// TestCreateRoom_FullAgentBodyBinding full_agent 绑定与并入(2026-10-21 定位 v3.0):
+// 虚拟城市恒全 Agent —— 显式 false 被强制为 true(仅记录,不打开人类座位旁路);
+// true → true;nil(缺省)→ 不构造配置对象(服务端缺省同样为全 Agent)。
 func TestCreateRoom_FullAgentBodyBinding(t *testing.T) {
 	falseVal := false
 	trueVal := true
@@ -20,7 +21,7 @@ func TestCreateRoom_FullAgentBodyBinding(t *testing.T) {
 		body string
 		want *bool // cfg.FullAgent 期望(nil = 未构造)
 	}{
-		{"explicit false allows humans", `{"full_agent":false}`, &falseVal},
+		{"explicit false coerced to full agent", `{"full_agent":false}`, &trueVal},
 		{"explicit true stays full agent", `{"full_agent":true}`, &trueVal},
 		{"absent keeps default (nil)", `{}`, nil},
 	}

@@ -253,7 +253,7 @@ func (s *BotUserService) EnsureBotUserForProvider(
 			if err := s.walletService.writeTx(tx.Statement.Context, tx, created.ID,
 				string(TxTypeRegisterBonus), DefaultInitialBalance,
 				DefaultInitialBalance, "llm_provider", p.ID, "werewolf",
-				"模型玩家初始金币"); err != nil {
+				"模型居民初始金币"); err != nil {
 				return err
 			}
 		}

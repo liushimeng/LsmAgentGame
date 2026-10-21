@@ -28,7 +28,7 @@ import (
 )
 
 // New constructs the *gin.Engine.
-func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcCityAPI *api.VirtualCityAPI, vcRealtimeAPI *api.VirtualCityRealtimeAPI, knowledgeAPI *api.KnowledgeAPI) *gin.Engine {
+func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcScenarioAPI *api.VirtualCityScenarioAPI, vcCityAPI *api.VirtualCityAPI, vcRealtimeAPI *api.VirtualCityRealtimeAPI, knowledgeAPI *api.KnowledgeAPI) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 
@@ -269,10 +269,15 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 	// 2026-09-16 §财商流P1-2 — 社会调研两端点(调研契约 §3.1)。
 	// 2026-09-21 §档案锚定 — 居民人物卡档案两端点(锚定契约 §7)。
 	// 2026-09-22 §17-CityHuman — 职业卡一览路由退役(精选层删除,契约 03 §1.2)。
+	// 2026-10-21 §场景推演 — 场景目录 + 条件注入/记录三端点(预测运行;
+	// 权限 = 任意登录用户,与调研同口径)。
 	vcGames := r.Group("/api/games/virtual_city")
 	vcGames.Use(middleware.AuthRequired(cfg))
 	{
-			vcGames.POST("/rooms/:id/survey", vcSurveyAPI.Launch)
+		vcGames.GET("/scenario_catalog", vcScenarioAPI.Catalog)
+		vcGames.POST("/rooms/:id/scenario", vcScenarioAPI.Inject)
+		vcGames.GET("/rooms/:id/scenarios", vcScenarioAPI.List)
+		vcGames.POST("/rooms/:id/survey", vcSurveyAPI.Launch)
 		vcGames.GET("/rooms/:id/surveys", vcSurveyAPI.List)
 		vcGames.GET("/rooms/:id/city/residents", vcCityAPI.ListResidents)
 		vcGames.GET("/rooms/:id/city/residents/:cardId", vcCityAPI.GetResident)

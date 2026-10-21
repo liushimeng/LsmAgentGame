@@ -952,4 +952,43 @@ export interface VirtualCityDict {
   'virtualCity.rt.exo.inactive': string;
   'virtualCity.rt.exo.updated': string;
   'virtualCity.rt.exo.effectHint': string;
+
+  // ── 2026-10-21 §城市模拟定位 — 场景推演台（ScenarioPanel / 条件触发者）──
+  // 目录键文案出处：tmpPlan/虚拟城市-模拟程序化与预测运行优化_20261021_095114.md §5.1/§5.3。
+  'virtualCity.scenario.open': string;
+  'virtualCity.scenario.title': string;
+  'virtualCity.scenario.subtitle': string;
+  'virtualCity.scenario.close': string;
+  'virtualCity.scenario.group.market': string;
+  'virtualCity.scenario.group.society': string;
+  'virtualCity.scenario.group.nature': string;
+  'virtualCity.scenario.group.unknown': string;
+  'virtualCity.scenario.group.other': string;
+  'virtualCity.scenario.magnitude': string;
+  'virtualCity.scenario.magnitudeLevel': string; // {n}
+  'virtualCity.scenario.duration': string;
+  'virtualCity.scenario.durationPlaceholder': string;
+  'virtualCity.scenario.target': string;
+  'virtualCity.scenario.targetPlaceholder': string;
+  /** target 语义化提示（后端 params=goods / stance）。 */
+  'virtualCity.scenario.targetHintGoods': string;
+  'virtualCity.scenario.targetHintStance': string;
+  'virtualCity.scenario.note': string;
+  'virtualCity.scenario.notePlaceholder': string;
+  'virtualCity.scenario.trigger': string;
+  'virtualCity.scenario.confirmBody': string; // {name} {level}
+  'virtualCity.scenario.effects': string;
+  'virtualCity.scenario.effectsNote': string;
+  'virtualCity.scenario.effectsEmpty': string;
+  'virtualCity.scenario.history': string;
+  'virtualCity.scenario.historyEmpty': string;
+  'virtualCity.scenario.loading': string;
+  'virtualCity.scenario.catalogEmpty': string;
+  'virtualCity.scenario.loadFailed': string; // {msg}
+  'virtualCity.scenario.historyFailed': string; // {msg}
+  'virtualCity.scenario.applyFailed': string; // {msg}
+  'virtualCity.scenario.notPlaying': string;
+  'virtualCity.scenario.spectatorHint': string;
+  'virtualCity.scenario.appliedAt': string; // {m}
+  'virtualCity.scenario.triggered': string; // {name}
 }

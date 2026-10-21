@@ -38,7 +38,8 @@ const CATEGORY_LABELS: Record<ObjectCategory, { 'zh-CN': string; en: string; ja:
   water: { 'zh-CN': '水系', en: 'Water', ja: '水域' },
   edge: { 'zh-CN': '城缘', en: 'City Edge', ja: '都市外縁' },
   sky: { 'zh-CN': '天空', en: 'Sky', ja: '空' },
-  agent: { 'zh-CN': '玩家', en: 'Player', ja: 'プレイヤー' },
+  // 2026-10-21 §城市模拟定位 — 虚拟城市人类角色为观察者/条件触发者，场内主体称「居民」。
+  agent: { 'zh-CN': '居民', en: 'Resident', ja: '住民' },
   ground: { 'zh-CN': '地面', en: 'Ground', ja: '地面' },
 };
 

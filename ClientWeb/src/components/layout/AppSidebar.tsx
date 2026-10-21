@@ -56,10 +56,17 @@ const MENU_GROUPS: MenuGroup[] = [
      { to: '/texasholdem', labelKey: 'nav.texasholdem', icon: '🎰' },
      { to: '/werewolf',    labelKey: 'nav.werewolf',    icon: '🐺' },
      { to: '/debate',      labelKey: 'nav.debate',      icon: '🎓' },
-     // 2026-09-14 §财商流 P0 — Agent 组第 4 款。
-     { to: '/virtual-city',      labelKey: 'nav.virtualCity',      icon: '💰' },
    ],
  },
+
+  // ── 城市模拟 ──
+  // 2026-10-21 §城市模拟定位 — 虚拟城市已从「Agent 游戏」迁出：它不再是游戏，
+  // 而是科研级全 Agent 城市模拟系统（人类 = 观察者 / 条件触发者）。
+  {
+    id: 'simulation', labelKey: 'nav.group.simulation', icon: '🏙', items: [
+      { to: '/virtual-city', labelKey: 'nav.virtualCity', icon: '💰' },
+    ],
+  },
 
   // ── 其他 ──
   {

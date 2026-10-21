@@ -193,6 +193,14 @@ type World struct {
 	Surveys   []*Survey // 全房调研(≤20,按发起序)
 	SurveySeq int       // id 自增序列
 
+	// 2026-10-21 §场景推演:条件触发者注入的场景(预测运行)。见 scenario.go。
+	//   - Scenarios 进行中(≤8),SettleMonth ②.0 逐月衰减;
+	//   - ScenarioApplied 注入记录环形缓冲(≤20,view 层 scenarios_recent);
+	// 零 rand —— 固定种子存量模拟回归零偏移。
+	Scenarios       []*ScenarioActive
+	ScenarioApplied []ScenarioAppliedRecord
+	ScenarioSeq     int
+
 	// P1-4: 商业保险与风险转移引擎(2026-09-19 §财商流P1-4 §11)。NewWorld 恒置
 	// true;房间层 Start 时按配置回写(false 时投保/退保 35041、月结不扣缴、
 	// 意外事件不掷骰 —— rand 序列零偏移,固定种子存量对局回归一致)。
@@ -228,15 +236,15 @@ type World struct {
 
 	// ── 批次62 行为金融与泡沫反身性引擎(2026-10-20)──
 	// 泡沫状态机(与 Market.CyclePhase 正交):none|overheat|burst|recession。
-	BubbleState          BubbleState
-	BubbleMonths         int  // 当前状态已持续月数
-	BubbleRecessionMonths int // 泡沫后衰退期的锁定月数(2~4,确定性)
-	BubbleLeverage       float64 // 市场杠杆率(总负债/总净资产)
-	BubbleTurnover       float64 // 资产换手率
-	BubbleCash           float64 // 现金占比
-	BubbleMessage        string  // 最近一次破裂播报(§11.3)
-	BubbleBurstMonth     int     // 最近一次破裂发生的月份(爆仓判定用)
-	BubbleRateShiftApplied bool  // 泡沫利率位移是否已施加(每周期只一次)
+	BubbleState            BubbleState
+	BubbleMonths           int     // 当前状态已持续月数
+	BubbleRecessionMonths  int     // 泡沫后衰退期的锁定月数(2~4,确定性)
+	BubbleLeverage         float64 // 市场杠杆率(总负债/总净资产)
+	BubbleTurnover         float64 // 资产换手率
+	BubbleCash             float64 // 现金占比
+	BubbleMessage          string  // 最近一次破裂播报(§11.3)
+	BubbleBurstMonth       int     // 最近一次破裂发生的月份(爆仓判定用)
+	BubbleRateShiftApplied bool    // 泡沫利率位移是否已施加(每周期只一次)
 
 	// 羊群效应(§3.4):回合操作摘要历史(最近 12 回合)。
 	TurnSummaries []TurnSummary

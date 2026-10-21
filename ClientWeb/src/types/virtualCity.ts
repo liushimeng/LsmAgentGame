@@ -1443,7 +1443,7 @@ export const WEALTH_MICRO_ERR = {
   StockT1Locked: 35044,
 } as const;
 
-/** POST /api/games/virtual-city/rooms 的 virtualCity 段（协议 §6）。 */
+/** POST /api/games/virtual_city/rooms 的 virtualCity 段（协议 §6）。 */
 export interface VirtualCityRoomOptions {
   /** 批次 27 §3.1：时间比例（城市秒/现实秒），clamp [60,864000]，缺省 60；
    *  经济月节拍由后端按 §3.1 推导（month_ms = clamp(2_592_000_000/ratio, 3000, 60000)）。 */

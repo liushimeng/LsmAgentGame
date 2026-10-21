@@ -1,0 +1,235 @@
+/* 虚拟城市 2026-10-21 §城市模拟定位 — 场景推演台（ScenarioPanel / 条件触发者）。
+ *
+ * 独立成文件：virtualCity.css 已 1777/1800 行触顶（§4 硬上限，一字不加）；
+ * 选择器全部为新增 .virtualCity-scenario-* / .virtualCity-scenario__* 前缀，
+ * 与既有规则零级联冲突。
+ * 只追加在链尾，不调整既有 @import 顺序（CLAUDE.md §2.1 约束 4）。
+ *
+ * 暗色对比度（CLAUDE.md §26.1）：
+ *   正文 var(--virtualCity-text) #e5e7eb on #161d28 ≈ 12:1；
+ *   次级文字 var(--virtualCity-text-dim) #b7bfcc on #1c2431 ≈ 8:1；
+ *   强度选中徽章 #111827 on #d4a017 ≈ 7.5:1（≥5:1 状态徽章阈值）；
+ *   错误红条 #fecaca on #3a1a1e ≈ 10:1；涨跌数值 #34d399 / #f87171 均 ≥4.5:1。
+ */
+
+.virtualCity-scenario {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 8px;
+  font-size: 12.5px;
+  color: var(--virtualCity-text);
+}
+
+/* ── 头部 ─────────────────────────────────────────── */
+.virtualCity-scenario__head { display: flex; flex-direction: column; gap: 4px; }
+.virtualCity-scenario__title { font-weight: 700; color: #fff; font-size: 13.5px; }
+.virtualCity-scenario__subtitle { color: var(--virtualCity-text-dim); font-size: 12px; line-height: 1.45; }
+
+/* ── 分组 / 场景卡片 ───────────────────────────────── */
+.virtualCity-scenario__groups { display: flex; flex-direction: column; gap: 10px; }
+.virtualCity-scenario__group {
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+  background: var(--virtualCity-panel);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.virtualCity-scenario__group-title {
+  color: var(--virtualCity-accent-strong);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.virtualCity-scenario__items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 6px;
+}
+.virtualCity-scenario__item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--virtualCity-border);
+  background: var(--virtualCity-panel-2);
+  color: var(--virtualCity-text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.virtualCity-scenario__item:hover:not(:disabled) {
+  border-color: var(--virtualCity-accent-strong);
+  background: #223044;
+}
+/* 选中态：背景提亮 + 金色光晕（§26.2 ④ 不只靠明度差）。 */
+.virtualCity-scenario__item--active {
+  border-color: var(--virtualCity-accent-strong);
+  background: #2a3a52;
+  box-shadow: 0 0 0 1px var(--virtualCity-accent-strong), 0 0 10px rgba(212, 160, 23, 0.35);
+}
+.virtualCity-scenario__item:disabled { cursor: not-allowed; opacity: 1; background: #232b38; }
+.virtualCity-scenario__item-name { color: #fff; font-weight: 600; font-size: 12.5px; }
+.virtualCity-scenario__item-desc {
+  color: var(--virtualCity-text-dim);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+/* ── 注入表单 ─────────────────────────────────────── */
+.virtualCity-scenario__form {
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+  background: var(--virtualCity-panel-2);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.virtualCity-scenario__field { display: flex; flex-direction: column; gap: 4px; }
+.virtualCity-scenario__field-label { color: var(--virtualCity-text-dim); font-size: 12px; }
+.virtualCity-scenario__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+.virtualCity-scenario__input {
+  min-height: 34px;
+  border-radius: 6px;
+  border: 1px solid var(--virtualCity-border);
+  background: var(--virtualCity-panel);
+  color: var(--virtualCity-text);
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.virtualCity-scenario__input::placeholder { color: #93a0b4; }
+.virtualCity-scenario__input:disabled { background: #232b38; color: #8b95a5; cursor: not-allowed; }
+
+/* 强度档位（1-5） */
+.virtualCity-scenario__magnitudes { display: flex; gap: 6px; flex-wrap: wrap; }
+.virtualCity-scenario__mag {
+  min-width: 34px;
+  min-height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--virtualCity-border);
+  background: var(--virtualCity-panel);
+  color: var(--virtualCity-text);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.virtualCity-scenario__mag:hover:not(:disabled) { border-color: var(--virtualCity-accent-strong); }
+.virtualCity-scenario__mag--active {
+  background: var(--virtualCity-accent-strong);
+  border-color: var(--virtualCity-accent-strong);
+  color: #111827;           /* on #d4a017 ≈ 7.5:1 */
+  box-shadow: 0 0 8px rgba(212, 160, 23, 0.5);
+}
+.virtualCity-scenario__mag:disabled { background: #232b38; color: #8b95a5; cursor: not-allowed; }
+
+.virtualCity-scenario__actions { display: flex; justify-content: flex-end; }
+.virtualCity-scenario__submit { align-self: flex-end; }
+
+/* ── 提示 / 内联错误（§7.1 优先级 1）───────────────── */
+.virtualCity-scenario__hint { margin: 0; color: #fde68a; font-size: 11.5px; line-height: 1.45; }
+.virtualCity-scenario__hint--dim { color: var(--virtualCity-text-dim); }
+.virtualCity-scenario__error {
+  border: 1px solid #f87171;
+  border-radius: 6px;
+  background: #3a1a1e;
+  color: #fecaca;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+/* ── 影响效果 ─────────────────────────────────────── */
+.virtualCity-scenario__effects {
+  border: 1px solid var(--virtualCity-accent-strong);
+  border-radius: 8px;
+  background: rgba(212, 160, 23, 0.08);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.virtualCity-scenario__section-title {
+  color: #fff;
+  font-weight: 700;
+  font-size: 12.5px;
+}
+.virtualCity-scenario__effect-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.virtualCity-scenario__effect {
+  display: grid;
+  grid-template-columns: minmax(84px, 32%) 62px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: rgba(22, 29, 40, 0.6);
+}
+.virtualCity-scenario__effect-metric { color: var(--virtualCity-text); font-weight: 600; }
+.virtualCity-scenario__effect-delta {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--virtualCity-text);
+}
+.virtualCity-scenario__effect-delta--up { color: #34d399; }
+.virtualCity-scenario__effect-delta--down { color: #f87171; }
+.virtualCity-scenario__effect-text { color: var(--virtualCity-text-dim); font-size: 11.5px; }
+
+/* ── 最近场景事件 ─────────────────────────────────── */
+.virtualCity-scenario__history { display: flex; flex-direction: column; gap: 6px; }
+.virtualCity-scenario__history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.virtualCity-scenario__history-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 6px;
+  background: var(--virtualCity-panel);
+}
+.virtualCity-scenario__history-kind { color: #fff; font-weight: 600; font-size: 12px; }
+.virtualCity-scenario__history-mag {
+  color: #111827;
+  background: var(--virtualCity-accent-strong); /* 状态徽章 ≥5:1 */
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.virtualCity-scenario__history-month { color: var(--virtualCity-text-dim); font-size: 11.5px; }
+.virtualCity-scenario__history-at { color: var(--virtualCity-text-dim); font-size: 11.5px; }
+.virtualCity-scenario__history-note {
+  flex-basis: 100%;
+  color: var(--virtualCity-text);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+/* ── 窄屏 ─────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .virtualCity-scenario__items { grid-template-columns: 1fr; }
+  .virtualCity-scenario__effect { grid-template-columns: minmax(0, 1fr) 56px; }
+  .virtualCity-scenario__effect-text { grid-column: 1 / -1; }
+}

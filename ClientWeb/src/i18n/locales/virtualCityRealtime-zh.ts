@@ -46,7 +46,7 @@ const virtualCityRealtimeZH = {
   'virtualCity.rt.exo.goldBias': '黄金漂移',
   'virtualCity.rt.exo.inactive': '外盘锚未激活',
   'virtualCity.rt.exo.updated': '数据更新于 {n} 分钟前',
-  'virtualCity.rt.exo.effectHint': '对游戏内影响',
+  'virtualCity.rt.exo.effectHint': '对城市模拟影响',
 };
 
 export default virtualCityRealtimeZH;

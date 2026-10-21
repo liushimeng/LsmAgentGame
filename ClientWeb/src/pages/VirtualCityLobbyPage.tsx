@@ -4,7 +4,13 @@
  * 与既有 6 款 Lobby 页同构：banner 头图（PNG 缺失回落 CSS 渐变）+ 房间列表
  * （RoomListTable 复用 + 5s HTTP 轮询 + useLobbyLiveUpdate room.state WS 实时更新）
  * + 建房弹窗（VirtualCityCreateRoomModal：resident_count / time_ratio / seed）
- * + 观战入口。加入 / 观战错误处理对齐 WerewolfLobbyPage（30001/30003/30012）。
+ * + 观察入口。
+ *
+ * 2026-10-21 §城市模拟定位 — 虚拟城市 = 全 Agent 城市模拟系统，人类只有两种角色：
+ * 观察者（Observer）与条件触发者（Condition Trigger，见房间内「场景推演台」）。
+ * 因此本页**不再提供加入**：`RoomListTable` 以 simulationMode 渲染（无「加入」按钮、
+ * 行点击仅进入观察路由、状态显示「模拟中」），原 handleJoin 及 35036/30001/
+ * 30003/30012 入座分支已删除。
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -145,46 +151,6 @@ export function VirtualCityLobbyPage() {
     [nav, fetchRooms, t],
   );
 
-  const handleJoin = async (roomId: string) => {
-    setLoading(true);
-    setErr('');
-    try {
-      const detail = await roomService.join(roomId);
-      const role = detail.my_role === 'spectator' ? 'spectator' : 'player';
-      setMyRoles((prev) => ({ ...prev, [roomId]: role }));
-      if (role === 'spectator') {
-        nav(`/virtual-city/spectate/${roomId}`);
-      } else {
-        nav(`/virtual-city/${roomId}`);
-      }
-    } catch (e: any) {
-      if (e.code === 35036) {
-        // 2026-09-19 §全Agent模式: 全 Agent 房间拒绝人类加入,自动跳转观战。
-        // 2026-09-25 §观战35036修复 — 后端实际返回 ErrVirtualCityFullAgentReject
-        // = 35036(errcode.go);此处曾误用 P2 交易错误码旧编号(设计文档漂移),
-        // 永不命中。
-        setMyRoles((prev) => ({ ...prev, [roomId]: 'spectator' }));
-        nav(`/virtual-city/spectate/${roomId}`);
-      } else if (e.code === 30001 || e.code === 30003) {
-        // playing / 已满：已知角色直接走路由；未知兜底玩家路由由 GamePage 纠正。
-        const known = myRoles[roomId];
-        if (known === 'spectator') {
-          nav(`/virtual-city/spectate/${roomId}`);
-        } else {
-          nav(`/virtual-city/${roomId}`);
-        }
-      } else if (e.code === 30012) {
-        setMyRoles((prev) => ({ ...prev, [roomId]: 'spectator' }));
-        nav(`/virtual-city/spectate/${roomId}`);
-      } else if (!isSessionExpiredError(e)) {
-        setErr(e.message);
-        reportGlobalError({ message: e.message, severity: 'error' });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSpectate = async (roomId: string) => {
     setLoading(true);
     setErr('');
@@ -194,8 +160,11 @@ export function VirtualCityLobbyPage() {
       nav(`/virtual-city/spectate/${roomId}`);
     } catch (e: any) {
       if (e.code === 30012) {
-        setMyRoles((prev) => ({ ...prev, [roomId]: 'player' }));
-        nav(`/virtual-city/${roomId}`);
+        // ErrAlreadyInOtherRole（历史遗留：该用户曾在旧房以 player 身份入座）。
+        // 2026-10-21 §城市模拟定位 — 人类不设座位，统一按观察者进入观察路由，
+        // 不再导航玩家路由（页面会以观察者模式渲染）。
+        setMyRoles((prev) => ({ ...prev, [roomId]: 'spectator' }));
+        nav(`/virtual-city/spectate/${roomId}`);
         return;
       }
       if (!isSessionExpiredError(e)) {
@@ -246,7 +215,7 @@ export function VirtualCityLobbyPage() {
 
       <RoomListTable
         rooms={rooms}
-        onJoin={handleJoin}
+        simulationMode
         onSpectate={handleSpectate}
         onNavigate={handleNavigateTo}
         onRemove={removeRoom}

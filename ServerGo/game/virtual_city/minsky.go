@@ -152,7 +152,7 @@ func (w *World) triggerMinskyMoment(res *SettleResult) {
 	w.MinskyMomentCooldown = 12
 	w.MinskyMomentCount++
 	w.emitEvent("minsky", -1, fmt.Sprintf(
-		"🚨 明斯基时刻！庞氏玩家占比 %.0f%% > 30%%，全场杠杆资产价格腰斩！", ponziRatio*100))
+		"🚨 明斯基时刻！庞氏居民占比 %.0f%% > 30%%，全场杠杆资产价格腰斩！", ponziRatio*100))
 
 	for seat, p := range w.Players {
 		if p == nil || !p.Alive {

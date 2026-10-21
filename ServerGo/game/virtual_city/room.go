@@ -159,12 +159,12 @@ type VirtualCityRoom struct {
 	// **默认 false(零值)= 关闭** —— 与 insuranceEnabled(NewWorld 恒 true,
 	// Start 回写)方向相反;NewVirtualCityRoom 不初始化 true,勿按保险家族惯性写。
 	electionEnabled bool
-	// FullAgentMode 标记该房间为全 Agent 模式（人类不能参与对局）。
-	// 2026-09-19 §全Agent模式 新增：创建时由 agent_seats 满 MinSeats 自动置位，
-	// 或前端显式请求 full_agent=true 置位。
-	// 2026-09-26 §批次25:full_agent 建房字段接线 —— 显式 false 时保持 false
-	// (允许人类加入空位);fullAgentModeSet 记录「已被显式配置」,ws 侧
-	// EnsureFullAgentMode 防御门只兜底从未配置过的房间,不覆盖显式 false。
+	// FullAgentMode 标记该房间为全 Agent 模式(人类不能入座)。
+	// 2026-10-21 §场景推演(定位 v3.0):虚拟城市 = 全 Agent 城市模拟,
+	// 生产链路(创建 → applyOpts → prepareVirtualCityAgentRoom)恒置 true;
+	// 人类只可观察(spectate)或触发场景条件(scenario)。
+	// fullAgentModeSet 记录「已被显式配置」,ws 侧 EnsureFullAgentMode 只
+	// 兜底从未配置过的房间(历史语义保留,生产路径不再出现 false)。
 	FullAgentMode    bool
 	fullAgentModeSet bool
 
@@ -467,13 +467,12 @@ func (r *VirtualCityRoom) applyOpts(opts *service.VirtualCityRoomOptions) {
 	} else if opts.LLMLines < 0 {
 		r.cityDriverLines = 0
 	}
-	// 2026-09-26 §批次25:full_agent 三态(body 顶层 full_agent → 本字段)。
-	// 经 pendingOpts 在房间创建时应用(早于 ws 层 EnsureFullAgentMode 防御门,
-	// 故显式 false 不会被翻回 true)。仅 Start 前生效。
-	if opts.FullAgent != nil {
-		r.FullAgentMode = *opts.FullAgent
-		r.fullAgentModeSet = true
-	}
+	// 2026-10-21 §场景推演(定位 v3.0):虚拟城市恒全 Agent,人类永不入座。
+	// opts.FullAgent 仅为旧载荷兼容保留,值一律忽略(恒置 true)——
+	// 显式 false 不再能打开人类座位旁路。
+	_ = opts.FullAgent
+	r.FullAgentMode = true
+	r.fullAgentModeSet = true
 }
 
 // SetOwner 记录房主(game.virtual_city_start/pause 权限,35011)。
@@ -1434,6 +1433,58 @@ func (r *VirtualCityRoom) ListSurveys() []Survey {
 		cp.Answers = nil
 		out = append(out, cp)
 	}
+	return out
+}
+
+// ── 2026-10-21 §场景推演:条件注入(预测运行;任意登录用户均可)──
+
+// ApplyScenario 向运行中的模拟注入场景(条件触发者 / 观察者)。
+//
+// 权限:任意登录用户(HTTP 层 AuthRequired;与 LaunchSurvey 同口径 ——
+// 人类在虚拟城市不是玩家,只观察或触发条件)。
+// 锁纪律(§92a):引擎校验与状态改写持 r.mu;注入事件经 hooks.OnEvent
+// **锁外**立即广播,随后 OnState 刷新 scenarios_recent。
+// 返回:注入记录 / 即时效果 / 错误(35002 未运行、35055 未知场景、
+// 35056 参数非法、35057 活动场景达上限)。
+func (r *VirtualCityRoom) ApplyScenario(kind string, magnitude, durationMonths int, target, note string) (*ScenarioAppliedRecord, []ScenarioEffect, *errcode.Error) {
+	r.mu.Lock()
+	if r.World == nil || r.Status != StatusPlaying {
+		r.mu.Unlock()
+		return nil, nil, errcode.Code(errcode.ErrVirtualCityNotPlaying) // 35002
+	}
+	evIdx := len(r.World.Events)
+	rec, effects, _, e := applyScenarioToWorld(r.World, kind, magnitude, durationMonths, target, note, time.Now().UnixMilli())
+	var ev EventRecord
+	hasEvent := len(r.World.Events) > evIdx
+	if hasEvent {
+		ev = r.World.Events[evIdx]
+	}
+	hooks := r.hooks
+	roomID := r.RoomID
+	r.mu.Unlock()
+	if e != nil {
+		return nil, nil, e
+	}
+	// ── 锁外回调(§92a)──
+	if hasEvent && hooks.OnEvent != nil {
+		hooks.OnEvent(roomID, ev)
+	}
+	if hooks.OnState != nil {
+		hooks.OnState(roomID)
+	}
+	return rec, effects, nil
+}
+
+// ListScenarios 返回注入记录(最近 ≤20 条,按注入序 = 旧→新,与
+// events_recent / ListSurveys 同序)。
+func (r *VirtualCityRoom) ListScenarios() []ScenarioAppliedRecord {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.World == nil || len(r.World.ScenarioApplied) == 0 {
+		return nil
+	}
+	out := make([]ScenarioAppliedRecord, len(r.World.ScenarioApplied))
+	copy(out, r.World.ScenarioApplied)
 	return out
 }
 
