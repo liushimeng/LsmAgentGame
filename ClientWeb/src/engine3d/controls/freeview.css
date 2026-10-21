@@ -139,6 +139,20 @@
   50% { opacity: 0.45; }
 }
 
+/* 批次 67：实时仰角读数 —— 「仰角 +39°」。
+   对比度：#c9d5e1 on rgba(10,14,20,0.82) ≈ 11:1（远超 AA 4.5:1）。
+   正（朝上）用青色高亮，负（朝下）用中性色 —— 一眼可辨「现在能不能抬头」。 */
+.freeview-hud__look {
+  color: #c9d5e1;
+  font-variant-numeric: tabular-nums;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.freeview-hud__look[data-look-up='1'] {
+  color: #7dd3fc;
+}
+
 /* ── 键位帮助面板 ─────────────────────────────────────────────── */
 .freeview-hud__help {
   margin: 0;

@@ -199,6 +199,21 @@ const ORBIT_MAX_POLAR_ANGLE = 1.54;
 const FLY_SPEED = u(20);
 /** 轨道模式下平移聚焦点的移速：10 m/s（俯瞰时小幅挪移足够）。 */
 const ORBIT_PAN_SPEED = u(10);
+/**
+ * 批次 67 · 视线俯仰自由度（抬头通道）限位。
+ *
+ * 用户的核心主诉是「视觉不能向上，看不到天空」：根因是 orbit / fly-选中 的基朝向被
+ * `lookAt(anchor)` 锁死（永远朝下），且 `maxPolar` 不得越 π/2（越了相机要沉到地面
+ * 以下才能抬头 ⇒ 与地面钳制冲突）。正解是把**位置与视线解耦**：位置照旧，视线在
+ * 基朝向之上叠加一个独立的抬头偏移。
+ *
+ * `LOOK_PITCH_LIMIT = 1.40 rad ≈ 80.2°`：orbit 默认 `FOCUS_PHI = 0.85`（基仰角
+ * −41°）⇒ 满抬头后视线仰角 +39°（正对天空上部）；`φ` 拖到 1.54（基仰角 −1.8°）
+ * ⇒ 满抬头 +78°（近天顶）。
+ */
+const LOOK_PITCH_LIMIT = 1.4;
+/** 允许比基朝向再低一点（低头看地面近处），与 `φ` 轨道俯仰互补。 */
+const LOOK_PITCH_MIN = -0.35;
 /** 俯瞰归零点固定落点（批次 32 v2）：城市中心 [0,0,0] 上空、视觉朝下。
  *  「俯瞰」不再是任意时刻的轨道相机，而是**只有一个固定落点** ——
  *  按 orbit / 俯瞰归零点按钮 = 飞到并停在这个点。坐标与批次 22 的 CAMERA_START 一致
@@ -599,6 +614,10 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
           minDistance={ORBIT_MIN_DISTANCE * 0.6}
           maxDistance={ORBIT_MAX_DISTANCE * 1.5}
           maxPolar={ORBIT_MAX_POLAR_ANGLE}
+          // 批次 67：视线俯仰自由度（抬头通道）—— orbit / fly-选中 在基朝向
+          // （lookAt(anchor)）之上叠加抬头偏移 ⇒ 每个模式都能抬头看天。
+          lookPitchLimit={LOOK_PITCH_LIMIT}
+          lookPitchMin={LOOK_PITCH_MIN}
           fov={45}
           colliders={cameraColliders}
           collisionRadius={FREE_VIEW_COLLISION_RADIUS}
@@ -632,10 +651,13 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
           help: '键位说明',
           speed: '速度',
           tiers: ['1 倍', '2 倍', '4 倍', '8 倍', '16 倍'],
+          look: '仰角',
           clear: '视野畅通',
           colliding: '被场景阻挡',
           // 批次 38 R5：选中可发现性（§4.9 三语；不新增弹窗，只补一行提示）
           hint: SELECT_HINT[lang] ?? SELECT_HINT['zh-CN'],
+          // 批次 67：键位表按「左 = 轨道 · 中 = 平移 · 右 = 视线」重写 ——
+          // 右键在**所有**模式下都是视线控制（垂直拖 = 抬头看天）。
           shortcuts: [
             ['V / F', '俯瞰 ⇄ 自由 往返'],
             ['1 / 2', '直达 俯瞰归零点 / 自由飞行'],
@@ -643,11 +665,13 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
             ['A / D', '沿画面左右平移'],
             ['空格 / E / Q', '上升 / 上升 / 下降'],
             ['Shift', '切换移动速度 ×1→×2→×4→×8→×16（回绕）'],
-            ['右键拖拽', '自由飞行下转向（选中物体时环绕所选物体；俯瞰为平移）'],
-            ['中键拖拽', '自由飞行下视口平移'],
+            ['右键拖拽', '视线控制：左右转身 / 上下抬头（所有模式均可抬头看天）'],
+            ['左键拖拽', '轨道控制：绕目标 / 所选物体公转（自由飞行未选中时为点选）'],
+            ['中键拖拽', '平移（俯瞰为平移聚焦点，自由飞行为视口平移）'],
             ['滚轮', '俯瞰缩放视距 / 自由视角变焦（选中物体时拉近 / 拉远）'],
             ['[ / ]', '速度档 降 / 升（同 Shift，可回绕）'],
             ['R', '复位视角'],
+            ['C', '视线归正（抬头偏移回零）'],
             ['H', '展开 / 收起本说明'],
           ],
         }}

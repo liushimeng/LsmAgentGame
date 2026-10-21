@@ -9,18 +9,22 @@
  *   「同一套积分器 + 按模式分流的输入映射」：切换时先 Seed 新模式的内部状态、
  *   再走 600 ms 位姿过渡（位置球面/线性插值 + 四元数 slerp + FOV 插值），零跳变。
  *
- * 交互契约（对应需求 R1–R17；批次 36 §3 起 WASD = 视向位移）：
- *   - orbit 轨道式：左拖绕目标公转 / 右拖平面平移 / 滚轮缩放视距 /
- *     W/S 沿视线（含俯仰）推进聚焦点、A/D 沿画面右向平移（整体刚性平移）。
+ * 交互契约（对应需求 R1–R17；批次 36 §3 起 WASD = 视向位移；批次 67 起「视线自由度」）：
+ *   - **输入通道统一为「左 = 轨道 · 中 = 平移 · 右 = 视线」**（批次 67）。
+ *   - orbit 轨道式：左拖绕目标公转 / **中拖平面平移** / **右拖视线（水平转身 ·
+ *     垂直抬头）** / 滚轮缩放视距 / W/S 沿视线（含俯仰）推进聚焦点、A/D 沿画面右向平移。
  *   - fly  全自由六自由度：**右拖**控制俯仰与水平旋转 / WASD 沿视线·画面右向移动 /
  *     空格·E 上升、Q 下降 / **中拖**屏幕平面视口平移 / 滚轮改 FOV（长焦检视）。
  *   - fly 选中物体（focus）：WASD 推着 focus 与相机同步平移（物体保持画面居中）/
- *     右拖绕 focus 环绕 / 滚轮拉近拉远（dolly）。
- *   - walk 街景漫游：贴地第一人称，眼高恒定（不可穿地）。
+ *     **左拖绕 focus 环绕** / **右拖视线（水平转身 · 垂直抬头）** / 滚轮拉近拉远（dolly）。
+ *   - **视线俯仰自由度 `lookPitch`（批次 67）**：锚定类模式（orbit / fly-选中）在
+ *     基朝向（`lookAt(anchor)`）之上叠加抬头偏移 ⇒ **三个模式都能抬头看天**，
+ *     且抬头**不移动相机**（不触碰地面钳制 / 碰撞 / 边界）。
  *   - 全模式：场景碰撞（AABB 推出）+ 地图边界钳制 + 地面钳制（避免穿模）。
  *   - 全模式：帧率无关指数阻尼（移动 / 转向 / 缩放），抑制抖动。
  *   - 全模式：禁用右键默认菜单；页面失焦立即归零速度；文本编辑不劫持按键。
- *   - 快捷键：V 循环 / 1·2·3 直达 / F 往返 / R 复位 / H 帮助 / [ ] 档位 / Esc 收起。
+ *   - 快捷键：V 循环 / 1·2·3 直达 / F 往返 / R 复位 / **C 视线归正** / H 帮助 /
+ *     [ ] 档位 / Esc 收起。
  *
  * 引擎层硬约束（CLAUDE.md §2.1-5）：本文件**禁止** import 任何游戏私有模块。
  */
@@ -30,18 +34,25 @@ import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import {
   clamp,
+  clampLookPitch,
   damp,
   dampVec3,
   easeInOutCubic,
+  forwardFromQuaternion,
   lerpPosition,
+  LOOK_PITCH_LIMIT_DEFAULT,
+  LOOK_PITCH_MIN_DEFAULT,
+  lookPitchQuaternion,
   shouldCaptureKey,
   wrapAngle,
+  yawPitchFromDirection,
 } from './cameraMath';
-import type { PoseLerpMode } from './cameraMath';
+import type { PoseLerpMode, YawPitch } from './cameraMath';
 import { resolveCameraCollision } from './cameraCollision';
 import type { CameraBounds, CameraBox, CollisionResult } from './cameraCollision';
 import { useFreeView, FREE_VIEW_MODES, FREE_VIEW_TIERS } from './freeViewStore';
 import type { FreeViewMode } from './freeViewStore';
+import { publishFreeViewRuntime, freeViewRuntime } from './freeViewRuntime';
 import type { TargetLike } from './CameraViewReporter';
 
 /** 聚焦目标（地平面上一点；null = 无聚焦请求）。原 FocusLerpController 的契约，收编至此。 */
@@ -102,6 +113,17 @@ export interface FreeViewControlsProps {
   maxPolar?: number;
   /** 自由视角俯仰限制（弧度，默认 ±89° 防翻转）。 */
   pitchLimit?: number;
+  /**
+   * 视线俯仰偏移上限（弧度，批次 67「抬头自由」）。缺省 `1.40`（≈80.2°）。
+   * 仅对**锚定类**模式（orbit / fly-选中）生效 —— 它们的基朝向被 `lookAt(anchor)`
+   * 锁死（永远向下），本项是唯一的抬头通道。自由飞行模式的 `pitch` 本身即自由视线。
+   */
+  lookPitchLimit?: number;
+  /**
+   * 视线俯仰偏移下限（弧度，批次 67）。缺省 `-0.35`（≈−20°）—— 允许比基朝向
+   * 再低一点（低头看地面近处），与 `φ` 轨道俯仰互补。
+   */
+  lookPitchMin?: number;
   /** 场景碰撞体（AABB 列表，对应 R3）。 */
   colliders?: readonly CameraBox[];
   /** 碰撞球半径（世界单位）。 */
@@ -181,6 +203,36 @@ const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const _quat = new THREE.Quaternion();
 const _coll: CollisionResult = { position: _v1, hit: false };
 
+/** 批次 67：视线相关临时量（每帧零分配）。 */
+const _fwd = new THREE.Vector3();
+const _pitchQuat = new THREE.Quaternion();
+const _yp: YawPitch = { yaw: 0, pitch: 0 };
+
+/**
+ * 在基朝向之上叠加视线俯仰偏移（绕相机局部 +X，正 = 抬头）。
+ *
+ * 批次 67「抬头自由」的核心：锚定类模式（orbit / fly-选中）的基朝向被
+ * `lookAt(anchor)` 锁死（永远朝下），本函数是唯一的抬头通道。
+ * 四元数**右乘** = 在相机局部系施加旋转 ⇒ 视线 `(0,0,−1)` 变为 `(0, sin a, −cos a)`。
+ */
+function applyLookPitchTo(quat: THREE.Quaternion, angle: number): void {
+  if (Math.abs(angle) < 1e-6) return;
+  lookPitchQuaternion(_pitchQuat, angle);
+  quat.multiply(_pitchQuat);
+}
+
+/**
+ * 由相机**实际**朝向反解 `(yaw, pitch)` —— WASD 基向量的唯一来源。
+ *
+ * 必须用实际朝向而非 `θ/φ` 解析推导：批次 36 起 WASD 是「沿视线位移」，而
+ * 批次 67 的抬头偏移叠加在基朝向之上，只有实际朝向才含抬头量（否则抬头后
+ * W 仍沿旧方向走，抬头与前进互相打架）。
+ */
+function viewYawPitch(camera: THREE.PerspectiveCamera): YawPitch {
+  forwardFromQuaternion(_fwd, camera.quaternion);
+  return yawPitchFromDirection(_yp, _fwd);
+}
+
 /** 由 yaw/pitch（YXZ 欧拉序）求朝向四元数。 */
 function quatFromYawPitch(out: THREE.Quaternion, yaw: number, pitch: number): THREE.Quaternion {
   _euler.set(pitch, yaw, 0, 'YXZ');
@@ -225,6 +277,12 @@ interface RigState {
   pitch: number;
   pitchGoal: number;
   vel: THREE.Vector3;
+
+  // ── 批次 67：视线俯仰自由度（抬头通道）──
+  /** 当前抬头偏移（弧度，相对锚定基朝向；正 = 抬头）。 */
+  lookPitch: number;
+  /** 抬头偏移目标量（阻尼跟随 lookPitch）。 */
+  lookPitchGoal: number;
 
   // ── 过渡 ──
   transitioning: boolean;
@@ -275,6 +333,9 @@ function createRig(camera: THREE.PerspectiveCamera, pr: FreeViewControlsProps): 
   // 否则首次按 W 平移时 clampTarget 把 y 从 0 抬到下限，相机先「向上一顿」
   // 再俯冲，与「W 沿视线向前」的观感相悖。
   clampTarget(target, pr);
+  // 批次 67：首帧即把朝向对准聚焦点（stepOrbit 的第一帧同款）——
+  // 否则第一帧的 WASD 基向量会取到 Canvas 默认朝向（朝 −Z），与俯瞰方向不符。
+  lookAtTarget(camera, target);
   return {
     mode: pr.mode ?? 'orbit',
     pendingMode: null,
@@ -292,6 +353,8 @@ function createRig(camera: THREE.PerspectiveCamera, pr: FreeViewControlsProps): 
     pitch,
     pitchGoal: pitch,
     vel: new THREE.Vector3(),
+    lookPitch: 0,
+    lookPitchGoal: 0,
     transitioning: false,
     tt: 0,
     dur: pr.transitionDuration ?? 0.6,
@@ -319,10 +382,18 @@ function createRig(camera: THREE.PerspectiveCamera, pr: FreeViewControlsProps): 
   };
 }
 
-/** 某只鼠标键在当前模式下是否被相机占用（避免劫持纯点选操作）。 */
-function isButtonUsedForCamera(mode: FreeViewMode, button: number): boolean {
-  if (mode === 'orbit') return button === 0 || button === 2;
-  return button === 1 || button === 2;
+/**
+ * 某只鼠标键在当前模式下是否被相机占用（避免劫持纯点选操作）。
+ *
+ * 批次 67 统一为「左 = 轨道 · 中 = 平移 · 右 = 视线」：
+ *   - orbit：左（公转）/ 中（平移）/ 右（视线）三者全占；
+ *   - fly：右（视线）+ 中（平移）常占；**左键仅在选中物体时**占（绕 focus 公转），
+ *     否则留给「点选物体」（未拖动的点击仍能选中 —— 见拖拽吞 click 逻辑）。
+ */
+function isButtonUsedForCamera(mode: FreeViewMode, button: number, hasFocus: boolean): boolean {
+  if (mode === 'orbit') return button === 0 || button === 1 || button === 2;
+  if (button === 1 || button === 2) return true;
+  return hasFocus && button === 0;
 }
 
 /** 键盘 → 目标速度矢量。`allowVertical` 为假时忽略升降键（walk 贴地）。 */
@@ -411,7 +482,7 @@ function collide(pos: THREE.Vector3, pr: FreeViewControlsProps): boolean {
   return _coll.hit;
 }
 
-/** 轨道模式一步：目标量 → 阻尼 → 相机位姿 → 碰撞 → 朝向。 */
+/** 轨道模式一步：目标量 → 阻尼 → 相机位姿 → 碰撞 → 朝向 → 抬头偏移。 */
 function stepOrbit(
   s: RigState,
   dt: number,
@@ -420,14 +491,16 @@ function stepOrbit(
   keySet: Set<string>,
   tier: number,
 ): void {
-  // WASD = 视向位移（批次 36 §3.2）：pitch 传 φ−π/2 ⇒ inputVelocity 的前向
-  // 恒等于视线方向 (−sinφ·sinθ, −cosφ, −sinφ·cosθ)，W/S 含俯仰分量朝画面中心推进，
-  // A/D 沿画面右向（无滚转 = 水平右向）。只平移 targetGoal，相机由 target + sphOffset
-  // 导出自动跟随（半径/φ/θ 不变，整 rig 刚性平移）。Q/E 升降仍走 targetGoal.y（allowVertical=false）。
+  // WASD = 视向位移（批次 36 §3.2，批次 67 修正基向量来源）：
+  // 基向量取**相机实际朝向**反解的 (yaw, pitch) —— 含批次 67 的抬头偏移，
+  // 旧写法 `theta / φ−π/2` 只含基朝向，抬头后 W 会沿旧方向走（头与脚打架）。
+  // 只平移 targetGoal，相机由 target + sphOffset 导出自动跟随（半径/φ/θ 不变，
+  // 整 rig 刚性平移）。Q/E 升降仍走 targetGoal.y（allowVertical=false）。
   const vkeys = pr.verticalKeys ?? { up: ['Space', 'KeyE'], down: ['KeyQ'] };
   const mag = moveSpeed(baseSpeed(pr, 'orbit'), tier);
   _velGoal.set(0, 0, 0);
-  inputVelocity(_velGoal, keySet, s.theta, s.phi - Math.PI / 2, mag, vkeys, false);
+  const yp = viewYawPitch(camera);
+  inputVelocity(_velGoal, keySet, yp.yaw, yp.pitch, mag, vkeys, false);
   if (_velGoal.lengthSq() > 1e-9) {
     s.targetGoal.addScaledVector(_velGoal, dt);
     for (const k of vkeys.up) if (keySet.has(k)) s.targetGoal.y += mag * dt;
@@ -440,11 +513,15 @@ function stepOrbit(
   s.phi = clamp(damp(s.phi, s.phiGoal, LAMBDA_ROT, dt), pr.minPolar ?? 0.02, pr.maxPolar ?? 1.545);
   // theta 走最短弧，避免跨越 ±π 时整圈甩动
   s.theta = wrapAngle(s.theta + wrapAngle(s.thetaGoal - s.theta) * dampFactorOf(LAMBDA_ROT, dt));
+  // 批次 67：抬头偏移（视线自由度）—— 阻尼跟随，且**不移动相机**
+  s.lookPitch = damp(s.lookPitch, s.lookPitchGoal, LAMBDA_ROT, dt);
 
   sphOffset(_v1, s.radius, s.phi, s.theta);
   camera.position.copy(s.target).add(_v1);
   s.collisionHit = collide(camera.position, pr);
   lookAtTarget(camera, s.target);
+  // 基朝向之上叠加抬头 ⇒ 抬头看天（相机高度不变 ⇒ 不触碰地面钳制 / 碰撞 / 边界）
+  applyLookPitchTo(camera.quaternion, s.lookPitch);
 }
 
 function dampFactorOf(lambda: number, dt: number): number {
@@ -481,7 +558,7 @@ function stepFly(
   const vkeys = pr.verticalKeys ?? { up: ['Space', 'KeyE'], down: ['KeyQ'] };
 
   if (focus) {
-    // ── 选中环绕子状态（批次 36 §3.3）──
+    // ── 选中环绕子状态（批次 36 §3.3；批次 67 增补抬头通道）──
     // 把当前 pos 投影到「以 focus 为中心」的球坐标（无跳变）。
     _v1.copy(s.pos).sub(_v2.set(focus.x, focus.y, focus.z));
     const sph = new THREE.Spherical().setFromVector3(_v1);
@@ -489,8 +566,9 @@ function stepFly(
     let theta = sph.theta;
     let phi = sph.phi;
     // WASD = 视向位移：focus 与相机同步平移（半径不变、lookAt 自动保持）。
-    // pitch = φ−π/2 ⇒ 前向 = −offset 方向 = 真视线（推导见批次 36 §3.2）。
-    inputVelocity(_velGoal, keySet, theta, phi - Math.PI / 2, mag, vkeys, false);
+    // 批次 67：基向量取**相机实际朝向**（含抬头偏移）——旧写法 `φ−π/2` 只含基朝向。
+    const yp = viewYawPitch(camera);
+    inputVelocity(_velGoal, keySet, yp.yaw, yp.pitch, mag, vkeys, false);
     if (_velGoal.lengthSq() > 1e-9) {
       focus.x += _velGoal.x * dt;
       focus.y += _velGoal.y * dt;
@@ -513,22 +591,33 @@ function stepFly(
     camera.position.copy(s.pos);
     s.collisionHit = collide(camera.position, pr);
     s.pos.copy(camera.position);
-    // 朝向聚焦点（环绕语义）；右键拖拽已改为改球坐标绕 focus 公转（onMove，见批次 36 §3.3）。
+    // 朝向聚焦点（环绕语义）；**基朝向**仍锁 focus ⇒ 批次 67 在其上叠加抬头偏移。
     // 想脱离 lookAt 环绕就取消选中（左键点空白）。
     _mat.lookAt(camera.position, _v2.set(focus.x, focus.y, focus.z), UP);
     camera.quaternion.setFromRotationMatrix(_mat);
-    // 同步 yaw/pitch 供 HUD / 后续切回自由飞行时无缝
+    // 批次 67：抬头偏移（阻尼跟随，**不移动相机**）
+    s.lookPitch = damp(s.lookPitch, s.lookPitchGoal, LAMBDA_ROT, dt);
+    applyLookPitchTo(camera.quaternion, s.lookPitch);
+    // 同步 yaw/pitch 供 HUD / 后续切回自由飞行时无缝。
+    // 取**最终**四元数（含抬头）⇒ 取消选中后自由飞行继承抬头姿态（无跳变）。
+    // 钳到 ±pitchLimit：基朝向（lookAt(focus) 必向下，≥ −88.5°）+ 低头偏移最低可到
+    // −108°，超出自由飞行模式的 ±89° 会导致翻越天顶（three 欧拉在 |pitch|>90° 时镜像）。
+    const lim = pr.pitchLimit ?? 1.553;
     _euler.setFromQuaternion(camera.quaternion, 'YXZ');
     s.yaw = _euler.y;
     s.yawGoal = _euler.y;
-    s.pitch = _euler.x;
-    s.pitchGoal = _euler.x;
+    s.pitch = clamp(_euler.x, -lim, lim);
+    s.pitchGoal = s.pitch;
     // vel ≈ 0（环绕是位置直接赋值，不是速度积分），自适应 FOV 不额外张开
     s.vel.set(0, 0, 0);
     return;
   }
 
   // ── 自由飞行（未选中）──
+  // 批次 67：该模式的 `pitch` 本身就是自由视线（±89°）⇒ **不叠加** lookPitch，
+  // 否则会双重倾斜。抬头量由 yaw/pitch 承载，lookPitch 归零。
+  s.lookPitch = 0;
+  s.lookPitchGoal = 0;
   s.yaw = wrapAngle(s.yaw + wrapAngle(s.yawGoal - s.yaw) * dampFactorOf(LAMBDA_ROT, dt));
   const lim = pr.pitchLimit ?? 1.553;
   s.pitch = clamp(damp(s.pitch, s.pitchGoal, LAMBDA_ROT, dt), -lim, lim);
@@ -551,6 +640,8 @@ function poseFromGoals(s: RigState, mode: FreeViewMode, _pr: FreeViewControlsPro
     s.toPos.copy(s.targetGoal).add(_v1);
     _mat.lookAt(s.toPos, s.targetGoal, UP);
     s.toQuat.setFromRotationMatrix(_mat);
+    // 批次 67：目标位姿同样带上抬头偏移 ⇒ 切回俯瞰时保留抬头姿态（不硬掰回俯视）
+    applyLookPitchTo(s.toQuat, s.lookPitchGoal);
   } else {
     s.toPos.copy(s.pos);
     quatFromYawPitch(s.toQuat, s.yawGoal, s.pitchGoal);
@@ -566,10 +657,14 @@ function settle(s: RigState): void {
     s.radius = s.radiusGoal;
     s.phi = s.phiGoal;
     s.theta = s.thetaGoal;
+    s.lookPitch = s.lookPitchGoal;
   } else {
     s.pos.copy(s.toPos);
     s.yaw = s.yawGoal;
     s.pitch = s.pitchGoal;
+    // 自由飞行：抬头量已烘焙进 yaw/pitch ⇒ lookPitch 归零（避免双重叠加）
+    s.lookPitch = 0;
+    s.lookPitchGoal = 0;
   }
   s.vel.set(0, 0, 0);
   s.userFov = s.userFovGoal;
@@ -609,12 +704,21 @@ function beginTransition(
       s.thetaGoal = pr.orbitFixedTheta ?? Math.PI / 4;
     }
   } else {
-    // 从俯瞰切入自由视角：保留相机位置与朝向，只换约束方式
-    s.pos.copy(camera.position);
-    _euler.setFromQuaternion(camera.quaternion, 'YXZ');
-    s.yawGoal = _euler.y;
-    s.pitchGoal = clamp(_euler.x, -(pr.pitchLimit ?? 1.553), pr.pitchLimit ?? 1.553);
-    s.vel.set(0, 0, 0);
+    // 从俯瞰切入自由视角：保留相机位置与朝向，只换约束方式。
+    // ⚠️ 仅在**跨模式**时播种：`R` 复位走的是同模式过渡（from === to），
+    // 此时目标量已由 resetHome 设为 home 位姿，不能再被当前相机位姿覆盖
+    // （否则 fly 模式的复位是空操作 —— 批次 67 顺带修掉的既有缺陷）。
+    if (from !== 'fly') {
+      s.pos.copy(camera.position);
+      _euler.setFromQuaternion(camera.quaternion, 'YXZ');
+      s.yawGoal = _euler.y;
+      s.pitchGoal = clamp(_euler.x, -(pr.pitchLimit ?? 1.553), pr.pitchLimit ?? 1.553);
+      s.vel.set(0, 0, 0);
+      // 批次 67：当前朝向已含抬头偏移（由相机四元数反解而来）⇒ lookPitch 归零，
+      // 避免「自由飞行 = yaw/pitch + lookPitch」双重叠加（头歪两倍）。
+      s.lookPitch = 0;
+      s.lookPitchGoal = 0;
+    }
   }
 
   s.mode = to;
@@ -685,6 +789,9 @@ export function FreeViewControls(props: FreeViewControlsProps) {
     minPolar = 0.02,
     maxPolar = 1.545,
     pitchLimit = 1.553,
+    // 批次 67：视线俯仰自由度（抬头通道）缺省限位
+    lookPitchLimit = LOOK_PITCH_LIMIT_DEFAULT,
+    lookPitchMin = LOOK_PITCH_MIN_DEFAULT,
     fovMin = 25,
     fovMax = 80,
     targetRef,
@@ -747,6 +854,11 @@ export function FreeViewControls(props: FreeViewControlsProps) {
         get target() { return (rig.current?.target ?? _v1).toArray(); },
         get yaw() { return rig.current?.yaw ?? 0; },
         get pitch() { return rig.current?.pitch ?? 0; },
+        /** 批次 67：视线俯仰偏移（弧度，正 = 抬头）—— CDP 验收「能不能抬头」的直接读数。 */
+        get lookPitch() { return rig.current?.lookPitch ?? 0; },
+        get lookPitchGoal() { return rig.current?.lookPitchGoal ?? 0; },
+        /** 视线绝对仰角（度，正 = 朝上）。 */
+        get lookAngleDeg() { return freeViewRuntime.lookAngleDeg; },
         get fov() { return camera.fov; },
         get colliding() { return rig.current?.collisionHit ?? false; },
         get transitioning() { return rig.current?.transitioning ?? false; },
@@ -808,6 +920,8 @@ export function FreeViewControls(props: FreeViewControlsProps) {
       s.pitchGoal = home.pitch;
       s.vel.set(0, 0, 0);
     }
+    // 批次 67：复位同时把视线俯仰归零（否则复位后仍歪着头）
+    s.lookPitchGoal = 0;
     s.userFovGoal = home.fov;
     beginTransition(s, s.mode, s.mode, camera, pr.current);
   };
@@ -854,6 +968,17 @@ export function FreeViewControls(props: FreeViewControlsProps) {
         // 「俯瞰 ↔ 自由」是最高频往返
         case 'KeyF': setModeIfAllowed(modeRef.current === 'fly' ? 'orbit' : 'fly'); break;
         case 'KeyR': resetHome(); break;
+        // 批次 67：视线归正 —— 只把「视线俯仰」平滑回零，不动位置/朝向其余部分。
+        // 锚定类模式（orbit / fly-选中）归零的是 lookPitch（基朝向保持看锚点）；
+        // 自由飞行模式归零的是 pitch（把地平线摆正）。
+        case 'KeyC': {
+          const st = rig.current;
+          if (!st) break;
+          st.lookPitchGoal = 0;
+          const focused = !!pr.current.selectedFocusRef?.current;
+          if (st.mode === 'fly' && !focused) st.pitchGoal = 0;
+          break;
+        }
         case 'KeyH':
         case 'Slash': store.getState().toggleHelp(); break;
         case 'BracketLeft': store.getState().stepTier(-1); break;
@@ -895,7 +1020,8 @@ export function FreeViewControls(props: FreeViewControlsProps) {
     const el = gl.domElement;
 
     const onDown = (e: PointerEvent) => {
-      if (!isButtonUsedForCamera(modeRef.current, e.button)) return;
+      const hasFocus = !!pr.current.selectedFocusRef?.current;
+      if (!isButtonUsedForCamera(modeRef.current, e.button, hasFocus)) return;
       const d = drag.current;
       d.active = true;
       d.button = e.button;
@@ -916,31 +1042,39 @@ export function FreeViewControls(props: FreeViewControlsProps) {
       if (!s) return;
       const p = pr.current;
       const rs = p.rotateSpeed ?? 0.0032;
+      const lo = p.lookPitchMin ?? lookPitchMin;
+      const hi = p.lookPitchLimit ?? lookPitchLimit;
       if (s.mode === 'orbit') {
+        // 批次 67 输入重映射：「左 = 轨道 · 中 = 平移 · 右 = 视线」
         if (d.button === 0) {
-          // 左拖绕目标公转
+          // 左拖绕目标公转（θ 水平 / φ 垂直）
           s.thetaGoal -= dx * rs;
           s.phiGoal = clamp(s.phiGoal - dy * rs, p.minPolar ?? minPolar, p.maxPolar ?? maxPolar);
-        } else if (d.button === 2) {
+        } else if (d.button === 1) {
+          // 中拖平面平移聚焦点（从右键迁来：右键已让位给「视线」，与 fly 的中拖平移统一）
           panOrbit(s, dx, dy, el.clientHeight, p);
+        } else if (d.button === 2) {
+          // 右拖 = 视线：水平转身（绕 target 转 θ）/ 垂直抬头（lookPitch）
+          s.thetaGoal = wrapAngle(s.thetaGoal - dx * rs);
+          s.lookPitchGoal = clampLookPitch(s.lookPitchGoal - dy * rs, lo, hi);
         }
       } else if (d.button === 2) {
         const focus = p.selectedFocusRef?.current ?? null;
         if (focus) {
-          // 批次 36 §3.3：focus 态右拖 = 绕 focus 公转（改球坐标 θ/φ）。
-          // 原「右拖改 yaw/pitch goal」在 focus 态被 lookAt 每帧覆盖（死代码），此处语义回收。
+          // 批次 67：focus 态右拖 = 视线。水平 = 绕 focus 转身（θ）；
+          // 垂直 = 抬头（lookPitch）—— 批次 36 的 φ 环绕迁到左键（见下）。
           _v1.copy(s.pos).sub(_v2.set(focus.x, focus.y, focus.z));
           const sph = new THREE.Spherical().setFromVector3(_v1);
           sph.theta -= dx * rs;
-          sph.phi = clamp(sph.phi - dy * rs, p.minPolar ?? minPolar, p.maxPolar ?? maxPolar);
           const sinPhi = Math.sin(sph.phi);
           s.pos.set(
             focus.x + sph.radius * sinPhi * Math.sin(sph.theta),
             focus.y + sph.radius * Math.cos(sph.phi),
             focus.z + sph.radius * sinPhi * Math.cos(sph.theta),
           );
+          s.lookPitchGoal = clampLookPitch(s.lookPitchGoal - dy * rs, lo, hi);
         } else {
-          // 右拖 look（fly 未选中）
+          // 右拖 look（fly 未选中）：该模式 pitch 本身即自由视线（±89°）
           const lim = p.pitchLimit ?? pitchLimit;
           s.yawGoal = wrapAngle(s.yawGoal - dx * rs);
           s.pitchGoal = clamp(s.pitchGoal - dy * rs, -lim, lim);
@@ -948,6 +1082,21 @@ export function FreeViewControls(props: FreeViewControlsProps) {
       } else if (d.button === 1) {
         // 中拖屏幕平面视口平移（朝向不变）
         panFly(s, dx, dy, el.clientHeight, p);
+      } else if (d.button === 0) {
+        // 批次 67：fly-选中态左拖 = 绕 focus 公转（θ/φ）。
+        // 未拖动的点击仍走 R3F 的点选（拖拽 > 4px 才吞 click）。
+        const focus = p.selectedFocusRef?.current ?? null;
+        if (!focus) return;
+        _v1.copy(s.pos).sub(_v2.set(focus.x, focus.y, focus.z));
+        const sph = new THREE.Spherical().setFromVector3(_v1);
+        sph.theta -= dx * rs;
+        sph.phi = clamp(sph.phi - dy * rs, p.minPolar ?? minPolar, p.maxPolar ?? maxPolar);
+        const sinPhi = Math.sin(sph.phi);
+        s.pos.set(
+          focus.x + sph.radius * sinPhi * Math.sin(sph.theta),
+          focus.y + sph.radius * Math.cos(sph.phi),
+          focus.z + sph.radius * sinPhi * Math.cos(sph.theta),
+        );
       }
     };
     const onUp = (e: PointerEvent) => {
@@ -1076,6 +1225,16 @@ export function FreeViewControls(props: FreeViewControlsProps) {
         aimRefs.current.fov = camera.fov;
       }
     }
+
+    // 批次 67：实时量上报（HUD 仰角读数）。
+    // 仰角取**相机实际朝向**反解 ⇒ 已含 lookPitch 抬头偏移；
+    // 「抬头偏移」另存一份，便于区分「基朝向本来就平视」与「玩家主动抬头」。
+    const vy = viewYawPitch(camera);
+    publishFreeViewRuntime(
+      s.mode,
+      THREE.MathUtils.radToDeg(vy.pitch),
+      THREE.MathUtils.radToDeg(s.lookPitch),
+    );
   });
 
   return null;

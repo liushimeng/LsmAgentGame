@@ -15,8 +15,10 @@
  * CLAUDE.md §2.1 硬约束 4）。
  */
 
+import { useEffect, useState } from 'react';
 import { useFreeView, FREE_VIEW_TIERS } from './freeViewStore';
 import type { FreeViewMode } from './freeViewStore';
+import { freeViewRuntime } from './freeViewRuntime';
 import './freeview.css';
 
 export interface FreeViewLabels {
@@ -36,6 +38,11 @@ export interface FreeViewLabels {
   /** 畅通 / 碰撞 两态文案（碰撞指示灯）。 */
   clear: string;
   colliding: string;
+  /**
+   * 仰角读数前缀（批次 67）。显示形如「仰角 +39°」—— 玩家据此判断
+   * 「现在能不能抬头看天」。缺省英文 `Look`。
+   */
+  look?: string;
   /** 键位帮助表：`[按键, 说明]`。 */
   shortcuts: Array<[string, string]>;
   /**
@@ -53,10 +60,12 @@ const DEFAULT_LABELS: FreeViewLabels = {
   tiers: ['×1', '×2', '×4', '×8', '×16'],
   clear: 'Clear',
   colliding: 'Blocked',
+  look: 'Look',
   shortcuts: [
     ['V / F', 'Toggle orbit ⇄ free'],
     ['1 / 2', 'Orbit / Free'],
     ['R', 'Reset pose'],
+    ['C', 'Level the view'],
     ['Shift', 'Speed ×1→×16 cycle'],
     ['[ / ]', 'Speed step down / up'],
     ['H', 'This panel'],
@@ -66,6 +75,13 @@ const DEFAULT_LABELS: FreeViewLabels = {
 };
 
 const MODE_ORDER: FreeViewMode[] = ['orbit', 'fly'];
+
+/** 仰角格式化：`+39°` / `−12°`（正号 = 朝上；负号用 U+2212 避免与连字符混淆）。 */
+function formatLookAngle(deg: number): string {
+  const r = Math.round(deg);
+  if (r === 0) return '0°';
+  return `${r > 0 ? '+' : '−'}${Math.abs(r)}°`;
+}
 
 export interface FreeViewHudProps {
   /** 文案包；缺省英文（引擎层不假设宿主语种）。 */
@@ -83,6 +99,22 @@ export function FreeViewHud({ labels, allowedModes }: FreeViewHudProps) {
   const ready = useFreeView((s) => s.ready);
   const setMode = useFreeView((s) => s.setMode);
   const toggleHelp = useFreeView((s) => s.toggleHelp);
+
+  // 批次 67：实时仰角读数。仰角是**每帧**变化的量，不能进 zustand（会拖着重渲染），
+  // 故读引擎层的实时量单例并以 ~8 Hz 轮询刷新（视觉足够跟手，React 开销可忽略）。
+  const [look, setLook] = useState({ angle: 0, pitch: 0 });
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setLook((prev) => {
+        const angle = Math.round(freeViewRuntime.lookAngleDeg);
+        const pitch = Math.round(freeViewRuntime.lookPitchDeg);
+        return prev.angle === angle && prev.pitch === pitch
+          ? prev
+          : { angle, pitch };
+      });
+    }, 120);
+    return () => window.clearInterval(id);
+  }, []);
 
   const modes = allowedModes ?? MODE_ORDER;
 
@@ -133,6 +165,18 @@ export function FreeViewHud({ labels, allowedModes }: FreeViewHudProps) {
         >
           <i className="freeview-hud__probe-dot" aria-hidden="true" />
           {colliding ? L.colliding : L.clear}
+        </span>
+        {/* 批次 67：实时仰角读数 —— 玩家据此判断「现在能不能抬头看天」。
+            data-look-deg / data-pitch-deg 供 CDP 验收直读（免解析文案）。 */}
+        <span
+          className="freeview-hud__look"
+          data-testid="freeview-look"
+          data-look-deg={look.angle}
+          data-look-up={look.angle > 0 ? '1' : '0'}
+          data-pitch-deg={look.pitch}
+          title={`${L.look ?? 'Look'} ${formatLookAngle(look.angle)}`}
+        >
+          {L.look} {formatLookAngle(look.angle)}
         </span>
       </div>
 

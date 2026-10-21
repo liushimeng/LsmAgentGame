@@ -125,6 +125,90 @@ export function lerpPosition(
   return out.addVectors(_mid, _va);
 }
 
+// ── 批次 67：视线俯仰自由度（抬头通道）────────────────────────────────────
+
+/**
+ * 视线俯仰偏移（`lookPitch`）的缺省限位。
+ *
+ * 背景：批次 67 修「视觉不能向上」。根因不是 `maxPolar` 太小，而是**视线朝向被锚点
+ * 锁死**（orbit 锁 `lookAt(target)`、fly-选中锁 `lookAt(focus)`）—— 把 `maxPolar`
+ * 放大到 >π/2 也不行（那样相机必须沉到锚点之下才能形成向上视线，与地面钳制冲突）。
+ * 正解是**位置与视线解耦**：位置照旧由锚定/积分求解，视线 = 基朝向 + `lookPitch`。
+ *
+ * `1.40 rad ≈ 80.2°`：orbit 默认 `φ=0.85`（基仰角 −41°）⇒ 满抬头后仰角 +39°（正对
+ * 天空上部）；`φ→1.54`（基仰角 −1.8°）⇒ 满抬头 +78°（近天顶）。
+ */
+export const LOOK_PITCH_LIMIT_DEFAULT = 1.4;
+/** 允许比基朝向再低一点（低头看地面近处），与 `φ` 轨道俯仰互补。 */
+export const LOOK_PITCH_MIN_DEFAULT = -0.35;
+
+/** 相机局部 +X（屏幕右向）—— 视线俯仰的旋转轴。 */
+const LOOK_PITCH_AXIS = new THREE.Vector3(1, 0, 0);
+
+/** Rodrigues 中转用的临时向量。 */
+const _tiltAxis = new THREE.Vector3();
+
+/** 视线俯仰偏移（yaw/pitch 欧拉形式）。 */
+export interface YawPitch {
+  yaw: number;
+  pitch: number;
+}
+
+/** 钳制视线俯仰偏移到 `[min, max]`。 */
+export function clampLookPitch(v: number, min: number, max: number): number {
+  return clamp(v, min, max);
+}
+
+/** 由四元数取视线方向（相机局部 −Z 经该四元数变换）。 */
+export function forwardFromQuaternion(
+  out: THREE.Vector3,
+  quat: THREE.Quaternion,
+): THREE.Vector3 {
+  return out.set(0, 0, -1).applyQuaternion(quat);
+}
+
+/**
+ * 绕「相机右向量」把视线方向抬起 `angle` 弧度（右手定则，正 = 抬头）。
+ *
+ * `right` 与 `out` 需正交（相机右向量 ⟂ 视线）。Rodrigues 展开后
+ * `k(k·v)(1−cos a)` 项因 `k·v = 0` 而消失 ⇒ `v' = v·cos a + (k×v)·sin a`。
+ *
+ * 说明：控制器实际走**四元数右乘**路径（`lookPitchQuaternion` + `quaternion.multiply`），
+ * 本函数是同一数学的向量形式，供纯函数测试与将来解析式求解复用。
+ */
+export function tiltForward(
+  out: THREE.Vector3,
+  right: THREE.Vector3,
+  angle: number,
+): THREE.Vector3 {
+  if (Math.abs(angle) < 1e-9) return out;
+  _tiltAxis.copy(right).cross(out);
+  out.multiplyScalar(Math.cos(angle)).addScaledVector(_tiltAxis, Math.sin(angle));
+  return out.normalize();
+}
+
+/**
+ * 由视线方向反解 `(yaw, pitch)`（three YXZ 欧拉约定）。
+ *
+ * 欧拉约定：`forward = (−sinY·cosP, sinP, −cosY·cosP)` ⇒
+ * `pitch = asin(fwd.y)`、`yaw = atan2(−fwd.x, −fwd.z)`。
+ */
+export function yawPitchFromDirection(out: YawPitch, dir: THREE.Vector3): YawPitch {
+  out.pitch = Math.asin(clamp(dir.y, -1, 1));
+  out.yaw = Math.atan2(-dir.x, -dir.z);
+  return out;
+}
+
+/**
+ * 视线俯仰偏移的**局部**旋转四元数（绕相机局部 +X，正 = 抬头）。
+ *
+ * 用法：`camera.quaternion.multiply(q)` —— 四元数右乘 = 在相机局部系施加旋转，
+ * 等价于「相机抬头 a 度」，视线方向随之由 `(0,0,−1)` 变为 `(0, sin a, −cos a)`。
+ */
+export function lookPitchQuaternion(out: THREE.Quaternion, angle: number): THREE.Quaternion {
+  return out.setFromAxisAngle(LOOK_PITCH_AXIS, angle);
+}
+
 /** 焦点在文本输入处时不劫持按键（聊天框 / 表单优先）。沿用批次 22 的既有口径。 */
 export function isTextEditingTarget(): boolean {
   const el = typeof document !== 'undefined' ? document.activeElement : null;

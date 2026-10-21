@@ -106,6 +106,13 @@ export type {
   FreeViewState,
   FreeViewTierIndex,
 } from './controls/freeViewStore';
+// 批次 67：视觉系统优化 —— 实时量单例（仰角读数）+ 视线俯仰自由度常量。
+export { freeViewRuntime } from './controls/freeViewRuntime';
+export type { FreeViewRuntime } from './controls/freeViewRuntime';
+export {
+  LOOK_PITCH_LIMIT_DEFAULT,
+  LOOK_PITCH_MIN_DEFAULT,
+} from './controls/cameraMath';
 export { resolveCameraCollision, boxFromCenter } from './controls/cameraCollision';
 export type {
   CameraBox,
