@@ -206,6 +206,17 @@ type World struct {
 	// 零 rand —— 固定种子存量模拟回归零偏移。
 	Prediction *PredictionState
 
+	// ── 批次71(2026-10-21 §校准与验证框架)──
+	// OffLedger 账外调整登记簿(不经 Ledger 的现金变动登记;见 offledger.go)。
+	// NewWorld 恒置;惰性初始化 nil 安全。
+	OffLedger *OffLedgerBook
+	// Audits 逐月审计快照环形缓冲(cap 24;见 calibration.go)。
+	// 写入点 = SettleMonth 末尾(w.Month++ 之前)。零 rand。
+	Audits []MonthlyAudit
+	// Calibration 运行级校准状态(内存版 RunRecord;写盘属批次 72)。
+	// 惰性初始化 nil 安全。
+	Calibration *CalibrationState
+
 	// P1-4: 商业保险与风险转移引擎(2026-09-19 §财商流P1-4 §11)。NewWorld 恒置
 	// true;房间层 Start 时按配置回写(false 时投保/退保 35041、月结不扣缴、
 	// 意外事件不掷骰 —— rand 序列零偏移,固定种子存量对局回归一致)。
@@ -222,6 +233,11 @@ type World struct {
 	Players [MaxSeats]*Player // 空座 nil
 
 	Rand *rand.Rand
+
+	// Seed 本局随机种子(批次71:RunRecord.Seed / 场景注入记录的 seed 字段
+	// 取此值;seed=0 传入时 NewWorld 派生实际种子并回写)。
+	// ⚠ 只读字段,绝不参与 rand 消费。
+	Seed int64
 
 	Events []EventRecord // 全量事件(增长缓慢:每月 ≈ 1–3 条)
 
@@ -263,12 +279,13 @@ type World struct {
 
 // NewWorld 构造世界(seed=0 时用时间随机;cards[seat] 可为零值 Card 表示空座)。
 func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
-	var rng *rand.Rand
-	if seed != 0 {
-		rng = rand.New(rand.NewSource(seed))
-	} else {
-		rng = rand.New(rand.NewSource(rand.Int63()))
+	// 批次71:回写实际种子(供 RunRecord.Seed / 场景注入记录 seed 使用);
+	// seed=0 时派生一个实际种子(行为与旧实现逐字节一致)。
+	seedVal := seed
+	if seedVal == 0 {
+		seedVal = rand.Int63()
 	}
+	rng := rand.New(rand.NewSource(seedVal))
 	w := &World{
 		Month:  1,
 		Status: StatusOpen,
@@ -309,6 +326,10 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		AuctionHouse: NewAuctionHouse(),
 		// 批次62:泡沫状态机初始为"常态"(零值是空串,view 快照要显式 none)。
 		BubbleState: BubbleNone,
+		// 批次71:账外调整登记簿恒置(惰性初始化兜底见 offLedgerEnsure)。
+		OffLedger: &OffLedgerBook{},
+		// 批次71:本局实际随机种子(seed=0 时为派生值)。
+		Seed: seedVal,
 	}
 	for seat := 0; seat < MaxSeats; seat++ {
 		if cards[seat].ID == "" {

@@ -17,7 +17,7 @@ import (
 // ApplyScenario)。校验失败返回 errcode,否则 nil。
 func applyPredScenario(t *testing.T, w *World) *errcode.Error {
 	t.Helper()
-	_, _, _, e := applyScenarioToWorld(w, ScenarioEarthquake, 3, 6, "", "det", 1730000000000)
+	_, _, _, e := applyScenarioToWorld(w, ScenarioEarthquake, 3, 6, "", "det", 1730000000000, 12345)
 	return e
 }
 
@@ -68,7 +68,7 @@ func TestPrediction_ZeroRand(t *testing.T) {
 func TestPrediction_BaselineBeforeShock(t *testing.T) {
 	r := newScenarioTestRoom(t, "pred-t0", 2026)
 	w := r.World
-	base := collectIndicators(w)
+	base := collectPredictionIndicators(w)
 	if _, _, e := r.ApplyScenario(ScenarioGoodsPriceShock, 5, 6, "", "shock"); e != nil {
 		t.Fatalf("inject: %v", e)
 	}
@@ -84,7 +84,7 @@ func TestPrediction_BaselineBeforeShock(t *testing.T) {
 		t.Fatalf("baseline goods_price_idx = %v, want pre-shock %v", run.Baseline.GoodsPriceIdx, base.GoodsPriceIdx)
 	}
 	// 当前世界已偏离基线(商品价格冲击 L5 +3%×5)。
-	now := collectIndicators(w)
+	now := collectPredictionIndicators(w)
 	if now.GoodsPriceIdx <= run.Baseline.GoodsPriceIdx {
 		t.Fatalf("current goods_price_idx %v did not deviate from baseline %v", now.GoodsPriceIdx, run.Baseline.GoodsPriceIdx)
 	}

@@ -2,8 +2,8 @@
  * VirtualCityDashboard — 批次 69「虚拟城市 - 实时看板」外壳。
  *
  * 把批次 62/65 之前散落的 9 个平级业务 Tab 统一重构为**单一看板**：
- *   3 组 11 个一级 Tab（维度）：
- *     城市运行 city    → city-overview / finance / ledger / economy / behavior / macro
+ *   3 组 12 个一级 Tab（维度）：
+ *     城市运行 city    → city-overview / finance / ledger / economy / behavior / macro / calibration
  *     市场金融 market  → market / market-trade / insurance
  *     外部实时 external → realtime / datasources
  *
@@ -65,6 +65,7 @@ import { RealtimeBoard } from './RealtimeBoard';
 import { BoardSection } from './BoardSection';
 import { CityOverviewPanel } from './CityOverviewPanel';
 import { DataSourcesPanel } from './DataSourcesPanel';
+import { CalibrationPanel } from './CalibrationPanel';
 import {
   DASHBOARD_CATALOG,
   DASHBOARD_GROUP_IDS,
@@ -322,6 +323,8 @@ export function VirtualCityDashboard({
         return <RealtimeBoard />;
       case 'datasources':
         return <DataSourcesPanel sources={snapshot?.data_sources ?? []} />;
+      case 'calibration':
+        return <CalibrationPanel gameState={gameState} />;
       default:
         return null;
     }
@@ -411,6 +414,8 @@ export function VirtualCityDashboard({
               title={t(d.titleKey as TKey)}
               aria-current={panelTab === d.id}
               data-testid={`virtualCity-dash-tab-${d.id}`}
+              /* CDP 实机验收钩子：稳定 id（不随 i18n 语言变化）。 */
+              data-vc-tab={d.id}
             >
               {t(d.titleKey as TKey)}
             </button>

@@ -40,7 +40,9 @@ export type VirtualCityPanelTab =
   | 'realtime'
   // 批次69：实时看板统一重构 —— 11 个一级 Tab（看板维度）。
   //   'city-overview' 城市总览（新增聚合面板）/ 'datasources' 数据源清单（新增）。
-  | 'city-overview' | 'datasources';
+  | 'city-overview' | 'datasources'
+  // 批次71：第 12 个看板维度「校准」（game.state.calibration：回归不变量 + D 指标 + 红线）。
+  | 'calibration';
 
 /** 市场快照（走势迷你图 + 相对上月箭头用）。 */
 export interface VirtualCityMarketPoint {

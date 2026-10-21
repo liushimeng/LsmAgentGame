@@ -54,6 +54,26 @@ type TreasuryState struct {
 	LastMonthExpense int64 // 上月财政支出(财政采购+转移支付+国债还本付息)
 	DeficitRun       int   // 连续赤字月数(Deficit<0 累计,盈余清零)
 
+	// PrevMonthCash 上月国库现金快照(批次71 §4.3:I3 国库收支闭合的左端基准)。
+	// 写入点 = SettleTreasuryMonth **开头**(⑨A 税收汇总之前)——
+	// 此刻快照的 Cash 与当月 ⑨ 窗口内的全部现金变动之间构成完整区间。
+	PrevMonthCash int64
+
+	// OtherExpense 本月经**账外**国库现金流出(批次71 §4.3)。
+	//
+	// 背景:国库现金有 2 处变动**不在** SettleTreasuryMonth 的
+	// LastMonthExpense 口径内:
+	//   - 市长津贴(civic_election.go,发生在 ⑨G = 国库月结之后);
+	//   - 场景推演国库支出(scenario.go;月结路径发生在 ⑨ 之前,
+	//     注入路径发生在月结之间 —— 两者均不落在当月 ⑨ 窗口内)。
+	// 按方案 §4.3「定位该改动点并登记」的要求单独登记,参与 I3 恒等式:
+	//
+	//	Cash − PrevMonthCash == LastMonthRevenue − LastMonthExpense − OtherExpense
+	//
+	// ⚠ **不参与** monthSpend() 预算口径(改它会波及发债阈值 ⇒ 改变经济
+	// 数值行为,违反本批「不改任何经济数值」纪律)。
+	OtherExpense int64
+
 	// MonthlyCounter 当月税收聚合器(R4-2:聚合一次性清算,避免逐笔计算)。
 	// CollectMonthTax 每次调用先清零再汇总当月口径。
 	MonthlyCounter *TaxCounter
@@ -186,6 +206,11 @@ func (t *TreasuryState) SettleTreasuryMonth(w *World) {
 	if t == nil || w == nil {
 		return
 	}
+	// 批次71 §4.3:国库现金快照 + 账外支出计数清零(窗口起点)。
+	// 此刻之前发生的国库现金流出(场景推演月结路径在 ②.0B)不落在本窗口内,
+	// 故不进 OtherExpense;⑨ 之后发生的(市长津贴 ⑨G)才计入。
+	t.PrevMonthCash = t.Cash
+	t.OtherExpense = 0
 	// ⑨A 政府税收。
 	revenue := t.CollectMonthTax(w)
 	// ⑨B 转移支付。

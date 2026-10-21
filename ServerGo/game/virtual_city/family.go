@@ -450,6 +450,11 @@ func (w *World) DistributeInheritance(deadSeat int) error {
 	}
 
 	// 清零死者账簿(裁决 D8 步骤 4:防资产被后续逻辑双花)。
+	//
+	// 批次71 §3.3 登记点 ④:未分配遗产部分被**静默抹去**(不经 Ledger)⇒
+	// 属真账外,必须登记。登记额 = 清零**前**的 p.Cash 取负
+	// (遗产已由上面的 w.Pay 逐笔付出,剩下的残余现金在此被抹去)。
+	w.offLedgerRecord(w.Month, deadSeat, OffLedgerEstateClear, -p.Cash, "遗产清算后死者账簿清零")
 	p.Cash = 0
 	p.Assets = nil
 	p.Loans = nil

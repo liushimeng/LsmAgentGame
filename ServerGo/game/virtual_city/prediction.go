@@ -65,9 +65,9 @@ type PredictionIndicators struct {
 	BubbleLeverage  float64 `json:"bubble_leverage"`   // 市场杠杆率
 }
 
-// collectIndicators 纯算术取数(方案 §2;零 rand,零平行账本)。
+// collectPredictionIndicators 纯算术取数(方案 §2;零 rand,零平行账本)。
 // 调用方持房间锁(engine 级)。
-func collectIndicators(w *World) PredictionIndicators {
+func collectPredictionIndicators(w *World) PredictionIndicators {
 	if w == nil {
 		return PredictionIndicators{Unemployment: 0.05}
 	}
@@ -222,7 +222,7 @@ func (w *World) predictionBeginOrJoin() *PredictionRun {
 	}
 	ps := w.predictionEnsure()
 	ps.Seq++
-	base := collectIndicators(w)
+	base := collectPredictionIndicators(w)
 	run := &PredictionRun{
 		ID:         fmt.Sprintf("PR%d", ps.Seq),
 		StartMonth: w.Month,
@@ -264,7 +264,7 @@ func (w *World) predictionMonthStep() {
 	if run == nil {
 		return
 	}
-	run.Trajectory = append(run.Trajectory, collectIndicators(w))
+	run.Trajectory = append(run.Trajectory, collectPredictionIndicators(w))
 	if len(run.Trajectory) > predictionTrajectoryCap {
 		run.Trajectory = run.Trajectory[len(run.Trajectory)-predictionTrajectoryCap:]
 	}

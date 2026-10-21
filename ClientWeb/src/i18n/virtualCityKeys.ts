@@ -1064,7 +1064,7 @@ export interface VirtualCityDict {
   'virtualCity.prediction.metric.bubbleLeverage': string;
 
   // ── 批次 69 ·「虚拟城市 - 实时看板」统一重构 ──────────────────────────
-  // 3 组 11 个一级 Tab（维度）：city / market / external。
+  // 3 组 12 个一级 Tab（维度）：city / market / external。
   // 文案在 locales/virtualCityDash-{zh,en,ja}.ts。
   'virtualCity.dash.title': string;
   /** 副行：数据版本 v{v} · {n} 个维度。 */
@@ -1083,6 +1083,8 @@ export interface VirtualCityDict {
   'virtualCity.dash.dim.insurance': string;
   'virtualCity.dash.dim.realtime': string;
   'virtualCity.dash.dim.dataSources': string;
+  /** 批次71：第 12 个维度「校准」。 */
+  'virtualCity.dash.dim.calibration': string;
   /** 折叠按钮文案 / aria-label。 */
   'virtualCity.dash.collapse': string;
   'virtualCity.dash.expand': string;
@@ -1133,4 +1135,42 @@ export interface VirtualCityDict {
   'virtualCity.dash.overview.fundRatings': string;
   'virtualCity.dash.overview.scenarioRecords': string;
   'virtualCity.dash.overview.scenarioLast': string;
+
+  // ── 批次 71 ·「校准与验证」看板维度（game.state.calibration）───────────
+  // 文案在 locales/virtualCityDash-{zh,en,ja}.ts（与看板外壳同文件）。
+  'virtualCity.calib.title': string;
+  'virtualCity.calib.stateHash': string;
+  'virtualCity.calib.invariants': string;
+  'virtualCity.calib.indicators': string;
+  'virtualCity.calib.redlines': string;
+  'virtualCity.calib.history': string;
+  'virtualCity.calib.pass': string;
+  'virtualCity.calib.fail': string;
+  'virtualCity.calib.empty': string;
+  'virtualCity.calib.copy': string;
+  'virtualCity.calib.copied': string;
+  // 回归不变量名称（id → 标签表；未知 id 回退后端 name 字段）
+  'virtualCity.calib.inv.i1': string;
+  'virtualCity.calib.inv.i2': string;
+  'virtualCity.calib.inv.i3': string;
+  'virtualCity.calib.inv.i4': string;
+  'virtualCity.calib.inv.i5': string;
+  'virtualCity.calib.inv.i6': string;
+  'virtualCity.calib.inv.i8': string;
+  // 红线名称（id → 标签表；未知 id 回退后端 name 字段）
+  'virtualCity.calib.redline.re3': string;
+  'virtualCity.calib.redline.re4': string;
+  'virtualCity.calib.redline.re5': string;
+  'virtualCity.calib.redline.re6': string;
+  'virtualCity.calib.redline.rb1': string;
+  // 校准指标名称
+  'virtualCity.calib.metric.moneyExpansion': string;
+  'virtualCity.calib.metric.bankruptcyRate': string;
+  'virtualCity.calib.metric.gini': string;
+  'virtualCity.calib.metric.unemployment': string;
+  'virtualCity.calib.metric.cpi': string;
+  'virtualCity.calib.metric.totalWealth': string;
+  'virtualCity.calib.metric.aliveSeats': string;
+  'virtualCity.calib.metric.totalSeats': string;
+  'virtualCity.calib.metric.offLedger': string;
 }

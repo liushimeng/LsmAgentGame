@@ -99,6 +99,12 @@ type ScenarioSpec struct {
 
 // ScenarioAppliedRecord 单条注入记录(World.ScenarioApplied 环形缓冲;
 // view 层 game.state.scenarios_recent 与 GET .../scenarios 共用)。
+//
+// 批次71 §4.5(I6 场景注入留痕):补齐《场景推演》§7.3 要求的
+// target / duration / seed / snapshot_id 四个字段 —— 缺任一项 ⇒
+// 注入记录不可复现,I6 判定失败。
+//
+// ⚠ 新增字段**一律不带 omitempty**(缺省零值下发,旧前端忽略未知键即可)。
 type ScenarioAppliedRecord struct {
 	ID           string `json:"id"`            // "SC1"…(World.ScenarioSeq 自增)
 	Kind         string `json:"kind"`          // 场景 kind
@@ -106,6 +112,14 @@ type ScenarioAppliedRecord struct {
 	AppliedMonth int    `json:"applied_month"` // 注入时的主钟月份
 	Note         string `json:"note"`          // 条件触发者备注(≤60 rune)
 	At           int64  `json:"at"`            // 注入时刻 unix 毫秒
+	// Target 作用范围(城区/行业/商品类目;空 = 全域)。
+	Target string `json:"target"`
+	// DurationMonths 持续月数。
+	DurationMonths int `json:"duration_months"`
+	// Seed 注入时的 run_seed(房间层 seed;0 = 未知)。
+	Seed int64 `json:"seed"`
+	// SnapshotID 关联的基线快照 id(预测运行 id;无基线 run = 空串)。
+	SnapshotID string `json:"snapshot_id"`
 }
 
 // ScenarioEffect 单条即时效果(注入响应 data.effects)。
@@ -385,7 +399,10 @@ func scenarioDefFor(kind string) (*scenarioDef, bool) {
 // 返回:记录 / 即时效果 / 活动态(供房间层写入 World.Scenarios)/ 错误。
 // 全部校验在此完成(未知 kind → 35055,参数非法 → 35056,活动上限 → 35057);
 // 房间未运行由房间层返回 35002(与 LaunchSurvey 同口径)。
-func applyScenarioToWorld(w *World, kind string, magnitude, durationMonths int, target, note string, at int64) (*ScenarioAppliedRecord, []ScenarioEffect, *ScenarioActive, *errcode.Error) {
+//
+// ⚠ 批次71 §4.5:新增 seed 入参(注入记录的 Seed 字段 = 房间层 seed ⇒
+// 注入可复现)。调用方(r)同步改。
+func applyScenarioToWorld(w *World, kind string, magnitude, durationMonths int, target, note string, at int64, seed int64) (*ScenarioAppliedRecord, []ScenarioEffect, *ScenarioActive, *errcode.Error) {
 	if w == nil {
 		return nil, nil, nil, errcode.Code(errcode.ErrVirtualCityNotPlaying)
 	}
@@ -592,13 +609,23 @@ func applyScenarioToWorld(w *World, kind string, magnitude, durationMonths int, 
 
 	// 记录(环形缓冲 cap 20)。
 	w.ScenarioSeq++
+	// 批次71 §4.5:注入留痕四字段(target / duration / seed / snapshot_id)。
+	// SnapshotID = 当前预测 run id(无 active run = 空串)。
+	snapshotID := ""
+	if run := w.predictionActiveRun(); run != nil {
+		snapshotID = run.ID
+	}
 	rec := &ScenarioAppliedRecord{
-		ID:           fmt.Sprintf("SC%d", w.ScenarioSeq),
-		Kind:         def.spec.Kind,
-		Magnitude:    magnitude,
-		AppliedMonth: w.Month,
-		Note:         note,
-		At:           at,
+		ID:             fmt.Sprintf("SC%d", w.ScenarioSeq),
+		Kind:           def.spec.Kind,
+		Magnitude:      magnitude,
+		AppliedMonth:   w.Month,
+		Note:           note,
+		At:             at,
+		Target:         target,
+		DurationMonths: durationMonths,
+		Seed:           seed,
+		SnapshotID:     snapshotID,
 	}
 	w.ScenarioApplied = append(w.ScenarioApplied, *rec)
 	if len(w.ScenarioApplied) > scenarioRecordCap {
@@ -752,6 +779,9 @@ func (w *World) scenarioCashDamage(frac, mag float64) (int64, int) {
 			dmg = p.Cash
 		}
 		p.Cash -= dmg
+		// 批次71 §3.3 登记点 ③:场景冲击对居民现金的直接损失是**真账外**
+		// (不经 Ledger)⇒ 必须登记,否则 I1 守恒立刻红。
+		w.offLedgerRecord(w.Month, seat, OffLedgerScenarioDamage, -dmg, "场景冲击现金损失")
 		total += dmg
 		n++
 	}
@@ -769,6 +799,11 @@ func (w *World) scenarioTreasurySpend(amount int64) int64 {
 		amount = w.Treasury.Cash
 	}
 	w.Treasury.Cash -= amount
+	// 批次71 §4.3:国库账外现金流出登记(供 I3 闭合恒等式)。
+	// ⚠ 月结路径(②.0B)发生在国库月结快照之前、注入路径发生在月结之间
+	// ⇒ 本项永不落在 [快照, 审计] 窗口内;登记只为「声明全部国库现金
+	// 流出」完整性(若将来窗口口径变化,登记即生效)。
+	w.Treasury.OtherExpense += amount
 	return amount
 }
 

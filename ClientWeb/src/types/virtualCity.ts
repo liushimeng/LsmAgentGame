@@ -21,6 +21,8 @@ import type {
   VirtualCitySupplyChain,
   VirtualCityTreasury,
 } from './virtualCityStages';
+import type { VirtualCityCalibration } from './virtualCityCalibration';
+import type { VirtualCitySenseResult } from './virtualCitySense';
 
 // ─── 虚拟城市 (VirtualCity) types ───
 //
@@ -385,6 +387,13 @@ export * from './virtualCityFamily';
 // 外部 import 路径保持 '@/types/virtualCity' 不变。
 export * from './virtualCityStages';
 
+// 批次71：City-Human 感知契约类型（VirtualCityNeighborBrief / VirtualCitySenseResult）
+// ——迁出独立文件以守住 §4 的 1800 行上限；外部 import 路径保持 '@/types/virtualCity' 不变。
+export * from './virtualCitySense';
+
+// 批次71：校准与验证契约类型（game.state.calibration）——同上，迁出独立文件。
+export * from './virtualCityCalibration';
+
 /** 仅本人座位填充；观战者 null。 */
 export interface VirtualCityMyState {
   cash: number;
@@ -464,37 +473,6 @@ export interface VirtualCityBotContext {
    * ⚠ 批次70 补齐：后端 BotCtxJSON.LocalPos 已下发（数组形状），前端此前未声明。
    */
   local_pos?: [number, number];
-}
-
-// ── City-Human 感知契约（2026-09-22 §CityHuman重构，文档 1 §4.3/§6）──
-
-/** 感知结果中的邻居摘要（来自已锚定的真实人物卡档案）。 */
-export interface VirtualCityNeighborBrief {
-  name: string;
-  occupation?: string;
-  /** 焦点层座位号（背景居民省略）。 */
-  seat?: number;
-  /** 人物卡号；档案未就绪时省略。 */
-  card_id?: string;
-}
-
-/** see/hear/smell 工具的统一返回（确定性构造，JSON 键与后端 SenseResult 逐字对齐）。 */
-export interface VirtualCitySenseResult {
-  /** 感知类型：see | hear | smell。 */
-  kind?: 'see' | 'hear' | 'smell';
-  district: string;
-  /** see 专用：同区居民。 */
-  people?: VirtualCityNeighborBrief[];
-  /** see：挂牌/店铺/建筑。 */
-  things?: string[];
-  /** see/hear：本区本月事件。 */
-  events?: string[];
-  /** hear：近期公开发言摘录。 */
-  utterances?: string[];
-  /** smell：气味标签。 */
-  smells?: string[];
-  /** hear/smell 共用：环境声。 */
-  sounds?: string[];
 }
 
 export interface VirtualCityLedgerEntry {
@@ -820,6 +798,11 @@ export interface VirtualCityGameState {
   fin_market?: VirtualCityFinMarket;
   /** 最近场景推演记录（条件触发者注入历史；后端可能下发 null ⇒ 联合 null）。 */
   scenarios_recent?: VirtualCityScenarioAppliedRecord[] | null;
+  /**
+   * ⚠ 批次71：校准与验证快照（game.state.calibration）。
+   *   老对局 / 后端未升级 / 未跑满首月 ⇒ **整个键缺省** ⇒ 面板走空态（不白屏）。
+   */
+  calibration?: VirtualCityCalibration;
 }
 
 // ── 市长选举（批次 20 文档 3 A1/A3；game.state.public_services 选举段）────

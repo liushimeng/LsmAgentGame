@@ -110,6 +110,14 @@ type Entry struct {
 // Ledger 全量流水(全量内存保留,§13 容量估算 ≈3.4 万条无压力)。
 type Ledger struct {
 	Entries []Entry
+	// SeatNets 逐座累计净流(批次71 §4.2:I1 闭合用;Record 内**增量**维护,
+	// 避免每次检查 O(entries) 全扫 —— 480 月 × 34k 条不可接受)。
+	// 口径:Σ(to=seat) − Σ(from=seat),**含** world 初始注入。
+	SeatNets [MaxSeats]int64
+	// Digest 账本摘要(批次71 §5.3-6:Record 内**增量** FNV-1a 64 更新,
+	// 与 Entries 同序,不重算全表;StateHash 纳入)。
+	// 口径:只取语义字段(month/from/to/amount/category),不含 Note 自由文本。
+	Digest uint64
 }
 
 // validEntity 实体白名单(I3)。
@@ -228,6 +236,8 @@ func truncateNote(note string) string {
 
 // Record 追加一条流水(带实体方向校验;校验失败 panic 交由上层测试捕获——
 // 引擎代码路径只产出合法方向,校验是开发期不变量而非运行时错误通道)。
+//
+// ⚠ 批次71:本函数**额外**增量维护 SeatNets / Digest(不改既有校验与 panic 行为)。
 func (l *Ledger) Record(month int, from, to string, amount int64, category, note string) {
 	if amount < 0 {
 		panic(fmt.Sprintf("ledger amount must be >= 0: %d", amount))
@@ -239,6 +249,26 @@ func (l *Ledger) Record(month int, from, to string, amount int64, category, note
 		Month: month, From: from, To: to,
 		AmountCNY: amount, Category: category, Note: truncateNote(note),
 	})
+	// 增量维护逐座净流(批次71 §4.2)。
+	if seat, ok := IsSeatEntity(to); ok {
+		l.SeatNets[seat] += amount
+	}
+	if seat, ok := IsSeatEntity(from); ok {
+		l.SeatNets[seat] -= amount
+	}
+	// 增量维护账本摘要(批次71 §5.3-6;固定 FNV-1a 64)。
+	l.Digest = ledgerDigestStep(l.Digest, month, from, to, amount, category)
+}
+
+// ledgerDigestStep 增量更新账本摘要(固定 FNV-1a 64;不取 Note 自由文本 ——
+// 备注是可变文本,纳入摘要会让同一经济事实因措辞不同而哈希不同)。
+func ledgerDigestStep(h uint64, month int, from, to string, amount int64, category string) uint64 {
+	h = fnvWriteInt64(h, int64(month))
+	h = fnvWriteString(h, from)
+	h = fnvWriteString(h, to)
+	h = fnvWriteInt64(h, amount)
+	h = fnvWriteString(h, category)
+	return h
 }
 
 // SeatNetFlow 座位净流入 = Σ(to=seat) − Σ(from=seat)(I1 右端)。

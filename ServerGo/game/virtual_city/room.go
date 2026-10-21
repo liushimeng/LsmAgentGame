@@ -1483,7 +1483,7 @@ func (r *VirtualCityRoom) ApplyScenario(kind string, magnitude, durationMonths i
 		return nil, nil, errcode.Code(errcode.ErrVirtualCityNotPlaying) // 35002
 	}
 	evIdx := len(r.World.Events)
-	rec, effects, _, e := applyScenarioToWorld(r.World, kind, magnitude, durationMonths, target, note, time.Now().UnixMilli())
+	rec, effects, _, e := applyScenarioToWorld(r.World, kind, magnitude, durationMonths, target, note, time.Now().UnixMilli(), r.seed)
 	var ev EventRecord
 	hasEvent := len(r.World.Events) > evIdx
 	if hasEvent {

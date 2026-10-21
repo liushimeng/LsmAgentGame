@@ -1390,6 +1390,9 @@ func (w *World) actDeposit(p *Player, a Action) (string, *errcode.Error) {
 	}
 	p.Cash -= a.AmountCNY
 	p.SavingsDeposit += a.AmountCNY
+	// 批次71 §3.3 登记点 ①:活期→定期是**真账外**(不经 Ledger;定期存款
+	// 无双式对手方)⇒ 必须登记,否则 I1 守恒立刻红。
+	w.offLedgerRecord(w.Month, p.Seat, OffLedgerSavingsDeposit, -a.AmountCNY, "活期转定期")
 	text := fmt.Sprintf("活期转定期 ¥%d(年利率 1.5%%)", a.AmountCNY)
 	w.spendBudget(p, "trading", text)
 	return text, nil
@@ -1408,6 +1411,8 @@ func (w *World) actWithdraw(p *Player, a Action) (string, *errcode.Error) {
 	}
 	p.SavingsDeposit -= a.AmountCNY
 	p.Cash += a.AmountCNY
+	// 批次71 §3.3 登记点 ②:定期→活期是**真账外**(不经 Ledger)⇒ 登记。
+	w.offLedgerRecord(w.Month, p.Seat, OffLedgerSavingsWithdraw, a.AmountCNY, "定期转活期")
 	text := fmt.Sprintf("定期转活期 ¥%d(提前支取,利息损失)", a.AmountCNY)
 	w.spendBudget(p, "trading", text)
 	return text, nil

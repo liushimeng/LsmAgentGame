@@ -96,8 +96,12 @@ type DataSource struct {
 // 做兼容分支)。当前 1。
 const dashboardSchemaVersion = 1
 
-// dashboardDimensions 是包级维度目录(11 条;顺序 = 前端默认 Tab 顺序)。
+// dashboardDimensions 是包级维度目录(12 条;顺序 = 前端默认 Tab 顺序)。
 // 只读语义:对外一律经 DashboardDimensions() 取副本。
+//
+// 批次71:追加「校准」维度(id=calibration,分组 city,位于 macro 之后 ——
+// 方案 §8.1)。⚠ **前端静态目录才是渲染权威**(CLAUDE.md §28.1),本目录
+// 仅作校验/补充;前端未接上该维度前,后端下发不影响既有 Tab。
 var dashboardDimensions = []DashboardDimension{
 	{ID: "city-overview", Group: DashboardGroupCity, TitleKey: "virtualCity.dash.dim.cityOverview", Source: DashboardSourceGameState, Scope: DashboardScopeRoom, Unit: DashboardUnitMixed, Refresh: DashboardRefreshPush},
 	{ID: "finance", Group: DashboardGroupCity, TitleKey: "virtualCity.dash.dim.finance", Source: DashboardSourceGameState, Scope: DashboardScopeSelf, Unit: DashboardUnitCNY, Refresh: DashboardRefreshPush},
@@ -105,6 +109,7 @@ var dashboardDimensions = []DashboardDimension{
 	{ID: "economy", Group: DashboardGroupCity, TitleKey: "virtualCity.dash.dim.economy", Source: DashboardSourceGameState, Scope: DashboardScopeRoom, Unit: DashboardUnitMixed, Refresh: DashboardRefreshPush},
 	{ID: "behavior", Group: DashboardGroupCity, TitleKey: "virtualCity.dash.dim.behavior", Source: DashboardSourceGameState, Scope: DashboardScopeSelf, Unit: DashboardUnitMixed, Refresh: DashboardRefreshPush},
 	{ID: "macro", Group: DashboardGroupCity, TitleKey: "virtualCity.dash.dim.macro", Source: DashboardSourceGameState, Scope: DashboardScopeRoom, Unit: DashboardUnitMixed, Refresh: DashboardRefreshPush},
+	{ID: "calibration", Group: DashboardGroupCity, TitleKey: "virtualCity.dash.dim.calibration", Source: DashboardSourceGameState, Scope: DashboardScopeRoom, Unit: DashboardUnitMixed, Refresh: DashboardRefreshPush},
 	{ID: "market", Group: DashboardGroupMarket, TitleKey: "virtualCity.dash.dim.market", Source: DashboardSourceGameState, Scope: DashboardScopeRoom, Unit: DashboardUnitIndex, Refresh: DashboardRefreshPush},
 	{ID: "market-trade", Group: DashboardGroupMarket, TitleKey: "virtualCity.dash.dim.marketTrade", Source: DashboardSourceGameState, Scope: DashboardScopeRoom, Unit: DashboardUnitCNY, Refresh: DashboardRefreshPush},
 	{ID: "insurance", Group: DashboardGroupMarket, TitleKey: "virtualCity.dash.dim.insurance", Source: DashboardSourceGameState, Scope: DashboardScopeSelf, Unit: DashboardUnitCNY, Refresh: DashboardRefreshPush},

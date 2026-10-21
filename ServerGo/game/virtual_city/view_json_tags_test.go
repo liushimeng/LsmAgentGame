@@ -107,10 +107,12 @@ func TestMinskyOverview_JSONTagPonziRatio(t *testing.T) {
 	})
 }
 
-// TestCycleJSON_LPR5YBothKeys 5Y LPR 双键下发:
-// 契约正名 `lpr_5y` + 前端兼容别名 `lpr5y`(前端 MarketPanel 读 cycle.lpr5y)。
-func TestCycleJSON_LPR5YBothKeys(t *testing.T) {
-	c := CycleJSON{Phase: "boom", LPR: 0.035, CPI: 0.02, MonthsLeft: 4, LPR5Y: 0.04, LPR5YAlias: 0.04}
+// TestCycleJSON_LPR5YContractKey 5Y LPR 契约正名 `lpr_5y` 单键下发:
+//
+// 批次71 L1:前端已统一读 `lpr_5y`(批次69 双键下发期的兼容别名 `lpr5y`
+// 已下线)⇒ 别名删除后前端零影响,且消除「两处事实来源」(§130)。
+func TestCycleJSON_LPR5YContractKey(t *testing.T) {
+	c := CycleJSON{Phase: "boom", LPR: 0.035, CPI: 0.02, MonthsLeft: 4, LPR5Y: 0.04}
 	raw, err := json.Marshal(c)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -119,11 +121,11 @@ func TestCycleJSON_LPR5YBothKeys(t *testing.T) {
 	if !strings.Contains(s, `"lpr_5y":0.04`) {
 		t.Errorf("缺少契约键 lpr_5y:%s", s)
 	}
-	if !strings.Contains(s, `"lpr5y":0.04`) {
-		t.Errorf("缺少兼容键 lpr5y:%s", s)
+	if strings.Contains(s, `"lpr5y"`) {
+		t.Errorf("仍出现已下线的兼容键 lpr5y:%s", s)
 	}
 	assertKeysExact(t, "CycleJSON", jsonTagKeysOf(t, c), []string{
-		"cpi", "lpr", "lpr5y", "lpr_5y", "minsky_moment_count", "months_left",
+		"cpi", "lpr", "lpr_5y", "minsky_moment_count", "months_left",
 		"phase", "ponzi_count", "ponzi_ratio",
 	})
 }
@@ -211,6 +213,35 @@ func TestViewLeafJSONTags(t *testing.T) {
 		{"SenseNeighborBrief", SenseNeighborBrief{}, []string{
 			"card_id", "district", "kind", "mood_hint", "name", "occupation", "seat",
 		}},
+		// 批次71 §9:校准与验证契约(前端 VirtualCityCalibration 逐字对齐)。
+		{"OffLedgerEntry", OffLedgerEntry{}, []string{
+			"amount", "month", "note", "reason", "seat",
+		}},
+		{"MonthlyAudit", MonthlyAudit{}, []string{
+			"indicators", "invariants", "month", "redlines", "state_hash",
+		}},
+		{"InvariantCheck", InvariantCheck{}, []string{
+			"actual", "detail", "expected", "id", "name", "passed", "severity",
+		}},
+		{"RedlineHit", RedlineHit{}, []string{
+			"actual", "detail", "id", "name", "threshold", "triggered",
+		}},
+		{"CalibrationIndicators", CalibrationIndicators{}, []string{
+			"alive_seats", "bankruptcy_rate", "cpi", "gini", "money_expansion",
+			"off_ledger_cny", "total_seats", "total_wealth", "unemployment",
+		}},
+		{"CalibrationJSON", CalibrationJSON{}, []string{
+			"history", "indicators", "invariants", "month", "redlines", "state_hash",
+		}},
+		{"CalibrationHistoryJSON", CalibrationHistoryJSON{}, []string{
+			"hash", "month", "ok",
+		}},
+		{"RunRecord", RunRecord{}, []string{
+			"bankruptcy_rate", "invariant_fails", "invariants_ok", "money_expansion",
+			"off_ledger_cny", "outcome_counts", "phase", "population_size",
+			"redlines_triggered", "run_id", "seed", "state_hash", "total_assets_end",
+			"total_assets_start", "total_steps",
+		}},
 	}
 	for _, c := range cases {
 		t.Run(c.label, func(t *testing.T) {
@@ -240,6 +271,8 @@ func TestViewContainerJSONTags(t *testing.T) {
 			"family", "inheritance_log", "bubble", "liquidity_spreads",
 			// 批次70 §契约补全:挂单簿 + 提前还款资格。
 			"listing_book", "early_repay_eligible",
+			// 批次71 §9:校准快照(状态哈希 + 不变量 + D 指标 + 红线 + 历史)。
+			"calibration",
 		}},
 		{"MyJSON", MyJSON{}, []string{
 			"cash", "savings_deposit", "salary", "spouse_income", "side_income",

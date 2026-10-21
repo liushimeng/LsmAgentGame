@@ -309,6 +309,13 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 	// 零 rand,固定种子存量模拟回归零偏移。
 	w.predictionMonthStep()
 
+	// ④.6D 校准审计快照(批次71,2026-10-21 §校准与验证框架):
+	// 逐月不变量检查 + 状态哈希 + D 指标 + 红线判定,写入 World.Audits
+	// (cap 24)。位置锁定:w.Month++ **之前**(与 predictionMonthStep 同侧)
+	// ⇒ 审计快照所属月 = 本次结算的月。
+	// ⚠ **零 rand 消费**(§197)—— 检查器与哈希绝不触碰 w.Rand。
+	w.auditMonth()
+
 	// ⑤ 月份 +1;年调整 / 钟声。
 	isYearEnd := w.Month%12 == 0
 	isBell := w.Month%60 == 0
@@ -338,6 +345,9 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 	finished = w.Age() >= TerminalAge || len(w.alivePlayers()) == 0
 	if finished {
 		w.Status = StatusOver
+		// 批次71:终局收口 —— 把进行中的校准运行记入 World.Calibration.Runs
+		// (内存版;写盘属批次 72)。零 rand。
+		w.finalizeCalibrationRun()
 	}
 	return finished, res
 }

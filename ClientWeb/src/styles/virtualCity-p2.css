@@ -293,12 +293,10 @@
 .virtualCity-badge--auction-sealed { background: #7c3aed; }
 /* 批次70：后端 AuctionType 实际下发 dutch / vickrey（此前前端类型里没有 ⇒
    徽章无配色、类型标签渲染成裸 key）。此处**新增**两条配色；
-   下方 take_it / single_round 是前端旧叫法（后端从不下发）的历史残留，
-   按「CSS 类名不算字段、不改」的纪律保留原样（已成死样式）。 */
+   take_it / single_round 是前端旧叫法（后端从不下发）的历史残留 ——
+   批次71 L6 已确认为**零 JSX 引用**并删除（死样式清理）。 */
 .virtualCity-badge--auction-dutch { background: #0e7490; }
 .virtualCity-badge--auction-vickrey { background: #b45309; }
-.virtualCity-badge--auction-take_it { background: #0e7490; }
-.virtualCity-badge--auction-single_round { background: #b45309; }
 
 /* ── 信息市场面板 ── */
 .virtualCity-infomarket { display: flex; flex-direction: column; gap: 6px; }

@@ -107,6 +107,34 @@ type ClientGameState struct {
 	// `!!gameState?.early_repay_eligible` 判断入口显隐,缺字段与 false 同义但
 	// 显式下发更利于排障(观战者/无房贷恒 false)。
 	EarlyRepayEligible bool `json:"early_repay_eligible"`
+	// Calibration 批次71 §9:校准与验证快照(状态哈希 + 7 条不变量 +
+	// D 指标 + 5 条红线 + 最近 12 月历史)。
+	// ⚠ omitempty:尚无审计快照(未结算过)时**不下发**(前端显示「—」,
+	// 与批次70「空数组 vs null」纪律一致 —— 缺失 ≠ 全 0)。
+	Calibration *CalibrationJSON `json:"calibration,omitempty"`
+}
+
+// CalibrationJSON 是 game.state.calibration(批次71 §9.1)。
+//
+// ⚠ 形状纪律(契约 §9.2):
+//   - invariants[] **恒 7 条**(I1/I2/I3/I4/I5/I6/I8),顺序固定;
+//   - redlines[] **恒 5 条**(R-E3/R-E4/R-E5/R-E6/R-B1),顺序固定;
+//   - indicators 无值键为 **null**(不得省略键);
+//   - history[] **恒为数组**(空 = [] 而非 null)。
+type CalibrationJSON struct {
+	Month      int                   `json:"month"`
+	StateHash  string                `json:"state_hash"`
+	Invariants []InvariantCheck      `json:"invariants"`
+	Indicators CalibrationIndicators `json:"indicators"`
+	Redlines   []RedlineHit          `json:"redlines"`
+	History    []CalibrationHistoryJSON `json:"history"`
+}
+
+// CalibrationHistoryJSON 是 calibration.history 单项(最近 12 月)。
+type CalibrationHistoryJSON struct {
+	Month int    `json:"month"`
+	Hash  string `json:"hash"`
+	OK    bool   `json:"ok"`
 }
 
 // PredictionSummary 批次68 §预测运行 game.state 小结(方案 §5;可空)。
@@ -547,17 +575,11 @@ type CycleJSON struct {
 	CPI        float64 `json:"cpi"`
 	MonthsLeft int     `json:"months_left"`
 	// P1: 5Y LPR(房贷重定价用,v2.60 N12-3)。
+	//
+	// 批次71 L1:原 `lpr5y` 兼容别名已下线 —— 前端已统一读 `lpr_5y`
+	// (批次69 双键下发 → 前端改读正名键),别名零影响,删别名避免两处
+	// 事实来源(§130)。
 	LPR5Y float64 `json:"lpr_5y"`
-	// LPR5YAlias 是 5Y LPR 的前端兼容别名(2026-10-21 批次69 JSON tag 对账)。
-	//
-	// 背景:前端 `ClientWeb/src/types/virtualCity.ts::VirtualCityCycle` 读
-	// `cycle.lpr5y`(批次21 全栈重命名前沿用的拼法),后端下发的是 `lpr_5y`
-	// ⇒ 前端 `MarketPanel` 的 5Y LPR 数值与徽标恒不渲染。
-	//
-	// 处置:同值**双键下发**(`lpr_5y` 为契约正名,`lpr5y` 为兼容别名),
-	// 两端读法都成立、不断线、不改 `lpr_5y` 的语义。
-	// ⚠ 前端统一改读 `lpr_5y` 后,本别名可随之下线(勿删 `lpr_5y`)。
-	LPR5YAlias float64 `json:"lpr5y"`
 	// 批次70 §契约补全:明斯基三字段(设计稿《虚拟城市-P1-Minsky与LPR引擎-v1.md》
 	// §2.7 明确要求 CycleJSON 追加)。前端 `MinskyPanel` 读
 	// `cycle.minsky_moment_count`(触发次数)⇒ 此前恒为 0。
@@ -1018,8 +1040,7 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 	if world.CB != nil {
 		cs.Cycle.LPR5Y = world.CB.ComputeL5Y()
 	}
-	// 5Y LPR 双键下发(前端读 cycle.lpr5y / 契约正名 cycle.lpr_5y 同值)。
-	cs.Cycle.LPR5YAlias = cs.Cycle.LPR5Y
+	// 5Y LPR 契约正名下发(批次71 L1:兼容别名 lpr5y 已下线)。
 	mj := MarketJSON{
 		StockIndex: world.Market.StockIndex,
 		GoldPrice:  world.Market.GoldPrice,
@@ -1410,7 +1431,72 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		}
 	}
 
+	// 批次71 §9:校准快照(最近一次审计 + 最近 12 月历史)。
+	// 尚无审计快照(未结算过)→ 不下发(omitempty)。
+	cs.Calibration = calibrationJSON(world)
+
 	return cs
+}
+
+// calibrationJSON 组装 game.state.calibration(批次71 §9.1)。
+//
+// 数据源 = World.Audits(逐月审计快照;calibration.go::auditMonth 写入)。
+// ⚠ **不重算**(每次 game.state 推送都重算 I8 全扫会拖慢帧率)——
+// 取最近一条审计快照。
+//
+// ⚠ **顶层 month = 该审计快照所属月(= 最近一次结算的月),不是当前
+// `game.state.month`** —— 两者相差一拍是**刻意**的:审计只在月结末尾
+// 产生(w.Month++ 之前),故 state_hash / invariants / indicators 与顶层
+// month **同源**。前端面板若同时显示「当前月」与「审计月」,用审计月即可,
+// 不要混用。
+//
+// 形状纪律:invariants 恒 7 条 / redlines 恒 5 条 / history 恒为数组。
+// (正常路径下 auditMonth 必写满 7 + 5 条,占位项仅作防御。)
+func calibrationJSON(w *World) *CalibrationJSON {
+	if w == nil || len(w.Audits) == 0 {
+		return nil
+	}
+	latest := w.Audits[len(w.Audits)-1]
+	out := &CalibrationJSON{
+		Month:      latest.Month,
+		StateHash:  latest.StateHash,
+		Invariants: make([]InvariantCheck, 0, 7),
+		Indicators: latest.Indicators,
+		Redlines:   make([]RedlineHit, 0, 5),
+		History:    make([]CalibrationHistoryJSON, 0, calibrationHistoryLen),
+	}
+	out.Invariants = append(out.Invariants, latest.Invariants...)
+	for len(out.Invariants) < 7 { // 防御:审计快照缺条时补占位(恒 7 条)
+		out.Invariants = append(out.Invariants, InvariantCheck{
+			ID: "", Name: "未采集", Passed: false, Severity: InvariantSeverityFatal,
+			Detail: "审计快照缺失该不变量",
+		})
+	}
+	out.Invariants = out.Invariants[:7]
+	out.Redlines = append(out.Redlines, latest.Redlines...)
+	for len(out.Redlines) < 5 { // 防御:恒 5 条
+		out.Redlines = append(out.Redlines, RedlineHit{ID: "", Name: "未采集", Detail: "审计快照缺失该红线"})
+	}
+	out.Redlines = out.Redlines[:5]
+
+	// 历史:最近 12 月(旧 → 新)。
+	start := len(w.Audits) - calibrationHistoryLen
+	if start < 0 {
+		start = 0
+	}
+	for _, a := range w.Audits[start:] {
+		ok := true
+		for _, inv := range a.Invariants {
+			if !inv.Passed {
+				ok = false
+				break
+			}
+		}
+		out.History = append(out.History, CalibrationHistoryJSON{
+			Month: a.Month, Hash: a.StateHash, OK: ok,
+		})
+	}
+	return out
 }
 
 // buildMinskyOverview 统计全局明斯基概览(view 下发)。

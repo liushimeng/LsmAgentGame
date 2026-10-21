@@ -505,6 +505,10 @@ func (w *World) settleDeferredPayments(p *Player) int64 {
 			if p.Cash > 0 {
 				w.Pay(p.Seat, SeatEntity(p.Seat), w.consumerPayTo(), p.Cash, CatConsume, "延期支付(现金不足,违约)")
 				extra += p.Cash
+				// 批次71 §3.3:此处 p.Cash 已被上面的 w.Pay 扣为 0 ⇒
+				// 属**假账外**(钱已进账本)。仍登记一条金额恒为 0 的条目,
+				// 使「所有直接写 p.Cash 的位置都已在账外登记簿声明」字面成立。
+				w.offLedgerRecord(w.Month, p.Seat, OffLedgerDeferredDefault, -p.Cash, "延期支付违约现金归零")
 				p.Cash = 0
 			}
 			p.DeferredDefaultCount++

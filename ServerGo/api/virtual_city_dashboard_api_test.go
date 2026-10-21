@@ -55,8 +55,9 @@ func TestVirtualCityDashboard_Catalog(t *testing.T) {
 	if len(dims) == 0 {
 		t.Fatal("dimensions empty")
 	}
-	if len(dims) != 11 {
-		t.Fatalf("dimensions = %d, want 11", len(dims))
+	// 批次71:追加「校准」维度 ⇒ 11 → 12。
+	if len(dims) != 12 {
+		t.Fatalf("dimensions = %d, want 12", len(dims))
 	}
 	seen := map[string]bool{}
 	for _, d := range dims {
@@ -121,8 +122,8 @@ func TestVirtualCityDashboard_EndpointOffline(t *testing.T) {
 	if !ok {
 		t.Fatalf("data.dashboard missing: %v", data)
 	}
-	if got := len(dash["dimensions"].([]any)); got != 11 {
-		t.Fatalf("offline dashboard dimensions = %d, want 11", got)
+	if got := len(dash["dimensions"].([]any)); got != 12 {
+		t.Fatalf("offline dashboard dimensions = %d, want 12", got)
 	}
 	if got := len(dash["data_sources"].([]any)); got != 22 {
 		t.Fatalf("offline dashboard data_sources = %d, want 22", got)
@@ -168,8 +169,8 @@ func TestVirtualCityDashboard_EndpointOnline(t *testing.T) {
 	if got := int64(dash["generated_at"].(float64)); got <= 0 {
 		t.Fatalf("generated_at = %d, want > 0", got)
 	}
-	if got := len(dash["dimensions"].([]any)); got != 11 {
-		t.Fatalf("dimensions = %d, want 11", got)
+	if got := len(dash["dimensions"].([]any)); got != 12 {
+		t.Fatalf("dimensions = %d, want 12", got)
 	}
 	if got := len(dash["data_sources"].([]any)); got != 22 {
 		t.Fatalf("data_sources = %d, want 22", got)

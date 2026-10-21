@@ -135,7 +135,9 @@ export function AuctionModal({ open, gameState, mySeat, auctionId, sendTrade, on
           </div>
         </div>
 
-        {auction.kind === 'sealed' && !isEnded && (
+        {/* ⚠ 批次71 L10：密封提示须同时覆盖 vickrey（维克里二价同样是密封暗标）——
+            原判定只判 'sealed' ⇒ 维克里拍卖漏提示。 */}
+        {(auction.kind === 'sealed' || auction.kind === 'vickrey') && !isEnded && (
           <p className="virtualCity-auction__sealedhint">🔒 {t('virtualCity.auction.sealedHint' as TKey)}</p>
         )}
 

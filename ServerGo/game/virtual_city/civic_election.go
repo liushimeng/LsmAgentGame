@@ -113,6 +113,11 @@ func (ce *CivicElection) MonthlyStep(w *World) {
 			w.Pay(ce.MayorSeat, EntityGovernment, SeatEntity(ce.MayorSeat),
 				MayorStipendCNY, CatWelfare, "市长津贴")
 			w.Treasury.Cash -= MayorStipendCNY
+			// 批次71 §4.3:市长津贴是国库现金的**第 7 处**改动点,
+			// 发生在 ⑨G(国库月结 SettleTreasuryMonth **之后**)⇒ 不在
+			// LastMonthExpense 口径内。登记进 OtherExpense 供 I3 闭合恒等式
+			// 使用(不影响 monthSpend 预算口径 ⇒ 不改任何经济数值)。
+			w.Treasury.OtherExpense += MayorStipendCNY
 			ce.StipendStopped = false
 		} else if !ce.StipendStopped {
 			ce.StipendStopped = true

@@ -7,8 +7,8 @@
  *     按 id 匹配覆盖 title_key / group；后端返回的**未知 id 一律忽略**，
  *     静态目录项始终保留（防止后端目录缺项导致 Tab 消失）。
  *
- * 分组（顺序固定，3 组 11 个维度）：
- *   城市运行 city    → city-overview / finance / ledger / economy / behavior / macro
+ * 分组（顺序固定，3 组 12 个维度）：
+ *   城市运行 city    → city-overview / finance / ledger / economy / behavior / macro / calibration
  *   市场金融 market  → market / market-trade / insurance
  *   外部实时 external → realtime / datasources
  */
@@ -46,7 +46,7 @@ export const DASHBOARD_GROUPS: { id: DashboardGroupId; labelKey: string }[] = [
 /** 已知分组 id 集合（校验后端目录的 group 字段 —— 外部输入必须收敛）。 */
 export const DASHBOARD_GROUP_IDS: DashboardGroupId[] = DASHBOARD_GROUPS.map((g) => g.id);
 
-/** 11 个维度的静态目录（权威）。 */
+/** 12 个维度的静态目录（权威）。 */
 export const DASHBOARD_CATALOG: DashboardDimension[] = [
   // ── 城市运行 ──
   {
@@ -98,6 +98,17 @@ export const DASHBOARD_CATALOG: DashboardDimension[] = [
     id: 'macro',
     group: 'city',
     titleKey: 'virtualCity.dash.dim.macro',
+    source: 'game_state',
+    scope: 'room',
+    unit: 'mixed',
+    refresh: 'push',
+  },
+  {
+    // 批次71：第 12 个维度「校准」——回归不变量 / D 指标 / 红线 / 状态哈希。
+    // 追加在 city 组**末尾**（方案 §8.1）。
+    id: 'calibration',
+    group: 'city',
+    titleKey: 'virtualCity.dash.dim.calibration',
     source: 'game_state',
     scope: 'room',
     unit: 'mixed',
