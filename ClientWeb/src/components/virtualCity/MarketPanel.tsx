@@ -203,10 +203,10 @@ function CentralBankSection({ cb, cycle }: { cb: VirtualCityCentralBank; cycle?:
       </div>
 
       {/* P1 5Y LPR 展示（如有） */}
-      {cycle?.lpr5y !== undefined && (
+      {cycle?.lpr_5y !== undefined && (
         <div className="virtualCity-cb__row">
           <span className="virtualCity-cb__label">{t('lpr.5y' as TKey)}</span>
-          <span className="virtualCity-cb__value virtualCity-cb__value--lpr5y">{formatPct(cycle.lpr5y, 2)}</span>
+          <span className="virtualCity-cb__value virtualCity-cb__value--lpr5y">{formatPct(cycle.lpr_5y, 2)}</span>
           <span className="virtualCity-cb__label">{t('lpr.5yNote' as TKey)}</span>
           <span className="virtualCity-cb__value">{t('lpr.5yHint' as TKey)}</span>
         </div>
@@ -274,9 +274,9 @@ export function MarketPanel({ gameState, marketHistory, onSelectDistrict }: Prop
       </div>
       <div className="virtualCity-marketpanel__rates">
         <span className="virtualCity-badge">{t('virtualCity.lpr' as TKey)} {formatPct(cycle.lpr)}</span>
-        {cycle.lpr5y !== undefined && (
+        {cycle.lpr_5y !== undefined && (
           <span className="virtualCity-badge virtualCity-badge--lpr5y">
-            {t('lpr.5y' as TKey)} {formatPct(cycle.lpr5y)}
+            {t('lpr.5y' as TKey)} {formatPct(cycle.lpr_5y)}
           </span>
         )}
         <span className="virtualCity-badge">{t('virtualCity.cpi' as TKey)} {formatPct(cycle.cpi)}</span>

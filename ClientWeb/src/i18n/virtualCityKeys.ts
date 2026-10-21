@@ -534,8 +534,9 @@ export interface VirtualCityDict {
   'virtualCity.auction.title': string;
   'virtualCity.auction.english': string;
   'virtualCity.auction.sealed': string;
-  'virtualCity.auction.takeIt': string;
-  'virtualCity.auction.singleRound': string;
+  // 批次70：与后端 AuctionType 逐字一致（dutch / vickrey）。
+  'virtualCity.auction.dutch': string;
+  'virtualCity.auction.vickrey': string;
   'virtualCity.auction.status.pending': string;
   'virtualCity.auction.status.active': string;
   'virtualCity.auction.status.ended': string;
@@ -1106,4 +1107,30 @@ export interface VirtualCityDict {
   'virtualCity.dash.overview.family': string;
   'virtualCity.dash.overview.prediction': string;
   'virtualCity.dash.overview.exoSentiment': string;
+  // ── 批次70：财政 / 产业链 / 金融市场 / 场景推演（game.state 新补齐段）──
+  'virtualCity.dash.overview.treasury': string;
+  'virtualCity.dash.overview.supply': string;
+  'virtualCity.dash.overview.finmarket': string;
+  'virtualCity.dash.overview.treasuryCash': string;
+  'virtualCity.dash.overview.treasuryBonds': string;
+  'virtualCity.dash.overview.treasuryRevenue': string;
+  'virtualCity.dash.overview.treasuryExpense': string;
+  'virtualCity.dash.overview.deficitRun': string;
+  'virtualCity.dash.overview.publicServiceIdx': string;
+  'virtualCity.dash.overview.bottlenecks': string;
+  'virtualCity.dash.overview.peakUtilization': string;
+  'virtualCity.dash.overview.minInventory': string;
+  'virtualCity.dash.overview.priceIdx': string;
+  'virtualCity.dash.overview.clusters': string;
+  'virtualCity.dash.overview.clusterFirms': string;
+  'virtualCity.dash.overview.quantIndex': string;
+  'virtualCity.dash.overview.quantReturn': string;
+  'virtualCity.dash.overview.quantStrategies': string;
+  'virtualCity.dash.overview.cdAvgRate': string;
+  'virtualCity.dash.overview.shortBalance': string;
+  'virtualCity.dash.overview.marginCalls': string;
+  'virtualCity.dash.overview.convertibles': string;
+  'virtualCity.dash.overview.fundRatings': string;
+  'virtualCity.dash.overview.scenarioRecords': string;
+  'virtualCity.dash.overview.scenarioLast': string;
 }

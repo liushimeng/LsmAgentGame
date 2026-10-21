@@ -123,7 +123,8 @@ func TestCycleJSON_LPR5YBothKeys(t *testing.T) {
 		t.Errorf("缺少兼容键 lpr5y:%s", s)
 	}
 	assertKeysExact(t, "CycleJSON", jsonTagKeysOf(t, c), []string{
-		"cpi", "lpr", "lpr5y", "lpr_5y", "months_left", "phase",
+		"cpi", "lpr", "lpr5y", "lpr_5y", "minsky_moment_count", "months_left",
+		"phase", "ponzi_count", "ponzi_ratio",
 	})
 }
 
@@ -164,6 +165,52 @@ func TestViewLeafJSONTags(t *testing.T) {
 		{"WealthLayerJSON", WealthLayerJSON{}, []string{
 			"avg_wealth", "count", "name", "total_wealth", "wealth_pct",
 		}},
+		// 批次70:挂单簿视图(前端 VirtualCityListingBook 逐字对齐)。
+		{"ListingBookJSON", ListingBookJSON{}, []string{
+			"auctions", "listings", "negotiates", "p2p_loans",
+		}},
+		{"ListingJSON", ListingJSON{}, []string{
+			"ask_cny", "create_month", "expire_month", "id", "payload", "seat", "status", "type",
+		}},
+		{"ListingPayloadJSON", ListingPayloadJSON{}, []string{
+			"asset", "info", "loan",
+		}},
+		{"TradeAssetPayloadJSON", TradeAssetPayloadJSON{}, []string{
+			"kind", "min_cny", "name", "price", "units", "value_cny",
+		}},
+		{"TradeLoanPayloadJSON", TradeLoanPayloadJSON{}, []string{
+			"direction", "max_rate", "need_guarantee", "principal_cny", "term_n",
+		}},
+		{"TradeInfoPayloadJSON", TradeInfoPayloadJSON{}, []string{
+			"category", "detail_hash", "min_bid_cny", "title",
+		}},
+		{"NegotiateSessionJSON", NegotiateSessionJSON{}, []string{
+			"create_month", "expire_month", "id", "last_offer_by", "last_offer_cny",
+			"listing_id", "proposer_seat", "respond_seat", "status", "turns",
+		}},
+		{"NegotiateTurnJSON", NegotiateTurnJSON{}, []string{
+			"action", "comment", "from", "offer_cny", "rate",
+		}},
+		{"P2PLoanJSON", P2PLoanJSON{}, []string{
+			"annual_rate", "balance_cny", "borrower_seat", "create_month", "guarantor_seat",
+			"id", "lender_seat", "listing_id", "monthly_payment", "months_left", "overdue",
+			"principal_cny", "term_n",
+		}},
+		{"AuctionJSON", AuctionJSON{}, []string{
+			"bids", "current_cny", "current_seat", "end_month", "id", "kind",
+			"listing_id", "reserve_cny", "seat", "start_cny", "status",
+		}},
+		{"AuctionBidJSON", AuctionBidJSON{}, []string{
+			"amount_cny", "month", "revealed", "seat",
+		}},
+		// 批次70:感知富形状(前端 VirtualCitySenseResult 对齐)。
+		{"SenseEntry", SenseEntry{}, []string{
+			"district", "events", "kind", "month", "people", "smells", "sounds",
+			"text", "things", "utterances",
+		}},
+		{"SenseNeighborBrief", SenseNeighborBrief{}, []string{
+			"card_id", "district", "kind", "mood_hint", "name", "occupation", "seat",
+		}},
 	}
 	for _, c := range cases {
 		t.Run(c.label, func(t *testing.T) {
@@ -191,6 +238,8 @@ func TestViewContainerJSONTags(t *testing.T) {
 			"scenarios_recent", "prediction", "flow_stat", "treasury", "supply_chain",
 			"industrial_clusters", "fin_market", "public_services", "city", "side_market",
 			"family", "inheritance_log", "bubble", "liquidity_spreads",
+			// 批次70 §契约补全:挂单簿 + 提前还款资格。
+			"listing_book", "early_repay_eligible",
 		}},
 		{"MyJSON", MyJSON{}, []string{
 			"cash", "savings_deposit", "salary", "spouse_income", "side_income",

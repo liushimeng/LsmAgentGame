@@ -12,6 +12,15 @@ import type {
   VirtualCityLiquiditySpreadSnapshot,
   VirtualCityReflectMode,
 } from './virtualCityBehavior';
+import type {
+  VirtualCityFinMarket,
+  VirtualCityFlowStat,
+  VirtualCityIndustrialCluster,
+  VirtualCityScenarioAppliedRecord,
+  VirtualCitySociety,
+  VirtualCitySupplyChain,
+  VirtualCityTreasury,
+} from './virtualCityStages';
 
 // ─── 虚拟城市 (VirtualCity) types ───
 //
@@ -80,8 +89,12 @@ export interface VirtualCityCycle {
   phase: VirtualCityCyclePhase;
   /** 1Y LPR，小数（如 0.035），非百分数。 */
   lpr: number;
-  /** 5Y LPR，小数（如 0.04），非百分数（P1 LPR 重定价）。 */
-  lpr5y?: number;
+  /**
+   * 5Y LPR，小数（如 0.04），非百分数（P1 LPR 重定价）。
+   * ⚠ 批次70：契约正名是 `lpr_5y`（后端 CycleJSON.LPR5Y；另留同值别名 `lpr5y`
+   *   兼容旧客户端）。前端统一读正名，不再依赖别名。
+   */
+  lpr_5y?: number;
   /** CPI，小数（如 0.02）。 */
   cpi: number;
   /** 阶段剩余月（含钟声重掷不确定性，仅展示）。 */
@@ -366,6 +379,12 @@ export interface VirtualCityFamily {
 // 批次52 代际财富类型/常量（leaf 模块）再导出——外部 import 路径保持 '@/types/virtualCity' 不变。
 export * from './virtualCityFamily';
 
+// 批次70：城市扩张 v2.12 阶段 4/7 扩展段 + P2 v2 可视化统计段类型
+// （treasury / supply_chain / industrial_clusters / fin_market / scenarios_recent /
+//  society 新字段 / 财富金字塔 / 资金流向）——拆出独立文件以守住 §4 的 1800 行上限；
+// 外部 import 路径保持 '@/types/virtualCity' 不变。
+export * from './virtualCityStages';
+
 /** 仅本人座位填充；观战者 null。 */
 export interface VirtualCityMyState {
   cash: number;
@@ -407,6 +426,12 @@ export interface VirtualCityMyState {
   /** 板外继承收入（批次52 §7 D7：恒 0，字段保留；座位间继承未来扩展时非零）。 */
   inheritance_cny?: number;
   /**
+   * 区内归一化坐标 [x,y] 各 0..1（批次35 §4.1；仅本人可见）。
+   * ⚠ 批次70：后端 MyJSON.LocalPos 是**数组**形状（`local_pos`，omitempty）；
+   *   旧前端的顶层 `my_local_pos`（{x,y} 对象）后端从不下发 ⇒ 恒 undefined。
+   */
+  local_pos?: [number, number];
+  /**
    * 行为画像快照（批次62 §3；仅本人座位下发，观战 / 全 Agent 模式 omit）。
    * 未识破的偏差其 name_cn / effect / explanation 已由后端置空 —— 前端不得反查补全。
    */
@@ -434,6 +459,11 @@ export interface VirtualCityBotContext {
   heart_thought: string;
   /** 本月感知记录（2026-09-22 §CityHuman重构：see/hear/smell 结果，本人+观察者可见）。 */
   last_senses?: VirtualCitySenseResult[];
+  /**
+   * 该座位区内归一化坐标 [x,y] 各 0..1（批次35 §4.1；仅本人/观察者可见）。
+   * ⚠ 批次70 补齐：后端 BotCtxJSON.LocalPos 已下发（数组形状），前端此前未声明。
+   */
+  local_pos?: [number, number];
 }
 
 // ── City-Human 感知契约（2026-09-22 §CityHuman重构，文档 1 §4.3/§6）──
@@ -733,8 +763,12 @@ export interface VirtualCityGameState {
   players: VirtualCityPlayer[];
   /** -1 = 观战。 */
   my_seat: number;
-  /** 本人区内坐标 [0,1]²（§CityHuman重构；仅本人/观察者下发，旧回放 omit）。 */
-  my_local_pos?: { x: number; y: number };
+  /**
+   * ⚠ 批次70：顶层 `my_local_pos` **后端从不下发**（坐标在 `my.local_pos`，
+   *   数组形状 [x,y]）⇒ 原声明恒 undefined。已移除；本人坐标改读
+   *   `my.local_pos`（见 VirtualCityMyState.local_pos），他人座位读
+   *   `players[].local_pos` / `bot_contexts[].local_pos`。
+   */
   my: VirtualCityMyState | null;
   bot_contexts: VirtualCityBotContext[];
   /** 最近 50 条：本人相关 + 公共。 */
@@ -775,6 +809,17 @@ export interface VirtualCityGameState {
   liquidity_spreads?: VirtualCityLiquiditySpreadSnapshot;
   /** 预测运行小结（批次68 §5；无 run omit/null）。 */
   prediction?: VirtualCityPredictionSummary | null;
+  // ── 批次70 补齐：后端「城市扩张 v2.12」阶段 4/7 已下发、前端此前未声明的段 ──
+  /** 国库/财政快照（阶段4；政府/观战者全量可见，omitempty）。 */
+  treasury?: VirtualCityTreasury;
+  /** 产业链供给快照（阶段4，omitempty）。 */
+  supply_chain?: VirtualCitySupplyChain;
+  /** 产业集群列表（阶段4，omitempty）。 */
+  industrial_clusters?: VirtualCityIndustrialCluster[];
+  /** 金融市场快照（阶段4，omitempty）。 */
+  fin_market?: VirtualCityFinMarket;
+  /** 最近场景推演记录（条件触发者注入历史；后端可能下发 null ⇒ 联合 null）。 */
+  scenarios_recent?: VirtualCityScenarioAppliedRecord[] | null;
 }
 
 // ── 市长选举（批次 20 文档 3 A1/A3；game.state.public_services 选举段）────
@@ -784,8 +829,12 @@ export interface VirtualCityElectionVote {
   seat: number;
   /** 综合得分 0..100。 */
   score: number;
-  /** 财富排名分 0..100。 */
-  virtualCity_score: number;
+  /**
+   * 财富排名分 0..100。
+   * ⚠ 批次70：后端 tag 是 `wealth_score`（ElectionVote.WealthScore）；
+   *   前端原写 `virtualCity_score`（批次21 wealth→virtualCity 重命名误伤）⇒ 恒 undefined。
+   */
+  wealth_score: number;
   /** 人脉分 0..100。 */
   network_score: number;
   /** 社会满意度 0..100（全城同值）。 */
@@ -832,6 +881,8 @@ export interface VirtualCityMinskyOverview {
   ponzi_ratio: number;
   /** 距离下次明斯基时刻判定的剩余月（冷却期；0=可触发）。 */
   cooldown_left: number;
+  /** 明斯基时刻累计触发次数（批次70 补齐后端已下发字段）。 */
+  moment_count?: number;
 }
 
 // ── P1 真实经济循环引擎（消费品市场 / 劳动力市场 / 社会结构）────────────
@@ -873,78 +924,6 @@ export interface VirtualCityLaborMarket {
   firm_revenue_cny: number;
   /** 裁员潮强度 0-3（0 平静 / 1 观察 / 2 裁员潮 / 3 已触发个体放大）。 */
   layoff_wave: number;
-}
-
-/** 三圈层人数（game.state.society.circles；《总体设计》§6）。 */
-export interface VirtualCitySocietyCircles {
-  /** 生存圈（月被动收入 < 月支出）。 */
-  survival: number;
-  /** 积累圈（1 ≤ 比值 < 2）。 */
-  accumulate: number;
-  /** 自由圈（比值 ≥ 2）。 */
-  freedom: number;
-}
-
-/** 社会结构统计（game.state.society，月度计算）。 */
-export interface VirtualCitySociety {
-  /** 存活玩家净资产基尼系数 [0,1]。 */
-  gini: number;
-  /** 可支配收入五等份各组占比（低→高，和 = 1）。 */
-  quintiles: number[];
-  /** 圈层人数分布。 */
-  circles: VirtualCitySocietyCircles;
-  // ── P2 v2(2026-09-19 §P2-可视化 §13.2.4)。omitempty 字段;缺省时为 0/空数组。 ──
-  /** 存活玩家净资产合计（分母）。 */
-  total_wealth?: number;
-  /** 净资产中位数（线性插值）。 */
-  median_wealth?: number;
-  /** 净资产均值 = total / 人数。 */
-  mean_wealth?: number;
-  /** 分位线 {p10, p25, p50, p75, p90}。 */
-  percentiles?: Record<string, number>;
-  /** 洛伦兹曲线点集 [(人口累计, 财富累计)];n+1 点。 */
-  lorenz_points?: [number, number][];
-  /** 财富金字塔三层（自下而上：生存 / 积累 / 自由）。 */
-  pyramid_layers?: VirtualCityPyramidLayer[];
-}
-
-/** 财富金字塔单层（v2 新增）。 */
-export interface VirtualCityPyramidLayer {
-  name: 'survival' | 'accumulation' | 'freedom';
-  count: number;
-  total_wealth: number;
-  avg_wealth: number;
-  /** 占总财富比例 0-1。 */
-  virtualCity_pct: number;
-}
-
-/** 月度资金流向统计（v2 新增）。 */
-export interface VirtualCityFlowStat {
-  period: string;
-  period_label: string;
-  nodes: VirtualCityFlowNode[];
-  links: VirtualCityFlowLink[];
-  total_in_cny: number;
-  total_out_cny: number;
-}
-
-/** 资金流向节点。 */
-export interface VirtualCityFlowNode {
-  // ⚠ 必须与后端 `ServerGo/game/virtual_city/distribution.go` 的 FlowNode* 常量同步
-  //   （批次52 新增 family；此前前端漏项 ⇒ t(undefined) ⇒ 桑基图面板崩溃）。
-  id: 'salary' | 'firms' | 'market' | 'bank' | 'gov' | 'player' | 'world' | 'family';
-  label: string;
-  kind: 'source' | 'sink' | 'pass';
-  amount_cny: number;
-}
-
-/** 资金流向边。 */
-export interface VirtualCityFlowLink {
-  from: VirtualCityFlowNode['id'];
-  to: VirtualCityFlowNode['id'];
-  amount_cny: number;
-  /** 占最大边比例 0-1，用于决定贝塞尔连线宽度。 */
-  pct: number;
 }
 
 // ── P1 社会调研系统（对全体 Agent 的预测模拟）───────────────────────────
@@ -1007,7 +986,16 @@ export type VirtualCityLoanDirection = 'lend' | 'borrow';
 export type VirtualCityInfoCategory = 'market' | 'intel' | 'personal';
 
 /** 拍卖类型。 */
-export type VirtualCityAuctionKind = 'english' | 'sealed' | 'take_it' | 'single_round';
+/**
+ * 拍卖类型 —— **逐字对齐后端 `ServerGo/game/virtual_city/auction.go` 的 AuctionType**：
+ * english(英式公开叫价) / sealed(密封暗标) / dutch(荷兰式降价) / vickrey(维克里二价密封)。
+ *
+ * ⚠ 批次70 修正：前端原为 'english' | 'sealed' | 'take_it' | 'single_round' ——
+ *   take_it / single_round 是**前端自造的旧叫法，后端从不下发**（⇒ 对应 i18n 键是死键）；
+ *   而后端实际下发的 dutch / vickrey 前端类型里没有（⇒ 拍卖类型标签渲染成裸 key）。
+ *   注：dutch（荷兰式，逐月降价）与 take_it（二手一口价）语义不同，**不做映射**。
+ */
+export type VirtualCityAuctionKind = 'english' | 'sealed' | 'dutch' | 'vickrey';
 
 /** 拍卖状态。 */
 export type VirtualCityAuctionStatus = 'pending' | 'active' | 'ended';

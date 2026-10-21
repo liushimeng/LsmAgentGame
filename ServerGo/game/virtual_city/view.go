@@ -97,6 +97,16 @@ type ClientGameState struct {
 	// 流动性价差表。观战者与玩家全量可见(宏观信息,非隐私)。
 	Bubble           *BubbleSnapshot          `json:"bubble,omitempty"`
 	LiquiditySpreads *LiquiditySpreadSnapshot `json:"liquidity_spreads,omitempty"`
+	// 批次70 §契约补全:挂单簿快照(挂单 / 议价 / P2P 借贷 / 拍卖)。
+	// 前端 VirtualCityListingBook 逐字对齐(见 view_trade.go);底价与保留价
+	// 仅卖家本人可见。空房/无交易 → 仍下发(四个空数组),前端 store 直接可用。
+	ListingBook *ListingBookJSON `json:"listing_book,omitempty"`
+	// EarlyRepayEligible 本人是否有可提前还款的房贷(批次70)。
+	//
+	// ⚠ **总是下发**(不用 omitempty):前端 ActionPanel 用
+	// `!!gameState?.early_repay_eligible` 判断入口显隐,缺字段与 false 同义但
+	// 显式下发更利于排障(观战者/无房贷恒 false)。
+	EarlyRepayEligible bool `json:"early_repay_eligible"`
 }
 
 // PredictionSummary 批次68 §预测运行 game.state 小结(方案 §5;可空)。
@@ -548,6 +558,15 @@ type CycleJSON struct {
 	// 两端读法都成立、不断线、不改 `lpr_5y` 的语义。
 	// ⚠ 前端统一改读 `lpr_5y` 后,本别名可随之下线(勿删 `lpr_5y`)。
 	LPR5YAlias float64 `json:"lpr5y"`
+	// 批次70 §契约补全:明斯基三字段(设计稿《虚拟城市-P1-Minsky与LPR引擎-v1.md》
+	// §2.7 明确要求 CycleJSON 追加)。前端 `MinskyPanel` 读
+	// `cycle.minsky_moment_count`(触发次数)⇒ 此前恒为 0。
+	//
+	// ⚠ **单一事实来源**:三个值均取自同帧的 `minsky_overview`
+	// (MinskyOverview),不另算 —— 避免两处口径漂移。
+	MinskyMomentCount int     `json:"minsky_moment_count,omitempty"`
+	PonziCount        int     `json:"ponzi_count,omitempty"`
+	PonziRatio        float64 `json:"ponzi_ratio,omitempty"`
 }
 
 // MinskyOverview 是明斯基全局概览(v2.60 N11-5,game.state.minsky_overview)。
@@ -969,6 +988,9 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		// 城市快照独立于引擎 World(未开局也可有城;当前实现建城在 Start,
 		// 此分支恒 nil,防御性赋值)。
 		cs.City = citySnap
+		// 批次70:挂单簿恒存在(四个空数组)⇒ 前端 store 的挂单簿种子不会因
+		// "字段缺失"而保留上一局的旧数据。
+		cs.ListingBook = emptyListingBookJSON()
 		// status/age/month 由 caller（game_service_xiangqi.go handleVirtualCityJoin /
 		// game.state 分支）从 room 快照覆盖 —— 这里给一个安全的兜底值让
 		// 前端 gameState?.status === 'open' 检查能匹配大厅态。
@@ -1187,9 +1209,15 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		if cs.My != nil {
 			cs.My.Family = world.buildMyFamilyJSON(world.Players[viewer])
 		}
+		// 批次70:提前还款资格(本人有余额 > 0 的房贷 ⇒ 可提前还款)。
+		// 判定口径复用 actEarlyRepay 的同一谓词(仅房贷 + 余额 > 0);
+		// 观战者恒 false。
+		cs.EarlyRepayEligible = world.Players[viewer] != nil &&
+			world.Players[viewer].hasEarlyRepayEligibleLoan()
 	} else {
 		cs.MySeat = -1
 		cs.My = nil
+		cs.EarlyRepayEligible = false
 	}
 
 	// 批次52 §7(裁决 D15):房间级家庭汇总 + 遗产日志(降序;观战者可见;
@@ -1241,6 +1269,16 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 
 	// P1: 明斯基全局概览(v2.60 N11-5)。
 	cs.Minsky = buildMinskyOverview(world)
+	// 批次70:cycle 段明斯基三字段(设计稿 §2.7)—— **同源**取自上面的
+	// MinskyOverview(单一事实来源,不另算)。前端 MinskyPanel 读
+	// cycle.minsky_moment_count(触发次数)⇒ 此前恒 0。
+	cs.Cycle.MinskyMomentCount = cs.Minsky.MomentCount
+	cs.Cycle.PonziCount = cs.Minsky.PonziCount
+	cs.Cycle.PonziRatio = cs.Minsky.PonziRatio
+
+	// 批次70:挂单簿快照(挂单 / 议价 / P2P 借贷 / 拍卖)。
+	// 底价与保留价按 viewer 过滤(仅卖家本人可见)。
+	cs.ListingBook = world.listingBookJSON(viewer)
 
 	// P1(§财商流P1-2 §6.1):消费品市场 / 劳动力市场 / 社会结构 / 调研。
 	// economy_enabled=false 时零值/空数组下发(P0-bugfix 纪律:数组非 null)。
@@ -1431,7 +1469,8 @@ func myJSONFor(p *Player, sideShares map[string]map[int]float64) *MyJSON {
 	if p == nil {
 		return nil
 	}
-	my := &MyMy{Cash: p.Cash, Salary: p.SalaryBase, SpouseIncome: p.Family.SpouseIncome,
+	my := &MyMy{Cash: p.Cash, SavingsDeposit: p.SavingsDeposit,
+		Salary: p.SalaryBase, SpouseIncome: p.Family.SpouseIncome,
 		SideIncome: p.Monthly.SideIncome, PassiveIncome: p.Monthly.PassiveIncome,
 		PensionCNY: p.PensionCNY, CreditScore: p.CreditScore,
 		Resources: ResourceJSON{Energy: p.Energy, Network: p.Network, Cognition: p.Cognition},
@@ -1500,21 +1539,24 @@ func myJSONFor(p *Player, sideShares map[string]map[int]float64) *MyJSON {
 
 // MyMy 是 myJSONFor 内部使用的待填充结构(纯函数镜像)。
 type MyMy struct {
-	Cash          int64
-	Salary        int64
-	SpouseIncome  int64
-	SideIncome    int64
-	PassiveIncome int64
-	Monthly       MyMonthlyJSON
-	Resources     ResourceJSON
-	Assets        []MyAssetJSON
-	Loans         []MyLoanJSON
-	PensionCNY    int64
-	CreditScore   int
-	Family        MyFamilyJSON
-	FIIndex       float64
-	NetWorth      int64
-	Goals         []string
+	Cash int64
+	// SavingsDeposit 定期存款(P1 M2 口径;批次70 补接线 —— 此前 MyJSON
+	// 声明了字段却从不赋值,前端 my.savings_deposit 恒 0)。
+	SavingsDeposit int64
+	Salary         int64
+	SpouseIncome   int64
+	SideIncome     int64
+	PassiveIncome  int64
+	Monthly        MyMonthlyJSON
+	Resources      ResourceJSON
+	Assets         []MyAssetJSON
+	Loans          []MyLoanJSON
+	PensionCNY     int64
+	CreditScore    int
+	Family         MyFamilyJSON
+	FIIndex        float64
+	NetWorth       int64
+	Goals          []string
 	// P1: 上月消费结构(nil→{})。
 	ConsumptionByGoods map[string]float64
 	// LocalPos 区内归一化坐标(§CityHuman重构)。
@@ -1533,7 +1575,8 @@ func jsonMy(m *MyMy) *MyJSON {
 		return nil
 	}
 	return &MyJSON{
-		Cash: m.Cash, Salary: m.Salary, SpouseIncome: m.SpouseIncome,
+		Cash: m.Cash, SavingsDeposit: m.SavingsDeposit,
+		Salary: m.Salary, SpouseIncome: m.SpouseIncome,
 		SideIncome: m.SideIncome, PassiveIncome: m.PassiveIncome,
 		Monthly: m.Monthly, Resources: m.Resources,
 		Assets: m.Assets, Loans: m.Loans,

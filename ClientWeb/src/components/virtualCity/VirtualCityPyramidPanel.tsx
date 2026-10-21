@@ -7,7 +7,8 @@
  * 复用 EconomyPanel 的 circles 视觉(同生存/积累/自由配色)。
  *
  * - 数字徽章 ≥5:1(CLAUDE.md §26)。
- * - 三层按"自下而上"展示(底层 = 生存圈,顶层 = 自由圈);virtualCity_pct 控制条宽。
+ * - 三层按"自下而上"展示(底层 = 生存圈,顶层 = 自由圈);wealth_pct 控制条宽
+ *   （批次70：后端 tag 是 wealth_pct，前端原写 virtualCity_pct ⇒ 条宽恒 0）。
  */
 
 import { useT } from '@/hooks/useT';
@@ -40,8 +41,8 @@ export function VirtualCityPyramidPanel({ layers }: Props) {
 
   // 求总人数用于比例尺
   const totalCount = layers.reduce((s, l) => s + l.count, 0);
-  // 求 max virtualCity_pct 用于宽度归一
-  const maxPct = Math.max(0.01, ...layers.map((l) => l.virtualCity_pct || 0));
+  // 求 max wealth_pct 用于宽度归一
+  const maxPct = Math.max(0.01, ...layers.map((l) => l.wealth_pct || 0));
 
   return (
     <div className="virtualCity-pyramid">
@@ -56,8 +57,8 @@ export function VirtualCityPyramidPanel({ layers }: Props) {
           const labelKey = LABEL_KEYS[layer.name as keyof typeof LABEL_KEYS];
           const label = labelKey ? t(labelKey as TKey) : layer.name;
           const dotClass = DOT_CLASS[layer.name as keyof typeof DOT_CLASS];
-          const barWidth = Math.min(100, (layer.virtualCity_pct / maxPct) * 100);
-          const pctText = formatPct(layer.virtualCity_pct, 1);
+          const barWidth = Math.min(100, (layer.wealth_pct / maxPct) * 100);
+          const pctText = formatPct(layer.wealth_pct, 1);
           return (
             <div className="virtualCity-pyramid__row" key={layer.name}>
               <div className="virtualCity-pyramid__row-label">

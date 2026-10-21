@@ -308,7 +308,7 @@ export function CityStatsPanel({ city, roomId, election, players }: Props) {
                     <span className="virtualCity-citypanel__gov-bars">
                       {([
                         ['virtualCity.election.colScore', v.score],
-                        ['virtualCity.election.colWealth', v.virtualCity_score],
+                        ['virtualCity.election.colWealth', v.wealth_score],
                         ['virtualCity.election.colNetwork', v.network_score],
                         ['virtualCity.election.colSatisfaction', v.satisfaction],
                       ] as const).map(([k, val]) => (

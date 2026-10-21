@@ -141,15 +141,47 @@ func (r *VirtualCityRoom) cityAmbianceLocked() map[string]city.AmbianceTags {
 }
 
 // recordSenseLocked 把一条感知摘要写入 bot_contexts[].last_senses(锁内, cap 3)。
-func (a *AgentRunner) recordSenseLocked(seat int, kind, text string) {
+//
+// res 为 see/hear/smell 工具产出的**结构化结果**(批次70):一并落到 transcript,
+// 使 game.state.bot_contexts[].last_senses 具备前端 VirtualCitySenseResult
+// 所需的富形状(人/物/事/声/味)。res 为 nil 时只记摘要(向后兼容)。
+func (a *AgentRunner) recordSenseLocked(seat int, kind, text string, res *vctypes.SenseResult) {
 	t := a.room.Transcripts[seat]
 	t.Month = a.room.World.Month
 	t.UpdatedAt = time.Now().UnixMilli()
-	t.LastSenses = append([]SenseEntry{{Month: a.room.World.Month, Kind: kind, Text: clip(text, 160)}}, t.LastSenses...)
+	entry := SenseEntry{Month: a.room.World.Month, Kind: kind, Text: clip(text, 160)}
+	if res != nil {
+		entry.District = res.District
+		entry.Things = copyStrings(res.Things)
+		entry.Events = copyStrings(res.Events)
+		entry.Utterances = copyStrings(res.Utterances)
+		entry.Smells = copyStrings(res.Smells)
+		entry.Sounds = copyStrings(res.Sounds)
+		if len(res.People) > 0 {
+			entry.People = make([]SenseNeighborBrief, 0, len(res.People))
+			for _, p := range res.People {
+				entry.People = append(entry.People, SenseNeighborBrief{
+					Kind: p.Kind, Seat: p.Seat, CardID: p.CardID, Name: p.Name,
+					Occupation: p.Occupation, District: p.District, MoodHint: p.MoodHint,
+				})
+			}
+		}
+	}
+	t.LastSenses = append([]SenseEntry{entry}, t.LastSenses...)
 	if len(t.LastSenses) > senseKeepLast {
 		t.LastSenses = t.LastSenses[:senseKeepLast]
 	}
 	a.room.Transcripts[seat] = t
+}
+
+// copyStrings 拷贝字符串切片(nil → nil;空 → 空非 nil 切片)。
+func copyStrings(in []string) []string {
+	if in == nil {
+		return nil
+	}
+	out := make([]string, len(in))
+	copy(out, in)
+	return out
 }
 
 // appendUtteranceLocked 追加公开发言记录(锁内, cap 50;hear 数据源)。
@@ -223,7 +255,7 @@ func (a *AgentRunner) See(seat int) (*vctypes.SenseResult, error) {
 
 	text := fmt.Sprintf("环顾%s:看见 %d 人(%s 等),%d 处景物/挂牌,%d 起本月事件",
 		DistrictCN(district), len(res.People), firstNeighborName(res.People), len(res.Things), len(res.Events))
-	a.recordSenseLocked(seat, "see", text)
+	a.recordSenseLocked(seat, "see", text, res)
 	month := w.Month
 	hooks := a.room.hooks
 	roomID := a.room.RoomID
@@ -264,7 +296,7 @@ func (a *AgentRunner) Hear(seat int) (*vctypes.SenseResult, error) {
 
 	text := fmt.Sprintf("在%s听见 %d 条议论,%d 起动静;环境声:%v",
 		DistrictCN(district), len(res.Utterances), len(res.Events), res.Sounds)
-	a.recordSenseLocked(seat, "hear", text)
+	a.recordSenseLocked(seat, "hear", text, res)
 	month := a.room.World.Month
 	hooks := a.room.hooks
 	roomID := a.room.RoomID
@@ -292,7 +324,7 @@ func (a *AgentRunner) Smell(seat int) (*vctypes.SenseResult, error) {
 	res := &vctypes.SenseResult{District: district, Smells: ab.Smells, Sounds: ab.Sounds}
 
 	text := fmt.Sprintf("%s的空气里飘着:%v", DistrictCN(district), res.Smells)
-	a.recordSenseLocked(seat, "smell", text)
+	a.recordSenseLocked(seat, "smell", text, res)
 	month := a.room.World.Month
 	hooks := a.room.hooks
 	roomID := a.room.RoomID

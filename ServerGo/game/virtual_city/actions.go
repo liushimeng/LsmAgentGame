@@ -916,6 +916,30 @@ func (w *World) applyMinskyRateAdjustment(p *Player, loan *Loan) {
 
 // ── early_repay:提前还款(仅房贷,全额或部分 + 违约金 1-3%)(v2.60 N12-5) ──
 
+// loanEarlyRepayEligible 该笔贷款是否可提前还款(仅房贷 + 余额 > 0)。
+//
+// 单一事实来源:提前还款动作(actEarlyRepay)与 game.state 的
+// `early_repay_eligible` 资格标记共用本谓词,避免两处口径漂移。
+func loanEarlyRepayEligible(l *Loan) bool {
+	return l != nil && l.Balance > 0 && l.Kind == LoanMortgage
+}
+
+// hasEarlyRepayEligibleLoan 本人是否存在可提前还款的房贷(任一笔即可)。
+//
+// ⚠ 不含「动作预算」条件:预算是**本回合**额度耗尽(临时不可用),
+// 不应让「提前还款」入口整月消失;动作本身仍由 actEarlyRepay 拒绝。
+func (p *Player) hasEarlyRepayEligibleLoan() bool {
+	if p == nil {
+		return false
+	}
+	for i := range p.Loans {
+		if loanEarlyRepayEligible(&p.Loans[i]) {
+			return true
+		}
+	}
+	return false
+}
+
 // actEarlyRepay 提前还款(v2.60 N12-5)。
 // 参数: loan_id, amount_cny(0/"all"=全部,正数=部分)。
 // 1 年内提前还款罚息 1-3%(线性化);仅房贷允许。
@@ -927,7 +951,7 @@ func (w *World) actEarlyRepay(p *Player, a Action) (string, *errcode.Error) {
 	if loan == nil || loan.Balance <= 0 {
 		return "", errcode.Code(errcode.ErrLoanNotFound)
 	}
-	if loan.Kind != LoanMortgage {
+	if !loanEarlyRepayEligible(loan) {
 		return "", errcode.Code(errcode.ErrEarlyRepayOnlyMortgage)
 	}
 	// 1 年内提前还款罚息 1-3%(线性化:开放时点距今 <12 月才收)。

@@ -42,10 +42,40 @@ type BotTranscript struct {
 }
 
 // SenseEntry 单条感知记录(bot_contexts[].last_senses 元素)。
+//
+// 批次70:补齐**富形状**(与前端 VirtualCitySenseResult 逐字对齐)——
+// see/hear/smell 工具早已产出结构化结果(vctypes.SenseResult:人/物/事/声/味),
+// 但此前只把「人读摘要文本」存进 transcript ⇒ 前端 VirtualCityBotPanel 的
+// 「感知」小节恒空(读不到 people/things/events/utterances/smells/sounds)。
+//
+// ⚠ last_senses **不回流 Agent 推理链路**(只进 game.state 视图层),
+// 故补齐富字段**不改变任何 Agent 行为**(不新增提示词字段、不改工具返回)。
 type SenseEntry struct {
 	Month int    `json:"month"`
 	Kind  string `json:"kind"` // see|hear|smell
 	Text  string `json:"text"` // 人读摘要(≤160 字)
+	// 富形状(未用的分支 omit)。
+	District   string               `json:"district,omitempty"`
+	People     []SenseNeighborBrief `json:"people,omitempty"`
+	Things     []string             `json:"things,omitempty"`
+	Events     []string             `json:"events,omitempty"`
+	Utterances []string             `json:"utterances,omitempty"`
+	Smells     []string             `json:"smells,omitempty"`
+	Sounds     []string             `json:"sounds,omitempty"`
+}
+
+// SenseNeighborBrief 是 last_senses[].people[] 单项(前端 VirtualCityNeighborBrief)。
+//
+// ⚠ Seat 必发(不用 omitempty):vctypes.NeighborBrief 的 `seat,omitempty` 会把
+// 0 号座位吃掉 ⇒ 前端拿不到座位号;此处改用 view 层结构体显式下发。
+type SenseNeighborBrief struct {
+	Kind       string `json:"kind"` // seat|resident
+	Seat       int    `json:"seat"`
+	CardID     string `json:"card_id,omitempty"`
+	Name       string `json:"name"`
+	Occupation string `json:"occupation,omitempty"`
+	District   string `json:"district,omitempty"`
+	MoodHint   string `json:"mood_hint,omitempty"`
 }
 
 // UtteranceRecord 单条公开发言记录(hear 感知数据源;房间内 ring, cap 50)。

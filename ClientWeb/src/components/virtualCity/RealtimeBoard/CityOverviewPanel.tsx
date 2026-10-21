@@ -80,6 +80,12 @@ export function CityOverviewPanel({ gameState }: CityOverviewPanelProps) {
   const family = gameState.family ?? null;
   const prediction = gameState.prediction ?? null;
   const exo = market.exo_anchor ?? null;
+  // ── 批次70：补齐后端已下发、前端此前未声明的段（财政 / 产业链 / 金融市场 / 场景推演）──
+  const treasury = gameState.treasury ?? null;
+  const supply = gameState.supply_chain ?? null;
+  const clusters = gameState.industrial_clusters ?? [];
+  const fin = gameState.fin_market ?? null;
+  const scenarios = gameState.scenarios_recent ?? [];
 
   // 房价指数 = 各区 price_index 均值（MarketPanel 同口径的聚合简化）。
   const houseIdx =
@@ -105,6 +111,23 @@ export function CityOverviewPanel({ gameState }: CityOverviewPanelProps) {
       : exo.sentiment < -0.02
         ? 'virtualCity.rt.exo.sentimentDown'
         : 'virtualCity.rt.exo.sentimentFlat';
+
+  // 产业链派生：瓶颈数 / 利用率峰值 / 最短库存月数 / Tier 价格指数均值（基 1.0）。
+  const bottleneckCount = supply ? supply.bottlenecks?.length ?? 0 : 0;
+  const peakUtilization = supply && supply.top_nodes?.length
+    ? Math.max(...supply.top_nodes.map((n) => n.utilization))
+    : undefined;
+  const minInventory = supply && supply.top_nodes?.length
+    ? Math.min(...supply.top_nodes.map((n) => n.inventory_months))
+    : undefined;
+  const avgPriceIdx = supply && supply.price_idx?.length
+    ? supply.price_idx.reduce((s, v) => s + v, 0) / supply.price_idx.length
+    : undefined;
+
+  // 场景推演：最近一次注入（按 applied_month 倒序取最新）。
+  const lastScenario = scenarios.length
+    ? [...scenarios].sort((a2, b2) => (b2.applied_month ?? 0) - (a2.applied_month ?? 0))[0]
+    : null;
 
   const groups: KpiGroup[] = [
     {
@@ -311,6 +334,149 @@ export function CityOverviewPanel({ gameState }: CityOverviewPanelProps) {
           key: 'prediction',
           label: t('virtualCity.dash.overview.prediction' as TKey),
           value: prediction ? prediction.run_id : '—',
+        },
+        {
+          // ── 批次70：场景推演记录（game.state.scenarios_recent）──
+          // 字段存在但为空数组 ⇒ 显示 0；字段缺失（null/undefined）才显示「—」。
+          key: 'scenarioRecords',
+          label: t('virtualCity.dash.overview.scenarioRecords' as TKey),
+          value:
+            gameState.scenarios_recent === undefined || gameState.scenarios_recent === null
+              ? '—'
+              : cnt(scenarios.length),
+        },
+        {
+          key: 'scenarioLast',
+          label: t('virtualCity.dash.overview.scenarioLast' as TKey),
+          value: lastScenario
+            ? `${lastScenario.kind} · ${cnt(lastScenario.magnitude)}`
+            : '—',
+        },
+      ],
+    },
+    {
+      // ── 批次70：财政 / 国库（game.state.treasury，阶段4）──
+      key: 'treasury',
+      title: t('virtualCity.dash.overview.treasury' as TKey),
+      rows: [
+        {
+          key: 'treasuryCash',
+          label: t('virtualCity.dash.overview.treasuryCash' as TKey),
+          value: formatCny(treasury?.cash_cny),
+        },
+        {
+          key: 'treasuryBonds',
+          label: t('virtualCity.dash.overview.treasuryBonds' as TKey),
+          value: formatCny(treasury?.bonds_outstanding_cny),
+        },
+        {
+          key: 'treasuryRevenue',
+          label: t('virtualCity.dash.overview.treasuryRevenue' as TKey),
+          value: formatCny(treasury?.last_month_revenue_cny),
+        },
+        {
+          key: 'treasuryExpense',
+          label: t('virtualCity.dash.overview.treasuryExpense' as TKey),
+          value: formatCny(treasury?.last_month_expense_cny),
+        },
+        {
+          key: 'deficitRun',
+          label: t('virtualCity.dash.overview.deficitRun' as TKey),
+          value: cnt(treasury?.deficit_run),
+        },
+        {
+          key: 'publicServiceIdx',
+          label: t('virtualCity.dash.overview.publicServiceIdx' as TKey),
+          // ⚠ 后端语义：每累计 1 万元投入 +1 点、上限 100（fiscal_policy.go
+          //   PublicServiceIdxUnit/Max）—— 是**点数**不是 0-1 比率 ⇒ 不能用百分比。
+          value: num(treasury?.public_service_idx, 1),
+        },
+      ],
+    },
+    {
+      // ── 批次70：产业链（game.state.supply_chain + industrial_clusters，阶段4）──
+      key: 'supply',
+      title: t('virtualCity.dash.overview.supply' as TKey),
+      rows: [
+        {
+          key: 'bottlenecks',
+          label: t('virtualCity.dash.overview.bottlenecks' as TKey),
+          value: supply ? cnt(bottleneckCount) : '—',
+        },
+        {
+          key: 'peakUtilization',
+          label: t('virtualCity.dash.overview.peakUtilization' as TKey),
+          value: formatPct(peakUtilization),
+        },
+        {
+          key: 'minInventory',
+          label: t('virtualCity.dash.overview.minInventory' as TKey),
+          value: num(minInventory, 1),
+        },
+        {
+          key: 'priceIdx',
+          label: t('virtualCity.dash.overview.priceIdx' as TKey),
+          // ⚠ price_idx 以基期 1.0 为准 ⇒ 展示数值（与股票指数/房价指数同款）。
+          value: num(avgPriceIdx),
+        },
+        {
+          key: 'clusters',
+          label: t('virtualCity.dash.overview.clusters' as TKey),
+          value: clusters.length ? cnt(clusters.length) : '—',
+        },
+        {
+          key: 'clusterFirms',
+          label: t('virtualCity.dash.overview.clusterFirms' as TKey),
+          value: clusters.length
+            ? cnt(clusters.reduce((s, c) => s + (c.firms ?? 0), 0))
+            : '—',
+        },
+      ],
+    },
+    {
+      // ── 批次70：金融市场（game.state.fin_market，阶段4）──
+      key: 'finmarket',
+      title: t('virtualCity.dash.overview.finmarket' as TKey),
+      rows: [
+        {
+          key: 'quantIndex',
+          label: t('virtualCity.dash.overview.quantIndex' as TKey),
+          value: num(fin?.quant_index, 1),
+        },
+        {
+          key: 'quantReturn',
+          label: t('virtualCity.dash.overview.quantReturn' as TKey),
+          value: formatPct(fin?.quant_last_return),
+        },
+        {
+          key: 'quantStrategies',
+          label: t('virtualCity.dash.overview.quantStrategies' as TKey),
+          value: fin ? cnt(fin.quant_strategies?.length ?? 0) : '—',
+        },
+        {
+          key: 'cdAvgRate',
+          label: t('virtualCity.dash.overview.cdAvgRate' as TKey),
+          value: formatPct(fin?.cd?.avg_rate, 2),
+        },
+        {
+          key: 'shortBalance',
+          label: t('virtualCity.dash.overview.shortBalance' as TKey),
+          value: formatCny(fin?.short?.balance_cny),
+        },
+        {
+          key: 'marginCalls',
+          label: t('virtualCity.dash.overview.marginCalls' as TKey),
+          value: cnt(fin?.short?.margin_calls_mon),
+        },
+        {
+          key: 'convertibles',
+          label: t('virtualCity.dash.overview.convertibles' as TKey),
+          value: fin ? cnt(fin.convertibles?.length ?? 0) : '—',
+        },
+        {
+          key: 'fundRatings',
+          label: t('virtualCity.dash.overview.fundRatings' as TKey),
+          value: fin ? cnt(fin.fund_ratings?.length ?? 0) : '—',
         },
       ],
     },
