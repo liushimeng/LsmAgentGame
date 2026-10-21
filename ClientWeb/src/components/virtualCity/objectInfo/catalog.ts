@@ -88,7 +88,10 @@ export function allObjectInfoEntries(): ObjectInfoEntry[] {
 
 /** 读三语文案（未知语言回退 zh-CN）。 */
 export function triText(t: TriText, lang: Lang): string {
-  return t[lang] ?? t['zh-CN'];
+  // ⚠ 兜底：调用方常写 `triText(CATEGORY_LABELS[entry.category], lang)`，
+  //   映射表漏项时 t 为 undefined ⇒ `t[lang]` 直接抛 TypeError。
+  if (!t) return '';
+  return t[lang] ?? t['zh-CN'] ?? '';
 }
 
 /** 悬浮卡「一句话简介」：取 desc 首句（中英日句号/句点断句，兜底截 40 字）。 */

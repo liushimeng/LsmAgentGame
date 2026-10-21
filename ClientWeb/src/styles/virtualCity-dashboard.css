@@ -1,0 +1,446 @@
+/* 虚拟城市 批次69 ·「虚拟城市 - 实时看板」统一外壳（VirtualCityDashboard / BoardSection /
+ * CityOverviewPanel / DataSourcesPanel）。
+ *
+ * 独立成文件：virtualCity.css 已 1777/1800 行触顶（§4 硬上限，一字不加）。
+ * 选择器全部为新增 .virtualCity-dash* 前缀，与既有规则零级联冲突。
+ * 只追加在 globals.css 链尾，不调整既有 @import 顺序（§2.1 约束 4）。
+ *
+ * §26 对比度纪律：正文 ≥4.5:1、徽章 ≥5:1、禁用态用实色灰底（禁 opacity 表状态）、
+ * 禁同色相叠加（红底红字等）。
+ */
+
+/* ── 容器 ───────────────────────────────────────────────────────────── */
+.virtualCity-dash {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12.5px;
+  min-height: 0;
+  padding-bottom: 4px;
+}
+
+/* 看板是 .virtualCity-sidebar 的**直接子元素**（批次69 二轮：不再套
+   .virtualCity-sidebar__panels —— 那是独立的 160px 滚动窗，会把 Tab 条与面板体
+   关进小窗，且中间一层 overflow:auto 会让看板内的 sticky 导航失效）。
+ *
+ * `display: contents` ⇒ 看板的 head / nav / body 三个块**直接成为侧栏的 flex item**，
+ * 于是 sticky 导航的「包含块」= 侧栏内容盒（而非看板盒）—— sticky 位移不再被
+ * 「看板顶边」截断，**整段滚动期间维度 Tab 条都固定可见**。
+ * （sticky 的上移量受包含块上边界限制：若 nav 仍在看板盒内，最多只能上移
+ *   「看板顶边 → nav 顶」那一段，之后就随看板一起滚走了。）
+ * 副作用：看板自身的 gap 失效 ⇒ 间距改由 head/nav/body 各自的 margin 承担。 */
+.virtualCity-sidebar > .virtualCity-dash {
+  display: contents;
+}
+
+/* ── ① 看板标题条（+ ② 实时通道区，同一视觉带）───────────────────── */
+.virtualCity-dash__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: nowrap;          /* 永不换行：换行会把标题条从 ~44px 撑到 ~78px */
+  padding: 8px 12px 4px;
+  margin-bottom: 2px;
+}
+
+.virtualCity-dash__head-left {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  /* 标题列不参与收缩：标题（「虚拟城市 - 实时看板」）必须完整可读，
+     空间不足时由右侧「更新时间」文本省略号截断。 */
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.virtualCity-dash__title {
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--virtualCity-text, #e5e7eb);
+  letter-spacing: 0.01em;
+  /* 单行不换行 —— 换行会把标题条从 ~44px 撑到 ~62px（挤压面板体可见高度） */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 副行：数据版本 v{n} · {n} 个维度（单行不换行 —— 换行会把标题条撑高一倍） */
+.virtualCity-dash__meta {
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--virtualCity-text-dim, #b7bfcc);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── ② 实时通道行（徽章 + 更新时间 + 刷新）──────────────────────────── */
+.virtualCity-dash__channel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* 通道区里的刷新按钮不再需要「推到最右」（head 已是 space-between）；
+   同时收紧内边距 —— 保证「标题列 + 通道列」在 380px 侧栏内**同一行**不换行
+   （换行会让标题条从 ~44px 涨到 ~78px，挤压面板体可见高度）。 */
+.virtualCity-dash__channel .virtualCity-rt__refresh {
+  margin-left: 0;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  flex: 0 0 auto;
+}
+
+/* 时间文本是通道区里唯一可压缩项：空间不足时省略号截断，绝不撑破标题条。 */
+.virtualCity-dash__channel .virtualCity-rt__time {
+  font-size: 11px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.virtualCity-dash__channel .virtualCity-rt__badge {
+  flex: 0 0 auto;
+}
+
+/* ── §7.1 内联红条（刷新失败）──────────────────────────────────────── */
+.virtualCity-dash__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #7f1d1d;   /* 实色深红底 */
+  color: #ffffff;      /* 白字 ≈ 9.4:1 */
+  font-size: 12.5px;
+}
+
+.virtualCity-dash__error button {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+/* ── ③ 两级 Tab 导航（sticky；滚动容器 = .virtualCity-sidebar）──────
+ * 第一级 = 分类选择器（3 等分单行）；第二级 = 当前分类的维度按钮（横排 wrap）。
+ * 背景必须**不透明**（--virtualCity-panel = 侧栏同色），否则滚动时内容透出叠字。 */
+.virtualCity-dash__nav {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px 12px 7px;
+  margin-bottom: 4px;
+  background: var(--virtualCity-panel, #161d28);
+}
+
+/* ── 第一级：分类选择器（3 等分单行；新 class，不复用 .virtualCity-tabs__btn
+ *    的 25% 基准排布，避免与既有面板的 Tab 组冲突）────────────────── */
+.virtualCity-dash__groups {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.virtualCity-dash__group-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 28px;
+  padding: 3px 6px;
+  border: 1px solid var(--virtualCity-border, #2c3644);
+  border-radius: 6px;
+  background: var(--virtualCity-panel-2, #1c2431);
+  color: var(--virtualCity-text, #e5e7eb);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.virtualCity-dash__group-btn:hover {
+  color: #fff;
+  border-color: var(--virtualCity-accent, #c9a227);
+}
+
+.virtualCity-dash__group-btn:focus-visible {
+  outline: 2px solid var(--virtualCity-accent-strong, #d4a017);
+  outline-offset: 1px;
+}
+
+/* 选中态：金底深字 ≈ 9:1 + 光晕（§26.1 选中态 ≥6:1）。 */
+.virtualCity-dash__group-btn--active {
+  background: var(--virtualCity-accent-strong, #d4a017);
+  border-color: var(--virtualCity-accent-strong, #d4a017);
+  color: #1a1305;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.45);
+}
+
+/* ── 第二级：当前分类的维度按钮（横排 wrap；内容宽度自适应，避免英文
+ *    长标签被挤成竖排 —— 批次62 踩过的坑）───────────────────────── */
+.virtualCity-dash__dims {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 4px;
+  min-width: 0;
+}
+
+.virtualCity-dash__dims .virtualCity-tabs__btn {
+  /* 覆写既有 25% 基准（每行 4 个）与 44px 触摸目标 —— 看板内 11 个维度
+     需要压到两行以内，否则导航条吃掉整个侧栏。 */
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 28px;
+  padding: 3px 9px;
+  border: 1px solid var(--virtualCity-border, #2c3644);
+  border-radius: 6px;
+  font-size: 12.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── ④ 维度面板体 + 折叠外壳（BoardSection）────────────────────────── */
+.virtualCity-dash__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* 看板用 display:contents ⇒ body 直接成为侧栏的 flex item。
+     必须 flex: 0 0 auto（不压缩）：否则侧栏 column flex 会把 body 压扁到
+     几 px（面板体被挤没），而不是让侧栏整体滚动。 */
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 0 12px 12px;
+  /* 滚动交给 .virtualCity-sidebar —— 这里**不能**再加一层 overflow，
+     否则 sticky 导航会被截断。 */
+}
+
+.virtualCity-dash__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  /* 切换维度时 scrollIntoView({block:'start'}) 要给 sticky 导航留出高度，
+     否则维度标题条会被导航条盖住。 */
+  scroll-margin-top: 96px;
+}
+
+.virtualCity-dash__section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 30px;          /* 折叠态整块 ≤ 32px */
+  max-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--virtualCity-border, #2c3644);
+  border-radius: 6px;
+  background: var(--virtualCity-panel-2, #1c2431);
+  color: var(--virtualCity-text, #e5e7eb);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.virtualCity-dash__section-head:hover {
+  border-color: var(--virtualCity-accent, #c9a227);
+  color: #fff;
+}
+
+.virtualCity-dash__section-head:focus-visible {
+  outline: 2px solid var(--virtualCity-accent-strong, #d4a017);
+  outline-offset: 1px;
+}
+
+.virtualCity-dash__chevron {
+  flex: 0 0 auto;
+  width: 12px;
+  color: var(--virtualCity-accent, #c9a227);
+  line-height: 1;
+}
+
+.virtualCity-dash__section-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.virtualCity-dash__section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* ── 标题去重：看板已有统一标题条 ⇒ 精确隐藏面板内的纯标题元素 ────────
+ * ⚠ 只隐藏 .title，**不得**隐藏 .virtualCity-insurance__monthly（本月保费）
+ *   等带信息的子元素（见 virtualCity-insurance.css）。 */
+.virtualCity-dash__body .virtualCity-behavior__head .virtualCity-behavior__title,
+.virtualCity-dash__body .virtualCity-macro__head .virtualCity-macro__title,
+.virtualCity-dash__body .virtualCity-insurance__head .virtualCity-insurance__title {
+  display: none;
+}
+
+/* 通道徽章 / 更新时间 / 刷新按钮由看板外壳统一提供 ⇒ 隐藏 RealtimeBoard 自身的头。
+ * ⚠ 只隐藏 __head；__error / __offline 是兄弟节点，错误提示仍会显示。 */
+.virtualCity-dash__body .virtualCity-rt__head {
+  display: none;
+}
+
+/* ── 城市总览面板（CityOverviewPanel）──────────────────────────────── */
+.virtualCity-dash__overview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.virtualCity-dash__ov-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px solid var(--virtualCity-border, #2c3644);
+  border-radius: 6px;
+  background: var(--virtualCity-panel, #161d28);
+}
+
+.virtualCity-dash__ov-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--virtualCity-accent, #c9a227);   /* 金色 ≈ 7:1 on #161d28 */
+}
+
+.virtualCity-dash__ov-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 10px;
+}
+
+.virtualCity-dash__ov-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.virtualCity-dash__ov-label {
+  color: var(--virtualCity-text-dim, #b7bfcc);   /* ≈ 8.6:1 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.virtualCity-dash__ov-value {
+  flex: 0 0 auto;
+  color: var(--virtualCity-text, #e5e7eb);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* ── 数据源清单面板（DataSourcesPanel）─────────────────────────────── */
+.virtualCity-dash__sources {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.virtualCity-dash__src-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.virtualCity-dash__src-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--virtualCity-accent, #c9a227);
+}
+
+.virtualCity-dash__src-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.virtualCity-dash__src-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1px solid var(--virtualCity-border, #2c3644);
+  border-radius: 6px;
+  background: var(--virtualCity-panel, #161d28);
+}
+
+.virtualCity-dash__src-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.virtualCity-dash__src-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--virtualCity-text, #e5e7eb);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.virtualCity-dash__src-link {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 1px solid #7dd3fc;    /* 亮蓝描边 ≈ 9:1 on #161d28 */
+  border-radius: 4px;
+  font-size: 11.5px;
+  color: #7dd3fc;              /* 亮蓝 ≈ 9:1 on #161d28 */
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.virtualCity-dash__src-link:hover {
+  color: #0b1220;              /* 深字 on 亮蓝底 ≈ 9:1 */
+  background: #7dd3fc;
+}
+
+.virtualCity-dash__src-purpose {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--virtualCity-text-dim, #b7bfcc);
+}

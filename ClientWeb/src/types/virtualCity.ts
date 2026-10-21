@@ -930,7 +930,9 @@ export interface VirtualCityFlowStat {
 
 /** 资金流向节点。 */
 export interface VirtualCityFlowNode {
-  id: 'salary' | 'firms' | 'market' | 'bank' | 'gov' | 'player' | 'world';
+  // ⚠ 必须与后端 `ServerGo/game/virtual_city/distribution.go` 的 FlowNode* 常量同步
+  //   （批次52 新增 family；此前前端漏项 ⇒ t(undefined) ⇒ 桑基图面板崩溃）。
+  id: 'salary' | 'firms' | 'market' | 'bank' | 'gov' | 'player' | 'world' | 'family';
   label: string;
   kind: 'source' | 'sink' | 'pass';
   amount_cny: number;

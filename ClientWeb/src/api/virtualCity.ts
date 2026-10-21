@@ -6,7 +6,7 @@
  * 的 roomService（参数化路由），本文件只承载 virtualCity 专属端点。
  */
 
-import { http, ApiError, isSessionExpiredError } from '@/services/http';
+import { http, ApiError, isSessionExpiredError, getAuthToken } from '@/services/http';
 import type { VirtualCityCityProfileProgress, VirtualCityCityResidentProfile, VirtualCitySurvey } from '@/types/virtualCity';
 import type { RealtimeBoardRefreshResult, RealtimeFeed } from '@/types/virtualCityRealtime';
 
@@ -135,6 +135,128 @@ export function refreshRealtimeBoard(
     method: 'POST',
     body: JSON.stringify(category ? { category } : {}),
   });
+}
+
+// ── 批次 69 · 虚拟城市「实时看板」统一重构 ─────────────────────────────────
+//
+// 契约（backend-dev 并行实现，字段/路径逐字对齐批次 69 任务书）：
+//   GET /api/virtual_city/dashboard（需登录）
+//   → {code:0, message:"ok", data:{dashboard:{
+//        schema_version, generated_at, dimensions[], data_sources[], realtime}}}
+//
+// ⚠️ **通道离线时 code = 35053，但 data.dashboard 仍完整**（dimensions / data_sources
+//    齐全，realtime.channel.status = "offline"）。而 http<T>() 在 code ≠ 0 时会抛
+//    ApiError 并丢弃 body —— 直接用 http() 会把完整目录一起丢掉。
+//    故本函数：① 先走 http()（保留 401 会话过期 / 统一错误语义）；
+//               ② 仅在 code = 35053 时用裸 fetch 兜底取回完整 data.dashboard。
+//    其余错误码照常抛出，由调用方按 §7.1 展示。
+
+/** 看板维度目录条目（dimensions[] 元素）。 */
+export interface VirtualCityDashboardDimension {
+  /** 维度 id（如 "city-overview" / "market-trade"），与前端静态目录同名。 */
+  id: string;
+  /** 所属分组（"city" / "market" / "external"）。 */
+  group: string;
+  /** i18n 键（前端按 id 匹配后覆盖静态目录的同名项）。 */
+  title_key: string;
+  /** 数据来源（"game_state" / "realtime_feed" / "catalog" …）。 */
+  source: string;
+  /** 作用域（"room" / "global"）。 */
+  scope: string;
+  /** 单位（"mixed" / "cny" / "pct" / "text"）。 */
+  unit: string;
+  /** 刷新方式（"push" / "pull" / "static"）。 */
+  refresh: string;
+}
+
+/** 数据源清单条目（data_sources[] 元素）。 */
+export interface VirtualCityDashboardDataSource {
+  /** 分类（如 "综合财经"）。 */
+  category: string;
+  /** 数据源名称。 */
+  name: string;
+  /** 用途说明。 */
+  purpose: string;
+  /** 官网链接。 */
+  url: string;
+}
+
+/** 看板快照（data.dashboard 形状）。 */
+export interface VirtualCityDashboardSnapshot {
+  /** 目录结构版本（前端展示为「数据版本 v{n}」）。 */
+  schema_version: number;
+  /** 生成时间（Unix 秒）。 */
+  generated_at: number;
+  /** 维度目录（前端静态目录为权威，本项只做校验/补充）。 */
+  dimensions: VirtualCityDashboardDimension[];
+  /** 数据源清单（按 category 分组渲染）。 */
+  data_sources: VirtualCityDashboardDataSource[];
+  /** 实时通道快照（与 GET /api/virtual_city/realtime_board 的 feed 同构）。 */
+  realtime: RealtimeFeed | null;
+}
+
+/** 通道离线错误码（后端在通道离线时返回，但 data.dashboard 仍完整）。 */
+export const VIRTUAL_CITY_DASHBOARD_CHANNEL_OFFLINE = 35053;
+
+/**
+ * 裸 fetch 取回 data.dashboard（绕过 http() 的 code≠0 即抛错语义）。
+ *
+ * 仅用于 35053 兜底路径：通道离线但目录完整，必须拿得到。
+ * 解析不出 dashboard 时返回 null（调用方按「目录不可用」处理，不抛错）。
+ */
+async function fetchDashboardTolerant(): Promise<VirtualCityDashboardSnapshot | null> {
+  try {
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    const token = getAuthToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    // 10s 超时兜底：兜底请求本身挂起时不能让整个看板快照 promise 悬空。
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 10_000);
+    try {
+      const res = await fetch('/api/virtual_city/dashboard', { headers, signal: ac.signal });
+      const body = (await res.json().catch(() => null)) as
+        | { data?: { dashboard?: VirtualCityDashboardSnapshot } }
+        | null;
+      return body?.data?.dashboard ?? null;
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GET /api/virtual_city/dashboard（需登录）— 实时看板快照。
+ *
+ * 返回 {dashboard:{schema_version, dimensions, data_sources, realtime}}。
+ * §7.1：调用方（VirtualCityDashboard）catch 后面板内联提示 + 静态目录兜底，
+ * 绝不吞进 console。
+ */
+export async function fetchVirtualCityDashboard(): Promise<{
+  dashboard: VirtualCityDashboardSnapshot;
+}> {
+  try {
+    return await http<{ dashboard: VirtualCityDashboardSnapshot }>(
+      '/api/virtual_city/dashboard',
+    );
+  } catch (e) {
+    if (e instanceof ApiError && e.code === VIRTUAL_CITY_DASHBOARD_CHANNEL_OFFLINE) {
+      // 通道离线：目录仍完整 → 裸 fetch 兜底取回；取不到则按「目录不可用」降级。
+      const dash = await fetchDashboardTolerant();
+      if (dash) return { dashboard: dash };
+      return {
+        dashboard: {
+          schema_version: 1,
+          generated_at: 0,
+          dimensions: [],
+          data_sources: [],
+          realtime: null,
+        },
+      };
+    }
+    throw e;
+  }
 }
 
 // ── 2026-10-21 §城市模拟定位 · 场景推演（条件触发者）──────────────────────

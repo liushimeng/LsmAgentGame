@@ -538,14 +538,30 @@ type CycleJSON struct {
 	MonthsLeft int     `json:"months_left"`
 	// P1: 5Y LPR(房贷重定价用,v2.60 N12-3)。
 	LPR5Y float64 `json:"lpr_5y"`
+	// LPR5YAlias 是 5Y LPR 的前端兼容别名(2026-10-21 批次69 JSON tag 对账)。
+	//
+	// 背景:前端 `ClientWeb/src/types/virtualCity.ts::VirtualCityCycle` 读
+	// `cycle.lpr5y`(批次21 全栈重命名前沿用的拼法),后端下发的是 `lpr_5y`
+	// ⇒ 前端 `MarketPanel` 的 5Y LPR 数值与徽标恒不渲染。
+	//
+	// 处置:同值**双键下发**(`lpr_5y` 为契约正名,`lpr5y` 为兼容别名),
+	// 两端读法都成立、不断线、不改 `lpr_5y` 的语义。
+	// ⚠ 前端统一改读 `lpr_5y` 后,本别名可随之下线(勿删 `lpr_5y`)。
+	LPR5YAlias float64 `json:"lpr5y"`
 }
 
 // MinskyOverview 是明斯基全局概览(v2.60 N11-5,game.state.minsky_overview)。
+//
+// ⚠ 2026-10-21 批次69(JSON tag 对账):PonziRatio 的 tag 曾拼作 `ponzy_ratio`
+// (拼写漂移)⇒ 前端 MinskyPanel / MinskyStatusBar / 城市总览读 `ponzi_ratio`
+// 恒为 undefined,庞氏族占比恒显示「—」。权威键名见设计稿
+// lag_docs/虚拟城市/已实现/05-P1扩展/虚拟城市-P1-Minsky与LPR引擎-v1.md §2.8
+// (`PonziRatio float64 \`json:"ponzi_ratio"\``)⇒ 此处更正为 `ponzi_ratio`。
 type MinskyOverview struct {
 	PonziCount   int     `json:"ponzi_count"`
 	SpecCount    int     `json:"spec_count"`
 	HedgeCount   int     `json:"hedge_count"`
-	PonziRatio   float64 `json:"ponzy_ratio"`
+	PonziRatio   float64 `json:"ponzi_ratio"`
 	CooldownLeft int     `json:"cooldown_left"`
 	MomentCount  int     `json:"moment_count"`
 }
@@ -980,6 +996,8 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 	if world.CB != nil {
 		cs.Cycle.LPR5Y = world.CB.ComputeL5Y()
 	}
+	// 5Y LPR 双键下发(前端读 cycle.lpr5y / 契约正名 cycle.lpr_5y 同值)。
+	cs.Cycle.LPR5YAlias = cs.Cycle.LPR5Y
 	mj := MarketJSON{
 		StockIndex: world.Market.StockIndex,
 		GoldPrice:  world.Market.GoldPrice,

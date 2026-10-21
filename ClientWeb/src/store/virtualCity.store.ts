@@ -37,7 +37,10 @@ export type VirtualCityPanelTab =
   // 批次62：行为金融（本人画像 + 反思）与宏观（集体泡沫 + 流动性价差）两个新面板。
   | 'behavior' | 'macro'
   // 批次65：实时看板（真实世界行情/新闻，全局数据，与房间无关）。
-  | 'realtime';
+  | 'realtime'
+  // 批次69：实时看板统一重构 —— 11 个一级 Tab（看板维度）。
+  //   'city-overview' 城市总览（新增聚合面板）/ 'datasources' 数据源清单（新增）。
+  | 'city-overview' | 'datasources';
 
 /** 市场快照（走势迷你图 + 相对上月箭头用）。 */
 export interface VirtualCityMarketPoint {

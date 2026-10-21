@@ -28,7 +28,7 @@ import (
 )
 
 // New constructs the *gin.Engine.
-func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcScenarioAPI *api.VirtualCityScenarioAPI, vcPredictionAPI *api.VirtualCityPredictionAPI, vcCityAPI *api.VirtualCityAPI, vcRealtimeAPI *api.VirtualCityRealtimeAPI, knowledgeAPI *api.KnowledgeAPI) *gin.Engine {
+func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcScenarioAPI *api.VirtualCityScenarioAPI, vcPredictionAPI *api.VirtualCityPredictionAPI, vcCityAPI *api.VirtualCityAPI, vcRealtimeAPI *api.VirtualCityRealtimeAPI, vcDashboardAPI *api.VirtualCityDashboardAPI, knowledgeAPI *api.KnowledgeAPI) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 
@@ -292,6 +292,9 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 	{
 		vcRt.GET("/realtime_board", vcRealtimeAPI.Board)
 		vcRt.POST("/realtime_board/refresh", vcRealtimeAPI.Refresh)
+		// 2026-10-21 §批次69 — 统一「实时看板」:维度目录 + 数据源登记册 +
+		// 实时通道快照的一次性快照端点(数据源同 cityChromeSvc 单例)。
+		vcRt.GET("/dashboard", vcDashboardAPI.Dashboard)
 	}
 
 	// 2026-10-05 §LsmKLBaseServer 知识库引擎 — 知识卡特征查询 + MCP 端点。

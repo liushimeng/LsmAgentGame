@@ -1043,6 +1043,9 @@ func main() {
 	cityChromeSvc.SetRoomPresence(func() bool { return len(vcMgr.RoomIDs()) > 0 })
 	gameSvcWs.WireCityChromeFeed(cityChromeSvc)
 	vcRealtimeAPI := api.NewVirtualCityRealtimeAPI(cityChromeSvc)
+	// 2026-10-21 §批次69 — 统一「实时看板」快照端点(复用同一 cityChromeSvc
+	// 单例;不新建 citychrome 实例)。
+	vcDashboardAPI := api.NewVirtualCityDashboardAPI(cityChromeSvc)
 
 	// 2026-10-20 §批次66 — 真实行情 → 游戏内市场联动:Feed→ExoQuote 装配层
 	// (唯一同时 import citychrome 与 virtual_city 的位置,引擎保持纯度)。
@@ -1076,7 +1079,7 @@ func main() {
 	_ = kbRetrievalChain // 预留给未来 MCP tools/call 内部使用
 	kbAPI := api.NewKnowledgeAPI(kbLoader)
 
-	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, vcSurveyAPI, vcScenarioAPI, vcPredictionAPI, vcCityAPI, vcRealtimeAPI, kbAPI)
+	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, vcSurveyAPI, vcScenarioAPI, vcPredictionAPI, vcCityAPI, vcRealtimeAPI, vcDashboardAPI, kbAPI)
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.

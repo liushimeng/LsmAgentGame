@@ -96,7 +96,8 @@ export function MacroPanel({ bubble, spreads }: Props) {
             className={`virtualCity-macro__state-badge virtualCity-macro__state-badge--${state}`}
             data-testid="virtualCity-macro-state"
           >
-            {t(STATE_LABEL[state] as TKey)}
+            {/* ⚠ 兜底：后端新增泡沫状态时 STATE_LABEL 会漏项 ⇒ 用原始 state 兜底显示 */}
+            {STATE_LABEL[state] ? t(STATE_LABEL[state] as TKey) : state}
           </span>
           {b && b.months_in_state > 0 && (
             <span className="virtualCity-macro__state-months">

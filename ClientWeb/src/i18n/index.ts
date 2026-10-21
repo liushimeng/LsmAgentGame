@@ -32,7 +32,15 @@ export function isLang(v: unknown): v is Lang {
 // vars 用于替换形如 {name} 的占位符。
 export function translate(lang: Lang, key: TKey, vars?: Record<string, string | number>): string {
   const dict = DICTS[lang] ?? DICTS[DEFAULT_LANG];
-  let s: string = dict[key] ?? DICTS[DEFAULT_LANG][key] ?? key;
+  // ⚠ **key 可能是 undefined**：调用方常写 `t(SOME_MAP[x] as TKey)`，而 SOME_MAP
+  //   在后端新增枚举值时会漏项 ⇒ 旧实现 `dict[key] ?? DICTS[DEFAULT_LANG][key] ?? key`
+  //   在 key 为 undefined 时会返回 **undefined（不是字符串）** ⇒ 下游任何
+  //   `label.includes(...)` / `.slice(...)` 直接抛 TypeError ⇒ 整个面板进
+  //   ErrorBoundary 白屏（批次69 实测：flow_stat 的 family 节点让「经济」维度整块崩）。
+  //   ⇒ 这里兜底成空串：**任何映射表漏项都只降级为「空标签」，绝不崩页面**。
+  const safeKey: string = typeof key === 'string' ? key : '';
+  let s: string =
+    dict[safeKey as TKey] ?? DICTS[DEFAULT_LANG][safeKey as TKey] ?? safeKey;
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {
       s = s.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));

@@ -51,7 +51,10 @@ export function VirtualCityPyramidPanel({ layers }: Props) {
       <div className="virtualCity-pyramid__layers">
         {/* 自下而上:survival → accumulation → freedom */}
         {[...layers].reverse().map((layer) => {
-          const label = t(LABEL_KEYS[layer.name as keyof typeof LABEL_KEYS] as TKey);
+          // ⚠ 兜底：后端新增层级名时 LABEL_KEYS 会漏项 ⇒ t(undefined) 返回 undefined
+          //   ⇒ 渲染空标签（不崩，但信息丢失）。查不到时用**原始 name** 兜底显示。
+          const labelKey = LABEL_KEYS[layer.name as keyof typeof LABEL_KEYS];
+          const label = labelKey ? t(labelKey as TKey) : layer.name;
           const dotClass = DOT_CLASS[layer.name as keyof typeof DOT_CLASS];
           const barWidth = Math.min(100, (layer.virtualCity_pct / maxPct) * 100);
           const pctText = formatPct(layer.virtualCity_pct, 1);

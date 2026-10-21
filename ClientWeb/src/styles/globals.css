@@ -163,3 +163,9 @@
  * 与既有规则零级联冲突。
  * 只追加在链尾，不调整既有 @import 顺序（CLAUDE.md §2.1 约束 4）。 */
 @import './virtualCity-scenario.css';
+/* 虚拟城市 批次69「虚拟城市 - 实时看板」统一外壳（VirtualCityDashboard / BoardSection /
+ * CityOverviewPanel / DataSourcesPanel）。
+ * 独立成文件：virtualCity.css 已 1777/1800 行触顶（§4 硬上限，一字不加）；
+ * 选择器全部为新增 .virtualCity-dash* 前缀，与既有规则零级联冲突。
+ * 只追加在链尾，不调整既有 @import 顺序（CLAUDE.md §2.1 约束 4）。 */
+@import './virtualCity-dashboard.css';

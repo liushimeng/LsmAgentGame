@@ -2,7 +2,8 @@
  * FundFlowSankeyPanel — 资金流向简化桑基图（2026-09-19 §P2 v2 §13.3）
  *
  * 契约: lag_docs/虚拟城市/已实现/07-P2财富可视化/.../§13.3。
- * 数据源: game.state.flow_stat(本月);节点固定 6 个(salary/firms/market/bank/gov/player)。
+ * 数据源: game.state.flow_stat(本月);节点由后端下发
+ * (salary/firms/market/bank/gov/player/world + 批次52 的 family)。
  *
  * 渲染: 左侧源节点 + 右侧汇节点 + 中间贝塞尔连线(宽 ∝ amount);
  * 玩家聚合("player")居中,工资注入从左侧入,消费/税/还款向右侧出。
@@ -10,6 +11,12 @@
  * - 节点颜色按 kind:source=绿 / sink=橙 / pass=紫;
  * - 对比度(CLAUDE.md §26):文字 ≥4.5:1,连线透明度 0.55(hover 提到 0.85);
  * - 空态:本月无流水 → 渲染 virtualCity-flow__empty。
+ *
+ * ⚠ 2026-10-21 批次69 修复：NODE_LABEL_KEYS 漏了后端批次52 新增的 `family`
+ *   节点 ⇒ `t(undefined as TKey)` 返回 undefined ⇒ NodeBox 里
+ *   `label.includes('工资')` 抛 TypeError ⇒ 整个「经济」维度进 ErrorBoundary
+ *   白屏（family 开启的房间必崩）。修复两层：
+ *   ① 补齐 family 键；② nodeLabel() 查不到映射时**用原始 id 兜底**显示。
  */
 
 import { useT } from '@/hooks/useT';
@@ -27,6 +34,13 @@ const PAD_X = 16;
 const PAD_TOP = 18;
 const PAD_BOTTOM = 18;
 
+/**
+ * 节点 id → i18n 键。
+ *
+ * ⚠ 必须与后端 `ServerGo/game/virtual_city/distribution.go` 的 FlowNode* 常量
+ *   **同步**：后端批次52 新增了 FlowNodeFamily("family")，此前前端漏项 ⇒ 崩溃。
+ *   新增后端节点时**先**在这里加键（漏项不再崩，见 nodeLabel 兜底）。
+ */
 const NODE_LABEL_KEYS: Record<string, string> = {
   salary: 'virtualCity.dashboard.flow.node.salary',
   firms: 'virtualCity.dashboard.flow.node.firms',
@@ -35,6 +49,7 @@ const NODE_LABEL_KEYS: Record<string, string> = {
   gov: 'virtualCity.dashboard.flow.node.gov',
   player: 'virtualCity.dashboard.flow.node.player',
   world: 'virtualCity.dashboard.flow.node.world',
+  family: 'virtualCity.dashboard.flow.node.family',
 };
 
 const STROKE_CLASS: Record<string, string> = {
@@ -59,6 +74,18 @@ export function FundFlowSankeyPanel({ flowStat }: Props) {
 
   // 节点布局:左列(source/p world) | 中列(player) | 右列(sink: firms/gov)
   // 其他(pass: bank/market)根据连接方向动态放左/右
+  /**
+   * 节点 id → 展示名。
+   *
+   * 兜底链：① 映射表命中 → t(键)；② 映射表漏项（后端新增节点）→ **原始 id 原样显示**。
+   * 绝不让 `t(undefined)` 的 undefined 流进 NodeBox（那里有 label.includes ⇒ 会崩）。
+   */
+  const nodeLabel = (id: string): string => {
+    const key = NODE_LABEL_KEYS[id];
+    if (!key) return id || '';
+    return t(key as TKey) || id;
+  };
+
   const leftIds: string[] = [];
   const rightIds: string[] = [];
   const idToAmount = new Map<string, number>();
@@ -221,8 +248,8 @@ export function FundFlowSankeyPanel({ flowStat }: Props) {
           const kindClass = STROKE_CLASS[linkKind(e.link, flowStat.nodes)] || STROKE_CLASS.pass;
           const path = bezierPath(e.x1, e.y1 + e.strokeWidth / 2, e.x2, e.y2 + e.strokeWidth / 2);
           const label = t('virtualCity.dashboard.flow.tooltip' as TKey, {
-            from: t(NODE_LABEL_KEYS[e.link.from] as TKey),
-            to: t(NODE_LABEL_KEYS[e.link.to] as TKey),
+            from: nodeLabel(e.link.from),
+            to: nodeLabel(e.link.to),
             amount: formatCny(e.link.amount_cny),
           });
           return (
@@ -244,7 +271,7 @@ export function FundFlowSankeyPanel({ flowStat }: Props) {
             y={c.y}
             w={80}
             h={c.h}
-            label={t(NODE_LABEL_KEYS[c.id] as TKey)}
+            label={nodeLabel(c.id)}
             amount={c.amt}
             side="left"
           />
@@ -257,7 +284,7 @@ export function FundFlowSankeyPanel({ flowStat }: Props) {
             y={c.y}
             w={80}
             h={c.h}
-            label={t(NODE_LABEL_KEYS[c.id] as TKey)}
+            label={nodeLabel(c.id)}
             amount={c.amt}
             side="right"
           />
@@ -313,10 +340,13 @@ function NodeBox({
   side: 'left' | 'right' | 'center';
 }) {
   // 节点配色按 kind 推断(简化):source=绿 / sink=橙 / pass=紫
+  // ⚠ label 兜底成 '' —— 这里有 label.includes(...)，若上游传入 undefined
+  //   （映射表漏项）会直接抛 TypeError ⇒ 整面板白屏（批次69 实测）。
+  const safeLabel = label ?? '';
   const fill =
-    label.includes('工资') || label.includes('Salary') || label.includes('給料') || label.includes('系统外')
+    safeLabel.includes('工资') || safeLabel.includes('Salary') || safeLabel.includes('給料') || safeLabel.includes('系统外')
       ? '#0d9488'
-      : label.includes('企业') || label.includes('Firms') || label.includes('企業') || label.includes('政府') || label.includes('Gov')
+      : safeLabel.includes('企业') || safeLabel.includes('Firms') || safeLabel.includes('企業') || safeLabel.includes('政府') || safeLabel.includes('Gov')
         ? '#7c2d12'
         : '#4c1d95';
 
@@ -328,7 +358,7 @@ function NodeBox({
     <g>
       <rect x={x} y={y} width={w} height={h} fill={fill} rx={3} />
       <text x={labelX} y={y + h / 2 - 2} className="virtualCity-flow__node-label" textAnchor={textAnchor}>
-        {label}
+        {safeLabel}
       </text>
       <text x={amountX} y={y + h / 2 + 10} className="virtualCity-flow__node-amount" textAnchor={textAnchor}>
         ¥{formatCny(amount)}

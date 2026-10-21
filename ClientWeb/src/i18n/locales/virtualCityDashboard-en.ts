@@ -24,6 +24,7 @@ const virtualCityDashboardEN = {
   'virtualCity.dashboard.flow.node.bank': 'Bank',
   'virtualCity.dashboard.flow.node.gov': 'Government',
   'virtualCity.dashboard.flow.node.player': 'Resident',
+  'virtualCity.dashboard.flow.node.family': 'Family',
   'virtualCity.dashboard.flow.node.world': 'System',
   'virtualCity.dashboard.flow.tooltip': '{from} → {to}: ¥{amount}',
 };

@@ -1,0 +1,45 @@
+// 虚拟城市 批次69「虚拟城市 - 实时看板」i18n（zh-CN）— 3 组 11 个维度 Tab 的统一外壳。
+const virtualCityDashZH = {
+  'virtualCity.dash.title': '虚拟城市 - 实时看板',
+  'virtualCity.dash.meta': '数据版本 v{v} · {n} 个维度',
+  'virtualCity.dash.group.city': '城市运行',
+  'virtualCity.dash.group.market': '市场金融',
+  'virtualCity.dash.group.external': '外部实时',
+
+  'virtualCity.dash.dim.cityOverview': '城市总览',
+  'virtualCity.dash.dim.finance': '财务',
+  'virtualCity.dash.dim.ledger': '流水',
+  'virtualCity.dash.dim.economy': '经济',
+  'virtualCity.dash.dim.behavior': '行为',
+  'virtualCity.dash.dim.macro': '宏观',
+  'virtualCity.dash.dim.market': '行情',
+  'virtualCity.dash.dim.marketTrade': '交易',
+  'virtualCity.dash.dim.insurance': '保险',
+  'virtualCity.dash.dim.realtime': '外部实时',
+  'virtualCity.dash.dim.dataSources': '数据源',
+
+  'virtualCity.dash.collapse': '折叠',
+  'virtualCity.dash.expand': '展开',
+  'virtualCity.dash.refreshFail': '刷新失败：{msg}',
+
+  'virtualCity.dash.sources.title': '数据源清单',
+  'virtualCity.dash.sources.empty': '数据源目录暂不可用',
+  'virtualCity.dash.sources.openLink': '访问',
+  'virtualCity.dash.sources.uncategorized': '其他',
+
+  'virtualCity.dash.overview.time': '时间与周期',
+  'virtualCity.dash.overview.society': '民生与社会',
+  'virtualCity.dash.overview.consume': '消费与劳动力',
+  'virtualCity.dash.overview.assets': '资产与金融',
+  'virtualCity.dash.overview.risk': '宏观与风险',
+  'virtualCity.dash.overview.external': '外部联动',
+  'virtualCity.dash.overview.phase': '当前阶段',
+  'virtualCity.dash.overview.cycle': '经济周期',
+  'virtualCity.dash.overview.totalWealth': '社会总财富',
+  'virtualCity.dash.overview.medianWealth': '净资产中位数',
+  'virtualCity.dash.overview.family': '家庭（父母/子女）',
+  'virtualCity.dash.overview.prediction': '预测运行',
+  'virtualCity.dash.overview.exoSentiment': '情绪分',
+};
+
+export default virtualCityDashZH;

@@ -26,6 +26,7 @@ const virtualCityDashboardZH = {
   'virtualCity.dashboard.flow.node.gov': '政府',
   'virtualCity.dashboard.flow.node.player': '居民',
   'virtualCity.dashboard.flow.node.world': '系统外',
+  'virtualCity.dashboard.flow.node.family': '家庭',
   'virtualCity.dashboard.flow.tooltip': '{from} → {to}：¥{amount}',
 };
 

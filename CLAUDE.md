@@ -364,3 +364,35 @@ Blender / `.glb` / 3D 模型 / 几何 → `art-designer`（`3d_script/build_*.py
 ### 27.8 建模四工序 SubAgent 分工（§27.0-4）
 
 结构调研（真实比例/结构/材质结论 → `build_<name>.py` 头部注释）→ 建模（几何 + 尺寸：`REAL_DIMS_M` 口径、Z-up、烘焙变换）→ 材质（`CITY_PALETTE` + `weathered_pbr()`）→ 灯光渲染（`render_preview.py` 出图 + 验收结论）。工序间**串行依赖**，并行只对**多件资产之间**成立；同一资产不要拆多个 Agent 改同一脚本。
+
+## 28. 虚拟城市 · 实时看板（批次 69 统一重构）
+
+> 右侧栏原 9 个平级面板（财务 / 行情 / 流水 / 经济 / 行为 / 宏观 / 交易 / 保险 / 实时）统一重构为**单一看板**「虚拟城市 - 实时看板」，采用**两级 Tab 架构**：分类选择器（城市运行 / 市场金融 / 外部实时）→ 维度 Tab 行（仅当前分类下的维度）；维度 Tab 条 `position: sticky` 贴在侧栏滚动容器顶部（改造前 Tab 条在独立滚动窗内会把数据挤出可视区，勿回退）。规范见 [`lag_docs/虚拟城市/已实现/69-实时看板统一重构/01-方案设计.md`](lag_docs/虚拟城市/已实现/69-实时看板统一重构/01-方案设计.md)。
+
+### 28.1 维度目录（11 个 · 前后端双源）
+
+- **前端静态目录 = 渲染权威**：`ClientWeb/src/components/virtualCity/RealtimeBoard/dashboardCatalog.ts` ⇒ 首屏不依赖网络，后端不可达 / 通道离线也出全量 Tab。
+- **后端目录 = 校验 / 补充**：`GET /api/virtual_city/dashboard` 的 `dimensions[]`，按 id 覆盖 `title_key` / `group`，**未知 id 一律忽略**；后端目录**不得**成为 Tab 可见性的唯一决定因素。
+- 后端目录源：`ServerGo/game/virtual_city/dashboard.go`（`DashboardDimensions()` / `DashboardDataSources()`，均返回**副本**，防调用方改坏包级切片）。
+
+### 28.2 看板快照端点
+
+`GET /api/virtual_city/dashboard`（需登录）→ `data.dashboard`：
+
+| 字段 | 说明 |
+|---|---|
+| `schema_version` | 目录结构版本（当前 1） |
+| `generated_at` | 生成时间（unix 秒） |
+| `dimensions[]` | 11 条维度目录（id / group / title_key / source / scope / unit / refresh） |
+| `data_sources[]` | 22 条公开免登录金融数据源登记册（category / name / purpose / url） |
+| `realtime` | 外部行情通道快照，与 `GET /api/virtual_city/realtime_board` 的 `feed` **同构** |
+
+⚠️ **通道离线时 `code` = 35053，但 `data.dashboard` 仍完整**（dimensions + data_sources 齐全，`realtime.channel.status="offline"`）。前端 `http<T>()` 在 `code≠0` 时抛错并**丢弃 body** ⇒ `fetchVirtualCityDashboard()` 对 35053 走**裸 fetch 兜底**取回完整目录。改这一段时前后端必须同步，否则「通道离线 = 看板骨架消失」。
+
+### 28.3 看板硬约束
+
+- 看板外壳与既有面板**不得双标题**：`behavior` / `macro` / `insurance` 的纯标题元素由 CSS 精确隐藏，**保险的「本月保费」必须保留可见**。
+- 刷新 / 快照失败一律**看板内联红条**展示（§7.1），不吞 console。
+- 通道徽章**只反映外部行情通道**；城市内维度的新鲜度由各面板负责，不重复展示。
+- 跨面板跳转（`ActionPanel.onTradeTab` → `market-trade`、`GameOverModal.onViewLedger` → `ledger`）经 store 的 `panelTab` 中转，改 store 类型时勿断链。
+- 看板维度**不得新增后端字段**：城市总览的 KPI 全部取自既有 `game.state` 段。

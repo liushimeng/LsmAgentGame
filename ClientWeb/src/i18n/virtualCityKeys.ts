@@ -656,6 +656,8 @@ export interface VirtualCityDict {
   'virtualCity.dashboard.flow.node.gov': string;
   'virtualCity.dashboard.flow.node.player': string;
   'virtualCity.dashboard.flow.node.world': string;
+  // 批次52 代际财富转移新增的资金流向节点（后端 distribution.go FlowNodeFamily）。
+  'virtualCity.dashboard.flow.node.family': string;
   'virtualCity.dashboard.flow.tooltip': string; // {from} {to} {amount}
 
   // ── P1-4 商业保险与风险转移引擎（2026-09-19 §财商流P1-4 §10.2）──
@@ -1059,4 +1061,49 @@ export interface VirtualCityDict {
   'virtualCity.prediction.metric.bottom50Pct': string;
   'virtualCity.prediction.metric.satisfaction': string;
   'virtualCity.prediction.metric.bubbleLeverage': string;
+
+  // ── 批次 69 ·「虚拟城市 - 实时看板」统一重构 ──────────────────────────
+  // 3 组 11 个一级 Tab（维度）：city / market / external。
+  // 文案在 locales/virtualCityDash-{zh,en,ja}.ts。
+  'virtualCity.dash.title': string;
+  /** 副行：数据版本 v{v} · {n} 个维度。 */
+  'virtualCity.dash.meta': string; // {v} {n}
+  'virtualCity.dash.group.city': string;
+  'virtualCity.dash.group.market': string;
+  'virtualCity.dash.group.external': string;
+  'virtualCity.dash.dim.cityOverview': string;
+  'virtualCity.dash.dim.finance': string;
+  'virtualCity.dash.dim.ledger': string;
+  'virtualCity.dash.dim.economy': string;
+  'virtualCity.dash.dim.behavior': string;
+  'virtualCity.dash.dim.macro': string;
+  'virtualCity.dash.dim.market': string;
+  'virtualCity.dash.dim.marketTrade': string;
+  'virtualCity.dash.dim.insurance': string;
+  'virtualCity.dash.dim.realtime': string;
+  'virtualCity.dash.dim.dataSources': string;
+  /** 折叠按钮文案 / aria-label。 */
+  'virtualCity.dash.collapse': string;
+  'virtualCity.dash.expand': string;
+  /** 刷新失败（{msg}）。 */
+  'virtualCity.dash.refreshFail': string; // {msg}
+  // 数据源清单面板
+  'virtualCity.dash.sources.title': string;
+  'virtualCity.dash.sources.empty': string;
+  'virtualCity.dash.sources.openLink': string;
+  'virtualCity.dash.sources.uncategorized': string;
+  // 城市总览面板（6 个 KPI 组标题 + 少量新标签；其余复用既有键）
+  'virtualCity.dash.overview.time': string;
+  'virtualCity.dash.overview.society': string;
+  'virtualCity.dash.overview.consume': string;
+  'virtualCity.dash.overview.assets': string;
+  'virtualCity.dash.overview.risk': string;
+  'virtualCity.dash.overview.external': string;
+  'virtualCity.dash.overview.phase': string;
+  'virtualCity.dash.overview.cycle': string;
+  'virtualCity.dash.overview.totalWealth': string;
+  'virtualCity.dash.overview.medianWealth': string;
+  'virtualCity.dash.overview.family': string;
+  'virtualCity.dash.overview.prediction': string;
+  'virtualCity.dash.overview.exoSentiment': string;
 }

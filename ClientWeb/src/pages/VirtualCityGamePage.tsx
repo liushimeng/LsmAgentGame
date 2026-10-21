@@ -4,7 +4,7 @@
  * 布局（产品设计 §6.1 线框）：
  *   顶部信息栏（月 / 年龄 / 周期徽章 / 城市时钟（旧帧兜底运行时长）/ 我的座位 / 提前开始 / 离开）
  *   ├─ 左主区：3D 城市地图（VirtualCityCityMap，批次 22 起 orbit 俯瞰 + 街景漫游双模式）+ 左上角小地图叠加
- *   ├─ 右侧栏：面板 Tab（财务 / 行情 / 流水）+ Agent 思维
+ *   ├─ 右侧栏：虚拟城市 - 实时看板（批次69：3 组 11 个维度 Tab，统一收纳原 9 个平级面板）+ Agent 思维
  *   ├─ 3D 语音气泡（批次 23：居民公开发话冒在座位 token 头顶，市民之声冒在市政厅上空）
  *   ├─ 底部动作条（ActionPanel，仅人类座位）
  *   └─ 事件流（MonthTicker）
@@ -28,7 +28,6 @@ import { useVirtualCityActionBubbles } from '@/hooks/useVirtualCityActionBubbles
 import { useSpectatorMode } from '@/hooks/useSpectatorMode';
 import { wsClient } from '@/services/ws';
 import { roomService } from '@/services/auth.service';
-import { fetchRealtimeBoard } from '@/api/virtualCity';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
 import { districtCenter, formatPct, timeRatioPresetKey, type VirtualCityDistrictId } from '@/types/virtualCity';
@@ -40,19 +39,10 @@ import {
   type VirtualCityFocusTarget,
 } from '@/components/virtualCity/VirtualCityCityMap';
 import { VirtualCityMinimap } from '@/components/virtualCity/VirtualCityMinimap';
-import { FinancialPanel } from '@/components/virtualCity/FinancialPanel';
-import { MarketPanel } from '@/components/virtualCity/MarketPanel';
-import { LedgerPanel } from '@/components/virtualCity/LedgerPanel';
-import { EconomyPanel } from '@/components/virtualCity/EconomyPanel';
-import { SurveyPanel } from '@/components/virtualCity/SurveyPanel';
+import { VirtualCityDashboard } from '@/components/virtualCity/RealtimeBoard/VirtualCityDashboard';
 import { ScenarioPanel } from '@/components/virtualCity/ScenarioPanel';
 import { ActionPanel } from '@/components/virtualCity/ActionPanel';
 import { MonthTicker } from '@/components/virtualCity/MonthTicker';
-import { MarketTradePanel } from '@/components/virtualCity/MarketTradePanel';
-import { InsurancePanel } from '@/components/virtualCity/InsurancePanel';
-import { BehaviorPanel } from '@/components/virtualCity/BehaviorPanel';
-import { MacroPanel } from '@/components/virtualCity/MacroPanel';
-import { RealtimeBoard } from '@/components/virtualCity/RealtimeBoard/RealtimeBoard';
 import { GameOverModal } from '@/components/virtualCity/GameOverModal';
 import { CityStatsPanel } from '@/components/virtualCity/CityStatsPanel';
 import { CivicElectionBanner } from '@/components/virtualCity/CivicElectionBanner';
@@ -70,67 +60,8 @@ const CYCLE_CLASS: Record<string, string> = {
 // <CityClockText> 拆到 components/virtualCity/CityClockText.tsx（批次 28 A1：
 // 页面组件不再持有 now state，消除 4Hz 全树 re-render）。
 
-/**
- * 阶段 Q：经济 Tab 内含调研入口 —— EconomyPanel + 顶部「📋 调研」小按钮，
- * 点击触发 SurveyPanel 模态。避免占独立 Tab。
- */
-function EconomyPanelWithSurvey({
-  gameState,
-  roomId,
-  onFamilyAction,
-  spectator,
-}: {
-  gameState: import('@/types/virtualCity').VirtualCityGameState | null;
-  roomId: string;
-  onFamilyAction: (action: import('@/types/virtualCity').VirtualCityAction) => void;
-  spectator: boolean;
-}) {
-  const [surveyOpen, setSurveyOpen] = useState(false);
-  return (
-    <div className="virtualCity-economy-wrap">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 4 }}>
-        <button
-          type="button"
-          className="virtualCity-tab-extra-btn"
-          onClick={() => setSurveyOpen(true)}
-          aria-label="打开调研"
-        >
-          📋 调研
-        </button>
-      </div>
-      <EconomyPanel gameState={gameState} onFamilyAction={onFamilyAction} spectator={spectator} />
-      {surveyOpen && (
-        <div
-          className="virtualCity-modal-overlay"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setSurveyOpen(false)}
-        >
-          {/* 18/04 AB-2：改统一 virtualCity-modal 三段结构（head sticky / body 内滚），
-              去掉内联 maxWidth/maxHeight —— 尺寸契约收口到 virtualCity-city3d.css。 */}
-          <div
-            className="virtualCity-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="virtualCity-modal__head">
-              <strong>📋 调研</strong>
-              <button
-                type="button"
-                className="virtualCity-tab-extra-btn"
-                onClick={() => setSurveyOpen(false)}
-              >
-                ✕ 关闭
-              </button>
-            </div>
-            <div className="virtualCity-modal__body">
-              <SurveyPanel roomId={roomId} gameState={gameState} />
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+// 批次 69：经济 Tab 的调研入口（EconomyPanelWithSurvey）已随看板重构
+// 拆到 components/virtualCity/EconomyPanelWithSurvey.tsx（看板内引用）。
 
 export function VirtualCityGamePage() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -146,11 +77,9 @@ export function VirtualCityGamePage() {
   const gameOver = useVirtualCityStore((s) => s.gameOver);
   const lastError = useVirtualCityStore((s) => s.lastError);
   const setLastError = useVirtualCityStore((s) => s.setLastError);
-  const panelTab = useVirtualCityStore((s) => s.panelTab);
   const setPanelTab = useVirtualCityStore((s) => s.setPanelTab);
   const selectedDistrict = useVirtualCityStore((s) => s.selectedDistrict);
   const setSelectedDistrict = useVirtualCityStore((s) => s.setSelectedDistrict);
-  const setRealtimeFeed = useVirtualCityStore((s) => s.setRealtimeFeed);
   const reset = useVirtualCityStore((s) => s.reset);
   // 2026-09-16 §财商流10–12座位 — 座位占用三件套（返回原语 → 不引发多余重渲染；
   // 实现见 store/virtualCity.store.ts 对应的 selectSeatedCount / selectSeatCapacity /
@@ -232,22 +161,8 @@ export function VirtualCityGamePage() {
     };
   }, [roomId, spectator, spectate, unspectate, requestState, reset]);
 
-  // 批次65：实时看板首屏快照（late-joiner 补齐 game.realtime_feed 帧间隙；
-  // 数据全局、与房间无关）。失败静默置空（§7.1：首屏拉取失败不算操作错误），
-  // 后续由 WS 帧 / 面板刷新按钮补齐。
-  useEffect(() => {
-    let cancelled = false;
-    fetchRealtimeBoard()
-      .then((r) => {
-        if (!cancelled) setRealtimeFeed(r?.feed ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setRealtimeFeed(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [setRealtimeFeed]);
+  // 批次69：实时看板（目录 + 实时 feed 首屏快照）由 <VirtualCityDashboard>
+  // 自行拉取 —— 页面只负责把对局态与动作通道喂给它。
 
   const handleSelectDistrict = useCallback(
     (id: VirtualCityDistrictId) => {
@@ -293,37 +208,9 @@ export function VirtualCityGamePage() {
   const waitingForSeats =
     gameState?.status === 'open' && !seatsReady;
 
-  // 13-3D城市渲染优化 · 阶段 E：9 Tab 按语义分两组（数据/交易），组内 wrap 防溢出。
-  // 15-3D城市全面真实感深化 · 阶段 Q：合并 Tab 9 → 6（economy + survey → economy 含调研入口；
-  // listing + loan + infomarket → market-trade 含子导航）。
-  type TabGroup = 'data' | 'trade';
-  type PanelTab =
-    | 'finance' | 'market' | 'ledger' | 'economy' | 'market-trade' | 'insurance'
-    // 批次62：行为金融 / 宏观泡沫两个新面板。
-    | 'behavior' | 'macro'
-    // 批次65：实时看板（全局真实世界行情/新闻）。
-    | 'realtime';
-  // 同步 store 类型（局部重新声明避免扩大 store.ts 类型）
-  const tabs: { key: PanelTab; label: string; group: TabGroup }[] = [
-    { key: 'finance', label: t('virtualCity.tab.finance' as TKey), group: 'data' },
-    { key: 'market', label: t('virtualCity.tab.market' as TKey), group: 'data' },
-    { key: 'ledger', label: t('virtualCity.tab.ledger' as TKey), group: 'data' },
-    { key: 'economy', label: `📊 ${t('virtualCity.tab.economy' as TKey)}`, group: 'data' },
-    { key: 'market-trade', label: `💼 市场`, group: 'trade' },
-    { key: 'insurance', label: `🛡 ${t('virtualCity.tab.insurance' as TKey)}`, group: 'trade' },
-    // 批次62：行为（本人画像，房间级宏观之外）与宏观（**所有人可见**，含观战者）。
-    // 标签用**短名**（面板内标题仍是全称）：侧栏 380px 内 8 个 Tab，
-    // 长标签会在窄按钮里换行 ⇒ 按钮变 3 行高 ⇒ 溢出 .virtualCity-tabs 的
-    // max-height:112px 被裁切（批次62 实测：标签写成「行为与认知」即被裁成竖排）。
-    { key: 'behavior', label: `🧠 ${t('virtualCity.behavior.tab' as TKey)}`, group: 'data' },
-    { key: 'macro', label: `🌐 ${t('virtualCity.macro.tab' as TKey)}`, group: 'data' },
-    // 批次65：实时看板（全局数据，数据组第 9 个按钮；组内 flex-wrap 自动两行）。
-    { key: 'realtime', label: `⚡ ${t('virtualCity.rt.tab' as TKey)}`, group: 'data' },
-  ];
-  const tabGroups: { key: TabGroup; labelKey: TKey }[] = [
-    { key: 'data', labelKey: 'virtualCity.tabgroup.data' as TKey },
-    { key: 'trade', labelKey: 'virtualCity.tabgroup.trade' as TKey },
-  ];
+  // 批次69：侧栏 9 个平级 Tab 已统一为 <VirtualCityDashboard>（3 组 11 个维度），
+  // 页面的局部 TabGroup / PanelTab 类型与 tabs 数组随之退役（改用 store 的
+  // VirtualCityPanelTab 单一事实来源）。
 
   // ── 批次 20 文档 3 A4：市长选举横幅 / 政务数据（纯派生值，不走 hook —— 位于
   //    上方 if (!roomId) 早退之后，加 hook 会违反 Rules of Hooks）。──
@@ -526,83 +413,22 @@ export function VirtualCityGamePage() {
         </div>
 
         <aside className="virtualCity-sidebar">
-          <div className="virtualCity-tabs virtualCity-tabs--panel">
-            {tabGroups.map((g) => (
-              <div className="virtualCity-tabs__group" key={g.key}>
-                <span className="virtualCity-tabs__group-label">{t(g.labelKey)}</span>
-                <div className="virtualCity-tabs__group-btns">
-                  {tabs
-                    .filter((x) => x.group === g.key)
-                    .map((x) => (
-                      <button
-                        key={x.key}
-                        type="button"
-                        className={'virtualCity-tabs__btn' + (panelTab === x.key ? ' virtualCity-tabs__btn--active' : '')}
-                        onClick={() => setPanelTab(x.key)}
-                      >
-                        {x.label}
-                      </button>
-                    ))}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="virtualCity-sidebar__panels">
-            {panelTab === 'finance' && <FinancialPanel gameState={gameState} />}
-            {panelTab === 'market' && (
-              <MarketPanel
-                gameState={gameState}
-                marketHistory={marketHistory}
-                onSelectDistrict={handleSelectDistrict}
-              />
-            )}
-            {panelTab === 'ledger' && <LedgerPanel gameState={gameState} />}
-            {/* 阶段 Q：经济 Tab 内含调研入口（EconomyPanel 顶部小按钮触发模态） */}
-            {panelTab === 'economy' && (
-              <EconomyPanelWithSurvey
-                gameState={gameState}
-                roomId={roomId}
-                onFamilyAction={sendAction}
-                spectator={spectator || (gameState?.my_seat ?? -1) < 0}
-              />
-            )}
-            {/* 阶段 Q：市场 Tab 聚合 listing / loan / infomarket 三个子面板 */}
-            {panelTab === 'market-trade' && (
-              <MarketTradePanel
-                roomId={roomId}
-                gameState={gameState}
-                mySeat={effectiveSeat}
-                my={gameState?.my ?? null}
-                sendTrade={sendTrade}
-              />
-            )}
-            {/* P1 第四期：商业保险（my.insurance 驱动；观战 / 全 Agent 模式只读）。 */}
-            {/* 批次62：行为金融面板（本人画像；观战 / 全 Agent 模式只读空态）。 */}
-            {panelTab === 'behavior' && (
-              <BehaviorPanel
-                behavior={gameState?.my?.behavior ?? null}
-                spectator={spectator || (gameState?.my_seat ?? -1) < 0}
-                onAction={sendAction}
-              />
-            )}
-            {/* 批次62：宏观泡沫面板（房间级 ⇒ 观战者也能看到集体杠杆率）。 */}
-            {panelTab === 'macro' && (
-              <MacroPanel
-                bubble={gameState?.bubble ?? null}
-                spreads={gameState?.liquidity_spreads ?? null}
-              />
-            )}
-            {panelTab === 'insurance' && (
-              <InsurancePanel
-                insurance={gameState?.my?.insurance ?? null}
-                myCash={gameState?.my?.cash ?? 0}
-                spectator={spectator || (gameState?.my_seat ?? -1) < 0}
-                onAction={sendAction}
-              />
-            )}
-            {/* 批次65：实时看板（全局真实世界行情/新闻；不依赖对局状态）。 */}
-            {panelTab === 'realtime' && <RealtimeBoard />}
-          </div>
+          {/* 批次69：9 个平级 Tab 统一重构为「虚拟城市 - 实时看板」（3 组 11 个维度 Tab）。
+              看板内部读写 store.panelTab ⇒ ActionPanel.onTradeTab(→'market-trade') /
+              GameOverModal.onViewLedger(→'ledger') 等跨面板跳转继续有效。
+              ⚠ 看板是 .virtualCity-sidebar 的**直接子元素**（不再套 .virtualCity-sidebar__panels）：
+                 后者是独立的 160px 滚动窗，会把 Tab 条与面板体关进小窗里（批次69 实测回归），
+                 且中间一层 overflow:auto 会让看板内的 sticky 导航失效。 */}
+          <VirtualCityDashboard
+            roomId={roomId}
+            gameState={gameState}
+            marketHistory={marketHistory}
+            mySeat={effectiveSeat}
+            spectator={spectator}
+            sendAction={sendAction}
+            sendTrade={sendTrade}
+            onSelectDistrict={handleSelectDistrict}
+          />
           {gameState && !spectator && gameState.my_seat < 0 && (
             <div className="virtualCity-join-hint">{t('virtualCity.joinHint' as TKey)}</div>
           )}
