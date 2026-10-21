@@ -303,6 +303,12 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		res.ExoActive = w.Market.Exo.Active
 	}
 
+	// ④.6C 预测运行逐月采样(批次68,2026-10-21 §预测运行,prediction.go):
+	// 挂在 scenarioMonthStep(②.0B)与 SocietyHist.Push(④.6B)之后、月结
+	// 结束前 —— gini 取本月新快照,当月指标点完整。无 active run → no-op。
+	// 零 rand,固定种子存量模拟回归零偏移。
+	w.predictionMonthStep()
+
 	// ⑤ 月份 +1;年调整 / 钟声。
 	isYearEnd := w.Month%12 == 0
 	isBell := w.Month%60 == 0

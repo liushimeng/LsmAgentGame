@@ -991,4 +991,72 @@ export interface VirtualCityDict {
   'virtualCity.scenario.spectatorHint': string;
   'virtualCity.scenario.appliedAt': string; // {m}
   'virtualCity.scenario.triggered': string; // {name}
+
+  // ── 批次 68 · 预测运行：基线快照 · 指标对比 · 预测报告（ScenarioPanel 第⑤块
+  //    + PredictionReportView）。键文案出处：tmpPlan/虚拟城市-预测运行报告_
+  //    20261021_113136.md §4/§7。──
+  'virtualCity.prediction.title': string;
+  'virtualCity.prediction.subtitle': string;
+  /** 状态行（有 run）：{run} {month} {n}=注入次数。 */
+  'virtualCity.prediction.statusActive': string;
+  /** 状态行（无 run）引导文案。 */
+  'virtualCity.prediction.statusEmpty': string;
+  'virtualCity.prediction.generate': string;
+  'virtualCity.prediction.generating': string;
+  'virtualCity.prediction.reportFailed': string; // {msg}
+  'virtualCity.prediction.stateFailed': string; // {msg}
+  'virtualCity.prediction.noRun': string;
+  'virtualCity.prediction.runLabel': string;
+  'virtualCity.prediction.runLatest': string;
+  'virtualCity.prediction.reportOf': string; // {run}
+  // 元数据条
+  'virtualCity.prediction.tierR1': string;
+  'virtualCity.prediction.startMonth': string;
+  'virtualCity.prediction.monthsObserved': string;
+  'virtualCity.prediction.seed': string;
+  'virtualCity.prediction.baseline': string;
+  'virtualCity.prediction.generatedAt': string;
+  'virtualCity.prediction.injections': string;
+  // 章节标题 / 表头
+  'virtualCity.prediction.firstImpact': string;
+  'virtualCity.prediction.firstImpactNote': string;
+  'virtualCity.prediction.peakRecovery': string;
+  'virtualCity.prediction.trajectory': string;
+  'virtualCity.prediction.trajectoryNote': string;
+  'virtualCity.prediction.extrapolation': string;
+  'virtualCity.prediction.extrapolationNote': string;
+  'virtualCity.prediction.boundaries': string;
+  'virtualCity.prediction.boundariesNote': string;
+  'virtualCity.prediction.resilience': string;
+  'virtualCity.prediction.resilienceRecovery': string;
+  'virtualCity.prediction.resilienceAdaptation': string;
+  'virtualCity.prediction.resilienceTransform': string;
+  'virtualCity.prediction.resilienceBasis': string;
+  'virtualCity.prediction.metricCol': string;
+  'virtualCity.prediction.peakDev': string;
+  'virtualCity.prediction.troughDev': string;
+  'virtualCity.prediction.recoveryMonth': string;
+  'virtualCity.prediction.recoveryState': string;
+  'virtualCity.prediction.recovered': string;
+  'virtualCity.prediction.unrecovered': string;
+  'virtualCity.prediction.month': string;
+  'virtualCity.prediction.monthAt': string; // {m}
+  'virtualCity.prediction.horizon': string; // {n}
+  'virtualCity.prediction.baselineShort': string;
+  'virtualCity.prediction.none': string;
+  // 指标标签（§2 指标口径表；未知指标原样展示）
+  'virtualCity.prediction.metric.goodsPriceIdx': string;
+  'virtualCity.prediction.metric.cpiAnn': string;
+  'virtualCity.prediction.metric.unemployment': string;
+  'virtualCity.prediction.metric.stockIndex': string;
+  'virtualCity.prediction.metric.goldPrice': string;
+  'virtualCity.prediction.metric.houseIdx': string;
+  'virtualCity.prediction.metric.treasuryCash': string;
+  'virtualCity.prediction.metric.avgResidentCash': string;
+  'virtualCity.prediction.metric.giniWealth': string;
+  'virtualCity.prediction.metric.giniIncome': string;
+  'virtualCity.prediction.metric.top10Pct': string;
+  'virtualCity.prediction.metric.bottom50Pct': string;
+  'virtualCity.prediction.metric.satisfaction': string;
+  'virtualCity.prediction.metric.bubbleLeverage': string;
 }

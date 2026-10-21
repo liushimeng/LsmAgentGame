@@ -678,6 +678,20 @@ export interface VirtualCityCitySnapshot {
   };
 }
 
+/** game.state.prediction 小结（批次 68 §5 view 增量；无 run = null/omit）。
+ *  报告全文类型在 api/virtualCity.ts（VirtualCityPredictionReport）。 */
+export interface VirtualCityPredictionSummary {
+  /** 当前 active run id，如 "PR1"。 */
+  run_id: string;
+  /** 注入时点（T0）月份。 */
+  start_month: number;
+  months_observed: number;
+  /** 复现层级（本批次恒 "R1"）。 */
+  tier: string;
+  /** 并入当前 run 的场景注入数。 */
+  active_scenarios: number;
+}
+
 /** game.state 全量快照（按座位脱敏，BroadcastTo 单发）。 */
 export interface VirtualCityGameState {
   room_id: string;
@@ -759,6 +773,8 @@ export interface VirtualCityGameState {
   bubble?: VirtualCityBubbleSnapshot;
   /** 资产流动性买卖价差表（批次62 §6；房间级，所有人可见）。 */
   liquidity_spreads?: VirtualCityLiquiditySpreadSnapshot;
+  /** 预测运行小结（批次68 §5；无 run omit/null）。 */
+  prediction?: VirtualCityPredictionSummary | null;
 }
 
 // ── 市长选举（批次 20 文档 3 A1/A3；game.state.public_services 选举段）────

@@ -28,7 +28,7 @@ import (
 )
 
 // New constructs the *gin.Engine.
-func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcScenarioAPI *api.VirtualCityScenarioAPI, vcCityAPI *api.VirtualCityAPI, vcRealtimeAPI *api.VirtualCityRealtimeAPI, knowledgeAPI *api.KnowledgeAPI) *gin.Engine {
+func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcScenarioAPI *api.VirtualCityScenarioAPI, vcPredictionAPI *api.VirtualCityPredictionAPI, vcCityAPI *api.VirtualCityAPI, vcRealtimeAPI *api.VirtualCityRealtimeAPI, knowledgeAPI *api.KnowledgeAPI) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 
@@ -277,6 +277,7 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		vcGames.GET("/scenario_catalog", vcScenarioAPI.Catalog)
 		vcGames.POST("/rooms/:id/scenario", vcScenarioAPI.Inject)
 		vcGames.GET("/rooms/:id/scenarios", vcScenarioAPI.List)
+		vcGames.GET("/rooms/:id/prediction", vcPredictionAPI.Report)
 		vcGames.POST("/rooms/:id/survey", vcSurveyAPI.Launch)
 		vcGames.GET("/rooms/:id/surveys", vcSurveyAPI.List)
 		vcGames.GET("/rooms/:id/city/residents", vcCityAPI.ListResidents)

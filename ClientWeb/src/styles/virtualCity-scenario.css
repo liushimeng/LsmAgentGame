@@ -233,3 +233,194 @@
   .virtualCity-scenario__effect { grid-template-columns: minmax(0, 1fr) 56px; }
   .virtualCity-scenario__effect-text { grid-column: 1 / -1; }
 }
+
+/* ══ 批次 68 · 预测运行（PredictionReportView / ScenarioPanel 第⑤块）═════
+ * 新增前缀 .virtualCity-prediction / .virtualCity-prediction__*，与上方
+ * .virtualCity-scenario-* 零级联冲突。无动画 ⇒ 无 @keyframes 需求
+ * （§26.3 三件套仅约束带动画的状态类）。
+ * 暗色对比度（§26.1）：正文 #e5e7eb on #161d28 ≈12:1；dim #b7bfcc ≈8:1；
+ * 层级徽章 #111827 on #d4a017 ≈7.5:1；已恢复 #052e16 on #34d399 ≈9:1；
+ * 未恢复 #111827 on #f87171 ≈7:1；R1 边界条 #fde68a on #262013 ≈10:1。
+ */
+.virtualCity-prediction {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.virtualCity-prediction__status {
+  margin: 0;
+  color: var(--virtualCity-text);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.virtualCity-prediction__report {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+  background: var(--virtualCity-panel);
+  padding: 10px;
+}
+
+/* 元数据条 */
+.virtualCity-prediction__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--virtualCity-panel-2);
+}
+.virtualCity-prediction__meta-item {
+  color: var(--virtualCity-text);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.virtualCity-prediction__meta-item--dim { color: var(--virtualCity-text-dim); }
+
+/* 状态徽章（§26.1 ≥5:1，实底深字，禁同色相叠加） */
+.virtualCity-prediction__badge {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.virtualCity-prediction__badge--tier {
+  background: var(--virtualCity-accent-strong); /* #d4a017 */
+  color: #111827;
+}
+.virtualCity-prediction__badge--ok { background: #34d399; color: #052e16; }
+.virtualCity-prediction__badge--warn { background: #f87171; color: #111827; }
+
+/* 章节 */
+.virtualCity-prediction__section { display: flex; flex-direction: column; gap: 6px; }
+.virtualCity-prediction__section-title {
+  color: #fff;
+  font-weight: 700;
+  font-size: 12.5px;
+}
+.virtualCity-prediction__note {
+  margin: 0;
+  color: var(--virtualCity-text-dim);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.virtualCity-prediction__note--dim { color: #93a0b4; } /* on #161d28 ≈5:1 */
+.virtualCity-prediction__sub { color: var(--virtualCity-text-dim); font-weight: 400; font-size: 11px; }
+.virtualCity-prediction__num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 首月直接冲击 chips */
+.virtualCity-prediction__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.virtualCity-prediction__chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 999px;
+  background: var(--virtualCity-panel-2);
+  color: var(--virtualCity-text);
+  padding: 3px 10px;
+  font-size: 11.5px;
+}
+.virtualCity-prediction__chip--up { border-color: #34d399; }
+.virtualCity-prediction__chip--down { border-color: #f87171; }
+.virtualCity-prediction__chip-delta {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.virtualCity-prediction__chip--up .virtualCity-prediction__chip-delta { color: #34d399; }
+.virtualCity-prediction__chip--down .virtualCity-prediction__chip-delta { color: #f87171; }
+
+/* 表格（峰值与恢复 / 逐月轨迹 / 外推） */
+.virtualCity-prediction__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+.virtualCity-prediction__table th,
+.virtualCity-prediction__table td {
+  border: 1px solid var(--virtualCity-border);
+  padding: 4px 6px;
+  text-align: left;
+  color: var(--virtualCity-text);
+}
+.virtualCity-prediction__table th {
+  background: var(--virtualCity-panel-2);
+  color: var(--virtualCity-text-dim);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.virtualCity-prediction__scroll {
+  max-height: 240px;
+  overflow-y: auto;
+  border-radius: 6px;
+}
+
+/* 韧性画像评分 */
+.virtualCity-prediction__scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.virtualCity-prediction__score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 6px;
+  background: var(--virtualCity-panel-2);
+  padding: 4px 10px;
+}
+.virtualCity-prediction__score i {
+  font-style: normal;
+  color: var(--virtualCity-text-dim);
+  font-size: 11.5px;
+}
+.virtualCity-prediction__score b {
+  color: var(--virtualCity-accent-strong);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 列表 + 边界与限制（R1 声明醒目：警示边框 + 暖色实底，禁透明浅字） */
+.virtualCity-prediction__list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--virtualCity-text);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.virtualCity-prediction__boundaries {
+  border: 1px solid var(--virtualCity-accent-strong);
+  border-radius: 8px;
+  background: #262013;
+  padding: 8px 10px;
+}
+.virtualCity-prediction__boundary {
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+.virtualCity-prediction__boundary--r1 {
+  border-left: 3px solid #fbbf24;
+  background: #33290f;
+  color: #fde68a; /* on #33290f ≈10:1 */
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .virtualCity-prediction__meta { flex-direction: column; align-items: flex-start; }
+  .virtualCity-prediction__table th .virtualCity-prediction__sub { display: none; }
+}

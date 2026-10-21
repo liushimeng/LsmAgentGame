@@ -64,6 +64,9 @@ type ClientGameState struct {
 	// ScenariosRecent 2026-10-21 §场景推演:最近 20 条条件注入记录(旧→新;
 	// 恒为数组,空 = [])。观察者据此回看条件触发者做过什么。
 	ScenariosRecent []ScenarioAppliedRecord `json:"scenarios_recent"`
+	// Prediction 批次68 §预测运行:当前 active run 小结(可空;无 run → null,
+	// 前端展示「暂无预测运行」)。完整报告走 GET .../prediction。
+	Prediction *PredictionSummary `json:"prediction"`
 	// P2 v2(2026-09-19 §P2-可视化):本月资金流向;omitempty 保证空月份不下发。
 	FlowStat *FlowStatJSON `json:"flow_stat,omitempty"`
 	// 阶段4(2026-09-21 §城市扩张v2.12):政府财政国库快照(nil → 不下发;
@@ -94,6 +97,15 @@ type ClientGameState struct {
 	// 流动性价差表。观战者与玩家全量可见(宏观信息,非隐私)。
 	Bubble           *BubbleSnapshot          `json:"bubble,omitempty"`
 	LiquiditySpreads *LiquiditySpreadSnapshot `json:"liquidity_spreads,omitempty"`
+}
+
+// PredictionSummary 批次68 §预测运行 game.state 小结(方案 §5;可空)。
+type PredictionSummary struct {
+	RunID           string `json:"run_id"`
+	StartMonth      int    `json:"start_month"`
+	MonthsObserved  int    `json:"months_observed"`
+	Tier            string `json:"tier"`
+	ActiveScenarios int    `json:"active_scenarios"`
 }
 
 // ConsumerMarketJSON 是 consumer_market 子结构(P1 §6.1)。
@@ -1316,6 +1328,18 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 			start = n - scenarioRecordCap
 		}
 		cs.ScenariosRecent = append(cs.ScenariosRecent, world.ScenarioApplied[start:]...)
+	}
+	// 批次68 §预测运行:当前 active run 小结(无 run → prediction: null)。
+	if run := world.predictionActiveRun(); run != nil {
+		observed := len(run.Trajectory) - 1
+		if observed < 0 {
+			observed = 0
+		}
+		cs.Prediction = &PredictionSummary{
+			RunID: run.ID, StartMonth: run.StartMonth,
+			MonthsObserved: observed, Tier: PredictionTierR1,
+			ActiveScenarios: len(world.Scenarios),
+		}
 	}
 	// Surveys:open(≤1)+ 最近 4 个 closed(含 Result),倒序(调研契约 §5.1)。
 	cs.Surveys = make([]SurveyJSON, 0)

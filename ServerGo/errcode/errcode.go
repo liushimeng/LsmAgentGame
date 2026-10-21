@@ -190,6 +190,9 @@ const (
 	ErrVirtualCityScenarioUnknown       = 35055 // 场景 kind 不在目录内
 	ErrVirtualCityScenarioParamsInvalid = 35056 // 强度/持续月数/target 非法
 	ErrVirtualCityScenarioActiveLimit   = 35057 // 同时生效的场景数达到上限(8)
+	// 35058 — 虚拟城市预测运行(批次68,2026-10-21 §预测运行)。
+	// 无任何 run 不报错(runs:[] + report:null);仅指定 run_id 未命中时返回。
+	ErrVirtualCityPredictionRunNotFound = 35058 // 预测运行不存在(不在该房)
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
 	// 契约: lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md §4.4。
 	ErrVirtualCitySenseInvalid  = 35100 // 感知/移动工具参数非法(未知城区、未知 mode、目标不存在)
@@ -345,10 +348,11 @@ var DefaultMessages = map[int]string{
 	// 批次65 City-Chrome 实时数据通道(契约 §3.5)。
 	ErrCityChromeChannelOffline:     "realtime data channel offline",
 	ErrCityChromeRefreshTooFrequent: "refresh too frequent for this category, retry later",
-	// 35055–35057 — 虚拟城市场景推演(2026-10-21 §场景推演;中文文案)。
+	// 35055–35058 — 虚拟城市场景推演 / 预测运行(2026-10-21;中文文案)。
 	ErrVirtualCityScenarioUnknown:       "场景不存在：kind 不在场景目录内",
 	ErrVirtualCityScenarioParamsInvalid: "场景参数非法：强度须 1-5、持续 1-24 月、target 须为合法取值",
 	ErrVirtualCityScenarioActiveLimit:   "同时生效的场景已达上限（8 个），请等待现有场景消退后再注入",
+	ErrVirtualCityPredictionRunNotFound: "预测运行不存在：run_id 不在该房间",
 }
 
 // Code constructs a Coded error.

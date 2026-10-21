@@ -17,6 +17,10 @@
  *   ③ 触发：二次确认（ConfirmModal）后 POST；返回的 effects 就地展示，随后刷新历史。
  *   ④ 最近场景事件：kind → 目录名映射 + 强度 + 注入月 + 备注。
  *
+ * 批次 68 追加第 ⑤ 块「预测运行」（注入表单之后、注入历史之前）：
+ *   状态行（run / 观测月 / 注入次数，无 run 引导文案）+ 「生成预测报告」按钮 →
+ *   GET /prediction → PredictionReportView 渲染（§7.2 清单）。
+ *
  * 错误展示（CLAUDE.md §7.1）：所有 API 失败都同时「面板内联红条」+ 「全局 toast」
  * (`reportGlobalError`)，绝不 console-only；会话过期走 AuthModal 通道不重复展示。
  */
@@ -30,12 +34,16 @@ import {
   applyVirtualCityScenario,
   fetchScenarioCatalog,
   fetchVirtualCityScenarios,
+  getPredictionReport,
+  type VirtualCityPredictionReport,
+  type VirtualCityPredictionRunSummary,
   type VirtualCityScenarioApplyRequest,
   type VirtualCityScenarioEffect,
   type VirtualCityScenarioRecord,
   type VirtualCityScenarioSpec,
 } from '@/api/virtualCity';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { PredictionReportView } from '@/components/virtualCity/PredictionReportView';
 
 interface Props {
   roomId: string;
@@ -89,6 +97,16 @@ export function ScenarioPanel({ roomId, playing }: Props) {
   const [history, setHistory] = useState<VirtualCityScenarioRecord[] | null>(null);
   const [historyErr, setHistoryErr] = useState<string | null>(null);
 
+  // ── 批次 68 预测运行 ──────────────────────────────────
+  // runs 只为状态行；report 仅在点「生成预测报告」后拉取并渲染（§7.2）。
+  const [predRuns, setPredRuns] = useState<VirtualCityPredictionRunSummary[] | null>(null);
+  const [predStateErr, setPredStateErr] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState(''); // '' = 最新 run
+  const [reportLoading, setReportLoading] = useState(false);
+  const [report, setReport] = useState<VirtualCityPredictionReport | null>(null);
+  const [reportRunId, setReportRunId] = useState('');
+  const [reportErr, setReportErr] = useState<string | null>(null);
+
   const [selectedKind, setSelectedKind] = useState('');
   const [magnitude, setMagnitude] = useState(3);
   const [duration, setDuration] = useState('');
@@ -111,6 +129,14 @@ export function ScenarioPanel({ roomId, playing }: Props) {
     for (const s of specs ?? []) map[s.kind] = s.name;
     return map;
   }, [specs]);
+
+  // 状态行取「最新」run = 观测推进最远者（start_month + months_observed 最大）。
+  const latestRun = useMemo(() => {
+    if (!predRuns || predRuns.length === 0) return null;
+    return predRuns.reduce((a, b) =>
+      b.start_month + b.months_observed >= a.start_month + a.months_observed ? b : a,
+    );
+  }, [predRuns]);
 
   // 分组（保持后端出现的分组语义；已知分组按固定顺序，未知分组追加）。
   const groups = useMemo(() => {
@@ -207,6 +233,75 @@ export function ScenarioPanel({ roomId, playing }: Props) {
     }
   }, [roomId, t]);
 
+  // 预测运行状态（runs 列表）：挂载 / 换房 / 注入成功后刷新。无 run 不报错
+  // （runs:[] 且 report:null → 状态行展示引导文案）。
+  const refreshPredictionState = useCallback(async () => {
+    try {
+      const r = await getPredictionReport(roomId);
+      setPredRuns(r?.runs ?? []);
+      setPredStateErr(null);
+    } catch (e) {
+      if (isSessionExpiredError(e)) return;
+      setPredStateErr(
+        t('virtualCity.prediction.stateFailed' as TKey, {
+          msg: errorMessage(e, String(e)),
+        }),
+      );
+      setPredRuns([]);
+      reportGlobalError(e);
+    }
+  }, [roomId, t]);
+
+  useEffect(() => {
+    let alive = true;
+    setPredRuns(null);
+    setPredStateErr(null);
+    setReport(null);
+    setReportErr(null);
+    setSelectedRunId('');
+    getPredictionReport(roomId)
+      .then((r) => {
+        if (alive) setPredRuns(r?.runs ?? []);
+      })
+      .catch((e) => {
+        if (!alive || isSessionExpiredError(e)) return;
+        setPredStateErr(
+          t('virtualCity.prediction.stateFailed' as TKey, {
+            msg: errorMessage(e, String(e)),
+          }),
+        );
+        setPredRuns([]);
+        reportGlobalError(e);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [roomId, t]);
+
+  // 「生成预测报告」：GET（runId 缺省 = 最新）→ 就地渲染，失败 §7.1 双通道。
+  const generateReport = useCallback(async () => {
+    setReportLoading(true);
+    setReportErr(null);
+    try {
+      const r = await getPredictionReport(roomId, selectedRunId || undefined);
+      setPredRuns(r?.runs ?? []);
+      setReport(r?.report ?? null);
+      setReportRunId(selectedRunId);
+      if (!r?.report) {
+        setReportErr(t('virtualCity.prediction.noRun' as TKey));
+      }
+    } catch (e) {
+      if (isSessionExpiredError(e)) return;
+      const msg = t('virtualCity.prediction.reportFailed' as TKey, {
+        msg: errorMessage(e, String(e)),
+      });
+      setReportErr(msg);
+      reportGlobalError(e);
+    } finally {
+      setReportLoading(false);
+    }
+  }, [roomId, selectedRunId, t]);
+
   const selectSpec = (spec: VirtualCityScenarioSpec) => {
     setSelectedKind(spec.kind);
     const mags = spec.magnitudes?.length ? spec.magnitudes : [1, 2, 3, 4, 5];
@@ -240,6 +335,8 @@ export function ScenarioPanel({ roomId, playing }: Props) {
       setTarget('');
       setDuration('');
       void refreshHistory();
+      // 注入会开启/并入预测 run（§3 生命周期），同步刷新状态行。
+      void refreshPredictionState();
     } catch (e) {
       if (isSessionExpiredError(e)) return;
       const msg = t('virtualCity.scenario.applyFailed' as TKey, {
@@ -250,7 +347,7 @@ export function ScenarioPanel({ roomId, playing }: Props) {
     } finally {
       setSubmitting(false);
     }
-  }, [selected, magnitude, duration, target, note, roomId, t, refreshHistory]);
+  }, [selected, magnitude, duration, target, note, roomId, t, refreshHistory, refreshPredictionState]);
 
   const magnitudes = useMemo(() => {
     const list = selected?.magnitudes?.length ? selected.magnitudes : [1, 2, 3, 4, 5];
@@ -499,6 +596,96 @@ export function ScenarioPanel({ roomId, playing }: Props) {
           )}
         </div>
       )}
+
+      {/* 批次 68 · 预测运行：状态行 + 生成报告 + 报告视图 */}
+      <div className="virtualCity-prediction" data-testid="virtualCity-prediction">
+        <div className="virtualCity-scenario__section-title">
+          {t('virtualCity.prediction.title' as TKey)}
+        </div>
+        <p className="virtualCity-scenario__hint virtualCity-scenario__hint--dim">
+          {t('virtualCity.prediction.subtitle' as TKey)}
+        </p>
+
+        {predStateErr && (
+          <div className="virtualCity-scenario__error" role="alert">
+            {predStateErr}
+          </div>
+        )}
+
+        {predRuns === null && !predStateErr && (
+          <p className="virtualCity-scenario__hint">{t('virtualCity.scenario.loading' as TKey)}</p>
+        )}
+
+        {predRuns !== null && predRuns.length === 0 && (
+          <p className="virtualCity-scenario__hint" data-testid="virtualCity-prediction-empty">
+            {t('virtualCity.prediction.statusEmpty' as TKey)}
+          </p>
+        )}
+
+        {latestRun && (
+          <p className="virtualCity-prediction__status" data-testid="virtualCity-prediction-status">
+            {t('virtualCity.prediction.statusActive' as TKey, {
+              run: latestRun.id,
+              month: latestRun.start_month + latestRun.months_observed,
+              n: latestRun.injections?.length ?? 0,
+            })}
+          </p>
+        )}
+
+        {predRuns !== null && predRuns.length > 1 && (
+          <label className="virtualCity-scenario__field">
+            <span className="virtualCity-scenario__field-label">
+              {t('virtualCity.prediction.runLabel' as TKey)}
+            </span>
+            <select
+              className="virtualCity-scenario__input"
+              value={selectedRunId}
+              onChange={(e) => setSelectedRunId(e.target.value)}
+              disabled={reportLoading}
+              data-testid="virtualCity-prediction-run-select"
+            >
+              <option value="">{t('virtualCity.prediction.runLatest' as TKey)}</option>
+              {predRuns.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.id}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <div className="virtualCity-scenario__actions">
+          <button
+            type="button"
+            className="btn btn-primary virtualCity-scenario__submit"
+            onClick={() => void generateReport()}
+            disabled={reportLoading || predRuns === null || predRuns.length === 0}
+            data-testid="virtualCity-prediction-generate"
+          >
+            {reportLoading
+              ? t('virtualCity.prediction.generating' as TKey)
+              : t('virtualCity.prediction.generate' as TKey)}
+          </button>
+        </div>
+
+        {/* 生成失败（§7.1 内联层；全局 toast 已由 catch 上报） */}
+        {reportErr && (
+          <div className="virtualCity-scenario__error" role="alert">
+            {reportErr}
+          </div>
+        )}
+
+        {report && (
+          <>
+            {reportRunId && (
+              <p className="virtualCity-prediction__note virtualCity-prediction__note--dim">
+                {t('virtualCity.prediction.reportOf' as TKey, { run: report.meta?.run_id ?? reportRunId })}
+              </p>
+            )}
+            <PredictionReportView report={report} />
+          </>
+        )}
+      </div>
 
       {/* 最近场景事件 */}
       <div className="virtualCity-scenario__history">

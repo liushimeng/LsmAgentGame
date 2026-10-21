@@ -247,3 +247,171 @@ export function fetchVirtualCityScenarios(
     `/api/games/virtual_city/rooms/${encodeURIComponent(roomId)}/scenarios`,
   );
 }
+
+// ── 批次 68 · 预测运行：基线快照 · 指标对比 · 预测报告 ─────────────────────
+// 契约（backend-dev 并行实现，字段/路径逐字对齐 tmpPlan/
+// 虚拟城市-预测运行报告_20261021_113136.md §4/§5）：
+//   GET /api/games/virtual_city/rooms/:id/prediction             // 最新 run
+//   GET /api/games/virtual_city/rooms/:id/prediction?run_id=PR2  // 指定 run
+//   → {code:0, data:{runs:[...], report: PredictionReport | null}}
+// 权限：任意登录用户（观察者/条件触发者同口径）。无 run 不报错——runs:[] 且
+// report:null，前端展示「暂无预测运行」。run_id 不在该房 → 35058。
+// §7.1：调用方（ScenarioPanel）catch 后面板内联错误 + reportGlobalError 上报。
+// 类型字段名与 §4 JSON snake_case 逐字一致（免映射层），注释标注语义。
+
+/** report.meta（复现层级 R1 = 观测对照：基线为注入时点 T0 观测快照）。 */
+export interface VirtualCityPredictionMeta {
+  /** run id，如 "PR1"。 */
+  run_id: string;
+  /** 复现层级；本批次唯一取值 "R1"（R0 同种子孪生未实现）。 */
+  tier: string;
+  /** 基线快照 hash id（fnv/基线点字段序列化）。 */
+  baseline_snapshot_id: string;
+  seed: number;
+  /** 注入时点（T0）月份。 */
+  start_month: number;
+  /** 已观测月数（trajectory 点数 − 1，≤36）。 */
+  months_observed: number;
+  /** 生成时间戳（unix 毫秒）。 */
+  generated_at: number;
+  /** ScenarioAppliedRecord 子集：id/kind/magnitude/applied_month/note。 */
+  injections: VirtualCityScenarioRecord[];
+}
+
+/** report.scenarios[] 元素（并入本 run 的场景详情）。 */
+export interface VirtualCityPredictionScenario {
+  kind: string;
+  name: string;
+  group: string;
+  magnitude: number;
+  duration_months: number;
+  target: string;
+  note: string;
+  applied_month: number;
+  /** 衰减形态描述（如 "线性衰减(remaining/total)"）。 */
+  decay: string;
+}
+
+/** report.first_month_impact[] 元素（T0+1 点 vs 基线；T0 即基线 ⇒ delta 0）。 */
+export interface VirtualCityPredictionImpact {
+  metric: string;
+  baseline: number;
+  value: number;
+  /** 相对基线偏离百分比（%，24.0 = +24%）。 */
+  delta_pct: number;
+  /** 指标单位（如 ratio / index / currency）。 */
+  unit: string;
+  /** 服务端生成的展示文本。 */
+  text: string;
+}
+
+/** report.trajectory[] 元素（逐月指标点，T0 也记一点，≤36 点滚动）。 */
+export interface VirtualCityPredictionTrajectoryPoint {
+  month: number;
+  /** metric → 当月取值。 */
+  values: Record<string, number>;
+  /** metric → T0 基线值（平直基线，恒定）。 */
+  baseline: Record<string, number>;
+}
+
+/** report.peak_recovery[] 元素（偏离回落基线 ±5% 带内视为恢复）。 */
+export interface VirtualCityPredictionPeakRecovery {
+  metric: string;
+  /** 最大正/负偏离峰值（%）。 */
+  peak_dev_pct: number;
+  peak_month: number;
+  /** 反向谷值偏离（%）。 */
+  trough_dev_pct: number;
+  trough_month: number;
+  /** 偏离回落 ±5% 带且其后保持的首月；未恢复 = null。 */
+  recovery_month: number | null;
+  recovered: boolean;
+}
+
+/** report.transmission（传导链贡献度；启发式估计非计量因果分解）。 */
+export interface VirtualCityPredictionTransmission {
+  chains: {
+    /** 链路名（如 "⑥资产→③就业→④消费"）。 */
+    chain: string;
+    /** 归一化贡献度 [0,1]。 */
+    contribution: number;
+    dominant: boolean;
+    evidence: string;
+  }[];
+  note: string;
+}
+
+/** report.distribution（财富/收入分配结构变化）。 */
+export interface VirtualCityPredictionDistribution {
+  gini_wealth_delta: number;
+  top10_delta_pct: number;
+  bottom50_delta_pct: number;
+  /** 金字塔层级份额位移。 */
+  pyramid_shift: number[];
+  text: string;
+}
+
+/** report.extrapolation[] 元素（3/6/12 月外推点估计 + 置信带）。 */
+export interface VirtualCityPredictionExtrapolation {
+  horizon_months: number;
+  metric: string;
+  point: number;
+  lo: number;
+  hi: number;
+}
+
+/** report.resilience（韧性画像；仅 group ∈ {自然灾害, 未知灾难} 时 applicable）。 */
+export interface VirtualCityPredictionResilience {
+  applicable: boolean;
+  /** 评分 ∈ [0,100]。 */
+  recovery_score: number;
+  adaptation_score: number;
+  transform_score: number;
+  basis: string[];
+}
+
+/** 预测报告全文（§4 契约；boundaries 首条为 R1 观测对照声明）。 */
+export interface VirtualCityPredictionReport {
+  meta: VirtualCityPredictionMeta;
+  scenarios: VirtualCityPredictionScenario[];
+  first_month_impact: VirtualCityPredictionImpact[];
+  trajectory: VirtualCityPredictionTrajectoryPoint[];
+  peak_recovery: VirtualCityPredictionPeakRecovery[];
+  transmission: VirtualCityPredictionTransmission;
+  distribution: VirtualCityPredictionDistribution;
+  extrapolation: VirtualCityPredictionExtrapolation[];
+  resilience: VirtualCityPredictionResilience;
+  boundaries: string[];
+}
+
+/** GET prediction 的 runs[] 元素（环形容量保留最近 3 个 run）。 */
+export interface VirtualCityPredictionRunSummary {
+  id: string;
+  start_month: number;
+  months_observed: number;
+  tier: string;
+  /** 并入本 run 的注入记录 id 列表。 */
+  injections: string[];
+}
+
+/** GET prediction 的 data 形状（无 run → runs:[] 且 report:null，不算错误）。 */
+export interface VirtualCityPredictionState {
+  runs: VirtualCityPredictionRunSummary[];
+  report: VirtualCityPredictionReport | null;
+}
+
+/**
+ * GET /api/games/virtual_city/rooms/:id/prediction（需登录）— 预测运行报告。
+ *
+ * runId 缺省取该房最新 run；指定 run_id 不在该房 → 35058。
+ * 返回 {runs, report}；无任何 run 时 runs:[] 且 report:null（前端引导文案）。
+ */
+export function getPredictionReport(
+  roomId: string,
+  runId?: string,
+): Promise<VirtualCityPredictionState> {
+  const params = runId ? `?run_id=${encodeURIComponent(runId)}` : '';
+  return http<VirtualCityPredictionState>(
+    `/api/games/virtual_city/rooms/${encodeURIComponent(roomId)}/prediction${params}`,
+  );
+}

@@ -201,6 +201,11 @@ type World struct {
 	ScenarioApplied []ScenarioAppliedRecord
 	ScenarioSeq     int
 
+	// 批次68(2026-10-21 §预测运行):预测运行状态(基线快照 + 逐月轨迹 +
+	// 最近 3 个 run 环形缓冲;见 prediction.go)。惰性初始化(nil 安全),
+	// 零 rand —— 固定种子存量模拟回归零偏移。
+	Prediction *PredictionState
+
 	// P1-4: 商业保险与风险转移引擎(2026-09-19 §财商流P1-4 §11)。NewWorld 恒置
 	// true;房间层 Start 时按配置回写(false 时投保/退保 35041、月结不扣缴、
 	// 意外事件不掷骰 —— rand 序列零偏移,固定种子存量对局回归一致)。

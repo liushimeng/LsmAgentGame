@@ -417,6 +417,11 @@ func applyScenarioToWorld(w *World, kind string, magnitude, durationMonths int, 
 		return nil, nil, nil, e
 	}
 	note = truncateRunes(strings.TrimSpace(note), scenarioNoteMaxRunes)
+
+	// 批次68 §预测运行:校验全部通过后、冲击生效**之前**拍 T0 基线
+	// (无 active run 开新 run,有则并入;prediction.go)。零 rand。
+	w.predictionBeginOrJoin()
+
 	mag := float64(magnitude)
 	prof := def.profile
 	effects := make([]ScenarioEffect, 0, 8)
@@ -614,6 +619,9 @@ func applyScenarioToWorld(w *World, kind string, magnitude, durationMonths int, 
 		electionBiasBase: biasBase,
 	}
 	w.Scenarios = append(w.Scenarios, active)
+
+	// 批次68 §预测运行:注入记录并入 active run(方案 §3;零 rand)。
+	w.predictionRecordInjection(rec, def.spec.Name, def.spec.Group, durationMonths, target)
 
 	w.emitEvent(EventScenario, -1, fmt.Sprintf(
 		"场景注入『%s』L%d(持续 %d 个月,目标:%s)%s",

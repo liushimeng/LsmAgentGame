@@ -1488,6 +1488,73 @@ func (r *VirtualCityRoom) ListScenarios() []ScenarioAppliedRecord {
 	return out
 }
 
+// ── 2026-10-21 §预测运行(批次68):基线快照 · 指标对比 · 预测报告 ──
+
+// PredictionRuns 返回全部预测 run 摘要(旧→新;无 run → 空切片非 null)。
+// 锁纪律(§92a):持 r.mu 只读 World.Prediction,不回调房间层。
+func (r *VirtualCityRoom) PredictionRuns() []PredictionRunSummary {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := []PredictionRunSummary{}
+	if r.World == nil || r.World.Prediction == nil {
+		return out
+	}
+	for _, run := range r.World.Prediction.Runs {
+		if run == nil {
+			continue
+		}
+		ids := make([]string, 0, len(run.Injections))
+		for _, inj := range run.Injections {
+			ids = append(ids, inj.ID)
+		}
+		observed := len(run.Trajectory) - 1
+		if observed < 0 {
+			observed = 0
+		}
+		out = append(out, PredictionRunSummary{
+			ID: run.ID, StartMonth: run.StartMonth,
+			MonthsObserved: observed, Tier: PredictionTierR1, Injections: ids,
+		})
+	}
+	return out
+}
+
+// PredictionReport 生成指定 run 的预测报告(runID 空 = 最新 run;方案 §5)。
+// 无任何 run → (nil, nil) 前端展示「暂无预测运行」;run_id 不在该房 → 35058。
+// 锁纪律(§92a):持 r.mu 调纯函数 BuildPredictionReport,不回调房间层。
+func (r *VirtualCityRoom) PredictionReport(runID string) (*PredictionReport, *errcode.Error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var runs []*PredictionRun
+	if r.World != nil && r.World.Prediction != nil {
+		runs = r.World.Prediction.Runs
+	}
+	var run *PredictionRun
+	for _, cand := range runs {
+		if cand != nil && cand.ID == runID && runID != "" {
+			run = cand
+			break
+		}
+	}
+	if runID != "" {
+		// 指定 run_id:未命中一律 35058(方案 §5;含「该房尚无任何 run」)。
+		if run == nil {
+			return nil, errcode.CodeMsg(errcode.ErrVirtualCityPredictionRunNotFound,
+				fmt.Sprintf("预测运行 %s 不存在", runID))
+		}
+		return BuildPredictionReport(run, r.seed, time.Now().UnixMilli()), nil
+	}
+	// 缺省 = 最新 run;无任何 run → (nil, nil) 不报错(方案 §5)。
+	if len(runs) == 0 {
+		return nil, nil
+	}
+	run = runs[len(runs)-1]
+	if run == nil {
+		return nil, nil
+	}
+	return BuildPredictionReport(run, r.seed, time.Now().UnixMilli()), nil
+}
+
 // SnapshotSeats/Nicknames/BotSeats/ModelKeys/Transcripts 锁内取快照。
 func (r *VirtualCityRoom) SnapshotSeats() [MaxSeats]string {
 	r.mu.Lock()
