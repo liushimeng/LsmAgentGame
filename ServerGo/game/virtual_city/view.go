@@ -547,6 +547,17 @@ type MarketJSON struct {
 	StockSellUnit float64 `json:"stock_sell_unit"`
 	SpreadBps     int     `json:"spread_bps"`
 	BreakerUntil  int     `json:"breaker_until"`
+	// 批次66 外盘情绪锚(契约 §3.3;前端窄读取,恒非 nil)。
+	ExoAnchor *ExoAnchorJSON `json:"exo_anchor"`
+}
+
+// ExoAnchorJSON 是 market.exo_anchor(批次66 真实行情 → 游戏内市场联动)。
+type ExoAnchorJSON struct {
+	Active    bool    `json:"active"`
+	Sentiment float64 `json:"sentiment"`  // [-1,+1]
+	StockBias float64 `json:"stock_bias"` // 月漂移加法项,封顶 ±0.003
+	GoldBias  float64 `json:"gold_bias"`  // 月漂移加法项,封顶 ±0.002
+	UpdatedAt int64   `json:"updated_at"`
 }
 
 // MarketDistrictJSON 是 districts 单项(idx_d / rent_index)。
@@ -957,6 +968,14 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		StockIndex: world.Market.StockIndex,
 		GoldPrice:  world.Market.GoldPrice,
 		BondYield:  p.BondRate,
+		// 批次66 外盘情绪锚(契约 §3.3;恒非 nil,active=false 表未激活)。
+		ExoAnchor: &ExoAnchorJSON{
+			Active:    world.Market.Exo.Active,
+			Sentiment: world.Market.Exo.Sentiment,
+			StockBias: world.Market.Exo.StockBias,
+			GoldBias:  world.Market.Exo.GoldBias,
+			UpdatedAt: world.Market.Exo.UpdatedAt,
+		},
 		// 批次20 文档3 B4:股票微观结构快照。
 		StockBuyUnit:  world.Market.StockBuyUnit(),
 		StockSellUnit: world.Market.StockSellUnit(),

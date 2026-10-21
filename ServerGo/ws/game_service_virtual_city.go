@@ -321,6 +321,8 @@ func (s *GameService) broadcastVirtualCityMonth(roomID string, res *virtual_city
 			"bond_rate": res.BondRate, "house_idx": res.HouseIdx,
 			// P1(§财商流P1-2 §6.3):cpi = 篮子 CPIYoY(回退时 CB 理论值)。
 			"cpi": res.CPI, "unemployment_rate": res.UnemploymentRate,
+			// 批次66:外盘情绪锚本月生效分(锚未激活恒 0)。
+			"exo_sentiment": res.ExoSentiment,
 		},
 		"events": res.Events,
 	}

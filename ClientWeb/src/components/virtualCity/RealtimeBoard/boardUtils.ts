@@ -105,3 +105,13 @@ export function getCategory(
 ): RealtimeCategory | null {
   return categories[key] ?? null;
 }
+
+/**
+ * 行情涨跌幅文本 —— 契约口径是**百分数**(0.12 = 0.12%),不是小数。
+ * ⚠ 不可用 types/virtualCityFormat.ts 的 formatPct:那个是「小数 → 百分比」
+ * (0.035 → "3.5%"),用在这里会二次 ×100(批次65 缺陷:上证 +0.12% 显示成 +12.00%)。
+ */
+export function pctText(v: number | undefined | null, digits = 2): string {
+  if (v === undefined || v === null || Number.isNaN(v)) return '—';
+  return `${v.toFixed(digits)}%`;
+}

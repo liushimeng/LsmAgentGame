@@ -1243,6 +1243,7 @@ func BuildContextForAgent(r *VirtualCityRoom, seat int) (*vctypes.GameContext, b
 		HerdBrief:       herdBriefLocked(r.World),
 		BubbleBrief:     bubbleBriefLocked(r.World),
 		LiquidityBrief:  liquidityBriefLocked(r.World),
+		ExoBrief:        exoBriefLocked(r.World),
 		RoomID:          r.RoomID, GameKind: "virtual_city",
 		MySeat: seat, MyUserID: r.Seats[seat], ModelKey: r.SeatModelKeys[seat],
 		Month: month, Age: age, Phase: r.Phase,

@@ -721,6 +721,17 @@ type CityChromeConfig struct {
 	NewsLimit int `json:"news_limit"`
 	// RequestTimeoutMs 底座 HTTP 请求超时(默认 90000)。
 	RequestTimeoutMs int `json:"request_timeout_ms"`
+	// MarketLinkageEnabled 批次66:真实行情 → 游戏内市场联动开关(默认 true;
+	// false ⇒ 外盘报价源恒空,全链路零偏置,一键回退)。
+	MarketLinkageEnabled *bool `json:"market_linkage_enabled"`
+}
+
+// MarketLinkage 报告市场联动是否启用(nil ⇒ true,默认开启)。
+func (c CityChromeConfig) MarketLinkage() bool {
+	if c.MarketLinkageEnabled == nil {
+		return true
+	}
+	return *c.MarketLinkageEnabled
 }
 
 var (

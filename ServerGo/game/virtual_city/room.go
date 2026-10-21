@@ -122,6 +122,9 @@ type VirtualCityRoom struct {
 	seed      int64
 	rng       *rand.Rand
 	docLoader *profession.Loader // Manager 注入(可能为 nil → 合成兜底)
+	// exoSource 批次66 外盘情绪锚:真实报价源(Manager 注入,可能为 nil)。
+	// 契约:必须纯内存快照、禁止回调房间(trySettle 锁内调用)。
+	exoSource func() []ExoQuote
 
 	hooks      BroadcastHooks
 	chatSender ChatSender
@@ -960,6 +963,8 @@ func (r *VirtualCityRoom) trySettle(onFinish func(roomID string)) bool {
 		}
 	}
 	prevEvents := len(r.World.Events)
+	// 批次66:月结前刷新外盘情绪锚(锁内纯内存读;nil 源 ⇒ 锚置零走零回归路径)。
+	r.refreshExoLocked()
 	finished, res := r.World.SettleMonth()
 	// 批次 27(§3.3 月结天气播报 P1):本月城市天气类型 ≠ 上月 → city_weather
 	// 事件(首月 lastWeatherKind=="" 恒播报)。锁内现算(WeatherAt 纯函数),
@@ -1026,6 +1031,28 @@ func (r *VirtualCityRoom) trySettle(onFinish func(roomID string)) bool {
 	r.launchCityDriver(voiceMonth)
 	r.wakeBots()
 	return true
+}
+
+// refreshExoLocked 月结前刷新外盘情绪锚(批次66)。调用方持房间锁。
+// exoSource 契约:纯内存快照、禁止回调房间 —— 只读 FeedStore 类数据。
+// nil 源 / 空报价 ⇒ ComputeExoSignal 返回 Active=false 且 bias 恒 0.0
+// (零回归契约 01 §2 关键决策 3)。
+func (r *VirtualCityRoom) refreshExoLocked() {
+	if r.World == nil || r.World.Market == nil {
+		return
+	}
+	var quotes []ExoQuote
+	if r.exoSource != nil {
+		quotes = r.exoSource()
+	}
+	r.World.Market.Exo = ComputeExoSignal(quotes, time.Now().Unix())
+}
+
+// SetExoSource 注入外盘报价源(Manager 装配,Start 前调用一次)。
+func (r *VirtualCityRoom) SetExoSource(fn func() []ExoQuote) {
+	r.mu.Lock()
+	r.exoSource = fn
+	r.mu.Unlock()
 }
 
 // allSubmittedLocked 全员已提交(空座不计)。

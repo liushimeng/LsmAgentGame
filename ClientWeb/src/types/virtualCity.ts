@@ -120,6 +120,8 @@ export interface VirtualCityMarket {
   spread_bps?: number;
   /** 熔断「最后一个禁止月」（0/缺省 = 从未触发；month ≤ 此值期间禁买禁卖股票）。 */
   breaker_until?: number;
+  /** 批次 66 外盘情绪锚（真实行情 → 游戏内月漂移微偏置；形状见 virtualCityRealtime.ts）。 */
+  exo_anchor?: { active: boolean; sentiment: number; stock_bias: number; gold_bias: number; updated_at: number };
 }
 
 /** 央行货币政策快照（game.state.central_bank，P1 央行引擎下发）。 */

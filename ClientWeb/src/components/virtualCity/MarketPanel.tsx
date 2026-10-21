@@ -19,6 +19,7 @@ import {
   type VirtualCityCyclePhase,
   type VirtualCityDistrictId,
   type VirtualCityGameState,
+  type VirtualCityMarket,
 } from '@/types/virtualCity';
 import type { VirtualCityMarketPoint } from '@/store/virtualCity.store';
 import './virtualCity-batch20.css';
@@ -107,6 +108,57 @@ function creditTightnessColor(v: number): string {
 }
 
 /** 央行货币政策快照区块（M0/M1/M2 + 政策利率 + 信贷约束）。 */
+/** 批次 66 外盘情绪锚行组:情绪分 + 股票/黄金偏置 + 更新时间。 */
+function ExoAnchorSection({ anchor }: { anchor?: VirtualCityMarket['exo_anchor'] }) {
+  const t = useT();
+  const now = Math.floor(Date.now() / 1000);
+  if (!anchor) return null;
+  const up = anchor.sentiment > 0.05;
+  const down = anchor.sentiment < -0.05;
+  const label = up
+    ? t('virtualCity.rt.exo.sentimentUp' as TKey)
+    : down
+      ? t('virtualCity.rt.exo.sentimentDown' as TKey)
+      : t('virtualCity.rt.exo.sentimentFlat' as TKey);
+  const ago = Math.max(0, Math.floor((now - anchor.updated_at) / 60));
+  return (
+    <div
+      className={`virtualCity-rt__exo ${anchor.active ? 'virtualCity-rt__exo--on' : 'virtualCity-rt__exo--off'}`}
+      data-testid="virtualCity-exo-anchor"
+    >
+      <div className="virtualCity-rt__exo-head">
+        <span className="virtualCity-rt__exo-title">{t('virtualCity.rt.exo.title' as TKey)}</span>
+        {anchor.active ? (
+          <span className={`virtualCity-badge virtualCity-rt__exo-badge ${up ? 'virtualCity-rt__exo-badge--up' : down ? 'virtualCity-rt__exo-badge--down' : ''}`}>
+            {label} {anchor.sentiment >= 0 ? '+' : ''}{anchor.sentiment.toFixed(2)}
+          </span>
+        ) : (
+          <span className="virtualCity-badge virtualCity-rt__exo-badge--off">
+            {t('virtualCity.rt.exo.inactive' as TKey)}
+          </span>
+        )}
+      </div>
+      {anchor.active && (
+        <>
+          <div className="virtualCity-rt__exo-row">
+            <span className="virtualCity-rt__exo-label">{t('virtualCity.rt.exo.stockBias' as TKey)}</span>
+            <span className={anchor.stock_bias >= 0 ? 'virtualCity-num--up' : 'virtualCity-num--down'}>
+              {anchor.stock_bias >= 0 ? '+' : ''}{(anchor.stock_bias * 100).toFixed(2)}%
+            </span>
+            <span className="virtualCity-rt__exo-label">{t('virtualCity.rt.exo.goldBias' as TKey)}</span>
+            <span className={anchor.gold_bias >= 0 ? 'virtualCity-num--up' : 'virtualCity-num--down'}>
+              {anchor.gold_bias >= 0 ? '+' : ''}{(anchor.gold_bias * 100).toFixed(2)}%
+            </span>
+          </div>
+          <div className="virtualCity-rt__exo-row virtualCity-rt__exo-updated">
+            {t('virtualCity.rt.exo.updated' as TKey, { n: ago })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function CentralBankSection({ cb, cycle }: { cb: VirtualCityCentralBank; cycle?: VirtualCityCycle }) {
   const t = useT();
   const tightnessColor = creditTightnessColor(cb.credit_tightness);
@@ -231,6 +283,8 @@ export function MarketPanel({ gameState, marketHistory, onSelectDistrict }: Prop
       </div>
 
       <CentralBankSection cb={gameState.central_bank} cycle={cycle} />
+
+      <ExoAnchorSection anchor={market.exo_anchor} />
 
       <QuoteRow
         label={t('virtualCity.stockIndex' as TKey)}

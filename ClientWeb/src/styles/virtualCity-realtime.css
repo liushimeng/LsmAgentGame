@@ -412,3 +412,61 @@
   text-align: center;
   line-height: 1.6;
 }
+
+/* ── 批次 66 外盘情绪锚（真实行情 → 游戏内市场联动，.virtualCity-rt__exo*）──
+   active=白底 + 涨跌徽章；inactive=灰底深字（禁 opacity 表禁用，§26.2）。 */
+.virtualCity-rt__exo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.45);
+}
+.virtualCity-rt__exo--on {
+  background: rgba(15, 23, 42, 0.45);
+}
+.virtualCity-rt__exo--off {
+  background: #334155;
+  color: #e2e8f0;
+}
+.virtualCity-rt__exo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+}
+.virtualCity-rt__exo-title {
+  font-weight: 600;
+  color: #f1f5f9;
+}
+.virtualCity-rt__exo-badge {
+  color: #f8fafc;
+}
+.virtualCity-rt__exo-badge--up {
+  background: #b91c1c;
+}
+.virtualCity-rt__exo-badge--down {
+  background: #15803d;
+}
+.virtualCity-rt__exo-badge--off {
+  background: #475569;
+  color: #f1f5f9;
+}
+.virtualCity-rt__exo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  flex-wrap: wrap;
+}
+.virtualCity-rt__exo-label {
+  color: #cbd5e1;
+}
+.virtualCity-rt__exo-updated {
+  color: #94a3b8;
+  font-size: 12px;
+  min-height: 24px;
+}

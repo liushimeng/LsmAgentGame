@@ -208,6 +208,7 @@ type Manager struct {
 	loader      *Loader // profession.Loader(包内别名)
 	rooms       map[string]*VirtualCityRoom
 	pendingOpts map[string]*VirtualCityRoomOptions // roomSvc → Start 时取用
+	exoSource   func() []ExoQuote                   // 批次66 外盘报价源(可 nil)
 	// seatHydrator 服务重启后从 DB 恢复 in-memory 房间的座位信息(对齐德扑
 	// BUG-WEREWOLF-P0-7 修复方案)。nil-safe,未设置时 Get/CreateRoom 跳过恢复。
 	seatHydrator func(roomID string) ([]SeatRestoreInfo, error)
@@ -220,6 +221,13 @@ type Manager struct {
 // SetLinePoolSource 注入 LLM 线路池来源(Registry.Reload 换池后经函数现取
 // 自动生效)。新房间在 CreateRoom 时继承;存量房间不回填(建 Agent 的时机
 // 已过,由 EnsureAgents 幂等覆盖)。
+// SetExoSource 批次66:注入外盘报价源(装配层 Feed→ExoQuote 映射)。
+func (m *Manager) SetExoSource(fn func() []ExoQuote) {
+	m.mu.Lock()
+	m.exoSource = fn
+	m.mu.Unlock()
+}
+
 func (m *Manager) SetLinePoolSource(fn func() *llm.LinePool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -301,6 +309,7 @@ func (m *Manager) CreateRoom(roomID string) *VirtualCityRoom {
 	// 2026-09-21 §虚拟城市:线路池来源 + 城市之声配置接线(Start 前回写;
 	// m.mu 写锁内调房间锁,锁序 m.mu → r.mu 全库一致,无反向路径)。
 	r.SetLinePoolSource(m.linePoolSource)
+	r.SetExoSource(m.exoSource)
 	r.SetCityVoiceConfig(m.cfg.CityVoiceEnabled, m.cfg.CityVoicePerMonth)
 	// 2026-09-22 §17-CityHuman(契约 02 §5):居民驱动层配置接线(与城市之声
 	// 互斥,Start 时按开关二选一装配)。

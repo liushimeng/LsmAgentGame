@@ -30,6 +30,16 @@ const virtualCityRealtimeJA = {
   'virtualCity.rt.empty.feed': 'リアルタイムデータはまだありません：右上の更新ボタンで収集を開始してください',
   'virtualCity.rt.empty.category': 'このカテゴリのデータはまだありません',
   'virtualCity.rt.empty.news': 'ニュースはまだありません',
+  // ── 批次 66 外盘情绪锚 ──
+  'virtualCity.rt.exo.title': '外盤センチメントアンカー',
+  'virtualCity.rt.exo.sentimentUp': '強気',
+  'virtualCity.rt.exo.sentimentDown': '弱気',
+  'virtualCity.rt.exo.sentimentFlat': '中立',
+  'virtualCity.rt.exo.stockBias': '株式ドリフト',
+  'virtualCity.rt.exo.goldBias': '金ドリフト',
+  'virtualCity.rt.exo.inactive': 'アンカー未活性',
+  'virtualCity.rt.exo.updated': 'データ更新 {n} 分前',
+  'virtualCity.rt.exo.effectHint': 'ゲーム内への影響',
 };
 
 export default virtualCityRealtimeJA;

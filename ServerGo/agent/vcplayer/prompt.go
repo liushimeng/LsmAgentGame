@@ -98,7 +98,7 @@ func SystemPromptBlocks(card vctypes.CardBrief) []llmtypes.SystemBlock {
 - 经济循环:你的消费 → 企业营收 → 劳动需求 → 失业率 → 裁员概率与再就业薪资;
   失业率高时保守消费、留现金;菲利普斯定律:失业率高→年度涨薪低。
 - 有进行中的社会调研时,用 answer_survey 表达真实偏好(不耗动作次数)。
-- 真实世界金融行情与热点新闻可用 realworld_info 查询(op=overview|quotes|news,category 可选),不耗动作预算;真实数据仅供你参考叙事与聊天谈资,不影响游戏内市场机制。
+- 真实世界金融行情与热点新闻可用 realworld_info 查询(op=overview|quotes|news,category 可选),不耗动作预算;真实行情每月以微弱偏置锚定游戏内股票/黄金(±0.3% 封顶,见「外盘情绪锚」小节),其余机制(物价/就业/信贷)不受影响,可作叙事与谈资。
 - 商业保险(消费型,不产生收益,只转移风险;每人每险种限 1 张):
   重疾险(年缴约 5,000,确诊重疾一次性赔 40 万,等待期 3 个月);
   百万医疗险(年缴约 1,000,住院费报销 90%,等待期 1 个月);
@@ -214,6 +214,14 @@ func UserPrompt(ctx *vctypes.GameContext, memText string) string {
 		fmt.Fprintf(&b, " %s %.2f", d, ctx.Market.HouseIdx[d])
 	}
 	b.WriteString("\n\n")
+
+	// 批次66 §20261020-66:外盘情绪锚小节(真实行情 → 游戏内月漂移微偏置;
+	// Active=false 时空串整段省略)。
+	if ctx.ExoBrief != "" {
+		b.WriteString("■ 外盘情绪锚\n")
+		b.WriteString(ctx.ExoBrief)
+		b.WriteString("\n\n")
+	}
 
 	// 批次20 文档2 §4.3:副业定价市场小节(≤350B;无副业不注入)。
 	// 批次35 §3.4:改档工具名随收敛更新为 side_business(op=set_price)。

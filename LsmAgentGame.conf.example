@@ -299,6 +299,9 @@
     // 全局新闻条数上限(默认 20,新→旧)。
     "news_limit": 20,
     // 底座 HTTP 请求超时毫秒(默认 90000)。
-    "request_timeout_ms": 90000
+    "request_timeout_ms": 90000,
+    // 批次66:真实行情 → 游戏内市场联动(外盘情绪锚)开关(默认 true)。
+    // false ⇒ 外盘报价源恒空,游戏内股票/黄金月漂移零偏置(一键回退)。
+    "market_linkage_enabled": true
   }
 }

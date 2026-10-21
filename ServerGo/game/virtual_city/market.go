@@ -91,6 +91,12 @@ type MarketState struct {
 	// ⚠ 只作用于杠杆资产(股票 + 房产指数);黄金由 PhaseTable 决定(避险属性)。
 	DriftMultiplier float64
 	DriftExtra      float64
+
+	// ── 批次66 外盘情绪锚(2026-10-20):真实行情 → 游戏内月漂移微偏置 ──
+	// exogenous.go::ComputeExoSignal 计算,room.trySettle 每月结前写入;
+	// Active=false ⇒ 两 bias 恒 0.0(零回归:x+0.0 IEEE 恒等)。
+	// 与 DriftMultiplier/DriftExtra 语义正交:bubble 内生(覆写链),外盘外生(独立字段)。
+	Exo ExoSignal
 }
 
 // NewMarket 构造初始市场(开局默认 recovery,阶段时长 U(24,48) 月)。
@@ -172,7 +178,7 @@ func (m *MarketState) MonthStep(rng *rand.Rand) {
 	// ±10% 保号截断。带内月份乘式与旧实现 `m *= 1+drift` 逐位一致 →
 	// 旧 seed 对局零偏移;σ=3% 月波动 p99 <10%,绝大多数月份走此路径)。
 	oldIdx := m.StockIndex
-	raw := oldIdx * (1 + p.StockAnnual/12*mult + extra + stockMonthlySigma*normFloat64(rng))
+	raw := oldIdx * (1 + p.StockAnnual/12*mult + extra + m.Exo.StockBias + stockMonthlySigma*normFloat64(rng))
 	if oldIdx > 0 {
 		m.LastStockRawDelta = raw/oldIdx - 1
 	}
@@ -182,7 +188,7 @@ func (m *MarketState) MonthStep(rng *rand.Rand) {
 	}
 	m.StockIndex = next
 	// 黄金(避险属性 ⇒ 不受泡沫漂移乘子影响,只吃 PhaseTable 的年化)。
-	m.GoldPrice *= 1 + p.GoldAnnual/12 + goldMonthlySigma*normFloat64(rng)
+	m.GoldPrice *= 1 + p.GoldAnnual/12 + m.Exo.GoldBias + goldMonthlySigma*normFloat64(rng)
 	if m.GoldPrice < 1 {
 		m.GoldPrice = 1
 	}

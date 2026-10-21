@@ -30,6 +30,16 @@ const virtualCityRealtimeEN = {
   'virtualCity.rt.empty.feed': 'No realtime data yet: click Refresh above to start a collection mission',
   'virtualCity.rt.empty.category': 'No data for this category yet',
   'virtualCity.rt.empty.news': 'No news yet',
+  // ── 批次 66 外盘情绪锚 ──
+  'virtualCity.rt.exo.title': 'Global Sentiment Anchor',
+  'virtualCity.rt.exo.sentimentUp': 'Risk-on',
+  'virtualCity.rt.exo.sentimentDown': 'Risk-off',
+  'virtualCity.rt.exo.sentimentFlat': 'Neutral',
+  'virtualCity.rt.exo.stockBias': 'Stock drift',
+  'virtualCity.rt.exo.goldBias': 'Gold drift',
+  'virtualCity.rt.exo.inactive': 'Anchor inactive',
+  'virtualCity.rt.exo.updated': 'Updated {n} min ago',
+  'virtualCity.rt.exo.effectHint': 'In-game impact',
 };
 
 export default virtualCityRealtimeEN;

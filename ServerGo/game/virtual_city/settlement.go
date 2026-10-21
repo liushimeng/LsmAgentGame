@@ -59,6 +59,9 @@ type SettleResult struct {
 	// ClosedSurveys 本月结算关闭的调研(调研契约 §4.4;房间层锁外逐个触发
 	// hooks.OnSurvey → game.survey_result)。
 	ClosedSurveys []*Survey
+	// 批次66 外盘情绪锚:本月结生效的情绪分与激活态(game.month 增量帧用)。
+	ExoSentiment float64
+	ExoActive    bool
 }
 
 // SettleMonth 执行一次完整月结。调用方持房间锁。
@@ -287,6 +290,11 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 	}
 	if w.EconomyEnabled && w.Labor != nil {
 		res.UnemploymentRate = w.Labor.Unemployment
+	}
+	// 批次66:快照外盘情绪锚(game.month.market_changes.exo_sentiment)。
+	if w.Market != nil {
+		res.ExoSentiment = w.Market.Exo.Sentiment
+		res.ExoActive = w.Market.Exo.Active
 	}
 
 	// ⑤ 月份 +1;年调整 / 钟声。

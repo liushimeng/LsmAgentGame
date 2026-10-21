@@ -81,3 +81,17 @@ export interface RealtimeBoardRefreshResult {
   accepted: boolean;
   queued_category: string;
 }
+
+/** 批次 66 外盘情绪锚（game.state.market.exo_anchor；契约 01 §3.3）。 */
+export interface VirtualCityExoAnchor {
+  /** false = 数据过期/通道离线 ⇒ bias 恒 0（对局零回归）。 */
+  active: boolean;
+  /** [-1, +1] 风险偏好分（tanh 饱和）。 */
+  sentiment: number;
+  /** 股票月漂移加法项（小数，封顶 ±0.003）。 */
+  stock_bias: number;
+  /** 黄金月漂移加法项（小数，封顶 ±0.002）。 */
+  gold_bias: number;
+  /** 参与计算的最新报价 Unix 秒。 */
+  updated_at: number;
+}

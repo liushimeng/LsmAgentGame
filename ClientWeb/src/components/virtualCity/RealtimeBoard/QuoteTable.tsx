@@ -9,9 +9,9 @@
 import { useMemo, useState } from 'react';
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
-import { formatPct } from '@/types/virtualCity';
 import type { RealtimeCategory, RealtimeQuote } from '@/types/virtualCityRealtime';
 import { CandleChart } from './CandleChart';
+import { pctText } from './boardUtils';
 
 /** 迷你走势 SVG 折线（MarketPanel.Sparkline 同款范式：60×18 viewBox）。 */
 function Sparkline({ points, color }: { points: number[]; color: string }) {
@@ -68,7 +68,7 @@ function QuoteRow({
         </span>
         <span className="virtualCity-rt__qprice">{quote.price.toLocaleString()}</span>
         <span className={chgClass(quote.change_pct)}>
-          {quote.change_pct > 0 ? '+' : ''}{formatPct(quote.change_pct, 2)}
+          {quote.change_pct > 0 ? '+' : ''}{pctText(quote.change_pct, 2)}
         </span>
         <span className="virtualCity-rt__qspark">
           <Sparkline points={sparkPoints} color={sparkColor} />

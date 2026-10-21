@@ -96,6 +96,9 @@ type GameContext struct {
 	BubbleBrief string
 	// LiquidityBrief 资产流动性价差小节(各资产类别买卖价差;≤200B)。
 	LiquidityBrief string
+	// ExoBrief 批次66 外盘情绪锚小节(真实行情 → 游戏内月漂移偏置;≤220B;
+	// 空串 = 锚未激活,整段省略)。
+	ExoBrief string
 }
 
 // NeighborBrief 是 see/hear 感知结果中「人」的摘要(全部来自已锚定真实档案;

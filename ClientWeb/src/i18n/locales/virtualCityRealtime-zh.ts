@@ -37,6 +37,16 @@ const virtualCityRealtimeZH = {
   'virtualCity.rt.empty.feed': '暂无实时数据：点击右上角刷新发起采集',
   'virtualCity.rt.empty.category': '该类目暂无数据',
   'virtualCity.rt.empty.news': '暂无新闻',
+  // ── 批次 66 外盘情绪锚 ──
+  'virtualCity.rt.exo.title': '外盘情绪锚',
+  'virtualCity.rt.exo.sentimentUp': '偏多',
+  'virtualCity.rt.exo.sentimentDown': '偏空',
+  'virtualCity.rt.exo.sentimentFlat': '中性',
+  'virtualCity.rt.exo.stockBias': '股票漂移',
+  'virtualCity.rt.exo.goldBias': '黄金漂移',
+  'virtualCity.rt.exo.inactive': '外盘锚未激活',
+  'virtualCity.rt.exo.updated': '数据更新于 {n} 分钟前',
+  'virtualCity.rt.exo.effectHint': '对游戏内影响',
 };
 
 export default virtualCityRealtimeZH;

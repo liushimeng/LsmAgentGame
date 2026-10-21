@@ -1040,6 +1040,27 @@ func main() {
 	gameSvcWs.WireCityChromeFeed(cityChromeSvc)
 	vcRealtimeAPI := api.NewVirtualCityRealtimeAPI(cityChromeSvc)
 
+	// 2026-10-20 §批次66 — 真实行情 → 游戏内市场联动:Feed→ExoQuote 装配层
+	// (唯一同时 import citychrome 与 virtual_city 的位置,引擎保持纯度)。
+	// market_linkage_enabled=false ⇒ 恒空报价源,全链路零偏置一键回退;
+	// ExoSource 契约:纯内存快照(FeedStore.Snapshot)、禁止回调房间。
+	if cfg.CityChrome.MarketLinkage() {
+		vcMgr.SetExoSource(func() []virtual_city.ExoQuote {
+			f := cityChromeSvc.Feed()
+			out := make([]virtual_city.ExoQuote, 0, len(f.Categories)*4)
+			for cat, c := range f.Categories {
+				for _, q := range c.Quotes {
+					out = append(out, virtual_city.ExoQuote{
+						Category:  cat,
+						ChangePct: q.ChangePct,
+						UpdatedAt: q.UpdatedAt,
+					})
+				}
+			}
+			return out
+		})
+	}
+
 	// 2026-10-05 §LsmKLBaseServer 知识库引擎 — 特征抽取 + MCP + Graph 检索。
 	// 装配: Loader(MySQL) + FeatureExtractor(LLM) + KnowledgeGraph + KnowledgeAPI。
 	// 抽取失败时回退到 profession.Loader 的 frontmatter 解析(零回归)。

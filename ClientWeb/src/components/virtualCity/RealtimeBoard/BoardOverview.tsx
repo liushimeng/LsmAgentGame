@@ -7,12 +7,14 @@
 
 import { useT } from '@/hooks/useT';
 import type { TKey } from '@/i18n';
-import { formatPct } from '@/types/virtualCity';
+import { useVirtualCityStore } from '@/store/virtualCity.store';
 import type { RealtimeFeed } from '@/types/virtualCityRealtime';
-import { pickQuote, RT_CORE_INDICES, timeAgoKey, timeAgoParts } from './boardUtils';
+import { pickQuote, pctText, RT_CORE_INDICES, timeAgoKey, timeAgoParts } from './boardUtils';
 
 export function BoardOverview({ feed }: { feed: RealtimeFeed }) {
   const t = useT();
+  // 批次 66:窄读取游戏内市场锚(gameState 可能为空/无对局 ⇒ 整卡不渲染)。
+  const exoAnchor = useVirtualCityStore((s) => s.gameState?.market?.exo_anchor);
   const cards = RT_CORE_INDICES
     .map((def) => {
       const cat = feed.categories[def.category];
@@ -44,11 +46,49 @@ export function BoardOverview({ feed }: { feed: RealtimeFeed }) {
                     (up ? ' virtualCity-rt__chg--up' : down ? ' virtualCity-rt__chg--down' : '')
                   }
                 >
-                  {quote.change_pct > 0 ? '+' : ''}{formatPct(quote.change_pct, 2)}
+                  {quote.change_pct > 0 ? '+' : ''}{pctText(quote.change_pct, 2)}
                 </span>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {exoAnchor && (
+        <div
+          className={`virtualCity-rt__exo virtualCity-rt__exo--on`}
+          data-testid="virtualCity-rt-exo-card"
+        >
+          <div className="virtualCity-rt__exo-head">
+            <span className="virtualCity-rt__exo-title">{t('virtualCity.rt.exo.effectHint' as TKey)}</span>
+            <span
+              className={`virtualCity-badge virtualCity-rt__exo-badge ${
+                exoAnchor.active
+                  ? exoAnchor.sentiment > 0.05
+                    ? 'virtualCity-rt__exo-badge--up'
+                    : exoAnchor.sentiment < -0.05
+                      ? 'virtualCity-rt__exo-badge--down'
+                      : ''
+                  : 'virtualCity-rt__exo-badge--off'
+              }`}
+            >
+              {exoAnchor.active
+                ? `${exoAnchor.sentiment >= 0 ? '+' : ''}${exoAnchor.sentiment.toFixed(2)}`
+                : t('virtualCity.rt.exo.inactive' as TKey)}
+            </span>
+          </div>
+          {exoAnchor.active && (
+            <div className="virtualCity-rt__exo-row">
+              <span className="virtualCity-rt__exo-label">{t('virtualCity.rt.exo.stockBias' as TKey)}</span>
+              <span className={exoAnchor.stock_bias >= 0 ? 'virtualCity-rt__chg virtualCity-rt__chg--up' : 'virtualCity-rt__chg virtualCity-rt__chg--down'}>
+                {exoAnchor.stock_bias >= 0 ? '+' : ''}{(exoAnchor.stock_bias * 100).toFixed(2)}%
+              </span>
+              <span className="virtualCity-rt__exo-label">{t('virtualCity.rt.exo.goldBias' as TKey)}</span>
+              <span className={exoAnchor.gold_bias >= 0 ? 'virtualCity-rt__chg virtualCity-rt__chg--up' : 'virtualCity-rt__chg virtualCity-rt__chg--down'}>
+                {exoAnchor.gold_bias >= 0 ? '+' : ''}{(exoAnchor.gold_bias * 100).toFixed(2)}%
+              </span>
+            </div>
+          )}
         </div>
       )}
 

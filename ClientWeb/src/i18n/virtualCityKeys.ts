@@ -942,4 +942,14 @@ export interface VirtualCityDict {
   'virtualCity.rt.empty.feed': string;
   'virtualCity.rt.empty.category': string;
   'virtualCity.rt.empty.news': string;
+  /** 批次 66 外盘情绪锚。 */
+  'virtualCity.rt.exo.title': string;
+  'virtualCity.rt.exo.sentimentUp': string;
+  'virtualCity.rt.exo.sentimentDown': string;
+  'virtualCity.rt.exo.sentimentFlat': string;
+  'virtualCity.rt.exo.stockBias': string;
+  'virtualCity.rt.exo.goldBias': string;
+  'virtualCity.rt.exo.inactive': string;
+  'virtualCity.rt.exo.updated': string;
+  'virtualCity.rt.exo.effectHint': string;
 }
