@@ -234,6 +234,16 @@ type World struct {
 
 	Rand *rand.Rand
 
+	// ── 批次73 O2/O1(校准采集,纯旁路;零 rand,不参与 StateHash)──
+	// MCEvents 事件级采集环形缓冲(cap mcEventCap;recordEvent 写入,
+	// 满则丢最旧 + EventDropped 计数)。与 World.Events(人生事件播报)
+	// 完全隔离。
+	MCEvents    []MCEvent
+	EventDropped int
+	// MCAuctionCount 本局 StartAuction 总场次(居民级 auction_participation_rate
+	// 分母;O1)。
+	MCAuctionCount int
+
 	// Seed 本局随机种子(批次71:RunRecord.Seed / 场景注入记录的 seed 字段
 	// 取此值;seed=0 传入时 NewWorld 派生实际种子并回写)。
 	// ⚠ 只读字段,绝不参与 rand 消费。

@@ -97,6 +97,14 @@ type MarketState struct {
 	// Active=false ⇒ 两 bias 恒 0.0(零回归:x+0.0 IEEE 恒等)。
 	// 与 DriftMultiplier/DriftExtra 语义正交:bubble 内生(覆写链),外盘外生(独立字段)。
 	Exo ExoSignal
+
+	// ── 批次73 O5:A/B 参数覆盖(MCOverride;nil = 引擎默认,零回归)──
+	// BoomStockMonthlyDrift 非 nil 且当前相位 = boom 时,替换 MonthStep
+	// 股票漂移项「PhaseTable[boom].StockAnnual/12」(覆盖值优先于 const)。
+	BoomStockMonthlyDrift *float64
+	// RecessionMinMonths 非 nil 时,RerollPhase 进入衰退相位的时长取
+	// max(随机 U(24,48), 覆盖值)(「衰退期最短持续月数」下限 clamp)。
+	RecessionMinMonths *int
 }
 
 // NewMarket 构造初始市场(开局默认 recovery,阶段时长 U(24,48) 月)。
@@ -174,11 +182,17 @@ func (m *MarketState) MonthStep(rng *rand.Rand) {
 		mult = 1.0
 	}
 	extra := m.DriftExtra
+	// 批次73 O5:A/B 覆盖 —— 繁荣相位月收益率「覆盖值优先于 const」;
+	// nil 时 stockDrift == p.StockAnnual/12 ⇒ 逐位零回归。
+	stockDrift := p.StockAnnual / 12
+	if m.BoomStockMonthlyDrift != nil && m.CyclePhase == PhaseBoom {
+		stockDrift = *m.BoomStockMonthlyDrift
+	}
 	// 股票(批次20 文档3 B2-1/B2-4:记录 clamp 前原始 Δ 供熔断判定,再做
 	// ±10% 保号截断。带内月份乘式与旧实现 `m *= 1+drift` 逐位一致 →
 	// 旧 seed 对局零偏移;σ=3% 月波动 p99 <10%,绝大多数月份走此路径)。
 	oldIdx := m.StockIndex
-	raw := oldIdx * (1 + p.StockAnnual/12*mult + extra + m.Exo.StockBias + stockMonthlySigma*normFloat64(rng))
+	raw := oldIdx * (1 + stockDrift*mult + extra + m.Exo.StockBias + stockMonthlySigma*normFloat64(rng))
 	if oldIdx > 0 {
 		m.LastStockRawDelta = raw/oldIdx - 1
 	}
@@ -235,7 +249,14 @@ func (m *MarketState) RerollPhase(rng *rand.Rand) (switched bool) {
 		next = rows[len(rows)-1].To
 	}
 	m.CyclePhase = next
-	m.CycleMonthsLeft = phaseDurationMonths(rng)
+	// 批次73 O5:RecessionMinMonths 覆盖 = 进入衰退时长的下限 clamp
+	// (nil ⇒ 恒走原 phaseDurationMonths,零回归;覆盖只抬不压 ⇒ 不移动
+	// 既有随机消费序列)。
+	d := phaseDurationMonths(rng)
+	if m.RecessionMinMonths != nil && next == PhaseRecession && d < *m.RecessionMinMonths {
+		d = *m.RecessionMinMonths
+	}
+	m.CycleMonthsLeft = d
 	return next != old
 }
 

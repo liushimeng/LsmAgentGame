@@ -43,7 +43,7 @@ const (
 	InvariantI8 = "I8" // 系统净流闭合
 )
 
-// ── 红线 id 常量(顺序即面板展示顺序,恒 5 条)──────────────────────────
+// ── 红线 id 常量(顺序即面板展示顺序,恒 10 条)────────────────────────
 
 const (
 	RedlineRE1 = "R-E1" // 品类年化上限(批次72 §6)
@@ -53,6 +53,9 @@ const (
 	RedlineRE5 = "R-E5" // 破产率上限
 	RedlineRE6 = "R-E6" // 破产率下限
 	RedlineRB1 = "R-B1" // 首位座位结局偏差
+	RedlineRB2 = "R-B2" // 职业结局画像偏差(批次73 O4)
+	RedlineRB3 = "R-B3" // 拍卖参与率过低(批次73 O4)
+	RedlineRB4 = "R-B4" // 事件频次偏离基线(批次73 O4)
 )
 
 // 红线阈值(方案 §7.1)。
@@ -65,6 +68,12 @@ const (
 	// 批次72 §6.3:品类年化红线阈值(跨局均值口径)。
 	redlineCategoryReturnMax = 0.30
 	redlineCategoryReturnMin = 0.03
+	// 批次73 O4:R-B2 职业结局画像偏差阈值(±20pp)。
+	redlineProfessionDevPP = 0.20
+	// 批次73 O4:R-B3 拍卖参与率阈值(跨窗口中位数的均值 < 30% 触发)。
+	redlineAuctionParticipationMin = 0.30
+	// 批次73 O4:R-B4 事件频偏阈值(±50%)。
+	redlineEventFreqDev = 0.50
 )
 
 // auditCap 逐月审计快照环形缓冲容量(最近 24 月)。
@@ -151,6 +160,11 @@ type RunRecord struct {
 	FinishedAt         int64              `json:"finished_at"`         // unix 秒
 	Strategy           string             `json:"strategy"`            // ""=真实对局 / 5 策略 id
 	CategoryAnnualized map[string]float64 `json:"category_annualized"` // §6.2(月数<12 为 nil)
+	// ── 批次73 扩展字段(全部 omitempty 向后兼容;§4.3/§5/§6/§7)──
+	OutcomeCauses              map[string]int    `json:"outcome_causes,omitempty"`              // O3:结局成因 8 类 + undetermined
+	EventCounts                map[string]int    `json:"event_counts,omitempty"`                // O2:事件六类 + 未识别桶
+	ProfessionOutcomes         map[string][2]int `json:"profession_outcomes,omitempty"`         // O4 R-B2:portrait → [good,total]
+	AuctionParticipationMedian float64           `json:"auction_participation_median,omitempty"` // O4 R-B3:本局 12 座中位数
 }
 
 // CalibrationState 校准运行状态(挂 World.Calibration;惰性初始化,nil 安全)。
@@ -695,14 +709,16 @@ func outcomeCounts(outcomes []OutcomeStat) map[string]int {
 
 // ── 红线判定 ───────────────────────────────────────────────────────────
 
-// EvaluateRedlines 判定 7 条红线(批次71 §7.1 的 5 条 + 批次72 §6 的
-// R-E1/R-E2 品类年化上下限,追加在尾部;前端按 id 渲染不受序影响)。
+// EvaluateRedlines 判定 10 条红线(批次71 §7.1 的 5 条 + 批次72 §6 的
+// R-E1/R-E2 品类年化上下限 + 批次73 O4 的 R-B2/R-B3/R-B4,追加在尾部;
+// 前端按 id 渲染不受序影响)。
 //
 // 判定是**纯函数**:输入 D 指标 + 逐座结局 + 最近完成运行(runs,
-// 仅 R-E1/R-E2 消费;nil = 无历史运行),输出恒 7 条、顺序固定。
+// R-E1/R-E2/R-B2/R-B3/R-B4 消费;nil = 无历史运行),输出恒 10 条、
+// 顺序固定(R-E3/R-E4/R-E5/R-E6/R-B1/R-E1/R-E2/R-B2/R-B3/R-B4)。
 // 红线是「越界告警」不是「失败」:触发不中止运行。
 func EvaluateRedlines(ind CalibrationIndicators, outcomes []OutcomeStat, runs []RunRecord) []RedlineHit {
-	out := make([]RedlineHit, 0, 7)
+	out := make([]RedlineHit, 0, 10)
 
 	// R-E3 货币扩张上限 / R-E4 货币扩张下限(D2)。
 	d2 := 0.0
@@ -784,6 +800,13 @@ func EvaluateRedlines(ind CalibrationIndicators, outcomes []OutcomeStat, runs []
 	// 跨最近 categoryRunsWindow 局完成运行取均值)。
 	out = append(out, evaluateCategoryRedline(runs, RedlineRE1, true))
 	out = append(out, evaluateCategoryRedline(runs, RedlineRE2, false))
+
+	// 批次73 O4:R-B2 职业结局画像偏差 / R-B3 拍卖参与率 / R-B4 事件频偏
+	// (窗口口径与 R-E1/R-E2 一致:runs 尾部 min(10, len) 局完成运行,
+	// 不足不触发 + detail 注样本数)。
+	out = append(out, evaluateProfessionRedline(runs))
+	out = append(out, evaluateAuctionParticipationRedline(runs))
+	out = append(out, evaluateEventFreqRedline(runs))
 	return out
 }
 
@@ -852,6 +875,150 @@ func evaluateCategoryRedline(runs []RunRecord, id string, upper bool) RedlineHit
 	return hit
 }
 
+// ── 批次73 O4:R-B2 / R-B3 / R-B4 ──────────────────────────────────────
+
+// redlineWindowRuns 取 runs 尾部 min(categoryRunsWindow, len) 局(与
+// R-E1/R-E2 完全同口径)。返回窗口与样本数。
+func redlineWindowRuns(runs []RunRecord) (window []RunRecord, n int) {
+	window = runs
+	if len(window) > categoryRunsWindow {
+		window = window[len(window)-categoryRunsWindow:]
+	}
+	return window, len(window)
+}
+
+// evaluateProfessionRedline R-B2:按 ProfessionOutcomes 合并各 portrait 的
+// 良好结局占比,任一 portrait 偏离全体均值 ±20pp 即触发
+// (actual = 最大偏离;threshold = 0.20)。窗口不足不触发。
+func evaluateProfessionRedline(runs []RunRecord) RedlineHit {
+	hit := RedlineHit{ID: RedlineRB2, Name: "职业结局画像偏差", Threshold: redlineProfessionDevPP}
+	window, n := redlineWindowRuns(runs)
+	if n < categoryRunsWindow {
+		hit.Detail = fmt.Sprintf("样本不足(n=%d/%d),不触发", n, categoryRunsWindow)
+		return hit
+	}
+	good, total := map[string]int{}, map[string]int{}
+	sumGood, sumTotal := 0, 0
+	for i := range window {
+		for portrait, gt := range window[i].ProfessionOutcomes {
+			good[portrait] += gt[0]
+			total[portrait] += gt[1]
+			sumGood += gt[0]
+			sumTotal += gt[1]
+		}
+	}
+	if sumTotal == 0 {
+		hit.Detail = fmt.Sprintf("窗口 %d 局均无职业结局数据,不触发", n)
+		return hit
+	}
+	overall := float64(sumGood) / float64(sumTotal)
+	worstDev, worstPortrait := 0.0, ""
+	for portrait, t := range total {
+		if t == 0 {
+			continue
+		}
+		dev := float64(good[portrait])/float64(t) - overall
+		if dev < 0 {
+			dev = -dev
+		}
+		if dev > worstDev {
+			worstDev, worstPortrait = dev, portrait
+		}
+	}
+	hit.Actual = worstDev
+	hit.Triggered = worstDev > redlineProfessionDevPP
+	hit.Detail = fmt.Sprintf("职业 %s 良好结局占比偏离全体均值 %.1fpp(窗口 %d 局;±%.0fpp 触发)",
+		worstPortrait, worstDev*100, n, redlineProfessionDevPP*100)
+	return hit
+}
+
+// evaluateAuctionParticipationRedline R-B3:窗口各局 AuctionParticipationMedian
+// 的中位数 < 30% 即触发(actual = 中位数的均值口径 = 中位数本身)。
+func evaluateAuctionParticipationRedline(runs []RunRecord) RedlineHit {
+	hit := RedlineHit{ID: RedlineRB3, Name: "拍卖参与率过低", Threshold: redlineAuctionParticipationMin}
+	window, n := redlineWindowRuns(runs)
+	if n < categoryRunsWindow {
+		hit.Detail = fmt.Sprintf("样本不足(n=%d/%d),不触发", n, categoryRunsWindow)
+		return hit
+	}
+	vals := make([]float64, 0, n)
+	for i := range window {
+		vals = append(vals, window[i].AuctionParticipationMedian)
+	}
+	median := mcMedian(vals) // 「跨窗口中位数的均值」⇡ 窗口中位数(纯函数口径)
+	hit.Actual = median
+	hit.Triggered = median < redlineAuctionParticipationMin
+	hit.Detail = fmt.Sprintf("拍卖参与率跨窗口中位数 %.1f%%(窗口 %d 局;< %.0f%% 触发)",
+		median*100, n, redlineAuctionParticipationMin*100)
+	return hit
+}
+
+// eventBaselinePer100Months R-B4 事件频偏基线表(每百月频次,α 阶段初值)。
+//
+// ⚠ **α 阶段登记值 = 当前引擎实测**:2026-10-22 balance_gate 千局实测
+// (T11 1000 局 = 365,283 模拟月,events.jsonl 逐事件统计,见批次73 实施
+// 记录):loan 0.11 / bias 4.42 / bankruptcy 2.08 / market 1.39(每百月)。
+// trade / auction 实测恒 0(5 策略代理不发起 P2P 挂单与拍卖)⇒ 基线 0,
+// R-B4 对基线 ≤0 的品类跳过不判(防除零)。批次74 用 O5 A/B 工具校正式
+// 回填(方案 §7)。
+var eventBaselinePer100Months = map[string]float64{
+	MCEventTrade:      0.0,  // 实测 0(策略代理无 P2P 成交)⇒ 不判
+	MCEventAuction:    0.0,  // 实测 0(策略代理不参与拍卖)⇒ 不判
+	MCEventLoan:       0.11, // 实测:房贷/信用贷(aggressive 繁荣期杠杆)
+	MCEventBias:       4.42, // 实测:消费/交易偏差触发(月结增量口径)
+	MCEventBankruptcy: 2.08, // 实测:破产清算(当前经济基线出局率高)
+	MCEventMarket:     1.39, // 实测:自然周期切换(U(24,48) 月/段)
+}
+
+// evaluateEventFreqRedline R-B4:窗口 EventCounts 六类各自 ÷ 窗口总月数
+// 得每百月频次,对 eventBaselinePer100Months 算频偏,超 ±50% 即触发
+// (actual = 最大频偏比;threshold = 0.50)。基线为 0 的品类跳过
+// (无基线不判,防除零;该品类实测恒 0 时也不判)。
+func evaluateEventFreqRedline(runs []RunRecord) RedlineHit {
+	hit := RedlineHit{ID: RedlineRB4, Name: "事件频次偏离基线", Threshold: redlineEventFreqDev}
+	window, n := redlineWindowRuns(runs)
+	if n < categoryRunsWindow {
+		hit.Detail = fmt.Sprintf("样本不足(n=%d/%d),不触发", n, categoryRunsWindow)
+		return hit
+	}
+	totalMonths := 0
+	for i := range window {
+		totalMonths += window[i].TotalSteps
+	}
+	if totalMonths <= 0 {
+		hit.Detail = fmt.Sprintf("窗口 %d 局总月数为 0,不触发", n)
+		return hit
+	}
+	worstDev, worstType := 0.0, ""
+	for _, typ := range []string{MCEventTrade, MCEventAuction, MCEventLoan, MCEventBias, MCEventBankruptcy, MCEventMarket} {
+		base := eventBaselinePer100Months[typ]
+		if base <= 0 {
+			continue // α 基线缺该品类 ⇒ 不判(防除零)
+		}
+		count := 0
+		for i := range window {
+			count += window[i].EventCounts[typ]
+		}
+		freq := float64(count) / float64(totalMonths) * 100
+		dev := (freq - base) / base
+		if dev < 0 {
+			dev = -dev
+		}
+		if dev > worstDev {
+			worstDev, worstType = dev, typ
+		}
+	}
+	if worstType == "" {
+		hit.Detail = fmt.Sprintf("窗口 %d 局基线表无可判品类(α 阶段基线缺省),不触发", n)
+		return hit
+	}
+	hit.Actual = worstDev
+	hit.Triggered = worstDev > redlineEventFreqDev
+	hit.Detail = fmt.Sprintf("事件 %s 每百月频次偏离基线 %.0f%%(窗口 %d 局/%d 月;±%.0f%% 触发)",
+		worstType, worstDev*100, n, totalMonths, redlineEventFreqDev*100)
+	return hit
+}
+
 // ── 逐月审计 ───────────────────────────────────────────────────────────
 
 // auditMonth 逐月审计快照(方案 §6.1):写入点为 SettleMonth 末尾
@@ -881,7 +1048,42 @@ func (w *World) auditMonth() {
 	if len(w.Audits) > auditCap {
 		w.Audits = w.Audits[len(w.Audits)-auditCap:]
 	}
+	w.calibrationSamplePlayers() // 批次73 O1:LoanMax/CreditMin 采样 + O2 偏差事件
 	w.updateCalibrationRun(audit, outcomes)
+}
+
+// calibrationSamplePlayers 批次73 月结采样(审计同节拍,纯旁路,零 rand):
+//
+//   - O1:LoanMaxCNY = Σ贷款余额 终身峰值;CreditMin = 信用分终身最低;
+//   - O2:逐座对比 BiasHits 与上月审计采样值的增量 ⇒ 有增量的座位记一条
+//     bias 事件(actors=座位,qty=增量)——与 BiasHits 计数器同口径,
+//     避免展示路径(behaviorJSONFor 每次 game.state 都重建)重复计数。
+func (w *World) calibrationSamplePlayers() {
+	if w == nil {
+		return
+	}
+	for _, p := range w.Players {
+		if p == nil {
+			continue
+		}
+		var loanSum int64
+		for i := range p.Loans {
+			loanSum += p.Loans[i].Balance
+		}
+		if loanSum > p.LoanMaxCNY {
+			p.LoanMaxCNY = loanSum
+		}
+		if p.CreditMin == 0 || p.CreditScore < p.CreditMin {
+			p.CreditMin = p.CreditScore
+		}
+		if d := p.BiasHits - p.biasHitsSampled; d > 0 {
+			p.biasHitsSampled = p.BiasHits
+			w.recordEvent(MCStepSettle, MCEventBias,
+				[]string{SeatEntity(p.Seat)}, 0, int64(d), false, "")
+		} else {
+			p.biasHitsSampled = p.BiasHits
+		}
+	}
 }
 
 // calibrationEnsure 惰性初始化校准状态(nil 安全)。
@@ -966,6 +1168,14 @@ func (w *World) updateCalibrationRun(audit MonthlyAudit, outcomes []OutcomeStat)
 		mt.BondRateN++
 		rec.CategoryAnnualized = computeCategoryAnnualized(w, mt, w.Month)
 	}
+
+	// 批次73 O1/O2/O3/O4:居民级采集(12 记录/局)+ 事件计数聚合 +
+	// 结局成因分类 + 职业结局/拍卖参与率聚合。全部纯旁路、零 rand;
+	// 采集失败静默降级(空聚合),绝不阻断审计。
+	rec.EventCounts = w.mcEventCounts()
+	residents := mcCollectResidents(w, rec.RunID, w.MCAuctionCount)
+	rec.ProfessionOutcomes, rec.AuctionParticipationMedian = mcAggregateResidents(residents, outcomes)
+	rec.OutcomeCauses = mcCollectOutcomeCauses(w, residents, outcomes)
 }
 
 // calibrationCaptureMarketStart 捕获品类年化期初基线(StartGame 调一次;

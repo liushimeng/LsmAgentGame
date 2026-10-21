@@ -118,11 +118,15 @@ func TestOffLedgerBook_RegisterSites(t *testing.T) {
 			hits = append(hits, hit{file: name, line: i + 1, source: trimmed})
 		}
 	}
-	// 命中数固定为 5(4 处真账外 + 1 处假账外)。
-	if len(hits) != 5 {
-		t.Fatalf("直接写 p.Cash 的位置 = %d 处,期望 5 处:\n%v", len(hits), hits)
+	// 命中数固定为 6(4 处真账外 + 1 处假账外 + 1 处批次73 MCOverride
+	// 开局缩放):mc_ab.go::apply 在 **StartGame 之前** 同比例缩放
+	// p.Cash 与 p.Card.Savings ⇒ StartGame 的 Ledger 初始注入同比例,
+	// I1 由构造保持(cash == inject)⇒ **不可** offLedgerRecord 登记
+	// (登记反而使 I1 = −delta ≠ 0)。
+	if len(hits) != 6 {
+		t.Fatalf("直接写 p.Cash 的位置 = %d 处,期望 6 处:\n%v", len(hits), hits)
 	}
-	wantFiles := map[string]int{"actions.go": 2, "scenario.go": 1, "family.go": 1, "bias.go": 1}
+	wantFiles := map[string]int{"actions.go": 2, "scenario.go": 1, "family.go": 1, "bias.go": 1, "mc_ab.go": 1}
 	gotFiles := map[string]int{}
 	for _, h := range hits {
 		gotFiles[h.file]++
@@ -132,8 +136,12 @@ func TestOffLedgerBook_RegisterSites(t *testing.T) {
 			t.Errorf("%s 命中 %d 处,期望 %d 处", f, gotFiles[f], n)
 		}
 	}
-	// 每处命中都必须在 ±8 行内出现 offLedgerRecord 登记。
+	// 每处命中都必须在 ±8 行内出现 offLedgerRecord 登记(批次73 豁免:
+	// mc_ab.go 开局缩放与注入同比例,I1 由构造保持,登记反而破坏 I1)。
 	for _, h := range hits {
+		if h.file == "mc_ab.go" {
+			continue
+		}
 		raw, err := os.ReadFile(h.file)
 		if err != nil {
 			t.Fatalf("read %s: %v", h.file, err)
@@ -483,10 +491,11 @@ func TestCalibration_RedlineEvaluation(t *testing.T) {
 				BankruptcyRate: f64Ptr(c.d5),
 			}
 			rl := EvaluateRedlines(ind, nil, nil)
-			if len(rl) != 7 {
-				t.Fatalf("红线条数 = %d,期望 7", len(rl))
+			if len(rl) != 10 {
+				t.Fatalf("红线条数 = %d,期望 10", len(rl))
 			}
-			wantOrder := []string{RedlineRE3, RedlineRE4, RedlineRE5, RedlineRE6, RedlineRB1, RedlineRE1, RedlineRE2}
+			wantOrder := []string{RedlineRE3, RedlineRE4, RedlineRE5, RedlineRE6,
+				RedlineRB1, RedlineRE1, RedlineRE2, RedlineRB2, RedlineRB3, RedlineRB4}
 			for i, id := range wantOrder {
 				if rl[i].ID != id {
 					t.Fatalf("红线顺序错位:%d = %s,期望 %s", i, rl[i].ID, id)
@@ -670,7 +679,7 @@ func TestAudit_NoRegressionOnExistingWorlds(t *testing.T) {
 // ── 契约形状(§9)───────────────────────────────────────────────────────
 
 // TestCalibration_ContractShape 契约形状断言(方案 §9.2):
-// invariants 恒 7 条 / redlines 恒 5 条 / history 恒为数组 /
+// invariants 恒 7 条 / redlines 恒 10 条(批次73)/ history 恒为数组 /
 // indicators 无值键为 null(不得省略)。
 func TestCalibration_ContractShape(t *testing.T) {
 	w := calibTestWorld(42, 6)
@@ -691,10 +700,11 @@ func TestCalibration_ContractShape(t *testing.T) {
 			t.Errorf("invariants[%d] = %s,期望 %s", i, cs.Calibration.Invariants[i].ID, id)
 		}
 	}
-	if len(cs.Calibration.Redlines) != 7 {
-		t.Errorf("redlines 长度 = %d,期望 7", len(cs.Calibration.Redlines))
+	if len(cs.Calibration.Redlines) != 10 {
+		t.Errorf("redlines 长度 = %d,期望 10", len(cs.Calibration.Redlines))
 	}
-	wantRed := []string{RedlineRE3, RedlineRE4, RedlineRE5, RedlineRE6, RedlineRB1, RedlineRE1, RedlineRE2}
+	wantRed := []string{RedlineRE3, RedlineRE4, RedlineRE5, RedlineRE6, RedlineRB1,
+		RedlineRE1, RedlineRE2, RedlineRB2, RedlineRB3, RedlineRB4}
 	for i, id := range wantRed {
 		if cs.Calibration.Redlines[i].ID != id {
 			t.Errorf("redlines[%d] = %s,期望 %s", i, cs.Calibration.Redlines[i].ID, id)
@@ -754,8 +764,8 @@ func TestCalibration_AuditAlwaysFullShape(t *testing.T) {
 		if len(a.Invariants) != 7 {
 			t.Fatalf("月 %d 审计不变量数 = %d,期望 7", a.Month, len(a.Invariants))
 		}
-		if len(a.Redlines) != 7 {
-			t.Fatalf("月 %d 审计红线数 = %d,期望 7", a.Month, len(a.Redlines))
+		if len(a.Redlines) != 10 {
+			t.Fatalf("月 %d 审计红线数 = %d,期望 10", a.Month, len(a.Redlines))
 		}
 		for _, inv := range a.Invariants {
 			if inv.ID == "" || inv.Name == "未采集" {
@@ -912,8 +922,8 @@ func TestCalibration_CategoryRedlines(t *testing.T) {
 	if byID[RedlineRE2].Triggered {
 		t.Errorf("R-E2 不应触发(其余品类 0.05):%+v", byID[RedlineRE2])
 	}
-	if len(rl) != 7 {
-		t.Fatalf("红线条数 = %d,期望 7", len(rl))
+	if len(rl) != 10 {
+		t.Fatalf("红线条数 = %d,期望 10", len(rl))
 	}
 	if rl[5].ID != RedlineRE1 || rl[6].ID != RedlineRE2 {
 		t.Errorf("R-E1/R-E2 应追加在尾部:got %s,%s", rl[5].ID, rl[6].ID)
@@ -990,5 +1000,116 @@ func TestCalibration_I6NoSample(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), `"no_sample":`) {
 		t.Errorf("calibration.invariants[].no_sample 未下发:%s", string(raw)[:min(200, len(raw))])
+	}
+}
+
+// ── 批次73 O4:R-B2 / R-B3 / R-B4 合成 RunRecord 压线测试 ──────────────
+
+// redlineByID 取红线结果 by id(测试辅助)。
+func redlineByID(t *testing.T, rl []RedlineHit, id string) RedlineHit {
+	t.Helper()
+	for _, r := range rl {
+		if r.ID == id {
+			return r
+		}
+	}
+	t.Fatalf("红线 %s 不在评估结果中", id)
+	return RedlineHit{}
+}
+
+// TestCalibration_ProfessionRedlineRB2 R-B2 职业结局画像偏差压线 ±ε。
+func TestCalibration_ProfessionRedlineRB2(t *testing.T) {
+	ind := CalibrationIndicators{MoneyExpansion: f64Ptr(3.0), BankruptcyRate: f64Ptr(0.2)}
+	mk := func(goodA, totalA, goodB, totalB int) []RunRecord {
+		runs := make([]RunRecord, categoryRunsWindow)
+		for i := range runs {
+			runs[i] = RunRecord{RunID: "CR" + strconvItoa(i + 1),
+				TotalSteps: 200,
+				ProfessionOutcomes: map[string][2]int{
+					"P-A": {goodA, totalA}, "P-B": {goodB, totalB}}}
+		}
+		return runs
+	}
+	// 偏离恰 0.20(A 0.6 / B 0.4,全体 0.5)⇒ 不触发(严格 >)。
+	rl := EvaluateRedlines(ind, nil, mk(6, 10, 4, 10))
+	if r := redlineByID(t, rl, RedlineRB2); r.Triggered {
+		t.Errorf("R-B2 偏离恰 20pp 不应触发(严格 >):%+v", r)
+	}
+	// 偏离 0.30 ⇒ 触发。
+	rl = EvaluateRedlines(ind, nil, mk(8, 10, 2, 10))
+	if r := redlineByID(t, rl, RedlineRB2); !r.Triggered {
+		t.Errorf("R-B2 偏离 30pp 应触发:%+v", r)
+	}
+	// 窗口不足 ⇒ 不触发 + detail 样本数。
+	rl = EvaluateRedlines(ind, nil, mk(8, 10, 2, 10)[:9])
+	if r := redlineByID(t, rl, RedlineRB2); r.Triggered {
+		t.Errorf("R-B2 样本不足不应触发:%+v", r)
+	} else if !strings.Contains(r.Detail, "n=9/10") {
+		t.Errorf("R-B2 detail 应注明样本不足:%s", r.Detail)
+	}
+}
+
+// TestCalibration_AuctionParticipationRedlineRB3 R-B3 拍卖参与率压线。
+func TestCalibration_AuctionParticipationRedlineRB3(t *testing.T) {
+	ind := CalibrationIndicators{MoneyExpansion: f64Ptr(3.0), BankruptcyRate: f64Ptr(0.2)}
+	mk := func(median float64, n int) []RunRecord {
+		runs := make([]RunRecord, n)
+		for i := range runs {
+			runs[i] = RunRecord{RunID: "CR" + strconvItoa(i + 1),
+				TotalSteps: 200, AuctionParticipationMedian: median}
+		}
+		return runs
+	}
+	// 恰 0.30 ⇒ 不触发(严格 <);0.29 ⇒ 触发。
+	if r := redlineByID(t, EvaluateRedlines(ind, nil, mk(0.30, 10)), RedlineRB3); r.Triggered {
+		t.Errorf("R-B3 中位数恰 30%% 不应触发:%+v", r)
+	}
+	if r := redlineByID(t, EvaluateRedlines(ind, nil, mk(0.29, 10)), RedlineRB3); !r.Triggered {
+		t.Errorf("R-B3 中位数 29%% 应触发:%+v", r)
+	}
+	if r := redlineByID(t, EvaluateRedlines(ind, nil, mk(0.10, 9)), RedlineRB3); r.Triggered {
+		t.Errorf("R-B3 样本不足不应触发:%+v", r)
+	}
+}
+
+// TestCalibration_EventFreqRedlineRB4 R-B4 事件频偏离基线压线(基线表
+// 测试内临时替换,保存/还原)。
+func TestCalibration_EventFreqRedlineRB4(t *testing.T) {
+	saved := eventBaselinePer100Months
+	defer func() { eventBaselinePer100Months = saved }()
+	eventBaselinePer100Months = map[string]float64{
+		MCEventTrade: 20, // 其余品类基线 0 ⇒ 跳过(隔离 trade 单变量)
+	}
+	ind := CalibrationIndicators{MoneyExpansion: f64Ptr(3.0), BankruptcyRate: f64Ptr(0.2)}
+	mk := func(tradeCount, months int, n int) []RunRecord {
+		runs := make([]RunRecord, n)
+		for i := range runs {
+			runs[i] = RunRecord{RunID: "CR" + strconvItoa(i + 1), TotalSteps: months,
+				EventCounts: map[string]int{MCEventTrade: tradeCount}}
+		}
+		return runs
+	}
+	// 10 局 × 100 月 = 1000 月;每局 trade N 次 ⇒ 每百月频次 = N
+	//(Σcounts/Σmonths×100 = 10N/1000×100 = N)。基线 trade=20:
+	// N=20 ⇒ 恰贴基线不触发;N=31 ⇒ +55% 触发;N=30 ⇒ 恰 +50%(严格 >)不触发;
+	// N=10 ⇒ −50% 恰界不触发;N=9 ⇒ −55% 触发。
+	if r := redlineByID(t, EvaluateRedlines(ind, nil, mk(20, 100, 10)), RedlineRB4); r.Triggered {
+		t.Errorf("R-B4 恰贴基线不应触发:%+v", r)
+	}
+	if r := redlineByID(t, EvaluateRedlines(ind, nil, mk(31, 100, 10)), RedlineRB4); !r.Triggered {
+		t.Errorf("R-B4 频偏 +55%% 应触发:%+v", r)
+	}
+	if r := redlineByID(t, EvaluateRedlines(ind, nil, mk(30, 100, 10)), RedlineRB4); r.Triggered {
+		t.Errorf("R-B4 频偏恰 +50%% 不应触发(严格 >):%+v", r)
+	}
+	if r := redlineByID(t, EvaluateRedlines(ind, nil, mk(10, 100, 10)), RedlineRB4); r.Triggered {
+		t.Errorf("R-B4 频偏恰 −50%% 不应触发:%+v", r)
+	}
+	if r := redlineByID(t, EvaluateRedlines(ind, nil, mk(9, 100, 10)), RedlineRB4); !r.Triggered {
+		t.Errorf("R-B4 频偏 −55%% 应触发:%+v", r)
+	}
+	// 样本不足 ⇒ 不触发。
+	if r := redlineByID(t, EvaluateRedlines(ind, nil, mk(31, 100, 9)), RedlineRB4); r.Triggered {
+		t.Errorf("R-B4 样本不足不应触发:%+v", r)
 	}
 }

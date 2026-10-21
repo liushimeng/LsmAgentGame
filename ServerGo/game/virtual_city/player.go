@@ -309,6 +309,32 @@ type Player struct {
 	LastActionText  string // 本月最近动作(公开字段 last_action)
 	StatusIcon      string // working|idle|trading|resting|moved
 	Ending          string // 终局结局 id
+
+	// ── 批次73 校准采集计数器(纯旁路观测:零 rand、零账目语义改动,
+	// 不参与 StateHash;常驻生效 —— 真实对局同样累计,为批次74+ 线上观测留面;
+	// 见 mc_resident.go / calibration.go::calibrationSamplePlayers)──
+	TradesMade    int   // P2P/拍卖成交次数(买卖双方各 +1;CatTrade 结算处)
+	AuctionsJoined int  // 拍卖有效出价次数(流拍/无效出价不计)
+	BiasHits      int   // 行为偏差实际生效次数(biasEffectMulOf m≠1 分支)
+	LoanMaxCNY    int64 // 终身贷款余额峰值(ΣBalance,月结采样)
+	CreditMin     int   // 终身信用分最低值(月结采样;0 = 开局值即最低或暂未采样)
+	TradeRealizedCNY int64 // 累计已实现价差盈亏(成交结算处分买卖记账)
+	// biasHitsSampled 上次审计节拍已入账的 BiasHits(事件增量口径;
+	// 未导出,不参与任何序列化)。
+	biasHitsSampled int
+
+	// ── 批次73 修正:破产时刻上下文快照(结局成因 NEG-1/2/4 输入)──
+	// 破产清算(liquidate)**清减贷款/资产之前**采样一次(首次破产才写;
+	// 二次破产不改写首因上下文)。零 rand、零账目语义、不参与 StateHash。
+	// ⚠ 必须在 liquidate 的清偿/重组动作之前取值,否则月供/资产被清掉,
+	// NEG 规则恒落空(gate 千局实测 NEG-1/2/4 全 0 的根因)。
+	BankruptMonth        int     // 首次破产月(0 = 未破产)
+	BankruptLoanPayment  int64   // 破产月存续贷款月供合计(Σ MonthlyPayment)
+	BankruptExpense      int64   // 破产月最近月结总支出
+	BankruptCash         int64   // 破产月现金
+	BankruptNonCash      int64   // 破产月非现金资产(recomputeNetWorth − Cash 口径)
+	BankruptTopCatShare  float64 // 破产月最大单一品类市值 ÷ 净资产(>1 clamp 1;NW≤0 且市值>0 ⇒ 1)
+	BankruptTopCatDD     float64 // 该品类回撤(1 − 市值/买入成本;成本 ≤0 ⇒ 0,市值波动代理口径)
 }
 
 // monthlyActionBudget 每月动作预算(人类/Agent 同规则 3)。

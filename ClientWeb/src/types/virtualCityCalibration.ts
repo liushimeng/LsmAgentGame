@@ -152,6 +152,28 @@ export interface VirtualCityCalibration {
   category_annualized?: Record<string, number>;
   /** 最近 12 局完成运行（新→旧；批次 72）。老对局 / 无终局记录缺省。 */
   runs?: VirtualCityCalibrationRun[];
+
+  /**
+   * 结局成因分布（批次 73，O3 分类器聚合；键 = 成因 id，值 = 座位数）。
+   * 8 类确定性规则（POS-1..4 / NEG-1..4）+ `undetermined` 兜底桶，键序见
+   * `CALIBRATION_OUTCOME_CAUSE_ORDER`。批次 72 及更早后端缺省 ⇒ 空态。
+   */
+  outcome_causes?: Record<string, number>;
+  /**
+   * 事件计数（批次 73，O2 事件级采集的本局聚合；键 = 事件类型，值 = 次数）。
+   * 六类触发点口径见方案 §5；未知类型键渲染层回落原字符串。老后端缺省 ⇒ 空态。
+   */
+  event_counts?: Record<string, number>;
+  /**
+   * 拍卖参与率中位数（批次 73，O4 R-B3 判定输入；本局 12 座参与率的中位数，
+   * 0-1 小数）。单局无拍卖或老后端缺省 ⇒ 展示 '—'（缺失 ≠ 0）。
+   */
+  auction_participation_median?: number;
+  /**
+   * 职业画像结局（批次 73，O4 R-B2 判定输入；键 = 职业卡 id，
+   * 值 = `[良好结局数, 总数]`）。老后端缺省 ⇒ 前端不渲染对应行。
+   */
+  profession_outcomes?: Record<string, [number, number]>;
 }
 
 /**
@@ -183,6 +205,10 @@ export const CALIBRATION_REDLINE_KEYS: Record<string, string> = {
   'R-B1': 'virtualCity.calib.redline.rb1',
   // ⚠ R-E1 / R-E2（批次 72）**刻意不映射**：契约规定红线名直接用后端 name
   //   中文名；未命中本表 ⇒ 渲染层回退 rl.name（既有兜底路径），勿补键。
+  // 批次 73：R-B2 / R-B3 / R-B4 走 i18n 映射（方案 §9.1）。
+  'R-B2': 'virtualCity.calib.redline.rb2',
+  'R-B3': 'virtualCity.calib.redline.rb3',
+  'R-B4': 'virtualCity.calib.redline.rb4',
 };
 
 /**
@@ -217,4 +243,62 @@ export const CALIBRATION_CATEGORY_ORDER: readonly string[] = [
   'gold',
   'house',
   'bond',
+];
+
+/**
+ * 结局成因 id → i18n 键（批次 73，方案 §6 分类器 8 类 + undetermined 兜底）。
+ *
+ * ⚠ 键序 = 分类器判定优先级（良好 1→4→2→3；不良 1→2→4→3；undetermined 尾部）。
+ *   后端 map 键拼写可能为 `pos_1` / `pos-1` / `POS_1` / `POS-1` 任一形态 ⇒
+ *   渲染层先归一化（小写 + `-`→`_`）再查本表；未知成因 id 回落**原字符串**，
+ *   绝不渲染空白（§12 纪律）。
+ */
+export const CALIBRATION_OUTCOME_CAUSE_KEYS: Record<string, string> = {
+  pos_1: 'virtualCity.calibration.cause.pos1',
+  pos_4: 'virtualCity.calibration.cause.pos4',
+  pos_2: 'virtualCity.calibration.cause.pos2',
+  pos_3: 'virtualCity.calibration.cause.pos3',
+  neg_1: 'virtualCity.calibration.cause.neg1',
+  neg_2: 'virtualCity.calibration.cause.neg2',
+  neg_4: 'virtualCity.calibration.cause.neg4',
+  neg_3: 'virtualCity.calibration.cause.neg3',
+  undetermined: 'virtualCity.calibration.cause.undetermined',
+};
+
+/** 结局成因固定展示顺序（= 判定优先级，见方案 §6）。 */
+export const CALIBRATION_OUTCOME_CAUSE_ORDER: readonly string[] = [
+  'pos_1',
+  'pos_4',
+  'pos_2',
+  'pos_3',
+  'neg_1',
+  'neg_2',
+  'neg_4',
+  'neg_3',
+  'undetermined',
+];
+
+/**
+ * 事件类型 id → i18n 键（批次 73，方案 §5 六类触发点聚合口径）。
+ *
+ * ⚠ 后端 `event_counts` 可能携带未知类型键 ⇒ 渲染层先按本表序渲染已知六类，
+ *   未知键按原字符串追加在尾部，绝不丢弃 / 空白。
+ */
+export const CALIBRATION_EVENT_TYPE_KEYS: Record<string, string> = {
+  trade: 'virtualCity.calibration.event.trade',
+  auction: 'virtualCity.calibration.event.auction',
+  loan: 'virtualCity.calibration.event.loan',
+  bias: 'virtualCity.calibration.event.bias',
+  bankruptcy: 'virtualCity.calibration.event.bankruptcy',
+  scenario: 'virtualCity.calibration.event.scenario',
+};
+
+/** 事件类型固定展示顺序（六类触发点口径，见方案 §5）。 */
+export const CALIBRATION_EVENT_TYPE_ORDER: readonly string[] = [
+  'trade',
+  'auction',
+  'loan',
+  'bias',
+  'bankruptcy',
+  'scenario',
 ];

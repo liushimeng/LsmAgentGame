@@ -178,6 +178,8 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 		res.StockIndex, res.GoldPrice, res.BondRate = w.Market.StockIndex, w.Market.GoldPrice, np.BondRate
 		w.emitEvent("market", -1, fmt.Sprintf("市场周期切换:%s(LPR %.1f%%, CPI %.1f%%)",
 			cyclePhaseCN(w.Market.CyclePhase), np.LPR*100, np.CPI*100))
+		// 批次73 O2:market 事件(自然周期切换;step 代理口径 settle)。
+		w.recordEvent(MCStepSettle, MCEventMarket, []string{"market"}, 0, 0, false, "")
 	}
 	w.Market.MonthStep(w.Rand)
 	// 批次20 文档3 B2-4:熔断判定(MonthStep 内 clamp **前**的原始跌幅
@@ -740,6 +742,11 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 func (w *World) liquidate(p *Player) {
 	seat := p.Seat
 	w.emitEvent("settle", seat, fmt.Sprintf("%d 号位触发破产清算!", seat))
+	// 批次73 O2:bankruptcy 事件(破产清算触发点;step 代理口径 settle)。
+	w.recordEvent(MCStepSettle, MCEventBankruptcy, []string{SeatEntity(seat)}, 0, 0, false, "")
+	// 批次73 修正:破产时刻上下文快照(**必须在清偿/重组清减贷款与资产
+	// 之前**采样;首次破产才写)——结局成因 NEG-1/2/4 的输入。零 rand。
+	w.captureBankruptSnapshot(p)
 
 	// 流动资产按市价卖出;房产/商铺按当前价 × 70% 强制变现(先偿房贷,余额入现金)。
 	for i := len(p.Assets) - 1; i >= 0; i-- {

@@ -643,6 +643,8 @@ func (w *World) actBuyHouse(p *Player, a Action) (string, *errcode.Error) {
 				w.Pay(p.Seat, SeatEntity(p.Seat), EntityMarket, extra, CatBiasCost, "跟风滑点")
 			}
 			w.Pay(p.Seat, EntityBank, SeatEntity(p.Seat), loanAmount, CatLoan, "房贷放款")
+			// 批次73 O2:放贷发放事件(银行房贷)。
+			w.recordEvent(MCStepAct, MCEventLoan, []string{SeatEntity(p.Seat)}, loanAmount, 1, false, "")
 			// P1: 锁定加点 = 银行侧加点(MortgageSpread + CreditSpread)(不含玩家信用加点,
 			// 玩家在重定价时按最新信用等级重新计算),用于 LPR 重定价(v2.60 N12-3)。
 			lprRef := w.Market.Params().LPR
@@ -775,6 +777,8 @@ func (w *World) actTakeLoan(p *Player, a Action) (string, *errcode.Error) {
 		rate := ConsumerRate + p.CreditMarkup() + creditSpread
 		payment := AnnuityPayment(a.AmountCNY, rate, 36)
 		w.Pay(p.Seat, EntityBank, SeatEntity(p.Seat), a.AmountCNY, CatLoan, "消费贷放款")
+		// 批次73 O2:放贷发放事件(银行消费贷)。
+		w.recordEvent(MCStepAct, MCEventLoan, []string{SeatEntity(p.Seat)}, a.AmountCNY, 1, false, "")
 		p.Loans = append(p.Loans, Loan{
 			ID: p.nextLoanID(), Kind: LoanConsumer, Principal: a.AmountCNY, Balance: a.AmountCNY,
 			AnnualRate: rate, MonthlyPayment: payment, TermN: 36, MonthsLeft: 36,
@@ -808,6 +812,8 @@ func (w *World) actTakeLoan(p *Player, a Action) (string, *errcode.Error) {
 			monthly = 0.018
 		}
 		w.Pay(p.Seat, EntityBank, SeatEntity(p.Seat), amount, CatLoan, "信用贷放款")
+		// 批次73 O2:放贷发放事件(银行信用贷)。
+		w.recordEvent(MCStepAct, MCEventLoan, []string{SeatEntity(p.Seat)}, amount, 1, false, "")
 		p.Loans = append(p.Loans, Loan{
 			ID: p.nextLoanID(), Kind: kind, Principal: amount, Balance: amount,
 			AnnualRate: monthly * 12, MonthlyPayment: int64(float64(amount)*monthly + 0.5),
@@ -838,6 +844,8 @@ func (w *World) actTakeLoan(p *Player, a Action) (string, *errcode.Error) {
 			rate = 0.01
 		}
 		w.Pay(p.Seat, EntityBank, SeatEntity(p.Seat), a.AmountCNY, CatLoan, "经营贷放款")
+		// 批次73 O2:放贷发放事件(银行经营贷)。
+		w.recordEvent(MCStepAct, MCEventLoan, []string{SeatEntity(p.Seat)}, a.AmountCNY, 1, false, "")
 		p.Loans = append(p.Loans, Loan{
 			ID: p.nextLoanID(), Kind: LoanBusiness, Principal: a.AmountCNY, Balance: a.AmountCNY,
 			AnnualRate: rate, MonthlyPayment: int64(float64(a.AmountCNY)*rate/12 + 0.5),

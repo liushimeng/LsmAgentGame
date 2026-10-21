@@ -17,6 +17,10 @@
  *                  最近 12 局运行表（同时充当趋势数据的 table view 可访问性兜底）
  *                  + D2/D5 各自独立 y 标尺的 sparkline（量纲不同，禁止双轴）
  *                  + 品类年化 4 行小表（收益类 ⇒ pos/neg 配色组，见下）
+ *   ⑦ 结局成因   —— 批次 73（`vc-calib-cause-*` class 前缀，§9.2）：
+ *                  8 类 + undetermined 水平分布条（纯 CSS 堆叠段，图表色相，
+ *                  不占状态色；每段 title 悬浮给判据说明）+ 行列表兜底
+ *                  + 拍卖参与率中位数 + 事件计数小表（六类，空态「—」）
  *
  * 口径纪律：
  *   - **整体可能不存在**（老对局 / 后端未升级）⇒ 走空态「本局尚未产生校准数据」，
@@ -50,7 +54,11 @@ import type {
 import {
   CALIBRATION_CATEGORY_KEYS,
   CALIBRATION_CATEGORY_ORDER,
+  CALIBRATION_EVENT_TYPE_KEYS,
+  CALIBRATION_EVENT_TYPE_ORDER,
   CALIBRATION_INVARIANT_KEYS,
+  CALIBRATION_OUTCOME_CAUSE_KEYS,
+  CALIBRATION_OUTCOME_CAUSE_ORDER,
   CALIBRATION_REDLINE_KEYS,
   CALIBRATION_STRATEGY_KEYS,
 } from '@/types/virtualCityCalibration';
@@ -252,6 +260,68 @@ export function CalibrationPanel({ gameState }: CalibrationPanelProps) {
     if (v === null) return '—';
     return `${v > 0 ? '+' : ''}${formatPct(v, 1)}`;
   };
+
+  // ── ⑦ 结局成因 + 事件计数（批次 73，均为可选键：批次 72 及更早后端
+  //    两者皆缺 ⇒ 本区块统一空态，不得白屏）────────────────────────────
+  const outcomeCauses = calibration.outcome_causes;
+  const eventCounts = calibration.event_counts;
+
+  // 成因 id 归一化：后端 map 键可能为 POS-1 / pos-1 / POS_1 / pos_1 任一形态。
+  const normCauseId = (id: string): string => id.toLowerCase().replace(/-/g, '_');
+
+  // 分布条 + 行列表共用的有序行集：固定键序在前（缺键跳过），未知成因
+  // id 追加尾部并回落原字符串（绝不丢弃 / 空白）。
+  const causeRows: Array<{ id: string; count: number }> = [];
+  if (outcomeCauses) {
+    for (const id of CALIBRATION_OUTCOME_CAUSE_ORDER) {
+      const n = outcomeCauses[id] ?? outcomeCauses[id.replace(/_/g, '-')];
+      const v = n ?? outcomeCauses[id.toUpperCase()] ?? outcomeCauses[id.toUpperCase().replace(/_/g, '-')];
+      if (typeof v === 'number' && Number.isFinite(v) && v !== 0) {
+        causeRows.push({ id, count: v });
+      }
+    }
+    for (const [rawId, v] of Object.entries(outcomeCauses)) {
+      if (typeof v !== 'number' || !Number.isFinite(v) || v === 0) continue;
+      const norm = normCauseId(rawId);
+      if (!CALIBRATION_OUTCOME_CAUSE_ORDER.includes(norm)) {
+        causeRows.push({ id: norm, count: v });
+      }
+    }
+  }
+  const causeTotal = causeRows.reduce((s, r) => s + r.count, 0);
+  const causeLabel = (id: string): string => {
+    const key = CALIBRATION_OUTCOME_CAUSE_KEYS[id];
+    if (key) return t(key as TKey);
+    return id;
+  };
+  // 判据 tooltip（每段的 title 悬浮说明，方案 §9.2）。
+  const causeTip = (id: string): string => {
+    const tipKey = `virtualCity.calibration.causeTip.${id.replace(/_/g, '')}`;
+    const known = id in CALIBRATION_OUTCOME_CAUSE_KEYS;
+    return known ? t(tipKey as TKey) : causeLabel(id);
+  };
+
+  // 事件计数行：已知六类按固定序（缺省 = 空态 '—'，缺失 ≠ 0），未知类型键追加。
+  const eventRows: Array<{ id: string; count: number | null }> =
+    CALIBRATION_EVENT_TYPE_ORDER.map((id) => ({
+      id,
+      count: eventCounts && typeof eventCounts[id] === 'number'
+        ? eventCounts[id]
+        : null,
+    }));
+  if (eventCounts) {
+    for (const [rawId, v] of Object.entries(eventCounts)) {
+      if (!CALIBRATION_EVENT_TYPE_ORDER.includes(rawId)) {
+        eventRows.push({ id: rawId, count: typeof v === 'number' ? v : null });
+      }
+    }
+  }
+  const eventLabel = (id: string): string => {
+    const key = CALIBRATION_EVENT_TYPE_KEYS[id];
+    if (key) return t(key as TKey);
+    return id;
+  };
+  const auctionMedian = calibration.auction_participation_median;
 
   // 汇总状态：有任一不变量失败 ⇒ fail；否则 ok（空态由上面的早退分支给出 empty）。
   const calibStatus = invariants.some((inv) => !inv.passed) ? 'fail' : 'ok';
@@ -664,6 +734,121 @@ export function CalibrationPanel({ gameState }: CalibrationPanelProps) {
             ))}
           </ul>
         </div>
+      </section>
+
+      {/* ⑦ 结局成因（批次 73，§9.2）：8 类 + undetermined 水平分布条
+          （纯 CSS，图表色相，不占 good/serious 状态色）+ 事件计数小表。 */}
+      <section
+        className="virtualCity-calib__block vc-calib-cause"
+        data-testid="virtualCity-calib-causes"
+        data-vc-calib-cause-count={String(causeRows.length)}
+      >
+        <div className="virtualCity-calib__block-title">
+          {t('virtualCity.calibration.outcomeTitle' as TKey)}
+        </div>
+
+        {!outcomeCauses && !eventCounts ? (
+          /* 统一空态：批次 72 及更早后端两个可选键皆缺。 */
+          <div className="virtualCity-calib__none">—</div>
+        ) : (
+          <>
+            {/* 拍卖参与率中位数（R-B3 判定输入；0-1 小数 ⇒ formatPct）。 */}
+            <div className="vc-calib-cause__median">
+              <span className="vc-calib-cause__median-label">
+                {t('virtualCity.calibration.auctionMedian' as TKey)}
+              </span>
+              <span className="vc-calib-cause__median-value">
+                {typeof auctionMedian === 'number' && Number.isFinite(auctionMedian)
+                  ? formatPct(auctionMedian, 1)
+                  : '—'}
+              </span>
+            </div>
+
+            {/* 水平分布条：单条堆叠，段宽 = 该类座位数 ÷ 总数；段色为面板
+                既有图表色相扩展组（--cause-pos1..--undetermined），不占状态色；
+                每段 title 悬浮给判据说明；条上不嵌文字（可达性由下行列表兜底）。 */}
+            {causeRows.length === 0 ? (
+              <div className="virtualCity-calib__none">—</div>
+            ) : (
+              <>
+                <div
+                  className="vc-calib-cause__bar"
+                  role="img"
+                  aria-label={causeRows
+                    .map((r) => `${causeLabel(r.id)} ${r.count}`)
+                    .join(' / ')}
+                >
+                  {causeRows.map((r) => (
+                    <span
+                      key={r.id}
+                      className={`vc-calib-cause__seg vc-calib-cause__seg--${r.id}`}
+                      style={{
+                        flexGrow: r.count,
+                        flexBasis: 0,
+                      }}
+                      title={causeTip(r.id)}
+                    />
+                  ))}
+                </div>
+                {/* 行列表：文字标签 + 计数 + 迷你条（颜色双通道 + 文本，不只靠色）。 */}
+                <ul className="vc-calib-cause__list">
+                  {causeRows.map((r) => (
+                    <li className="vc-calib-cause__row" key={r.id}>
+                      <span
+                        className={`vc-calib-cause__dot vc-calib-cause__seg--${r.id}`}
+                        aria-hidden="true"
+                      />
+                      <span
+                        className="vc-calib-cause__name"
+                        title={causeTip(r.id)}
+                      >
+                        {causeLabel(r.id)}
+                      </span>
+                      <span className="vc-calib-cause__track" aria-hidden="true">
+                        <span
+                          className={`vc-calib-cause__fill vc-calib-cause__seg--${r.id}`}
+                          style={{
+                            width: `${((r.count / causeTotal) * 100).toFixed(1)}%`,
+                          }}
+                        />
+                      </span>
+                      <span className="vc-calib-cause__count">{cnt(r.count)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {/* 事件计数小表（六类触发点口径；空态「—」，缺失 ≠ 0）。 */}
+            <div className="vc-calib-cause__events">
+              <div className="vc-calib-runs__sub-title">
+                {t('virtualCity.calibration.eventTitle' as TKey)}
+              </div>
+              <table className="vc-calib-cause__event-table">
+                <thead>
+                  <tr>
+                    <th className="vc-calib-cause__th">
+                      {t('virtualCity.calibration.colEventType' as TKey)}
+                    </th>
+                    <th className="vc-calib-cause__th vc-calib-cause__th--num">
+                      {t('virtualCity.calibration.colEventCount' as TKey)}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {eventRows.map((r) => (
+                    <tr className="vc-calib-cause__tr" key={r.id}>
+                      <td className="vc-calib-cause__td">{eventLabel(r.id)}</td>
+                      <td className="vc-calib-cause__td vc-calib-cause__td--num">
+                        {r.count === null ? '—' : cnt(r.count)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </section>
     </div>
   );

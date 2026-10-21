@@ -1163,6 +1163,10 @@ export interface VirtualCityDict {
   'virtualCity.calib.redline.re5': string;
   'virtualCity.calib.redline.re6': string;
   'virtualCity.calib.redline.rb1': string;
+  // 红线名称（批次 73 追加，方案 §9.1：R-B2 职业画像 / R-B3 拍卖参与率 / R-B4 事件频偏）
+  'virtualCity.calib.redline.rb2': string;
+  'virtualCity.calib.redline.rb3': string;
+  'virtualCity.calib.redline.rb4': string;
   // 校准指标名称
   'virtualCity.calib.metric.moneyExpansion': string;
   'virtualCity.calib.metric.bankruptcyRate': string;
@@ -1205,4 +1209,43 @@ export interface VirtualCityDict {
   'virtualCity.calibration.strategy.balanced': string;
   'virtualCity.calibration.strategy.aggressive_leverage': string;
   'virtualCity.calibration.strategy.stress': string;
+
+  // ── 批次 73 ·「结局成因」第 7 区块 + R-B2–R-B4 红线名（方案 §9，24 键）──
+  // 文案在 locales/virtualCityDash-{zh,en,ja}.ts（与批次 71/72 校准键同文件）。
+  /** 第 7 区块标题。 */
+  'virtualCity.calibration.outcomeTitle': string;
+  /** 拍卖参与率中位数（R-B3 输入，0-1 小数）。 */
+  'virtualCity.calibration.auctionMedian': string;
+  /** 事件计数子标题。 */
+  'virtualCity.calibration.eventTitle': string;
+  /** 事件计数表头：事件类型 / 本局次数。 */
+  'virtualCity.calibration.colEventType': string;
+  'virtualCity.calibration.colEventCount': string;
+  /** 结局成因 8 类 + undetermined 名称（键序 = 判定优先级，方案 §6）。 */
+  'virtualCity.calibration.cause.pos1': string;
+  'virtualCity.calibration.cause.pos4': string;
+  'virtualCity.calibration.cause.pos2': string;
+  'virtualCity.calibration.cause.pos3': string;
+  'virtualCity.calibration.cause.neg1': string;
+  'virtualCity.calibration.cause.neg2': string;
+  'virtualCity.calibration.cause.neg4': string;
+  'virtualCity.calibration.cause.neg3': string;
+  'virtualCity.calibration.cause.undetermined': string;
+  /** 结局成因判据说明（分布条 / 行 title 悬浮）。 */
+  'virtualCity.calibration.causeTip.pos1': string;
+  'virtualCity.calibration.causeTip.pos4': string;
+  'virtualCity.calibration.causeTip.pos2': string;
+  'virtualCity.calibration.causeTip.pos3': string;
+  'virtualCity.calibration.causeTip.neg1': string;
+  'virtualCity.calibration.causeTip.neg2': string;
+  'virtualCity.calibration.causeTip.neg4': string;
+  'virtualCity.calibration.causeTip.neg3': string;
+  'virtualCity.calibration.causeTip.undetermined': string;
+  /** 事件类型标签（六类触发点口径，方案 §5；未知类型回落原串）。 */
+  'virtualCity.calibration.event.trade': string;
+  'virtualCity.calibration.event.auction': string;
+  'virtualCity.calibration.event.loan': string;
+  'virtualCity.calibration.event.bias': string;
+  'virtualCity.calibration.event.bankruptcy': string;
+  'virtualCity.calibration.event.scenario': string;
 }

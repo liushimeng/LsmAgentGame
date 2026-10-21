@@ -954,3 +954,167 @@
   background: #3f4854;
   color: #e2e8f0;
 }
+
+/* ── ⑦ 结局成因（批次73 · vc-calib-cause-* 前缀）─────────────────────────
+ * 数据源：game.state.calibration.outcome_causes / event_counts /
+ * auction_participation_median（均**可选键**：批次 72 及更早后端两键皆缺 ⇒
+ * 区块统一空态 '—'；event_counts 缺单类 ⇒ 该行 '—'，绝不白屏）。
+ * §26 纪律：正文文字用 --virtualCity-text / --text-dim token（≈12:1 / 8.6:1）；
+ * 段色为面板图表色相扩展组（9 色），**不占** good/serious 状态色组 ——
+ * 图表色只做色块（非文本），可达性由行列表的文字标签 + 计数双通道兜底；
+ * 无动画 / 无 keyframes。
+ */
+
+/* 拍卖参与率中位数行（R-B3 输入）。 */
+.vc-calib-cause__median {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.vc-calib-cause__median-label {
+  color: var(--virtualCity-text-dim, #b7bfcc);   /* ≈ 8.6:1 */
+}
+
+.vc-calib-cause__median-value {
+  flex: 0 0 auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--virtualCity-text, #e5e7eb);       /* ≈ 12:1 */
+}
+
+/* 水平分布条：单条堆叠，段宽由 flexGrow（= 座位数）驱动，段间 1px 缝。 */
+.vc-calib-cause__bar {
+  display: flex;
+  align-items: stretch;
+  height: 14px;
+  min-width: 0;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #232b36;
+}
+
+.vc-calib-cause__seg {
+  display: block;
+  min-width: 0;
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.35); /* 段间视觉分隔（非文本） */
+}
+
+/* 9 段图表色相（良好 → 中性蓝紫系；不良 → 暖色衰减系；未判定中性灰）。
+ * 全部仅用于色块 + 行内 8px 圆点，不做文字色。 */
+.vc-calib-cause__seg--pos_1 { background: #34d399; }
+.vc-calib-cause__seg--pos_4 { background: #2dd4bf; }
+.vc-calib-cause__seg--pos_2 { background: #7dd3fc; }
+.vc-calib-cause__seg--pos_3 { background: #a5b4fc; }
+.vc-calib-cause__seg--neg_1 { background: #f87171; }
+.vc-calib-cause__seg--neg_2 { background: #fb923c; }
+.vc-calib-cause__seg--neg_4 { background: #fbbf24; }
+.vc-calib-cause__seg--neg_3 { background: #fb7185; }
+.vc-calib-cause__seg--undetermined { background: #9ca3af; }
+
+/* 行列表：圆点 + 文字标签 + 迷你条 + 计数（颜色与文本双通道，不只靠色）。 */
+.vc-calib-cause__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vc-calib-cause__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.vc-calib-cause__dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.vc-calib-cause__name {
+  flex: 0 0 auto;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--virtualCity-text, #e5e7eb);       /* ≈ 12:1 */
+}
+
+.vc-calib-cause__track {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 6px;
+  border-radius: 2px;
+  background: #232b36;
+  overflow: hidden;
+}
+
+.vc-calib-cause__fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+
+.vc-calib-cause__count {
+  flex: 0 0 auto;
+  min-width: 2ch;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--virtualCity-text-dim, #b7bfcc);   /* ≈ 8.6:1 */
+}
+
+/* 事件计数小表（六类触发点口径，未知类型键追加尾部）。 */
+.vc-calib-cause__events {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.vc-calib-cause__event-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.vc-calib-cause__th {
+  padding: 2px 4px;
+  text-align: left;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--virtualCity-text-dim, #b7bfcc);   /* ≈ 8.6:1 */
+  border-bottom: 1px solid var(--virtualCity-border, #2c3644);
+}
+
+.vc-calib-cause__th--num {
+  text-align: right;
+}
+
+.vc-calib-cause__td {
+  padding: 2.5px 4px;
+  white-space: nowrap;
+  color: var(--virtualCity-text, #e5e7eb);       /* ≈ 12:1 */
+  border-bottom: 1px solid var(--virtualCity-border, #2c3644);
+}
+
+.vc-calib-cause__td--num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.vc-calib-cause__tr:hover {
+  background: #232b36;
+}

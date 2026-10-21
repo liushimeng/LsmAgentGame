@@ -47,11 +47,18 @@ type RunStore struct {
 // defaultRunStore 包级单例(finalizeCalibrationRun 接线消费)。
 var defaultRunStore = &RunStore{}
 
-// SetCalibrationRunsDir 注入写盘目录(测试用;影响包级单例)。
+// SetCalibrationRunsDir 注入写盘目录(测试用;影响包级单例:runs +
+// 批次73 residents/events 同目录)。零 rand。
 func SetCalibrationRunsDir(dir string) {
 	defaultRunStore.mu.Lock()
 	defer defaultRunStore.mu.Unlock()
 	defaultRunStore.dir = dir
+	defaultResidentStore.mu.Lock()
+	defer defaultResidentStore.mu.Unlock()
+	defaultResidentStore.dir = dir
+	defaultEventStore.mu.Lock()
+	defer defaultEventStore.mu.Unlock()
+	defaultEventStore.dir = dir
 }
 
 // AppendRun 经包级单例追加一条运行记录(失败返回 error,绝不 panic)。

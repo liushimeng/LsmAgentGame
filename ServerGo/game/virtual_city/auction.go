@@ -131,6 +131,7 @@ func (w *World) StartAuction(sellerSeat int, aType AuctionType, asset Asset, sta
 		auction.MinIncrement = auctionMinIncrementSealed
 	}
 	w.AuctionHouse.Auctions[auction.ID] = auction
+	w.MCAuctionCount++ // 批次73 O1:本局拍卖总场次(居民级参与率分母)
 	w.emitEvent("action", sellerSeat, fmt.Sprintf("发起 %s 拍卖 %s(起拍 ¥%d)", cnAuctionType(aType), auction.ID, startPrice))
 	return auction, nil
 }
@@ -189,6 +190,7 @@ func (w *World) PlaceBid(bidderSeat int, auctionID string, amount int64) *errcod
 		a.Bids = append(a.Bids, AuctionBid{Seat: bidderSeat, Amount: amount, Time: a.Seq})
 		a.CurrentBid = amount
 		a.CurrentBidder = bidderSeat
+		bidder.AuctionsJoined++ // 批次73 O1:有效出价计数(流拍/无效不计)
 		w.emitEvent("action", bidderSeat, fmt.Sprintf("%d 号位英式竞价 %s 出价 ¥%d", bidderSeat, auctionID, amount))
 	case AuctionDutch:
 		// 荷兰式:出价 ≥ 当前价即成交。
@@ -198,6 +200,7 @@ func (w *World) PlaceBid(bidderSeat int, auctionID string, amount int64) *errcod
 			a.Bids = append(a.Bids, AuctionBid{Seat: bidderSeat, Amount: currentPrice, Time: a.Seq})
 			a.CurrentBid = currentPrice
 			a.CurrentBidder = bidderSeat
+			bidder.AuctionsJoined++ // 批次73 O1:有效出价(立即成交)计数
 			// 立即成交。
 			w.finalizeAuction(a)
 		} else {
@@ -253,6 +256,7 @@ func (w *World) PlaceSealedBid(bidderSeat int, auctionID string, amount int64) *
 	}
 	a.Seq++
 	a.SealedBids = append(a.SealedBids, AuctionBid{Seat: bidderSeat, Amount: amount, Time: a.Seq})
+	bidder.AuctionsJoined++ // 批次73 O1:有效密封出价计数
 	w.emitEvent("action", bidderSeat, fmt.Sprintf("%d 号位参与密封拍卖 %s", bidderSeat, auctionID))
 	return nil
 }
@@ -351,6 +355,16 @@ func (w *World) finalizeAuction(a *Auction) (string, *errcode.Error) {
 		a.Status = AuctionStatusUnsold
 		return "", errcode.CodeMsg(errcode.ErrVirtualCityAssetInvalid, "auction asset no longer exists")
 	}
+
+	// 批次73 O1/O2:成交计数器(双方)+ 已实现价差(卖方成本口径)+
+	// auction 事件(纯旁路;只在资产过户成功路径计数)。
+	seller.TradesMade++
+	buyer.TradesMade++
+	seller.TradeRealizedCNY += price - seller.Assets[idx].CostCNY
+	w.recordEvent(MCStepAct, MCEventAuction,
+		[]string{SeatEntity(buyer.Seat), SeatEntity(a.SellerSeat)},
+		price, int64(a.Item.Asset.Units+0.5), false, "")
+
 	transfer := seller.Assets[idx]
 	transfer.CostCNY = price
 	transfer.OpenMonth = w.Month

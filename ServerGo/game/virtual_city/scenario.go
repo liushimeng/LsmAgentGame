@@ -435,6 +435,14 @@ func applyScenarioToWorld(w *World, kind string, magnitude, durationMonths int, 
 	}
 	note = truncateRunes(strings.TrimSpace(note), scenarioNoteMaxRunes)
 
+	// 批次73 O2:真实场景注入事件(scenario_id = 场景 id;target 座位/实体
+	// 进 actors;step 代理口径 inject)。
+	actors := []string{}
+	if target != "" {
+		actors = append(actors, target)
+	}
+	w.recordEvent(MCStepInject, MCEventScenario, actors, 0, 0, false, kind)
+
 	// 批次68 §预测运行:校验全部通过后、冲击生效**之前**拍 T0 基线
 	// (无 active run 开新 run,有则并入;prediction.go)。零 rand。
 	w.predictionBeginOrJoin()

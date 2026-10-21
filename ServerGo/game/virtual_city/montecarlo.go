@@ -196,23 +196,29 @@ const (
 //   - M62:每个存活座位 ¥50,000 医疗支出(经 w.Pay 走 Ledger,不变量不受染)
 //   - Energy −5(clamp −3)+ HadIllnessYear = true。
 //
-// 零 rand;非 stress 月为 no-op。
+// 零 rand;非 stress 月为 no-op。批次73 O2:两处注入各记一条 scenario
+// 事件(step=inject,scenario_id=stress_unemployment / stress_medical)。
 func MCStressPreSettle(w *World, month int) {
 	if w == nil {
 		return
 	}
 	switch month {
 	case stressUnemploymentMonth:
+		actors := make([]string, 0, MaxSeats)
 		for _, p := range w.Players {
 			if p != nil && p.Alive {
 				p.UnemployedMonths = 2
+				actors = append(actors, SeatEntity(p.Seat))
 			}
 		}
+		w.recordEvent(MCStepInject, MCEventScenario, actors, 0, 0, false, "stress_unemployment")
 	case stressMedicalMonth:
+		actors := make([]string, 0, MaxSeats)
 		for seat, p := range w.Players {
 			if p == nil || !p.Alive {
 				continue
 			}
+			actors = append(actors, SeatEntity(seat))
 			w.Pay(seat, SeatEntity(seat), w.consumerPayTo(), stressMedicalCNY, CatMedical, stressMedicalNote)
 			p.Energy -= 5
 			if p.Energy < -3 {
@@ -220,6 +226,7 @@ func MCStressPreSettle(w *World, month int) {
 			}
 			p.HadIllnessYear = true
 		}
+		w.recordEvent(MCStepInject, MCEventScenario, actors, stressMedicalCNY, int64(len(actors)), false, "stress_medical")
 	}
 }
 
@@ -228,16 +235,24 @@ func MCStressPreSettle(w *World, month int) {
 // PhaseRecession / CycleMonthsLeft=1;M61–M73 ⇒ PhaseDepression。
 //
 // 引擎自身的相位转移 rand 照常消耗,本函数只做写回覆盖 ⇒ 同种子确定性保持。
+// 批次73 O2:窗口首月各记一条 scenario 事件(stress_recession /
+// stress_depression;每窗口 1 条,防 13 个月重复计数)。
 func MCStressPostSettle(w *World) {
 	if w == nil || w.Market == nil {
 		return
 	}
 	m := w.Month
 	switch {
-	case m >= stressRecessionFrom && m <= stressRecessionTo:
+	case m == stressRecessionFrom:
+		w.recordEvent(MCStepInject, MCEventScenario, nil, 0, 0, false, "stress_recession")
+		fallthrough
+	case m > stressRecessionFrom && m <= stressRecessionTo:
 		w.Market.CyclePhase = PhaseRecession
 		w.Market.CycleMonthsLeft = 1
-	case m >= stressDepressionFrom && m <= stressDepressionTo:
+	case m == stressDepressionFrom:
+		w.recordEvent(MCStepInject, MCEventScenario, nil, 0, 0, false, "stress_depression")
+		fallthrough
+	case m > stressDepressionFrom && m <= stressDepressionTo:
 		w.Market.CyclePhase = PhaseDepression
 		w.Market.CycleMonthsLeft = 1
 	}
@@ -320,7 +335,21 @@ type MCRunStats struct {
 //
 // 同 seed + 同 strategy ⇒ 返回值逐字段相等(T-MC1)。
 // 未知策略 ⇒ 返回零值统计(Months=0),不 panic。
+//
+// ⚠ 批次73 O5:本体 = MCRunOneWith(seed, strategy, nil) 的薄封装
+// (nil 覆盖 ⇒ 与批次72 行为逐字段一致,T-AB1 钉死)。
 func MCRunOne(seed int64, strategy string) MCRunStats {
+	return MCRunOneWith(seed, strategy, nil)
+}
+
+// MCRunOneWith MCRunOne + 参数覆盖(批次73 O5)。ov 只允许常量类参数
+// (见 MCOverride 注释);nil ⇒ 与 MCRunOne 完全等价。
+//
+// 出口旁路(零 rand、失败静默/zap warn,绝不阻断收口):
+//   - O1:residents.jsonl 落盘(mcCollectResidents 12 记录);
+//   - O2:events.jsonl 明细仅 balance_gate 构建的 gate 运行落盘
+//     (mcGateDetail 常量判定;默认构建零写盘开销)。
+func MCRunOneWith(seed int64, strategy string, ov *MCOverride) MCRunStats {
 	stats := MCRunStats{Seed: seed, Strategy: strategy, InvariantFailsByID: map[string]int{}}
 	if mcStrategyIndex(strategy) < 0 {
 		return stats
@@ -336,6 +365,10 @@ func MCRunOne(seed int64, strategy string) MCRunStats {
 		cards[i] = c
 	}
 	w := NewWorld(seed, cards)
+	// 批次73 O5:覆盖生效点①(初始现金缩放须早于 StartGame 的注入记账)。
+	if ov != nil {
+		ov.apply(w)
+	}
 	w.StartGame()
 	if cs := w.calibrationEnsure(); cs != nil {
 		// MC 局策略标注(RunRecord.Strategy;真实对局恒空串)。
@@ -384,6 +417,16 @@ func MCRunOne(seed int64, strategy string) MCRunStats {
 	}
 	if stats.Months == 0 { // 防御:首月即终局的极端情形
 		stats.Months = minInt(w.Month, mcMaxMonths)
+	}
+
+	// 批次73 O1/O2 出口旁路:居民级采集恒落盘(12 记录/局);事件明细
+	// 仅 gate 构建落盘。失败 zap warn / 静默降级,绝不阻断收口。
+	if stats.Months > 0 {
+		residents := mcCollectResidents(w, stats.RunID, w.MCAuctionCount)
+		appendResidentsLogging(residents)
+		if mcGateDetail && len(w.MCEvents) > 0 {
+			appendEventsLogging(w.MCEvents)
+		}
 	}
 	return stats
 }

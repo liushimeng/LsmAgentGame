@@ -508,6 +508,16 @@ func (w *World) dealAsset(l *Listing, neg *NegotiateSession, price int64) (strin
 		w.Pay(buyer.Seat, SeatEntity(buyer.Seat), EntityMarket, fee, CatTradeFee, "交易中介费")
 	}
 
+	// 批次73 O1/O2:成交计数器(买卖双方)+ 已实现价差(卖方按成本口径;
+	// 买方成本按成交价重置 ⇒ 本次已实现 0)+ trade 事件(纯旁路)。
+	sellerCost := asset.CostCNY
+	seller.TradesMade++
+	buyer.TradesMade++
+	seller.TradeRealizedCNY += price - sellerCost
+	w.recordEvent(MCStepAct, MCEventTrade,
+		[]string{SeatEntity(buyer.Seat), SeatEntity(seller.Seat)},
+		price, int64(asset.Units+0.5), false, "")
+
 	// 资产过户:从卖方移除,加入买方(保持快照)。
 	transfer := *asset
 	transfer.CostCNY = price // 买方成本按成交价重置
@@ -541,6 +551,13 @@ func (w *World) dealBuy(l *Listing, neg *NegotiateSession, price int64) (string,
 		return "", errcode.Code(errcode.ErrVirtualCityInsufficientCash)
 	}
 	w.PaySeatToSeat(buyer.Seat, seller.Seat, price, CatTrade, fmt.Sprintf("收购 %d 号位副业", seller.Seat))
+	// 批次73 O1/O2:成交计数器(双方)+ 已实现价差(副业无成本字段 ⇒
+	// 卖方按全额成交价记)+ trade 事件。
+	seller.TradesMade++
+	buyer.TradesMade++
+	seller.TradeRealizedCNY += price
+	w.recordEvent(MCStepAct, MCEventTrade,
+		[]string{SeatEntity(buyer.Seat), SeatEntity(seller.Seat)}, price, 1, false, "")
 	sb := *seller.SideBusiness
 	sb.OpenedMonth = w.Month
 	seller.SideBusiness = nil
@@ -613,6 +630,9 @@ func (w *World) dealLoan(l *Listing, neg *NegotiateSession, price int64) (string
 
 	// 资金过户:lender → borrower(本金)。
 	w.PaySeatToSeat(lender.Seat, borrower.Seat, loan.PrincipalCNY, CatLoan, fmt.Sprintf("P2P 借出 → %d 号位", borrowerSeat))
+	// 批次73 O2:P2P 放贷事件(actors = 贷方/借方;price = 本金)。
+	w.recordEvent(MCStepAct, MCEventLoan,
+		[]string{SeatEntity(lenderSeat), SeatEntity(borrowerSeat)}, loan.PrincipalCNY, 1, false, "")
 
 	w.ListingBook.SeqP2P++
 	p2p := &P2PLoan{

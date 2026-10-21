@@ -330,6 +330,11 @@ func (p *Player) biasEffectMulOf(effect BiasEffect, ctx *BiasCtx) (float64, []Bi
 			continue
 		}
 		mul *= m
+		// 批次73 O1:偏差实际生效(m≠1)计数。计数放在本函数(经济应用的
+		// 唯一漏斗)而非 applyBias —— applyBias 同时被 behaviorJSONFor 等
+		// 展示路径每次 game.state 重建调用,会在那里重复计数(实施记录
+		// 偏离 1)。
+		p.BiasHits++
 		if det {
 			detected = append(detected, def)
 			// 局内成功抵抗 ⇒ 免疫进度 +0.15(§4.4.2)。
