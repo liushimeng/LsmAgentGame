@@ -116,18 +116,37 @@ type ClientGameState struct {
 
 // CalibrationJSON 是 game.state.calibration(批次71 §9.1)。
 //
-// ⚠ 形状纪律(契约 §9.2):
+// ⚠ 形状纪律(契约 §9.2;批次72 §6.3 红线扩为 7 条):
 //   - invariants[] **恒 7 条**(I1/I2/I3/I4/I5/I6/I8),顺序固定;
-//   - redlines[] **恒 5 条**(R-E3/R-E4/R-E5/R-E6/R-B1),顺序固定;
+//   - redlines[] **恒 7 条**(R-E3/R-E4/R-E5/R-E6/R-B1/R-E1/R-E2),顺序固定;
 //   - indicators 无值键为 **null**(不得省略键);
 //   - history[] **恒为数组**(空 = [] 而非 null)。
 type CalibrationJSON struct {
-	Month      int                   `json:"month"`
-	StateHash  string                `json:"state_hash"`
-	Invariants []InvariantCheck      `json:"invariants"`
-	Indicators CalibrationIndicators `json:"indicators"`
-	Redlines   []RedlineHit          `json:"redlines"`
+	Month      int                      `json:"month"`
+	StateHash  string                   `json:"state_hash"`
+	Invariants []InvariantCheck         `json:"invariants"`
+	Indicators CalibrationIndicators    `json:"indicators"`
+	Redlines   []RedlineHit             `json:"redlines"`
 	History    []CalibrationHistoryJSON `json:"history"`
+	// CategoryAnnualized 当期局品类年化(批次72 §6.2;月数<12 或无数据 → null)。
+	CategoryAnnualized map[string]float64 `json:"category_annualized"`
+	// Runs 最近 12 局完成运行(新→旧;批次72 §8.1;恒为数组,空 = [])。
+	Runs []CalibrationRunJSON `json:"runs"`
+}
+
+// CalibrationRunJSON 是 calibration.runs 单项(批次72 §8.1 字段逐字)。
+type CalibrationRunJSON struct {
+	RunID             string         `json:"run_id"`
+	Seed              int64          `json:"seed"`
+	Strategy          string         `json:"strategy"`
+	TotalSteps        int            `json:"total_steps"`
+	MoneyExpansion    float64        `json:"money_expansion"`
+	BankruptcyRate    float64        `json:"bankruptcy_rate"`
+	OutcomeCounts     map[string]int `json:"outcome_counts"`
+	InvariantFails    []string       `json:"invariant_fails"`
+	RedlinesTriggered []string       `json:"redlines_triggered"`
+	StateHash         string         `json:"state_hash"`
+	FinishedAt        int64          `json:"finished_at"`
 }
 
 // CalibrationHistoryJSON 是 calibration.history 单项(最近 12 月)。
@@ -597,7 +616,7 @@ type CycleJSON struct {
 // (拼写漂移)⇒ 前端 MinskyPanel / MinskyStatusBar / 城市总览读 `ponzi_ratio`
 // 恒为 undefined,庞氏族占比恒显示「—」。权威键名见设计稿
 // lag_docs/虚拟城市/已实现/05-P1扩展/虚拟城市-P1-Minsky与LPR引擎-v1.md §2.8
-// (`PonziRatio float64 \`json:"ponzi_ratio"\``)⇒ 此处更正为 `ponzi_ratio`。
+// (`PonziRatio float64 \`json:"ponzi_ratio"\“)⇒ 此处更正为 `ponzi_ratio`。
 type MinskyOverview struct {
 	PonziCount   int     `json:"ponzi_count"`
 	SpecCount    int     `json:"spec_count"`
@@ -1450,8 +1469,8 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 // month **同源**。前端面板若同时显示「当前月」与「审计月」,用审计月即可,
 // 不要混用。
 //
-// 形状纪律:invariants 恒 7 条 / redlines 恒 5 条 / history 恒为数组。
-// (正常路径下 auditMonth 必写满 7 + 5 条,占位项仅作防御。)
+// 形状纪律:invariants 恒 7 条 / redlines 恒 7 条 / history 与 runs 恒为数组。
+// (正常路径下 auditMonth 必写满 7 + 7 条,占位项仅作防御。)
 func calibrationJSON(w *World) *CalibrationJSON {
 	if w == nil || len(w.Audits) == 0 {
 		return nil
@@ -1462,7 +1481,7 @@ func calibrationJSON(w *World) *CalibrationJSON {
 		StateHash:  latest.StateHash,
 		Invariants: make([]InvariantCheck, 0, 7),
 		Indicators: latest.Indicators,
-		Redlines:   make([]RedlineHit, 0, 5),
+		Redlines:   make([]RedlineHit, 0, 7),
 		History:    make([]CalibrationHistoryJSON, 0, calibrationHistoryLen),
 	}
 	out.Invariants = append(out.Invariants, latest.Invariants...)
@@ -1474,10 +1493,10 @@ func calibrationJSON(w *World) *CalibrationJSON {
 	}
 	out.Invariants = out.Invariants[:7]
 	out.Redlines = append(out.Redlines, latest.Redlines...)
-	for len(out.Redlines) < 5 { // 防御:恒 5 条
+	for len(out.Redlines) < 7 { // 防御:恒 7 条(批次72 §6.3)
 		out.Redlines = append(out.Redlines, RedlineHit{ID: "", Name: "未采集", Detail: "审计快照缺失该红线"})
 	}
-	out.Redlines = out.Redlines[:5]
+	out.Redlines = out.Redlines[:7]
 
 	// 历史:最近 12 月(旧 → 新)。
 	start := len(w.Audits) - calibrationHistoryLen
@@ -1496,7 +1515,48 @@ func calibrationJSON(w *World) *CalibrationJSON {
 			Month: a.Month, Hash: a.StateHash, OK: ok,
 		})
 	}
+
+	// 批次72 §5.4/§8.1:当期局品类年化 + 最近 12 局完成运行(新→旧)。
+	if w.Calibration != nil {
+		if w.Calibration.Current != nil {
+			out.CategoryAnnualized = w.Calibration.Current.CategoryAnnualized
+		} else if n := len(w.Calibration.Runs); n > 0 {
+			out.CategoryAnnualized = w.Calibration.Runs[n-1].CategoryAnnualized
+		}
+		n := len(w.Calibration.Runs)
+		if n > calibrationHistoryLen {
+			n = calibrationHistoryLen
+		}
+		out.Runs = make([]CalibrationRunJSON, 0, n)
+		for i := len(w.Calibration.Runs) - 1; i >= len(w.Calibration.Runs)-n; i-- {
+			r := &w.Calibration.Runs[i]
+			out.Runs = append(out.Runs, CalibrationRunJSON{
+				RunID:             r.RunID,
+				Seed:              r.Seed,
+				Strategy:          r.Strategy,
+				TotalSteps:        r.TotalSteps,
+				MoneyExpansion:    r.MoneyExpansion,
+				BankruptcyRate:    r.BankruptcyRate,
+				OutcomeCounts:     r.OutcomeCounts,
+				InvariantFails:    nonNilStrings(r.InvariantFails),
+				RedlinesTriggered: nonNilStrings(r.RedlinesTriggered),
+				StateHash:         r.StateHash,
+				FinishedAt:        r.FinishedAt,
+			})
+		}
+	}
+	if out.Runs == nil {
+		out.Runs = []CalibrationRunJSON{} // 恒为数组(空 ≠ null)
+	}
 	return out
+}
+
+// nonNilStrings nil 切片 → 空数组(契约「恒为数组」口径)。
+func nonNilStrings(xs []string) []string {
+	if xs == nil {
+		return []string{}
+	}
+	return xs
 }
 
 // buildMinskyOverview 统计全局明斯基概览(view 下发)。

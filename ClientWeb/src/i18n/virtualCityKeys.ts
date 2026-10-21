@@ -1173,4 +1173,36 @@ export interface VirtualCityDict {
   'virtualCity.calib.metric.aliveSeats': string;
   'virtualCity.calib.metric.totalSeats': string;
   'virtualCity.calib.metric.offLedger': string;
+
+  // ── 批次 72 ·「运行历史」区块 + 品类年化 + I6 无样本徽章（§8.3，21 键）──
+  // 文案在 locales/virtualCityDash-{zh,en,ja}.ts（与批次 71 校准键同文件）。
+  /** 第 6 区块标题。 */
+  'virtualCity.calibration.runsTitle': string;
+  /** 运行表空态（本局未终局或进程重启 ⇒ 无完成局）。 */
+  'virtualCity.calibration.runsEmpty': string;
+  /** 运行表列头：局号 / 种子 / 策略 / 月数。 */
+  'virtualCity.calibration.colRun': string;
+  'virtualCity.calibration.colSeed': string;
+  'virtualCity.calibration.colStrategy': string;
+  'virtualCity.calibration.colSteps': string;
+  /** 运行表列头：D2 / D5 / 不变量失败数 / 红线触发数。 */
+  'virtualCity.calibration.colD2': string;
+  'virtualCity.calibration.colD5': string;
+  'virtualCity.calibration.colInvFails': string;
+  'virtualCity.calibration.colRedlines': string;
+  /** 趋势小倍图子标题 + 两条独立系列的系列名（标题即图例）。 */
+  'virtualCity.calibration.trendTitle': string;
+  'virtualCity.calibration.trendD2': string;
+  'virtualCity.calibration.trendD5': string;
+  /** 品类年化子标题。 */
+  'virtualCity.calibration.categoryAnnualized': string;
+  /** I6 无样本灰徽章文案（passed && no_sample）。 */
+  'virtualCity.calibration.noSample': string;
+  /** 策略 id → 标签（"" = 真实对局；未知 id 回落原串）。 */
+  'virtualCity.calibration.strategy.live': string;
+  'virtualCity.calibration.strategy.safety_net_only': string;
+  'virtualCity.calibration.strategy.minimum_effort': string;
+  'virtualCity.calibration.strategy.balanced': string;
+  'virtualCity.calibration.strategy.aggressive_leverage': string;
+  'virtualCity.calibration.strategy.stress': string;
 }

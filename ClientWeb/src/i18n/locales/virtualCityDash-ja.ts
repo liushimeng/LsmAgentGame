@@ -100,6 +100,30 @@ const virtualCityDashJA = {
   'virtualCity.calib.metric.aliveSeats': '生存座席数',
   'virtualCity.calib.metric.totalSeats': '総座席数',
   'virtualCity.calib.metric.offLedger': '帳外純流量',
+
+  // ── バッチ72：実行履歴 + カテゴリ年率 + I6 サンプルなしバッジ（§8.3、21 キー）──
+  'virtualCity.calibration.runsTitle': '実行履歴',
+  'virtualCity.calibration.runsEmpty':
+    '完了した実行はまだありません（本局が未終了、またはサーバー再起動後）',
+  'virtualCity.calibration.colRun': '局番号',
+  'virtualCity.calibration.colSeed': 'シード',
+  'virtualCity.calibration.colStrategy': '戦略',
+  'virtualCity.calibration.colSteps': '月数',
+  'virtualCity.calibration.colD2': 'D2 通貨拡張',
+  'virtualCity.calibration.colD5': 'D5 破産率',
+  'virtualCity.calibration.colInvFails': '不変量失敗',
+  'virtualCity.calibration.colRedlines': 'レッドライン発火',
+  'virtualCity.calibration.trendTitle': '局間トレンド',
+  'virtualCity.calibration.trendD2': 'D2 通貨拡張',
+  'virtualCity.calibration.trendD5': 'D5 破産率',
+  'virtualCity.calibration.categoryAnnualized': 'カテゴリ年率リターン',
+  'virtualCity.calibration.noSample': 'サンプルなし',
+  'virtualCity.calibration.strategy.live': '実対局',
+  'virtualCity.calibration.strategy.safety_net_only': 'セーフティネットのみ',
+  'virtualCity.calibration.strategy.minimum_effort': '最小努力',
+  'virtualCity.calibration.strategy.balanced': 'バランス型',
+  'virtualCity.calibration.strategy.aggressive_leverage': '積極レバレッジ',
+  'virtualCity.calibration.strategy.stress': 'ストレス台本',
 };
 
 export default virtualCityDashJA;

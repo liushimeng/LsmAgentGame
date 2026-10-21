@@ -10,6 +10,7 @@ package virtual_city
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"math/rand"
 	"os"
@@ -481,11 +482,11 @@ func TestCalibration_RedlineEvaluation(t *testing.T) {
 				MoneyExpansion: f64Ptr(c.d2),
 				BankruptcyRate: f64Ptr(c.d5),
 			}
-			rl := EvaluateRedlines(ind, nil)
-			if len(rl) != 5 {
-				t.Fatalf("红线条数 = %d,期望 5", len(rl))
+			rl := EvaluateRedlines(ind, nil, nil)
+			if len(rl) != 7 {
+				t.Fatalf("红线条数 = %d,期望 7", len(rl))
 			}
-			wantOrder := []string{RedlineRE3, RedlineRE4, RedlineRE5, RedlineRE6, RedlineRB1}
+			wantOrder := []string{RedlineRE3, RedlineRE4, RedlineRE5, RedlineRE6, RedlineRB1, RedlineRE1, RedlineRE2}
 			for i, id := range wantOrder {
 				if rl[i].ID != id {
 					t.Fatalf("红线顺序错位:%d = %s,期望 %s", i, rl[i].ID, id)
@@ -517,7 +518,7 @@ func TestCalibration_RedlineRB1(t *testing.T) {
 		{Seat: 1, Outcome: OutcomeOrdinary},
 		{Seat: 2, Outcome: OutcomeOrdinary},
 	}
-	rl := EvaluateRedlines(ind, outcomes)
+	rl := EvaluateRedlines(ind, outcomes, nil)
 	var rb1 RedlineHit
 	for _, r := range rl {
 		if r.ID == RedlineRB1 {
@@ -529,7 +530,7 @@ func TestCalibration_RedlineRB1(t *testing.T) {
 	}
 	// 首位同样普通 ⇒ 不触发。
 	outcomes[0].Good = false
-	rl = EvaluateRedlines(ind, outcomes)
+	rl = EvaluateRedlines(ind, outcomes, nil)
 	for _, r := range rl {
 		if r.ID == RedlineRB1 && r.Triggered {
 			t.Errorf("R-B1 不应触发:%+v", r)
@@ -690,10 +691,10 @@ func TestCalibration_ContractShape(t *testing.T) {
 			t.Errorf("invariants[%d] = %s,期望 %s", i, cs.Calibration.Invariants[i].ID, id)
 		}
 	}
-	if len(cs.Calibration.Redlines) != 5 {
-		t.Errorf("redlines 长度 = %d,期望 5", len(cs.Calibration.Redlines))
+	if len(cs.Calibration.Redlines) != 7 {
+		t.Errorf("redlines 长度 = %d,期望 7", len(cs.Calibration.Redlines))
 	}
-	wantRed := []string{RedlineRE3, RedlineRE4, RedlineRE5, RedlineRE6, RedlineRB1}
+	wantRed := []string{RedlineRE3, RedlineRE4, RedlineRE5, RedlineRE6, RedlineRB1, RedlineRE1, RedlineRE2}
 	for i, id := range wantRed {
 		if cs.Calibration.Redlines[i].ID != id {
 			t.Errorf("redlines[%d] = %s,期望 %s", i, cs.Calibration.Redlines[i].ID, id)
@@ -753,8 +754,8 @@ func TestCalibration_AuditAlwaysFullShape(t *testing.T) {
 		if len(a.Invariants) != 7 {
 			t.Fatalf("月 %d 审计不变量数 = %d,期望 7", a.Month, len(a.Invariants))
 		}
-		if len(a.Redlines) != 5 {
-			t.Fatalf("月 %d 审计红线数 = %d,期望 5", a.Month, len(a.Redlines))
+		if len(a.Redlines) != 7 {
+			t.Fatalf("月 %d 审计红线数 = %d,期望 7", a.Month, len(a.Redlines))
 		}
 		for _, inv := range a.Invariants {
 			if inv.ID == "" || inv.Name == "未采集" {
@@ -874,5 +875,120 @@ func TestCalibration_ScenarioRecordJSONTags(t *testing.T) {
 	// 零值也必须下发(不带 omitempty)。
 	if !strings.Contains(s, `"seed":0`) {
 		t.Errorf("seed 零值未下发:%s", s)
+	}
+}
+
+// ── 批次72 §9:T-C2 / T-C3 ─────────────────────────────────────────────
+
+// TestCalibration_CategoryRedlines T-C2:R-E1/R-E2 品类年化红线。
+//
+// 构造 10 局 category_annualized 均值 0.31 / 0.029 ⇒ 触发;
+// 9 局 ⇒ 不触发且 detail 注明样本不足(n=9/10)。
+func TestCalibration_CategoryRedlines(t *testing.T) {
+	mkRuns := func(n int, stockRate float64) []RunRecord {
+		runs := make([]RunRecord, n)
+		for i := range runs {
+			runs[i] = RunRecord{RunID: "CR" + strconvItoa(i+1),
+				CategoryAnnualized: map[string]float64{
+					AssetStockIndex: stockRate,
+					AssetGold:       0.05,
+					"house":         0.05,
+					AssetBond:       0.05,
+				}}
+		}
+		return runs
+	}
+	ind := CalibrationIndicators{MoneyExpansion: f64Ptr(3.0), BankruptcyRate: f64Ptr(0.2)}
+
+	// 10 局均值 0.31 ⇒ R-E1 触发,R-E2 不触发。
+	rl := EvaluateRedlines(ind, nil, mkRuns(10, 0.31))
+	byID := map[string]RedlineHit{}
+	for _, r := range rl {
+		byID[r.ID] = r
+	}
+	if !byID[RedlineRE1].Triggered {
+		t.Errorf("R-E1 应触发(均值 0.31 > 0.30):%+v", byID[RedlineRE1])
+	}
+	if byID[RedlineRE2].Triggered {
+		t.Errorf("R-E2 不应触发(其余品类 0.05):%+v", byID[RedlineRE2])
+	}
+	if len(rl) != 7 {
+		t.Fatalf("红线条数 = %d,期望 7", len(rl))
+	}
+	if rl[5].ID != RedlineRE1 || rl[6].ID != RedlineRE2 {
+		t.Errorf("R-E1/R-E2 应追加在尾部:got %s,%s", rl[5].ID, rl[6].ID)
+	}
+
+	// 10 局均值 0.029 ⇒ R-E2 触发。
+	rl = EvaluateRedlines(ind, nil, mkRuns(10, 0.029))
+	byID = map[string]RedlineHit{}
+	for _, r := range rl {
+		byID[r.ID] = r
+	}
+	if !byID[RedlineRE2].Triggered {
+		t.Errorf("R-E2 应触发(均值 0.029 < 0.03):%+v", byID[RedlineRE2])
+	}
+	if byID[RedlineRE1].Triggered {
+		t.Errorf("R-E1 不应触发:%+v", byID[RedlineRE1])
+	}
+
+	// 9 局 ⇒ 双双不触发 + detail 样本不足标注。
+	rl = EvaluateRedlines(ind, nil, mkRuns(9, 0.9))
+	byID = map[string]RedlineHit{}
+	for _, r := range rl {
+		byID[r.ID] = r
+	}
+	for _, id := range []string{RedlineRE1, RedlineRE2} {
+		if byID[id].Triggered {
+			t.Errorf("%s 样本不足不应触发:%+v", id, byID[id])
+		}
+		if !strings.Contains(byID[id].Detail, "n=9/10") {
+			t.Errorf("%s detail 应注明样本不足(n=9/10):%s", id, byID[id].Detail)
+		}
+	}
+
+	// 窗口 = 尾部 10 局:15 局中前 5 局极端值不计入。
+	runs := append(mkRuns(5, 0.9), mkRuns(10, 0.05)...)
+	rl = EvaluateRedlines(ind, nil, runs)
+	for _, r := range rl {
+		if r.ID == RedlineRE1 && r.Triggered {
+			t.Errorf("R-E1 不应触发(窗口尾部 10 局均值 0.05):%+v", r)
+		}
+	}
+}
+
+// strconvItoa 局部小工具(避免与 strconv 包短名冲突的测试内别名)。
+func strconvItoa(i int) string { return fmt.Sprintf("%d", i) }
+
+// TestCalibration_I6NoSample T-C3:I6 无样本状态位。
+//
+// 无场景注入局 no_sample=true 且 passed=true;有场景记录局 false。
+func TestCalibration_I6NoSample(t *testing.T) {
+	w := calibTestWorld(42, 4)
+	calibSettleMonths(w, 3)
+	inv := calibInvariantByID(t, CheckInvariants(w), InvariantI6)
+	if !inv.NoSample || !inv.Passed {
+		t.Errorf("无场景局:I6 应 no_sample=true && passed=true,got %+v", inv)
+	}
+
+	// 注入一条合法场景记录 ⇒ no_sample=false。
+	w.ScenarioApplied = append(w.ScenarioApplied, ScenarioAppliedRecord{
+		Kind: "market_crash", Magnitude: 3, AppliedMonth: 1, DurationMonths: 2, Seed: 42,
+	})
+	inv = calibInvariantByID(t, CheckInvariants(w), InvariantI6)
+	if inv.NoSample || !inv.Passed {
+		t.Errorf("有场景局:I6 应 no_sample=false && passed=true,got %+v", inv)
+	}
+
+	// 契约键下发:game.state.calibration.invariants[].no_sample。
+	cs := BuildClientState("room-1", 0, w,
+		[MaxSeats]string{"u:0"}, [MaxSeats]string{"玩家0"}, [MaxSeats]bool{false},
+		[MaxSeats]string{}, [MaxSeats]BotTranscript{}, 0, 0, 0, nil, nil)
+	raw, err := json.Marshal(cs.Calibration)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(raw), `"no_sample":`) {
+		t.Errorf("calibration.invariants[].no_sample 未下发:%s", string(raw)[:min(200, len(raw))])
 	}
 }

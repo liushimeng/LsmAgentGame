@@ -35,11 +35,24 @@ func SeatEntity(seat int) string { return fmt.Sprintf("seat:%d", seat) }
 
 // IsSeatEntity 判定并解出座位号。
 func IsSeatEntity(e string) (seat int, ok bool) {
-	var n int
-	if _, err := fmt.Sscanf(e, "seat:%d", &n); err == nil {
-		return n, true
+	// 批次72 性能修复:本函数位于 Record / I1 / I2 / I8 等账本扫描热路径
+	//(每条 Entry × 每月多次),fmt.Sscanf ≈1µs/次,420 月 × 数万条 ⇒ 单局
+	// 秒级(蒙特卡洛 harness 实测 77% CPU 花在 Fscanf)。改为手写解析:
+	// SeatEntity 是本 id 的唯一构造函数(恒 "seat:%d"、seat ≥ 0),
+	// 非规范输入(如 "seat:-3" / "seat:12x")引擎内不存在,按非座位处理。
+	const prefix = "seat:"
+	if len(e) <= len(prefix) || e[:len(prefix)] != prefix {
+		return -1, false
 	}
-	return -1, false
+	n := 0
+	for i := len(prefix); i < len(e); i++ {
+		c := e[i]
+		if c < '0' || c > '9' {
+			return -1, false
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n, true
 }
 
 // Ledger category 全集(§13;P0 增补 study|social|moving|overtime|property,

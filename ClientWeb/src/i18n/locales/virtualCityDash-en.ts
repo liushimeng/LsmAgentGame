@@ -100,6 +100,30 @@ const virtualCityDashEN = {
   'virtualCity.calib.metric.aliveSeats': 'Alive Seats',
   'virtualCity.calib.metric.totalSeats': 'Total Seats',
   'virtualCity.calib.metric.offLedger': 'Off-ledger Net Flow',
+
+  // ── Batch 72: run history block + category annualized + I6 no-sample badge (§8.3, 21 keys) ──
+  'virtualCity.calibration.runsTitle': 'Run History',
+  'virtualCity.calibration.runsEmpty':
+    'No completed runs yet (this game has not finished or the server was restarted)',
+  'virtualCity.calibration.colRun': 'Run',
+  'virtualCity.calibration.colSeed': 'Seed',
+  'virtualCity.calibration.colStrategy': 'Strategy',
+  'virtualCity.calibration.colSteps': 'Months',
+  'virtualCity.calibration.colD2': 'D2 Money Expansion',
+  'virtualCity.calibration.colD5': 'D5 Bankruptcy Rate',
+  'virtualCity.calibration.colInvFails': 'Invariant Fails',
+  'virtualCity.calibration.colRedlines': 'Redlines Hit',
+  'virtualCity.calibration.trendTitle': 'Cross-run Trends',
+  'virtualCity.calibration.trendD2': 'D2 Money Expansion',
+  'virtualCity.calibration.trendD5': 'D5 Bankruptcy Rate',
+  'virtualCity.calibration.categoryAnnualized': 'Category Annualized Return',
+  'virtualCity.calibration.noSample': 'No Sample',
+  'virtualCity.calibration.strategy.live': 'Live Game',
+  'virtualCity.calibration.strategy.safety_net_only': 'Safety Net Only',
+  'virtualCity.calibration.strategy.minimum_effort': 'Minimum Effort',
+  'virtualCity.calibration.strategy.balanced': 'Balanced',
+  'virtualCity.calibration.strategy.aggressive_leverage': 'Aggressive Leverage',
+  'virtualCity.calibration.strategy.stress': 'Stress',
 };
 
 export default virtualCityDashEN;

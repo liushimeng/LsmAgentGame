@@ -100,6 +100,29 @@ const virtualCityDashZH = {
   'virtualCity.calib.metric.aliveSeats': '存活座位',
   'virtualCity.calib.metric.totalSeats': '总座位',
   'virtualCity.calib.metric.offLedger': '账外净额',
+
+  // ── 批次72：运行历史区块 + 品类年化 + I6 无样本徽章（§8.3，21 键）────
+  'virtualCity.calibration.runsTitle': '运行历史',
+  'virtualCity.calibration.runsEmpty': '暂无已完成的运行记录（本局尚未终局或进程已重启）',
+  'virtualCity.calibration.colRun': '局号',
+  'virtualCity.calibration.colSeed': '种子',
+  'virtualCity.calibration.colStrategy': '策略',
+  'virtualCity.calibration.colSteps': '月数',
+  'virtualCity.calibration.colD2': 'D2 货币扩张',
+  'virtualCity.calibration.colD5': 'D5 破产率',
+  'virtualCity.calibration.colInvFails': '不变量失败',
+  'virtualCity.calibration.colRedlines': '红线触发',
+  'virtualCity.calibration.trendTitle': '跨局趋势',
+  'virtualCity.calibration.trendD2': 'D2 货币扩张',
+  'virtualCity.calibration.trendD5': 'D5 破产率',
+  'virtualCity.calibration.categoryAnnualized': '品类年化收益',
+  'virtualCity.calibration.noSample': '无样本',
+  'virtualCity.calibration.strategy.live': '真实对局',
+  'virtualCity.calibration.strategy.safety_net_only': '纯兜底（零动作）',
+  'virtualCity.calibration.strategy.minimum_effort': '最小努力',
+  'virtualCity.calibration.strategy.balanced': '均衡配置',
+  'virtualCity.calibration.strategy.aggressive_leverage': '激进杠杆',
+  'virtualCity.calibration.strategy.stress': '压力剧本',
 };
 
 export default virtualCityDashZH;

@@ -16,8 +16,10 @@ package virtual_city
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
+	"time"
 )
 
 // ── 严重级常量 ─────────────────────────────────────────────────────────
@@ -44,6 +46,8 @@ const (
 // ── 红线 id 常量(顺序即面板展示顺序,恒 5 条)──────────────────────────
 
 const (
+	RedlineRE1 = "R-E1" // 品类年化上限(批次72 §6)
+	RedlineRE2 = "R-E2" // 品类年化下限(批次72 §6)
 	RedlineRE3 = "R-E3" // 货币扩张上限
 	RedlineRE4 = "R-E4" // 货币扩张下限
 	RedlineRE5 = "R-E5" // 破产率上限
@@ -55,9 +59,12 @@ const (
 const (
 	redlineMoneyExpansionMax = 7.0
 	redlineMoneyExpansionMin = 2.0
-	redlineBankruptcyMax      = 0.40
-	redlineBankruptcyMin      = 0.08
-	redlineFirstSeatBiasPP    = 0.15 // 15pp
+	redlineBankruptcyMax     = 0.40
+	redlineBankruptcyMin     = 0.08
+	redlineFirstSeatBiasPP   = 0.15 // 15pp
+	// 批次72 §6.3:品类年化红线阈值(跨局均值口径)。
+	redlineCategoryReturnMax = 0.30
+	redlineCategoryReturnMin = 0.03
 )
 
 // auditCap 逐月审计快照环形缓冲容量(最近 24 月)。
@@ -79,6 +86,10 @@ type InvariantCheck struct {
 	Actual   *float64 `json:"actual"`
 	Expected *float64 `json:"expected"`
 	Detail   string   `json:"detail"`
+	// NoSample 批次72 §7(N12):该检查无样本可判(当前仅 I6:
+	// 无场景注入记录)。true 时 Passed 恒 true(无违例事实),
+	// 前端渲染灰色「无样本」徽章(不是 ✔ 也不是 ✘)。
+	NoSample bool `json:"no_sample"`
 }
 
 // CalibrationIndicators D 指标 + 辅助指标(方案 §6.2)。
@@ -121,7 +132,7 @@ type MonthlyAudit struct {
 
 // RunRecord 运行级采集记录(方案 §6.3;本批只做内存版)。
 type RunRecord struct {
-	RunID             string         `json:"run_id"`              // "CR{n}"(Calibration Run)
+	RunID             string         `json:"run_id"` // "CR{n}"(Calibration Run)
 	Seed              int64          `json:"seed"`
 	Phase             string         `json:"phase"`              // α / β / γ
 	TotalSteps        int            `json:"total_steps"`        // 推进的模拟月数
@@ -136,13 +147,33 @@ type RunRecord struct {
 	InvariantFails    []string       `json:"invariant_fails"` // 失败的不变量 id
 	RedlinesTriggered []string       `json:"redlines_triggered"`
 	OffLedgerCNY      int64          `json:"off_ledger_cny"` // 账外净流
+	// ── 批次72 扩展字段(§5.4,向后兼容追加)──
+	FinishedAt         int64              `json:"finished_at"`         // unix 秒
+	Strategy           string             `json:"strategy"`            // ""=真实对局 / 5 策略 id
+	CategoryAnnualized map[string]float64 `json:"category_annualized"` // §6.2(月数<12 为 nil)
 }
 
 // CalibrationState 校准运行状态(挂 World.Calibration;惰性初始化,nil 安全)。
 type CalibrationState struct {
 	Seq     int         // run id 自增序列(CR1 / CR2…)
-	Runs    []RunRecord // 已完成运行(内存版;写盘属批次 72)
+	Runs    []RunRecord // 已完成运行(批次72 起 finalize 时同步 JSONL 落盘)
 	Current *RunRecord  // 进行中的运行(每次审计刷新)
+	// Strategy 当局策略标注(批次72:MC harness 写入,真实对局恒空串;
+	// updateCalibrationRun 首建 Current 时拷入 RunRecord.Strategy)。
+	Strategy string
+	// MarketTrack 品类年化基线追踪(§6.2:期初价 + BondRate 逐月累计;
+	// StartGame 捕获,审计兜底)。内部态,不直接序列化(RunRecord 只带结果)。
+	MarketTrack *calibrationMarketTrack
+}
+
+// calibrationMarketTrack 品类年化计算的内累积器(零 rand)。
+type calibrationMarketTrack struct {
+	StartStock    float64 // 期初 StockIndex
+	StartGold     float64 // 期初 GoldPrice
+	StartHouseIdx float64 // 期初 DistrictIdx 全区均值
+	StartMonth    int     // 捕获月
+	BondRateSum   float64 // 逐月 BondRate(新购票面年化)累计
+	BondRateN     int     // 累计月数
 }
 
 // OutcomeStat 单座结局统计(R-B1 首位偏差判定输入)。
@@ -433,6 +464,7 @@ func checkI6(w *World) InvariantCheck {
 	c.Expected = f64Ptr(0)
 	c.Passed = bad == 0
 	if total == 0 {
+		c.NoSample = true // 批次72 §7:无样本状态位(Passed 保持 true)
 		c.Detail = "尚无场景注入记录,本项无样本"
 	} else {
 		c.Detail = fmt.Sprintf("%d 条注入记录中 %d 条留痕不完整", total, bad)
@@ -663,12 +695,14 @@ func outcomeCounts(outcomes []OutcomeStat) map[string]int {
 
 // ── 红线判定 ───────────────────────────────────────────────────────────
 
-// EvaluateRedlines 判定本批实现的 5 条红线(方案 §7.1)。
+// EvaluateRedlines 判定 7 条红线(批次71 §7.1 的 5 条 + 批次72 §6 的
+// R-E1/R-E2 品类年化上下限,追加在尾部;前端按 id 渲染不受序影响)。
 //
-// 判定是**纯函数**:输入 D 指标 + 逐座结局,输出恒 5 条、顺序固定。
+// 判定是**纯函数**:输入 D 指标 + 逐座结局 + 最近完成运行(runs,
+// 仅 R-E1/R-E2 消费;nil = 无历史运行),输出恒 7 条、顺序固定。
 // 红线是「越界告警」不是「失败」:触发不中止运行。
-func EvaluateRedlines(ind CalibrationIndicators, outcomes []OutcomeStat) []RedlineHit {
-	out := make([]RedlineHit, 0, 5)
+func EvaluateRedlines(ind CalibrationIndicators, outcomes []OutcomeStat, runs []RunRecord) []RedlineHit {
+	out := make([]RedlineHit, 0, 7)
 
 	// R-E3 货币扩张上限 / R-E4 货币扩张下限(D2)。
 	d2 := 0.0
@@ -745,7 +779,77 @@ func EvaluateRedlines(ind CalibrationIndicators, outcomes []OutcomeStat) []Redli
 			firstGood*100, othersRate*100, redlineFirstSeatBiasPP*100),
 	}
 	out = append(out, rb1)
+
+	// 批次72 §6.3:R-E1 品类年化上限 / R-E2 下限(市场级口径,
+	// 跨最近 categoryRunsWindow 局完成运行取均值)。
+	out = append(out, evaluateCategoryRedline(runs, RedlineRE1, true))
+	out = append(out, evaluateCategoryRedline(runs, RedlineRE2, false))
 	return out
+}
+
+// categoryRunsWindow R-E1/R-E2 的跨局均值窗口(方案 §6.3)。
+const categoryRunsWindow = 10
+
+// mcCategoryOrder R-E1/R-E2 判定的品类顺序(与 §6.2 表一致)。
+var mcCategoryOrder = []string{AssetStockIndex, AssetGold, "house", AssetBond}
+
+// evaluateCategoryRedline 品类年化跨局均值红线。
+//
+//   - 窗口 = runs 尾部 min(10, len) 局(MC 局与真实局混计 —— 品类行情
+//     与策略无关,但需 ≥10 局才触发);
+//   - 每品类对窗口内有该品类值的局取均值;upper ⇒ 任一品类均值 > 0.30
+//     触发(actual = 最差品类均值),lower ⇒ 任一品类均值 < 0.03 触发
+//     (actual = 最低品类均值);
+//   - 窗口不足 10 局 ⇒ 不触发,detail 标注「样本不足(n=x/10)」。
+func evaluateCategoryRedline(runs []RunRecord, id string, upper bool) RedlineHit {
+	name := "品类年化上限"
+	threshold := redlineCategoryReturnMax
+	if !upper {
+		name = "品类年化下限"
+		threshold = redlineCategoryReturnMin
+	}
+	hit := RedlineHit{ID: id, Name: name, Threshold: threshold}
+
+	window := len(runs)
+	if window > categoryRunsWindow {
+		runs = runs[len(runs)-categoryRunsWindow:]
+		window = categoryRunsWindow
+	}
+	if window < categoryRunsWindow {
+		hit.Detail = fmt.Sprintf("样本不足(n=%d/%d),不触发", window, categoryRunsWindow)
+		return hit
+	}
+
+	worstMean, worstCat := 0.0, ""
+	for _, cat := range mcCategoryOrder {
+		var vals []float64
+		for i := range runs {
+			if v, ok := runs[i].CategoryAnnualized[cat]; ok {
+				vals = append(vals, v)
+			}
+		}
+		if len(vals) == 0 {
+			continue
+		}
+		mean := mcMean(vals)
+		if worstCat == "" || (upper && mean > worstMean) || (!upper && mean < worstMean) {
+			worstMean, worstCat = mean, cat
+		}
+	}
+	if worstCat == "" {
+		hit.Detail = fmt.Sprintf("窗口内 %d 局均无品类年化数据,不触发", window)
+		return hit
+	}
+	mean := worstMean
+	hit.Actual = mean
+	if upper {
+		hit.Triggered = mean > redlineCategoryReturnMax
+		hit.Detail = fmt.Sprintf("品类 %s 年化均值 %.1f%%(窗口 %d 局;> %.0f%% 触发)", worstCat, mean*100, window, redlineCategoryReturnMax*100)
+	} else {
+		hit.Triggered = mean < redlineCategoryReturnMin
+		hit.Detail = fmt.Sprintf("品类 %s 年化均值 %.1f%%(窗口 %d 局;< %.0f%% 触发)", worstCat, mean*100, window, redlineCategoryReturnMin*100)
+	}
+	return hit
 }
 
 // ── 逐月审计 ───────────────────────────────────────────────────────────
@@ -760,7 +864,11 @@ func (w *World) auditMonth() {
 	invariants := CheckInvariants(w)
 	indicators := collectIndicators(w)
 	outcomes := outcomeStats(w)
-	redlines := EvaluateRedlines(indicators, outcomes)
+	var pastRuns []RunRecord // R-E1/R-E2 跨局均值输入(批次72 §6.3)
+	if w.Calibration != nil {
+		pastRuns = w.Calibration.Runs
+	}
+	redlines := EvaluateRedlines(indicators, outcomes, pastRuns)
 
 	audit := MonthlyAudit{
 		Month:      w.Month,
@@ -799,10 +907,14 @@ func (w *World) updateCalibrationRun(audit MonthlyAudit, outcomes []OutcomeStat)
 			RunID:          "CR" + strconv.Itoa(cs.Seq),
 			Seed:           w.Seed,
 			Phase:          "α",
+			Strategy:       cs.Strategy, // 批次72:MC 局策略标注(真实对局空串)
 			OutcomeCounts:  map[string]int{},
 			InvariantsOK:   []bool{},
 			InvariantFails: []string{},
 		}
+	}
+	if cs.MarketTrack == nil {
+		w.calibrationCaptureMarketStart() // 兜底:未经 StartGame 的世界(测试路径)
 	}
 	rec := cs.Current
 	rec.TotalSteps = w.Month
@@ -846,6 +958,82 @@ func (w *World) updateCalibrationRun(audit MonthlyAudit, outcomes []OutcomeStat)
 	if w.OffLedger != nil {
 		rec.OffLedgerCNY = w.OffLedger.Total()
 	}
+
+	// 批次72 §6.2:品类年化 —— BondRate 逐月累计 + 期初/期末价年化
+	// (月数 <12 不产出;零 rand)。
+	if mt := cs.MarketTrack; mt != nil && w.Market != nil {
+		mt.BondRateSum += w.Market.Params().BondRate
+		mt.BondRateN++
+		rec.CategoryAnnualized = computeCategoryAnnualized(w, mt, w.Month)
+	}
+}
+
+// calibrationCaptureMarketStart 捕获品类年化期初基线(StartGame 调一次;
+// 幂等:已有 MarketTrack 时不覆盖)。零 rand。
+func (w *World) calibrationCaptureMarketStart() {
+	cs := w.calibrationEnsure()
+	if cs == nil || cs.MarketTrack != nil || w.Market == nil {
+		return
+	}
+	cs.MarketTrack = &calibrationMarketTrack{
+		StartStock:    w.Market.StockIndex,
+		StartGold:     w.Market.GoldPrice,
+		StartHouseIdx: w.houseIndexMean(),
+		StartMonth:    w.Month,
+	}
+}
+
+// houseIndexMean DistrictIdx 全区均值(DistrictDefs 固定序求和 ⇒ 确定性)。
+func (w *World) houseIndexMean() float64 {
+	if w == nil || w.Market == nil {
+		return 0
+	}
+	var sum float64
+	n := 0
+	for _, d := range DistrictDefs {
+		v, ok := w.Market.DistrictIdx[d.ID]
+		if !ok {
+			continue
+		}
+		sum += v
+		n++
+	}
+	if n == 0 {
+		return 0
+	}
+	return sum / float64(n)
+}
+
+// computeCategoryAnnualized 品类年化(方案 §6.2):
+//
+//	stock_index / gold / house:(期末/期初)^(12/月数) − 1(复利年化);
+//	bond:逐月 BondRate(新购票面年化)算术均值;
+//	月数 < 12 ⇒ nil(数据不足)。零 rand。
+func computeCategoryAnnualized(w *World, mt *calibrationMarketTrack, months int) map[string]float64 {
+	if w == nil || w.Market == nil || mt == nil || months < 12 {
+		return nil
+	}
+	out := map[string]float64{
+		AssetStockIndex: mcCompoundAnnual(mt.StartStock, w.Market.StockIndex, months),
+		AssetGold:       mcCompoundAnnual(mt.StartGold, w.Market.GoldPrice, months),
+		"house":         mcCompoundAnnual(mt.StartHouseIdx, w.houseIndexMean(), months),
+	}
+	if mt.BondRateN > 0 {
+		out[AssetBond] = mt.BondRateSum / float64(mt.BondRateN)
+	}
+	return out
+}
+
+// mcCompoundAnnual 复利年化:(end/start)^(12/months) − 1(非有限值 → 0)。
+func mcCompoundAnnual(start, end float64, months int) float64 {
+	if months < 12 || start <= 0 {
+		return 0
+	}
+	r := math.Pow(end/start, 12.0/float64(months)) - 1
+	if math.IsNaN(r) || math.IsInf(r, 0) {
+		return 0
+	}
+	return r
 }
 
 // worldInjectTotal 世界注入现金总额(D2 分母:期初全体现金)。
@@ -885,12 +1073,17 @@ func totalAssetsEnd(w *World) int64 {
 	return total
 }
 
-// finalizeCalibrationRun 终局时把进行中运行收口进 Runs(内存版;写盘属批次 72)。
+// finalizeCalibrationRun 终局时把进行中运行收口进 Runs,并同步 JSONL 落盘
+// (批次72 §5.1:仅在终局调用一次,不在月结热路径 ⇒ 同步写可接受;
+// 写失败 zap warn,绝不 panic、绝不阻断对局收口)。
 func (w *World) finalizeCalibrationRun() {
 	cs := w.calibrationEnsure()
 	if cs == nil || cs.Current == nil {
 		return
 	}
-	cs.Runs = append(cs.Runs, *cs.Current)
+	rec := *cs.Current
+	rec.FinishedAt = time.Now().Unix()
+	cs.Runs = append(cs.Runs, rec)
 	cs.Current = nil
+	appendRunLogging(rec)
 }

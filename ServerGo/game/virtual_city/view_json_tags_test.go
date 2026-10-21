@@ -221,7 +221,7 @@ func TestViewLeafJSONTags(t *testing.T) {
 			"indicators", "invariants", "month", "redlines", "state_hash",
 		}},
 		{"InvariantCheck", InvariantCheck{}, []string{
-			"actual", "detail", "expected", "id", "name", "passed", "severity",
+			"actual", "detail", "expected", "id", "name", "no_sample", "passed", "severity",
 		}},
 		{"RedlineHit", RedlineHit{}, []string{
 			"actual", "detail", "id", "name", "threshold", "triggered",
@@ -231,16 +231,23 @@ func TestViewLeafJSONTags(t *testing.T) {
 			"off_ledger_cny", "total_seats", "total_wealth", "unemployment",
 		}},
 		{"CalibrationJSON", CalibrationJSON{}, []string{
-			"history", "indicators", "invariants", "month", "redlines", "state_hash",
+			"category_annualized", "history", "indicators", "invariants", "month",
+			"redlines", "runs", "state_hash",
+		}},
+		{"CalibrationRunJSON", CalibrationRunJSON{}, []string{
+			"bankruptcy_rate", "finished_at", "invariant_fails", "money_expansion",
+			"outcome_counts", "redlines_triggered", "run_id", "seed", "state_hash",
+			"strategy", "total_steps",
 		}},
 		{"CalibrationHistoryJSON", CalibrationHistoryJSON{}, []string{
 			"hash", "month", "ok",
 		}},
 		{"RunRecord", RunRecord{}, []string{
-			"bankruptcy_rate", "invariant_fails", "invariants_ok", "money_expansion",
-			"off_ledger_cny", "outcome_counts", "phase", "population_size",
-			"redlines_triggered", "run_id", "seed", "state_hash", "total_assets_end",
-			"total_assets_start", "total_steps",
+			"bankruptcy_rate", "category_annualized", "finished_at", "invariant_fails",
+			"invariants_ok", "money_expansion", "off_ledger_cny", "outcome_counts",
+			"phase", "population_size", "redlines_triggered", "run_id", "seed",
+			"state_hash", "strategy", "total_assets_end", "total_assets_start",
+			"total_steps",
 		}},
 	}
 	for _, c := range cases {

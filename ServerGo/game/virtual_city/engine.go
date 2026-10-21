@@ -399,6 +399,8 @@ func (w *World) StartGame() {
 				"初始储蓄注入 "+p.Card.ID)
 		}
 	}
+	// 批次72 §6.2:品类年化期初基线捕获(幂等,零 rand,不加任何账目)。
+	w.calibrationCaptureMarketStart()
 }
 
 // Age 主时钟年龄 = 开局基准 + floor((month-1)/12)。

@@ -776,3 +776,181 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── ⑥ 运行历史（批次72 · vc-calib-runs-* 前缀）─────────────────────────
+ * 数据源：game.state.calibration.runs / category_annualized（均**可选键**：
+ * 空 runs ⇒ 空态文案；缺 category_annualized ⇒ 4 行 '—'，绝不白屏）。
+ * §26 纪律：正文 ≥4.5:1；趋势线静态无动画（无 keyframes 需求）；
+ * 线色复用面板既有色相（金 accent / 亮蓝 hash 色），**不占用** good/serious
+ * 状态色组；数值文本用文字 token 色，不用系列色。
+ */
+
+/* 区块根（叠加在 virtualCity-calib__block 外壳上）：保住表格横向滚动容器的
+ * min-width 链（flex 子项默认 min-width:auto 会撑破侧栏）。 */
+.vc-calib-runs {
+  min-width: 0;
+}
+
+/* 子区块标题（跨局趋势 / 品类年化）。 */
+.vc-calib-runs__sub-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--virtualCity-text-dim, #b7bfcc);   /* ≈ 8.6:1 */
+}
+
+/* 空态（本局未终局或进程重启 —— 真实对局无 MC 局时的预期形态）。 */
+.vc-calib-runs__empty {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--virtualCity-text-dim, #b7bfcc);   /* ≈ 8.6:1 */
+}
+
+/* 趋势小倍图：D2 与 D5 各自独立 y 标尺，两图并排（量纲不同，禁止双轴）。 */
+.vc-calib-runs__trend-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.vc-calib-runs__trend {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.vc-calib-runs__trend-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--virtualCity-text, #e5e7eb);       /* ≈ 12:1 */
+}
+
+/* 最新值文本：文字 token 色（不用系列线色）。 */
+.vc-calib-runs__trend-value {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--virtualCity-text-dim, #b7bfcc);   /* ≈ 8.6:1 */
+}
+
+.vc-calib-runs__spark {
+  display: block;
+  width: 100%;
+  height: 30px;
+}
+
+/* 线色：复用面板既有色相（金 / 亮蓝）；2px 线宽 + non-scaling-stroke 恒定。 */
+.vc-calib-runs__spark-line {
+  fill: none;
+}
+
+.vc-calib-runs__spark-line--d2 {
+  stroke: var(--virtualCity-accent, #c9a227);
+}
+
+.vc-calib-runs__spark-line--d5 {
+  stroke: #7dd3fc;
+}
+
+/* 运行表（最近 12 局）：11px 窄列 + 横向滚动兜底（8 列可能超侧栏宽；
+ * 该 overflow 只作用于表格外壳，不构成维度 Tab sticky 的中间滚动层）。 */
+.vc-calib-runs__table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.vc-calib-runs__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.vc-calib-runs__th {
+  padding: 2px 4px;
+  text-align: left;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--virtualCity-text-dim, #b7bfcc);   /* ≈ 8.6:1 */
+  border-bottom: 1px solid var(--virtualCity-border, #2c3644);
+}
+
+.vc-calib-runs__th--num {
+  text-align: right;
+}
+
+.vc-calib-runs__td {
+  padding: 2.5px 4px;
+  white-space: nowrap;
+  color: var(--virtualCity-text, #e5e7eb);       /* ≈ 12:1 */
+  border-bottom: 1px solid var(--virtualCity-border, #2c3644);
+}
+
+.vc-calib-runs__td--num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.vc-calib-runs__td--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  color: #7dd3fc;                                /* 亮蓝 ≈ 7.6:1 on #161d28 */
+}
+
+/* 行悬停：实色浅灰底（文字 ≈ 11:1，不靠 opacity）。 */
+.vc-calib-runs__tr:hover {
+  background: #232b36;
+}
+
+/* 品类年化 4 行（收益类涨跌复用全局 virtualCity-num--pos/--neg 着色，
+ * house 规则见 virtualCity.css:1343 —— 不用价格类 --up/--down 组）。 */
+.vc-calib-runs__annualized {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.vc-calib-runs__annualized-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vc-calib-runs__annualized-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.vc-calib-runs__annualized-name {
+  color: var(--virtualCity-text-dim, #b7bfcc);   /* ≈ 8.6:1 */
+}
+
+.vc-calib-runs__annualized-val {
+  flex: 0 0 auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--virtualCity-text, #e5e7eb);       /* 缺失 '—' 的默认色 ≈ 12:1 */
+}
+
+/* I6 无样本灰徽章（批次72）：与 --ok/--bad 同族的中性灰 ——「无样本」文案
+ * + '—' 图标双通道，不只靠颜色（§26.2）；白字 ≈ 7.5:1（徽章 ≥5:1 达标）。 */
+.virtualCity-calib__flag--na {
+  background: #3f4854;
+  color: #e2e8f0;
+}
