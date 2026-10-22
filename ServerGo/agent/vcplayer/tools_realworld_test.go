@@ -64,3 +64,46 @@ func TestDispatch_RealworldInfo_NoRunnerRequired(t *testing.T) {
 		t.Errorf("engine tools still require runner: %+v", res)
 	}
 }
+
+// TestDispatch_RealworldInfo_Keyword 批次77 §3.5:realworld_info 新增可选
+// keyword(op=news 时按标题过滤);不耗动作预算;schema 必须声明该参数。
+func TestDispatch_RealworldInfo_Keyword(t *testing.T) {
+	ensureCityChromeOfflineSingleton(t)
+	a := &Agent{}
+	res := a.DispatchTool(ToolRealworldInfo, map[string]any{"op": "news", "keyword": "黄金"})
+	if res.IsErr {
+		t.Fatalf("realworld_info with keyword: %s", res.Text)
+	}
+	if res.Budget {
+		t.Error("realworld_info must not consume action budget")
+	}
+	if !strings.Contains(res.Text, `"news"`) {
+		t.Errorf("news result should carry the news array: %s", res.Text)
+	}
+	// keyword 缺省仍可用(不过滤)。
+	res = a.DispatchTool(ToolRealworldInfo, map[string]any{"op": "news"})
+	if res.IsErr {
+		t.Errorf("realworld_info news without keyword: %s", res.Text)
+	}
+	// 工具 schema 必须声明 keyword(否则 LLM 不会传)。
+	props, ok := realworldInfoSchemaProps(t)
+	if !ok {
+		t.Fatal("realworld_info schema properties not found")
+	}
+	if _, found := props["keyword"]; !found {
+		t.Error("realworld_info schema must declare the optional keyword property")
+	}
+}
+
+// realworldInfoSchemaProps 取 realworld_info 的 schema properties。
+func realworldInfoSchemaProps(t *testing.T) (map[string]any, bool) {
+	t.Helper()
+	for _, td := range BuildTools() {
+		if td.Name != ToolRealworldInfo {
+			continue
+		}
+		props, ok := td.InputSchema["properties"].(map[string]any)
+		return props, ok
+	}
+	return nil, false
+}

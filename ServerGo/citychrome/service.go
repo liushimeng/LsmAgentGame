@@ -34,6 +34,9 @@ type Service struct {
 	client *WebUseClient
 	agent  *Agent
 	sched  *Scheduler
+	// mlog 是采集任务遥测日志(批次77 §3.2;无条件创建,离线占位实例也有,
+	// HTTP 快照 data.missions[] 出口)。
+	mlog *MissionLog
 
 	// llmSema 复用项目 llmSema 节流模式(全局 LLM 并发槽,cap 1 ——
 	// 调度器本身单飞,这里再兜一层防手动刷新与轮转竞态)。
@@ -94,6 +97,7 @@ func newService(cfg config.CityChromeConfig, reg LLMRegistry) *Service {
 	svc := &Service{
 		cfg:               cfg,
 		store:             NewFeedStore(cfg.SymbolsPerCategory, cfg.NewsLimit),
+		mlog:              NewMissionLog(),
 		llmSema:           make(chan struct{}, 1),
 		lastManualRefresh: map[string]time.Time{},
 		refreshNow:        time.Now,
@@ -110,6 +114,8 @@ func newService(cfg config.CityChromeConfig, reg LLMRegistry) *Service {
 		SymbolsPerCategory: cfg.SymbolsPerCategory,
 		NewsLimit:          cfg.NewsLimit,
 	}, svc.client, reg)
+	// 遥测日志注入 Agent(批次77 §3.3-3:mission 入口/出口写 MissionRecord)。
+	svc.agent.SetMissionLog(svc.mlog)
 	// LLM 节流槽(5s 获取超时,复用项目 AcquireLLM/ReleaseLLM 语义)。
 	svc.agent.SetLLMAcquire(func(ctx context.Context) (func(), bool) {
 		select {
@@ -163,6 +169,15 @@ func (s *Service) Channel() ChannelStatus {
 		return ChannelStatus{Status: ChannelOffline, Detail: "service not started"}
 	}
 	return s.store.Channel()
+}
+
+// MissionLog 返回采集任务遥测快照(批次77 §3.2/§3.4:新→旧 ≤20 条)。
+// nil-safe:s 为 nil 或日志缺失时返回空切片(非 nil,JSON 序列化为 [])。
+func (s *Service) MissionLog() []MissionRecord {
+	if s == nil || s.mlog == nil {
+		return []MissionRecord{}
+	}
+	return s.mlog.Snapshot()
 }
 
 // OnFeed 订阅 Feed 更新(广播出口:WS 层 listener 注入;每次成功 mission 后回调)。

@@ -29,7 +29,7 @@ func sampleFeed() Feed {
 }
 
 func TestFeedCompactJSON_Overview(t *testing.T) {
-	text, err := FeedCompactJSON(sampleFeed(), "overview", "")
+	text, err := FeedCompactJSON(sampleFeed(), "overview", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestFeedCompactJSON_Overview(t *testing.T) {
 }
 
 func TestFeedCompactJSON_Quotes(t *testing.T) {
-	text, err := FeedCompactJSON(sampleFeed(), "quotes", "")
+	text, err := FeedCompactJSON(sampleFeed(), "quotes", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestFeedCompactJSON_Quotes(t *testing.T) {
 		t.Errorf("quotes should include both categories: %s", text)
 	}
 	// category 过滤。
-	text, err = FeedCompactJSON(sampleFeed(), "quotes", CategoryCrypto)
+	text, err = FeedCompactJSON(sampleFeed(), "quotes", CategoryCrypto, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestFeedCompactJSON_Quotes(t *testing.T) {
 }
 
 func TestFeedCompactJSON_News(t *testing.T) {
-	text, err := FeedCompactJSON(sampleFeed(), "news", "")
+	text, err := FeedCompactJSON(sampleFeed(), "news", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,15 +75,73 @@ func TestFeedCompactJSON_News(t *testing.T) {
 }
 
 func TestFeedCompactJSON_Errors(t *testing.T) {
-	if _, err := FeedCompactJSON(sampleFeed(), "hack", ""); err == nil {
+	if _, err := FeedCompactJSON(sampleFeed(), "hack", "", ""); err == nil {
 		t.Error("unknown op should fail")
 	}
-	if _, err := FeedCompactJSON(sampleFeed(), "quotes", "mars"); err == nil {
+	if _, err := FeedCompactJSON(sampleFeed(), "quotes", "mars", ""); err == nil {
 		t.Error("unknown category should fail")
 	}
 	// op 缺省 = overview。
-	if _, err := FeedCompactJSON(sampleFeed(), "", ""); err != nil {
+	if _, err := FeedCompactJSON(sampleFeed(), "", "", ""); err != nil {
 		t.Errorf("empty op should default overview: %v", err)
+	}
+}
+
+// TestFeedCompactJSON_NewsKeyword 批次77 §3.5:keyword 仅 op=news 生效,
+// 标题大小写不敏感包含过滤;空串不过滤;其余 op 忽略 keyword。
+func TestFeedCompactJSON_NewsKeyword(t *testing.T) {
+	f := Feed{
+		Channel: ChannelStatus{Status: ChannelOnline},
+		News: []RealtimeNews{
+			{ID: "1", Title: "黄金价格创新高", Category: CategoryNews},
+			{ID: "2", Title: "A股三大指数集体上涨", Category: CategoryNews},
+			{ID: "3", Title: "GOLD 期货收涨", Category: CategoryNews},
+		},
+	}
+	// 命中:大小写不敏感。
+	text, err := FeedCompactJSON(f, "news", "", "gold")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "GOLD 期货收涨") {
+		t.Errorf("keyword should match case-insensitively: %s", text)
+	}
+	if strings.Contains(text, "A股三大指数集体上涨") {
+		t.Errorf("keyword should filter out non-matching titles: %s", text)
+	}
+	// 中文命中。
+	text, err = FeedCompactJSON(f, "news", "", "黄金")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "黄金价格创新高") || strings.Contains(text, "A股三大指数集体上涨") {
+		t.Errorf("chinese keyword filter failed: %s", text)
+	}
+	// 不命中 ⇒ 空数组(非 null)。
+	text, err = FeedCompactJSON(f, "news", "", "不存在的词")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, `"news":[]`) {
+		t.Errorf("non-matching keyword should yield empty news: %s", text)
+	}
+	// 空串 = 不过滤。
+	text, err = FeedCompactJSON(f, "news", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"黄金价格创新高", "A股三大指数集体上涨", "GOLD 期货收涨"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("empty keyword must not filter, missing %q: %s", want, text)
+		}
+	}
+	// 其余 op 忽略 keyword。
+	text, err = FeedCompactJSON(f, "overview", "", "黄金")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "黄金价格创新高") {
+		t.Errorf("overview must ignore keyword: %s", text)
 	}
 }
 

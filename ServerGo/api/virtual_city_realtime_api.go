@@ -28,24 +28,42 @@ func NewVirtualCityRealtimeAPI(svc *citychrome.Service) *VirtualCityRealtimeAPI 
 	return &VirtualCityRealtimeAPI{svc: svc}
 }
 
-// Board 处理 GET /api/virtual_city/realtime_board:返回 {code:0, data:{feed}}。
+// Board 处理 GET /api/virtual_city/realtime_board:返回 {code:0, data:{feed, missions}}。
+// missions 为采集任务遥测(批次77 §3.4:新→旧 ≤20 条,无记录返回 [] 非 null;
+// svc 离线分支同样带 missions: [])。
+// ⚠️ WS game.realtime_feed 帧结构不动 —— missions 只随 HTTP 快照/手动刷新回读。
 func (a *VirtualCityRealtimeAPI) Board(c *gin.Context) {
 	if a.svc == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"code":    errcode.ErrCityChromeChannelOffline,
 			"message": errcode.DefaultMessages[errcode.ErrCityChromeChannelOffline],
-			"data": gin.H{"feed": citychrome.Feed{
-				Categories: map[string]citychrome.RealtimeCategory{},
-				News:       []citychrome.RealtimeNews{},
-			}},
+			"data": gin.H{
+				"feed": citychrome.Feed{
+					Categories: map[string]citychrome.RealtimeCategory{},
+					News:       []citychrome.RealtimeNews{},
+				},
+				"missions": a.missionsOrNil(),
+			},
 		})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"code":    errcode.OK,
 		"message": "ok",
-		"data":    gin.H{"feed": a.svc.Feed()},
+		"data": gin.H{
+			"feed":     a.svc.Feed(),
+			"missions": a.missionsOrNil(),
+		},
 	})
+}
+
+// missionsOrNil 返回 Board 的 missions 字段(批次77 §3.4):svc 在线取遥测快照,
+// svc 为 nil 时返回空切片(JSON 序列化为 [] 而非 null)。
+func (a *VirtualCityRealtimeAPI) missionsOrNil() []citychrome.MissionRecord {
+	if a.svc == nil {
+		return []citychrome.MissionRecord{}
+	}
+	return a.svc.MissionLog()
 }
 
 // refreshReq POST body(契约 §3.5:category 可选)。

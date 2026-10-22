@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // realworldQuoteCap 是 realworld_info op=quotes 时每类目最多返回条数(契约 §3.7)。
@@ -22,8 +23,10 @@ const realworldHeadlineCap = 3
 //   - op=quotes:全部类目(或指定 category)各前 5 条报价;
 //   - op=news:最近 10 条(或指定 category)。
 //
-// category 非空时必须是 8 类目之一(批次76 起)。返回人读 JSON 文本。
-func FeedCompactJSON(f Feed, op, category string) (string, error) {
+// category 非空时必须是 8 类目之一(批次76 起)。
+// keyword(批次77 §3.5)**仅 op=news 生效**:标题大小写不敏感包含过滤;
+// 空串 = 不过滤;其余 op 忽略 keyword。返回人读 JSON 文本。
+func FeedCompactJSON(f Feed, op, category, keyword string) (string, error) {
 	if op == "" {
 		op = "overview"
 	}
@@ -36,7 +39,7 @@ func FeedCompactJSON(f Feed, op, category string) (string, error) {
 	case "quotes":
 		return compactQuotes(f, category)
 	case "news":
-		return compactNews(f, category)
+		return compactNews(f, category, keyword)
 	default:
 		return "", fmt.Errorf("未知 op %q(须 overview|quotes|news)", op)
 	}
@@ -131,10 +134,19 @@ func compactQuotes(f Feed, category string) (string, error) {
 	return string(raw), err
 }
 
-func compactNews(f Feed, category string) (string, error) {
+// compactNews 组装 op=news 的紧凑 JSON。keyword 非空时按标题大小写不敏感
+// 包含过滤(批次77 §3.5;城市居民 Agent 可按主题查新闻)。
+func compactNews(f Feed, category, keyword string) (string, error) {
+	kw := ""
+	if keyword != "" {
+		kw = strings.ToLower(keyword)
+	}
 	news := make([]compactNewsItem, 0, realworldNewsCap)
 	for _, n := range f.News {
 		if category != "" && n.Category != category {
+			continue
+		}
+		if kw != "" && !strings.Contains(strings.ToLower(n.Title), kw) {
 			continue
 		}
 		news = append(news, compactNewsItem{ID: n.ID, Title: n.Title, Source: n.Source,

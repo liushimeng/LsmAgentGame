@@ -402,6 +402,7 @@ func BuildTools() []llmtypes.ToolDef {
 				"properties": map[string]any{
 					"op":       enumStrSchema([]string{"overview", "quotes", "news"}, "overview=总览 / quotes=行情 / news=新闻"),
 					"category": enumStrSchema([]string{"a_share", "hk", "us", "metal", "futures", "crypto"}, "类目过滤(可选,缺省全部)"),
+					"keyword":  strSchema("op=news 时按标题关键词过滤(可选,大小写不敏感;其余 op 忽略)"),
 				},
 				"required": []string{},
 			},
@@ -523,7 +524,7 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 		if op == "" {
 			op = "overview"
 		}
-		text, rerr := realworldInfoText(op, getStr("category"))
+		text, rerr := realworldInfoText(op, getStr("category"), getStr("keyword"))
 		if rerr != nil {
 			return fail(rerr)
 		}

@@ -15,11 +15,12 @@ import (
 )
 
 // realworldInfoText 生成 realworld_info 的紧凑 JSON 文本。
+// keyword 仅 op=news 生效(标题大小写不敏感包含过滤;批次77 §3.5)。
 // 通道未启动(nil 单例)时返回明确错误文本(不 panic)。
-func realworldInfoText(op, category string) (string, error) {
+func realworldInfoText(op, category, keyword string) (string, error) {
 	svc := citychrome.Get()
 	if svc == nil {
 		return "", fmt.Errorf("真实世界数据通道未启动(city_chrome.enabled=false 或服务未起)")
 	}
-	return citychrome.FeedCompactJSON(svc.Feed(), op, category)
+	return citychrome.FeedCompactJSON(svc.Feed(), op, category, keyword)
 }
