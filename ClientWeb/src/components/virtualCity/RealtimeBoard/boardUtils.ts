@@ -86,6 +86,8 @@ export const RT_CORE_INDICES: RtCoreIndexDef[] = [
   { category: 'metal', keywords: ['黄金', '伦敦金', 'Au'] },
   { category: 'futures', keywords: ['原油', 'WTI', '布伦特'] },
   { category: 'crypto', keywords: ['BTC', '比特币'] },
+  // 批次76:宏观指标（无数据时不显示）。
+  { category: 'macro', keywords: ['LPR', 'CPI', 'GDP'] },
 ];
 
 /** 在报价列表里按关键词序匹配第一条（大小写不敏感）。 */

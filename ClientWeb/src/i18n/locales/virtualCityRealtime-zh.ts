@@ -23,6 +23,7 @@ const virtualCityRealtimeZH = {
   'virtualCity.rt.sub.metal': '贵金属',
   'virtualCity.rt.sub.futures': '期货',
   'virtualCity.rt.sub.crypto': '比特币',
+  'virtualCity.rt.sub.macro': '宏观',
   'virtualCity.rt.sub.news': '新闻',
   // ── 报价表 ──
   'virtualCity.rt.col.name': '名称',

@@ -74,7 +74,7 @@ export interface RealtimeFeed {
 
 /** 看板类目联合类型（"general" 仅用于新闻归类，不是行情类目）。 */
 export type RealtimeBoardCategory =
-  | 'a_share' | 'hk' | 'us' | 'metal' | 'futures' | 'crypto' | 'general';
+  | 'a_share' | 'hk' | 'us' | 'metal' | 'futures' | 'crypto' | 'macro' | 'news' | 'general';
 
 /** HTTP 刷新端点响应（POST /api/virtual_city/realtime_board/refresh）。 */
 export interface RealtimeBoardRefreshResult {

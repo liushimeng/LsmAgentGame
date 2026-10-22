@@ -22,10 +22,10 @@ import { BoardOverview } from './BoardOverview';
 import { QuoteTable } from './QuoteTable';
 import { NewsList } from './NewsList';
 
-type RtSubTab = 'overview' | 'a_share' | 'hk' | 'us' | 'metal' | 'futures' | 'crypto' | 'news';
+type RtSubTab = 'overview' | 'a_share' | 'hk' | 'us' | 'metal' | 'futures' | 'crypto' | 'macro' | 'news';
 
 /** 行情子 Tab → feed.categories 键（overview / news 无类目数据）。 */
-const QUOTE_SUBTABS: RtSubTab[] = ['a_share', 'hk', 'us', 'metal', 'futures', 'crypto'];
+const QUOTE_SUBTABS: RtSubTab[] = ['a_share', 'hk', 'us', 'metal', 'futures', 'crypto', 'macro'];
 
 /** 1 分钟粒度重渲染「更新于 N 分钟前」。 */
 function useMinuteTick(): number {
@@ -92,6 +92,8 @@ export function RealtimeBoard() {
     { key: 'metal', labelKey: 'virtualCity.rt.sub.metal' },
     { key: 'futures', labelKey: 'virtualCity.rt.sub.futures' },
     { key: 'crypto', labelKey: 'virtualCity.rt.sub.crypto' },
+    // 批次76:宏观指标类目（LPR/CPI/GDP/PMI/外汇储备）。
+    { key: 'macro', labelKey: 'virtualCity.rt.sub.macro' },
     { key: 'news', labelKey: 'virtualCity.rt.sub.news' },
   ];
 

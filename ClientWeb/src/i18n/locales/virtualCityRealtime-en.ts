@@ -18,6 +18,7 @@ const virtualCityRealtimeEN = {
   'virtualCity.rt.sub.metal': 'Metals',
   'virtualCity.rt.sub.futures': 'Futures',
   'virtualCity.rt.sub.crypto': 'BTC',
+  'virtualCity.rt.sub.macro': 'Macro',
   'virtualCity.rt.sub.news': 'News',
   'virtualCity.rt.col.name': 'Name',
   'virtualCity.rt.col.price': 'Price',

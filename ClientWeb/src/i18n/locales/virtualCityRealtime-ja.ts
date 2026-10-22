@@ -18,6 +18,7 @@ const virtualCityRealtimeJA = {
   'virtualCity.rt.sub.metal': '貴金属',
   'virtualCity.rt.sub.futures': '先物',
   'virtualCity.rt.sub.crypto': 'BTC',
+  'virtualCity.rt.sub.macro': 'マクロ',
   'virtualCity.rt.sub.news': 'ニュース',
   'virtualCity.rt.col.name': '名称',
   'virtualCity.rt.col.price': '価格',
