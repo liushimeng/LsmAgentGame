@@ -12,7 +12,9 @@ import (
 
 // TestCreateRoom_FullAgentBodyBinding full_agent 绑定与并入(2026-10-21 定位 v3.0):
 // 虚拟城市恒全 Agent —— 显式 false 被强制为 true(仅记录,不打开人类座位旁路);
-// true → true;nil(缺省)→ 不构造配置对象(服务端缺省同样为全 Agent)。
+// true → true;nil(缺省)→ cfg.FullAgent 保持 nil(2026-10-22 §背景居民默认1
+// 起 virtual_city 仍恒构造 cfg,但 FullAgent 指针缺省不置位;服务端缺省同样
+// 为全 Agent)。
 func TestCreateRoom_FullAgentBodyBinding(t *testing.T) {
 	falseVal := false
 	trueVal := true
@@ -23,7 +25,7 @@ func TestCreateRoom_FullAgentBodyBinding(t *testing.T) {
 	}{
 		{"explicit false coerced to full agent", `{"full_agent":false}`, &trueVal},
 		{"explicit true stays full agent", `{"full_agent":true}`, &trueVal},
-		{"absent keeps default (nil)", `{}`, nil},
+		{"absent keeps FullAgent nil", `{}`, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

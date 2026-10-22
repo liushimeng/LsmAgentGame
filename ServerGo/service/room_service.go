@@ -74,9 +74,10 @@ type VirtualCityRoomOptions struct {
 	// Pool Deprecated(2026-09-22 §17-CityHuman):原 "curated"|"docs" 卡池
 	// 选择已退役;字段仅为旧客户端载荷兼容保留,**任何值都被忽略**。
 	Pool string `json:"pool,omitempty"`
-	// ResidentCount 2026-09-21 §虚拟城市 — 城市背景居民数(0=不启用城市层,
-	// 向后兼容旧形态)。建房 body 顶层 resident_count 由 API 层并入本字段;
-	// service 层 clamp [0, cfg.VirtualCity.MaxResidents](负数在 API 层 400)。
+	// ResidentCount 2026-09-21 §虚拟城市 — 城市背景居民数。
+	// 2026-10-22 §背景居民默认1:缺省/0 → 1(原 10000);建房 body 顶层
+	// resident_count 由 API 层并入本字段;service 层 clamp
+	// [1, cfg.VirtualCity.MaxResidents](负数在 API 层 400)。
 	ResidentCount int `json:"resident_count,omitempty"`
 	// CivicElectionEnabled 2026-09-24 §批次20(文档3 A2)— 市长选举启用
 	// (仅 wealth 生效;**缺省 false = 关闭**,与 manager.Config 同零值语义,

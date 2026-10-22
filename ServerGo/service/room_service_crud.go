@@ -226,11 +226,18 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	}
 
 	// 2026-09-22 §17-CityHuman(契约 03 §3.1): resident_count **必达**新语义
-	// —— 缺省/0 → 10000;<10 → clamp 10;>上限 → clamp cfg.VirtualCity.MaxResidents
-	// (默认 100000);负数在 API 层 400(此处 v<=0 兜底走缺省)。
+	// —— 缺省/0 → 1(2026-10-22 §背景居民默认1,原 10000);<1 → 1;
+	// >上限 → clamp cfg.VirtualCity.MaxResidents(默认 100000);负数在 API 层 400
+	// (此处 v<=0 兜底走缺省)。
 	// 2026-09-26 §批次25:clamp 前移 —— 座位数合成(wealthDeepSeats)必须取到
-	// clamp 后的 ResidentCount(座位数 = clamp(N,10,12))。
-	if gameKind == "virtual_city" && wealthCfg != nil {
+	// clamp 后的 ResidentCount(座位数 = clamp(N,1,12))。
+	// 2026-10-22 §背景居民默认1:virtual_city 即使 body 完全省略 virtual_city
+	// 子对象(wealthCfg == nil)也补默认配置 —— 缺省 resident_count → 1,
+	// 旧客户端不传该字段也建 1 人城(不再回落 wealthDeepSeats(0) 的 12 座位)。
+	if gameKind == "virtual_city" {
+		if wealthCfg == nil {
+			wealthCfg = &VirtualCityRoomOptions{}
+		}
 		maxResidents := 100000
 		if s.cfg != nil && s.cfg.VirtualCity.MaxResidents > 0 {
 			maxResidents = s.cfg.VirtualCity.MaxResidents
@@ -251,7 +258,8 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	// 2026-09-22 §17-CityHuman 全民驱动(契约 03 §3.1): wealth 建房**忽略**
 	// 传入的 agent_seats(旧客户端携带任意值静默忽略,不 400 —— HTTP 契约
 	// 宽松化,§6),由服务端合成池驱动居民座位(ModelKey="")。
-	// 2026-09-26 §批次25:座位数 = clamp(resident_count,10,12)(居民-Agent 统一)。
+	// 2026-09-26 §批次25:座位数 = clamp(resident_count,1,12)(居民-Agent 统一;
+	// 2026-10-08 §背景居民下限降至1 将下限由 10 降到 1)。
 	// 替换必须发生在 agentSeatSet 构建/校验/落库之前,使 bot 用户行、
 	// FullAgentMode 判定、ws 层 RegisterBotSeats、自动开局看到同一座位集;
 	// werewolf 等其他游戏路径零变化。
@@ -261,11 +269,8 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 	// 降级为观察者。注释保留历史:批次63 曾用 `virtualCityFullAgent` 闸口
 	// 支持 full_agent=false 的可玩房,该语义已随定位 v3.0 退役。
 	if gameKind == "virtual_city" {
-		residentN := 0
-		if wealthCfg != nil {
-			residentN = wealthCfg.ResidentCount
-		}
-		agentSeats = virtualCityAgentSeatsFor(virtualCityFullAgent, residentN)
+		// 上方 clamp 段已保证 wealthCfg 非 nil 且 ResidentCount >= 1。
+		agentSeats = virtualCityAgentSeatsFor(virtualCityFullAgent, wealthCfg.ResidentCount)
 	}
 
 	// Validate agent-seat requests up front, failing fast before any DB writes.
@@ -872,12 +877,12 @@ func creatorShouldBeSpectator(gameKind string, freeSeatCount int, virtualCityFul
 }
 
 // clampVirtualCityResidentCount 2026-09-22 §17-CityHuman(契约 03 §3.1)语义更新:
-// resident_count **必达** —— 缺省/0 → defaultResidents(10000,仅「客户端不传
-// 该字段」路径;前端弹窗恒传,故 UI 默认由前端 RESIDENT_DEFAULT=10 决定);
+// resident_count **必达** —— 缺省/0 → defaultResidents(1,2026-10-22
+// §背景居民默认1 由 10000 降为 1:客户端不传该字段即建 1 人城);
 // <1 → clamp 1(2026-10-08 §背景居民下限降至1);>maxResidents
 // → clamp(默认 100000);负数在 API 层已 400,此处 v<=0 兜底走缺省。
 func clampVirtualCityResidentCount(v, maxResidents int) int {
-	const defaultResidents = 10000
+	const defaultResidents = 1
 	const minResidents = 1
 	if maxResidents <= 0 {
 		maxResidents = 100000

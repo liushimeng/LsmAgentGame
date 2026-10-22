@@ -52,10 +52,11 @@ func TestMergeVirtualCityBodyFields(t *testing.T) {
 	if bad != "" || cfg == nil || !cfg.CivicElectionEnabled {
 		t.Fatalf("top-level true: cfg=%+v bad=%q", cfg, bad)
 	}
-	// 缺省 false + 无 wealth → 仍 nil(不构造;旧行为零改动)。
+	// 缺省 false + 无 wealth → cfg 非 nil(2026-10-22 §背景居民默认1 起
+	// virtual_city 恒构造配置),但 CivicElectionEnabled 保持 false。
 	cfg, bad = mergeVirtualCityBodyFields(createRoomRequest{}, "virtual_city", nil)
-	if bad != "" || cfg != nil {
-		t.Fatalf("all absent must keep nil: %+v %q", cfg, bad)
+	if bad != "" || cfg == nil || cfg.CivicElectionEnabled {
+		t.Fatalf("all absent must keep election off: %+v %q", cfg, bad)
 	}
 	// 嵌套显式携带不受影响。
 	nested := &service.VirtualCityRoomOptions{MonthMs: 3000, CivicElectionEnabled: true}

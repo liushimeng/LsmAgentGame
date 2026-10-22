@@ -2,7 +2,7 @@
  * VirtualCityCreateRoomModal — 虚拟城市「创建城市」弹窗（2026-09-22 §CityHuman全民驱动）：
  *   - 城市名（可选，≤30 字）
  *   - 背景居民规模（StepperRow 数值步进 [−] 输入 [+]，min=1 max=100000，
- *     默认值 10，clamp [1,100000]）：用户唯一可设置的城市规模；
+ *     默认值 1，clamp [1,100000]）：用户唯一可设置的城市规模；
  *     每位居民都是 `LsmAgentGame-City-Human`（契约 01 §1）。虚拟城市没有玩家、
  *     没有座位档位概念 —— 职业卡池 / 档位选择 / agent_seats 已全部退役
  *     （2026-09-25 §LLM线路池配额：预设档 10/1千/1万/10万 按钮行与标签内
@@ -38,7 +38,7 @@ import {
 
 export interface VirtualCityCreateRequest {
   name?: string;
-  /** 背景居民规模（1..100000；前端 clamp；默认值 10；后端缺省 10000 / <1 归 1）。 */
+  /** 背景居民规模（1..100000；前端 clamp；默认值 1；后端缺省 1 / <1 归 1）。 */
   resident_count: number;
   /** 批次 27 §3.1：时间比例（城市秒/现实秒，13 档之一；后端 clamp [60,864000]）。 */
   time_ratio: number;
@@ -69,10 +69,10 @@ const TIME_RATIO_DEFAULT = 60;
 /** 季节观感提示阈值：慢于（含）1分钟比2小时 的档位显示（h1/h2 两档）。 */
 const SEASON_TIP_MAX_RATIO = 120;
 
-/** 2026-10-08 §下限降至 1：居民数下限 1（默认值 10 与上限 100000 不变）。 */
+/** 2026-10-08 §下限降至 1：居民数下限 1（上限 100000 不变；默认值自 2026-10-22 起为 1）。 */
 const RESIDENT_MIN = 1;
 const RESIDENT_MAX = 100000;
-const RESIDENT_DEFAULT = 10;
+const RESIDENT_DEFAULT = 1;
 
 /** hint 时长紧凑格式（60s / 105min / 3.5h；三语通用缩写，不另立 i18n 键）。 */
 function fmtCompactDuration(ms: number): string {
@@ -157,7 +157,7 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
   const [name, setName] = useState('');
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
-  // §CityHuman全民驱动 — 背景居民规模（默认值 10，clamp 1..100000）。
+  // §CityHuman全民驱动 — 背景居民规模（默认值 1，clamp 1..100000）。
   const [residentCount, setResidentCount] = useState(RESIDENT_DEFAULT);
   // 批次 27 §3.1：时间比例（13 档，默认 1分钟比1小时）。
   const [timeRatio, setTimeRatio] = useState(TIME_RATIO_DEFAULT);
@@ -286,7 +286,7 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
           />
         </label>
 
-        {/* 背景居民规模 stepper：min=1 max=100000，默认 10，即时归位 + 焦点离开写入边界值。
+        {/* 背景居民规模 stepper：min=1 max=100000，默认 1，即时归位 + 焦点离开写入边界值。
             2026-09-25 §LLM线路池配额 — 预设档按钮行与标签内重复数值显示退役，
             收敛为单行 StepperRow（testid 输入框后缀 -input，全库无旧 testid 消费方）。 */}
         <StepperRow

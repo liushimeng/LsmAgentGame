@@ -45,9 +45,9 @@ type createRoomRequest struct {
 	// month_ms clamp [3000,30000] 由 service 层校验。
 	VirtualCity *service.VirtualCityRoomOptions `json:"virtual_city,omitempty"`
 	// ResidentCount 2026-09-21 §虚拟城市(契约 04 §1.1)— 城市背景居民数
-	// (仅 wealth 生效,其他 kind 静默忽略;与 reveal_role_on_death 同策略)。
-	// 2026-09-22 §17-CityHuman(契约 03 §3.1)**必达**新语义:缺省/0 → 10000;
-	// <10 → clamp 10;>上限由 service 层 clamp(默认 100000);负数 400。
+	// (仅 virtual_city 生效,其他 kind 静默忽略;与 reveal_role_on_death 同策略)。
+	// 2026-10-22 §背景居民默认1:缺省/0 → 1(原 10000);<1 归 1;
+	// >上限由 service 层 clamp(默认 100000);负数 400。
 	// 并入 VirtualCity.ResidentCount 透传(virtual_city 子对象亦可显式携带,顶层优先)。
 	ResidentCount int `json:"resident_count,omitempty"`
 	// FullAgent 2026-09-19 §全Agent模式 — 是否全 Agent 模式(仅 virtual_city 生效)。
@@ -181,10 +181,12 @@ func (a *RoomAPI) Create(c *gin.Context) {
 }
 
 // mergeVirtualCityBodyFields 把顶层 wealth 参数并入 wealth 子对象(仅 kind=="virtual_city"
-// 生效;其他 kind 静默忽略,与 reveal_role_on_death 同策略):
-//   - resident_count(2026-09-21 契约 04 §1.1;负数返回 400 原因);
-//   - civic_election_enabled(2026-09-24 批次20 文档3 A2;缺省 false 不构造
-//     配置对象 —— 与 resident_count 不同,false 无需任何动作);
+// 生效;其他 kind 静默忽略且**不构造**配置,与 reveal_role_on_death 同策略):
+//   - resident_count(2026-09-21 契约 04 §1.1;2026-10-22 §背景居民默认1):
+//     virtual_city 恒返回非 nil cfg;缺省/0(顶层或 virtual_city 子对象同口径)
+//     → 1;<1 归 1;正数原样并入(上限 clamp 由 service 层负责,默认 100000);
+//     负数返回 400 原因 "resident_count must be >= 0";
+//   - civic_election_enabled(2026-09-24 批次20 文档3 A2;缺省 false 不置位);
 //   - llm_lines(2026-09-25 §LLM线路池配额;负数返回 400 原因,0/缺省不
 //     动作 —— clamp [1,64] 与池总量取 min 在 game 层 applyOpts 完成)。
 //
@@ -193,29 +195,28 @@ func mergeVirtualCityBodyFields(req createRoomRequest, kind string, cfg *service
 	if kind != "virtual_city" {
 		return cfg, ""
 	}
+	// 2026-10-22 §背景居民默认1:virtual_city 恒有配置对象 —— 缺省 resident_count
+	// 也要落 1,旧客户端不传该字段时 service 层才不会看到 nil / 0。
+	if cfg == nil {
+		cfg = &service.VirtualCityRoomOptions{}
+	}
+	if req.ResidentCount < 0 {
+		return cfg, "resident_count must be >= 0"
+	}
 	if req.ResidentCount != 0 {
-		if req.ResidentCount < 0 {
-			return cfg, "resident_count must be >= 0"
-		}
-		if cfg == nil {
-			cfg = &service.VirtualCityRoomOptions{}
-		}
 		cfg.ResidentCount = req.ResidentCount
 	}
+	if cfg.ResidentCount <= 0 {
+		cfg.ResidentCount = 1
+	}
 	if req.CivicElectionEnabled {
-		if cfg == nil {
-			cfg = &service.VirtualCityRoomOptions{}
-		}
 		cfg.CivicElectionEnabled = true
 	}
 	// 2026-09-25 §LLM线路池配额:负数 400;正数并入(顶层优先,子对象
-	// virtual_city.llm_lines 亦可显式携带);0/缺省 = 未指定,不构造配置对象。
+	// virtual_city.llm_lines 亦可显式携带);0/缺省 = 未指定。
 	if req.LLMLines != 0 {
 		if req.LLMLines < 0 {
 			return cfg, "llm_lines must be >= 0"
-		}
-		if cfg == nil {
-			cfg = &service.VirtualCityRoomOptions{}
 		}
 		cfg.LLMLines = req.LLMLines
 	}
@@ -224,9 +225,6 @@ func mergeVirtualCityBodyFields(req createRoomRequest, kind string, cfg *service
 	// 强制 true(显式 false 仅记日志,不再打开人类座位旁路)。
 	if req.FullAgent != nil {
 		enabled := true
-		if cfg == nil {
-			cfg = &service.VirtualCityRoomOptions{}
-		}
 		cfg.FullAgent = &enabled
 	}
 	return cfg, ""

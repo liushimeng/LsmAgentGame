@@ -79,10 +79,11 @@ func TestMergeVirtualCityBodyFields_LLMLines(t *testing.T) {
 	if bad != "" || cfg.LLMLines != 3 {
 		t.Fatalf("top-level llm_lines must win over nested, cfg=%+v bad=%q", cfg, bad)
 	}
-	// 0/缺省 → 不动作(cfg 保持 nil,零回归)。
+	// 0/缺省 → 不置位 LLMLines(2026-10-22 §背景居民默认1 起 virtual_city
+	// 恒返回非 nil cfg,但 LLMLines 仍保持 0 = 未指定)。
 	cfg, bad = mergeVirtualCityBodyFields(createRoomRequest{}, "virtual_city", nil)
-	if bad != "" || cfg != nil {
-		t.Fatalf("absent llm_lines must not construct cfg, cfg=%+v bad=%q", cfg, bad)
+	if bad != "" || cfg == nil || cfg.LLMLines != 0 {
+		t.Fatalf("absent llm_lines must stay 0, cfg=%+v bad=%q", cfg, bad)
 	}
 	// 其他 kind(如 werewolf)负数也静默忽略(不 400)。
 	cfg, bad = mergeVirtualCityBodyFields(createRoomRequest{LLMLines: -1}, "werewolf", nil)
