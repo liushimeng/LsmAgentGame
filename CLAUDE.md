@@ -384,7 +384,7 @@ Blender / `.glb` / 3D 模型 / 几何 → `art-designer`（`3d_script/build_*.py
 | `schema_version` | 目录结构版本（当前 1） |
 | `generated_at` | 生成时间（unix 秒） |
 | `dimensions[]` | 11 条维度目录（id / group / title_key / source / scope / unit / refresh） |
-| `data_sources[]` | 22 条公开免登录金融数据源登记册（category / name / purpose / url） |
+| `data_sources[]` | 45 条公开免登录金融数据源登记册（category / name / purpose / url；批次76 对齐公开数据源清单，新增「时政军事」分组） |
 | `realtime` | 外部行情通道快照，与 `GET /api/virtual_city/realtime_board` 的 `feed` **同构** |
 
 ⚠️ **通道离线时 `code` = 35053，但 `data.dashboard` 仍完整**（dimensions + data_sources 齐全，`realtime.channel.status="offline"`）。前端 `http<T>()` 在 `code≠0` 时抛错并**丢弃 body** ⇒ `fetchVirtualCityDashboard()` 对 35053 走**裸 fetch 兜底**取回完整目录。改这一段时前后端必须同步，否则「通道离线 = 看板骨架消失」。
