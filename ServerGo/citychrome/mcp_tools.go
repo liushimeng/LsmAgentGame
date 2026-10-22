@@ -265,7 +265,7 @@ func ValidatePayload(symbolsPerCategory int, raw any) (*MissionPayload, error) {
 		return nil, fmt.Errorf("payload 解析失败: %w", err)
 	}
 	if !IsMissionCategory(p.Category) {
-		return nil, fmt.Errorf("未知 category %q(必须是 a_share|hk|us|metal|futures|crypto)", p.Category)
+		return nil, fmt.Errorf("未知 category %q(必须是 a_share|hk|us|metal|futures|crypto|macro|news)", p.Category)
 	}
 	if p.Source == "" {
 		return nil, fmt.Errorf("source 不能为空(采集来源站点名)")

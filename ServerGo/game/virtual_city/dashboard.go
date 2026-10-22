@@ -117,40 +117,67 @@ var dashboardDimensions = []DashboardDimension{
 	{ID: "datasources", Group: DashboardGroupExternal, TitleKey: "virtualCity.dash.dim.dataSources", Source: DashboardSourceStatic, Scope: DashboardScopeGlobal, Unit: DashboardUnitText, Refresh: DashboardRefreshStatic},
 }
 
-// dashboardDataSources 是包级数据源登记册(22 条;按分类分组顺序排列)。
-// 全部为公开免登录站点 —— 前端「数据源」Tab 直接渲染,不做任何鉴权代理。
+// dashboardDataSources 是包级数据源登记册(45 条;按分类分组顺序排列;
+// 批次76 对齐《自迭代优化规范》§八 公开数据源清单 2026-10-22 实测版)。
+// 全部为公开免登录可浏览站点(「数据接口」类含需注册的平台,用途注明)——
+// 前端「数据源」Tab 直接渲染,不做任何鉴权代理。
+// 语义分层:登记册=可查清单(宽),citychrome/sites.go=可采集源(窄)。
 var dashboardDataSources = []DataSource{
-	// 综合财经
+	// 综合财经(5)
 	{Category: "综合财经", Name: "东方财富网", Purpose: "全品类行情、财报、资金流向", URL: "https://www.eastmoney.com"},
 	{Category: "综合财经", Name: "新浪财经", Purpose: "全球市场资讯、宏观数据", URL: "https://finance.sina.com.cn"},
 	{Category: "综合财经", Name: "中国证券网", Purpose: "证券市场资讯、官方公告", URL: "https://www.cnstock.com"},
 	{Category: "综合财经", Name: "中证网", Purpose: "资本市场权威资讯、行情数据", URL: "https://www.cs.com.cn"},
-	// A股市场
+	{Category: "综合财经", Name: "财联社", Purpose: "7×24 财经快讯、突发消息", URL: "https://www.cls.cn"},
+	// A股市场(4)
 	{Category: "A股市场", Name: "上交所官网", Purpose: "沪市官方行情与规则文件", URL: "https://www.sse.com.cn"},
 	{Category: "A股市场", Name: "巨潮资讯网", Purpose: "证监会指定信息披露平台", URL: "https://www.cninfo.com.cn"},
-	// 港股市场
+	{Category: "A股市场", Name: "雪球", Purpose: "个股热度、讨论与组合数据", URL: "https://xueqiu.com"},
+	{Category: "A股市场", Name: "乐咕乐股", Purpose: "估值、指数与宏观指标", URL: "https://www.legulegu.com"},
+	// 港股市场(1)
 	{Category: "港股市场", Name: "香港交易所官网", Purpose: "港股官方行情与披露数据", URL: "https://www.hkex.com.hk"},
-	// 美股市场
+	// 美股市场(1)
 	{Category: "美股市场", Name: "纳斯达克官网", Purpose: "美股官方行情(国内可直连)", URL: "https://www.nasdaq.com"},
-	// 贵金属大宗
+	// 贵金属大宗(7)
 	{Category: "贵金属大宗", Name: "上海有色金属网", Purpose: "金属现货与期货价格", URL: "https://www.smm.cn"},
 	{Category: "贵金属大宗", Name: "生意社", Purpose: "大宗商品价格指数", URL: "https://www.100ppi.com"},
 	{Category: "贵金属大宗", Name: "卓创资讯", Purpose: "大宗商品行情分析", URL: "https://www.sci99.com"},
 	{Category: "贵金属大宗", Name: "LBMA 伦敦金银协会", Purpose: "国际黄金基准价", URL: "https://www.lbma.org.uk"},
-	// 期货市场
+	{Category: "贵金属大宗", Name: "金投网", Purpose: "黄金/外汇实时报价", URL: "https://www.fx678.com"},
+	{Category: "贵金属大宗", Name: "Kitco", Purpose: "国际金银与金属报价", URL: "https://www.kitco.com"},
+	{Category: "贵金属大宗", Name: "GoldPrice", Purpose: "实时金价", URL: "https://www.goldprice.org"},
+	// 期货市场(6)
+	{Category: "期货市场", Name: "上海期货交易所", Purpose: "金属与能化期货行情", URL: "https://www.shfe.com.cn"},
+	{Category: "期货市场", Name: "上海国际能源交易中心", Purpose: "原油等能源期货行情", URL: "https://www.ine.cn"},
 	{Category: "期货市场", Name: "中国金融期货交易所", Purpose: "股指与国债期货官方数据", URL: "https://www.cffex.com.cn"},
 	{Category: "期货市场", Name: "郑州商品交易所", Purpose: "农产品与能化期货行情", URL: "https://www.czce.com.cn"},
 	{Category: "期货市场", Name: "广州期货交易所", Purpose: "工业硅与碳酸锂期货行情", URL: "https://www.gfex.com.cn"},
 	{Category: "期货市场", Name: "期货日报网", Purpose: "期货资讯与策略研究", URL: "https://www.qhrb.com.cn"},
-	// 加密货币
+	// 加密货币(3)
+	{Category: "加密货币", Name: "AICoin", Purpose: "加密货币行情与快讯", URL: "https://www.aicoin.com"},
 	{Category: "加密货币", Name: "非小号", Purpose: "加密货币行情与交易所数据", URL: "https://www.feixiaohao.com"},
 	{Category: "加密货币", Name: "金色财经", Purpose: "区块链与加密货币动态", URL: "https://www.jinse.com"},
-	// 宏观数据
+	// 宏观数据(4)
 	{Category: "宏观数据", Name: "中国人民银行官网", Purpose: "货币政策、宏观金融数据", URL: "https://www.pbc.gov.cn"},
-	// 数据接口
-	{Category: "数据接口", Name: "聚宽 JoinQuant", Purpose: "基础行情 API(含免费额度)", URL: "https://www.joinquant.com"},
-	{Category: "数据接口", Name: "阿里云 API 市场", Purpose: "多类金融行情接口", URL: "https://market.aliyun.com"},
-	{Category: "数据接口", Name: "腾讯云 API 市场", Purpose: "证券与大宗商品数据接口", URL: "https://market.cloud.tencent.com"},
+	{Category: "宏观数据", Name: "国家统计局", Purpose: "CPI/GDP 等宏观数据", URL: "https://www.stats.gov.cn"},
+	{Category: "宏观数据", Name: "财政部", Purpose: "财政收支与国债数据", URL: "https://www.mof.gov.cn"},
+	{Category: "宏观数据", Name: "国家外汇管理局", Purpose: "汇率与外汇储备数据", URL: "https://www.safe.gov.cn"},
+	// 时政军事(8;批次76 新分组)
+	{Category: "时政军事", Name: "新华网", Purpose: "权威时政与突发消息", URL: "https://www.news.cn"},
+	{Category: "时政军事", Name: "中国政府网", Purpose: "政策发布与国务院动态", URL: "https://www.gov.cn"},
+	{Category: "时政军事", Name: "环球网", Purpose: "国际时事与军事动态", URL: "https://www.huanqiu.com"},
+	{Category: "时政军事", Name: "澎湃新闻", Purpose: "深度报道与社会热点", URL: "https://www.thepaper.cn"},
+	{Category: "时政军事", Name: "中国新闻网", Purpose: "综合新闻与舆情", URL: "https://www.chinanews.com.cn"},
+	{Category: "时政军事", Name: "华尔街见闻", Purpose: "全球财经快讯", URL: "https://wallstreetcn.com"},
+	{Category: "时政军事", Name: "第一财经", Purpose: "财经与产业报道", URL: "https://www.yicai.com"},
+	{Category: "时政军事", Name: "联合早报", Purpose: "华文国际视角", URL: "https://www.zaobao.com"},
+	// 数据接口(6)
+	{Category: "数据接口", Name: "东方财富行情 API", Purpose: "股票/指数 JSON 行情(免鉴权)", URL: "https://push2.eastmoney.com/api/qt/clist/get"},
+	{Category: "数据接口", Name: "新浪行情接口", Purpose: "股票/期货/外汇快照(需带 Referer)", URL: "https://hq.sinajs.cn/list=sh000001"},
+	{Category: "数据接口", Name: "Tushare", Purpose: "金融数据 API(需注册 Token)", URL: "https://www.tushare.pro"},
+	{Category: "数据接口", Name: "聚宽 JoinQuant", Purpose: "策略与行情 API(需注册)", URL: "https://www.joinquant.com"},
+	{Category: "数据接口", Name: "阿里云 API 市场", Purpose: "多类金融行情接口(需注册)", URL: "https://market.aliyun.com"},
+	{Category: "数据接口", Name: "腾讯云 API 市场", Purpose: "证券与大宗商品数据接口(需注册)", URL: "https://market.cloud.tencent.com"},
 }
 
 // DashboardSchemaVersion 返回看板目录 schema 版本(当前 1)。
@@ -164,7 +191,7 @@ func DashboardDimensions() []DashboardDimension {
 	return out
 }
 
-// DashboardDataSources 返回数据源登记册副本(22 条)。
+// DashboardDataSources 返回数据源登记册副本(45 条;批次76)。
 func DashboardDataSources() []DataSource {
 	out := make([]DataSource, len(dashboardDataSources))
 	copy(out, dashboardDataSources)

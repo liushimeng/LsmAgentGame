@@ -3,8 +3,8 @@
 //
 // 覆盖:
 //	① 维度目录:非空 / id 唯一 / 恰好 11 条 / group 合法 / title_key 前缀;
-//	② 数据源登记册:恰好 22 条 / URL 均 https / name 非空;
-//	③ 端点 svc=nil ⇒ code 35053 且 dashboard 骨架完整(11/22/offline);
+//	② 数据源登记册:恰好 45 条(批次76) / URL 均 https / name 非空;
+//	③ 端点 svc=nil ⇒ code 35053 且 dashboard 骨架完整(12/45/offline);
 //	④ 端点 svc≠nil ⇒ code 0 且 schema_version=1、generated_at>0。
 package api
 
@@ -82,8 +82,8 @@ func TestVirtualCityDashboard_Catalog(t *testing.T) {
 	}
 
 	sources := virtual_city.DashboardDataSources()
-	if len(sources) != 22 {
-		t.Fatalf("data_sources = %d, want 22", len(sources))
+	if len(sources) != 45 {
+		t.Fatalf("data_sources = %d, want 45", len(sources))
 	}
 	for _, s := range sources {
 		if s.Name == "" {
@@ -125,8 +125,8 @@ func TestVirtualCityDashboard_EndpointOffline(t *testing.T) {
 	if got := len(dash["dimensions"].([]any)); got != 12 {
 		t.Fatalf("offline dashboard dimensions = %d, want 12", got)
 	}
-	if got := len(dash["data_sources"].([]any)); got != 22 {
-		t.Fatalf("offline dashboard data_sources = %d, want 22", got)
+	if got := len(dash["data_sources"].([]any)); got != 45 {
+		t.Fatalf("offline dashboard data_sources = %d, want 45", got)
 	}
 	rt, ok := dash["realtime"].(map[string]any)
 	if !ok {
@@ -172,8 +172,8 @@ func TestVirtualCityDashboard_EndpointOnline(t *testing.T) {
 	if got := len(dash["dimensions"].([]any)); got != 12 {
 		t.Fatalf("dimensions = %d, want 12", got)
 	}
-	if got := len(dash["data_sources"].([]any)); got != 22 {
-		t.Fatalf("data_sources = %d, want 22", got)
+	if got := len(dash["data_sources"].([]any)); got != 45 {
+		t.Fatalf("data_sources = %d, want 45", got)
 	}
 	// realtime 与 realtime_board 的 feed 同构:必须带 channel/categories/news。
 	rt := dash["realtime"].(map[string]any)

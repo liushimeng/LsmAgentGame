@@ -52,6 +52,23 @@ var categorySites = map[string][]SiteInfo{
 		{Name: "金色财经", URL: "https://www.jinse.com"},
 		{Name: "CoinMarketCap", URL: "https://coinmarketcap.com"},
 	},
+	// 批次76(§五.6 分级调度):宏观类目,日级轮转(默认 86400s)。
+	// 源顺序按 2026-10-22 本机 CDP 实测导航耗时排序:东财数据中心秒开;
+	// 统计局/央行官网页在 CDP 下 60s 超时(network idle 等不到),降为兜底。
+	CategoryMacro: {
+		{Name: "东方财富·宏观数据", URL: "https://data.eastmoney.com/cjsj/"},
+		{Name: "国家外汇管理局", URL: "https://www.safe.gov.cn"},
+		{Name: "国家统计局·数据发布", URL: "https://www.stats.gov.cn"},
+		{Name: "中国人民银行", URL: "https://www.pbc.gov.cn"},
+	},
+	// 批次76:时政新闻类目,分钟级轮转(默认 600s),纯新闻产出。
+	CategoryNews: {
+		{Name: "财联社·电报", URL: "https://www.cls.cn/telegraph"},
+		{Name: "华尔街见闻·快讯", URL: "https://wallstreetcn.com/live/global"},
+		{Name: "第一财经", URL: "https://www.yicai.com"},
+		{Name: "澎湃新闻", URL: "https://www.thepaper.cn"},
+		{Name: "新华网", URL: "https://www.news.cn"},
+	},
 }
 
 // categoryGoals 类目 → 采集目标描述(mission.Goal,写入 Agent user prompt)。
@@ -62,6 +79,8 @@ var categoryGoals = map[string]string{
 	CategoryMetal:   "采集贵金属行情:纽约黄金/纽约白银(名称/最新价/涨跌幅),并顺带 1-2 条贵金属市场新闻",
 	CategoryFutures: "采集大宗商品期货行情:纽约原油/黄金/白银/铜/镍等(名称/最新价/涨跌幅),并顺带 1-2 条大宗商品新闻",
 	CategoryCrypto:  "采集加密货币行情:BTC/ETH 及市值前 5 币种(名称/最新价/24h涨跌幅),并顺带 1-2 条加密市场新闻",
+	CategoryMacro:   "采集最新发布的关键宏观指标:LPR/CPI同比/GDP同比/制造业PMI/外汇储备等 5-8 条(指标名/最新值/较上期变动),并顺带 2-3 条宏观政策新闻",
+	CategoryNews:    "采集最新 5-8 条时政/财经/国际快讯(标题/原文链接/发布时间),纯 news 提交(quotes 留空)",
 }
 
 // categoryHints 类目 → 确定性提取配方(E2E 2026-10-20 本机实测验证)。
@@ -100,6 +119,33 @@ document.title + document.body.innerText.slice(0,3000) 定位币种表;再用 we
 备选:navigate 到 https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd
 读 body JSON(可能 403,403 则回退 DOM 提取);或换非小号/金色财经用 DOM 提取。
 price 单位为 USD,change_pct 用 24h 涨跌幅(没有则给 0 并在 source 注明)。`,
+	// 批次76:首选东财数据中心(结构化表格,秒开),官网仅作兜底。
+	CategoryMacro: `【确定性提取配方·首选源(东方财富数据中心)·严格限量】
+只抓下列 5 个指标页,每页 1 次 web_eval 读表格就够,**不要**再点别的标签页:
+  ① https://data.eastmoney.com/cjsj/cpi.html           → CPI_YOY
+  ② https://data.eastmoney.com/cjsj/gdp.html           → GDP_YOY
+  ③ https://data.eastmoney.com/cjsj/pmi.html           → PMI_MFG
+  ④ https://data.eastmoney.com/cjsj/hjwh.html          → FX_RESERVE
+  ⑤ https://data.eastmoney.com/cjsj/globalRateLPR.html → LPR_1Y
+每页流程固定 2 步(web_open → web_eval 读表格),**5 页 ≤ 10 步,必须 web_done**。
+表格解析(取最新月份那一行,列序以表头为准):
+  - CPI 页列:月份 | 今值 | 预测值 | 前值 ⇒ price=今值, change_pct=今值-前值;
+  - PMI 页列:月份 | 制造业指数 | 同比增长 | 非制造业指数 | 同比增长
+    ⇒ PMI_MFG.price=制造业指数, change_pct=同比增长(百分点差);
+  - 外汇储备页列:月份 | 国家外汇储备(亿美元) | 黄金储备(亿美元)(各带同比/环比)
+    ⇒ FX_RESERVE.price=国家外汇储备(亿美元)/10000 换算万亿美元, change_pct=环比;
+  - LPR 页列:日期 | 1年期LPR | 5年期以上LPR ⇒ LPR_1Y.price=1年期LPR, change_pct=与上一行之差;
+  - GDP 页列:季度 | 当季值 | 同比增长 ⇒ GDP_YOY.price=同比增长, change_pct=与上一季之差。
+change_pct 一律是百分点差(**原样填写不要乘 100**,取不到给 0),currency 留空。
+某页打不开(403/导航超时)→ 跳过该页、换下一个,**绝不重试同一 URL**,也不要换源。
+5 页全失败时降级为纯新闻:从首页「投资日历/宏观新闻」取 2-3 条标题提交。
+禁止登录、禁止下载报表文件,只读公开页面文本。`,
+	CategoryNews: `【提取建议·批次76】首选财联社电报(Vue SPA):web_open 后快讯流自动加载,
+1 次 web_eval 批量提取列表项(title/时间,class 含 telegraph 或快讯流元素);
+每条 news 填 title/url/published_at,published_at 按页面时间换算 Unix 秒,
+取不到精确时间用当前时间并在 source 注明「时间未标注」。
+body 为空/403/验证码 → 立即换备选站点(华尔街见闻 live 页同套路),
+不要重试同一 URL。quotes 留空(纯新闻 mission,服务端允许)。`,
 }
 
 // BuildMission 按类目构造一次 mission(首选源 = Sites[0])。

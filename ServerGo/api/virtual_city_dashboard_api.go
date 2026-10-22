@@ -9,7 +9,7 @@
 //	  "schema_version": 1,
 //	  "generated_at": 1750000000,
 //	  "dimensions":    [11 条维度目录],
-//	  "data_sources": [22 条数据源登记册],
+//	  "data_sources": [45 条数据源登记册(批次76)],
 //	  "realtime":     <citychrome.Feed:channel/categories/news>
 //	}
 //

@@ -184,7 +184,7 @@ func TestScheduler_RotationAndIdleUnload(t *testing.T) {
 	if len(s.in) != 0 {
 		t.Error("rotation should pause when no virtual_city rooms")
 	}
-	// 有房间 → 入队 1 个轮转类目(序 0 = a_share)。
+	// 有房间 → 冷启动逐类补齐:每 tick 1 个,序 0 = a_share。
 	s.SetRoomPresence(func() bool { return true })
 	s.maybeRotate()
 	if len(s.in) != 1 {
@@ -194,26 +194,113 @@ func TestScheduler_RotationAndIdleUnload(t *testing.T) {
 	if m.Category != CategoryAShare {
 		t.Errorf("first rotation = %q, want a_share", m.Category)
 	}
-	// 未到 refresh 间隔 → 不再入队。
+	// 冷启动下一 tick → 序 1 = hk(未运行过的类目视为到期)。
+	s.maybeRotate()
+	if len(s.in) != 1 {
+		t.Fatalf("queue len = %d, want 1 (cold start fill)", len(s.in))
+	}
+	m = <-s.in
+	if m.Category != CategoryHK {
+		t.Errorf("second rotation = %q, want hk (cold start)", m.Category)
+	}
+	// 全部 8 类目跑过一轮后(t 各记为 t0):未到任何间隔 → 不再入队。
+	for i := 0; i < 6; i++ {
+		s.maybeRotate()
+		if len(s.in) != 1 {
+			t.Fatalf("cold start fill %d: queue len = %d, want 1", i+3, len(s.in))
+		}
+		<-s.in
+	}
 	s.maybeRotate()
 	if len(s.in) != 0 {
-		t.Error("rotation should respect refresh interval")
+		t.Error("rotation should respect per-category intervals")
 	}
-	// 到间隔 → 下一类目 hk。
+	// 到行情间隔(1800s)→ a_share 首个到期。
 	clk.now = clk.now.Add(1801 * time.Second)
 	s.maybeRotate()
 	if len(s.in) != 1 {
 		t.Fatalf("queue len = %d, want 1 after interval", len(s.in))
 	}
-	m = <-s.in
-	if m.Category != CategoryHK {
-		t.Errorf("second rotation = %q, want hk", m.Category)
+	if m = <-s.in; m.Category != CategoryAShare {
+		t.Errorf("rotation after interval = %q, want a_share", m.Category)
 	}
 	// 队列有积压 → 不叠加。
 	s.in <- BuildMission(CategoryUS)
 	s.maybeRotate()
 	if len(s.in) != 1 {
 		t.Error("rotation should not stack when queue busy")
+	}
+}
+
+// TestScheduler_PerCategoryCadence 批次76 §五.6 分级调度:news 分钟级(600s)、
+// macro 日级(此处用 7200s 缩短用例)、行情类目统一间隔(1800s)各自独立计时。
+func TestScheduler_PerCategoryCadence(t *testing.T) {
+	clk := &fakeClock{now: time.Unix(1_700_000_000, 0)}
+	st := NewFeedStore(12, 20)
+	s := NewScheduler(SchedulerConfig{
+		RefreshSeconds:      1800,
+		NewsRefreshSeconds:  600,
+		MacroRefreshSeconds: 7200,
+		QueueCapacity:       8,
+	}, st, func(ctx context.Context, m Mission) (*MissionPayload, error) {
+		return &MissionPayload{Category: m.Category, Source: "s"}, nil
+	})
+	s.SetClock(clk.nowFunc(), clk.sleepFunc())
+	t0 := clk.now
+	// 冷启动:8 次 maybeRotate 逐类入队并排空,全部 lastRunAt = t0。
+	for i := 0; i < len(MissionCategories); i++ {
+		s.maybeRotate()
+		if len(s.in) != 1 {
+			t.Fatalf("cold start %d: queue len = %d, want 1", i, len(s.in))
+		}
+		<-s.in
+	}
+	// t0+599s:news 未到 600s,其余更久 → 无一到期。
+	clk.now = t0.Add(599 * time.Second)
+	s.maybeRotate()
+	if len(s.in) != 0 {
+		t.Error("nothing should be due at +599s")
+	}
+	// t0+601s:仅 news 到期。
+	clk.now = t0.Add(601 * time.Second)
+	s.maybeRotate()
+	if len(s.in) != 1 {
+		t.Fatalf("queue len = %d at +601s, want 1 (news)", len(s.in))
+	}
+	if m := <-s.in; m.Category != CategoryNews {
+		t.Errorf("due at +601s = %q, want news", m.Category)
+	}
+	// t0+1801s:行情类目到期,序首 a_share(news 刚跑过未到 600s)。
+	clk.now = t0.Add(1801 * time.Second)
+	s.maybeRotate()
+	if len(s.in) != 1 {
+		t.Fatalf("queue len = %d at +1801s, want 1", len(s.in))
+	}
+	if m := <-s.in; m.Category != CategoryAShare {
+		t.Errorf("due at +1801s = %q, want a_share", m.Category)
+	}
+	// 排空其余到期行情类目(同 tick 序内逐个)。
+	for {
+		s.maybeRotate()
+		if len(s.in) == 0 {
+			break
+		}
+		<-s.in
+	}
+	// t0+7201s:macro 到期(此前 news 又到期过也无妨,序扫描先遇 crypto 前
+	// 的到期行情类目——此处直接断言 macro 在到期集合内)。
+	clk.now = t0.Add(7201 * time.Second)
+	due := map[string]bool{}
+	for {
+		s.maybeRotate()
+		if len(s.in) == 0 {
+			break
+		}
+		m := <-s.in
+		due[m.Category] = true
+	}
+	if !due[CategoryMacro] {
+		t.Errorf("macro should be due at +7201s, due set = %v", due)
 	}
 }
 

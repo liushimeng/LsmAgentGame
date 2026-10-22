@@ -130,10 +130,15 @@ func (s *FeedStore) MergeMissionResult(now int64, p *MissionPayload) MergeStats 
 		}
 		cat.History[q.Symbol] = ring
 	}
-	if s.feed.Categories == nil {
-		s.feed.Categories = map[string]RealtimeCategory{}
+	// 批次76:纯新闻 mission(news 类目)quotes 为空 —— 不写入 Categories,
+	// 新闻统一走 Feed.News(契约 76 §2.1)。同理任一行情 mission 若全部
+	// 脏数据被丢弃,保留旧类目数据而非用空类目覆盖。
+	if len(cat.Quotes) > 0 {
+		if s.feed.Categories == nil {
+			s.feed.Categories = map[string]RealtimeCategory{}
+		}
+		s.feed.Categories[p.Category] = cat
 	}
-	s.feed.Categories[p.Category] = cat
 
 	// ── 新闻:去重 + 裁旧 ──
 	added := make([]RealtimeNews, 0, len(p.News))
@@ -152,6 +157,9 @@ func (s *FeedStore) MergeMissionResult(now int64, p *MissionPayload) MergeStats 
 		}
 		if n.Category == "" {
 			n.Category = p.Category
+		}
+		if n.Source == "" {
+			n.Source = p.Source // 批次76:Agent 常省略逐条来源,回填 mission 站点名。
 		}
 		if n.PublishedAt <= 0 {
 			n.PublishedAt = now

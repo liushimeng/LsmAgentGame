@@ -22,13 +22,13 @@ const realworldHeadlineCap = 3
 //   - op=quotes:全部类目(或指定 category)各前 5 条报价;
 //   - op=news:最近 10 条(或指定 category)。
 //
-// category 非空时必须是 6 类目之一。返回人读 JSON 文本。
+// category 非空时必须是 8 类目之一(批次76 起)。返回人读 JSON 文本。
 func FeedCompactJSON(f Feed, op, category string) (string, error) {
 	if op == "" {
 		op = "overview"
 	}
 	if category != "" && !IsMissionCategory(category) {
-		return "", fmt.Errorf("未知 category %q(须 a_share|hk|us|metal|futures|crypto)", category)
+		return "", fmt.Errorf("未知 category %q(须 a_share|hk|us|metal|futures|crypto|macro|news)", category)
 	}
 	switch op {
 	case "overview":

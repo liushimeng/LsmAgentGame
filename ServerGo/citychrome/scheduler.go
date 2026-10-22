@@ -1,13 +1,17 @@
 // Package citychrome — scheduler.go: 类目轮转调度 + 熔断退避 + 单飞任务队列
-// (契约 §3.6)。
+// (契约 §3.6;批次76 修订:单指针轮转 → 类目级分级调度)。
 //
-//   - 轮转:6 类目按 refresh_seconds 间隔轮转(news 随各类目 mission 顺带采集);
+//   - 轮转(批次76 §五.6 分级调度):8 类目各自独立计时,每 tick(5s)按
+//     MissionCategories 顺序取「距上次运行 ≥ 类目专属间隔」的首个类目入队;
+//     行情 6 类目共用 refresh_seconds(默认 1800s),news 分钟级
+//     (news_refresh_seconds,默认 600s),macro 日级(macro_refresh_seconds,
+//     默认 86400s)。冷启动时未运行过的类目视为到期,逐 tick 顺序补齐;
 //   - 单飞:全局同时只跑 1 个 mission(单 worker 串行队列),LLM 调用走 llmSema
 //     节流(Agent.acquireLLM);
 //   - 熔断:连续 3 次 mission 失败 ⇒ channel=offline + 指数退避
 //     (5m→10m→20m→封顶 30m),任一成功即复位 online;
 //   - 空闲降载:Hub 内无 virtual_city 房间 ⇒ 暂停自动轮转(HTTP 手动刷新仍可用);
-//   - 同站点 ≥10s 间隔纪律(契约 §6)。
+//   - 同站点 ≥10s 间隔纪律(契约 §6)。手动刷新不重置 lastRunAt(只受 60s 限流)。
 package citychrome
 
 import (
@@ -35,8 +39,10 @@ type MissionRunner func(ctx context.Context, m Mission) (*MissionPayload, error)
 
 // SchedulerConfig 是调度器参数。
 type SchedulerConfig struct {
-	RefreshSeconds int // 轮转间隔秒(默认 1800)
-	QueueCapacity  int // 任务队列容量(默认 8)
+	RefreshSeconds      int // 行情类目轮转间隔秒(默认 1800;批次76 起 6 行情类目各自独立计时)
+	NewsRefreshSeconds  int // news 类目轮转间隔秒(批次76;默认 600,分钟级)
+	MacroRefreshSeconds int // macro 类目轮转间隔秒(批次76;默认 86400,日级)
+	QueueCapacity       int // 任务队列容量(默认 8)
 }
 
 // Scheduler 是全局单飞任务队列 + 轮转 + 熔断退避。
@@ -55,10 +61,9 @@ type Scheduler struct {
 	in           chan Mission
 	stopCh       chan struct{}
 	stopped      bool
-	rotIdx       int
+	lastRunAt    map[string]time.Time // 类目 → 上次自动轮转入队时间(批次76:替代单指针 rotIdx/lastRotateAt)
 	fails        int
 	breakerUntil time.Time
-	lastRotateAt time.Time
 	lastSite     map[string]time.Time
 	running      bool
 }
@@ -68,20 +73,27 @@ func NewScheduler(cfg SchedulerConfig, store *FeedStore, runner MissionRunner) *
 	if cfg.RefreshSeconds <= 0 {
 		cfg.RefreshSeconds = 1800
 	}
+	if cfg.NewsRefreshSeconds <= 0 {
+		cfg.NewsRefreshSeconds = 600
+	}
+	if cfg.MacroRefreshSeconds <= 0 {
+		cfg.MacroRefreshSeconds = 86400
+	}
 	if cfg.QueueCapacity <= 0 {
 		cfg.QueueCapacity = 8
 	}
 	return &Scheduler{
-		cfg:      cfg,
-		store:    store,
-		runner:   runner,
-		healthy:  func(context.Context) bool { return true },
-		hasRooms: func() bool { return true },
-		now:      time.Now,
-		sleep:    time.Sleep,
-		in:       make(chan Mission, cfg.QueueCapacity),
-		stopCh:   make(chan struct{}),
-		lastSite: map[string]time.Time{},
+		cfg:       cfg,
+		store:     store,
+		runner:    runner,
+		healthy:   func(context.Context) bool { return true },
+		hasRooms:  func() bool { return true },
+		now:       time.Now,
+		sleep:     time.Sleep,
+		in:        make(chan Mission, cfg.QueueCapacity),
+		stopCh:    make(chan struct{}),
+		lastRunAt: map[string]time.Time{},
+		lastSite:  map[string]time.Time{},
 	}
 }
 
@@ -185,15 +197,48 @@ func (s *Scheduler) ConsecutiveFails() int {
 	return s.fails
 }
 
-// nextRotationCategory 返回当前轮转指针所指类目(不推进指针;手动刷新
-// category 缺省用)。Service.Refresh 调用。
+// categoryInterval 返回类目专属轮转间隔(批次76 §五.6 分级调度):
+// 行情 6 类目共用 RefreshSeconds;news/Macro 各自独立(默认 600s/86400s)。
+func (s *Scheduler) categoryInterval(cat string) time.Duration {
+	sec := s.cfg.RefreshSeconds
+	switch cat {
+	case CategoryNews:
+		sec = s.cfg.NewsRefreshSeconds
+	case CategoryMacro:
+		sec = s.cfg.MacroRefreshSeconds
+	}
+	return time.Duration(sec) * time.Second
+}
+
+// nextRotationCategory 返回下一个到期类目(不推进计时;手动刷新 category 缺省
+// 用)。未运行过的类目视为到期;全部未到期时回退 MissionCategories[0]。
+// Service.Refresh 调用。
 func (s *Scheduler) nextRotationCategory() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return MissionCategories[s.rotIdx%len(MissionCategories)]
+	if cat, ok := s.dueCategoryLocked(); ok {
+		return cat
+	}
+	return MissionCategories[0]
 }
 
-// maybeRotate 自动轮转:空闲降载 / 熔断 / 未到间隔 / 已有积压时跳过。
+// dueCategoryLocked 扫描首个到期类目(须持 s.mu;不修改状态)。
+// 冷启动语义:lastRunAt 无记录 = 从未运行 = 立即到期,按序补齐。
+// ok=false 表示当前无类目到期 —— maybeRotate 必须据此跳过,否则会每 tick
+// 强制入队同一类目(批次76 踩坑:回退值被误当成到期结果 ⇒ 死循环)。
+func (s *Scheduler) dueCategoryLocked() (string, bool) {
+	for _, cat := range MissionCategories {
+		last, ok := s.lastRunAt[cat]
+		if !ok || s.now().Sub(last) >= s.categoryInterval(cat) {
+			return cat, true
+		}
+	}
+	return "", false
+}
+
+// maybeRotate 自动轮转(批次76:类目级分级调度):每 tick 至多入队 1 个到期
+// 类目(按 MissionCategories 顺序取首个)。空闲降载 / 熔断 / 已有积压时跳过。
+// 入队即记 lastRunAt(入队失败也记 —— 下个间隔再试,避免热循环重试打爆队列)。
 func (s *Scheduler) maybeRotate() {
 	s.mu.Lock()
 	if s.stopped {
@@ -212,19 +257,17 @@ func (s *Scheduler) maybeRotate() {
 		s.mu.Unlock()
 		return // 空闲降载:无 virtual_city 房间。
 	}
-	interval := time.Duration(s.cfg.RefreshSeconds) * time.Second
-	if s.lastRotateAt.IsZero() || s.now().Sub(s.lastRotateAt) >= interval {
-		cat := MissionCategories[s.rotIdx%len(MissionCategories)]
-		s.rotIdx++
-		s.lastRotateAt = s.now()
+	cat, due := s.dueCategoryLocked()
+	if !due {
 		s.mu.Unlock()
-		logger.L().Info("citychrome rotate mission", zap.String("category", cat))
-		if err := s.Enqueue(BuildMission(cat)); err != nil {
-			logger.L().Warn("citychrome enqueue rotated mission failed", zap.Error(err))
-		}
-		return
+		return // 无类目到期(批次76:必须跳过,不得回退首个类目)。
 	}
+	s.lastRunAt[cat] = s.now()
 	s.mu.Unlock()
+	logger.L().Info("citychrome rotate mission", zap.String("category", cat))
+	if err := s.Enqueue(BuildMission(cat)); err != nil {
+		logger.L().Warn("citychrome enqueue rotated mission failed", zap.Error(err))
+	}
 }
 
 // execute 执行单飞 mission:同站点间隔纪律 → 健康探测 → runner →

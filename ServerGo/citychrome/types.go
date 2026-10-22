@@ -14,7 +14,8 @@
 //   - 广播出口为 listener 注入(OnFeed),本包不得 import ws(防反向依赖)。
 package citychrome
 
-// 类目常量(契约 §3.2)。前 6 个为轮转 mission 类目;general 仅用于综合新闻。
+// 类目常量(契约 §3.2;批次76 修订:mission 类目 6→8)。
+// 前 8 个为轮转 mission 类目;general 仅用于综合新闻。
 const (
 	CategoryAShare  = "a_share"
 	CategoryHK      = "hk"
@@ -22,17 +23,20 @@ const (
 	CategoryMetal   = "metal"
 	CategoryFutures = "futures"
 	CategoryCrypto  = "crypto"
+	CategoryMacro   = "macro"
+	CategoryNews    = "news"
 	CategoryGeneral = "general"
 )
 
-// MissionCategories 是调度器轮转的 6 个类目(契约 §3.6:a_share→hk→us→
-// metal→futures→crypto→回卷)。
+// MissionCategories 是调度器轮转的 8 个类目(契约 §3.6,批次76 修订:
+// a_share→hk→us→metal→futures→crypto→macro→news→回卷)。
 var MissionCategories = []string{
-	CategoryAShare, CategoryHK, CategoryUS, CategoryMetal, CategoryFutures, CategoryCrypto,
+	CategoryAShare, CategoryHK, CategoryUS, CategoryMetal, CategoryFutures,
+	CategoryCrypto, CategoryMacro, CategoryNews,
 }
 
-// IsMissionCategory 报告 s 是否是 6 个轮转类目之一(web_done payload / HTTP
-// refresh 的 category 只允许这 6 个;general 不是有效 mission 类目)。
+// IsMissionCategory 报告 s 是否是 8 个轮转类目之一(web_done payload / HTTP
+// refresh 的 category 只允许这 8 个;general 不是有效 mission 类目)。
 func IsMissionCategory(s string) bool {
 	for _, c := range MissionCategories {
 		if c == s {
@@ -88,7 +92,7 @@ type ChannelStatus struct {
 type Feed struct {
 	Channel    ChannelStatus               `json:"channel"`
 	UpdatedAt  int64                       `json:"updated_at"` // Unix 秒(最近合并时间)
-	Categories map[string]RealtimeCategory `json:"categories"` // key: 6 类目
+	Categories map[string]RealtimeCategory `json:"categories"` // key: 7 行情类目(6 行情 + macro;news 纯新闻不走此键,见批次76 §2.1)
 	News       []RealtimeNews              `json:"news"`       // ≤ news_limit,新→旧
 }
 
@@ -109,7 +113,7 @@ type SiteInfo struct {
 
 // Mission 是一次采集任务(契约 §3.4)。
 type Mission struct {
-	Category  string     `json:"category"`   // 6 类目之一
+	Category  string     `json:"category"`   // 8 类目之一
 	TargetURL string     `json:"target_url"` // 首选站点 URL(Sites[0])
 	Sites     []SiteInfo `json:"sites"`      // 备选源(3-5 个)
 	Goal      string     `json:"goal"`       // 采集目标描述

@@ -63,7 +63,9 @@ func Start(cfg config.CityChromeConfig, reg LLMRegistry) *Service {
 		zap.Bool("enabled", cfg.Enabled),
 		zap.String("debug_tool_url", cfg.DebugToolURL),
 		zap.String("model_key", cfg.ModelKey),
-		zap.Int("refresh_seconds", cfg.RefreshSeconds))
+		zap.Int("refresh_seconds", cfg.RefreshSeconds),
+		zap.Int("news_refresh_seconds", cfg.NewsRefreshSeconds),
+		zap.Int("macro_refresh_seconds", cfg.MacroRefreshSeconds))
 	if cfg.Enabled {
 		go svc.sched.Run()
 	}
@@ -125,7 +127,9 @@ func newService(cfg config.CityChromeConfig, reg LLMRegistry) *Service {
 		}
 	})
 	svc.sched = NewScheduler(SchedulerConfig{
-		RefreshSeconds: cfg.RefreshSeconds,
+		RefreshSeconds:      cfg.RefreshSeconds,
+		NewsRefreshSeconds:  cfg.NewsRefreshSeconds,
+		MacroRefreshSeconds: cfg.MacroRefreshSeconds,
 	}, svc.store, svc.agent.RunMission)
 	svc.sched.SetHealthProbe(svc.client.Healthy)
 	svc.sched.SetNotify(svc.emitFanout)
@@ -217,7 +221,7 @@ func (s *Service) Refresh(category string) (bool, string, *errcode.Error) {
 	}
 	if !IsMissionCategory(category) {
 		return false, "", errcode.CodeMsg(errcode.ErrValidationFailed,
-			fmt.Sprintf("未知 category %q(须 a_share|hk|us|metal|futures|crypto)", category))
+			fmt.Sprintf("未知 category %q(须 a_share|hk|us|metal|futures|crypto|macro|news)", category))
 	}
 	s.refreshMu.Lock()
 	now := s.refreshNow()

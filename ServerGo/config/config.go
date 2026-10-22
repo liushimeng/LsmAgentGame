@@ -711,8 +711,12 @@ type CityChromeConfig struct {
 	AuthToken string `json:"auth_token"`
 	// ModelKey City-Chrome Agent 的 LLM 模型 key(registry.Get)。
 	ModelKey string `json:"model_key"`
-	// RefreshSeconds 6 类目轮转间隔秒(默认 1800)。
+	// RefreshSeconds 行情类目轮转间隔秒(默认 1800;批次76 起 6 行情类目各自独立计时)。
 	RefreshSeconds int `json:"refresh_seconds"`
+	// NewsRefreshSeconds news 类目轮转间隔秒(批次76 §五.6;默认 600,下限 60)。
+	NewsRefreshSeconds int `json:"news_refresh_seconds"`
+	// MacroRefreshSeconds macro 类目轮转间隔秒(批次76 §五.6;默认 86400,下限 3600)。
+	MacroRefreshSeconds int `json:"macro_refresh_seconds"`
 	// MaxStepsPerMission 单 mission 步数上限(默认 14)。
 	MaxStepsPerMission int `json:"max_steps_per_mission"`
 	// SymbolsPerCategory 单类目报价条数上限(默认 12)。
@@ -1368,6 +1372,19 @@ func applyDefaults(c *Config) {
 	}
 	if c.CityChrome.RefreshSeconds < 60 {
 		c.CityChrome.RefreshSeconds = 60
+	}
+	// 批次76 §五.6 分级调度:news 分钟级 / macro 日级(独立计时,0=默认)。
+	if c.CityChrome.NewsRefreshSeconds == 0 {
+		c.CityChrome.NewsRefreshSeconds = 600
+	}
+	if c.CityChrome.NewsRefreshSeconds < 60 {
+		c.CityChrome.NewsRefreshSeconds = 60
+	}
+	if c.CityChrome.MacroRefreshSeconds == 0 {
+		c.CityChrome.MacroRefreshSeconds = 86400
+	}
+	if c.CityChrome.MacroRefreshSeconds < 3600 {
+		c.CityChrome.MacroRefreshSeconds = 3600
 	}
 	if c.CityChrome.MaxStepsPerMission == 0 {
 		c.CityChrome.MaxStepsPerMission = 14
