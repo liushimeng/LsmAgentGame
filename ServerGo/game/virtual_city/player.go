@@ -300,6 +300,9 @@ type Player struct {
 	// P1: 真实经济循环(2026-09-16 §财商流P1-2 契约 §3.1)。
 	ConsumptionLevel   int                // 0 节俭/1 标准/2 精致/3 奢侈;默认 1(newPlayerFromCard 显式置 1)
 	ConsumptionByGoods map[string]float64 // 上月消费结构(元,id→金额;nil=未初始化,视为档位 1)
+	// ConsumptionLevelForced 批次74:档位 0 由**引擎强制**(新手期/储备不足/失业期)
+	// 而非玩家选择;条件解除后据此恢复 1 并清标记(方案 §3.4)。不参与 JSON 下发。
+	ConsumptionLevelForced bool `json:"-"`
 
 	// P1-4: 商业保险保单(2026-09-19 §财商流P1-4 §2.2)。key=kind;nil=从未投保。
 	Policies map[string]*Policy `json:"-"`

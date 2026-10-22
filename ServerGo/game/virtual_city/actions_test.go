@@ -12,7 +12,9 @@ import (
 func TestActions_BuySellStock(t *testing.T) {
 	w := NewWorld(1, [MaxSeats]profession.Card{{ID: "P09"}})
 	w.Players[0] = newPlayerFromCard(0, w.Players[0].Card)
-	w.Players[0].Cash = 100000
+	// 批次74:生效初始现金由卡面 Savings 决定(StartGame 写回 Cash)⇒ 夹具
+	// 金额走 Savings(100,000 为整千,ceil_1000 后不变)。
+	w.Players[0].Card.Savings = 100000
 	w.StartGame()
 	w.Month = 1
 
@@ -62,7 +64,8 @@ func TestActions_BuySellStock(t *testing.T) {
 func TestActions_Study(t *testing.T) {
 	w := NewWorld(1, [MaxSeats]profession.Card{{ID: "P05"}})
 	w.Players[0] = newPlayerFromCard(0, w.Players[0].Card)
-	w.Players[0].Cash = 5000
+	// 批次74:夹具金额走卡面 Savings(生效初始现金,StartGame 写回 Cash)。
+	w.Players[0].Card.Savings = 5000
 	w.Players[0].Energy = 5
 	w.Players[0].Cognition = 3
 	w.StartGame()
@@ -151,7 +154,8 @@ func TestActions_BudgetExhausted(t *testing.T) {
 func TestActions_BondLockRate(t *testing.T) {
 	w := NewWorld(1, [MaxSeats]profession.Card{{ID: "P05"}})
 	w.Players[0] = newPlayerFromCard(0, w.Players[0].Card)
-	w.Players[0].Cash = 100000
+	// 批次74:夹具金额走卡面 Savings(生效初始现金,StartGame 写回 Cash)。
+	w.Players[0].Card.Savings = 100000
 	w.StartGame()
 	w.Market.CyclePhase = PhaseBoom
 	_, err := w.ApplyAction(0, Action{Type: ActBuyAsset, Asset: AssetBond, AmountCNY: 1000})

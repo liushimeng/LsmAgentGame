@@ -226,6 +226,18 @@ type World struct {
 	// false 时月结零接线 + 家庭工具拒绝(35045)+ 遗产不分配(回滚阀,§5)。
 	FamilyEnabled bool
 
+	// ── 批次74(2026-10-22 §P0经济平衡v2第一步「只救命」)──
+	// BalanceV2Enabled 总开关(NewWorld 默认 true;false = 批次73 旧口径逐字段
+	// 一致 —— 初始现金/基础租/节俭档/失业救济/hazard 全部走旧公式)。
+	// 五项杠杆的常量与纯函数见 balance_v2.go;MCOverride 可成对 A/B。
+	BalanceV2Enabled bool
+	// BasicRentRate 基础租占家庭常规月收入比(默认 0.25;敏感度 0.20/0.30)。
+	BasicRentRate float64
+	// StartCashMonths 生效初始现金 = 生存核心 × 月数(默认 6;敏感度 3/9)。
+	StartCashMonths int
+	// FrugalMonths 新手节俭档强制月数(默认 6;敏感度 3/12)。
+	FrugalMonths int
+
 	// InheritanceLog 遗产分配日志(批次52 §4 裁决 D15:最近 5 条;ToSeats 恒空 =
 	// 板外继承,裁决 D6/D7)。view 层降序下发。
 	InheritanceLog []InheritanceEvent
@@ -313,8 +325,13 @@ func NewWorld(seed int64, cards [MaxSeats]profession.Card) *World {
 		InsuranceEnabled: true,
 		// 批次52(§5):代际财富转移引擎默认开启(family_enabled;false 回滚阀)。
 		FamilyEnabled: true,
-		Goods:         NewGoodsMarket(),
-		Labor:         NewFirmSector(),
+		// 批次74:P0 经济平衡 v2 默认开启(常量口径;false = 批次73 旧口径)。
+		BalanceV2Enabled: true,
+		BasicRentRate:    BasicRentDefaultRate,
+		StartCashMonths:  StartCashMonthsDefault,
+		FrugalMonths:     FrugalMonthsDefault,
+		Goods:            NewGoodsMarket(),
+		Labor:            NewFirmSector(),
 		// 阶段7: 社会结构指标 24 月环形历史(2026-09-21 §城市扩张v2.12)。
 		SocietyHist: &SocietyHistory{},
 		// 阶段5: 产业链 15 节点 + 产业集群 6 集群(2026-09-21 §城市扩张v2.12)。
@@ -392,8 +409,13 @@ func newPlayerFromCard(seat int, card profession.Card) *Player {
 	return p
 }
 
-// StartGame 开局:状态切 playing + 初始注入 Ledger(world→seat = 卡面 Savings,I2)。
+// StartGame 开局:状态切 playing + 初始注入 Ledger(world→seat,金额见下,I2)。
 // 由房间层在发卡完成后调用一次。
+//
+// 批次74:BalanceV2Enabled 时注入金额 = **生效初始现金**
+// (ceil_1000(max(card.Savings, StartCashMonths × SurvivalCore)),方案 §3.2),
+// 同时写 p.Card.Savings 与 p.Cash;高储蓄卡只向上取整不削减(保留阶层差异)。
+// false ⇒ 与批次73 逐字段一致(金额 = 卡面 Savings)。
 func (w *World) StartGame() {
 	w.Status = StatusPlaying
 	for seat, p := range w.Players {
@@ -403,9 +425,15 @@ func (w *World) StartGame() {
 		p.ActionBudget = monthlyActionBudget
 		p.Submitted = false
 		p.SpeakCountThisMonth = 0
-		if p.Card.Savings > 0 {
+		injection := p.Card.Savings
+		if w.BalanceV2Enabled {
+			injection = w.effectiveStartCash(p)
+			p.Card.Savings = injection
+			p.Cash = injection
+		}
+		if injection > 0 {
 			// 直接 Record(不走 Pay:注入即初始现金,不产生增量)。
-			w.Ledger.Record(0, EntityWorld, SeatEntity(seat), p.Card.Savings, CatInject,
+			w.Ledger.Record(0, EntityWorld, SeatEntity(seat), injection, CatInject,
 				"初始储蓄注入 "+p.Card.ID)
 		}
 	}

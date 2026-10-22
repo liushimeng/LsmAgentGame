@@ -118,15 +118,17 @@ func TestOffLedgerBook_RegisterSites(t *testing.T) {
 			hits = append(hits, hit{file: name, line: i + 1, source: trimmed})
 		}
 	}
-	// 命中数固定为 6(4 处真账外 + 1 处假账外 + 1 处批次73 MCOverride
-	// 开局缩放):mc_ab.go::apply 在 **StartGame 之前** 同比例缩放
-	// p.Cash 与 p.Card.Savings ⇒ StartGame 的 Ledger 初始注入同比例,
-	// I1 由构造保持(cash == inject)⇒ **不可** offLedgerRecord 登记
-	// (登记反而使 I1 = −delta ≠ 0)。
-	if len(hits) != 6 {
-		t.Fatalf("直接写 p.Cash 的位置 = %d 处,期望 6 处:\n%v", len(hits), hits)
+	// 命中数固定为 7(4 处真账外 + 1 处假账外 + 1 处批次73 MCOverride
+	// 开局缩放 + 1 处批次74 生效初始现金):mc_ab.go::apply 在 **StartGame
+	// 之前** 同比例缩放 p.Cash 与 p.Card.Savings ⇒ StartGame 的 Ledger 初始
+	// 注入同比例,I1 由构造保持(cash == inject)⇒ **不可** offLedgerRecord
+	// 登记(登记反而使 I1 = −delta ≠ 0)。engine.go::StartGame 的
+	// `p.Cash = injection` 同属「开局注入」类:紧随其后的唯一一笔
+	// Ledger.Record(CatInject)金额与之相等 ⇒ I1/I2 由构造保持,同样不登记。
+	if len(hits) != 7 {
+		t.Fatalf("直接写 p.Cash 的位置 = %d 处,期望 7 处:\n%v", len(hits), hits)
 	}
-	wantFiles := map[string]int{"actions.go": 2, "scenario.go": 1, "family.go": 1, "bias.go": 1, "mc_ab.go": 1}
+	wantFiles := map[string]int{"actions.go": 2, "scenario.go": 1, "family.go": 1, "bias.go": 1, "mc_ab.go": 1, "engine.go": 1}
 	gotFiles := map[string]int{}
 	for _, h := range hits {
 		gotFiles[h.file]++
@@ -136,10 +138,11 @@ func TestOffLedgerBook_RegisterSites(t *testing.T) {
 			t.Errorf("%s 命中 %d 处,期望 %d 处", f, gotFiles[f], n)
 		}
 	}
-	// 每处命中都必须在 ±8 行内出现 offLedgerRecord 登记(批次73 豁免:
-	// mc_ab.go 开局缩放与注入同比例,I1 由构造保持,登记反而破坏 I1)。
+	// 每处命中都必须在 ±8 行内出现 offLedgerRecord 登记(批次73/74 豁免:
+	// mc_ab.go 开局缩放与注入同比例、engine.go 开局注入与 CatInject 记账等额,
+	// 两者 I1 均由构造保持,登记反而破坏 I1)。
 	for _, h := range hits {
-		if h.file == "mc_ab.go" {
+		if h.file == "mc_ab.go" || h.file == "engine.go" {
 			continue
 		}
 		raw, err := os.ReadFile(h.file)
@@ -620,8 +623,12 @@ func TestCalibration_FinalizeRun(t *testing.T) {
 // TestAudit_NoRegressionOnExistingWorlds 固定种子对局在新增审计接线后
 // **指标零偏移**(方案 §10.1 B13)。
 //
-// ⚠ 金标值取自**批次 71 之前**的代码(git HEAD 4e951b254e 的独立
-// worktree 跑同一探针取得),逐字节一致 ⇒ 审计接线未移动任何模拟行为。
+// ⚠ 金标值**批次 74 经济校准后重取**(P0 经济平衡 v2 第一步成为默认口径:
+// 生效初始现金 / 基础租 / 新手节俭档 / 失业救济 v2 / hazard v2 全部生效);
+// 旧口径由 balance_v2_test.go::TestBalanceV2_T6_LegacyRegression 钉死
+// (BalanceV2Enabled=false 与批次 73 行为逐字段一致)。重取前的批次 71 金标
+// (账本 537 条 / 逐座 cash·nw / 股指 4.650379528164 / 金价 687.307086582964 /
+// 国库 5,211,215)仍可在 git 历史中查得,用于验证「新口径 = 有意变更」。
 func TestAudit_NoRegressionOnExistingWorlds(t *testing.T) {
 	w := calibTestWorld(42, 6)
 	calibSettleMonths(w, 24)
@@ -629,8 +636,8 @@ func TestAudit_NoRegressionOnExistingWorlds(t *testing.T) {
 	if w.Month != 25 {
 		t.Errorf("month = %d,期望 25", w.Month)
 	}
-	if got := len(w.Ledger.Entries); got != 537 {
-		t.Errorf("账本条目数 = %d,期望 537", got)
+	if got := len(w.Ledger.Entries); got != 894 {
+		t.Errorf("账本条目数 = %d,期望 894", got)
 	}
 	type seatGold struct {
 		cash  int64
@@ -639,12 +646,12 @@ func TestAudit_NoRegressionOnExistingWorlds(t *testing.T) {
 		end   string
 	}
 	gold := []seatGold{
-		{cash: -22724, nw: -22724, alive: false, end: "bankrupt"},
-		{cash: -4487, nw: 2102, alive: false, end: "bankrupt"},
-		{cash: -14664, nw: -782, alive: false, end: "bankrupt"},
-		{cash: 72325, nw: 114917, alive: true, end: ""},
-		{cash: -14185, nw: 23617, alive: false, end: "bankrupt"},
-		{cash: 48146, nw: 72161, alive: true, end: ""},
+		{cash: 8146, nw: 17590, alive: true, end: ""},
+		{cash: 29956, nw: 40551, alive: true, end: ""},
+		{cash: 118430, nw: 149738, alive: true, end: ""},
+		{cash: 217919, nw: 269231, alive: true, end: ""},
+		{cash: 116631, nw: 169415, alive: true, end: ""},
+		{cash: 87522, nw: 112782, alive: true, end: ""},
 	}
 	for seat, g := range gold {
 		p := w.Players[seat]
@@ -665,14 +672,14 @@ func TestAudit_NoRegressionOnExistingWorlds(t *testing.T) {
 		}
 	}
 	// 浮点金标:容差 1e-9(远严于任何行为漂移,又避开末位表示噪声)。
-	if got := w.Market.StockIndex; math.Abs(got-4.650379528164) > 1e-9 {
-		t.Errorf("股指 = %v,期望 ≈4.650379528164", got)
+	if got := w.Market.StockIndex; math.Abs(got-5.181038406292) > 1e-9 {
+		t.Errorf("股指 = %v,期望 ≈5.181038406292", got)
 	}
-	if got := w.Market.GoldPrice; math.Abs(got-687.307086582964) > 1e-9 {
-		t.Errorf("金价 = %v,期望 ≈687.307086582964", got)
+	if got := w.Market.GoldPrice; math.Abs(got-716.889633304304) > 1e-9 {
+		t.Errorf("金价 = %v,期望 ≈716.889633304304", got)
 	}
-	if got := w.Treasury.Cash; got != 5211215 {
-		t.Errorf("国库现金 = %d,期望 5211215", got)
+	if got := w.Treasury.Cash; got != 5184498 {
+		t.Errorf("国库现金 = %d,期望 5184498", got)
 	}
 }
 

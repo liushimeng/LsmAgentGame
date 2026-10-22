@@ -22,6 +22,15 @@ func treasuryWorld(seed int64, n int) *World {
 	return w
 }
 
+// legacyPayWorld 批次74:失业救济**旧公式**(等待期 + >12 月衰减)测试夹具 ——
+// 关闭 BalanceV2 开关(v2 = clamp(0.5×SalaryBase, 1800, 8000)、无等待期无衰减,
+// 由 balance_v2_test.go T3 覆盖)。
+func legacyPayWorld() *World {
+	w := treasuryWorld(3, 1)
+	w.BalanceV2Enabled = false
+	return w
+}
+
 // 1. TestTreasuryInitialState 初始国库:现金 500 万,无国债,无历史,聚合器非 nil。
 func TestTreasuryInitialState(t *testing.T) {
 	tr := NewTreasury()
@@ -102,7 +111,7 @@ func TestTreasuryCollectTax(t *testing.T) {
 // 第 1/2/3 个失业月(预置 0/1/2 → 计发时 1/2/3)待遇为 0。
 func TestTransferUnemployment_WaitingPeriod(t *testing.T) {
 	for pre := 0; pre < UnemploymentWaitMonths; pre++ {
-		w := treasuryWorld(3, 1)
+		w := legacyPayWorld()
 		p := w.Players[0]
 		p.UnemployedMonths = 4 // 仍处失业期
 		p.UnemployedAccumMonths = pre
@@ -118,7 +127,7 @@ func TestTransferUnemployment_WaitingPeriod(t *testing.T) {
 		}
 	}
 	// 在职玩家:不累计不计发。
-	w := treasuryWorld(3, 1)
+	w := legacyPayWorld()
 	p := w.Players[0]
 	p.UnemployedMonths = 0
 	if got := w.Treasury.payUnemployment(w, p); got != 0 {
@@ -135,7 +144,7 @@ func TestTransferUnemployment_DecayAndFullBand(t *testing.T) {
 	full := int64(1000) // 基本生活成本 2000 × 50%(+0.5 截断)
 	// 第 4–12 个失业月:全额 1000(预置 3/7/11 → 计发时 4/8/12,抽样首尾)。
 	for pre := range map[int]bool{3: true, 7: true, 11: true} {
-		w := treasuryWorld(3, 1)
+		w := legacyPayWorld()
 		p := w.Players[0]
 		p.UnemployedMonths = 2
 		p.UnemployedAccumMonths = pre
@@ -145,7 +154,7 @@ func TestTransferUnemployment_DecayAndFullBand(t *testing.T) {
 	}
 	// 第 13/14 个失业月(>12):递减 0.7 → 700。
 	for pre := UnemploymentDecayFrom; pre <= UnemploymentDecayFrom+1; pre++ {
-		w := treasuryWorld(3, 1)
+		w := legacyPayWorld()
 		p := w.Players[0]
 		p.UnemployedMonths = 2
 		p.UnemployedAccumMonths = pre
@@ -155,7 +164,7 @@ func TestTransferUnemployment_DecayAndFullBand(t *testing.T) {
 		}
 	}
 	// 累计计数推进:仍失业 → accum+1。
-	w := treasuryWorld(3, 1)
+	w := legacyPayWorld()
 	p := w.Players[0]
 	p.UnemployedMonths = 5
 	p.UnemployedAccumMonths = 4

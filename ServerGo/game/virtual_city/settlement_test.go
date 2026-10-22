@@ -221,6 +221,9 @@ func TestSettle_ForcedDowngrade(t *testing.T) {
 	w.Players[0].Cash = 0                                           // < 2×baseline → 触发强制降档
 	w.Players[0].Family.Marital = "single"
 	w.Players[0].Card.EldersDependent = 0
+	// 批次74:本测试钉的是**旧口径**的粘滞强制降档(Cash < 2×baseline → 0 档
+	// 且永不恢复);新口径(新手期/储备/失业)由 balance_v2_test.go T5 覆盖。
+	w.BalanceV2Enabled = false
 	w.StartGame()
 
 	eventsBefore := len(w.Events)
@@ -268,6 +271,9 @@ func TestSettle_EconomyDisabledFallback(t *testing.T) {
 			w.Players[s] = newPlayerFromCard(s, synthCard(s, 200000))
 		}
 		w.EconomyEnabled = economy
+		// 批次74:本测试钉的是 economy_enabled=false 的 **P0 口径**(living = 卡面
+		// Expense×infl,档位 1);关闭 BalanceV2 保持原断言(旧口径回归,T6 同源)。
+		w.BalanceV2Enabled = false
 		w.StartGame()
 		return w
 	}
@@ -426,6 +432,9 @@ func TestSettle_SidePricingZeroOffset_Golden(t *testing.T) {
 	for s := 0; s < 2; s++ {
 		w.Players[s] = newPlayerFromCard(s, synthCard(s, 200000))
 	}
+	// 批次74:副业定价零偏移金标取自批次20/62 代码,须在旧经济口径下复现
+	// (新口径会改初始现金/房租/节俭档);关 v2 开关保持金标逐分不差。
+	w.BalanceV2Enabled = false
 	w.StartGame()
 	// PriceTier 零值 = 中价;两人不同品类 → sideMarketShares 全部独占 s=1.0。
 	w.Players[0].SideBusiness = &SideBusiness{Kind: "delivery", BaseIncome: 3250, OpenedMonth: w.Month}

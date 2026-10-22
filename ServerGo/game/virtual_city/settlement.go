@@ -514,7 +514,13 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 
 	// ── 步骤3 固定支出:房租(未自住)+ 物业 500(有房者)先扣;贷款月供允许逾期。
 	if p.selfOccupiedHouse() == nil {
+		// 批次74(方案 §3.3.1):租房支出改「基础住房租金」——
+		// min(市场租, clamp(25% × 家庭常规收入, 1800, 12000));随当月市场价动态
+		// 计算。步骤 2 的投资房租金收入不受影响;自住房仍免租。false = 旧口径。
 		rentPay := w.Market.HouseRent(p.HomeDistrict)
+		if w.BalanceV2Enabled {
+			rentPay = w.basicRent(p)
+		}
 		if rentPay > 0 {
 			w.Pay(seat, SeatEntity(seat), w.consumerPayTo(), rentPay, CatRentPay, "房租")
 			addExpense(rentPay, "rent_pay", "房租")
@@ -577,13 +583,37 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 	if p.ConsumptionByGoods == nil {
 		level = 1 // 存量兜底:map 未初始化视为标准档(与 ConsumptionLevelSafe 双保险)
 	}
-	// 强制降档(流动性约束,P1 新定):现金 < 2×月生活支出基准(不含档位乘数)
-	// → 强制降为 0 档(节俭)。
-	baseline := int64(float64(p.Card.Expense)*infl + 0.5)
-	if p.Cash < 2*baseline && level != 0 {
-		p.ConsumptionLevel = 0
-		level = 0
-		w.emitEvent("life", seat, fmt.Sprintf("%d 号位现金不足,本月强制节俭档(生活支出×0.6)", seat))
+	// 批次74(方案 §3.4):新手默认节俭档。以下任一 ⇒ 引擎强制 0 档(×0.6):
+	//  ① w.Month ≤ FrugalMonths;② 流动性储备 < 6×SurvivalCore;③ 失业期。
+	// 仅**引擎强制置 0**时记 ConsumptionLevelForced;条件解除且 Forced 为真 ⇒
+	// 恢复 1 并清标记。玩家/Agent 显式 set_consumption_level 的档位在非强制
+	// 条件下不被改写(显式选 0 也不会被「恢复 1」覆盖 —— 那时 Forced 恒 false)。
+	// false = 批次73 旧口径(现金 < 2×基准 → 置 0 且永不恢复的粘滞行为原样保留)。
+	if w.BalanceV2Enabled {
+		if w.forcedFrugal(p) {
+			level = 0
+			// 只在**引擎改写**档位时打标记:玩家本就显式选 0 档 ⇒ 不标记,
+			// 条件解除后也不得被「恢复 1」覆盖(显式选择优先)。
+			if p.ConsumptionLevel != 0 {
+				p.ConsumptionLevel = 0
+				p.ConsumptionLevelForced = true
+				w.emitEvent("life", seat, fmt.Sprintf("%d 号位生存储备不足,本月强制节俭档(生活支出×0.6)", seat))
+			}
+		} else if p.ConsumptionLevelForced {
+			p.ConsumptionLevel = 1
+			p.ConsumptionLevelForced = false
+			level = 1
+			w.emitEvent("life", seat, fmt.Sprintf("%d 号位生存储备达标,消费档位恢复标准档", seat))
+		}
+	} else {
+		// 强制降档(流动性约束,P1 新定):现金 < 2×月生活支出基准(不含档位乘数)
+		// → 强制降为 0 档(节俭)。
+		baseline := int64(float64(p.Card.Expense)*infl + 0.5)
+		if p.Cash < 2*baseline && level != 0 {
+			p.ConsumptionLevel = 0
+			level = 0
+			w.emitEvent("life", seat, fmt.Sprintf("%d 号位现金不足,本月强制节俭档(生活支出×0.6)", seat))
+		}
 	}
 	living := int64(float64(p.Card.Expense)*infl*consumptionLevelMult[level] + 0.5)
 	if living > 0 {

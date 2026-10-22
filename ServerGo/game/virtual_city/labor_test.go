@@ -28,6 +28,10 @@ func laborWorld(seed int64, n int) *World {
 	// 意外事件 rand 消费会平移固定种子轨迹,破坏 §10.2 单调性标定(§12 契约:
 	// insurance_enabled=false 时 rand 序列零偏移,等价 P1-4 前行为)。
 	w.InsuranceEnabled = false
+	// 批次74:本文件钉的是劳动力市场传导机制本身(消费骤降 → 营收 → 失业的
+	// 负反馈)。新经济口径 M1–M6 强制节俭档会让「基线」与「骤降」同处 0 档,
+	// 抹平被测量;关闭 BalanceV2 保持旧口径(机制断言不变)。
+	w.BalanceV2Enabled = false
 	w.StartGame()
 	return w
 }

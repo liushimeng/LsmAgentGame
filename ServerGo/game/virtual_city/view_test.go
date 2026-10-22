@@ -15,6 +15,9 @@ func TestBuildClientState_Desensitization(t *testing.T) {
 	w.Players[0].Cash = 10000
 	w.Players[1] = newPlayerFromCard(1, w.Players[1].Card)
 	w.Players[1].Cash = 20000
+	// 批次74:本测试钉的是 view 反脱敏(My 只给自己),与经济学口径无关;
+	// 关 v2 开关避免 StartGame 的生效初始现金覆盖夹具现金。
+	w.BalanceV2Enabled = false
 	w.StartGame()
 	// 给 bot_contexts 注入测试内容(2026-09-22 §17 契约 03 §4:夹具改内联卡面)。
 	w.Players[0].Card = profession.Card{

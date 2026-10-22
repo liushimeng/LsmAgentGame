@@ -338,6 +338,9 @@ func settleSideCase(t *testing.T, kind string, tier int, cog int) (int64, int, s
 	p := newPlayerFromCard(0, profession.Card{ID: "S", Savings: 500000, Salary: 20000, Expense: 5000, Energy: 9, Cognition: cog})
 	w.Players[0] = p
 	p.SideBusiness = &SideBusiness{Kind: kind, BaseIncome: 4000, OpenedMonth: 1, PriceTier: tier}
+	// 批次74:本测试钉副业档位倍率/精力效果本身,须在旧经济口径下比较
+	// (新口径 M1–M6 强制节俭档会改档位精力项);关 v2 开关保持原断言。
+	w.BalanceV2Enabled = false
 	w.StartGame()
 	p.Energy = 9
 	w.settlePlayer(p, 30, sideMarketShares(w))

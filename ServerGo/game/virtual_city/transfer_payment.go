@@ -93,15 +93,25 @@ func childrenUnder6(p *Player, month int) int {
 }
 
 // payUnemployment 失业救济金:仍处失业期(UnemployedMonths > 0)→ 先推进累计
-// 月数(+1,即「第 N 个失业月」)→ 按新计数取系数计发(2000 × 50% × 系数)。
-// 等待期(第 1–3 月)只累计不计发(R4-3)。返回实发金额(国库不足 → 0)。
+// 月数(+1,即「第 N 个失业月」)→ 计发。返回实发金额(国库不足 → 0)。
+//
+// 批次74(方案 §3.4.2):BalanceV2Enabled 时金额 = clamp(0.5 × SalaryBase,
+// 1,800, 8,000),**取消 3 月等待期与 >12 月衰减**(单次失业 ≤ U(2,6) 月)。
+// 累计月数照旧递增(低保 R4-3 门槛依赖它)。false ⇒ 旧公式
+// (2000 × 50% × 系数,含等待期/衰减)逐位不变。Ledger category 仍为 CatWelfare
+// (civic_election.go:15 的「gov→treasury 唯一合法国库→座位」契约,不新增类目)。
 func (t *TreasuryState) payUnemployment(w *World, p *Player) int64 {
 	if p.UnemployedMonths <= 0 {
 		return 0 // 在职/再就业:不累计不计发
 	}
 	p.UnemployedAccumMonths++
-	amount := int64(float64(BasicLivingCostCNY)*UnemploymentBenefitRate*
-		unemploymentCoef(p.UnemployedAccumMonths) + 0.5)
+	var amount int64
+	if w != nil && w.BalanceV2Enabled {
+		amount = unemploymentBenefitV2(p)
+	} else {
+		amount = int64(float64(BasicLivingCostCNY)*UnemploymentBenefitRate*
+			unemploymentCoef(p.UnemployedAccumMonths) + 0.5)
+	}
 	if amount <= 0 {
 		return 0
 	}

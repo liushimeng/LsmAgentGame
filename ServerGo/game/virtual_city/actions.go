@@ -1439,6 +1439,9 @@ func (w *World) actSetConsumption(p *Player, a Action) (string, *errcode.Error) 
 		return "", errcode.Code(errcode.ErrVirtualCityConsumptionLevelInvalid) // 35020
 	}
 	p.ConsumptionLevel = a.Level
+	// 批次74(方案 §3.4):显式选择优先 —— 清掉「引擎强制」标记,使条件解除后
+	// 不再自动恢复 1 档;若强制条件仍在,下次月结会重新强制并重新标记。
+	p.ConsumptionLevelForced = false
 	text := fmt.Sprintf("调整消费档位:%s(支出×%.1f,精力%+d)",
 		consumptionLevelCN(a.Level), consumptionLevelMult[a.Level], consumptionLevelEnergy[a.Level])
 	w.spendBudget(p, "idle", text)

@@ -28,6 +28,17 @@ type MCOverride struct {
 	// phaseDurationMonths = U(24,48) = 2–4 年;覆盖值 = 进入衰退相位时
 	// 时长的下限 clamp)。
 	RecessionMinMonths *int
+
+	// ── 批次74(P0 经济平衡 v2 第一步;方案 §3.1)──
+	// 全部只改常量/公式阈值,**绝不新增 rand 消费点**;nil = 引擎默认。
+	// BalanceV2 总开关(false = 批次73 旧口径;主 A/B 用)。
+	BalanceV2 *bool
+	// BasicRentRate 基础租占家庭常规收入比(默认 0.25;敏感度 0.20/0.30)。
+	BasicRentRate *float64
+	// StartCashMonths 生效初始现金月数(默认 6;敏感度 3/9)。
+	StartCashMonths *int
+	// FrugalMonths 新手节俭档强制月数(默认 6;敏感度 3/12)。
+	FrugalMonths *int
 }
 
 // apply 把覆盖写到世界/市场(零 rand;nil 字段不动 ⇒ 默认路径零差异)。
@@ -58,6 +69,20 @@ func (ov *MCOverride) apply(w *World) {
 		if ov.RecessionMinMonths != nil {
 			w.Market.RecessionMinMonths = ov.RecessionMinMonths
 		}
+	}
+	// 批次74:经济平衡 v2 开关与三档常量(写 World 字段;纯参数,零 rand)。
+	// 生效时机 = StartGame 之前(初始现金口径)与逐月月结(租/档位/救济/hazard)。
+	if ov.BalanceV2 != nil {
+		w.BalanceV2Enabled = *ov.BalanceV2
+	}
+	if ov.BasicRentRate != nil && *ov.BasicRentRate > 0 {
+		w.BasicRentRate = *ov.BasicRentRate
+	}
+	if ov.StartCashMonths != nil && *ov.StartCashMonths > 0 {
+		w.StartCashMonths = *ov.StartCashMonths
+	}
+	if ov.FrugalMonths != nil && *ov.FrugalMonths > 0 {
+		w.FrugalMonths = *ov.FrugalMonths
 	}
 }
 

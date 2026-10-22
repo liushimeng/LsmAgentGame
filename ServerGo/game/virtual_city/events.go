@@ -45,23 +45,11 @@ func (w *World) MonthlyEvents() {
 		if p.SalaryBase <= 0 && !p.SalaryVolatile {
 			continue
 		}
-		var base float64
-		switch w.Market.CyclePhase {
-		case PhaseRecession:
-			base = 0.15
-		case PhaseDepression:
-			base = 0.25
-		default:
-			base = 0.05
-		}
-		// P1: 个体失业概率 × 内生失业率倍率(§4.3)。U=自然率 5% 时 p=base
-		// (与 P0 等价);危机 U=12.5% → ×2.5;过热 U=2% → ×0.4→clamp 0.5。
-		// economy_enabled=false → 完整回退 P0(factor 恒 1,rand 消费序列不变)。
-		unemployFactor := 1.0
-		if w.EconomyEnabled && w.Labor != nil {
-			unemployFactor = clampF(w.Labor.Unemployment/UnemployNatural, 0.5, 2.5)
-		}
-		if w.Rand.Float64() >= base*unemployFactor*negativeGuard(p.Cognition) {
+		// 批次74(方案 §3.4.1):hazard v2 = 0.8% / 3% / 5%(旧 5%/15%/25%),
+		// 乘 P1 个体失业倍率(§4.3:U=自然率时 =base;危机 ×2.5;过热 ×0.5 下限)
+		// 与 negativeGuard(cognition),v2 再**封顶 8%**。false = 旧表且不封顶。
+		// ⚠ 仍为**单次** Float64 抽样(零新增 rand 消费点;仅阈值变化)。
+		if w.Rand.Float64() >= w.unemploymentProbability(p) {
 			continue
 		}
 		months := 2 + w.Rand.Intn(5) // U(2,6) 月,不变
