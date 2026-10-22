@@ -396,3 +396,14 @@ Blender / `.glb` / 3D 模型 / 几何 → `art-designer`（`3d_script/build_*.py
 - 通道徽章**只反映外部行情通道**；城市内维度的新鲜度由各面板负责，不重复展示。
 - 跨面板跳转（`ActionPanel.onTradeTab` → `market-trade`、`GameOverModal.onViewLedger` → `ledger`）经 store 的 `panelTab` 中转，改 store 类型时勿断链。
 - 看板维度**不得新增后端字段**：城市总览的 KPI 全部取自既有 `game.state` 段。
+
+### 28.4 采集任务遥测与「采集」子页（批次 77）
+
+> 规范见 [`lag_docs/虚拟城市/已实现/77-CityChrome规划执行能力增强/01-方案设计.md`](lag_docs/虚拟城市/已实现/77-CityChrome规划执行能力增强/01-方案设计.md)。
+
+- **City-Chrome 工具集 7→10**：新增 `web_plan`（mission 第 1 步强制提交结构化规划，≤8 步）、`web_read`（一步完成打开+读正文）、`web_search`（必应中国 SERP 只读提取，固定源全失败时发现兜底，自动关页）；既有 7 工具与批次65/76 配方**完全兼容**。
+- **跨 mission 经验闭环**：mission user prompt 自动注入「最近成功（source/步数/条数）+ 最近失败原因」（`MissionLog.LastOK` / `LastFail`），Agent 据此优化本次规划。
+- **`MissionRecord` 遥测环**（`ServerGo/citychrome/mission_log.go`）：容量 20，新→旧；字段 = category / status(running|ok|fail) / source / steps_used / max_steps / plan / quotes / news / error。
+- **HTTP 出口**：`GET /api/virtual_city/realtime_board` 的 `data` 增 `missions[]`（无记录 `[]` 非 null）。⚠️ **WS `game.realtime_feed` 帧不含 missions** —— 只随 HTTP 快照 / 手动刷新回读，前端 store `realtimeMissions` 承载。
+- **前端**：「实时看板」→ 外部实时 → 实时看板 → 子页尾部「采集」（`MissionLogPanel.tsx`，徽章对比度 ≥5:1），显示状态徽章 / 步数 / 数据条数 / **规划全文** / 失败原因。
+- `payload.source` 语义是**站点名**（校验层按 40 rune 截断兜底），看板来源列直出，勿塞链接说明。
