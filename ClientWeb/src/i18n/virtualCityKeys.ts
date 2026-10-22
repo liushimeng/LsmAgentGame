@@ -931,6 +931,8 @@ export interface VirtualCityDict {
   'virtualCity.rt.sub.metal': string;
   'virtualCity.rt.sub.futures': string;
   'virtualCity.rt.sub.crypto': string;
+  /** 批次 76 补登：宏观指标类目子 Tab（locale 三语早已存在，此前漏声明）。 */
+  'virtualCity.rt.sub.macro': string;
   'virtualCity.rt.sub.news': string;
   'virtualCity.rt.col.name': string;
   'virtualCity.rt.col.price': string;
@@ -955,6 +957,20 @@ export interface VirtualCityDict {
   'virtualCity.rt.exo.inactive': string;
   'virtualCity.rt.exo.updated': string;
   'virtualCity.rt.exo.effectHint': string;
+  /** 批次 77 · 采集任务面板（MissionLogPanel；missions 只随 HTTP 快照回读）。 */
+  'virtualCity.rt.sub.missions': string;
+  'virtualCity.rt.missions.empty': string;
+  'virtualCity.rt.missions.col.time': string;
+  'virtualCity.rt.missions.col.category': string;
+  'virtualCity.rt.missions.col.status': string;
+  'virtualCity.rt.missions.col.source': string;
+  'virtualCity.rt.missions.col.steps': string;
+  'virtualCity.rt.missions.col.data': string;
+  'virtualCity.rt.missions.col.plan': string;
+  'virtualCity.rt.missions.status.running': string;
+  'virtualCity.rt.missions.status.ok': string;
+  'virtualCity.rt.missions.status.fail': string;
+  'virtualCity.rt.missions.planNone': string;
 
   // ── 2026-10-21 §城市模拟定位 — 场景推演台（ScenarioPanel / 条件触发者）──
   // 目录键文案出处：tmpPlan/虚拟城市-模拟程序化与预测运行优化_20261021_095114.md §5.1/§5.3。

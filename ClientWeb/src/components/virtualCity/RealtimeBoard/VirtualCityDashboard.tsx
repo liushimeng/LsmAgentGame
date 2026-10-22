@@ -119,6 +119,7 @@ export function VirtualCityDashboard({
   const setPanelTab = useVirtualCityStore((s) => s.setPanelTab);
   const feed = useVirtualCityStore((s) => s.realtimeFeed);
   const setRealtimeFeed = useVirtualCityStore((s) => s.setRealtimeFeed);
+  const setRealtimeMissions = useVirtualCityStore((s) => s.setRealtimeMissions);
 
   const [snapshot, setSnapshot] = useState<VirtualCityDashboardSnapshot | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -147,12 +148,14 @@ export function VirtualCityDashboard({
         if (!cancelled) setSnapshot(null);
       });
     // ② 实时看板快照（late-joiner 补齐 game.realtime_feed 帧间隙）。
+    //    批次77：missions 不进 WS 帧，快照拿到就整表替换（无记录为 []）。
     fetchRealtimeBoard()
       .then((r) => {
         if (cancelled) return;
         const f = r?.feed ?? null;
         // 只在拿到数据时写入 —— 失败**不置空**，避免冲掉已有（WS / 看板快照）数据。
         if (f) setRealtimeFeed(f);
+        setRealtimeMissions(r.missions ?? []);
       })
       .catch(() => {
         // best-effort：WS 帧会补齐；不置空以免冲掉已有数据。
@@ -160,7 +163,7 @@ export function VirtualCityDashboard({
     return () => {
       cancelled = true;
     };
-  }, [setRealtimeFeed]);
+  }, [setRealtimeFeed, setRealtimeMissions]);
 
   // ── 目录合并：静态目录为权威，后端目录按 id 覆盖 title_key / group ──────
   const dimensions = useMemo<DashboardDimension[]>(() => {
@@ -222,10 +225,12 @@ export function VirtualCityDashboard({
       await refreshRealtimeBoard();
       // 快照不回读：mission 是异步的，数据经 game.realtime_feed 帧落库；
       // 拉一次快照让 accepted 后的通道状态即时可见（失败静默，等 WS 帧）。
+      // 批次77：missions 不进 WS 帧，一并随快照回读（无记录为 []）。
       try {
         const r = await fetchRealtimeBoard();
         const f = r?.feed ?? null;
         if (f) setRealtimeFeed(f);
+        setRealtimeMissions(r.missions ?? []);
       } catch {
         // best-effort：WS 帧会补齐
       }
@@ -236,7 +241,7 @@ export function VirtualCityDashboard({
     } finally {
       setRefreshing(false);
     }
-  }, [refreshing, setRealtimeFeed, t]);
+  }, [refreshing, setRealtimeFeed, setRealtimeMissions, t]);
 
   const toggleCollapsed = useCallback((id: string) => {
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));

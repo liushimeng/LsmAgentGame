@@ -5,8 +5,8 @@
  * 禁 opacity 表状态）+「更新于 N 分钟前」+ 刷新按钮（点击 POST
  * /api/virtual_city/realtime_board/refresh，转圈；失败按 §7.1 在面板内联红条
  * 展示，不吞 console）。
- * 子 Tab 8 个（.virtualCity-subtabs 手写范式，可横向滚动）：总览 / A股 / 港股 /
- * 美股 / 贵金属 / 期货 / 比特币 / 新闻。
+ * 子 Tab 10 个（.virtualCity-subtabs 手写范式，可横向滚动）：总览 / A股 / 港股 /
+ * 美股 / 贵金属 / 期货 / 比特币 / 宏观（批次76）/ 新闻 / 采集（批次77）。
  *
  * 数据源：store.realtimeFeed（首屏 HTTP 快照 + game.realtime_feed 帧增量，
  * 见 useVirtualCity / VirtualCityGamePage）。
@@ -21,8 +21,11 @@ import { getCategory, timeAgoKey, timeAgoParts } from './boardUtils';
 import { BoardOverview } from './BoardOverview';
 import { QuoteTable } from './QuoteTable';
 import { NewsList } from './NewsList';
+import { MissionLogPanel } from './MissionLogPanel';
 
-type RtSubTab = 'overview' | 'a_share' | 'hk' | 'us' | 'metal' | 'futures' | 'crypto' | 'macro' | 'news';
+type RtSubTab =
+  | 'overview' | 'a_share' | 'hk' | 'us' | 'metal' | 'futures' | 'crypto'
+  | 'macro' | 'news' | 'missions';
 
 /** 行情子 Tab → feed.categories 键（overview / news 无类目数据）。 */
 const QUOTE_SUBTABS: RtSubTab[] = ['a_share', 'hk', 'us', 'metal', 'futures', 'crypto', 'macro'];
@@ -40,6 +43,7 @@ function useMinuteTick(): number {
 export function RealtimeBoard() {
   const t = useT();
   const feed = useVirtualCityStore((s) => s.realtimeFeed);
+  const missions = useVirtualCityStore((s) => s.realtimeMissions);
   const [sub, setSub] = useState<RtSubTab>('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,9 +60,11 @@ export function RealtimeBoard() {
       await refreshRealtimeBoard(category);
       // 快照不回读：mission 是异步的，数据经 game.realtime_feed 帧落库；
       // 拉一次快照让 accepted 后的通道状态即时可见（失败静默，等 WS 帧）。
+      // 批次77：missions 不进 WS 帧，一并随快照回读（无记录为 []）。
       try {
         const r = await fetchRealtimeBoard();
         useVirtualCityStore.getState().setRealtimeFeed(r.feed ?? null);
+        useVirtualCityStore.getState().setRealtimeMissions(r.missions ?? []);
       } catch {
         // best-effort：WS 帧会补齐
       }
@@ -95,6 +101,8 @@ export function RealtimeBoard() {
     // 批次76:宏观指标类目（LPR/CPI/GDP/PMI/外汇储备）。
     { key: 'macro', labelKey: 'virtualCity.rt.sub.macro' },
     { key: 'news', labelKey: 'virtualCity.rt.sub.news' },
+    // 批次77:采集任务遥测（HTTP 快照回读，WS 帧不携带 missions）。
+    { key: 'missions', labelKey: 'virtualCity.rt.sub.missions' },
   ];
 
   return (
@@ -161,6 +169,7 @@ export function RealtimeBoard() {
         <>
           {sub === 'overview' && <BoardOverview feed={feed} />}
           {sub === 'news' && <NewsList news={feed.news} />}
+          {sub === 'missions' && <MissionLogPanel missions={missions} />}
           {QUOTE_SUBTABS.includes(sub) && (() => {
             const cat = getCategory(feed.categories, sub);
             if (!cat || !cat.quotes.length) {

@@ -20,6 +20,8 @@ const virtualCityRealtimeEN = {
   'virtualCity.rt.sub.crypto': 'BTC',
   'virtualCity.rt.sub.macro': 'Macro',
   'virtualCity.rt.sub.news': 'News',
+  // ── Batch 77 mission log panel (MissionLogPanel) ──
+  'virtualCity.rt.sub.missions': 'Missions',
   'virtualCity.rt.col.name': 'Name',
   'virtualCity.rt.col.price': 'Price',
   'virtualCity.rt.col.change': 'Change',
@@ -31,6 +33,19 @@ const virtualCityRealtimeEN = {
   'virtualCity.rt.empty.feed': 'No realtime data yet: click Refresh above to start a collection mission',
   'virtualCity.rt.empty.category': 'No data for this category yet',
   'virtualCity.rt.empty.news': 'No news yet',
+  // ── Batch 77 mission log panel (MissionLogPanel) ──
+  'virtualCity.rt.missions.empty': 'No mission records yet, waiting for scheduler',
+  'virtualCity.rt.missions.col.time': 'Time',
+  'virtualCity.rt.missions.col.category': 'Category',
+  'virtualCity.rt.missions.col.status': 'Status',
+  'virtualCity.rt.missions.col.source': 'Source',
+  'virtualCity.rt.missions.col.steps': 'Steps',
+  'virtualCity.rt.missions.col.data': 'Data',
+  'virtualCity.rt.missions.col.plan': 'Plan',
+  'virtualCity.rt.missions.status.running': 'Running',
+  'virtualCity.rt.missions.status.ok': 'OK',
+  'virtualCity.rt.missions.status.fail': 'Failed',
+  'virtualCity.rt.missions.planNone': '(no plan)',
   // ── 批次 66 外盘情绪锚 ──
   'virtualCity.rt.exo.title': 'Global Sentiment Anchor',
   'virtualCity.rt.exo.sentimentUp': 'Risk-on',

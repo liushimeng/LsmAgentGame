@@ -82,6 +82,38 @@ export interface RealtimeBoardRefreshResult {
   queued_category: string;
 }
 
+/** 批次 77 · 采集任务状态（MissionRecord.status）。 */
+export type MissionStatus = 'running' | 'ok' | 'fail';
+
+/**
+ * 批次 77 · 采集任务遥测记录（服务端 MissionLog 环形缓冲 ≤20 条，新→旧）。
+ *
+ * 契约：仅随 HTTP 快照 GET /api/virtual_city/realtime_board 的 data.missions 下发，
+ * **不进 WS game.realtime_feed 帧**（无记录为 []，非 null）。
+ */
+export interface MissionRecord {
+  /** "<category>-<startedAtMs>"。 */
+  id: string;
+  /** a_share|hk|us|metal|futures|crypto|macro|news。 */
+  category: string;
+  /** Unix 秒。 */
+  started_at: number;
+  duration_ms: number;
+  status: MissionStatus;
+  /** 成功时的采集站点名，失败为空串。 */
+  source: string;
+  steps_used: number;
+  max_steps: number;
+  /** 规划摘要（goal + steps 以 " → " 连接），可能为空串。 */
+  plan: string;
+  /** 提交行情条数。 */
+  quotes: number;
+  /** 提交新闻条数。 */
+  news: number;
+  /** 失败原因，成功为空串。 */
+  error: string;
+}
+
 /** 批次 66 外盘情绪锚（game.state.market.exo_anchor；契约 01 §3.3）。 */
 export interface VirtualCityExoAnchor {
   /** false = 数据过期/通道离线 ⇒ bias 恒 0（对局零回归）。 */

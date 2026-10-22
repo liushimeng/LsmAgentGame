@@ -25,6 +25,8 @@ const virtualCityRealtimeZH = {
   'virtualCity.rt.sub.crypto': '比特币',
   'virtualCity.rt.sub.macro': '宏观',
   'virtualCity.rt.sub.news': '新闻',
+  // ── 批次 77 采集任务面板（MissionLogPanel）──
+  'virtualCity.rt.sub.missions': '采集',
   // ── 报价表 ──
   'virtualCity.rt.col.name': '名称',
   'virtualCity.rt.col.price': '价格',
@@ -38,6 +40,19 @@ const virtualCityRealtimeZH = {
   'virtualCity.rt.empty.feed': '暂无实时数据：点击右上角刷新发起采集',
   'virtualCity.rt.empty.category': '该类目暂无数据',
   'virtualCity.rt.empty.news': '暂无新闻',
+  // ── 批次 77 采集任务面板（MissionLogPanel）──
+  'virtualCity.rt.missions.empty': '暂无采集记录，等待调度器运行',
+  'virtualCity.rt.missions.col.time': '时间',
+  'virtualCity.rt.missions.col.category': '类目',
+  'virtualCity.rt.missions.col.status': '状态',
+  'virtualCity.rt.missions.col.source': '来源',
+  'virtualCity.rt.missions.col.steps': '步数',
+  'virtualCity.rt.missions.col.data': '数据',
+  'virtualCity.rt.missions.col.plan': '规划',
+  'virtualCity.rt.missions.status.running': '进行中',
+  'virtualCity.rt.missions.status.ok': '成功',
+  'virtualCity.rt.missions.status.fail': '失败',
+  'virtualCity.rt.missions.planNone': '（未提交规划）',
   // ── 批次 66 外盘情绪锚 ──
   'virtualCity.rt.exo.title': '外盘情绪锚',
   'virtualCity.rt.exo.sentimentUp': '偏多',

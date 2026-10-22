@@ -20,6 +20,8 @@ const virtualCityRealtimeJA = {
   'virtualCity.rt.sub.crypto': 'BTC',
   'virtualCity.rt.sub.macro': 'マクロ',
   'virtualCity.rt.sub.news': 'ニュース',
+  // ── 批次 77 采集任务面板（MissionLogPanel）──
+  'virtualCity.rt.sub.missions': 'ミッション',
   'virtualCity.rt.col.name': '名称',
   'virtualCity.rt.col.price': '価格',
   'virtualCity.rt.col.change': '変動率',
@@ -31,6 +33,19 @@ const virtualCityRealtimeJA = {
   'virtualCity.rt.empty.feed': 'リアルタイムデータはまだありません：右上の更新ボタンで収集を開始してください',
   'virtualCity.rt.empty.category': 'このカテゴリのデータはまだありません',
   'virtualCity.rt.empty.news': 'ニュースはまだありません',
+  // ── 批次 77 采集任务面板（MissionLogPanel）──
+  'virtualCity.rt.missions.empty': 'ミッション記録なし、スケジューラ待ち',
+  'virtualCity.rt.missions.col.time': '時刻',
+  'virtualCity.rt.missions.col.category': '分類',
+  'virtualCity.rt.missions.col.status': '状態',
+  'virtualCity.rt.missions.col.source': 'ソース',
+  'virtualCity.rt.missions.col.steps': 'ステップ',
+  'virtualCity.rt.missions.col.data': 'データ',
+  'virtualCity.rt.missions.col.plan': '計画',
+  'virtualCity.rt.missions.status.running': '実行中',
+  'virtualCity.rt.missions.status.ok': '成功',
+  'virtualCity.rt.missions.status.fail': '失敗',
+  'virtualCity.rt.missions.planNone': '（計画なし）',
   // ── 批次 66 外盘情绪锚 ──
   'virtualCity.rt.exo.title': '外盤センチメントアンカー',
   'virtualCity.rt.exo.sentimentUp': '強気',

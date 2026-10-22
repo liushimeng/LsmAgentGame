@@ -470,3 +470,134 @@
   font-size: 12px;
   min-height: 24px;
 }
+
+/* ── 批次 77 · 采集任务面板（MissionLogPanel，.virtualCity-rt-mlog__）───────
+   行 = 6 列网格（时间/类目/状态/来源/步数/数据）+ 规划与失败原因整行铺开。
+   §26 对比度：表格文字 ≥4.5:1（#e5e7eb on 深底 ≈ 11:1）、状态徽章文字 ≥5:1
+   （黄/绿底深字、红底白字实色，手法同 __badge--online/updating）。无动画。 */
+.virtualCity-rt-mlog {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.virtualCity-rt-mlog__row {
+  display: grid;
+  grid-template-columns: 56px minmax(40px, auto) minmax(46px, auto) minmax(0, 1fr) 38px auto;
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 3px;
+  min-height: 36px;
+  padding: 5px 6px;
+  border-bottom: 1px solid #263250;
+  color: #e5e7eb;
+  font-size: 12px;
+}
+
+.virtualCity-rt-mlog__row--head {
+  cursor: default;
+  min-height: 28px;
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+  border-bottom: 1px solid #33415e;
+}
+
+.virtualCity-rt-mlog__cell-time {
+  color: var(--virtualCity-text-dim, #9ca3af);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.virtualCity-rt-mlog__cell-cat {
+  white-space: nowrap;
+}
+
+.virtualCity-rt-mlog__cell-src {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.virtualCity-rt-mlog__cell-steps {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.virtualCity-rt-mlog__cell-data {
+  display: inline-flex;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 状态徽章（§26.1 ≥5:1）：running=黄底深字（#0f172a on #fbbf24 ≈ 10:1）。 */
+.virtualCity-rt-mlog__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.virtualCity-rt-mlog__badge--running {
+  background: #fbbf24;
+  color: #0f172a;
+}
+
+/* ok=绿底深字（#0f172a on #4ade80 ≈ 9:1）。 */
+.virtualCity-rt-mlog__badge--ok {
+  background: #4ade80;
+  color: #0f172a;
+}
+
+/* fail=红底白字（#fff on #b91c1c ≈ 9:1）。 */
+.virtualCity-rt-mlog__badge--fail {
+  background: #b91c1c;
+  color: #fff;
+}
+
+/* 规划整行铺开：标签 + 等宽文本（空串显示占位文案）。 */
+.virtualCity-rt-mlog__plan {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  line-height: 1.5;
+}
+
+.virtualCity-rt-mlog__plan-label {
+  flex: none;
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+}
+
+.virtualCity-rt-mlog__plan-code {
+  min-width: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #0f172a;
+  color: #cbd5e1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.virtualCity-rt-mlog__plan-none {
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+}
+
+/* 失败原因整行红字（#fca5a5 on 深底 ≈ 8.6:1）。 */
+.virtualCity-rt-mlog__error {
+  grid-column: 1 / -1;
+  color: #fca5a5;
+  font-size: 11.5px;
+  line-height: 1.5;
+  word-break: break-all;
+}
