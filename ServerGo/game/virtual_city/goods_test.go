@@ -215,35 +215,86 @@ func TestEngelShares_FourKidsScalingTriggered(t *testing.T) {
 	}
 }
 
-// TestSplitEngel_Conservation Σ ConsumptionByGoods == living+familyLiving
-// (金额守恒,§10.1;含家庭表拆分口径)。
+// TestSplitEngel_Conservation Σ ConsumptionByGoods == living+familyAdd
+// (金额守恒,§10.1;批次75 B75-2 **比例切分**口径)。
+//
+// v2 口径:不再用固定 CNY 常数扣减家庭基数,改为按成员构成权重比例切分
+// (本人 1.0 / 配偶 1.0 / 每孩 2.5 / 每位老人 0.5;常量见 balance_v2.go)。
+// 夹具:已婚 2 孩 1 老人 ⇒ totalW = 1+1+5+0.5 = 7.5。
 func TestSplitEngel_Conservation(t *testing.T) {
 	p := newPlayerFromCard(0, synthCard(0, 100000))
 	p.Family.Marital = "married"
 	p.Family.Children = 2
 	p.Card.EldersDependent = 1
 	living := int64(6000)
-	familyLiving := int64(livingSpouseCNY) + 2*int64(livingChildCNY) + 1*int64(livingElderCNY)
-	m := splitEngel(living+familyLiving, p, 40)
+	// v2 口径:卡面初始配偶/子女/赡养已含在 monthly_expense ⇒ 家庭加项为 0。
+	familyAdd := int64(0)
+	total := living + familyAdd
+	m := splitEngel(total, p, 40)
 	var sum int64
 	for _, v := range m {
 		sum += int64(v)
 	}
-	if sum != living+familyLiving {
-		t.Errorf("engel conservation: sum=%d, want %d (living %d + family %d)", sum, living+familyLiving, living, familyLiving)
+	if sum != total {
+		t.Errorf("engel conservation: sum=%d, want %d (living %d + familyAdd %d)", sum, total, living, familyAdd)
 	}
-	// 家庭表:教育 = 2 孩 × 5000 × 0.55 = 5500 起步(再加本人份额)。
-	if m["education"] < 5500 {
-		t.Errorf("education split: got %f, want >= 5500 (2 kids × 0.55)", m["education"])
+	// 权重切分:本人 800 / 配偶 800 / 子女 4000 / 老人 400(total 6000)。
+	const totalW = 1.0 + 1.0 + 2.5*2 + 0.5*1
+	own := float64(total) * 1.0 / totalW
+	child := float64(total) * (2.5 * 2) / totalW
+	elder := float64(total) * 0.5 / totalW
+	shares := engelShares(p.monthlyIncomeEstimate(),
+		1+boolToInt(p.Family.Marital == "married")+p.Family.Children,
+		p.Family.Children, 40)
+	// 家庭表:子女教育 = 子女份额 × 0.55(再加本人份额)。
+	wantEdu := own*shares["education"] + child*0.55
+	if math.Abs(m["education"]-wantEdu) > 1 {
+		t.Errorf("education split: got %f, want %f(子女 %f × 0.55 + 本人 %f × %f)",
+			m["education"], wantEdu, child, own, shares["education"])
 	}
-	// 医疗 = 老人 1000×0.60 = 600 起步。
-	if m["healthcare"] < 600 {
-		t.Errorf("healthcare split: got %f, want >= 600 (elder × 0.60)", m["healthcare"])
+	// 医疗 = 老人份额 × 0.60(再加本人份额)。
+	wantHealth := own*shares["healthcare"] + elder*0.60
+	if math.Abs(m["healthcare"]-wantHealth) > 1 {
+		t.Errorf("healthcare split: got %f, want %f(老人 %f × 0.60 + 本人 %f × %f)",
+			m["healthcare"], wantHealth, elder, own, shares["healthcare"])
 	}
 	// 8 类俱全。
 	for _, id := range goodsOrder {
 		if _, ok := m[id]; !ok {
 			t.Errorf("missing goods category in split: %s", id)
+		}
+	}
+}
+
+// TestSplitEngelLegacy_Conservation 旧口径(固定 CNY 常数扣减)金额守恒回归 ——
+// BalanceV2Enabled=false 回滚阀路径,批次74 及之前逐字段不变。
+func TestSplitEngelLegacy_Conservation(t *testing.T) {
+	p := newPlayerFromCard(0, synthCard(0, 100000))
+	p.Family.Marital = "married"
+	p.Family.Children = 2
+	p.Card.EldersDependent = 1
+	living := int64(6000)
+	familyLiving := int64(livingSpouseCNY) + 2*int64(livingChildCNY) + 1*int64(livingElderCNY)
+	m := splitEngelLegacy(living+familyLiving, p, 40)
+	var sum int64
+	for _, v := range m {
+		sum += int64(v)
+	}
+	if sum != living+familyLiving {
+		t.Errorf("legacy engel conservation: sum=%d, want %d (living %d + family %d)", sum, living+familyLiving, living, familyLiving)
+	}
+	// 家庭表:教育 = 2 孩 × 5000 × 0.55 = 5500 起步(再加本人份额)。
+	if m["education"] < 5500 {
+		t.Errorf("legacy education split: got %f, want >= 5500 (2 kids × 0.55)", m["education"])
+	}
+	// 医疗 = 老人 1000×0.60 = 600 起步。
+	if m["healthcare"] < 600 {
+		t.Errorf("legacy healthcare split: got %f, want >= 600 (elder × 0.60)", m["healthcare"])
+	}
+	// 8 类俱全。
+	for _, id := range goodsOrder {
+		if _, ok := m[id]; !ok {
+			t.Errorf("missing goods category in legacy split: %s", id)
 		}
 	}
 }

@@ -9,6 +9,9 @@ import "testing"
 func TestMCEvent_TriggerPoints(t *testing.T) {
 	// trade / auction / loan:造交易 + 拍卖 + 贷款(复用居民测试场景)。
 	w := mcResidentTradeWorld()
+	// 批次75:bankruptcy 触发点钉**旧口径**(NegativeCashMonths ≥ 3 ⇒ 清算);
+	//关闭 v2 开关保持原断言(三阶段状态机由 balance_v2_batch75_test.go 覆盖)。
+	w.BalanceV2Enabled = false
 	l, e := w.CreateListing(0, ListingAsset, ListingPayload{
 		Asset: &AssetPayload{Asset: w.Players[0].Assets[0], MinCNY: 5000},
 	}, 6000)

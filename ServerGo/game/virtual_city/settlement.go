@@ -134,9 +134,11 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 			p.MinskyMomentTriggered = false
 		}
 		net := p.NetWorth(w.Market)
-		// 批次62:泡沫爆仓清算(§11.2)—— 复用既有 liquidate 流程,不自写清算。
+		// 批次62:泡沫爆仓清算(§11.2)—— 复用既有清算流程,不自写清算。
+		// 批次75:爆仓是**市场**事件(非个人破产),不走 B1(B1 定义 = R1 后仍资不抵债);
+		// 沿用批次74 清算流程(liquidateLegacy),避免市场崩盘被误判为个人资不抵债。
 		if p.Alive && w.bubbleBustCheck(p) {
-			w.liquidate(p)
+			w.liquidateLegacy(p)
 		} else if p.Alive {
 			// 批次62:逆势奖励(§3.4.3)—— 同向 ≥3 人且本人逆势获利 ⇒ 认知 +2。
 			w.counterTrendReward(p, netBefore, net, turnSummary)
@@ -576,8 +578,9 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 		}
 	}
 
-	// ── 步骤5 生活支出:职业基数 × 通胀因子 × 档位乘数(P1 §3.3)+ 配偶 2000 +
-	// 每孩 5000 + 赡养;economy_enabled 时归入 firms 钱流并按恩格尔曲线拆 8 类。
+	// ── 步骤5 生活支出:职业基数 × 通胀因子 × 档位乘数(P1 §3.3);批次75 B75-2:
+	// 卡面 monthly_expense 已含初始配偶/子女/赡养 ⇒ v2 口径家庭加项**只计游戏内
+	// 新增成员**(新配偶/新生儿);economy_enabled 时归入 firms 钱流并按恩格尔曲线拆 8 类。
 	infl := InflationFactorCB(w)
 	level := p.ConsumptionLevelSafe()
 	if p.ConsumptionByGoods == nil {
@@ -621,32 +624,88 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 		addExpense(living, "living", "生活支出")
 	}
 	familyLiving := int64(0)
-	if p.Family.Marital == "married" {
-		familyLiving += livingSpouseCNY
+	if w.BalanceV2Enabled {
+		// 批次75 B75-2(v2 口径,方案 §3.7):卡面 monthly_expense(=Card.Expense)
+		// 已是**家庭总生活消费**(含初始配偶/子女/赡养)⇒ 只对**游戏内新增成员**
+		// 计费(新配偶 / 新生儿);初始成员再加即重复计入(B75-2 修正对象)。
+		familyLiving = familyLivingAddV2(p)
+	} else {
+		// 旧口径(批次74 及之前):叠加初始家庭成员常数,逐字段不变。
+		if p.Family.Marital == "married" {
+			familyLiving += livingSpouseCNY
+		}
+		familyLiving += int64(p.Family.Children) * livingChildCNY
+		familyLiving += int64(p.Card.EldersDependent) * livingElderCNY
 	}
-	familyLiving += int64(p.Family.Children) * livingChildCNY
-	familyLiving += int64(p.Card.EldersDependent) * livingElderCNY
 	if familyLiving > 0 {
-		// 家庭支出金额不变,但归入篮子计数(§3.4)且 to=firms。
-		w.Pay(seat, SeatEntity(seat), w.consumerPayTo(), familyLiving, CatLiving, "家庭支出")
-		addExpense(familyLiving, "family", "家庭支出(配偶/子女/赡养)")
+		// 家庭支出金额归入篮子计数(§3.4)且 to=firms。
+		familyText := "家庭支出(配偶/子女/赡养)"
+		if w.BalanceV2Enabled {
+			familyText = "家庭支出(游戏内新增成员)"
+		}
+		w.Pay(seat, SeatEntity(seat), w.consumerPayTo(), familyLiving, CatLiving, familyText)
+		addExpense(familyLiving, "family", familyText)
 	}
 
 	// 档位精力效果(clamp [-3,10],与 events.go 精力边界同款)。
 	p.Energy = clamp(p.Energy+consumptionLevelEnergy[level], -3, 10)
 
 	// 恩格尔分配:living+familyLiving 拆 8 类写入 p.ConsumptionByGoods(覆盖上月)。
-	p.ConsumptionByGoods = splitEngel(living+familyLiving, p, age)
+	// 批次75 B75-2:v2 = 按成员构成权重**比例切分**(金额守恒);旧口径 = 固定
+	// CNY 常数扣减(splitEngelLegacy,BalanceV2Enabled=false 时逐字段不变)。
+	if w.BalanceV2Enabled {
+		p.ConsumptionByGoods = splitEngel(living+familyLiving, p, age)
+	} else {
+		p.ConsumptionByGoods = splitEngelLegacy(living+familyLiving, p, age)
+	}
 
 	// ── 步骤6 债务:月供足够 → 正常扣款;不足 → 逾期(罚息 5%、信用分 −50)。
+	// 批次75:BalanceV2Enabled 且 H1 内 ⇒ 消费贷/信用贷**只付利息、本金延期**;
+	// 不记逾期、不扣信用分、不产生 5% 罚息;连续两月无法付息计入
+	// HardshipUnpaidMonths(≥2 ⇒ R1,见 bankruptcy_v2.go::stepH1)。
 	type dueItem struct {
 		loan                *Loan
 		interest, principal int64
 	}
 	var dues []dueItem
 	dueTotal := int64(0)
+	hardship := w.hardshipLoan(p)
+	if hardship {
+		// 「连续两月无法付息」按**座位**口径判定(任一笔结构性付息不能即计数),
+		// 不得在贷款循环内逐笔重置 —— 否则多笔贷款时后一笔正常即抹掉前一笔计数。
+		structuralUnpayable := false
+		for i := range p.Loans {
+			loan := &p.Loans[i]
+			if !isConsumerOrCredit(loan.Kind) {
+				continue
+			}
+			interest := int64(float64(loan.Balance)*loan.AnnualRate/12 + 0.5)
+			if interest <= 0 {
+				continue
+			}
+			if p.Cash >= interest {
+				w.Pay(seat, SeatEntity(seat), EntityBank, interest, CatInterest, "贷款利息(H1只付息) "+loan.ID)
+				addExpense(interest, "loan", "贷款利息 "+loan.ID)
+			} else {
+				// 无法付息:不记逾期、不扣信用分、不产生罚息(顺延)。
+				// 「连续两月无法付息」= 常规收入也不足以覆盖利息(结构性付息不能)。
+				if w.hardshipIncome(p) < interest {
+					structuralUnpayable = true
+				}
+				addExpense(interest, "loan_hardship_defer", "H1只付息未付(顺延)")
+			}
+		}
+		if structuralUnpayable {
+			p.HardshipUnpaidMonths++
+		} else {
+			p.HardshipUnpaidMonths = 0
+		}
+	}
 	for i := range p.Loans {
 		loan := &p.Loans[i]
+		if hardship && isConsumerOrCredit(loan.Kind) {
+			continue // H1 只付息已在上面处理
+		}
 		var interest, principal int64
 		if loan.FreeInterest {
 			principal = loan.Balance / int64(max(loan.MonthsLeft, 1))
@@ -716,6 +775,11 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 		} else {
 			p.CreditScore = 0
 		}
+		// 批次75:R1 后信用分下限 400(不归零;方案 §3.6.3-4)。
+		if w.BalanceV2Enabled && (p.InR1 || p.LastR1EndMonth > 0) &&
+			p.CreditScore < CreditScoreFloorV2 {
+			p.CreditScore = CreditScoreFloorV2
+		}
 		penalty := int64(float64(dueTotal) * 0.05)
 		if pay := min(p.Cash, penalty); pay > 0 {
 			w.Pay(seat, SeatEntity(seat), EntityBank, pay, CatInterest, "逾期罚息")
@@ -724,6 +788,16 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 		addExpense(dueTotal, "loan_overdue", "本月月供逾期未付(顺延)")
 		w.emitEvent("settle", seat, fmt.Sprintf("%d 号位月供不足,逾期(应付 ¥%d,信用分 −%d)",
 			seat, dueTotal, overdueCreditHit))
+	}
+	// H1 内若有消费贷/信用贷利息未付 ⇒ 不计入按时还款(避免 OnTimeStreak 虚增)。
+	if hardship && p.HardshipUnpaidMonths > 0 {
+		p.OnTimeStreak = 0
+	}
+	// 批次75:R1 后按时还款信用分回补(每 6 月 +10,上限 550;方案 §3.6.3-4)。
+	if w.BalanceV2Enabled && (p.InR1 || p.LastR1EndMonth > 0) &&
+		p.OnTimeStreak > 0 && p.OnTimeStreak%CreditScoreOnTimeEveryV2 == 0 &&
+		p.CreditScore < CreditScoreR1CapV2 {
+		p.CreditScore = min(p.CreditScore+CreditScoreOnTimeStepV2, CreditScoreR1CapV2)
 	}
 
 	// ── 步骤7 精力自然恢复 +1(≤10)。
@@ -748,8 +822,12 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 		Detail: detail,
 	}
 
-	// ── 破产检查:现金连续 3 月 < 0(月末,§11)。
-	if p.Cash < 0 {
+	// ── 破产检查(§11)。
+	// 批次75:BalanceV2Enabled ⇒ 三阶段(H1/R1/B1)状态机;false ⇒ 批次74 旧口径
+	//(现金连续 3 月 < 0 ⇒ 清算,逐字段保留)。
+	if w.BalanceV2Enabled {
+		w.bankruptcyStep(p)
+	} else if p.Cash < 0 {
 		p.NegativeCashMonths++
 		if p.NegativeCashMonths >= 3 && !p.InReorganization {
 			w.liquidate(p)
@@ -768,8 +846,24 @@ func (w *World) settlePlayer(p *Player, age int, sideShares map[string]map[int]f
 	}
 }
 
-// liquidate 破产清算 + 债务重组(§11)。
+// liquidate B1 正式破产清算(批次75,方案 §3.6.4)。
+// 清算顺序:流动资产 → 非自住房/商铺 → 自住房(70%);**仅当资不抵债才 eliminate**。
 func (w *World) liquidate(p *Player) {
+	if !w.BalanceV2Enabled {
+		// 批次74 旧口径逐字段保留。
+		w.liquidateLegacy(p)
+		return
+	}
+	w.emitEvent("settle", p.Seat, fmt.Sprintf("%d 号位触发正式破产清算(B1)!", p.Seat))
+	w.liquidateInsolvent(p)
+	if !w.postLiquidationSolvent(p) {
+		w.eliminate(p, "资不抵债破产出局")
+	}
+}
+
+// liquidateLegacy 批次74 旧清算路径(BalanceV2Enabled=false 时逐字段一致)。
+// 现金连续 3 月 < 0 ⇒ 清算 + 债务重组 + 现金仍 < 0 即刻出局。
+func (w *World) liquidateLegacy(p *Player) {
 	seat := p.Seat
 	w.emitEvent("settle", seat, fmt.Sprintf("%d 号位触发破产清算!", seat))
 	// 批次73 O2:bankruptcy 事件(破产清算触发点;step 代理口径 settle)。

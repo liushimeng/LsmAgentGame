@@ -239,8 +239,19 @@ type Player struct {
 	MajorIllness   bool
 	HadIllnessYear bool // 当年有大病 → 生日不加精力
 
-	NegativeCashMonths int // 连续现金 < 0 月数(破产触发)
-	InReorganization   bool
+	NegativeCashMonths int // 连续现金 < 0 月数(破产触发;批次74 旧口径)
+	InReorganization   bool // 批次74 旧口径重组标记(BalanceV2Enabled=false)
+
+	// ── 批次75 三阶段破产(H1/R1/B1,方案 §3.6;仅 BalanceV2Enabled=true 使用)──
+	InHardship           bool // H1 困难期中(不记破产)
+	HardshipMonths       int  // H1 剩余月数(倒数;到期仍负 ⇒ R1)
+	HardshipCount        int  // H1 累计触发次数
+	LastHardshipEndMonth int  // 上次 H1 结束月(24 月内重复触发 ⇒ 3 月)
+	HardshipUnpaidMonths int  // H1 内连续无法付息月数(≥2 ⇒ R1)
+	InR1                 bool // R1 协助重组中
+	R1Months             int  // R1 重组分期数(首次 60 / 重复 36)
+	LastR1EndMonth       int  // 上次 R1 结束月(24 月内重复重组 ⇒ 36 期)
+	R1FreezeMonths       int  // R1 动作冻结剩余月数(仅禁非还款/非保险)
 
 	// P1: 明斯基金融不稳定引擎(v2.60 N11-4 / N11-5)。
 	MinskyByLoan          map[string]*MinskyStatus // loanID -> 分级

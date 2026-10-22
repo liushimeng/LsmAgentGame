@@ -140,6 +140,16 @@ func (w *World) hashPlayersScope(h uint64) uint64 {
 		h = fnvWriteInt64(h, int64(p.BankruptCount))
 		h = fnvWriteString(h, p.District)
 		h = fnvWriteInt64(h, int64(p.SalaryBase))
+		// 批次75 三阶段破产字段(H1/R1/B1;防确定性回归漏项)。
+		h = fnvWriteBool(h, p.InHardship)
+		h = fnvWriteInt64(h, int64(p.HardshipMonths))
+		h = fnvWriteInt64(h, int64(p.HardshipCount))
+		h = fnvWriteInt64(h, int64(p.LastHardshipEndMonth))
+		h = fnvWriteInt64(h, int64(p.HardshipUnpaidMonths))
+		h = fnvWriteBool(h, p.InR1)
+		h = fnvWriteInt64(h, int64(p.R1Months))
+		h = fnvWriteInt64(h, int64(p.LastR1EndMonth))
+		h = fnvWriteInt64(h, int64(p.R1FreezeMonths))
 
 		// 资产:按 (Kind, district) 稳定排序(纪律 1/4)。
 		idx := make([]int, len(p.Assets))

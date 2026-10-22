@@ -232,6 +232,9 @@ func TestMCCause_BankruptSnapshotBranches(t *testing.T) {
 // liquidate 后贷款/资产已清空,但快照仍保留破产月特征。
 func TestMCCause_BankruptSnapshotCaptured(t *testing.T) {
 	w := calibTestWorld(7, 2)
+	// 批次75:本测试钉的是**旧口径**「NegativeCashMonths ≥ 3 ⇒ 清算」路径
+	//(三阶段状态机下同名触发条件已改语义);关闭 v2 开关保持原断言。
+	w.BalanceV2Enabled = false
 	p := w.Players[0]
 	p.CreditScore = 700
 	if _, e := w.ApplyAction(0, Action{Type: ActTakeLoan, Kind: "credit", AmountCNY: 50000}); e != nil {

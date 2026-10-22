@@ -344,15 +344,88 @@ var familyBasket = []struct {
 	{"elder", map[string]float64{"healthcare": 0.60, "food": 0.30, "misc": 0.10}},
 }
 
-// splitEngel 把总消费额(living+familyLiving)按恩格尔曲线拆到八大类。
-// 家庭各项按 §3.4 表拆分(金额口径不变),本人生活按 engelShares 份额分摊;
-// 金额 round 到元,凑整残差计入 food —— 保证 Σ ConsumptionByGoods == totalCNY(金额守恒)。
+// splitEngel 把总消费额(living+familyAdd)按恩格尔曲线拆到八大类(**v2 口径**)。
+//
+// 批次75 B75-2(方案 §3.7):改为按**成员构成权重比例切分**,金额守恒 ——
+// 旧口径用固定 CNY 常数(配偶 2000/每孩 5000/每位老人 1000)从总额里扣减,
+// 在 living 不再叠加家庭常数(B75-2 修正)后该口径已失效(own 会为负 ⇒ 触发
+// 防御缩放分支,家庭篮子被整体压缩)。
+//
+// 权重(相对 2000 元基准,沿用旧常数比例;常量见 balance_v2.go):
+//
+//	本人 1.0 / 配偶 1.0(已婚) / 每孩 2.5(=5000/2000) / 每位老人 0.5(=1000/2000)
+//
+// 本人部分按 engelShares 份额分摊;配偶/子女/老人按 §3.4 familyBasket 表拆分
+// (比例不变);金额 round 到元,凑整残差计入 food ⇒ Σ == totalCNY(金额守恒)。
 func splitEngel(totalCNY int64, p *Player, age int) map[string]float64 {
 	out := map[string]float64{}
 	if totalCNY <= 0 || p == nil {
 		return out
 	}
-	// 家庭构成(与 settlement 步骤5 同口径:配偶 2000/每孩 5000/每位老人 1000)。
+	ownW := FamilyWeightOwn
+	spouseW := 0.0
+	if p.Family.Marital == "married" {
+		spouseW = FamilyWeightSpouse
+	}
+	childW := FamilyWeightChild * float64(p.Family.Children)
+	elderW := FamilyWeightElder * float64(p.Card.EldersDependent)
+	totalW := ownW + spouseW + childW + elderW
+	if totalW <= 0 {
+		// 防御:本人权重恒为 1 ⇒ totalW ≥ 1(实际不可达),保底不除零。
+		totalW = 1
+	}
+	f := float64(totalCNY)
+	own := f * ownW / totalW
+	spouseCNY := f * spouseW / totalW
+	childCNY := f * childW / totalW
+	elderCNY := f * elderW / totalW
+
+	shares := engelShares(p.monthlyIncomeEstimate(),
+		1+boolToInt(p.Family.Marital == "married")+p.Family.Children,
+		p.Family.Children, age)
+	for id, share := range shares {
+		out[id] = own * share
+	}
+	add := func(amt float64, split map[string]float64) {
+		for id, w := range split {
+			out[id] += amt * w
+		}
+	}
+	if spouseCNY > 0 {
+		add(spouseCNY, familyBasket[0].split)
+	}
+	if childCNY > 0 {
+		add(childCNY, familyBasket[1].split)
+	}
+	if elderCNY > 0 {
+		add(elderCNY, familyBasket[2].split)
+	}
+
+	// round 到元 + 残差计入 food(金额守恒)。
+	var sum int64
+	for id, v := range out {
+		r := math.Round(v)
+		out[id] = r
+		sum += int64(r)
+	}
+	if residual := totalCNY - sum; residual != 0 {
+		out["food"] += float64(residual)
+	}
+	return out
+}
+
+// splitEngelLegacy 旧口径恩格尔分配(BalanceV2Enabled=false 路径;批次74 及之前
+// 逐字段不变):用固定 CNY 常数从总额里扣减家庭基数(配偶 2000/每孩 5000/
+// 每位老人 1000),余额归本人,再按 §3.4 表拆分家庭项。
+//
+// 保留原因:旧口径路径(BalanceV2Enabled=false)是回滚阀,必须与批次74 完全一致;
+// v2 路径改用 splitEngel(比例切分)。
+func splitEngelLegacy(totalCNY int64, p *Player, age int) map[string]float64 {
+	out := map[string]float64{}
+	if totalCNY <= 0 || p == nil {
+		return out
+	}
+	// 家庭构成(与 settlement 步骤5 旧口径同源:配偶 2000/每孩 5000/每位老人 1000)。
 	spouseCNY, childCNY, elderCNY := 0.0, 0.0, 0.0
 	if p.Family.Marital == "married" {
 		spouseCNY = float64(livingSpouseCNY)

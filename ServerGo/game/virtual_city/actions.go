@@ -123,6 +123,12 @@ func (w *World) ApplyAction(seat int, a Action) (string, *errcode.Error) {
 	if !p.Alive || p.StoppedMonths > 0 {
 		return "", errcode.Code(errcode.ErrVirtualCityPlayerInactive)
 	}
+	// 批次75:三阶段破产动作守卫(H1/R1;方案 §3.6.2/§3.6.3)。
+	if w.BalanceV2Enabled {
+		if err := w.guardHardshipAction(p, a); err != nil {
+			return "", err
+		}
+	}
 
 	switch a.Type {
 	case ActBuyAsset:
@@ -182,6 +188,47 @@ func (w *World) ApplyAction(seat int, a Action) (string, *errcode.Error) {
 	default:
 		return "", errcode.CodeMsg(errcode.ErrValidationFailed, "unknown wealth action: "+a.Type)
 	}
+}
+
+// guardHardshipAction 三阶段破产动作守卫(批次75,方案 §3.6.2/§3.6.3):
+//
+//	H1 困难期:拒绝 work_overtime / 新增贷款 / 买入非债券风险资产(股票/黄金/房产/商铺);
+//	R1 冻结期(1 月):仅允许还款与保险动作,其余拒绝。
+//
+// 工资、失业保险与被动收入由月结自动发放,不经动作面 ⇒ 不受冻结影响。
+func (w *World) guardHardshipAction(p *Player, a Action) *errcode.Error {
+	if p == nil {
+		return nil
+	}
+	if p.InHardship {
+		switch a.Type {
+		case ActWorkOvertime:
+			return errcode.CodeMsg(errcode.ErrVirtualCityGateFailed, "困难期内禁止加班")
+		case ActTakeLoan:
+			return errcode.CodeMsg(errcode.ErrVirtualCityGateFailed, "困难期内禁止新增贷款")
+		case ActBuyAsset:
+			if a.Asset != AssetBond {
+				return errcode.CodeMsg(errcode.ErrVirtualCityGateFailed, "困难期内禁止买入非债券风险资产")
+			}
+		case ActBuyHouse:
+			return errcode.CodeMsg(errcode.ErrVirtualCityGateFailed, "困难期内禁止购置房产/商铺")
+		}
+	}
+	if p.InR1 && p.R1FreezeMonths > 0 {
+		switch a.Type {
+		case ActRepayLoan, ActEarlyRepay, ActBuyInsurance, ActCancelInsurance:
+			// 还款 / 保险动作在冻结期仍允许。
+		default:
+			return errcode.CodeMsg(errcode.ErrVirtualCityGateFailed, "重组冻结期内仅可还款/投保")
+		}
+	}
+	// R1 后 24 月内禁止新杠杆(方案 §3.6.3-4)。
+	if p.InR1 || (p.LastR1EndMonth > 0 && w.Month-p.LastR1EndMonth <= ReorgRepeatWindowMonths) {
+		if a.Type == ActTakeLoan || (a.Type == ActBuyHouse && a.DownpayRatio < 1.0) {
+			return errcode.CodeMsg(errcode.ErrVirtualCityGateFailed, "重组后 24 月内禁止新增杠杆")
+		}
+	}
+	return nil
 }
 
 // spendBudget 动作成功后统一扣预算 + 记公开动作文本。

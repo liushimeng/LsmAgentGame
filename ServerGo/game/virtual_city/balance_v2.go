@@ -1,11 +1,12 @@
-// Package virtual_city — balance_v2.go: P0 经济平衡 v2 第一步「只救命」
-// (批次74,2026-10-22 §74)。
+// Package virtual_city — balance_v2.go: P0 经济平衡 v2「只救命」常量与纯函数
+// (批次74 第一步,2026-10-22 §74;批次75 第二步「三阶段破产」B75-1 扩展)。
 //
 // 权威契约:lag_docs/虚拟城市/已实现/02-架构设计/
-// 虚拟城市-P0经济平衡修复与蒙特卡洛验收方案-v1.md §3.2/§3.3/§3.4,
-// 本批实施口径见 lag_docs/虚拟城市/已实现/74-P0经济平衡v2第一步/01-方案设计.md §3。
+// 虚拟城市-P0经济平衡修复与蒙特卡洛验收方案-v1.md §3.2/§3.3/§3.4/§3.6,
+// 批次74 口径见 lag_docs/虚拟城市/已实现/74-P0经济平衡v2第一步/01-方案设计.md §3,
+// 批次75 口径见 lag_docs/虚拟城市/已实现/75-P0经济平衡v2第二步-三阶段破产/01-方案设计.md §3。
 //
-// 五项杠杆(全部由 World.BalanceV2Enabled 总开关控制,false = 批次73 旧口径
+// 批次74 五项杠杆(全部由 World.BalanceV2Enabled 总开关控制,false = 批次73 旧口径
 // 逐字段一致):
 //  1. 生效初始现金 = ceil_1000(max(card.Savings, StartCashMonths × SurvivalCore));
 //  2. 基础住房租金 = min(Market.HouseRent, clamp(BasicRentRate × 家庭常规收入,
@@ -14,9 +15,13 @@
 //  4. 失业救济金 v2 = clamp(0.5 × SalaryBase, 1,800, 8,000),取消等待期与衰减;
 //  5. 失业 hazard v2 = 0.8% / 3% / 5%,乘 Labor 倍率与认知守卫后封顶 8%。
 //
+// 批次75 三阶段破产(B75-1)新增:GraceFloor / H1 时长 / R1 分期 / 信用分上下限 /
+// 房贷展期 / 自住房保留 + graceFloor / hardshipDuration / reorgPeriods /
+// predictedBaseCashFlow 纯函数;状态机与清算动作在 bankruptcy_v2.go。
+//
 // 硬纪律:
-//   - **零新增 rand 消费点**(只改阈值/公式,随机序列形态不变);
-//   - 常量集中本文件(settlement.go 已 1052 行);不加 LsmAgentGame.conf 配置项;
+//   - **零新增 rand 消费点**(只改阈值/公式/状态,随机序列形态不变);
+//   - 常量集中本文件;不加 LsmAgentGame.conf 配置项;
 //   - 所有现金变动仍走 World.Pay(本文件全部为纯计算,不动账)。
 package virtual_city
 
@@ -61,6 +66,72 @@ const (
 	UnemploymentHazardDepressionLegacy = 0.25
 )
 
+// ── 批次75 三阶段破产常量(B75-1,方案 §3.6)────────────────────────────
+const (
+	// GraceFloorBaseCNY GraceFloor 下限绝对值(元):现金 ≥ −30000 视为流动性困难。
+	GraceFloorBaseCNY int64 = 30000
+	// GraceFloorCapCNY GraceFloor 上限绝对值(元)。
+	GraceFloorCapCNY int64 = 100000
+
+	// HardshipFirstMonths H1 首次时长(月)。
+	HardshipFirstMonths = 6
+	// HardshipRepeatMonths H1 重复触发时长(月)。
+	HardshipRepeatMonths = 3
+	// HardshipRepeatWindowMonths H1 重复触发判定窗口(月)。
+	HardshipRepeatWindowMonths = 24
+
+	// ReorgFirstPeriods R1 首次重组分期数(期)。
+	ReorgFirstPeriods = 60
+	// ReorgRepeatPeriods R1 重复重组分期数(期)。
+	ReorgRepeatPeriods = 36
+	// ReorgRepeatWindowMonths R1 重复重组判定窗口(月)。
+	ReorgRepeatWindowMonths = 24
+
+	// CreditScoreFloorV2 重组后信用分下限(不归零)。
+	CreditScoreFloorV2 = 400
+	// CreditScoreR1CapV2 重组后信用分上限(按时还款回补封顶)。
+	CreditScoreR1CapV2 = 550
+	// CreditScoreOnTimeStepV2 每 6 月按时还款的信用分回补步长。
+	CreditScoreOnTimeStepV2 = 10
+	// CreditScoreOnTimeEveryV2 按时还款回补周期(月)。
+	CreditScoreOnTimeEveryV2 = 6
+
+	// MortgageExtensionMonthsV2 H1 房贷展期月数(一次性)。
+	MortgageExtensionMonthsV2 = 12
+	// MortgagePaymentIncomeRatioV2 H1 房贷展期前提:月供 ≤ 家庭常规收入比。
+	MortgagePaymentIncomeRatioV2 = 0.35
+	// SelfOccupiedRetentionRatioV2 R1 保留自住房条件:房贷+物业+基础生活 ≤ 常规收入比。
+	SelfOccupiedRetentionRatioV2 = 0.55
+	// SelfOccupiedReserveMonthsV2 R1 保留自住房需保留的生存金月数。
+	SelfOccupiedReserveMonthsV2 = 3
+)
+
+// ── 批次75 B75-2 家庭支出口径常量(方案 §3.7)──────────────────────────
+//
+// 事实基础:profession.Card.Expense(=卡面 monthly_expense)= **家庭总生活消费**
+// (含初始配偶/子女/赡养)。批次74 方案 §2.3 已用 4000 张真实卡实证:
+// monthly_expense/income 随子女数上升(1 孩 0.541 → 2 孩 0.685 → 3 孩 0.699),
+// 与 2025 数据锚点「消费倾向 68%」同口径。
+//
+// ⇒ 引擎**不得**在 living(=Card.Expense × infl × 档位乘数)之上再叠加
+// 「配偶 2,000 + 每孩 5,000 + 赡养 1,000/位」(**重复计入**;批次74 实测
+// 已婚有孩卡 median 总生活支出/收入 = 1.16)。
+//
+// v2 口径(BalanceV2Enabled=true):
+//   - 步骤5 家庭加项只计**游戏内新增成员**(新配偶/新生儿);
+//   - 恩格尔切分改为按成员构成权重**比例切分**(金额守恒)。
+// false(BalanceV2Enabled=false)⇒ 旧口径常量叠加原样保留(批次74 逐字段一致)。
+const (
+	// FamilyWeightOwn 本人在家庭消费切分中的权重(基准 1.0 ≡ 2000 元档)。
+	FamilyWeightOwn = 1.0
+	// FamilyWeightSpouse 配偶权重(1.0 ≡ 2000 元/月档)。
+	FamilyWeightSpouse = 1.0
+	// FamilyWeightChild 每孩权重(2.5 ≡ 5000/2000,沿用旧常数比例)。
+	FamilyWeightChild = 2.5
+	// FamilyWeightElder 每位赡养老人权重(0.5 ≡ 1000/2000)。
+	FamilyWeightElder = 0.5
+)
+
 // ── 参数读取(nil/零值安全;零值 World 视为默认值)────────────────────
 
 // basicRentRate 基础租占比(<=0 ⇒ 默认 0.25;MCOverride.BasicRentRate 落点)。
@@ -97,6 +168,30 @@ func householdRegularGrossIncome(p *Player) int64 {
 		return 0
 	}
 	return p.SalaryBase + p.Family.SpouseIncome
+}
+
+// familyLivingAddV2 游戏内新增成员的月生活支出加项(v2 口径,方案 §3.7)。
+//
+// **只计**:
+//   - 游戏内新配偶:结婚事件(events.go)置 Marital="married" 且 SpouseIncome=6000;
+//     卡面初始已婚者 SpouseIncome=0 ⇒ 天然可区分;
+//   - 游戏内新生儿:生育事件(events.go)向 p.BirthMonths 追加一条(每次生育一条)。
+//
+// **不加**:初始卡面配偶 / 初始子女(Card.ChildrenCount)/ 赡养老人
+// (Card.EldersDependent)—— 三者已含在卡面 monthly_expense(=Card.Expense)内,
+// 再加即**重复计入**(B75-2 修正对象)。
+//
+// 纯计算(零 rand);BalanceV2Enabled=false 路径不调用本函数(旧口径常量叠加)。
+func familyLivingAddV2(p *Player) int64 {
+	if p == nil {
+		return 0
+	}
+	var add int64
+	if p.Family.Marital == "married" && p.Family.SpouseIncome > 0 {
+		add += livingSpouseCNY
+	}
+	add += int64(len(p.BirthMonths)) * livingChildCNY
+	return add
 }
 
 // basicRent 租房者的基础住房月租(方案 §3.3.1):
@@ -172,7 +267,8 @@ func liquidReserve(p *Player) int64 {
 // forcedFrugal 引擎是否强制节俭档(方案 §3.4):
 //  1. w.Month ≤ FrugalMonths(新手保护期);
 //  2. 流动性储备 < 6 × SurvivalCore;
-//  3. 失业期(破产宽限期/重组观察期归批次 75)。
+//  3. 失业期;
+//  4. 批次75:困难期(H1)/重组观察期(R1) —— 方案 §3.3.2 条件③。
 func (w *World) forcedFrugal(p *Player) bool {
 	if w == nil || p == nil {
 		return false
@@ -183,7 +279,127 @@ func (w *World) forcedFrugal(p *Player) bool {
 	if p.UnemployedMonths > 0 {
 		return true
 	}
+	if w.BalanceV2Enabled && (p.InHardship || p.InR1) {
+		return true
+	}
 	return liquidReserve(p) < FrugalReserveMonths*w.survivalCoreM1(p)
+}
+
+// ── 批次75 三阶段破产纯函数(方案 §3.6)──────────────────────────────
+
+// graceFloor 现金宽限下限(方案 §3.6.1):
+//
+//	GraceFloor(p) = −min(max(30000, 3 × SurvivalCoreM1(p)), 100000)
+//
+// 月末现金 ≥ GraceFloor 且 < 0 ⇒ 流动性困难(H1);< GraceFloor ⇒ 直接 R1。
+// 纯计算(零 rand)。
+func (w *World) graceFloor(p *Player) int64 {
+	if w == nil || p == nil {
+		return -GraceFloorBaseCNY
+	}
+	core := 3 * w.survivalCoreM1(p)
+	if core < GraceFloorBaseCNY {
+		core = GraceFloorBaseCNY
+	}
+	if core > GraceFloorCapCNY {
+		core = GraceFloorCapCNY
+	}
+	return -core
+}
+
+// hardshipDuration H1 时长(方案 §3.6.1):首次 6 月;上次 H1 结束 24 月内重复 ⇒ 3 月。
+func (w *World) hardshipDuration(p *Player) int {
+	if p == nil {
+		return HardshipFirstMonths
+	}
+	if p.HardshipCount > 0 && w != nil &&
+		w.Month-p.LastHardshipEndMonth <= HardshipRepeatWindowMonths {
+		return HardshipRepeatMonths
+	}
+	return HardshipFirstMonths
+}
+
+// reorgPeriods R1 重组分期数(方案 §3.6.3):首次 60 期;上次 R1 结束 24 月内重复 ⇒ 36 期。
+func (w *World) reorgPeriods(p *Player) int {
+	if p == nil {
+		return ReorgFirstPeriods
+	}
+	if p.LastR1EndMonth > 0 && w != nil &&
+		w.Month-p.LastR1EndMonth <= ReorgRepeatWindowMonths {
+		return ReorgRepeatPeriods
+	}
+	return ReorgFirstPeriods
+}
+
+// hardshipIncome 常规收入(工资 + 配偶 + 被动),用于 H1「无法付息」判定。
+// 纯计算(零 rand)。
+func (w *World) hardshipIncome(p *Player) int64 {
+	if w == nil || p == nil {
+		return 0
+	}
+	var inc int64
+	if p.UnemployedMonths <= 0 {
+		inc += p.SalaryBase
+	}
+	inc += p.Family.SpouseIncome
+	inc += p.MonthlyPassiveIncome(w.Market, w.Age())
+	return inc
+}
+
+// predictedBaseCashFlow 预测基础月现金流(方案 §3.6.1 B1 判据;纯计算零 rand):
+//
+//	= 常规收入(工资/配偶/副业基准/被动/养老金) − 固定支出(租/物业/生活/家庭/
+//	  税/社保/保险/贷款月供)
+//
+// H1 内消费贷/信用贷按只付息口径计息(本金延期);其余贷款按当前月供。
+// 副业取档位基准(不含竞争份额与方差),以保证确定性。
+func (w *World) predictedBaseCashFlow(p *Player) int64 {
+	if w == nil || p == nil {
+		return 0
+	}
+	var inflow, outflow int64
+	salary := int64(0)
+	if p.UnemployedMonths <= 0 {
+		salary = p.SalaryBase
+		inflow += p.SalaryBase
+	}
+	if p.Family.Marital == "married" && p.Family.SpouseIncome > 0 {
+		inflow += p.Family.SpouseIncome
+	}
+	if p.SideBusiness != nil && p.Energy >= 0 {
+		inflow += int64(float64(p.SideBusiness.BaseIncome)*
+			sideTierMultiplier(p.SideBusiness.PriceTier)*p.BrassSideFactor() + 0.5)
+	}
+	inflow += p.MonthlyPassiveIncome(w.Market, w.Age())
+
+	if p.selfOccupiedHouse() == nil {
+		outflow += w.basicRent(p)
+	}
+	if p.ownsProperty() {
+		outflow += propertyFeeCNY
+	}
+	infl := InflationFactorCB(w)
+	level := p.ConsumptionLevelSafe()
+	outflow += int64(float64(p.Card.Expense)*infl*consumptionLevelMult[level] + 0.5)
+	// 批次75 B75-2(v2 口径):与 settlement 步骤5 **同口径** —— 家庭加项只计
+	// 游戏内新增成员(卡面初始成员已含在 Card.Expense 内);否则预测现金流与
+	// 实际月结口径不一致,会系统性高估流出 ⇒ 误判 B1。
+	outflow += familyLivingAddV2(p)
+	outflow += MonthlyIncomeTax(salary) + SocialSecurity(salary)
+	for _, kind := range insuranceKindOrder {
+		if pol := p.Policies[kind]; pol != nil && pol.Active {
+			outflow += monthlyPremium(pol.AnnualPremiumCNY)
+		}
+	}
+	for i := range p.Loans {
+		loan := &p.Loans[i]
+		if w.hardshipLoan(p) && isConsumerOrCredit(loan.Kind) {
+			outflow += int64(float64(loan.Balance)*loan.AnnualRate/12 + 0.5)
+			continue
+		}
+		outflow += loan.MonthlyPayment
+	}
+	return inflow - outflow
 }
 
 // ── 失业保险 v2(方案 §3.4.2)─────────────────────────────────────────
