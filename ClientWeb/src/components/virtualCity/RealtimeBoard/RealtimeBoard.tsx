@@ -44,6 +44,8 @@ export function RealtimeBoard() {
   const t = useT();
   const feed = useVirtualCityStore((s) => s.realtimeFeed);
   const missions = useVirtualCityStore((s) => s.realtimeMissions);
+  // 批次78：采集健康度聚合（同样只随 HTTP 快照回读，WS 帧不携带）。
+  const stats = useVirtualCityStore((s) => s.realtimeStats);
   const [sub, setSub] = useState<RtSubTab>('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,10 +63,12 @@ export function RealtimeBoard() {
       // 快照不回读：mission 是异步的，数据经 game.realtime_feed 帧落库；
       // 拉一次快照让 accepted 后的通道状态即时可见（失败静默，等 WS 帧）。
       // 批次77：missions 不进 WS 帧，一并随快照回读（无记录为 []）。
+      // 批次78：stats 同理（无记录为 null ⇒ 不渲染统计条）。
       try {
         const r = await fetchRealtimeBoard();
         useVirtualCityStore.getState().setRealtimeFeed(r.feed ?? null);
         useVirtualCityStore.getState().setRealtimeMissions(r.missions ?? []);
+        useVirtualCityStore.getState().setRealtimeStats(r.stats ?? null);
       } catch {
         // best-effort：WS 帧会补齐
       }
@@ -169,7 +173,7 @@ export function RealtimeBoard() {
         <>
           {sub === 'overview' && <BoardOverview feed={feed} />}
           {sub === 'news' && <NewsList news={feed.news} />}
-          {sub === 'missions' && <MissionLogPanel missions={missions} />}
+          {sub === 'missions' && <MissionLogPanel missions={missions} stats={stats} />}
           {QUOTE_SUBTABS.includes(sub) && (() => {
             const cat = getCategory(feed.categories, sub);
             if (!cat || !cat.quotes.length) {

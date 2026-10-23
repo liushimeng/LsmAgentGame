@@ -53,6 +53,15 @@ const virtualCityRealtimeZH = {
   'virtualCity.rt.missions.status.ok': '成功',
   'virtualCity.rt.missions.status.fail': '失败',
   'virtualCity.rt.missions.planNone': '（未提交规划）',
+  // ── 批次 78 · 站点尝试列（MissionRecord.visited）──
+  'virtualCity.rt.missions.col.visited': '站点尝试',
+  // ── 批次 78 · 采集健康度统计条（MissionStats）──
+  'virtualCity.rt.missions.stats.total': '总次数',
+  'virtualCity.rt.missions.stats.successRate': '成功率',
+  'virtualCity.rt.missions.stats.avgSteps': '平均步数',
+  'virtualCity.rt.missions.stats.avgDuration': '平均耗时',
+  'virtualCity.rt.missions.stats.fail': '失败次数',
+  'virtualCity.rt.missions.stats.seconds': '{n} 秒',
   // ── 批次 66 外盘情绪锚 ──
   'virtualCity.rt.exo.title': '外盘情绪锚',
   'virtualCity.rt.exo.sentimentUp': '偏多',

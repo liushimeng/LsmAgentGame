@@ -8,7 +8,7 @@
 
 import { http, ApiError, isSessionExpiredError, getAuthToken } from '@/services/http';
 import type { VirtualCityCityProfileProgress, VirtualCityCityResidentProfile, VirtualCitySurvey } from '@/types/virtualCity';
-import type { MissionRecord, RealtimeBoardRefreshResult, RealtimeFeed } from '@/types/virtualCityRealtime';
+import type { MissionRecord, MissionStats, RealtimeBoardRefreshResult, RealtimeFeed } from '@/types/virtualCityRealtime';
 
 // 2026-09-22 §CityHuman全民驱动 — GET /api/games/virtual_city/professions 已随
 // 职业卡精选层退役（03 号契约）：原拉取接口及其三个类型一并删除。
@@ -113,14 +113,19 @@ export async function fetchCityResident(
 /**
  * GET /api/virtual_city/realtime_board（需登录）— 实时看板快照。
  *
- * 返回 {code:0, data:{feed: Feed, missions: MissionRecord[]}}；late-joiner 首屏
- * 靠它补齐 game.realtime_feed 帧间隙。数据是全局的（与房间无关）。
+ * 返回 {code:0, data:{feed: Feed, missions: MissionRecord[], stats: MissionStats}}；
+ * late-joiner 首屏靠它补齐 game.realtime_feed 帧间隙。数据是全局的（与房间无关）。
  * 批次77：missions 为采集任务遥测（新→旧 ≤20 条，无记录为 []）——**仅走本端点**，
  * WS game.realtime_feed 帧不携带，快照/手动刷新回读更新。
+ * 批次78：stats 为采集健康度聚合（MissionStats，无记录时全零）——同样**仅走本端点**。
  * §7.1：首屏拉取失败不算操作错误 —— 调用方静默兜底置空即可。
  */
-export function fetchRealtimeBoard(): Promise<{ feed: RealtimeFeed; missions: MissionRecord[] }> {
-  return http<{ feed: RealtimeFeed; missions: MissionRecord[] }>(
+export function fetchRealtimeBoard(): Promise<{
+  feed: RealtimeFeed;
+  missions: MissionRecord[];
+  stats: MissionStats;
+}> {
+  return http<{ feed: RealtimeFeed; missions: MissionRecord[]; stats: MissionStats }>(
     '/api/virtual_city/realtime_board',
   );
 }

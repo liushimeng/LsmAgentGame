@@ -282,3 +282,68 @@ func TestMissionLog_RecordIDFormat(t *testing.T) {
 		t.Errorf("id = %q, want prefix %q", got, CategoryNews+"-")
 	}
 }
+
+// TestRunMission_VisitedTelemetry 批次78 §3.3-5:mission 出口把
+// web_open/web_read 访问过的 URL 写进 rec.Visited(新→旧去重)。
+func TestRunMission_VisitedTelemetry(t *testing.T) {
+	srv := newMockServer(t, func(path string, body map[string]any) (int, string, any) {
+		switch path {
+		case "/NewChromePage":
+			return 0, "ok", map[string]any{"page_id": "p_v1", "title": "t", "final_url": "https://x/"}
+		case "/BatchEval":
+			return 0, "ok", map[string]any{"results": []any{
+				map[string]any{"index": 0, "ok": true, "result": "T"},
+				map[string]any{"index": 1, "ok": true, "result": "B"},
+			}}
+		case "/CloseChromePage":
+			return 0, "ok", map[string]any{"closed": true}
+		}
+		return 1000, "bad path", nil
+	})
+	defer srv.Close()
+	fp := &missionFakeProvider{script: []llmtypes.LLMResponse{
+		missionToolUse("tu-1", ToolWebRead, map[string]any{"url": "https://qt.gtimg.cn/q=sh000001"}),
+		missionToolUse("tu-2", ToolWebDone, map[string]any{"payload": missionASharePayload()}),
+	}}
+	a, mlog := newMissionTestAgent(t, fp, srv.URL)
+	if _, err := a.RunMission(context.Background(), BuildMission(CategoryAShare)); err != nil {
+		t.Fatalf("RunMission: %v", err)
+	}
+	recs := mlog.Snapshot()
+	if len(recs) != 1 {
+		t.Fatalf("records = %d, want 1", len(recs))
+	}
+	if len(recs[0].Visited) == 0 {
+		t.Fatalf("rec.Visited must not be empty: %+v", recs[0])
+	}
+	if recs[0].Visited[0] != "https://qt.gtimg.cn/q=sh000001" {
+		t.Errorf("rec.Visited = %v", recs[0].Visited)
+	}
+}
+
+// TestRoleText_DeterministicParseDiscipline 批次78 §3.3-4:角色段必须含
+// 「确定性解析纪律」段(行情优先用 web_read 的 parse、不要自己切数字、
+// SPA 用 wait_selector、拦截时换源);既有纪律段逐字保留。
+func TestRoleText_DeterministicParseDiscipline(t *testing.T) {
+	for _, want := range []string{
+		"【确定性解析纪律(批次78)】",
+		"web_read 的 parse",
+		"不要自己按 ~ 或 , 手工切分数字",
+		"wait_selector",
+	} {
+		if !strings.Contains(roleText, want) {
+			t.Errorf("roleText missing %q", want)
+		}
+	}
+	// 既有段落逐字保留。
+	for _, want := range []string{
+		"【规划与效率(批次77)】",
+		"【纪律】",
+		"【收敛流程(重要,防步数耗尽)】",
+		"【输出 schema(web_done.payload)】",
+	} {
+		if !strings.Contains(roleText, want) {
+			t.Errorf("roleText lost existing section %q", want)
+		}
+	}
+}

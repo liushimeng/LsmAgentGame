@@ -28,10 +28,12 @@ func NewVirtualCityRealtimeAPI(svc *citychrome.Service) *VirtualCityRealtimeAPI 
 	return &VirtualCityRealtimeAPI{svc: svc}
 }
 
-// Board 处理 GET /api/virtual_city/realtime_board:返回 {code:0, data:{feed, missions}}。
+// Board 处理 GET /api/virtual_city/realtime_board:返回 {code:0, data:{feed, missions, stats}}。
 // missions 为采集任务遥测(批次77 §3.4:新→旧 ≤20 条,无记录返回 [] 非 null;
-// svc 离线分支同样带 missions: [])。
-// ⚠️ WS game.realtime_feed 帧结构不动 —— missions 只随 HTTP 快照/手动刷新回读。
+// svc 离线分支同样带 missions: []);stats 为采集健康度聚合(批次78 §3.4:
+// total/ok/fail/running/success_rate/avg_steps/avg_duration_ms/last_error,
+// 无记录时全零)。
+// ⚠️ WS game.realtime_feed 帧结构不动 —— missions/stats 只随 HTTP 快照/手动刷新回读。
 func (a *VirtualCityRealtimeAPI) Board(c *gin.Context) {
 	if a.svc == nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -43,6 +45,7 @@ func (a *VirtualCityRealtimeAPI) Board(c *gin.Context) {
 					News:       []citychrome.RealtimeNews{},
 				},
 				"missions": a.missionsOrNil(),
+				"stats":    a.statsOrNil(),
 			},
 		})
 		return
@@ -53,8 +56,18 @@ func (a *VirtualCityRealtimeAPI) Board(c *gin.Context) {
 		"data": gin.H{
 			"feed":     a.svc.Feed(),
 			"missions": a.missionsOrNil(),
+			"stats":    a.statsOrNil(),
 		},
 	})
+}
+
+// statsOrNil 返回 Board 的 stats 字段(批次78 §3.4):svc 在线取遥测聚合,
+// svc 为 nil 时返回零值 MissionStats(序列化为对象,非 null)。
+func (a *VirtualCityRealtimeAPI) statsOrNil() citychrome.MissionStats {
+	if a.svc == nil {
+		return citychrome.MissionStats{}
+	}
+	return a.svc.MissionStats()
 }
 
 // missionsOrNil 返回 Board 的 missions 字段(批次77 §3.4):svc 在线取遥测快照,

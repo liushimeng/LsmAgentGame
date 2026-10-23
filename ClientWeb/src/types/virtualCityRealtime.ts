@@ -112,6 +112,38 @@ export interface MissionRecord {
   news: number;
   /** 失败原因，成功为空串。 */
   error: string;
+  /**
+   * 批次 78 · 本次 mission 访问过的 URL 轨迹（新→旧去重，≤6 条，每条 ≤120 rune）。
+   *
+   * 契约：服务端 `MissionRecord.Visited` 的 JSON 名逐字对齐 `visited`；
+   * 缺省为空数组（早期记录无该字段）。前端只展示 host + pathname。
+   * ⚠ 服务端 Go 侧 nil slice 会序列化成 `null` ⇒ 渲染端一律 `m.visited ?? []`。
+   */
+  visited: string[];
+}
+
+/**
+ * 批次 78 · 采集健康度聚合（服务端 `MissionLog.Stats()`）。
+ *
+ * 契约字段名与后端 JSON **逐字一致**（snake_case，不做驼峰改写）：
+ * total / ok / fail / running / success_rate / avg_steps / avg_duration_ms / last_error。
+ *
+ * 仅随 HTTP 快照 GET /api/virtual_city/realtime_board 的 data.stats 下发，
+ * **不进 WS game.realtime_feed 帧**（无记录时全零：success_rate=0、last_error=""）。
+ */
+export interface MissionStats {
+  total: number;
+  ok: number;
+  fail: number;
+  running: number;
+  /** 成功率 0..1（分母 = ok + fail）。 */
+  success_rate: number;
+  /** 成功记录平均步数。 */
+  avg_steps: number;
+  /** 成功记录平均耗时（毫秒）。 */
+  avg_duration_ms: number;
+  /** 最近一次失败原因，成功为空串。 */
+  last_error: string;
 }
 
 /** 批次 66 外盘情绪锚（game.state.market.exo_anchor；契约 01 §3.3）。 */

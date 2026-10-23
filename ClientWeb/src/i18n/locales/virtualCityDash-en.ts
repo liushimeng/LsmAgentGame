@@ -26,6 +26,13 @@ const virtualCityDashEN = {
   'virtualCity.dash.sources.empty': 'Data source catalog is currently unavailable',
   'virtualCity.dash.sources.openLink': 'Open',
   'virtualCity.dash.sources.uncategorized': 'Other',
+  // ── Batch 78: live status bar per data-source group (.virtualCity-dash__src-live__*) ──
+  'virtualCity.dash.sources.live.title': 'Live status',
+  'virtualCity.dash.sources.live.count': '{n} quotes',
+  'virtualCity.dash.sources.live.source': 'Source {source}',
+  'virtualCity.dash.sources.live.static': 'Static registry · no matching live category',
+  'virtualCity.dash.sources.live.offline': 'Live channel not ready · no readable data',
+  'virtualCity.dash.sources.live.noData': 'No data for this category yet',
 
   'virtualCity.dash.overview.time': 'Time & Cycle',
   'virtualCity.dash.overview.society': 'Society & Welfare',

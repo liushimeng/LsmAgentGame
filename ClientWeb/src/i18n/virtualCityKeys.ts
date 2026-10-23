@@ -971,6 +971,16 @@ export interface VirtualCityDict {
   'virtualCity.rt.missions.status.ok': string;
   'virtualCity.rt.missions.status.fail': string;
   'virtualCity.rt.missions.planNone': string;
+  /** 批次 78 · 站点尝试列（MissionRecord.visited）。 */
+  'virtualCity.rt.missions.col.visited': string;
+  /** 批次 78 · 采集健康度统计条（MissionStats）。 */
+  'virtualCity.rt.missions.stats.total': string;
+  'virtualCity.rt.missions.stats.successRate': string;
+  'virtualCity.rt.missions.stats.avgSteps': string;
+  'virtualCity.rt.missions.stats.avgDuration': string;
+  'virtualCity.rt.missions.stats.fail': string;
+  /** 平均耗时单位（{n} 秒）。 */
+  'virtualCity.rt.missions.stats.seconds': string; // {n}
 
   // ── 2026-10-21 §城市模拟定位 — 场景推演台（ScenarioPanel / 条件触发者）──
   // 目录键文案出处：tmpPlan/虚拟城市-模拟程序化与预测运行优化_20261021_095114.md §5.1/§5.3。
@@ -1111,6 +1121,13 @@ export interface VirtualCityDict {
   'virtualCity.dash.sources.empty': string;
   'virtualCity.dash.sources.openLink': string;
   'virtualCity.dash.sources.uncategorized': string;
+  /** 批次 78 · 数据源分组的实时状态条（.virtualCity-dash__src-live__*）。 */
+  'virtualCity.dash.sources.live.title': string;
+  'virtualCity.dash.sources.live.count': string; // {n}
+  'virtualCity.dash.sources.live.source': string; // {source}
+  'virtualCity.dash.sources.live.static': string;
+  'virtualCity.dash.sources.live.offline': string;
+  'virtualCity.dash.sources.live.noData': string;
   // 城市总览面板（6 个 KPI 组标题 + 少量新标签；其余复用既有键）
   'virtualCity.dash.overview.time': string;
   'virtualCity.dash.overview.society': string;

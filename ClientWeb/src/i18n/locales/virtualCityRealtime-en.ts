@@ -46,6 +46,15 @@ const virtualCityRealtimeEN = {
   'virtualCity.rt.missions.status.ok': 'OK',
   'virtualCity.rt.missions.status.fail': 'Failed',
   'virtualCity.rt.missions.planNone': '(no plan)',
+  // ── Batch 78 · visited sites column (MissionRecord.visited) ──
+  'virtualCity.rt.missions.col.visited': 'Sites tried',
+  // ── Batch 78 · collection health stats bar (MissionStats) ──
+  'virtualCity.rt.missions.stats.total': 'Runs',
+  'virtualCity.rt.missions.stats.successRate': 'Success rate',
+  'virtualCity.rt.missions.stats.avgSteps': 'Avg steps',
+  'virtualCity.rt.missions.stats.avgDuration': 'Avg duration',
+  'virtualCity.rt.missions.stats.fail': 'Failures',
+  'virtualCity.rt.missions.stats.seconds': '{n} s',
   // ── 批次 66 外盘情绪锚 ──
   'virtualCity.rt.exo.title': 'Global Sentiment Anchor',
   'virtualCity.rt.exo.sentimentUp': 'Risk-on',

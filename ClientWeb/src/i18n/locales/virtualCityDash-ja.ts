@@ -26,6 +26,13 @@ const virtualCityDashJA = {
   'virtualCity.dash.sources.empty': 'データソース一覧は現在利用できません',
   'virtualCity.dash.sources.openLink': '開く',
   'virtualCity.dash.sources.uncategorized': 'その他',
+  // ── バッチ78：データソース分组のリアルタイム状況バー（.virtualCity-dash__src-live__*）──
+  'virtualCity.dash.sources.live.title': 'リアルタイム状況',
+  'virtualCity.dash.sources.live.count': '相場 {n} 件',
+  'virtualCity.dash.sources.live.source': 'ソース {source}',
+  'virtualCity.dash.sources.live.static': '静的登録簿 · 対応するリアルタイムカテゴリなし',
+  'virtualCity.dash.sources.live.offline': 'リアルタイムチャネル未準備 · 読み取り可能なデータなし',
+  'virtualCity.dash.sources.live.noData': 'このカテゴリにはまだデータがありません',
 
   'virtualCity.dash.overview.time': '時間と景気循環',
   'virtualCity.dash.overview.society': '社会と福祉',

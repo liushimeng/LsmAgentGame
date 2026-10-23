@@ -123,3 +123,67 @@ func TestVirtualCityRealtimeBoard_MissionRecordShape(t *testing.T) {
 		t.Fatal("citychrome.Start returned nil")
 	}
 }
+
+// TestVirtualCityRealtimeBoard_StatsShape 批次78 §3.4:快照 data.stats 字段
+// 形状(total/ok/fail/running/success_rate/avg_steps/avg_duration_ms/last_error);
+// svc=nil 的离线分支同样带 stats(全零对象,非 null)。
+func TestVirtualCityRealtimeBoard_StatsShape(t *testing.T) {
+	// 离线分支(svc=nil)。
+	body := getRealtimeBoardJSON(t, realtimeBoardRouter(nil))
+	data, ok := body["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("data missing: %v", body)
+	}
+	stats, ok := data["stats"].(map[string]any)
+	if !ok {
+		t.Fatalf("offline data.stats must be an object (not null): %v", data)
+	}
+	for _, k := range []string{"total", "ok", "fail", "running",
+		"success_rate", "avg_steps", "avg_duration_ms", "last_error"} {
+		if _, found := stats[k]; !found {
+			t.Errorf("offline data.stats missing key %q: %v", k, stats)
+		}
+	}
+	if v, _ := stats["total"].(float64); v != 0 {
+		t.Errorf("offline stats.total = %v, want 0", stats["total"])
+	}
+
+	// 在线分支(svc≠nil)。
+	svc := citychrome.Start(config.CityChromeConfig{Enabled: false}, nil)
+	body = getRealtimeBoardJSON(t, realtimeBoardRouter(svc))
+	data = body["data"].(map[string]any)
+	stats, ok = data["stats"].(map[string]any)
+	if !ok {
+		t.Fatalf("data.stats must be an object: %v", data)
+	}
+	for _, k := range []string{"total", "ok", "fail", "running",
+		"success_rate", "avg_steps", "avg_duration_ms", "last_error"} {
+		if _, found := stats[k]; !found {
+			t.Errorf("data.stats missing key %q: %v", k, stats)
+		}
+	}
+}
+
+// TestVirtualCityRealtimeBoard_MissionRecordVisitedField 批次78 §3.3:
+// MissionRecord 序列化后带 visited 字段(≤6 条 URL)。
+func TestVirtualCityRealtimeBoard_MissionRecordVisitedField(t *testing.T) {
+	rec := citychrome.MissionRecord{
+		ID: "a_share-1", Category: citychrome.CategoryAShare, Status: citychrome.MissionStatusOK,
+		Visited: []string{"https://qt.gtimg.cn/q=sh000001"},
+	}
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	visited, ok := got["visited"].([]any)
+	if !ok {
+		t.Fatalf("mission record json missing visited array: %s", raw)
+	}
+	if len(visited) != 1 {
+		t.Errorf("visited = %v, want 1 entry", visited)
+	}
+}

@@ -180,6 +180,30 @@ func (s *Service) MissionLog() []MissionRecord {
 	return s.mlog.Snapshot()
 }
 
+// MissionStats 返回采集健康度聚合(批次78 §3.3/§3.4:HTTP 快照 data.stats)。
+// nil-safe:s 为 nil 或日志缺失时返回零值 MissionStats。
+func (s *Service) MissionStats() MissionStats {
+	if s == nil || s.mlog == nil {
+		return MissionStats{}
+	}
+	return s.mlog.Stats()
+}
+
+// RealworldInfo 组装 realworld_info 的紧凑 JSON(批次78 §3.5:op 扩为
+// overview|quotes|news|history|sources)。
+//
+// op=sources 需要采集遥测(MissionLog)算类目健康度,故在 Service 层组装;
+// 其余 op 只读 Feed 快照。nil-safe:s 为 nil 时返回错误文本(不 panic)。
+func (s *Service) RealworldInfo(op, category, keyword, symbol string) (string, error) {
+	if s == nil {
+		return "", fmt.Errorf("真实世界数据通道未启动(city_chrome.enabled=false 或服务未起)")
+	}
+	if op == "sources" {
+		return SourcesCompactJSON(s.mlog, category)
+	}
+	return FeedCompactJSON(s.Feed(), op, category, keyword, symbol)
+}
+
 // OnFeed 订阅 Feed 更新(广播出口:WS 层 listener 注入;每次成功 mission 后回调)。
 // 返回取消函数。回调在调度 goroutine 内同步执行,不得阻塞。
 func (s *Service) OnFeed(fn func(Feed)) func() {

@@ -18,7 +18,7 @@ import type {
   VirtualCitySurvey,
 } from '@/types/virtualCity';
 import { VIRTUAL_CITY_MIN_SEATS, virtualCityOccupiedSeats, virtualCitySeatCapacity } from '@/types/virtualCity';
-import type { MissionRecord, RealtimeFeed } from '@/types/virtualCityRealtime';
+import type { MissionRecord, MissionStats, RealtimeFeed } from '@/types/virtualCityRealtime';
 
 /**
  * 右侧面板 Tab（聊天 / Agent 思维独立于 Tab 栈之外）。
@@ -128,6 +128,10 @@ interface VirtualCityStore {
   // null = 快照未回读；[] = 无记录（空态同 null 口径）。
   realtimeMissions: MissionRecord[] | null;
 
+  // ── 批次78：采集健康度聚合（MissionStats）——HTTP 快照回读；WS 帧不携带 ──
+  // null = 快照未回读（不渲染统计条）；非 null = 服务端下发的聚合值。
+  realtimeStats: MissionStats | null;
+
   // ── UI ──
   panelTab: VirtualCityPanelTab;
   selectedDistrict: VirtualCityDistrictId | null;
@@ -161,6 +165,8 @@ interface VirtualCityStore {
   setRealtimeFeed: (feed: RealtimeFeed | null) => void;
   /** 批次77：missions 整表替换（仅 HTTP 快照 / 手动刷新回读；无记录为 []）。 */
   setRealtimeMissions: (missions: MissionRecord[]) => void;
+  /** 批次78：stats 整表替换（仅 HTTP 快照 / 手动刷新回读；无记录为 null）。 */
+  setRealtimeStats: (stats: MissionStats | null) => void;
   reset: () => void;
 }
 
@@ -181,6 +187,7 @@ export const useVirtualCityStore = create<VirtualCityStore>((set) => ({
   listingBook: null,
   realtimeFeed: null,
   realtimeMissions: null,
+  realtimeStats: null,
   panelTab: 'finance',
   selectedDistrict: null,
 
@@ -280,6 +287,7 @@ export const useVirtualCityStore = create<VirtualCityStore>((set) => ({
 
   setRealtimeFeed: (feed) => set({ realtimeFeed: feed }),
   setRealtimeMissions: (missions) => set({ realtimeMissions: missions }),
+  setRealtimeStats: (stats) => set({ realtimeStats: stats }),
 
   reset: () =>
     set({

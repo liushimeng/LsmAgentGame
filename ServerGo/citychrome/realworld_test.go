@@ -3,6 +3,7 @@
 package citychrome
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -29,7 +30,7 @@ func sampleFeed() Feed {
 }
 
 func TestFeedCompactJSON_Overview(t *testing.T) {
-	text, err := FeedCompactJSON(sampleFeed(), "overview", "", "")
+	text, err := FeedCompactJSON(sampleFeed(), "overview", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +45,7 @@ func TestFeedCompactJSON_Overview(t *testing.T) {
 }
 
 func TestFeedCompactJSON_Quotes(t *testing.T) {
-	text, err := FeedCompactJSON(sampleFeed(), "quotes", "", "")
+	text, err := FeedCompactJSON(sampleFeed(), "quotes", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +56,7 @@ func TestFeedCompactJSON_Quotes(t *testing.T) {
 		t.Errorf("quotes should include both categories: %s", text)
 	}
 	// category 过滤。
-	text, err = FeedCompactJSON(sampleFeed(), "quotes", CategoryCrypto, "")
+	text, err = FeedCompactJSON(sampleFeed(), "quotes", CategoryCrypto, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +66,7 @@ func TestFeedCompactJSON_Quotes(t *testing.T) {
 }
 
 func TestFeedCompactJSON_News(t *testing.T) {
-	text, err := FeedCompactJSON(sampleFeed(), "news", "", "")
+	text, err := FeedCompactJSON(sampleFeed(), "news", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,14 +76,14 @@ func TestFeedCompactJSON_News(t *testing.T) {
 }
 
 func TestFeedCompactJSON_Errors(t *testing.T) {
-	if _, err := FeedCompactJSON(sampleFeed(), "hack", "", ""); err == nil {
+	if _, err := FeedCompactJSON(sampleFeed(), "hack", "", "", ""); err == nil {
 		t.Error("unknown op should fail")
 	}
-	if _, err := FeedCompactJSON(sampleFeed(), "quotes", "mars", ""); err == nil {
+	if _, err := FeedCompactJSON(sampleFeed(), "quotes", "mars", "", ""); err == nil {
 		t.Error("unknown category should fail")
 	}
 	// op 缺省 = overview。
-	if _, err := FeedCompactJSON(sampleFeed(), "", "", ""); err != nil {
+	if _, err := FeedCompactJSON(sampleFeed(), "", "", "", ""); err != nil {
 		t.Errorf("empty op should default overview: %v", err)
 	}
 }
@@ -99,7 +100,7 @@ func TestFeedCompactJSON_NewsKeyword(t *testing.T) {
 		},
 	}
 	// 命中:大小写不敏感。
-	text, err := FeedCompactJSON(f, "news", "", "gold")
+	text, err := FeedCompactJSON(f, "news", "", "gold", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +111,7 @@ func TestFeedCompactJSON_NewsKeyword(t *testing.T) {
 		t.Errorf("keyword should filter out non-matching titles: %s", text)
 	}
 	// 中文命中。
-	text, err = FeedCompactJSON(f, "news", "", "黄金")
+	text, err = FeedCompactJSON(f, "news", "", "黄金", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +119,7 @@ func TestFeedCompactJSON_NewsKeyword(t *testing.T) {
 		t.Errorf("chinese keyword filter failed: %s", text)
 	}
 	// 不命中 ⇒ 空数组(非 null)。
-	text, err = FeedCompactJSON(f, "news", "", "不存在的词")
+	text, err = FeedCompactJSON(f, "news", "", "不存在的词", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +127,7 @@ func TestFeedCompactJSON_NewsKeyword(t *testing.T) {
 		t.Errorf("non-matching keyword should yield empty news: %s", text)
 	}
 	// 空串 = 不过滤。
-	text, err = FeedCompactJSON(f, "news", "", "")
+	text, err = FeedCompactJSON(f, "news", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +137,7 @@ func TestFeedCompactJSON_NewsKeyword(t *testing.T) {
 		}
 	}
 	// 其余 op 忽略 keyword。
-	text, err = FeedCompactJSON(f, "overview", "", "黄金")
+	text, err = FeedCompactJSON(f, "overview", "", "黄金", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,5 +205,212 @@ func TestService_DisabledOffline(t *testing.T) {
 	}
 	if ok, _, e := svc.Refresh("a_share"); ok || e == nil || e.Code != 35053 {
 		t.Errorf("disabled refresh should be 35053: ok=%v e=%v", ok, e)
+	}
+}
+
+// ── 批次78 §3.5:realworld_info 扩 op ────────────────────────────────
+
+// TestFeedCompactJSON_OverviewAgeStale op=overview:各类目带 age_seconds/stale。
+func TestFeedCompactJSON_OverviewAgeStale(t *testing.T) {
+	old := time.Now().Unix() - 7200 // 2 小时前(行情类目间隔 1800s ⇒ stale)。
+	f := Feed{
+		Channel: ChannelStatus{Status: ChannelOnline},
+		Categories: map[string]RealtimeCategory{
+			CategoryAShare: {UpdatedAt: old, Source: "腾讯行情", Quotes: []RealtimeQuote{
+				quote("000001", "上证指数", 3658.03, -1.48),
+			}},
+			CategoryMacro: {UpdatedAt: time.Now().Unix(), Source: "统计局", Quotes: []RealtimeQuote{
+				quote("CPI_YOY", "CPI同比", 0.4, -0.1),
+			}},
+		},
+	}
+	text, err := FeedCompactJSON(f, "overview", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Categories map[string]struct {
+			AgeSeconds int64 `json:"age_seconds"`
+			Stale      bool  `json:"stale"`
+			UpdatedAt  int64 `json:"updated_at"`
+		} `json:"categories"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("bad json: %v (%s)", err, text)
+	}
+	a := out.Categories[CategoryAShare]
+	if a.AgeSeconds < 7000 {
+		t.Errorf("a_share age_seconds = %d, want >= 7000", a.AgeSeconds)
+	}
+	if !a.Stale {
+		t.Error("a_share should be stale (age > 2×1800s)")
+	}
+	if out.Categories[CategoryMacro].Stale {
+		t.Error("macro (fresh) must not be stale")
+	}
+}
+
+// TestFeedCompactJSON_QuotesSymbolFilter op=quotes 的 symbol 精确过滤。
+func TestFeedCompactJSON_QuotesSymbolFilter(t *testing.T) {
+	f := sampleFeed()
+	// 命中(大小写不敏感)。
+	text, err := FeedCompactJSON(f, "quotes", "", "", "btc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "BTC") || strings.Contains(text, "上证指数") {
+		t.Errorf("symbol filter failed: %s", text)
+	}
+	// 未命中 ⇒ 空数组。
+	text, err = FeedCompactJSON(f, "quotes", "", "", "NOPE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, `"quotes":[]`) {
+		t.Errorf("non-matching symbol should yield empty quotes: %s", text)
+	}
+}
+
+// TestFeedCompactJSON_History op=history:symbol 必填;命中返价点;未命中返空。
+func TestFeedCompactJSON_History(t *testing.T) {
+	st := NewFeedStore(12, 20)
+	st.MergeMissionResult(1000, &MissionPayload{Category: CategoryAShare, Source: "腾讯行情",
+		Quotes: []RealtimeQuote{quote("000001", "上证指数", 3658.03, -1.48)}})
+	st.MergeMissionResult(2000, &MissionPayload{Category: CategoryAShare, Source: "腾讯行情",
+		Quotes: []RealtimeQuote{quote("000001", "上证指数", 3660.00, -1.2)}})
+	f := st.Snapshot()
+
+	text, err := FeedCompactJSON(f, "history", "", "", "000001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Symbol     string  `json:"symbol"`
+		Category   string  `json:"category"`
+		Price      float64 `json:"price"`
+		PointCount int     `json:"point_count"`
+		Points     []struct {
+			T int64   `json:"t"`
+			P float64 `json:"p"`
+		} `json:"points"`
+		SpanSeconds int64 `json:"span_seconds"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("bad json: %v (%s)", err, text)
+	}
+	if out.Category != CategoryAShare {
+		t.Errorf("category = %q, want a_share", out.Category)
+	}
+	if out.PointCount != 2 || len(out.Points) != 2 {
+		t.Fatalf("points = %d, want 2: %s", out.PointCount, text)
+	}
+	if out.Points[0].T != 1000 || out.Points[1].T != 2000 {
+		t.Errorf("points timestamps = %+v", out.Points)
+	}
+	if out.SpanSeconds != 1000 {
+		t.Errorf("span_seconds = %d, want 1000", out.SpanSeconds)
+	}
+	if out.Price != 3660.00 {
+		t.Errorf("price = %v, want 3660", out.Price)
+	}
+	// 未命中 ⇒ points 为空数组。
+	text, err = FeedCompactJSON(f, "history", "", "", "NOPE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, `"points":[]`) {
+		t.Errorf("unmatched symbol should yield empty points: %s", text)
+	}
+	// symbol 缺省 ⇒ 错误文本(不 panic)。
+	if _, err := FeedCompactJSON(f, "history", "", "", ""); err == nil {
+		t.Error("history without symbol should error")
+	}
+}
+
+// TestSourcesCompactJSON op=sources:采集源清单 + 类目健康度(遥测聚合)。
+func TestSourcesCompactJSON(t *testing.T) {
+	mlog := NewMissionLog()
+	mlog.Append(MissionRecord{ID: "s-1", Category: CategoryAShare, Status: MissionStatusOK,
+		Source: "腾讯行情·A股指数", StartedAt: 1000, DurationMs: 2000})
+	mlog.Append(MissionRecord{ID: "s-2", Category: CategoryAShare, Status: MissionStatusFail,
+		Error: "超时", StartedAt: 900})
+	text, err := SourcesCompactJSON(mlog, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Categories []struct {
+			Category string `json:"category"`
+			Sites    []struct {
+				Name string `json:"name"`
+				URL  string `json:"url"`
+			} `json:"sites"`
+			LastSource string `json:"last_source"`
+			LastOKAt   int64  `json:"last_ok_at"`
+			AgeSeconds int64  `json:"age_seconds"`
+			OK         int    `json:"ok"`
+			Fail       int    `json:"fail"`
+		} `json:"categories"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("bad json: %v (%s)", err, text)
+	}
+	if len(out.Categories) == 0 {
+		t.Fatalf("sources categories empty: %s", text)
+	}
+	var aShare *struct {
+		Category string `json:"category"`
+		Sites    []struct {
+			Name string `json:"name"`
+			URL  string `json:"url"`
+		} `json:"sites"`
+		LastSource string `json:"last_source"`
+		LastOKAt   int64  `json:"last_ok_at"`
+		AgeSeconds int64  `json:"age_seconds"`
+		OK         int    `json:"ok"`
+		Fail       int    `json:"fail"`
+	}
+	for i := range out.Categories {
+		if out.Categories[i].Category == CategoryAShare {
+			aShare = &out.Categories[i]
+		}
+	}
+	if aShare == nil {
+		t.Fatalf("a_share category missing: %s", text)
+	}
+	if len(aShare.Sites) < 3 {
+		t.Errorf("a_share sites = %d, want >= 3", len(aShare.Sites))
+	}
+	if aShare.LastSource != "腾讯行情·A股指数" {
+		t.Errorf("last_source = %q", aShare.LastSource)
+	}
+	if aShare.OK != 1 || aShare.Fail != 1 {
+		t.Errorf("ok/fail = %d/%d, want 1/1", aShare.OK, aShare.Fail)
+	}
+	if aShare.LastOKAt != 1002 {
+		t.Errorf("last_ok_at = %d, want 1002 (started_at+duration)", aShare.LastOKAt)
+	}
+	// 类目过滤。
+	text2, err := SourcesCompactJSON(mlog, CategoryMetal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(text2, `"category":"a_share"`) {
+		t.Errorf("category filter failed: %s", text2)
+	}
+	if !strings.Contains(text2, "fx678.com") {
+		t.Errorf("metal sites should include 金投网 fx678.com: %s", text2)
+	}
+}
+
+// TestFeedCompactJSON_OpSources op=sources 经 FeedCompactJSON 也能取到清单
+// (健康度需 MissionLog,由 Service.RealworldInfo 注入)。
+func TestFeedCompactJSON_OpSources(t *testing.T) {
+	text, err := FeedCompactJSON(sampleFeed(), "sources", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, `"categories"`) || !strings.Contains(text, `"sites"`) {
+		t.Errorf("sources shape mismatch: %s", text)
 	}
 }

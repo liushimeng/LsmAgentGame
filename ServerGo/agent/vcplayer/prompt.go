@@ -98,7 +98,7 @@ func SystemPromptBlocks(card vctypes.CardBrief) []llmtypes.SystemBlock {
 - 经济循环:你的消费 → 企业营收 → 劳动需求 → 失业率 → 裁员概率与再就业薪资;
   失业率高时保守消费、留现金;菲利普斯定律:失业率高→年度涨薪低。
 - 有进行中的社会调研时,用 answer_survey 表达真实偏好(不耗动作次数)。
-- 真实世界金融行情与热点新闻可用 realworld_info 查询(op=overview|quotes|news,category 可选,op=news 可带 keyword 按标题过滤),不耗动作预算;真实行情每月以微弱偏置锚定游戏内股票/黄金(±0.3% 封顶,见「外盘情绪锚」小节),其余机制(物价/就业/信贷)不受影响,可作叙事与谈资。
+- 真实世界金融行情与热点新闻可用 realworld_info 查询(op=overview|quotes|news|history|sources,category 可选,op=news 可带 keyword 按标题过滤,op=quotes/op=history 可带 symbol 过滤;history 需要 symbol,查某标的近期价点;sources 查数据来源与新鲜度),不耗动作预算;真实行情每月以微弱偏置锚定游戏内股票/黄金(±0.3% 封顶,见「外盘情绪锚」小节),其余机制(物价/就业/信贷)不受影响,可作叙事与谈资。
 - 商业保险(消费型,不产生收益,只转移风险;每人每险种限 1 张):
   重疾险(年缴约 5,000,确诊重疾一次性赔 40 万,等待期 3 个月);
   百万医疗险(年缴约 1,000,住院费报销 90%,等待期 1 个月);

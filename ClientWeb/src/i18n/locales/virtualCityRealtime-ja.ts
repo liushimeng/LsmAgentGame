@@ -46,6 +46,15 @@ const virtualCityRealtimeJA = {
   'virtualCity.rt.missions.status.ok': '成功',
   'virtualCity.rt.missions.status.fail': '失敗',
   'virtualCity.rt.missions.planNone': '（計画なし）',
+  // ── バッチ78 · 訪問サイト列（MissionRecord.visited）──
+  'virtualCity.rt.missions.col.visited': '訪問サイト',
+  // ── バッチ78 · 収集ヘルス度統計バー（MissionStats）──
+  'virtualCity.rt.missions.stats.total': '収集回数',
+  'virtualCity.rt.missions.stats.successRate': '成功率',
+  'virtualCity.rt.missions.stats.avgSteps': '平均ステップ',
+  'virtualCity.rt.missions.stats.avgDuration': '平均所要時間',
+  'virtualCity.rt.missions.stats.fail': '失敗回数',
+  'virtualCity.rt.missions.stats.seconds': '{n} 秒',
   // ── 批次 66 外盘情绪锚 ──
   'virtualCity.rt.exo.title': '外盤センチメントアンカー',
   'virtualCity.rt.exo.sentimentUp': '強気',

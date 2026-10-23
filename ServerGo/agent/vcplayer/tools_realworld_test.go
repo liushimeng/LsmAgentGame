@@ -3,6 +3,7 @@
 package vcplayer
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -106,4 +107,80 @@ func realworldInfoSchemaProps(t *testing.T) (map[string]any, bool) {
 		return props, ok
 	}
 	return nil, false
+}
+
+// TestDispatch_RealworldInfo_HistoryAndSources 批次78 §3.5:realworld_info
+// 新增 op=history(symbol 必填)与 op=sources(采集源清单 + 健康度)。
+func TestDispatch_RealworldInfo_HistoryAndSources(t *testing.T) {
+	ensureCityChromeOfflineSingleton(t)
+	a := &Agent{}
+
+	// op=history:symbol 必填 —— 缺省报错(不 panic)。
+	res := a.DispatchTool(ToolRealworldInfo, map[string]any{"op": "history"})
+	if !res.IsErr {
+		t.Errorf("history without symbol should error: %+v", res)
+	}
+	// 带 symbol(离线通道无数据 ⇒ points 为空数组,仍不报错)。
+	res = a.DispatchTool(ToolRealworldInfo, map[string]any{"op": "history", "symbol": "000001"})
+	if res.IsErr {
+		t.Fatalf("history with symbol: %s", res.Text)
+	}
+	if res.Budget {
+		t.Error("realworld_info must not consume action budget")
+	}
+	if !strings.Contains(res.Text, `"points"`) {
+		t.Errorf("history result should carry points: %s", res.Text)
+	}
+
+	// op=sources:采集源清单。
+	res = a.DispatchTool(ToolRealworldInfo, map[string]any{"op": "sources"})
+	if res.IsErr {
+		t.Fatalf("sources: %s", res.Text)
+	}
+	for _, want := range []string{`"categories"`, `"sites"`, `"last_source"`, `"ok"`, `"fail"`} {
+		if !strings.Contains(res.Text, want) {
+			t.Errorf("sources result missing %q: %s", want, res.Text)
+		}
+	}
+}
+
+// TestDispatch_RealworldInfo_SymbolFilter 批次78 §3.5:op=quotes 支持 symbol
+// 精确过滤;schema 必须声明 symbol 参数。
+func TestDispatch_RealworldInfo_SymbolFilter(t *testing.T) {
+	ensureCityChromeOfflineSingleton(t)
+	a := &Agent{}
+	res := a.DispatchTool(ToolRealworldInfo, map[string]any{"op": "quotes", "symbol": "000001"})
+	if res.IsErr {
+		t.Fatalf("quotes with symbol: %s", res.Text)
+	}
+	if !strings.Contains(res.Text, `"quotes"`) {
+		t.Errorf("quotes result should carry the quotes array: %s", res.Text)
+	}
+	props, ok := realworldInfoSchemaProps(t)
+	if !ok {
+		t.Fatal("realworld_info schema properties not found")
+	}
+	if _, found := props["symbol"]; !found {
+		t.Error("realworld_info schema must declare the optional symbol property")
+	}
+	// op 枚举扩为 5 值。
+	opSchema, _ := props["op"].(map[string]any)
+	got := map[string]bool{}
+	switch enum := opSchema["enum"].(type) {
+	case []string:
+		for _, e := range enum {
+			got[e] = true
+		}
+	case []any:
+		for _, e := range enum {
+			got[fmt.Sprint(e)] = true
+		}
+	default:
+		t.Fatalf("unexpected op enum shape: %v", opSchema["enum"])
+	}
+	for _, want := range []string{"overview", "quotes", "news", "history", "sources"} {
+		if !got[want] {
+			t.Errorf("realworld_info op enum missing %q (got %v)", want, opSchema["enum"])
+		}
+	}
 }

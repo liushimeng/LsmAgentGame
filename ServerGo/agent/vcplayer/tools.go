@@ -393,16 +393,20 @@ func BuildTools() []llmtypes.ToolDef {
 		},
 		{
 			Name: ToolRealworldInfo,
-			Description: "查询真实世界金融行情与热点新闻(批次65,只读,不耗动作预算,零 LLM 成本)。" +
-				"op=overview(通道状态+各类目最近更新+头条 3 条,默认)/quotes(行情,各类目前 5 条)/" +
-				"news(最近 10 条新闻)。category 可选:a_share|hk|us|metal|futures|crypto;" +
-				"不传 = 全部类目。真实世界数据仅供你参考叙事与聊天谈资,不影响游戏内市场机制。",
+			Description: "查询真实世界金融行情与热点新闻(批次65/78,只读,不耗动作预算,零 LLM 成本)。" +
+				"op=overview(通道状态+各类目最近更新与新鲜度 age_seconds/stale+头条 3 条,默认)/" +
+				"quotes(行情,各类目前 5 条,可带 symbol 精确过滤)/news(最近 10 条新闻)/" +
+				"history(某 symbol 的自采价点序列 {t,p},symbol 必填)/" +
+				"sources(采集源清单与各类目健康度:最近来源/成功失败次数)。" +
+				"category 可选:a_share|hk|us|metal|futures|crypto|macro|news;不传 = 全部类目。" +
+				"真实世界数据仅供你参考叙事与聊天谈资,不影响游戏内市场机制。",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"op":       enumStrSchema([]string{"overview", "quotes", "news"}, "overview=总览 / quotes=行情 / news=新闻"),
-					"category": enumStrSchema([]string{"a_share", "hk", "us", "metal", "futures", "crypto"}, "类目过滤(可选,缺省全部)"),
+					"op":       enumStrSchema([]string{"overview", "quotes", "news", "history", "sources"}, "overview=总览 / quotes=行情 / news=新闻 / history=某 symbol 历史价点(symbol 必填) / sources=采集源与健康度"),
+					"category": enumStrSchema([]string{"a_share", "hk", "us", "metal", "futures", "crypto", "macro", "news"}, "类目过滤(可选,缺省全部)"),
 					"keyword":  strSchema("op=news 时按标题关键词过滤(可选,大小写不敏感;其余 op 忽略)"),
+					"symbol":   strSchema("op=quotes 时按代码精确过滤(op=history 时必填,如 000001 / BTC / GC)"),
 				},
 				"required": []string{},
 			},
@@ -524,7 +528,7 @@ func (a *Agent) DispatchTool(name string, input map[string]any) dispatchToolResu
 		if op == "" {
 			op = "overview"
 		}
-		text, rerr := realworldInfoText(op, getStr("category"), getStr("keyword"))
+		text, rerr := realworldInfoText(op, getStr("category"), getStr("keyword"), getStr("symbol"))
 		if rerr != nil {
 			return fail(rerr)
 		}

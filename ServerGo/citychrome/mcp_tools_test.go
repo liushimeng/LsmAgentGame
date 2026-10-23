@@ -5,6 +5,7 @@ package citychrome
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -49,8 +50,8 @@ func TestValidatePayload_DirtyRowsDroppedNotWholePackage(t *testing.T) {
 	raw := payloadMap(t, "crypto", "CoinGecko",
 		[]map[string]any{
 			{"symbol": "BTC", "name": "比特币", "price": 65000.0, "change_pct": 2.1},
-			{"symbol": "", "name": "坏", "price": 1.0, "change_pct": 1},          // symbol 空
-			{"symbol": "X", "name": "坏价", "price": "abc", "change_pct": 1},     // 非数值 → unmarshal 失败
+			{"symbol": "", "name": "坏", "price": 1.0, "change_pct": 1},     // symbol 空
+			{"symbol": "X", "name": "坏价", "price": "abc", "change_pct": 1}, // 非数值 → unmarshal 失败
 		}, nil)
 	// 非数值 price 会让整个 unmarshal 失败(JSON 类型严格)——这也是"整包拒绝"的合法形态。
 	if _, err := ValidatePayload(12, raw); err == nil {
@@ -193,8 +194,8 @@ func TestToolset_Dispatch_UnknownTool(t *testing.T) {
 
 func TestBuildTools_TenTools(t *testing.T) {
 	tools := BuildTools()
-	if len(tools) != 10 {
-		t.Fatalf("BuildTools = %d, want 10 (批次77 §3.1:7→10)", len(tools))
+	if len(tools) != 11 {
+		t.Fatalf("BuildTools = %d, want 11 (批次77 §3.1:7→10;批次78 §3.2:10→11)", len(tools))
 	}
 	names := map[string]bool{}
 	for _, td := range tools {
@@ -204,7 +205,8 @@ func TestBuildTools_TenTools(t *testing.T) {
 		}
 	}
 	for _, want := range []string{ToolWebOpen, ToolWebControl, ToolWebEval, ToolWebLook,
-		ToolWebList, ToolWebClose, ToolWebDone, ToolWebPlan, ToolWebRead, ToolWebSearch} {
+		ToolWebList, ToolWebClose, ToolWebDone, ToolWebPlan, ToolWebRead, ToolWebSearch,
+		ToolWebParse} {
 		if !names[want] {
 			t.Errorf("missing tool %q", want)
 		}
@@ -412,5 +414,279 @@ func TestToolset_WebSearch_Rejects(t *testing.T) {
 	if text, isErr := ts.Dispatch(context.Background(), ToolWebSearch,
 		map[string]any{"query": strings.Repeat("词", 101)}); !isErr {
 		t.Errorf("overlong query should be rejected: %q", text)
+	}
+}
+
+// ── 批次78 §3.2 新增/增强分支单测 ───────────────────────────────────
+
+// TestEvalStringValue_UnescapesRawJSONString 底座 BatchEval 的 result 是
+// **裸 JSON 字符串**(带外层引号 + \" 转义)。evalStringValue 必须解一次转义,
+// 否则正则 `v_xxx="([^"]*)"` 永远匹配不到(确定性解析彻底失效)。
+func TestEvalStringValue_UnescapesRawJSONString(t *testing.T) {
+	raw := json.RawMessage(`"v_sh000001=\"1~上证指数~000001~3658.03~3713.03~\""`)
+	got := evalStringValue(raw)
+	if strings.Contains(got, `\"`) {
+		t.Errorf("result must be unescaped, got %q", got)
+	}
+	if got != `v_sh000001="1~上证指数~000001~3658.03~3713.03~"` {
+		t.Errorf("unescaped = %q", got)
+	}
+	// 兼容形状:{"type":"string","value":"..."}。
+	got2 := evalStringValue(json.RawMessage(`{"type":"string","value":"hello"}`))
+	if got2 != "hello" {
+		t.Errorf("legacy shape = %q, want hello", got2)
+	}
+	// 空 result。
+	if evalStringValue(json.RawMessage(nil)) != "" {
+		t.Error("nil result should be empty string")
+	}
+}
+
+// TestToolset_WebRead_ParseBranch web_read 的 parse 分支:结构化块**在前**,
+// 正文在后;正文来自底座的裸 JSON 字符串形态(必须已解转义)。
+func TestToolset_WebRead_ParseBranch(t *testing.T) {
+	quote := `v_sh000001="1~上证指数~000001~3658.03~3713.03~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~20261022161500~-55.00~-1.48~3714.48~3649.86";`
+	srv := newMockServer(t, func(path string, body map[string]any) (int, string, any) {
+		switch path {
+		case "/NewChromePage":
+			return 0, "ok", map[string]any{"page_id": "p_parse", "title": "行情", "final_url": "https://qt.gtimg.cn/"}
+		case "/BatchEval":
+			return 0, "ok", map[string]any{
+				"results": []any{
+					map[string]any{"index": 0, "ok": true, "result": "腾讯行情"},
+					// 裸 JSON 字符串形态(真实底座):必须解转义后再解析。
+					map[string]any{"index": 1, "ok": true, "result": quote},
+				},
+				"succeeded": 2,
+			}
+		}
+		return 1000, "bad path", nil
+	})
+	defer srv.Close()
+	ts := NewToolset(NewWebUseClient(srv.URL, "", 5000), 12, 20)
+	text, isErr := ts.Dispatch(context.Background(), ToolWebRead,
+		map[string]any{"url": "https://qt.gtimg.cn/q=sh000001"})
+	if isErr {
+		t.Fatalf("web_read should pass: %q", text)
+	}
+	blockIdx := strings.Index(text, "【结构化解析")
+	bodyIdx := strings.Index(text, "正文如下")
+	if blockIdx < 0 {
+		t.Fatalf("structured block missing: %s", text)
+	}
+	if bodyIdx < 0 || blockIdx > bodyIdx {
+		t.Errorf("structured block must come BEFORE the body snippet: %s", text)
+	}
+	if !strings.Contains(text, "auto→tencent_quote") {
+		t.Errorf("block header mismatch: %s", text)
+	}
+	if !strings.Contains(text, `"symbol":"000001"`) {
+		t.Errorf("block rows missing: %s", text)
+	}
+	// 站点访问轨迹已登记(批次78 §3.3-5)。
+	if len(ts.VisitedURLs) != 1 || ts.VisitedURLs[0] != "https://qt.gtimg.cn/q=sh000001" {
+		t.Errorf("VisitedURLs = %v", ts.VisitedURLs)
+	}
+}
+
+// TestToolset_WebRead_UnknownRecipe web_read 的未知 parse 配方拒绝(不碰底座)。
+func TestToolset_WebRead_UnknownRecipe(t *testing.T) {
+	ts := NewToolset(nil, 12, 20)
+	text, isErr := ts.Dispatch(context.Background(), ToolWebRead,
+		map[string]any{"url": "https://x/y", "parse": "nope"})
+	if !isErr || !strings.Contains(text, "未知解析配方") {
+		t.Errorf("unknown recipe should be rejected: %q err=%v", text, isErr)
+	}
+	// wait_selector 超长拒绝。
+	text, isErr = ts.Dispatch(context.Background(), ToolWebRead,
+		map[string]any{"url": "https://x/y", "wait_selector": strings.Repeat("a", 201)})
+	if !isErr || !strings.Contains(text, "wait_selector") {
+		t.Errorf("overlong wait_selector should be rejected: %q err=%v", text, isErr)
+	}
+}
+
+// TestToolset_WebRead_WaitSelector web_read 的 wait_selector 分支:打开后调用
+// 底座 wait 动作(selector + timeout_ms),再读正文。
+func TestToolset_WebRead_WaitSelector(t *testing.T) {
+	var waited map[string]any
+	srv := newMockServer(t, func(path string, body map[string]any) (int, string, any) {
+		switch path {
+		case "/NewChromePage":
+			return 0, "ok", map[string]any{"page_id": "p_wait", "title": "SPA", "final_url": "https://spa.example/"}
+		case "/ControlChromePage":
+			action, _ := body["action"].(string)
+			if action != "wait" {
+				return 1001, "unexpected action " + action, nil
+			}
+			waited, _ = body["params"].(map[string]any)
+			return 0, "ok", map[string]any{"result": map[string]any{"waited_for": ".quote"}}
+		case "/BatchEval":
+			return 0, "ok", map[string]any{
+				"results": []any{
+					map[string]any{"index": 0, "ok": true, "result": "SPA 行情"},
+					map[string]any{"index": 1, "ok": true, "result": "上证指数 3658.03"},
+				},
+				"succeeded": 2,
+			}
+		}
+		return 1000, "bad path", nil
+	})
+	defer srv.Close()
+	ts := NewToolset(NewWebUseClient(srv.URL, "", 5000), 12, 20)
+	text, isErr := ts.Dispatch(context.Background(), ToolWebRead, map[string]any{
+		"url": "https://spa.example/", "wait_selector": ".quote", "wait_ms": 3000,
+	})
+	if isErr {
+		t.Fatalf("web_read with wait_selector should pass: %q", text)
+	}
+	if waited == nil {
+		t.Fatal("wait action was not called")
+	}
+	if waited["selector"] != ".quote" {
+		t.Errorf("wait selector = %v, want .quote", waited["selector"])
+	}
+	if fmt.Sprint(waited["timeout_ms"]) != "3000" {
+		t.Errorf("wait timeout_ms = %v, want 3000", waited["timeout_ms"])
+	}
+	if !strings.Contains(text, "上证指数 3658.03") {
+		t.Errorf("web_read should return the body: %s", text)
+	}
+}
+
+// TestToolset_WebParse 批次78 第 11 个工具:校验分支 + 正常解析。
+func TestToolset_WebParse(t *testing.T) {
+	ts := NewToolset(nil, 12, 20) // 本地工具:不需要底座。
+	quote := `v_sh000001="1~上证指数~000001~3658.03~3713.03~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~0~20261022161500~-55.00~-1.48~3714.48~3649.86";`
+	text, isErr := ts.Dispatch(context.Background(), ToolWebParse, map[string]any{"text": quote})
+	if isErr {
+		t.Fatalf("web_parse should pass: %q", text)
+	}
+	var res ParseResult
+	if err := json.Unmarshal([]byte(text), &res); err != nil {
+		t.Fatalf("web_parse result must be JSON: %v (%s)", err, text)
+	}
+	if !res.Matched || res.Count != 1 || res.Rows[0].Symbol != "000001" {
+		t.Errorf("parse result = %+v", res)
+	}
+	// 空 text 拒绝。
+	if _, isErr := ts.Dispatch(context.Background(), ToolWebParse, map[string]any{"text": "  "}); !isErr {
+		t.Error("empty text should be rejected")
+	}
+	// 超长 text 拒绝。
+	long := strings.Repeat("字", webParseTextMaxRunes+1)
+	if _, isErr := ts.Dispatch(context.Background(), ToolWebParse, map[string]any{"text": long}); !isErr {
+		t.Error("overlong text should be rejected")
+	}
+	// 未知配方拒绝。
+	_, isErr = ts.Dispatch(context.Background(), ToolWebParse, map[string]any{"text": "x", "recipe": "nope"})
+	if !isErr {
+		t.Error("unknown recipe should be rejected")
+	}
+}
+
+// TestToolset_WebControl_WaitWhitelist 批次78:wait 进白名单(底座 actWait)。
+func TestToolset_WebControl_WaitWhitelist(t *testing.T) {
+	if !webControlActions["wait"] {
+		t.Fatal("wait must be in the web_control whitelist")
+	}
+	var gotAction string
+	var gotParams map[string]any
+	srv := newMockServer(t, func(path string, body map[string]any) (int, string, any) {
+		if path != "/ControlChromePage" {
+			return 1000, "bad path", nil
+		}
+		gotAction, _ = body["action"].(string)
+		gotParams, _ = body["params"].(map[string]any)
+		return 0, "ok", map[string]any{"result": map[string]any{"waited_for": ".q"}}
+	})
+	defer srv.Close()
+	ts := NewToolset(NewWebUseClient(srv.URL, "", 5000), 12, 20)
+	text, isErr := ts.Dispatch(context.Background(), ToolWebControl, map[string]any{
+		"page_id": "p1", "action": "wait",
+		"params": map[string]any{"selector": ".q", "timeout_ms": 5000},
+	})
+	if isErr {
+		t.Fatalf("wait action should pass: %q", text)
+	}
+	if gotAction != "wait" {
+		t.Errorf("action = %q, want wait", gotAction)
+	}
+	if gotParams["selector"] != ".q" {
+		t.Errorf("params = %v", gotParams)
+	}
+}
+
+// TestToolset_WebSearch_AntiBot 批次78:反爬识别(安全验证/403/异常流量)⇒
+// 明确报错(is_err),不静默当 0 结果。
+func TestToolset_WebSearch_AntiBot(t *testing.T) {
+	for _, marker := range []string{"安全验证", "请完成下方验证", "403 Forbidden", "unusual traffic"} {
+		srv := newMockServer(t, func(path string, body map[string]any) (int, string, any) {
+			switch path {
+			case "/NewChromePage":
+				return 0, "ok", map[string]any{"page_id": "p_block", "title": "必应", "final_url": "https://cn.bing.com/"}
+			case "/BatchEval":
+				return 0, "ok", map[string]any{
+					"results": []any{
+						map[string]any{"index": 0, "ok": true, "result": `[{"title":"__no_results__","url":"https://cn.bing.com/","snippet":""}]`},
+						map[string]any{"index": 1, "ok": true, "result": marker},
+					},
+					"succeeded": 2,
+				}
+			case "/CloseChromePage":
+				return 0, "ok", map[string]any{"closed": true}
+			}
+			return 1000, "bad path", nil
+		})
+		ts := NewToolset(NewWebUseClient(srv.URL, "", 5000), 12, 20)
+		text, isErr := ts.Dispatch(context.Background(), ToolWebSearch, map[string]any{"query": "上证指数"})
+		if !isErr {
+			t.Errorf("marker %q: expected blocked error, got %q", marker, text)
+		}
+		if !strings.Contains(text, "被拦截") {
+			t.Errorf("marker %q: error should say 被拦截, got %q", marker, text)
+		}
+		srv.Close()
+	}
+}
+
+// TestToolset_WebSearch_BaiduEngine 批次78:engine=baidu 用百度 SERP URL。
+func TestToolset_WebSearch_BaiduEngine(t *testing.T) {
+	var serpURL string
+	srv := newMockServer(t, func(path string, body map[string]any) (int, string, any) {
+		switch path {
+		case "/NewChromePage":
+			serpURL, _ = body["url"].(string)
+			return 0, "ok", map[string]any{"page_id": "p_bd", "title": "百度", "final_url": serpURL}
+		case "/BatchEval":
+			return 0, "ok", map[string]any{
+				"results": []any{
+					map[string]any{"index": 0, "ok": true, "result": `[{"title":"上证指数实时行情","url":"https://x/1","snippet":"3200 点震荡"}]`},
+					map[string]any{"index": 1, "ok": true, "result": "正常页面"},
+				},
+				"succeeded": 2,
+			}
+		case "/CloseChromePage":
+			return 0, "ok", map[string]any{"closed": true}
+		}
+		return 1000, "bad path", nil
+	})
+	defer srv.Close()
+	ts := NewToolset(NewWebUseClient(srv.URL, "", 5000), 12, 20)
+	text, isErr := ts.Dispatch(context.Background(), ToolWebSearch,
+		map[string]any{"query": "上证指数 实时行情", "engine": "baidu"})
+	if isErr {
+		t.Fatalf("baidu search should pass: %q", text)
+	}
+	if !strings.HasPrefix(serpURL, "https://www.baidu.com/s?wd=") || !strings.HasSuffix(serpURL, "&ie=utf-8") {
+		t.Errorf("baidu serp url = %q", serpURL)
+	}
+	if !strings.Contains(text, "上证指数实时行情") {
+		t.Errorf("baidu results missing: %s", text)
+	}
+	// 非法 engine 拒绝。
+	ts2 := NewToolset(nil, 12, 20)
+	if _, isErr := ts2.Dispatch(context.Background(), ToolWebSearch,
+		map[string]any{"query": "x", "engine": "google"}); !isErr {
+		t.Error("unsupported engine should be rejected")
 	}
 }

@@ -4,6 +4,7 @@ package citychrome
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -135,5 +136,103 @@ func TestMissionLog_NilSafe(t *testing.T) {
 	}
 	if l.LastOK(CategoryNews) != nil || l.LastFail(CategoryNews) != nil {
 		t.Error("nil log must return nil last records")
+	}
+}
+
+// ── 批次78 §3.3:Stats() 聚合 + Visited 覆盖 ─────────────────────────
+
+// TestMissionLog_Stats_Empty 空日志:全零(成功率 0、last_error 空)。
+func TestMissionLog_Stats_Empty(t *testing.T) {
+	l := NewMissionLog()
+	s := l.Stats()
+	if s.Total != 0 || s.OK != 0 || s.Fail != 0 || s.Running != 0 {
+		t.Errorf("empty stats = %+v", s)
+	}
+	if s.SuccessRate != 0 || s.AvgSteps != 0 || s.AvgDuration != 0 || s.LastError != "" {
+		t.Errorf("empty stats fields = %+v", s)
+	}
+	// nil 接收者不得 panic。
+	var nilLog *MissionLog
+	if got := nilLog.Stats(); got.Total != 0 {
+		t.Errorf("nil log stats = %+v", got)
+	}
+}
+
+// TestMissionLog_Stats_AllOK 全成功:成功率 1,平均步数/耗时按成功记录算。
+func TestMissionLog_Stats_AllOK(t *testing.T) {
+	l := NewMissionLog()
+	l.Append(MissionRecord{ID: "a-2", Category: CategoryAShare, Status: MissionStatusOK,
+		StepsUsed: 4, DurationMs: 2000})
+	l.Append(MissionRecord{ID: "a-1", Category: CategoryAShare, Status: MissionStatusOK,
+		StepsUsed: 6, DurationMs: 4000})
+	s := l.Stats()
+	if s.Total != 2 || s.OK != 2 || s.Fail != 0 {
+		t.Errorf("stats = %+v", s)
+	}
+	if s.SuccessRate != 1 {
+		t.Errorf("success_rate = %v, want 1", s.SuccessRate)
+	}
+	if s.AvgSteps != 5 {
+		t.Errorf("avg_steps = %v, want 5", s.AvgSteps)
+	}
+	if s.AvgDuration != 3000 {
+		t.Errorf("avg_duration_ms = %v, want 3000", s.AvgDuration)
+	}
+	if s.LastError != "" {
+		t.Errorf("last_error = %q, want empty", s.LastError)
+	}
+}
+
+// TestMissionLog_Stats_Mixed 混合:成功率分母 = OK+Fail;平均步数/耗时只算成功;
+// last_error 取最近一条 fail。
+func TestMissionLog_Stats_Mixed(t *testing.T) {
+	l := NewMissionLog()
+	l.Append(MissionRecord{ID: "b-1", Category: CategoryHK, Status: MissionStatusFail,
+		Error: "步数用尽且无合法 web_done", StepsUsed: 14, DurationMs: 9000})
+	l.Append(MissionRecord{ID: "b-2", Category: CategoryHK, Status: MissionStatusOK,
+		StepsUsed: 3, DurationMs: 1000})
+	l.Append(MissionRecord{ID: "b-3", Category: CategoryHK, Status: MissionStatusRunning,
+		StepsUsed: 1})
+	s := l.Stats()
+	if s.Total != 3 || s.OK != 1 || s.Fail != 1 || s.Running != 1 {
+		t.Errorf("stats = %+v", s)
+	}
+	if math.Abs(s.SuccessRate-0.5) > 1e-9 {
+		t.Errorf("success_rate = %v, want 0.5 (OK/(OK+Fail))", s.SuccessRate)
+	}
+	if s.AvgSteps != 3 {
+		t.Errorf("avg_steps = %v, want 3 (只统计成功记录)", s.AvgSteps)
+	}
+	if s.AvgDuration != 1000 {
+		t.Errorf("avg_duration_ms = %v, want 1000 (只统计成功记录)", s.AvgDuration)
+	}
+	if !strings.Contains(s.LastError, "步数用尽") {
+		t.Errorf("last_error = %q", s.LastError)
+	}
+}
+
+// TestMissionLog_Visited 批次78:Visited 入库归一化(≤6 条 / ≤120 rune / 去重)。
+func TestMissionLog_Visited(t *testing.T) {
+	l := NewMissionLog()
+	l.Append(MissionRecord{ID: "v-1", Category: CategoryAShare, Status: MissionStatusOK,
+		Visited: []string{
+			"https://a.example/1", "https://a.example/1", // 重复
+			"https://b.example/2", "https://c.example/3", "https://d.example/4",
+			"https://e.example/5", "https://f.example/6", "https://g.example/7",
+			"https://h.example/8",
+		}})
+	r := l.Snapshot()[0]
+	if len(r.Visited) != missionVisitedCap {
+		t.Fatalf("visited len = %d, want %d", len(r.Visited), missionVisitedCap)
+	}
+	if r.Visited[0] != "https://a.example/1" || r.Visited[1] != "https://b.example/2" {
+		t.Errorf("visited order/dedup wrong: %v", r.Visited)
+	}
+	// 单条 URL 截断到 ≤120 rune。
+	long := strings.Repeat("u", 300)
+	l.Append(MissionRecord{ID: "v-2", Category: CategoryAShare, Status: MissionStatusOK,
+		Visited: []string{long}})
+	if n := utf8.RuneCountInString(l.Snapshot()[0].Visited[0]); n > missionVisitedRuneCap+utf8.RuneCountInString("…(截断)") {
+		t.Errorf("visited url runes = %d, want <= %d", n, missionVisitedRuneCap+5)
 	}
 }

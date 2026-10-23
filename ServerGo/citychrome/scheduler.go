@@ -34,6 +34,29 @@ const (
 	siteMinInterval  = 10 * time.Second // 同站点访问最小间隔(契约 §6)
 )
 
+// 默认类目刷新间隔(秒)——与 config.CityChromeConfig 的 applyDefaults 缺省
+// 一致(批次76 §五.6 分级调度)。此处是**包内唯一事实来源**:调度器
+// NewScheduler 的缺省与批次78 §3.5 的 realworld_info stale 判定共用。
+const (
+	defaultQuoteRefreshSeconds = 1800  // 行情 6 类目(a_share/hk/us/metal/futures/crypto)
+	defaultNewsRefreshSeconds  = 600   // news 类目(分钟级)
+	defaultMacroRefreshSeconds = 86400 // macro 类目(日级)
+)
+
+// categoryRefreshInterval 返回类目的刷新间隔(秒):行情 6 类目 1800s,
+// news 600s,macro 86400s(与 Scheduler.categoryInterval 同口径)。
+// 批次78 §3.5:realworld_info op=overview 的 stale = age_seconds > 2× 本值。
+func categoryRefreshInterval(cat string) int64 {
+	switch cat {
+	case CategoryNews:
+		return defaultNewsRefreshSeconds
+	case CategoryMacro:
+		return defaultMacroRefreshSeconds
+	default:
+		return defaultQuoteRefreshSeconds
+	}
+}
+
 // MissionRunner 是一次 mission 执行器(Agent.RunMission 签名;测试注入 fake)。
 type MissionRunner func(ctx context.Context, m Mission) (*MissionPayload, error)
 
@@ -71,13 +94,13 @@ type Scheduler struct {
 // NewScheduler 构造。runner 为 nil 时 mission 一律失败(熔断最终会置 offline)。
 func NewScheduler(cfg SchedulerConfig, store *FeedStore, runner MissionRunner) *Scheduler {
 	if cfg.RefreshSeconds <= 0 {
-		cfg.RefreshSeconds = 1800
+		cfg.RefreshSeconds = defaultQuoteRefreshSeconds
 	}
 	if cfg.NewsRefreshSeconds <= 0 {
-		cfg.NewsRefreshSeconds = 600
+		cfg.NewsRefreshSeconds = defaultNewsRefreshSeconds
 	}
 	if cfg.MacroRefreshSeconds <= 0 {
-		cfg.MacroRefreshSeconds = 86400
+		cfg.MacroRefreshSeconds = defaultMacroRefreshSeconds
 	}
 	if cfg.QueueCapacity <= 0 {
 		cfg.QueueCapacity = 8

@@ -26,6 +26,13 @@ const virtualCityDashZH = {
   'virtualCity.dash.sources.empty': '数据源目录暂不可用',
   'virtualCity.dash.sources.openLink': '访问',
   'virtualCity.dash.sources.uncategorized': '其他',
+  // ── 批次78：数据源分组的实时状态条（.virtualCity-dash__src-live__*）──
+  'virtualCity.dash.sources.live.title': '实时状态',
+  'virtualCity.dash.sources.live.count': '报价 {n} 条',
+  'virtualCity.dash.sources.live.source': '来源 {source}',
+  'virtualCity.dash.sources.live.static': '静态登记册 · 无对应实时类目',
+  'virtualCity.dash.sources.live.offline': '实时通道未就绪 · 暂无可读数据',
+  'virtualCity.dash.sources.live.noData': '该类目暂无数据',
 
   'virtualCity.dash.overview.time': '时间与周期',
   'virtualCity.dash.overview.society': '民生与社会',

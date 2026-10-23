@@ -37,7 +37,7 @@ var categorySites = map[string][]SiteInfo{
 	CategoryMetal: {
 		{Name: "腾讯行情·外盘贵金属", URL: "https://qt.gtimg.cn/q=hf_GC,hf_SI"},
 		{Name: "上海黄金交易所", URL: "https://www.sge.com.cn"},
-		{Name: "金投网", URL: "https://www.cngold.org"},
+		{Name: "金投网", URL: "https://www.fx678.com"},
 		{Name: "上海有色金属网", URL: "https://www.smm.cn"},
 	},
 	CategoryFutures: {
@@ -83,34 +83,54 @@ var categoryGoals = map[string]string{
 	CategoryNews:    "采集最新 5-8 条时政/财经/国际快讯(标题/原文链接/发布时间),纯 news 提交(quotes 留空)",
 }
 
-// categoryHints 类目 → 确定性提取配方(E2E 2026-10-20 本机实测验证)。
-// 腾讯行情直读:web_control navigate 到 URL → web_eval 读 document.body.innerText
-// → 按分隔符解析。首选源失败(403/超时)再换 Sites[1:] 按 DOM 提取。
+// categoryHints 类目 → 确定性提取配方(E2E 2026-10-20 本机实测验证;
+// 批次78 §3.1 实机复测 2026-10-23 修正字段下标)。
+//
+// ⚠️ 批次78 起**优先用 web_read 的 parse(缺省 auto)做确定性解析**,不要自己
+// 按分隔符切数字;下面的人工切分说明只是「parse 未命中」时的兜底口径。
+//
+// 腾讯行情直读:web_read/web_control navigate 到 URL → 读 body → 解析。
+// 首选源失败(403/超时)再换 Sites[1:] 按 DOM 提取。
 var categoryHints = map[string]string{
 	CategoryAShare: `【确定性提取配方·首选源】
+0. **优先用 web_read 一步完成「打开+读正文+自动解析」(parse 缺省 auto)**,
+   直接把【结构化解析】块里的 price/change_pct 抄进 web_done,不要自己切数字;
+   仅当返回 matched=false 时才按下面的下标手工提取。
 1. web_control navigate 到目标 URL;2. web_eval 读 document.body.innerText;
-3. 每行形如 v_sh000001="1~上证指数~000001~3735.37~...",按 ~ 分割:
-  [1]=名称 [3]=最新价 [32]=涨跌额 [33]=涨跌幅(百分数口径,如 0.12=+0.12%、-1.15=-1.15%,**原样填写不要乘 100**) [31]=时间;
+3. 每行形如 v_sh000001="1~上证指数~000001~3658.03~3713.03~...",按 ~ 分割:
+  [1]=名称 [2]=代码 [3]=最新价 [4]=昨收 [30]=时间 [31]=涨跌额 [32]=涨跌幅(百分数口径,如 -1.48=-1.48%,**原样填写不要乘 100**);
 symbol 用代码(如 000001),currency="CNY"。
 注意:若 body 是 "403 Forbidden"(触发了 WAF),立即换备选站点,不要重试同一 URL。`,
 	CategoryHK: `【确定性提取配方·首选源】
+0. **优先用 web_read 一步完成「打开+读正文+自动解析」(parse 缺省 auto)**,
+   直接把【结构化解析】块里的 price/change_pct 抄进 web_done,不要自己切数字;
+   仅当返回 matched=false 时才按下面的下标手工提取。
 1. web_control navigate 到目标 URL;2. web_eval 读 document.body.innerText;
-3. 每行形如 v_hkHSI="100~恒生指数~HSI~23908.08~...",按 ~ 分割:
-  [1]=名称 [3]=最新价 [32]=涨跌额 [33]=涨跌幅(百分数口径,如 -1.15=-1.15%,**原样填写不要乘 100**);symbol 用 HSI/HSTECH/HSCEI,currency="HKD"。
+3. 每行形如 v_hkHSI="100~恒生指数~HSI~22934.680~23651.870~...",按 ~ 分割:
+  [1]=名称 [2]=代码 [3]=最新价 [4]=昨收 [30]=时间 [31]=涨跌额 [32]=涨跌幅(百分数口径,如 -3.03=-3.03%,**原样填写不要乘 100**);symbol 用 HSI/HSTECH/HSCEI,currency="HKD"。
 注意:若 body 是 "403 Forbidden"(触发了 WAF),立即换备选站点,不要重试同一 URL。`,
 	CategoryUS: `【确定性提取配方·首选源】
+0. **优先用 web_read 一步完成「打开+读正文+自动解析」(parse 缺省 auto)**,
+   直接把【结构化解析】块里的 price/change_pct 抄进 web_done,不要自己切数字;
+   仅当返回 matched=false 时才按下面的下标手工提取。
 1. web_control navigate 到目标 URL;2. web_eval 读 document.body.innerText;
-3. 每行形如 v_usIXIC="200~纳斯达克~.IXIC~26430.89~...",按 ~ 分割:
-  [1]=名称 [3]=最新价 [32]=涨跌额 [33]=涨跌幅(百分数口径,如 1.11=+1.11%,**原样填写不要乘 100**);symbol 用 DJI/IXIC/INX,currency="USD"。
+3. 每行形如 v_usIXIC="200~纳斯达克~.IXIC~26008.86~26702.86~...",按 ~ 分割:
+  [1]=名称 [2]=代码 [3]=最新价 [4]=昨收 [30]=时间 [31]=涨跌额 [32]=涨跌幅(百分数口径,如 -2.60=-2.60%,**原样填写不要乘 100**);symbol 用 DJI/IXIC/INX,currency="USD"。
 注意:若 body 是 "403 Forbidden"(触发了 WAF),立即换备选站点,不要重试同一 URL。`,
 	CategoryMetal: `【确定性提取配方·首选源】
+0. **优先用 web_read 一步完成「打开+读正文+自动解析」(parse 缺省 auto)**,
+   直接把【结构化解析】块里的 price/change_pct 抄进 web_done,不要自己切数字;
+   仅当返回 matched=false 时才按下面的下标手工提取。
 1. web_control navigate 到目标 URL;2. web_eval 读 document.body.innerText;
-3. 每行形如 v_hf_GC="4144.15,-0.38,4144.90,4145.20,4166.50,4134.50,15:36:04,4160.10,4162.40,0,2,4,2026-10-20,纽约黄金",
-  按逗号分割:[0]=最新价 [1]=涨跌幅(百分数口径,如 -0.38=-0.38%,**原样填写不要乘 100**) [13]=名称(纽约黄金/纽约白银);symbol 用 GC/SI,currency="USD"。
+3. 每行形如 v_hf_GC="4036.75,-0.58,...,纽约黄金",
+  按逗号分割:[0]=最新价 [1]=涨跌幅(百分数口径,如 -0.58=-0.58%,**原样填写不要乘 100**) [13]=名称(纽约黄金/纽约白银);symbol 用 GC/SI,currency="USD"。
 注意:若 body 是 "403 Forbidden"(触发了 WAF),立即换备选站点,不要重试同一 URL。`,
 	CategoryFutures: `【确定性提取配方·首选源】
+0. **优先用 web_read 一步完成「打开+读正文+自动解析」(parse 缺省 auto)**,
+   直接把【结构化解析】块里的 price/change_pct 抄进 web_done,不要自己切数字;
+   仅当返回 matched=false 时才按下面的下标手工提取。
 1. web_control navigate 到目标 URL;2. web_eval 读 document.body.innerText;
-3. 每行形如 v_hf_CL="99.56,1.04,99.54,99.55,99.75,98.04,15:36:07,98.54,98.24,0,3,5,2026-10-20,纽约原油",
+3. 每行形如 v_hf_CL="99.35,-0.12,99.34,99.36,100.15,98.04,15:36:07,98.54,98.24,0,3,5,2026-10-20,纽约原油",
   按逗号分割:[0]=最新价 [1]=涨跌幅(百分数口径,**原样填写不要乘 100**) [13]=名称(纽约原油/纽约黄金/纽约白银/伦铜/伦镍);symbol 用 CL/GC/SI/HG/NID,currency="USD"。
 注意:若 body 是 "403 Forbidden"(触发了 WAF),立即换备选站点,不要重试同一 URL。`,
 	CategoryCrypto: `【提取建议·首选源】CoinGecko 为 SPA:web_open 后先用 1 次 web_eval 读

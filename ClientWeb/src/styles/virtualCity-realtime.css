@@ -601,3 +601,119 @@
   line-height: 1.5;
   word-break: break-all;
 }
+
+/* ── 批次 78 · 采集健康度统计条（.virtualCity-rt-mlog__stats__*）──────────
+   置于表格上方：总次数 / 成功率 / 平均步数 / 平均耗时 / 失败次数。
+   §26 对比度：标签 #9ca3af on #161d28 ≈ 7.5:1、数值 #e5e7eb ≈ 11:1，
+   失败数复用既有 __badge--fail（#fff on #b91c1c ≈ 9:1）——**不自造状态色**、
+   **禁 opacity 表状态**。无动画 ⇒ 无需 @keyframes / prefers-reduced-motion。 */
+.virtualCity-rt-mlog__stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 4px;
+  padding: 7px 8px;
+  border: 1px solid #263250;
+  border-radius: 6px;
+  background: var(--virtualCity-panel, #161d28);
+}
+
+.virtualCity-rt-mlog__stats__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+.virtualCity-rt-mlog__stats__label {
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+  white-space: nowrap;
+}
+
+.virtualCity-rt-mlog__stats__value {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--virtualCity-text, #e5e7eb);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── 批次 78 · 站点尝试带（.virtualCity-rt-mlog__visited__*）──────────────
+   整行铺开（grid-column 1/-1），与「规划」带同范式 —— 侧栏宽度放不下第 7 列。
+   徽标文字 #cbd5e1 on #0f172a ≈ 13:1（≥4.5:1）。 */
+.virtualCity-rt-mlog__visited {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  line-height: 1.5;
+}
+
+.virtualCity-rt-mlog__visited__label {
+  flex: none;
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+}
+
+.virtualCity-rt-mlog__visited__item {
+  max-width: 100%;
+  min-width: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #0f172a;
+  color: #cbd5e1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.virtualCity-rt-mlog__visited__more {
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+  font-variant-numeric: tabular-nums;
+}
+
+.virtualCity-rt-mlog__visited__empty {
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+}
+
+/* ── 批次 78 · 数据源分组实时状态条（.virtualCity-dash__src-live__*）──────
+   「数据源」维度每个分组标题下的实时通道摘要：报价条数 / 采集来源 / 更新于。
+   §26 对比度：正文 #b7bfcc on #1b2331 ≈ 8.6:1、标签金 #c9a227 ≈ 6.5:1（均 ≥4.5:1）。
+   状态以**文字**表达（不靠颜色单独区分，§26.2 反模式①/③）；无动画。 */
+.virtualCity-dash__src-live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 10px;
+  padding: 4px 8px;
+  border-left: 2px solid var(--virtualCity-accent, #c9a227);
+  border-radius: 0 4px 4px 0;
+  background: #1b2331;
+  font-size: 11.5px;
+}
+
+.virtualCity-dash__src-live__label {
+  font-weight: 600;
+  color: var(--virtualCity-accent, #c9a227);
+  white-space: nowrap;
+}
+
+.virtualCity-dash__src-live__meta {
+  color: var(--virtualCity-text-dim, #b7bfcc);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.virtualCity-dash__src-live__placeholder {
+  color: var(--virtualCity-text-dim, #b7bfcc);
+}

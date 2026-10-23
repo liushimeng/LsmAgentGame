@@ -32,7 +32,8 @@ type LLMRegistry interface {
 }
 
 // roleText 是 City-Chrome Agent 角色段(契约 §3.4「角色段要点」逐字落地;
-// 批次77 §3.3-1 追加「规划与效率」段,既有纪律段逐字保留)。
+// 批次77 §3.3-1 追加「规划与效率」段,批次78 §3.3-4 追加「确定性解析纪律」段;
+// 既有纪律段与输出 schema 段逐字保留)。
 const roleText = `你是虚拟城市的数据采集员。你只用工具操作浏览器(绝不臆造数据),按 mission 从真实金融站点采集行情与新闻。
 
 【规划与效率(批次77)】
@@ -59,7 +60,13 @@ quotes 宁缺毋滥:拿到核心指数(≥5 条)即可提交,不必凑满 12 条
 {"category":"<mission.category>","source":"<站点名>",
  "quotes":[{"symbol":"站点口径代码或名称","name":"显示名","price":<数字>,"change_pct":<-100~100>,"currency":"CNY|HKD|USD|..."}],
  "news":[{"title":"标题","url":"https://...","published_at":<Unix秒>}]}
-quotes 至多 12 条(price>0、change_pct 百分比),news 至多 5 条;单条脏数据会被服务端丢弃,不影响其它数据。`
+quotes 至多 12 条(price>0、change_pct 百分比),news 至多 5 条;单条脏数据会被服务端丢弃,不影响其它数据。
+
+【确定性解析纪律(批次78)】
+1. 行情类目优先用 web_read 的 parse(缺省 auto)拿结构化报价:**不要自己按 ~ 或 , 手工切分数字**;结构化块里的 price/change_pct 已是服务端口径(涨跌幅自算),原样抄进 web_done 即可。
+2. 只有当 parse 返回 matched=false(未命中行情特征)时,才改用 web_eval 手工提取;不要在已命中时重复手工解析。
+3. 遇到 SPA 页面正文为空,不要盲目重试同一 URL:用 web_read 的 wait_selector(≤15s)等目标元素出现再读一次;仍为空就换备选站点。
+4. web_search 返回「该源被拦截」时直接换备选站点,不要重试同一搜索引擎。`
 
 // AgentConfig 是 City-Chrome Agent 的运行参数(从 config.CityChromeConfig 收窄)。
 type AgentConfig struct {
@@ -184,6 +191,8 @@ func (a *Agent) RunMission(ctx context.Context, m Mission) (*MissionPayload, err
 		rec.StepsUsed = stepsUsed
 		rec.Plan = toolset.Plan
 		rec.DurationMs = time.Since(start).Milliseconds()
+		// 站点尝试轨迹(批次78 §3.3-5):web_open/web_read 访问过的 URL。
+		rec.Visited = toolset.VisitedURLs
 		if payload != nil {
 			rec.Source = payload.Source
 			rec.Quotes = len(payload.Quotes)
