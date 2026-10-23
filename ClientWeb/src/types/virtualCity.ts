@@ -22,6 +22,7 @@ import type {
   VirtualCityTreasury,
 } from './virtualCityStages';
 import type { VirtualCityCalibration } from './virtualCityCalibration';
+import type { WorldEventsSnapshot } from './virtualCityWorldEvent';
 import type { VirtualCitySenseResult } from './virtualCitySense';
 
 // ─── 虚拟城市 (VirtualCity) types ───
@@ -803,6 +804,7 @@ export interface VirtualCityGameState {
    *   老对局 / 后端未升级 / 未跑满首月 ⇒ **整个键缺省** ⇒ 面板走空态（不白屏）。
    */
   calibration?: VirtualCityCalibration;
+  world_events?: WorldEventsSnapshot; // 批次80：真实世界事件流（后端未上线 / 本月未派生时缺省）
 }
 
 // ── 市长选举（批次 20 文档 3 A1/A3；game.state.public_services 选举段）────

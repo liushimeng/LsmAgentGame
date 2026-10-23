@@ -155,6 +155,9 @@ type VirtualCityRoom struct {
 	// exoSource 批次66 外盘情绪锚:真实报价源(Manager 注入,可能为 nil)。
 	// 契约:必须纯内存快照、禁止回调房间(trySettle 锁内调用)。
 	exoSource func() []ExoQuote
+	// worldEvent 批次80 真实世界事件接线(源 + 安全阀;字段与逻辑见
+	// room_world_event.go)。
+	worldEvent worldEventRoomState
 
 	hooks      BroadcastHooks
 	chatSender ChatSender
@@ -307,6 +310,9 @@ func NewVirtualCityRoom(roomID string, monthMs int, seed int64, llmConcurrency i
 		surveyEnabled:    true,
 		insuranceEnabled: true,
 		familyEnabled:    true,
+		// 批次80:真实世界事件自动注入接线(默认开启;Manager.CreateRoom 经
+		// SetAutoScenarioLimits 按 config city_chrome{} 覆盖)。
+		worldEvent: newWorldEventRoomState(),
 		// 2026-09-21 §虚拟城市:城市之声默认开(契约 03 §7;Manager.CreateRoom
 		// 按 cfg 覆盖;无线路池时调度器自动空转,零开销)。
 		cityVoiceEnabled:  true,
@@ -749,6 +755,9 @@ func (r *VirtualCityRoom) Start(loader *profession.Loader) *errcode.Error {
 	r.World.InsuranceEnabled = r.insuranceEnabled
 	// 批次52(§5):NewWorld 恒置 FamilyEnabled=true,此处按开关回写(回滚阀)。
 	r.World.FamilyEnabled = r.familyEnabled
+	// 批次80:自动注入安全阀参数落进 World(开启 / 每月条数 / 强度上限)。
+	applyAutoScenarioLimits(r.World, r.worldEvent.autoEnabled,
+		r.worldEvent.maxPerMonth, r.worldEvent.maxMagnitude)
 	// 批次20(文档3 A2):市长选举接线 —— NewCivicElection 默认 Enabled=false
 	// (零值=false 家族,勿按上面 InsuranceEnabled 的反向语义写);房间级
 	// 开关 true 才启用。false 时 MonthlyStep 完全 no-op,与升级前逐分不差。
@@ -994,6 +1003,9 @@ func (r *VirtualCityRoom) trySettle(onFinish func(roomID string)) bool {
 	prevEvents := len(r.World.Events)
 	// 批次66:月结前刷新外盘情绪锚(锁内纯内存读;nil 源 ⇒ 锚置零走零回归路径)。
 	r.refreshExoLocked()
+	// 批次80:月结前派生并注入真实世界事件(锁内纯内存读;nil 源/无候选 ⇒
+	// 零回归,不触碰任何状态)。
+	r.refreshWorldEventsLocked()
 	finished, res := r.World.SettleMonth()
 	// 批次 27(§3.3 月结天气播报 P1):本月城市天气类型 ≠ 上月 → city_weather
 	// 事件(首月 lastWeatherKind=="" 恒播报)。锁内现算(WeatherAt 纯函数),

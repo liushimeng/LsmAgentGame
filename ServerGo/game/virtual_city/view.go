@@ -113,6 +113,10 @@ type ClientGameState struct {
 	// 与批次70「空数组 vs null」纪律一致 —— 缺失 ≠ 全 0)。
 	// ⚠ 视图代码已拆至 view_calibration.go(批次73 O0)。
 	Calibration *CalibrationJSON `json:"calibration,omitempty"`
+	// WorldEvents 批次80 §3.6:真实世界事件流(事件 → 场景注入 → 城市结果
+	// 因果链)。**总是下发**(含 auto_enabled 开关位;items 恒为 [])。
+	// ⚠ 视图代码已拆至 view_world_event.go(批次80)。
+	WorldEvents *WorldEventsJSON `json:"world_events"`
 }
 
 // ConsumerMarketJSON 是 consumer_market 子结构(P1 §6.1)。
@@ -1000,8 +1004,13 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		if cs.Month == 0 {
 			cs.Month = 1
 		}
+		// 批次80:未开局房也下发 world_events 骨架(items 恒 [])⇒ 前端
+		// store 不会因 null 崩(批次70「空数组 vs null」纪律)。
+		cs.WorldEvents = &WorldEventsJSON{AutoEnabled: true, Items: []WorldEventRecord{}}
 		return cs
 	}
+	// 批次80:真实世界事件流快照(事件 → 注入 → 城市结果因果链)。
+	cs.WorldEvents = BuildWorldEventsJSON(world)
 	// 2026-09-21 §虚拟城市:城市背景层快照(未建城 nil → omitempty)。
 	cs.City = citySnap
 	cs.Status = world.Status

@@ -223,6 +223,14 @@ func UserPrompt(ctx *vctypes.GameContext, memText string) string {
 		b.WriteString("\n\n")
 	}
 
+	// 批次80 §20261023-80:真实世界事件小节(真实数据 → 世界事件 → 场景注入;
+	// 无已注入事件时空串整段省略)。
+	if ctx.WorldEventBrief != "" {
+		b.WriteString("■ 世界事件\n")
+		b.WriteString(ctx.WorldEventBrief)
+		b.WriteString("\n\n")
+	}
+
 	// 批次20 文档2 §4.3:副业定价市场小节(≤350B;无副业不注入)。
 	// 批次35 §3.4:改档工具名随收敛更新为 side_business(op=set_price)。
 	if ctx.SideMarketBrief != "" {

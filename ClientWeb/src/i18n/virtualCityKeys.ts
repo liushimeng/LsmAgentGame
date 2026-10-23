@@ -985,6 +985,71 @@ export interface VirtualCityDict {
   'virtualCity.rt.missions.stats.fail': string;
   /** 平均耗时单位（{n} 秒）。 */
   'virtualCity.rt.missions.stats.seconds': string; // {n}
+  // ── 批次 80 · 真实世界事件流子页（WorldEventPanel；数据源 game.state.world_events）──
+  /** 实时看板子 Tab「事件流」。 */
+  'virtualCity.rt.sub.events': string;
+  'virtualCity.rt.event.title': string;
+  /** 事件条数（{n} 条事件）。 */
+  'virtualCity.rt.event.count': string; // {n}
+  /** 空态（未触发阈值 / 数据通道离线）。 */
+  'virtualCity.rt.event.empty': string;
+  /** 降级提示（未开局 / 后端未下发 world_events）。 */
+  'virtualCity.rt.event.noRoom': string;
+  'virtualCity.rt.event.autoOn': string;
+  'virtualCity.rt.event.autoOffBadge': string;
+  'virtualCity.rt.event.autoOff': string;
+  /** 本月已注入条数（{n} 条）。 */
+  'virtualCity.rt.event.injectedThisMonth': string; // {n}
+  /** 快照更新时间（{n} = 相对时间文本）。 */
+  'virtualCity.rt.event.updated': string; // {n}
+  'virtualCity.rt.event.severity': string;
+  'virtualCity.rt.event.severity1': string;
+  'virtualCity.rt.event.severity2': string;
+  'virtualCity.rt.event.severity3': string;
+  'virtualCity.rt.event.bullish': string;
+  'virtualCity.rt.event.bearish': string;
+  'virtualCity.rt.event.neutral': string;
+  'virtualCity.rt.event.injected': string;
+  'virtualCity.rt.event.notInjected': string;
+  'virtualCity.rt.event.effects': string;
+  /** 次月结果段标题（{m} = 游戏月）。 */
+  'virtualCity.rt.event.outcome': string; // {m}
+  'virtualCity.rt.event.source': string;
+  'virtualCity.rt.event.observedAt': string;
+  /** 派生规则（{rule} = R1..R10）。 */
+  'virtualCity.rt.event.rule': string; // {rule}
+  /** 触发量（{v} = 已格式化百分比）。 */
+  'virtualCity.rt.event.magnitude': string; // {v}
+  'virtualCity.rt.event.link': string;
+  /** 事件相对时间四档。 */
+  'virtualCity.rt.event.ago.just': string;
+  'virtualCity.rt.event.ago.min': string; // {n}
+  'virtualCity.rt.event.ago.hour': string; // {n}
+  'virtualCity.rt.event.ago.day': string; // {n}
+  /** 事件类型标签（后端 WorldEvent.Kind 逐字对齐）。 */
+  'virtualCity.rt.event.kind.equity_crash': string;
+  'virtualCity.rt.event.kind.gold_spike': string;
+  'virtualCity.rt.event.kind.crypto_crash': string;
+  'virtualCity.rt.event.kind.commodity_inflation': string;
+  'virtualCity.rt.event.kind.policy_easing': string;
+  'virtualCity.rt.event.kind.policy_tightening': string;
+  'virtualCity.rt.event.kind.earthquake': string;
+  'virtualCity.rt.event.kind.tsunami': string;
+  'virtualCity.rt.event.kind.extreme_disaster': string;
+  'virtualCity.rt.event.kind.survey_pulse': string;
+  /** 事件作用域标签。 */
+  'virtualCity.rt.event.scope.market': string;
+  'virtualCity.rt.event.scope.policy': string;
+  'virtualCity.rt.event.scope.disaster': string;
+  'virtualCity.rt.event.scope.macro': string;
+  'virtualCity.rt.event.scope.society': string;
+  /** 次月结果快照指标标签。 */
+  'virtualCity.rt.event.metric.cpi': string;
+  'virtualCity.rt.event.metric.unemployment': string;
+  'virtualCity.rt.event.metric.stockIndex': string;
+  'virtualCity.rt.event.metric.goldPrice': string;
+  'virtualCity.rt.event.metric.goodsPrice': string;
+  'virtualCity.rt.event.metric.residentCash': string;
 
   // ── 2026-10-21 §城市模拟定位 — 场景推演台（ScenarioPanel / 条件触发者）──
   // 目录键文案出处：tmpPlan/虚拟城市-模拟程序化与预测运行优化_20261021_095114.md §5.1/§5.3。

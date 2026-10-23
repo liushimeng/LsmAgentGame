@@ -206,6 +206,27 @@ type World struct {
 	// 零 rand —— 固定种子存量模拟回归零偏移。
 	Prediction *PredictionState
 
+	// ── 批次80(2026-10-23 §真实世界事件自动注入引擎)──
+	// 真实世界数据 → 世界事件 → 场景注入 的事件层/反馈层状态。
+	//   - WorldEventLog 事件日志环(≤50,新→旧;含未注入事件);
+	//   - WorldEventSeen 幂等指纹集合(同一事件只处理一次);
+	//   - WorldEventAutoEnabled/MaxPerMonth/MaxMagnitude 房间级安全阀配置
+	//     (由房间层 Start 回写;见 room_world_event.go);
+	//   - WorldEventAutoMonth/Count/Kinds 本月安全阀计数器(与主钟月同步,
+	//     跨月自动归零 ⇒「每月 ≤N 条」「同 kind 每月至多 1 次」按月独立生效)。
+	// 零 rand —— 不参与 StateHash(仅审计留痕与看板展示)。
+	WorldEventLog          []WorldEventRecord
+	WorldEventSeen         map[string]bool
+	WorldEventAutoEnabled  bool
+	WorldEventMaxPerMonth  int
+	WorldEventMaxMagnitude int
+	// WorldEventAutoMonth 本月安全阀计数器所属月份(= 触发注入时的主钟月)。
+	WorldEventAutoMonth int
+	// WorldEventAutoCount 该月已自动注入条数。
+	WorldEventAutoCount int
+	// WorldEventAutoKinds 该月已自动注入的 scenario_kind 集合。
+	WorldEventAutoKinds map[string]bool
+
 	// ── 批次71(2026-10-21 §校准与验证框架)──
 	// OffLedger 账外调整登记簿(不经 Ledger 的现金变动登记;见 offledger.go)。
 	// NewWorld 恒置;惰性初始化 nil 安全。

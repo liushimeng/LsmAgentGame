@@ -179,6 +179,11 @@ func NewManager(cfg Config, reg LLMRegistry) *Manager {
 		cfg:      cfg,
 		registry: reg,
 		rooms:    make(map[string]*VirtualCityRoom),
+		// 批次80 自动注入安全阀默认值(开启 / 每月 2 条 / 强度上限 3);
+		// main.go 经 SetAutoScenarioLimits 用 config city_chrome{} 覆盖。
+		autoScenarioEnabled:      true,
+		autoScenarioMaxPerMonth:  2,
+		autoScenarioMaxMagnitude: 3,
 	}
 }
 
@@ -209,6 +214,14 @@ type Manager struct {
 	rooms       map[string]*VirtualCityRoom
 	pendingOpts map[string]*VirtualCityRoomOptions // roomSvc → Start 时取用
 	exoSource   func() []ExoQuote                   // 批次66 外盘报价源(可 nil)
+	// worldEventSource 批次80 真实世界事件源(装配层 Feed→WorldEventInput 映射;
+	// 可 nil)。契约:纯内存快照、禁止回调房间。
+	worldEventSource func() []WorldEventInput
+	// 批次80 自动注入安全阀参数(来源 config city_chrome{};Manager.CreateRoom
+	// 透传给房间)。零值 ⇒ 默认(开启 / 每月 2 条 / 强度上限 3)。
+	autoScenarioEnabled      bool
+	autoScenarioMaxPerMonth  int
+	autoScenarioMaxMagnitude int
 	// seatHydrator 服务重启后从 DB 恢复 in-memory 房间的座位信息(对齐德扑
 	// BUG-WEREWOLF-P0-7 修复方案)。nil-safe,未设置时 Get/CreateRoom 跳过恢复。
 	seatHydrator func(roomID string) ([]SeatRestoreInfo, error)
@@ -225,6 +238,25 @@ type Manager struct {
 func (m *Manager) SetExoSource(fn func() []ExoQuote) {
 	m.mu.Lock()
 	m.exoSource = fn
+	m.mu.Unlock()
+}
+
+// SetWorldEventSource 批次80:注入真实世界事件源(装配层 Feed→WorldEventInput
+// 映射;唯一同时 import citychrome 与 virtual_city 的位置在 main.go)。
+// 契约:纯内存快照、禁止回调房间。
+func (m *Manager) SetWorldEventSource(fn func() []WorldEventInput) {
+	m.mu.Lock()
+	m.worldEventSource = fn
+	m.mu.Unlock()
+}
+
+// SetAutoScenarioLimits 批次80:设置自动注入安全阀参数(开启 / 每月条数上限 /
+// 强度上限)。CreateRoom 时透传给房间。false ⇒ 不派生、不注入(回退阀)。
+func (m *Manager) SetAutoScenarioLimits(enabled bool, maxPerMonth, maxMagnitude int) {
+	m.mu.Lock()
+	m.autoScenarioEnabled = enabled
+	m.autoScenarioMaxPerMonth = maxPerMonth
+	m.autoScenarioMaxMagnitude = maxMagnitude
 	m.mu.Unlock()
 }
 
@@ -310,6 +342,9 @@ func (m *Manager) CreateRoom(roomID string) *VirtualCityRoom {
 	// m.mu 写锁内调房间锁,锁序 m.mu → r.mu 全库一致,无反向路径)。
 	r.SetLinePoolSource(m.linePoolSource)
 	r.SetExoSource(m.exoSource)
+	// 批次80:真实世界事件源 + 自动注入安全阀参数透传(同 SetExoSource 范式)。
+	r.SetWorldEventSource(m.worldEventSource)
+	r.SetAutoScenarioLimits(m.autoScenarioEnabled, m.autoScenarioMaxPerMonth, m.autoScenarioMaxMagnitude)
 	r.SetCityVoiceConfig(m.cfg.CityVoiceEnabled, m.cfg.CityVoicePerMonth)
 	// 2026-09-22 §17-CityHuman(契约 02 §5):居民驱动层配置接线(与城市之声
 	// 互斥,Start 时按开关二选一装配)。

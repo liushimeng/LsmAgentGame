@@ -1078,6 +1078,36 @@ func main() {
 		})
 	}
 
+	// 2026-10-23 §批次80 — 真实世界事件自动注入:Feed→WorldEventInput 装配层
+	// (唯一同时 import citychrome 与 virtual_city 的位置,引擎保持纯度)。
+	// auto_scenario_enabled=false ⇒ 恒空事件源,全链路零注入一键回退;
+	// WorldEventSource 契约:纯内存快照(FeedStore.Snapshot)、禁止回调房间。
+	// 报价类目字面量与引擎一致(a_share/hk/us/metal/futures/crypto);
+	// news 类目的新闻由 Feed().News 单独映射(不经 Categories)。
+	vcMgr.SetAutoScenarioLimits(cfg.CityChrome.AutoScenario(),
+		cfg.CityChrome.AutoScenarioPerMonth(), cfg.CityChrome.AutoScenarioMagnitude())
+	if cfg.CityChrome.AutoScenario() {
+		vcMgr.SetWorldEventSource(func() []virtual_city.WorldEventInput {
+			f := cityChromeSvc.Feed()
+			in := virtual_city.WorldEventInput{}
+			for cat, c := range f.Categories {
+				for _, q := range c.Quotes {
+					in.Quotes = append(in.Quotes, virtual_city.WorldEventQuote{
+						Category: cat, Symbol: q.Symbol, Name: q.Name,
+						ChangePct: q.ChangePct, UpdatedAt: q.UpdatedAt,
+					})
+				}
+			}
+			for _, n := range f.News {
+				in.News = append(in.News, virtual_city.WorldEventNews{
+					ID: n.ID, Title: n.Title, Source: n.Source,
+					URL: n.URL, PublishedAt: n.PublishedAt,
+				})
+			}
+			return []virtual_city.WorldEventInput{in}
+		})
+	}
+
 	// 2026-10-05 §LsmKLBaseServer 知识库引擎 — 特征抽取 + MCP + Graph 检索。
 	// 装配: Loader(MySQL) + FeatureExtractor(LLM) + KnowledgeGraph + KnowledgeAPI。
 	// 抽取失败时回退到 profession.Loader 的 frontmatter 解析(零回归)。

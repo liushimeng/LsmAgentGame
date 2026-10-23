@@ -717,3 +717,283 @@
 .virtualCity-dash__src-live__placeholder {
   color: var(--virtualCity-text-dim, #b7bfcc);
 }
+
+/* ── 批次 80 · 真实世界事件流子页（WorldEventPanel，.virtualCity-rt__event*）──
+   侧栏仅 340~380px ⇒ 卡片纵向堆叠（不并排）。
+   §26 对比度（暗底 #16213a）：
+     正文 标题 #f9fafb ≈ 17:1 / 明细 #cbd5e1 ≈ 10.7:1 / 元信息 #9ca3af ≈ 5.9:1
+     徽章 auto #0f172a on #4ade80 ≈ 9:1 / sev2 #0f172a on #fbbf24 ≈ 10:1
+          sev3 & bear #fff on #b91c1c ≈ 9:1 / bull #f8fafc on #166534 ≈ 6.8:1
+          sev1 #e2e8f0 on #334155 ≈ 8.8:1 / 中性 & 未注入 #f8fafc on #475569 ≈ 7:1
+     提示条 #fef3c7 on #78350f ≈ 8.3:1（**不用 opacity 表状态**，§26.2 反模式⑤）。
+   无动画 ⇒ 无需 @keyframes / prefers-reduced-motion 兜底。 */
+.virtualCity-rt__event {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* 小节标题行（标题 + 条数）。 */
+.virtualCity-rt__event__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.virtualCity-rt__event__heading-count {
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 顶部状态条：自动注入徽章 + 本月注入数 + 更新时间。 */
+.virtualCity-rt__event__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 8px;
+  border: 1px solid #263250;
+  border-radius: 6px;
+  background: var(--virtualCity-panel, #161d28);
+}
+
+.virtualCity-rt__event__meta {
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 通用徽章基座。 */
+.virtualCity-rt__event__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* 自动注入开启=绿底深字（#0f172a on #4ade80 ≈ 9:1）。 */
+.virtualCity-rt__event__badge--auto {
+  background: #4ade80;
+  color: #0f172a;
+}
+
+/* 自动注入关闭=实色灰底浅字（#f8fafc on #475569 ≈ 7:1）。 */
+.virtualCity-rt__event__badge--auto-off {
+  background: #475569;
+  color: #f8fafc;
+}
+
+/* 强度 1=灰蓝底（#e2e8f0 on #334155 ≈ 8.8:1）。 */
+.virtualCity-rt__event__badge--sev1 {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+/* 强度 2=黄底深字（#0f172a on #fbbf24 ≈ 10:1）。 */
+.virtualCity-rt__event__badge--sev2 {
+  background: #fbbf24;
+  color: #0f172a;
+}
+
+/* 强度 3=红底白字（#fff on #b91c1c ≈ 9:1）。 */
+.virtualCity-rt__event__badge--sev3 {
+  background: #b91c1c;
+  color: #fff;
+}
+
+/* 方向 看多=深绿底浅字（#f8fafc on #166534 ≈ 6.8:1）。 */
+.virtualCity-rt__event__badge--bull {
+  background: #166534;
+  color: #f8fafc;
+}
+
+/* 方向 看空=红底白字（#fff on #b91c1c ≈ 9:1）。 */
+.virtualCity-rt__event__badge--bear {
+  background: #b91c1c;
+  color: #fff;
+}
+
+/* 方向 中性=灰底浅字（#f8fafc on #475569 ≈ 7:1）。 */
+.virtualCity-rt__event__badge--neutral {
+  background: #475569;
+  color: #f8fafc;
+}
+
+/* 已注入=绿底深字（#0f172a on #4ade80 ≈ 9:1）。 */
+.virtualCity-rt__event__badge--injected {
+  background: #4ade80;
+  color: #0f172a;
+}
+
+/* 未注入=实色灰底浅字（#f8fafc on #475569 ≈ 7:1）。 */
+.virtualCity-rt__event__badge--not-injected {
+  background: #475569;
+  color: #f8fafc;
+}
+
+/* 降级 / 关闭提示条（棕底米字 ≈ 8.3:1；不用 opacity）。 */
+.virtualCity-rt__event__notice {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #78350f;
+  color: #fef3c7;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 事件卡列表。 */
+.virtualCity-rt__event__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* 单条事件卡。 */
+.virtualCity-rt__event__card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #16213a;
+  border: 1px solid #2a3654;
+  border-left: 3px solid #3b4a6b;
+  text-align: left;
+}
+
+/* 标题行：标题 + 强度徽章 + 方向徽章。 */
+.virtualCity-rt__event__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.virtualCity-rt__event__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #f9fafb;
+  line-height: 1.45;
+}
+
+/* 明细（触发依据）。 */
+.virtualCity-rt__event__detail {
+  margin: 0;
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+/* 标签带：类型 / 作用域 / 规则 / 触发量。 */
+.virtualCity-rt__event__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.virtualCity-rt__event__tag {
+  max-width: 100%;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #0f172a;
+  color: #cbd5e1;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 元信息行：观测时间 / 来源 / 注入状态。 */
+.virtualCity-rt__event__meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+/* 效果 / 结果分组。 */
+.virtualCity-rt__event__section {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 4px;
+  border-top: 1px solid #263250;
+}
+
+.virtualCity-rt__event__section-label {
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+}
+
+.virtualCity-rt__event__effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.virtualCity-rt__event__effect {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #0f172a;
+  color: #cbd5e1;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 次月结果快照：指标网格（窄栏 2 列）。 */
+.virtualCity-rt__event__outcome {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 3px 8px;
+}
+
+.virtualCity-rt__event__outcome-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+.virtualCity-rt__event__outcome-label {
+  min-width: 0;
+  font-size: 11px;
+  color: var(--virtualCity-text-dim, #9ca3af);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.virtualCity-rt__event__outcome-value {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #e5e7eb;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 原文链接。 */
+.virtualCity-rt__event__link {
+  align-self: flex-start;
+  font-size: 11.5px;
+  color: #93c5fd;
+  text-decoration: none;
+}
+
+.virtualCity-rt__event__link:hover {
+  color: #bfdbfe;
+  text-decoration: underline;
+}

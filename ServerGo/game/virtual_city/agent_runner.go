@@ -1244,6 +1244,8 @@ func BuildContextForAgent(r *VirtualCityRoom, seat int) (*vctypes.GameContext, b
 		BubbleBrief:     bubbleBriefLocked(r.World),
 		LiquidityBrief:  liquidityBriefLocked(r.World),
 		ExoBrief:        exoBriefLocked(r.World),
+		// 批次80:真实世界事件小节(已注入事件;空 ⇒ prompt 整段省略)。
+		WorldEventBrief: worldEventBriefLocked(r.World),
 		RoomID:          r.RoomID, GameKind: "virtual_city",
 		MySeat: seat, MyUserID: r.Seats[seat], ModelKey: r.SeatModelKeys[seat],
 		Month: month, Age: age, Phase: r.Phase,

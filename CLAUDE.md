@@ -408,3 +408,15 @@ Blender / `.glb` / 3D 模型 / 几何 → `art-designer`（`3d_script/build_*.py
 - **HTTP 出口**：`GET /api/virtual_city/realtime_board` 的 `data` 增 `missions[]`（无记录 `[]` 非 null）。⚠️ **WS `game.realtime_feed` 帧不含 missions** —— 只随 HTTP 快照 / 手动刷新回读，前端 store `realtimeMissions` 承载。
 - **前端**：「实时看板」→ 外部实时 → 实时看板 → 子页尾部「采集」（`MissionLogPanel.tsx`，徽章对比度 ≥5:1），显示状态徽章 / 步数 / 数据条数 / **规划全文** / 失败原因。
 - `payload.source` 语义是**站点名**（校验层按 40 rune 截断兜底），看板来源列直出，勿塞链接说明。
+
+### 28.5 真实世界事件自动注入引擎（批次 80）
+
+> 规范见 [`lag_docs/虚拟城市/已实现/80-真实世界事件自动注入引擎/01-方案设计.md`](lag_docs/虚拟城市/已实现/80-真实世界事件自动注入引擎/01-方案设计.md)（§五「事件层→注入层→反馈层」自动链路）。
+
+- **链路**：`FeedStore` → `main.go` 装配层（Feed→`WorldEventInput`，引擎不 import citychrome）→ `world_event.go::DeriveWorldEvents` 规则引擎 R1–R10（纯函数、阈值写死常量、零 RNG）→ `room_world_event.go::refreshWorldEventsLocked`（`trySettle` 锁内、`SettleMonth` 之前）幂等闸门 + 安全阀 → **复用批次 68** `applyScenarioToWorld` 注入 → `WorldEventLog`（环 ≤50）反馈链（即时 effects + 次月 outcome 回填）。
+- **幂等指纹**：行情 `rw:<rule>:<类目集>:<dayBucket>`（自然日分桶）；新闻 `rw:<rule>:<newsID>`。只在**成功注入**时入 `World.WorldEventSeen`——被安全阀拦下的下月可重试，日志按 key 原地 upsert。
+- **安全阀**（config `city_chrome.auto_scenario_enabled` / `max_per_month`=2 / `max_magnitude`=3）：每月条数上限 / 强度上限（**超限跳过**非裁剪，留痕 `Injected=false`）/ **同 scenario kind 每月 1 次**（R1/R2/R3 同映射 market_crash 不重复计）/ 活动场景 <8；人工 `ApplyScenario` 不受限。
+- **强度纪律**：场景幅度按 `profile × magnitude` 线性放大（L3 market_crash = 股指瞬时 −18%）⇒ **自动注入一律 L1/L2**（仅 R7 ≥7 级地震 → L3）；`InjectedMonth` = 生效月 M+1（注入在月结前，`ScenarioApplied.AppliedMonth` = M）。
+- **零回归硬契约**：无事件（通道离线 / 源 nil / 无候选）⇒ 不触碰 World 状态 ⇒ 固定 seed 双跑 `SettleMonth` 逐位相等；MC/calibration 对局（无 feed）零偏移。
+- **前端**：实时看板第 11 子 Tab「事件流」（`WorldEventPanel.tsx`），数据源 `game.state.world_events`（**总是下发**，items 恒 `[]` 非 null）；⚠️ 该子页**不受**行情通道空态闸门约束（通道离线恰是「无事件」常见成因）。类型只放 `types/virtualCityWorldEvent.ts`（`virtualCity.ts` 触顶禁加）。
+- **居民感知**：月度 prompt「■ 世界事件」段（≤3 条已注入事件；空则整段省略），位于「■ 外盘情绪锚」之后。

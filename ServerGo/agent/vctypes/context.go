@@ -99,6 +99,9 @@ type GameContext struct {
 	// ExoBrief 批次66 外盘情绪锚小节(真实行情 → 游戏内月漂移偏置;≤220B;
 	// 空串 = 锚未激活,整段省略)。
 	ExoBrief string
+	// WorldEventBrief 批次80 真实世界事件小节(真实数据 → 世界事件 → 场景
+	// 注入 ⇒ 居民可据此调整决策;≤3 条已注入事件;空串 = 无事件,整段省略)。
+	WorldEventBrief string
 }
 
 // NeighborBrief 是 see/hear 感知结果中「人」的摘要(全部来自已锚定真实档案;

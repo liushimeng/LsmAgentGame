@@ -345,6 +345,12 @@ func (w *World) SettleMonth() (finished bool, res *SettleResult) {
 	// w.Month > DeadlineMonth 的 open → 关闭聚合;房间层锁外广播 game.survey_result。
 	res.ClosedSurveys = w.CloseSurveyIfDue()
 
+	// 批次80:回填「事件 → 参数变化 → 城市结果」因果链终点(契约 §3.4)。
+	// 位置:月结末尾(w.Month 已 +1 ⇒ Outcome.Month = 次月编号);注入发生在
+	// 本次月结之前(房间层 trySettle)⇒ 本次月结即「注入后的下一次月结」。
+	// 零 rand;无待回填记录 ⇒ 立即返回(零开销、零偏移)。
+	w.fillWorldEventOutcomes()
+
 	// 终局判定:主时钟到 60 岁。
 	finished = w.Age() >= TerminalAge || len(w.alivePlayers()) == 0
 	if finished {

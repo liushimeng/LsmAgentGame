@@ -306,6 +306,13 @@
     "request_timeout_ms": 90000,
     // 批次66:真实行情 → 游戏内市场联动(外盘情绪锚)开关(默认 true)。
     // false ⇒ 外盘报价源恒空,游戏内股票/黄金月漂移零偏置(一键回退)。
-    "market_linkage_enabled": true
+    "market_linkage_enabled": true,
+    // 批次80:真实世界事件自动注入总开关(默认 true)。
+    // false ⇒ 不派生、不注入真实世界事件(一键回退;前端显示「自动注入已关闭」)。
+    "auto_scenario_enabled": true,
+    // 批次80:每月自动注入条数上限(默认 2)。
+    "auto_scenario_max_per_month": 2,
+    // 批次80:自动注入强度上限(默认 3;L1..L5)。
+    "auto_scenario_max_magnitude": 3
   }
 }

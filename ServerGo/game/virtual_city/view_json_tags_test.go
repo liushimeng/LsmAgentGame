@@ -282,6 +282,11 @@ func TestViewContainerJSONTags(t *testing.T) {
 			"listing_book", "early_repay_eligible",
 			// 批次71 §9:校准快照(状态哈希 + 不变量 + D 指标 + 红线 + 历史)。
 			"calibration",
+			// 批次80 §3.6:真实世界事件流(事件 → 注入 → 城市结果因果链)。
+			"world_events",
+		}},
+		{"WorldEventsJSON", WorldEventsJSON{}, []string{
+			"auto_enabled", "updated_at", "injected_this_month", "items",
 		}},
 		{"MyJSON", MyJSON{}, []string{
 			"cash", "savings_deposit", "salary", "spouse_income", "side_income",

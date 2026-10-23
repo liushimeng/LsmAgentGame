@@ -728,6 +728,14 @@ type CityChromeConfig struct {
 	// MarketLinkageEnabled 批次66:真实行情 → 游戏内市场联动开关(默认 true;
 	// false ⇒ 外盘报价源恒空,全链路零偏置,一键回退)。
 	MarketLinkageEnabled *bool `json:"market_linkage_enabled"`
+	// ── 批次80(2026-10-23 §真实世界事件自动注入引擎)安全阀 ──
+	// AutoScenarioEnabled 自动注入总开关(nil ⇒ true,默认开启;false ⇒
+	// 不派生、不注入真实世界事件 —— 一键回退阀)。
+	AutoScenarioEnabled *bool `json:"auto_scenario_enabled"`
+	// AutoScenarioMaxPerMonth 每月自动注入条数上限(默认 2;≤0 ⇒ 2)。
+	AutoScenarioMaxPerMonth int `json:"auto_scenario_max_per_month"`
+	// AutoScenarioMaxMagnitude 自动注入强度上限(默认 3;≤0 ⇒ 3)。
+	AutoScenarioMaxMagnitude int `json:"auto_scenario_max_magnitude"`
 }
 
 // MarketLinkage 报告市场联动是否启用(nil ⇒ true,默认开启)。
@@ -736,6 +744,30 @@ func (c CityChromeConfig) MarketLinkage() bool {
 		return true
 	}
 	return *c.MarketLinkageEnabled
+}
+
+// AutoScenario 报告真实世界事件自动注入是否启用(nil ⇒ true,默认开启)。
+func (c CityChromeConfig) AutoScenario() bool {
+	if c.AutoScenarioEnabled == nil {
+		return true
+	}
+	return *c.AutoScenarioEnabled
+}
+
+// AutoScenarioPerMonth 每月自动注入条数上限(≤0 ⇒ 缺省 2)。
+func (c CityChromeConfig) AutoScenarioPerMonth() int {
+	if c.AutoScenarioMaxPerMonth <= 0 {
+		return 2
+	}
+	return c.AutoScenarioMaxPerMonth
+}
+
+// AutoScenarioMagnitude 自动注入强度上限(≤0 ⇒ 缺省 3)。
+func (c CityChromeConfig) AutoScenarioMagnitude() int {
+	if c.AutoScenarioMaxMagnitude <= 0 {
+		return 3
+	}
+	return c.AutoScenarioMaxMagnitude
 }
 
 var (
