@@ -152,16 +152,6 @@ feat(虚拟城市/批次54): <业务变更摘要>
 
 正文出现 `Claude Code`、`§<编号>`、`AGENTS.md` 等**词条本身不算署名**（是业务上下文），被禁的是署名行/trailer 形态；不要为合规改写业务描述。用户显式要求加署名才例外，默认一律不加。
 
-### 10.4 双远端（gitee + gitcode）与自动同步
-
-> **2026-10-23 起硬约束**：主仓库同时托管 gitee 与 gitcode，一次 `git push` 自动推送到两处；推送前自动拉取到最新。
-
-- **远端**：`origin` = `git@gitee.com:liushimeng109117198_admin/lsm-agent-game.git`，**带两个 pushurl**（gitee + `git@gitcode.com:liusm109117198/LsmAgentGame.git`）⇒ 普通 `git push` 一次推两个平台；另设 `gitcode` 远端供单独 fetch/pull。
-- **一键配置脚本**：`sh scripts/git-dual-remote.sh`（幂等）——配远端/pushurl、`fetch.prune`、`pull.ff only`、别名、并安装 `pre-push` hook。
-- **pre-push hook**（`.git/hooks/pre-push`，不入库）：推送前 `fetch --all --prune` → 对 `origin`/`gitcode` 逐个 `merge --ff-only` 到最新；工作区脏或分叉时**中止推送并报错**（不静默强推）。
-- **别名**：`git pull` / `git sync` = fetch 两个远端 + 快进合并 `origin/main` 与 `gitcode/main`；`git pushall` = 分别推 `origin` 与 `gitcode`。
-- **子模块**（`lag_docs` / `python-generate-image-tool` / `go-web-debug-tool`）各自为独立仓库，**未**配置 gitcode 镜像；子模块提交需各自单独推送。
-
 ## 11. 常见陷阱
 
 - **子模块本地 file:// 路径** —— 当前网络无问题；局域网外克隆需把 `.gitmodules` 更新为真实远程。
