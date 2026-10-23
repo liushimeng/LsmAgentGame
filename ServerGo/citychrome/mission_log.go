@@ -56,6 +56,9 @@ type MissionRecord struct {
 	// Visited 是本次 mission 访问过的 URL(批次78 §3.3;≤6 条,每条 ≤120 rune,
 	// 新→旧去重)。看板「采集」子页的「站点尝试」列直出。
 	Visited []string `json:"visited"`
+	// Model 是本次 mission 实际使用的 LLM 线路(批次79;随机策略下每次
+	// 任务从线路池抽一条)。旧记录为空,omitempty 不污染 wire。
+	Model string `json:"model,omitempty"`
 }
 
 // MissionStats 是采集健康度聚合(批次78 §3.3;HTTP 快照 data.stats 出口)。

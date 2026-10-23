@@ -52,6 +52,9 @@ export interface VirtualCityCreateRequest {
   civic_election_enabled?: boolean;
   /** 2026-09-25 §LLM线路池配额 — [1,64]，缺省不发送。 */
   llm_lines?: number;
+  /** 2026-10-23 §批次79 — LsmAgentGame-City-Chrome 采集 Agent 线路：
+   *  "random"（默认，每个 mission 从线路池随机取线）或固定 model key。 */
+  city_chrome_line?: string;
 }
 
 interface Props {
@@ -174,6 +177,9 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
   // 2026-09-25 §LLM线路池配额 — 本房 Agent 并发线路数（0=未初始化；
   // listModels 成功后置为池上限，用户已改动则只 clamp 不覆盖）。
   const [llmLines, setLlmLines] = useState(0);
+  // 2026-10-23 §批次79 — LsmAgentGame-City-Chrome 采集 Agent 线路：
+  // 默认 "random"（只随机：每个 mission 从 LLM 线路池抽一条线路）。
+  const [cityChromeLine, setCityChromeLine] = useState<string>('random');
   /** stepper 上限 = min(池总量, 64)（64 = 后端 concurrency_lines / driver worker 硬上限）。 */
   const lineCap = Math.max(1, Math.min(linePoolTotal, 64));
 
@@ -234,6 +240,8 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
         civic_election_enabled: election,
         // 2026-09-25 §LLM线路池配额 — 未初始化/0 不发送（后端按池总量运行）。
         llm_lines: llmLines > 0 ? llmLines : undefined,
+        // 2026-10-23 §批次79 — City-Chrome 采集 Agent 线路（默认 random）。
+        city_chrome_line: cityChromeLine || undefined,
       });
       if (!ok) {
         // 父组件已 setErr + reportGlobalError；这里不重复上报，仅保留弹窗。
@@ -329,6 +337,29 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
             🔌 {t('virtualCity.linePoolInfo' as TKey, { n: linePoolTotal })}
           </p>
         )}
+
+        {/* 2026-10-23 §批次79 — LsmAgentGame-City-Chrome 采集 Agent 的 LLM
+            线路选择：默认「只随机」（每个 mission 从线路池随机取一条），
+            也可固定到某个模型线路。池空时仅保留「只随机」项。 */}
+        <label className="virtualCity-create-form__row">
+          <span>{t('virtualCity.cityChromeLine' as TKey)}</span>
+          <select
+            value={cityChromeLine}
+            onChange={(e) => setCityChromeLine(e.target.value)}
+            disabled={busy || linePoolTotal < 1}
+            data-testid="virtualCity-create-city-chrome-line"
+          >
+            <option value="random">{t('virtualCity.cityChromeLineRandom' as TKey)}</option>
+            {models.map((m) => (
+              <option key={m.model} value={m.model}>
+                {m.model}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="virtualCity-create-form__hint" data-testid="virtualCity-create-city-chrome-line-hint">
+          🛰 {t('virtualCity.cityChromeLineHint' as TKey)}
+        </p>
 
         {/* 批次 33 §3.1：真实城市下拉（默认 / 20 城 / 随机）。显示名直取中文
             （如既有「📋 调研」硬编码先例）；选中真实城市时 hint 追加城市摘要。 */}

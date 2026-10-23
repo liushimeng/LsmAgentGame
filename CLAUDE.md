@@ -403,7 +403,8 @@ Blender / `.glb` / 3D 模型 / 几何 → `art-designer`（`3d_script/build_*.py
 
 - **City-Chrome 工具集 7→10**：新增 `web_plan`（mission 第 1 步强制提交结构化规划，≤8 步）、`web_read`（一步完成打开+读正文）、`web_search`（必应中国 SERP 只读提取，固定源全失败时发现兜底，自动关页）；既有 7 工具与批次65/76 配方**完全兼容**。
 - **跨 mission 经验闭环**：mission user prompt 自动注入「最近成功（source/步数/条数）+ 最近失败原因」（`MissionLog.LastOK` / `LastFail`），Agent 据此优化本次规划。
-- **`MissionRecord` 遥测环**（`ServerGo/citychrome/mission_log.go`）：容量 20，新→旧；字段 = category / status(running|ok|fail) / source / steps_used / max_steps / plan / quotes / news / error。
+- **`MissionRecord` 遥测环**（`ServerGo/citychrome/mission_log.go`）：容量 20，新→旧；字段 = category / status(running|ok|fail) / source / steps_used / max_steps / plan / quotes / news / error / model（批次79）。
+- **City-Chrome 线路策略**（批次79）：建房弹窗「采集 Agent 线路」→ `city_chrome_line`（`"random"` 默认 = 每个 mission 从 LLM 线路池按 `concurrency_lines` 加权随机取一条；`""` = 沿用 `city_chrome.model_key`；其余 = 固定 model key）。数据通道是 server 级单例，建房时更新其策略（后建房覆盖，`Service.SetLinePolicy`）。
 - **HTTP 出口**：`GET /api/virtual_city/realtime_board` 的 `data` 增 `missions[]`（无记录 `[]` 非 null）。⚠️ **WS `game.realtime_feed` 帧不含 missions** —— 只随 HTTP 快照 / 手动刷新回读，前端 store `realtimeMissions` 承载。
 - **前端**：「实时看板」→ 外部实时 → 实时看板 → 子页尾部「采集」（`MissionLogPanel.tsx`，徽章对比度 ≥5:1），显示状态徽章 / 步数 / 数据条数 / **规划全文** / 失败原因。
 - `payload.source` 语义是**站点名**（校验层按 40 rune 截断兜底），看板来源列直出，勿塞链接说明。

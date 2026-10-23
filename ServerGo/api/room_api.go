@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/service"
@@ -63,6 +64,12 @@ type createRoomRequest struct {
 	// 生效,其他 kind 静默忽略)。[1,64];0/缺省 = 未指定(维持 agentSem=池总量、
 	// Workers=config 缺省,零回归);负数 400。并入 VirtualCity.LLMLines 透传。
 	LLMLines int `json:"llm_lines,omitempty"`
+	// CityChromeLine 2026-10-23 §批次79 — LsmAgentGame-City-Chrome 采集 Agent
+	// 的 LLM 线路选择(仅 virtual_city 生效,其他 kind 静默忽略):
+	// ""/缺省 = 沿用服务端配置 model_key(旧行为);"random" = 每个 mission 从
+	// LLM 线路池随机取线(建房弹窗默认);其余 = 固定 model key。
+	// 顶层优先,亦可在 virtual_city 子对象显式携带(与 llm_lines 同策略)。
+	CityChromeLine string `json:"city_chrome_line,omitempty"`
 }
 
 // RoomAPI serves the room management endpoints.
@@ -226,6 +233,17 @@ func mergeVirtualCityBodyFields(req createRoomRequest, kind string, cfg *service
 	if req.FullAgent != nil {
 		enabled := true
 		cfg.FullAgent = &enabled
+	}
+	// 2026-10-23 §批次79 — City-Chrome 采集 Agent 线路:顶层优先,子对象
+	// virtual_city.city_chrome_line 亦可显式携带;缺省 "" = 沿用服务端配置
+	// (旧行为)。trim 后超 128 rune 直接 400(防脏载荷进日志/遥测)。
+	if line := strings.TrimSpace(req.CityChromeLine); line != "" {
+		if len([]rune(line)) > 128 {
+			return cfg, "city_chrome_line too long"
+		}
+		cfg.CityChromeLine = line
+	} else if line := strings.TrimSpace(cfg.CityChromeLine); line != "" {
+		cfg.CityChromeLine = line
 	}
 	return cfg, ""
 }

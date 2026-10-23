@@ -51,6 +51,8 @@ func (r missionFakeRegistry) Get(modelKey string) (llmtypes.LLMProvider, string,
 
 func (r missionFakeRegistry) GetThinkingEnabled(modelKey string) (bool, int) { return false, 0 }
 
+func (r missionFakeRegistry) ListEnabled() []llmtypes.ModelInfo { return nil }
+
 // missionErrRegistry 的 Get 恒报错(模拟模型 key 缺失/上游不可用)。
 type missionErrRegistry struct{}
 
@@ -59,6 +61,8 @@ func (missionErrRegistry) Get(modelKey string) (llmtypes.LLMProvider, string, er
 }
 
 func (missionErrRegistry) GetThinkingEnabled(modelKey string) (bool, int) { return false, 0 }
+
+func (missionErrRegistry) ListEnabled() []llmtypes.ModelInfo { return nil }
 
 // newMissionTestAgent 构造注入假 provider + 遥测日志的最小 Agent。
 func newMissionTestAgent(t *testing.T, p llmtypes.LLMProvider, baseURL string) (*Agent, *MissionLog) {

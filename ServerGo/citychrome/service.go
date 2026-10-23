@@ -144,6 +144,26 @@ func newService(cfg config.CityChromeConfig, reg LLMRegistry) *Service {
 	return svc
 }
 
+// SetLinePolicy 设置 LsmAgentGame-City-Chrome 采集 Agent 的 LLM 线路策略
+// (批次79;virtual_city 建房 body.city_chrome_line 经 main.go 装配桥透传,
+// 后建房覆盖):"" = 沿用配置 model_key(旧行为),LinePolicyRandom = 每个
+// mission 从线路池随机取线,其它 = 固定 model key。离线占位实例(agent=nil)
+// 静默忽略。
+func (s *Service) SetLinePolicy(line string) {
+	if s == nil || s.agent == nil {
+		return
+	}
+	s.agent.SetLinePolicy(line)
+}
+
+// LinePolicy 返回当前线路策略(诊断/测试;离线实例返回 "")。
+func (s *Service) LinePolicy() string {
+	if s == nil || s.agent == nil {
+		return ""
+	}
+	return s.agent.LinePolicy()
+}
+
 // SetRoomPresence 注入空闲降载探针(main.go:Hub 有无 virtual_city 房间)。
 // 必须在 Start 后、调度循环消费前调用。
 func (s *Service) SetRoomPresence(fn func() bool) {

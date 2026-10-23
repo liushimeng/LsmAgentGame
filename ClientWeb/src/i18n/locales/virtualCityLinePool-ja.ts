@@ -5,6 +5,11 @@ const virtualCityLinePool = {
   'virtualCity.llmLines': 'LLM ラインプール',
   // ゲーム内都市パネル：{n} = 本室の有効ライン数
   'virtualCity.cityDriverLines': 'LLM ライン：{n} 条',
+  // 2026-10-23 §batch79 — 建室モーダル：City-Chrome 収集エージェントのライン。
+  'virtualCity.cityChromeLine': '収集エージェント回線',
+  'virtualCity.cityChromeLineRandom': 'ランダムのみ',
+  'virtualCity.cityChromeLineHint':
+    'LsmAgentGame-City-Chrome は収集ミッションごとに LLM ラインプールからランダムに 1 本選びます。特定のモデル回線に固定することもできます。',
 };
 
 export default virtualCityLinePool;

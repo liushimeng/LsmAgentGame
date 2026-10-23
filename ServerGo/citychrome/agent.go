@@ -14,7 +14,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	agentroot "LsmAgentGame/agent"
@@ -29,7 +31,14 @@ import (
 type LLMRegistry interface {
 	Get(modelKey string) (llmtypes.LLMProvider, string, error)
 	GetThinkingEnabled(modelKey string) (bool, int)
+	// ListEnabled 返回可用模型目录(批次79:随机线路模式的候选集,
+	// 权重 = concurrency_lines)。
+	ListEnabled() []llmtypes.ModelInfo
 }
+
+// LinePolicyRandom 是线路策略的「随机」取值(建房弹窗默认):
+// 每个 mission 从 LLM 线路池随机取一条线路。
+const LinePolicyRandom = "random"
 
 // roleText 是 City-Chrome Agent 角色段(契约 §3.4「角色段要点」逐字落地;
 // 批次77 §3.3-1 追加「规划与效率」段,批次78 §3.3-4 追加「确定性解析纪律」段;
@@ -86,6 +95,12 @@ type Agent struct {
 	acquireLLM func(ctx context.Context) (release func(), ok bool)
 	// mlog 是采集任务遥测日志(批次77 §3.3-3);nil = 不记录遥测。
 	mlog *MissionLog
+	// lineMu 保护 linePolicy:建房链路(Service.SetLinePolicy)写入,
+	// RunMission 读取;读多写少用 RWMutex。
+	lineMu sync.RWMutex
+	// linePolicy 是 LLM 线路策略(批次79):"" = 沿用 cfg.ModelKey(旧行为);
+	// LinePolicyRandom = 每个 mission 从线路池随机取线;其它 = 固定 model key。
+	linePolicy string
 }
 
 // NewAgent 构造。registry 为 nil 时 mission 直接失败(由调度器计熔断)。
@@ -109,6 +124,74 @@ func (a *Agent) SetLLMAcquire(fn func(ctx context.Context) (release func(), ok b
 
 // SetMissionLog 注入采集任务遥测日志(Service 装配;nil = 不记录遥测)。
 func (a *Agent) SetMissionLog(l *MissionLog) { a.mlog = l }
+
+// SetLinePolicy 设置 LLM 线路策略(批次79;建房链路 Service.SetLinePolicy
+// 透传):"" = 沿用 cfg.ModelKey(旧行为),LinePolicyRandom = 每个 mission
+// 从线路池随机取线,其它 = 固定 model key。并发安全(建房线程写 / 调度线程读)。
+func (a *Agent) SetLinePolicy(line string) {
+	line = strings.TrimSpace(line)
+	a.lineMu.Lock()
+	a.linePolicy = line
+	a.lineMu.Unlock()
+	logger.L().Info("citychrome line policy updated", zap.String("line", line))
+}
+
+// LinePolicy 返回当前线路策略(测试/诊断)。
+func (a *Agent) LinePolicy() string {
+	a.lineMu.RLock()
+	defer a.lineMu.RUnlock()
+	return a.linePolicy
+}
+
+// resolveLineKey 解析本 mission 使用的 model key(批次79):
+//   - 固定策略(非空且非 random)→ 原样返回(Get 失败走既有 mission 失败兜底);
+//   - 缺省 "" → cfg.ModelKey(旧行为,零回归);
+//   - random → 从 registry.ListEnabled() 按 concurrency_lines 加权随机;
+//     池空时回退 cfg.ModelKey(不因线路池空缺而整条通道失败)。
+func (a *Agent) resolveLineKey() string {
+	line := a.LinePolicy()
+	if line != "" && !strings.EqualFold(line, LinePolicyRandom) {
+		return line
+	}
+	if line == "" {
+		return a.cfg.ModelKey
+	}
+	if a.registry != nil {
+		if key := randomLineKey(a.registry.ListEnabled()); key != "" {
+			return key
+		}
+	}
+	return a.cfg.ModelKey
+}
+
+// randomLineKey 按线路数加权随机取一个 model key(权重 = concurrency_lines,
+// ≤0 视作 1;空列表返回 ""）。与 LinePool 的线路数量权重口径一致。
+func randomLineKey(list []llmtypes.ModelInfo) string {
+	total := 0
+	for _, m := range list {
+		total += lineWeight(m)
+	}
+	if total <= 0 {
+		return ""
+	}
+	n := rand.Intn(total)
+	for _, m := range list {
+		w := lineWeight(m)
+		if n < w {
+			return m.Model
+		}
+		n -= w
+	}
+	return ""
+}
+
+// lineWeight 返回单模型的线路权重(concurrency_lines,≤0 → 1)。
+func lineWeight(m llmtypes.ModelInfo) int {
+	if m.ConcurrencyLines <= 0 {
+		return 1
+	}
+	return m.ConcurrencyLines
+}
 
 // missionUserPrompt 构造 mission 的 user 文本(mission JSON + 输出 schema +
 // 站点备选 + 跨 mission 经验注入)。经验段按 MissionLog 该类目最近成功/失败
@@ -158,6 +241,10 @@ func (a *Agent) RunMission(ctx context.Context, m Mission) (*MissionPayload, err
 	mctx, cancel := context.WithTimeout(ctx, a.cfg.MissionTimeout)
 	defer cancel()
 
+	// 批次79:一次 mission 内固定使用同一条线路(随机策略在入口抽一次,
+	// 避免同一任务多步跨模型漂移);线路名进遥测记录便于诊断。
+	modelKey := a.resolveLineKey()
+
 	// ── 遥测:running 入环,出口 finish 同 ID 覆盖(批次77 §3.3-3)──
 	start := time.Now()
 	rec := MissionRecord{
@@ -166,6 +253,7 @@ func (a *Agent) RunMission(ctx context.Context, m Mission) (*MissionPayload, err
 		StartedAt: start.Unix(),
 		Status:    MissionStatusRunning,
 		MaxSteps:  a.cfg.MaxStepsPerMission,
+		Model:     modelKey,
 	}
 	if a.mlog != nil {
 		a.mlog.Append(rec)
@@ -213,7 +301,7 @@ func (a *Agent) RunMission(ctx context.Context, m Mission) (*MissionPayload, err
 	lastText := ""
 	stepsUsed := 0
 	for step := 0; step < a.cfg.MaxStepsPerMission; step++ {
-		resp, err := a.callLLM(mctx, system, messages)
+		resp, err := a.callLLM(mctx, modelKey, system, messages)
 		stepsUsed = step + 1
 		if err != nil {
 			finish(MissionStatusFail, stepsUsed, nil, err.Error())
@@ -281,7 +369,8 @@ func payloadFromText(symbolsPerCategory int, text string) (*MissionPayload, erro
 }
 
 // callLLM 单步 LLM 调用:节流槽 + thinking 注入 + ChatStreamAccumulate(§197)。
-func (a *Agent) callLLM(ctx context.Context, system []llmtypes.SystemBlock, messages []llmtypes.Message) (llmtypes.LLMResponse, error) {
+// modelKey 由 RunMission 入口按线路策略解析(批次79),一次 mission 内恒定。
+func (a *Agent) callLLM(ctx context.Context, modelKey string, system []llmtypes.SystemBlock, messages []llmtypes.Message) (llmtypes.LLMResponse, error) {
 	if a.acquireLLM != nil {
 		release, ok := a.acquireLLM(ctx)
 		if !ok {
@@ -289,19 +378,19 @@ func (a *Agent) callLLM(ctx context.Context, system []llmtypes.SystemBlock, mess
 		}
 		defer release()
 	}
-	provider, key, err := a.registry.Get(a.cfg.ModelKey)
+	provider, key, err := a.registry.Get(modelKey)
 	if err != nil {
-		return llmtypes.LLMResponse{}, fmt.Errorf("registry.Get(%s): %w", a.cfg.ModelKey, err)
+		return llmtypes.LLMResponse{}, fmt.Errorf("registry.Get(%s): %w", modelKey, err)
 	}
 	req := llmtypes.LLMRequest{
-		Model:          a.cfg.ModelKey,
+		Model:          modelKey,
 		System:         system,
 		Messages:       messages,
 		Tools:          BuildTools(),
 		MaxTokens:      4096,
 		AgentClassName: string(agentroot.AgentClassCityChrome),
 	}
-	if enabled, budget := a.registry.GetThinkingEnabled(a.cfg.ModelKey); enabled {
+	if enabled, budget := a.registry.GetThinkingEnabled(modelKey); enabled {
 		req.Thinking = &llmtypes.ThinkingConfig{Type: "enabled", BudgetTokens: budget}
 	}
 	type streamingProvider interface {

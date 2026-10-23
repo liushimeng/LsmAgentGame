@@ -112,6 +112,9 @@ export function VirtualCityLobbyPage() {
           // 2026-09-25 §LLM线路池配额 — 本房 Agent 并发线路数（顶层字段，
           // 仅 virtualCity 生效；undefined 不发送，后端按池总量运行）。
           llm_lines: req.llm_lines,
+          // 2026-10-23 §批次79 — LsmAgentGame-City-Chrome 采集 Agent 线路
+          // （"random" = 随机取线，默认；模型 key = 固定线路）。
+          city_chrome_line: req.city_chrome_line,
         });
         // 先导航，副作用 best-effort（BUG-R229 教训）。
         if (detail.my_role === 'spectator') {

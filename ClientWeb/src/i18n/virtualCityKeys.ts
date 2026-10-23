@@ -310,6 +310,10 @@ export interface VirtualCityDict {
   'virtualCity.llmLines': string;
   /** 游戏内城市面板：{n} = 本房生效线路数。 */
   'virtualCity.cityDriverLines': string;
+  /** 2026-10-23 §批次79 — 建房弹窗：City-Chrome 采集 Agent 线路选择。 */
+  'virtualCity.cityChromeLine': string;
+  'virtualCity.cityChromeLineRandom': string;
+  'virtualCity.cityChromeLineHint': string;
   // CityStatsPanel（右侧栏城市面板）。
   'virtualCity.cityTitle': string;
   'virtualCity.cityPopulation': string;

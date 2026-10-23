@@ -1017,7 +1017,8 @@ func main() {
 		logger.L().Info("virtual_city profession loader warmup finished")
 	}()
 	gameSvcWs.SetVirtualCityChatSender(&wsChatSenderAdapter{chat: chatSvc})
-	roomSvc.SetVirtualCityRoomConfigurer(vcMgr.ApplyRoomOptions)
+	// 2026-10-23 §批次79 — virtual_city 建房配置回调在下方 City-Chrome 装配段
+	// 统一注册(同路径需同时更新 City-Chrome 线路策略),此处不再单独注册。
 	// 2026-09-21 §虚拟城市(契约 04 §1.3):大厅列表/详情下发 wealth 房间
 	// resident_count(🏙 徽标;in-memory 只读探针,不落 DB)。
 	roomSvc.SetVirtualCityResidentCounter(func(roomID string) int {
@@ -1040,6 +1041,15 @@ func main() {
 	// 注入 vcMgr(无 virtual_city 房间时暂停自动轮转);WS 广播经 OnFeed
 	// listener 注入接线(game.realtime_feed,节流合并 ≥10s)。
 	cityChromeSvc := citychrome.Start(cfg.CityChrome, llmRegistry)
+	// 2026-10-23 §批次79 — 建房弹窗选择 LsmAgentGame-City-Chrome 的 LLM 线路:
+	// 数据通道是 server 级单例,建房时按 body.city_chrome_line 更新线路策略
+	// (后建房覆盖;""=沿用配置 model_key,"random"=每 mission 随机取线)。
+	roomSvc.SetVirtualCityRoomConfigurer(func(roomID string, opts *service.VirtualCityRoomOptions) {
+		vcMgr.ApplyRoomOptions(roomID, opts)
+		if opts != nil {
+			cityChromeSvc.SetLinePolicy(opts.CityChromeLine)
+		}
+	})
 	cityChromeSvc.SetRoomPresence(func() bool { return len(vcMgr.RoomIDs()) > 0 })
 	gameSvcWs.WireCityChromeFeed(cityChromeSvc)
 	vcRealtimeAPI := api.NewVirtualCityRealtimeAPI(cityChromeSvc)
