@@ -17,20 +17,20 @@ type Memory struct {
 }
 
 const (
-	memoryMonthlyCap = 24
-	memoryKeyFactsCap = 20
+	memoryMonthlyCap   = 24
+	memoryKeyFactsCap  = 20
 	memoryPromptWindow = 6
 )
 
 // MonthDecision 单月决策摘要。
 type MonthDecision struct {
-	Month      int
-	Actions    []string // 人读动作列表(≤3 条)
-	SpeakText  string
-	CashAfter  int64
-	NetAfter   int64
-	FI         float64
-	Summary    string // ≤80 字
+	Month     int
+	Actions   []string // 人读动作列表(≤3 条)
+	SpeakText string
+	CashAfter int64
+	NetAfter  int64
+	FI        float64
+	Summary   string // ≤80 字
 }
 
 // AppendDecision 追加本月决策;满 24 月时压缩最早 6 月 → CompactSummary。

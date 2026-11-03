@@ -12,6 +12,7 @@ import virtualCityBehavior from './virtualCityBehavior-ja';
 import virtualCityRealtime from './virtualCityRealtime-ja';
 import virtualCityScenario from './virtualCityScenario-ja';
 import virtualCityDash from './virtualCityDash-ja';
+import virtualCitySystem from './virtualCitySystem-ja';
 
 // 日本語 — ja
 const ja: Dict = {
@@ -1740,7 +1741,7 @@ const ja: Dict = {
   'virtualCity.consumption.invalid': '消費水準が不正です（0-3）',
 
   // ── virtualCity 分割ファイル（≤1800 行制約）：P2 取引 / P1-4 保険 / 住民档案 / バッチ20 / ラインプール ──
-  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily, ...virtualCityDashboard, ...virtualCityBehavior, ...virtualCityRealtime, ...virtualCityScenario, ...virtualCityDash,
+  ...virtualCityP2, ...virtualCityInsurance, ...virtualCityResidents, ...virtualCityBatch20, ...virtualCityLinePool, ...virtualCityCityClock, ...virtualCityTimeWeather, ...virtualCityFamily, ...virtualCityDashboard, ...virtualCityBehavior, ...virtualCityRealtime, ...virtualCityScenario, ...virtualCityDash, ...virtualCitySystem,
 
   // ── P1 ミンスキーエンジン + LPR リプライシング + 早期返済 ──
   'minsky.title': 'ミンスキー融資状態',

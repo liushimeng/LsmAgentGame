@@ -289,10 +289,12 @@ func (s *GameService) broadcastVirtualCityState(roomID string) {
 			continue
 		}
 		cs := virtual_city.BuildClientState(roomID, seat, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, cityClock, citySnap, &env)
+		cs.SystemAgentEnabled = s.vcSystemEnabled // 批次81:系统对话入口开关
 		s.hub.BroadcastTo(uid, wsEnvelope("game.state", 0, cs))
 	}
 	// 观战者(viewer = -1)。
 	cs := virtual_city.BuildClientState(roomID, -1, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, cityClock, citySnap, &env)
+	cs.SystemAgentEnabled = s.vcSystemEnabled // 批次81:系统对话入口开关
 	for _, uid := range s.hub.connectedSpectatorUserIDs(roomID) {
 		s.hub.BroadcastTo(uid, wsEnvelope("game.state", 0, cs))
 	}

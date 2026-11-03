@@ -30,9 +30,11 @@ func newScenarioTestRoom(t *testing.T, roomID string, seed int64) *VirtualCityRo
 	return r
 }
 
-// TestScenarioCatalog_Complete 目录 = 10 个 kind、4 个分组、L1-L5。
+// TestScenarioCatalog_Complete 目录 = 40 个 kind、6 个分组、L1-L5
+// (批次68 既有 10 个 + 批次81 新增 30 个)。
 func TestScenarioCatalog_Complete(t *testing.T) {
 	want := map[string]string{
+		// ── 批次68 既有 10 个 ──
 		ScenarioGoodsPriceShock: ScenarioGroupMarket,
 		ScenarioPolicyShock:     ScenarioGroupMarket,
 		ScenarioMarketCrash:     ScenarioGroupMarket,
@@ -43,6 +45,42 @@ func TestScenarioCatalog_Complete(t *testing.T) {
 		ScenarioExtremeDisaster: ScenarioGroupNature,
 		ScenarioMeteorite:       ScenarioGroupUnknown,
 		ScenarioAlienInvasion:   ScenarioGroupUnknown,
+		// ── 批次81 新增 30 个(市场与经济 +8)──
+		ScenarioInterestRateHike:     ScenarioGroupMarket,
+		ScenarioCurrencyDepreciation: ScenarioGroupMarket,
+		ScenarioTradeWar:             ScenarioGroupMarket,
+		ScenarioCommodityBoom:        ScenarioGroupMarket,
+		ScenarioInflationSpiral:      ScenarioGroupMarket,
+		ScenarioDeflation:            ScenarioGroupMarket,
+		ScenarioHousingBubbleBurst:   ScenarioGroupMarket,
+		ScenarioBankRun:              ScenarioGroupMarket,
+		// ── 政策与治理 +5 ──
+		ScenarioFiscalStimulus:           ScenarioGroupPolicy,
+		ScenarioAusterity:                ScenarioGroupPolicy,
+		ScenarioRegulatoryCrackdown:      ScenarioGroupPolicy,
+		ScenarioInfrastructureInvestment: ScenarioGroupPolicy,
+		ScenarioSocialWelfareExpansion:   ScenarioGroupPolicy,
+		// ── 社会与舆情 +5 ──
+		ScenarioSocialUnrest:               ScenarioGroupSociety,
+		ScenarioPandemicOutbreak:           ScenarioGroupSociety,
+		ScenarioPopulationSurge:            ScenarioGroupSociety,
+		ScenarioAgingCrisis:                ScenarioGroupSociety,
+		ScenarioConsumerConfidenceCollapse: ScenarioGroupSociety,
+		// ── 自然灾害 +6 ──
+		ScenarioFlood:            ScenarioGroupNature,
+		ScenarioTyphoon:          ScenarioGroupNature,
+		ScenarioDrought:          ScenarioGroupNature,
+		ScenarioWildfire:         ScenarioGroupNature,
+		ScenarioVolcanicEruption: ScenarioGroupNature,
+		ScenarioExtremeHeat:      ScenarioGroupNature,
+		// ── 未知灾难 +3 ──
+		ScenarioNuclearAccident: ScenarioGroupUnknown,
+		ScenarioSolarStorm:      ScenarioGroupUnknown,
+		ScenarioBioweaponLeak:   ScenarioGroupUnknown,
+		// ── 科技与新文明 +3 ──
+		ScenarioAIBoom:                     ScenarioGroupTech,
+		ScenarioUnknownCivilizationContact: ScenarioGroupTech,
+		ScenarioCyberAttack:                ScenarioGroupTech,
 	}
 	catalog := ScenarioCatalog()
 	if len(catalog) != len(want) {

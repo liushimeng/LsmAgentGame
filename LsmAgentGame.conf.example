@@ -314,5 +314,27 @@
     "auto_scenario_max_per_month": 2,
     // 批次80:自动注入强度上限(默认 3;L1..L5)。
     "auto_scenario_max_magnitude": 3
+  },
+
+  // ============================================================================
+  // 2026-11-03 §批次81 — City-System 主 Agent(city_system 顶级段)。
+  // 虚拟城市定位 v3.0 的「对话即控制面」:人类用自然语言驱动 LsmAgentGame-City-System
+  // 主 Agent 理解意图、选场景、调工具、控制模拟、拉 3D 视角。
+  // enabled=false ⇒ WS 帧返回 35059,前端隐藏「系统对话」入口(一键回退)。
+  // ⚠ 本段**缺失**等同 enabled=false(Go 零值),部署必须显式带上本段。
+  // ============================================================================
+  "city_system": {
+    // 总开关(默认开启;置 false 一键回退)。
+    "enabled": true,
+    // 系统 Agent 的 LLM 模型 key(房间级 city_system_line="random" 时每轮随机取线)。
+    "model_key": "DeepSeek-model",
+    // 单轮 ReAct 步数上限(默认 8;防 LLM 死循环)。
+    "max_steps": 8,
+    // 单会话消息上限(默认 40;超出裁剪)。
+    "max_messages": 40,
+    // 单轮总超时毫秒(默认 180000;含流式续命)。
+    "request_timeout_ms": 180000,
+    // 单个工具结果回灌上限 rune(默认 4000)。
+    "tool_result_limit": 4000
   }
 }

@@ -8,7 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"LsmAgentGame/agent/citysystem"
 	"LsmAgentGame/agent/thpagent"
+	"LsmAgentGame/config"
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/game/chess"
 	"LsmAgentGame/game/doudizhu"
@@ -42,11 +44,19 @@ type GameService struct {
 	texasHoldemMgr *texasholdem.TexasHoldemManager
 	werewolfMgr    *werewolf.WerewolfManager
 	// 2026-08-19 §德州扑克Agent — Bot 驱动器
-	thpDriver      *thpagent.Driver
+	thpDriver *thpagent.Driver
 
 	// 2026-09-14 §财商流P0 — 虚拟城市管理器 + 文档池加载器(由 main.go 注入)。
-	vcMgr     *virtual_city.Manager
-	vcLoader  *virtual_city.Loader
+	vcMgr    *virtual_city.Manager
+	vcLoader *virtual_city.Loader
+
+	// 批次81(2026-11-03 §批次81)— City-System 主 Agent 运行时:
+	// 每房间一个 Agent + 会话存储(roomID → *systemRoomAgent);
+	// 配置/LLM registry 由 main.go 经 SetCitySystemRuntime 注入。
+	vcSystemAgents   sync.Map // roomID -> *systemRoomAgent
+	vcSystemEnabled  bool
+	vcSystemCfg      config.ResolvedCitySystemConfig
+	vcSystemRegistry citysystem.LLMRegistry
 
 	// 2026-08-20 §B5/B6/B8 — 德州扑克 bot 运行时支撑字段。
 	// chatSvc: bot 公屏发言(poker_chat)的落库 + 广播通道(§B5,由 main.go SetChatService 注入)。
@@ -72,8 +82,8 @@ type GameService struct {
 
 	// thpRegistry / thpMemoryStore:德扑 MemoryIter(§3.4)的 LLM 注册表与
 	// 持久记忆存取层(由 main.go / initTexasHoldemBotDriver 注入;nil 时 no-op)。
-	thpRegistry     *llm.Registry
-	thpMemoryStore  texasAgentMemoryStore
+	thpRegistry    *llm.Registry
+	thpMemoryStore texasAgentMemoryStore
 }
 
 // texasAgentMemoryStore 是德扑 MemoryIter 的持久记忆存取窄接口
@@ -751,6 +761,8 @@ func (s *GameService) RemoveRoomState(roomID string) {
 	if s.vcMgr != nil {
 		s.vcMgr.RemoveRoom(roomID)
 	}
+	// 批次81:清理房间级 City-System Agent(会话存储随之释放)。
+	s.removeCitySystemAgent(roomID)
 	// 2026-08-20 §B6/§B8: 同步清理德扑 bot 运行时(串行守卫 + watchdog + driver 注册),
 	// 否则 thpDriver.UnregisterAgents 零生产调用点、Agent goroutine 与 watchdog 泄漏。
 	s.cleanupTexasHoldemBotRuntime(roomID)
@@ -948,6 +960,13 @@ func (s *GameService) HandleClientFrame(c *Client, env Envelope) {
 		s.handleVirtualCityStart(c, env)
 	case "game.virtual_city_pause":
 		s.handleVirtualCityPause(c, env)
+	// 批次81(2026-11-03 §批次81)— City-System 主 Agent 对话帧。
+	case "game.virtual_city_system_message":
+		s.handleVirtualCitySystemMessage(c, env)
+	case "game.virtual_city_system_reset":
+		s.handleVirtualCitySystemReset(c, env)
+	case "game.virtual_city_system_history":
+		s.handleVirtualCitySystemHistory(c, env)
 	case "game.werewolf_vote":
 		s.handleWerewolfVote(c, env)
 	case "game.werewolf_suicide":
@@ -1025,35 +1044,19 @@ func (s *GameService) rejectIfSpectator(c *Client, env Envelope, roomID string) 
 
 // ─────────────────── join ───────────────────
 
-
-
-
 // ─────────────────── move ───────────────────
-
-
-
 
 // ─────────────────── promote ───────────────────
 
-
 // ─────────────────── resign / leave / state ───────────────────
-
-
-
 
 // ─────────────────── junqi (中国军棋) ───────────────────
 
 // handleJunqiLayout handles a game.layout frame — a player submits their 25-piece layout.
 
-
-
 // ─────────────────── doudizhu (斗地主) ───────────────────
 
 // handleDoudizhuJoin 入座并按座位推送可见状态。
-
-
-
-
 
 // sendDoudizhuState 向单个客户端发送该座位可见的对局状态。
 
@@ -1332,7 +1335,6 @@ func (s *GameService) handleSpectatorsList(c *Client, env Envelope) {
 // sanitized view for every currently-connected spectator and fan it out via
 // Hub.BroadcastRoomSpectators — which never reaches players.
 
-
 func (s *GameService) broadcastChessSpectatorState(roomID string) {
 	uids := s.hub.connectedSpectatorUserIDs(roomID)
 	for _, uid := range uids {
@@ -1343,9 +1345,6 @@ func (s *GameService) broadcastChessSpectatorState(roomID string) {
 		s.hub.BroadcastTo(uid, Envelope{Type: "game.state", Payload: mustMarshal(state)})
 	}
 }
-
-
-
 
 // ─────────────────── Helpers ───────────────────
 
@@ -1491,7 +1490,6 @@ func (s *GameService) leaveRoomQuiet(roomID, userID string) {
 // 副作用：每次广播 state 都会唤醒该房间内的所有 bot agent。Agent.runLoop
 // 阻塞在 evCh 上直到收到事件——少了这一步狼刀/预言家/女巫永远不会
 // 行动（BUG-WEREWOLF-P0-3）。
-
 
 // broadcastWerewolfSpecial 在夜晚动作后,向夜晚专属角色额外推送神职情报。
 

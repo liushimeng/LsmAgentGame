@@ -37,6 +37,9 @@ const (
 	ScenarioGroupSociety = "社会与舆情"
 	ScenarioGroupNature  = "自然灾害"
 	ScenarioGroupUnknown = "未知灾难"
+	// 批次81(2026-11-03 §批次81 场景目录扩展 10 → 40)新增两组。
+	ScenarioGroupPolicy = "政策与治理"
+	ScenarioGroupTech   = "科技与新文明"
 )
 
 // 场景 kind 常量(契约 §5.1:10 个,前端按 kind 派发强度/参数控件)。
@@ -179,7 +182,11 @@ type scenarioDef struct {
 }
 
 // scenarioDefs 场景目录唯一事实来源(顺序 = 前端分组展示顺序)。
-var scenarioDefs = []scenarioDef{
+//
+// 批次81(2026-11-03 §批次81):既有 10 个在前,新增 30 个
+// (scenarioDefsBatch81,见 scenario_catalog_batch81.go)在后 ⇒ 共 40 个。
+// append 到新切片,既有 10 项的顺序与内容逐字段不变(零回归)。
+var scenarioDefs = append([]scenarioDef{
 	// ── 市场与经济 ──
 	{
 		spec: ScenarioSpec{
@@ -364,7 +371,7 @@ var scenarioDefs = []scenarioDef{
 		},
 		defaultDuration: 18,
 	},
-}
+}, scenarioDefsBatch81...)
 
 // ScenarioCatalog 返回场景目录(契约 §5.1)。每次调用返回独立副本 ——
 // Magnitudes/Params 切片可安全被调用方修改。
@@ -666,7 +673,14 @@ func applyScenarioToWorld(w *World, kind string, magnitude, durationMonths int, 
 
 // scenarioValidateTarget 按 kind 校验 target 并返回:
 //   - goodsTargets 商品品类列表(goods_price_shock 用;其他 kind 忽略);
-//   - policyDir   政策方向(only policy_shock:tight=+1 / loose=-1)。
+//   - policyDir   政策方向(policy_shock:tight=+1 / loose=-1;其余 kind = +1)。
+//
+// 批次81(2026-11-03 §批次81):default 分支的 policyDir 由 0 改为 +1 ——
+// 新增场景(interest_rate_hike / inflation_spiral / deflation /
+// regulatory_crackdown / cyber_attack / bank_run)的 profile 直接以
+// PolicyRateDelta / CreditWindowDelta 的**符号**表达政策方向(正 = 收紧),
+// 而既有 10 个场景无一在非 policy_shock 分支设置这两个字段 ⇒ 对存量
+// 场景零行为变化(零回归),仅让新场景的利率/信贷字段按契约生效。
 func scenarioValidateTarget(kind, target string) ([]string, float64, *errcode.Error) {
 	switch kind {
 	case ScenarioGoodsPriceShock:
@@ -693,7 +707,9 @@ func scenarioValidateTarget(kind, target string) ([]string, float64, *errcode.Er
 	default:
 		// 其余场景不消费 target:宽松忽略(旧/新客户端互通),但商品供给/
 		// 价格冲击(灾害场景)恒作用于全品类。
-		return goodsOrder, 0, nil
+		// 批次81:policyDir = +1(见上方注释)—— 新场景的 PolicyRateDelta /
+		// CreditWindowDelta 符号即方向,缺省 +1 使正 delta = 收紧。
+		return goodsOrder, 1, nil
 	}
 }
 

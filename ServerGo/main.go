@@ -34,7 +34,10 @@ import (
 	"syscall"
 	"time"
 
+	agentroot "LsmAgentGame/agent"
+	"LsmAgentGame/agent/citybus"
 	"LsmAgentGame/agent/debaterun"
+	"LsmAgentGame/agent/vcplayer"
 	"LsmAgentGame/agent/wwjudge"
 	"LsmAgentGame/api"
 	"LsmAgentGame/citychrome"
@@ -1035,6 +1038,13 @@ func main() {
 	vcPredictionAPI := api.NewVirtualCityPredictionAPI(vcMgr)
 	// 2026-09-21 §档案锚定契约 §7 — 居民人物卡档案两端点(房间源 = vcMgr)。
 	vcCityAPI := api.NewVirtualCityAPI(vcMgr)
+	// 2026-11-03 §批次81 — City-System 主 Agent 会话 HTTP 入口(rooms = vcMgr,
+	// agents = ws 层实现;WS 为主通道,HTTP 为首屏历史/兜底)。
+	vcSystemAPI := api.NewVirtualCitySystemAPI(vcMgr, gameSvcWs)
+	// 批次81:City-System 运行时配置注入 ws 层(enabled / 归一化配置 / LLM
+	// registry)。房间级线路策略(city_system_line)已由 applyOpts 落位,
+	// ws 层在 GetOrCreate SystemAgent 时经 r.CitySystemLine() 读取。
+	gameSvcWs.SetCitySystemRuntime(cfg.CitySystem.Enabled, cfg.CitySystem.Resolved(), llmRegistry)
 
 	// 2026-10-20 §批次65 — City-Chrome 实时数据通道:全局单例启动(enabled=false
 	// 时也是离线占位实例,HTTP 快照可用、refresh 返回 35053);空闲降载探针
@@ -1056,6 +1066,35 @@ func main() {
 	// 2026-10-21 §批次69 — 统一「实时看板」快照端点(复用同一 cityChromeSvc
 	// 单例;不新建 citychrome 实例)。
 	vcDashboardAPI := api.NewVirtualCityDashboardAPI(cityChromeSvc)
+
+	// 2026-11-03 §批次81 — Citybus 类级 Agent handler 注册(装配层是唯一同时
+	// import citybus 与两侧 Agent 包的位置)。
+	//
+	// City-Chrome:触发一次采集 mission(薄委托 citychrome.SystemBusPayload;
+	// 其 BusTrigger 注入点由本装配层绑定到 Service.SystemBusTrigger)。
+	citychrome.BusTrigger = cityChromeSvc.SystemBusTrigger
+	if err := citybus.Default().Register(string(agentroot.AgentClassCityChrome),
+		func(ctx context.Context, msg citybus.Message) (any, error) {
+			category := ""
+			if payload, ok := msg.Payload.(map[string]any); ok {
+				category, _ = payload["category"].(string)
+			}
+			return citychrome.SystemBusPayload(ctx, category)
+		}); err != nil {
+		logger.L().Warn("register City-Chrome bus handler failed", zap.Error(err))
+	}
+	// City-Human:返回本房居民摘要(只读;薄委托 vcplayer.SystemBusResidents;
+	// 其 CityRoomSource 注入点由本装配层把 vcMgr 房间快照适配成
+	// []vcplayer.ResidentBrief —— vcplayer 禁止反向 import game/virtual_city)。
+	vcplayer.CityRoomSource = cityHumanBusSource{mgr: vcMgr}
+	if err := citybus.Default().Register(string(agentroot.AgentClassCityHuman),
+		func(ctx context.Context, msg citybus.Message) (any, error) {
+			return vcplayer.SystemBusResidents(ctx, msg.RoomID)
+		}); err != nil {
+		logger.L().Warn("register City-Human bus handler failed", zap.Error(err))
+	}
+	// 注:City-WebGL-Show 的**房间级** bus handler 由 citywebgl SubAgent
+	// 自行注册(含 main.go 大装配行),此处不注册、不 import citywebgl。
 
 	// 2026-10-20 §批次66 — 真实行情 → 游戏内市场联动:Feed→ExoQuote 装配层
 	// (唯一同时 import citychrome 与 virtual_city 的位置,引擎保持纯度)。
@@ -1119,7 +1158,7 @@ func main() {
 	_ = kbRetrievalChain // 预留给未来 MCP tools/call 内部使用
 	kbAPI := api.NewKnowledgeAPI(kbLoader)
 
-	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, vcSurveyAPI, vcScenarioAPI, vcPredictionAPI, vcCityAPI, vcRealtimeAPI, vcDashboardAPI, kbAPI)
+	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, vcSurveyAPI, vcScenarioAPI, vcPredictionAPI, vcCityAPI, vcRealtimeAPI, vcDashboardAPI, vcSystemAPI, kbAPI)
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.
@@ -1315,6 +1354,46 @@ func (a *wsChatSenderAdapter) SendFromBot(roomID, botUserID, botAccount, modelKe
 	}
 	_, err := a.chat.SendFromBot(roomID, botUserID, botAccount, modelKey, text)
 	return err
+}
+
+// cityHumanBusSource 把 vcMgr 的房间快照适配成 []vcplayer.ResidentBrief
+// (批次81 City-Human 总线薄委托的装配层适配器)。
+//
+// 放在 main.go 而非 vcplayer/virtual_city —— vcplayer 禁止反向 import
+// game/virtual_city(会成环,见 vcplayer/system_bus.go 头注),而
+// game/virtual_city 也不应感知总线;装配层是唯一同时持有两侧的位置。
+// 只读、不阻塞(持 r.mu 读字段快照,§92a;不回调任何房间方法)。
+type cityHumanBusSource struct {
+	mgr *virtual_city.Manager
+}
+
+func (s cityHumanBusSource) SystemBusResidents(roomID string) ([]vcplayer.ResidentBrief, error) {
+	r := s.mgr.Get(roomID)
+	if r == nil {
+		return nil, fmt.Errorf("virtual_city room %s not found", roomID)
+	}
+	r.MuLock()
+	defer r.MuUnlock()
+	w := r.EngineLocked()
+	if w == nil {
+		return nil, fmt.Errorf("virtual_city room %s not started", roomID)
+	}
+	out := make([]vcplayer.ResidentBrief, 0, virtual_city.MaxSeats)
+	for seat := 0; seat < virtual_city.MaxSeats; seat++ {
+		p := w.Players[seat]
+		if p == nil {
+			continue
+		}
+		out = append(out, vcplayer.ResidentBrief{
+			Seat:     seat,
+			Nickname: r.Nicknames[seat],
+			ModelKey: r.SeatModelKeys[seat],
+			Alive:    p.Alive,
+			Cash:     p.Cash,
+			District: p.District,
+		})
+	}
+	return out, nil
 }
 
 // resolveTLSCertPath 自动 fallback(2026-09-15 §财商流P0-bugfix)。

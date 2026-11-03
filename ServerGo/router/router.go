@@ -28,7 +28,7 @@ import (
 )
 
 // New constructs the *gin.Engine.
-func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcScenarioAPI *api.VirtualCityScenarioAPI, vcPredictionAPI *api.VirtualCityPredictionAPI, vcCityAPI *api.VirtualCityAPI, vcRealtimeAPI *api.VirtualCityRealtimeAPI, vcDashboardAPI *api.VirtualCityDashboardAPI, knowledgeAPI *api.KnowledgeAPI) *gin.Engine {
+func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcScenarioAPI *api.VirtualCityScenarioAPI, vcPredictionAPI *api.VirtualCityPredictionAPI, vcCityAPI *api.VirtualCityAPI, vcRealtimeAPI *api.VirtualCityRealtimeAPI, vcDashboardAPI *api.VirtualCityDashboardAPI, vcSystemAPI *api.VirtualCitySystemAPI, knowledgeAPI *api.KnowledgeAPI) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 
@@ -282,6 +282,10 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		vcGames.GET("/rooms/:id/surveys", vcSurveyAPI.List)
 		vcGames.GET("/rooms/:id/city/residents", vcCityAPI.ListResidents)
 		vcGames.GET("/rooms/:id/city/residents/:cardId", vcCityAPI.GetResident)
+		// 2026-11-03 §批次81 — City-System 主 Agent 会话历史 / 清空(登录即可;
+		// WS 为主通道,HTTP 为首屏历史/兜底)。
+		vcGames.GET("/rooms/:id/system_agent/history", vcSystemAPI.History)
+		vcGames.POST("/rooms/:id/system_agent/reset", vcSystemAPI.Reset)
 	}
 
 	// 2026-10-20 §批次65 — City-Chrome 实时看板(需登录;契约 §3.5)。

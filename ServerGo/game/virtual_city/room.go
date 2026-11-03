@@ -158,6 +158,12 @@ type VirtualCityRoom struct {
 	// worldEvent 批次80 真实世界事件接线(源 + 安全阀;字段与逻辑见
 	// room_world_event.go)。
 	worldEvent worldEventRoomState
+	// citySystemLine 批次81(2026-11-03 §批次81)— LsmAgentGame-City-System
+	// 主 Agent 的 LLM 线路策略: ""=沿用服务端配置 city_system.model_key;
+	// "random"=每轮从线路池随机取线;其余=固定 model key。由 applyOpts 从
+	// service.VirtualCityRoomOptions.CitySystemLine 落位;ws 层 GetOrCreate
+	// SystemAgent 时经 CitySystemLine() 读取。与批次79 CityChromeLine 同构。
+	citySystemLine string
 
 	hooks      BroadcastHooks
 	chatSender ChatSender
@@ -470,6 +476,9 @@ func (r *VirtualCityRoom) applyOpts(opts *service.VirtualCityRoomOptions) {
 	if opts.Seed != 0 {
 		r.seed = opts.Seed
 	}
+	// 批次81(2026-11-03 §批次81):房间级 City-System 线路策略(与批次79
+	// CityChromeLine 同构;""=沿用服务端配置,"random"=每轮随机,其余=固定 key)。
+	r.citySystemLine = strings.TrimSpace(opts.CitySystemLine)
 	// 批次 33(方案 §2.2):真实城市选择。必须在 Seed 落位之后解析 ——
 	// "random" 按最终 seed 确定性抽取(同 seed 复现同一座城);未命中/空串
 	// = 默认城市(cityGeo=nil,全部城市逻辑旁路,批次 27 行为零偏移)。

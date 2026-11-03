@@ -193,6 +193,14 @@ const (
 	// 35058 — 虚拟城市预测运行(批次68,2026-10-21 §预测运行)。
 	// 无任何 run 不报错(runs:[] + report:null);仅指定 run_id 未命中时返回。
 	ErrVirtualCityPredictionRunNotFound = 35058 // 预测运行不存在(不在该房)
+	// 35059–35061 — 虚拟城市 City-System 主 Agent 与 Agent 总线
+	// (2026-11-03 §批次81)。
+	// ⚠ 契约文档 §9 原写 35058/35059/35060,但 35058 已被批次68
+	// ErrVirtualCityPredictionRunNotFound 占用(有单测与前端契约依赖),
+	// 故顺延取 35059–35061;前端契约以 errcode 常量为准。
+	ErrVirtualCitySystemAgentDisabled = 35059 // 系统 Agent 未启用(city_system.enabled=false)
+	ErrVirtualCitySystemAgentBusy     = 35060 // 该用户上一轮尚未结束(并发限流 1)
+	ErrVirtualCityAgentNotFound       = 35061 // send_agent_message 目标 Agent 未注册
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
 	// 契约: lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md §4.4。
 	ErrVirtualCitySenseInvalid  = 35100 // 感知/移动工具参数非法(未知城区、未知 mode、目标不存在)
@@ -353,6 +361,10 @@ var DefaultMessages = map[int]string{
 	ErrVirtualCityScenarioParamsInvalid: "场景参数非法：强度须 1-5、持续 1-24 月、target 须为合法取值",
 	ErrVirtualCityScenarioActiveLimit:   "同时生效的场景已达上限（8 个），请等待现有场景消退后再注入",
 	ErrVirtualCityPredictionRunNotFound: "预测运行不存在：run_id 不在该房间",
+	// 35059–35061 — 虚拟城市 City-System 主 Agent 与 Agent 总线(2026-11-03 §批次81)。
+	ErrVirtualCitySystemAgentDisabled: "系统 Agent 未启用（city_system.enabled=false）",
+	ErrVirtualCitySystemAgentBusy:     "该用户上一轮系统对话尚未结束，请稍候",
+	ErrVirtualCityAgentNotFound:       "目标 Agent 未注册（send_agent_message 目标不存在）",
 }
 
 // Code constructs a Coded error.

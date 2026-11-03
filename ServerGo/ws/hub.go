@@ -829,26 +829,60 @@ func (h *Hub) BroadcastRoomSpectators(roomID string, env Envelope) {
 	}
 }
 
-// BroadcastRoomIncludingSpectators sends an envelope to every player AND every
-// spectator of the given room. Used exclusively by the chat fan-out so that
-// spectator messages appear in the player's chat panel and vice versa.
-func (h *Hub) BroadcastRoomIncludingSpectators(roomID string, env Envelope) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	if set, ok := h.rooms[roomID]; ok {
+// collectRoomAndSpectatorsLocked returns the per-connection deduplicated
+// union of the room's subscriber set (h.rooms) and spectator set
+// (h.spectators). Callers must hold h.mu (read or write).
+//
+// A single *Client can legitimately appear in BOTH sets: `game.spectate`
+// registers it as a spectator while `handleGetState`'s auto-SubscribeRoom
+// also puts it into h.rooms. Iterating the two sets verbatim would enqueue
+// every envelope to such a client twice (doubled streaming text, duplicate
+// tool cards), so every "players AND spectators" fan-out MUST go through
+// this collector and send at most once per *Client pointer.
+//
+// excluded (may be nil): user IDs to skip entirely (whisper redaction).
+// Dedup is intentionally keyed by *Client, not UserID — two tabs of the
+// same user are distinct connections and each must receive one copy.
+func (h *Hub) collectRoomAndSpectatorsLocked(roomID string, excluded map[string]struct{}) []*Client {
+	players := h.rooms[roomID]
+	spectators := h.spectators[roomID]
+	if len(players) == 0 && len(spectators) == 0 {
+		return nil
+	}
+	seen := make(map[*Client]struct{}, len(players)+len(spectators))
+	out := make([]*Client, 0, len(players)+len(spectators))
+	for _, set := range []map[*Client]struct{}{players, spectators} {
 		for c := range set {
-			select {
-			case c.send <- env:
-			default:
+			if _, dup := seen[c]; dup {
+				continue
 			}
+			if len(excluded) > 0 {
+				if _, skip := excluded[c.UserID]; skip {
+					continue
+				}
+			}
+			seen[c] = struct{}{}
+			out = append(out, c)
 		}
 	}
-	if set, ok := h.spectators[roomID]; ok {
-		for c := range set {
-			select {
-			case c.send <- env:
-			default:
-			}
+	return out
+}
+
+// BroadcastRoomIncludingSpectators sends an envelope to every player AND every
+// spectator of the given room — exactly once per client connection. Used by
+// the chat fan-out (so spectator messages appear in the player's chat panel
+// and vice versa) and by whole-room game event broadcasts.
+//
+// The recipient list is snapshotted under h.mu.RLock and the (non-blocking)
+// sends run after the lock is released, per the hub lock discipline.
+func (h *Hub) BroadcastRoomIncludingSpectators(roomID string, env Envelope) {
+	h.mu.RLock()
+	targets := h.collectRoomAndSpectatorsLocked(roomID, nil)
+	h.mu.RUnlock()
+	for _, c := range targets {
+		select {
+		case c.send <- env:
+		default:
 		}
 	}
 }
@@ -861,6 +895,10 @@ func (h *Hub) BroadcastRoomIncludingSpectators(roomID string, env Envelope) {
 // Multiple connections under the same userID (e.g. a player with two tabs, or
 // a bot whose UserID collides with a spectator record) are all excluded if
 // the id matches. excludeUserIDs is typically {sender, recipient}.
+//
+// Like BroadcastRoomIncludingSpectators, delivery is deduplicated per *Client
+// so a client registered in both the player and spectator sets receives at
+// most one copy.
 func (h *Hub) BroadcastRoomIncludingSpectatorsExcluding(roomID string, env Envelope, excludeUserIDs ...string) {
 	if len(excludeUserIDs) == 0 {
 		h.BroadcastRoomIncludingSpectators(roomID, env)
@@ -874,27 +912,12 @@ func (h *Hub) BroadcastRoomIncludingSpectatorsExcluding(roomID string, env Envel
 		excluded[id] = struct{}{}
 	}
 	h.mu.RLock()
-	defer h.mu.RUnlock()
-	if set, ok := h.rooms[roomID]; ok {
-		for c := range set {
-			if _, skip := excluded[c.UserID]; skip {
-				continue
-			}
-			select {
-			case c.send <- env:
-			default:
-			}
-		}
-	}
-	if set, ok := h.spectators[roomID]; ok {
-		for c := range set {
-			if _, skip := excluded[c.UserID]; skip {
-				continue
-			}
-			select {
-			case c.send <- env:
-			default:
-			}
+	targets := h.collectRoomAndSpectatorsLocked(roomID, excluded)
+	h.mu.RUnlock()
+	for _, c := range targets {
+		select {
+		case c.send <- env:
+		default:
 		}
 	}
 }

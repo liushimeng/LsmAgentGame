@@ -32,6 +32,9 @@ type Config struct {
 	TexasHoldem TexasHoldemConfig `json:"texasholdem"`
 	VirtualCity VirtualCityConfig `json:"virtual_city"`
 	CityChrome  CityChromeConfig  `json:"city_chrome"`
+	// CitySystem 批次81(2026-11-03 §批次81)— LsmAgentGame-City-System
+	// 主 Agent 配置段(对话即控制面)。
+	CitySystem CitySystemConfig `json:"city_system"`
 }
 
 // §128 对话即思考重构:AgentParallelConfig 已删除(原 §122)。
@@ -770,6 +773,9 @@ func (c CityChromeConfig) AutoScenarioMagnitude() int {
 	return c.AutoScenarioMaxMagnitude
 }
 
+// 批次81(2026-11-03 §批次81)的 CitySystemConfig / ResolvedCitySystemConfig
+// 已拆至 config/city_system_config.go(§4 单文件 ≤1800 行)。
+
 var (
 	once sync.Once
 	cfg  *Config
@@ -1429,6 +1435,31 @@ func applyDefaults(c *Config) {
 	}
 	if c.CityChrome.RequestTimeoutMs == 0 {
 		c.CityChrome.RequestTimeoutMs = 90000
+	}
+
+	// ── 2026-11-03 §批次81 — city_system 段默认值 ─────────────────────
+	// Enabled 默认 false(显式开启;与 city_chrome.enabled 同语义,零值不翻 true)。
+	// 其余字段缺省:DeepSeek-model / 8 步 / 40 条 / 180s / 4000 rune。
+	if c.CitySystem.ModelKey == "" {
+		c.CitySystem.ModelKey = "DeepSeek-model"
+	}
+	if c.CitySystem.MaxSteps == 0 {
+		c.CitySystem.MaxSteps = 8
+	}
+	if c.CitySystem.MaxSteps < 1 {
+		c.CitySystem.MaxSteps = 1
+	}
+	if c.CitySystem.MaxMessages == 0 {
+		c.CitySystem.MaxMessages = 40
+	}
+	if c.CitySystem.MaxMessages < 4 {
+		c.CitySystem.MaxMessages = 4
+	}
+	if c.CitySystem.RequestTimeoutMs == 0 {
+		c.CitySystem.RequestTimeoutMs = 180000
+	}
+	if c.CitySystem.ToolResultLimit == 0 {
+		c.CitySystem.ToolResultLimit = 4000
 	}
 
 	// 2026-07-12 §127 增强 — agent 外层 LLM 调用重试次数。

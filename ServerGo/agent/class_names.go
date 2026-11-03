@@ -1,32 +1,32 @@
 // Package agent — class_names.go: AgentClassName 常量集中定义(2026-08-06 §Agent 重构增强)。
 //
 // 设计动机:
-//   1. 每种 Agent 实现(玩家 Bot / 法官 / 未来其他游戏 / 未来其他类型)
-//      都有一个独立的 AgentClassName,统一在此文件登记。
-//   2. User-Agent 拼装规则(出站 LLM HTTP 请求头):
-//         User-Agent: <AgentClassName>/<AppVersion> <buildDateTime>
-//      其中 AppVersion 与 buildDateTime 来自 main.go,经 llm.Registry
-//      的 SetUserAgent 注入到每个 Provider(共享底层 HTTP 客户端)。
-//   3. 命名规则:
-//      - 游戏无关通用 Agent     → "LsmAgentGame-<职能>" (例:未来 "LsmAgentGame-Sandbox")
-//      - 狼人杀玩家 Bot          → "LsmAgentGame-Werewolf-Player"
-//      - 狼人杀法官 Bot          → "LsmAgentGame-Werewolf-Judge"
-//      - 其他游戏玩家 Bot        → "LsmAgentGame-<Game>-Player"
-//      - 其他游戏法官/裁判 Bot   → "LsmAgentGame-<Game>-Judge"
-//      - 工具型 Agent(记忆迭代)  → "LsmAgentGame-<Game>-MemoryIter"
+//  1. 每种 Agent 实现(玩家 Bot / 法官 / 未来其他游戏 / 未来其他类型)
+//     都有一个独立的 AgentClassName,统一在此文件登记。
+//  2. User-Agent 拼装规则(出站 LLM HTTP 请求头):
+//     User-Agent: <AgentClassName>/<AppVersion> <buildDateTime>
+//     其中 AppVersion 与 buildDateTime 来自 main.go,经 llm.Registry
+//     的 SetUserAgent 注入到每个 Provider(共享底层 HTTP 客户端)。
+//  3. 命名规则:
+//     - 游戏无关通用 Agent     → "LsmAgentGame-<职能>" (例:未来 "LsmAgentGame-Sandbox")
+//     - 狼人杀玩家 Bot          → "LsmAgentGame-Werewolf-Player"
+//     - 狼人杀法官 Bot          → "LsmAgentGame-Werewolf-Judge"
+//     - 其他游戏玩家 Bot        → "LsmAgentGame-<Game>-Player"
+//     - 其他游戏法官/裁判 Bot   → "LsmAgentGame-<Game>-Judge"
+//     - 工具型 Agent(记忆迭代)  → "LsmAgentGame-<Game>-MemoryIter"
 //
 // 4. 与 §14 LLM Provider 的关系:
-//    - AgentClassName 用于 User-Agent(让上游/网关区分调用方);
-//    - ModelKey/Provider 由 llm.Registry 管理,决定**用哪个模型**;
-//    - 二者正交:同一 AgentClassName 可配多个 ModelKey(同一类 Agent 用
-//      不同 LLM 模型),同一 ModelKey 也可被多个 AgentClassName 复用(不推荐,
-//      会让上游无法区分调用方)。
+//   - AgentClassName 用于 User-Agent(让上游/网关区分调用方);
+//   - ModelKey/Provider 由 llm.Registry 管理,决定**用哪个模型**;
+//   - 二者正交:同一 AgentClassName 可配多个 ModelKey(同一类 Agent 用
+//     不同 LLM 模型),同一 ModelKey 也可被多个 AgentClassName 复用(不推荐,
+//     会让上游无法区分调用方)。
 //
 // 注册新 Agent 时:
-//   1. 在本文件追加常量(注释注明出处 §/docs/);
-//   2. 在对应 Agent 实现里以常量引用,**不要**散写字面量;
-//   3. 在 llm.Registry.SetUserAgent 调用处用本常量拼装 UA(见 main.go
-//      与 agent_run 系列路径)。
+//  1. 在本文件追加常量(注释注明出处 §/docs/);
+//  2. 在对应 Agent 实现里以常量引用,**不要**散写字面量;
+//  3. 在 llm.Registry.SetUserAgent 调用处用本常量拼装 UA(见 main.go
+//     与 agent_run 系列路径)。
 package agent
 
 // AgentClassName 是 Agent 实现的唯一类别标识。类型化避免与 ModelKey
@@ -163,6 +163,10 @@ func AllAgentClassNames() []AgentClassName {
 		AgentClassCityHuman,
 		// 2026-10-20 §批次65 — City-Chrome 数据采集 Agent
 		AgentClassCityChrome,
+		// 2026-11-03 §批次81 — 虚拟城市系统主 Agent(对话即控制面)
+		AgentClassCitySystem,
+		// 2026-11-03 §批次81 — 虚拟城市渲染显示 Agent(3D 显示指令翻译)
+		AgentClassCityWebGLShow,
 		// 2026-10-05 §LsmKLBaseServer 知识库引擎 — LLM 特征抽取
 		AgentClassKnowledgeExtractor,
 	}
@@ -232,3 +236,19 @@ const (
 	// 65-CityChrome实时数据通道与实时看板/01-方案设计.md。
 	AgentClassCityChrome AgentClassName = "LsmAgentGame-City-Chrome"
 )
+
+// 虚拟城市批次81(2026-11-03 §批次81「City-System 主 Agent 与系统对话」)Agent 类别。
+const (
+	// AgentClassCitySystem 是虚拟城市「系统主 Agent」的 AgentClassName
+	// (2026-11-03 §批次81)。由 ServerGo/agent/citysystem/ 的 Agent struct 实现;
+	// 人类用自然语言对话触发(查看城市状态 / 注入场景 / 控制模拟 /
+	// 发起调研 / 调度采集 / 驱动 3D 显示),是虚拟城市唯一的对话控制面。
+	// 详见 lag_docs/虚拟城市/已实现/81-CitySystem-Agent与系统对话/01-方案设计.md。
+	AgentClassCitySystem AgentClassName = "LsmAgentGame-City-System"
+)
+
+// AgentClassCityWebGLShow 是虚拟城市「渲染显示 Agent」的 AgentClassName(2026-11-03 §批次81)。
+// 由 ServerGo/agent/citywebgl/ 的 Agent struct 实现;把 SystemAgent / 用户的
+// 「看哪里 / 怎么显示」翻译成结构化 DisplayCommand,经 WS 推给前端 3D 引擎执行。
+// 详见 lag_docs/虚拟城市/已实现/81-CitySystem-Agent与系统对话/CityWebGLShow-Agent设计.md。
+const AgentClassCityWebGLShow AgentClassName = "LsmAgentGame-City-WebGL-Show"

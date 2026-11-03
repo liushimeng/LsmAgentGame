@@ -117,6 +117,11 @@ type ClientGameState struct {
 	// 因果链)。**总是下发**(含 auto_enabled 开关位;items 恒为 [])。
 	// ⚠ 视图代码已拆至 view_world_event.go(批次80)。
 	WorldEvents *WorldEventsJSON `json:"world_events"`
+	// SystemAgentEnabled 批次81(2026-11-03 §批次81):City-System 主 Agent
+	// 对话入口是否可用(city_system.enabled)。**总是下发** —— 前端据此
+	// 显示/隐藏「💬 系统对话」按钮;false 时 WS 帧返回 35058(一键回退)。
+	// 由 ws 层在 BuildClientState 之后按服务端配置填充(视图层不感知配置)。
+	SystemAgentEnabled bool `json:"system_agent_enabled"`
 }
 
 // ConsumerMarketJSON 是 consumer_market 子结构(P1 §6.1)。

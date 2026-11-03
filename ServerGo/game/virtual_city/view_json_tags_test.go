@@ -284,6 +284,8 @@ func TestViewContainerJSONTags(t *testing.T) {
 			"calibration",
 			// 批次80 §3.6:真实世界事件流(事件 → 注入 → 城市结果因果链)。
 			"world_events",
+			// 批次81:City-System 主 Agent 对话入口开关(city_system.enabled)。
+			"system_agent_enabled",
 		}},
 		{"WorldEventsJSON", WorldEventsJSON{}, []string{
 			"auto_enabled", "updated_at", "injected_this_month", "items",

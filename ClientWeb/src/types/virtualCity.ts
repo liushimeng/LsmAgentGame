@@ -805,6 +805,12 @@ export interface VirtualCityGameState {
    */
   calibration?: VirtualCityCalibration;
   world_events?: WorldEventsSnapshot; // 批次80：真实世界事件流（后端未上线 / 本月未派生时缺省）
+  /**
+   * 批次81 §8 一键回退：`[city_system] enabled=false` ⇒ 后端下发 false ⇒
+   * 前端隐藏「💬 系统对话」入口（面板已打开则内联提示 + 禁发）。
+   * 旧后端 omit → **缺省视为 true**（向后兼容，行为不变）。
+   */
+  system_agent_enabled?: boolean;
 }
 
 // ── 市长选举（批次 20 文档 3 A1/A3；game.state.public_services 选举段）────

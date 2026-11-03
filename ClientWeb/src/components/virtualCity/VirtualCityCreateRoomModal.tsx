@@ -55,6 +55,9 @@ export interface VirtualCityCreateRequest {
   /** 2026-10-23 §批次79 — LsmAgentGame-City-Chrome 采集 Agent 线路：
    *  "random"（默认，每个 mission 从线路池随机取线）或固定 model key。 */
   city_chrome_line?: string;
+  /** 2026-11-03 §批次81 — LsmAgentGame-City-System 主 Agent 线路：
+   *  "random"（默认，每轮对话从线路池随机取线）或固定 model key。 */
+  city_system_line?: string;
 }
 
 interface Props {
@@ -180,6 +183,9 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
   // 2026-10-23 §批次79 — LsmAgentGame-City-Chrome 采集 Agent 线路：
   // 默认 "random"（只随机：每个 mission 从 LLM 线路池抽一条线路）。
   const [cityChromeLine, setCityChromeLine] = useState<string>('random');
+  // 2026-11-03 §批次81 — LsmAgentGame-City-System 主 Agent 线路：
+  // 默认 "random"（每轮对话从 LLM 线路池抽一条线路）。
+  const [citySystemLine, setCitySystemLine] = useState<string>('random');
   /** stepper 上限 = min(池总量, 64)（64 = 后端 concurrency_lines / driver worker 硬上限）。 */
   const lineCap = Math.max(1, Math.min(linePoolTotal, 64));
 
@@ -242,6 +248,8 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
         llm_lines: llmLines > 0 ? llmLines : undefined,
         // 2026-10-23 §批次79 — City-Chrome 采集 Agent 线路（默认 random）。
         city_chrome_line: cityChromeLine || undefined,
+        // 2026-11-03 §批次81 — City-System 主 Agent 线路（默认 random）。
+        city_system_line: citySystemLine || undefined,
       });
       if (!ok) {
         // 父组件已 setErr + reportGlobalError；这里不重复上报，仅保留弹窗。
@@ -359,6 +367,29 @@ export const VirtualCityCreateRoomModal: React.FC<Props> = ({
         </label>
         <p className="virtualCity-create-form__hint" data-testid="virtualCity-create-city-chrome-line-hint">
           🛰 {t('virtualCity.cityChromeLineHint' as TKey)}
+        </p>
+
+        {/* 2026-11-03 §批次81 — LsmAgentGame-City-System 主 Agent 的 LLM 线路：
+            默认「只随机」（每轮对话从线路池随机取一条），也可固定到某个模型线路。
+            与上方采集 Agent 线路互相独立、互不覆盖。 */}
+        <label className="virtualCity-create-form__row">
+          <span>{t('virtualCity.citySystemLine' as TKey)}</span>
+          <select
+            value={citySystemLine}
+            onChange={(e) => setCitySystemLine(e.target.value)}
+            disabled={busy || linePoolTotal < 1}
+            data-testid="virtualCity-create-city-system-line"
+          >
+            <option value="random">{t('virtualCity.citySystemLineRandom' as TKey)}</option>
+            {models.map((m) => (
+              <option key={m.model} value={m.model}>
+                {m.model}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="virtualCity-create-form__hint" data-testid="virtualCity-create-city-system-line-hint">
+          💬 {t('virtualCity.citySystemLineHint' as TKey)}
         </p>
 
         {/* 批次 33 §3.1：真实城市下拉（默认 / 20 城 / 随机）。显示名直取中文

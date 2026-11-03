@@ -101,6 +101,12 @@ type VirtualCityRoomOptions struct {
 	// 线路池随机取一条线路(建房弹窗默认);其余=固定 model key。
 	// 数据通道为 server 级单例,建房时按本字段更新其线路策略(后建房覆盖)。
 	CityChromeLine string `json:"city_chrome_line,omitempty"`
+	// CitySystemLine 批次81(2026-11-03)— LsmAgentGame-City-System 主 Agent
+	// 的 LLM 线路选择(仅 virtual_city 生效):""=沿用服务端配置
+	// city_system.model_key(旧行为,零回归);"random"=每轮对话从 LLM 线路池
+	// 随机取一条线路(建房弹窗默认);其余=固定 model key。
+	// 房间级策略,由 applyOpts 落位;ws 层 GetOrCreate SystemAgent 时读取。
+	CitySystemLine string `json:"city_system_line,omitempty"`
 }
 
 // GameJoiner is the callback RoomService invokes after a successful CreateRoom

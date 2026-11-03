@@ -9,6 +9,7 @@
 import { http, ApiError, isSessionExpiredError, getAuthToken } from '@/services/http';
 import type { VirtualCityCityProfileProgress, VirtualCityCityResidentProfile, VirtualCitySurvey } from '@/types/virtualCity';
 import type { MissionRecord, MissionStats, RealtimeBoardRefreshResult, RealtimeFeed } from '@/types/virtualCityRealtime';
+import type { VirtualCitySystemWireMessage } from '@/types/virtualCitySystem';
 
 // 2026-09-22 §CityHuman全民驱动 — GET /api/games/virtual_city/professions 已随
 // 职业卡精选层退役（03 号契约）：原拉取接口及其三个类型一并删除。
@@ -268,45 +269,26 @@ export async function fetchVirtualCityDashboard(): Promise<{
   }
 }
 
-// ── 2026-10-21 §城市模拟定位 · 场景推演（条件触发者）──────────────────────
+// ── 批次 68 · 预测运行：基线快照 · 指标对比 · 预测报告 ─────────────────────
 // 契约（backend-dev 并行实现，字段/路径逐字对齐 tmpPlan/
-// 虚拟城市-模拟程序化与预测运行优化_20261021_095114.md §5.1）：
-//   GET  /api/games/virtual_city/scenario_catalog
-//   POST /api/games/virtual_city/rooms/:id/scenario
-//   GET  /api/games/virtual_city/rooms/:id/scenarios
+// 虚拟城市-预测运行报告_20261021_113136.md §4/§5）：
+//   GET /api/games/virtual_city/rooms/:id/prediction             // 最新 run
+//   GET /api/games/virtual_city/rooms/:id/prediction?run_id=PR2  // 指定 run
+//   → {code:0, data:{runs:[...], report: PredictionReport | null}}
+// 权限：任意登录用户（观察者/条件触发者同口径）。无 run 不报错——runs:[] 且
+// report:null，前端展示「暂无预测运行」。run_id 不在该房 → 35058。
+// §7.1：调用方（系统对话报告卡）catch 后面板内联错误 + reportGlobalError 上报。
+// 类型字段名与 §4 JSON snake_case 逐字一致（免映射层），注释标注语义。
 // ⚠️ 路径一律用下划线 `virtual_city`（后端 router 的 `r.Group("/api/games/virtual_city")`；
-//    未登录探针：下划线 401、连字符 404）。本文件既有的调研/居民档案函数原写作
-//    `virtual-city`（连字符），已随本次修复统一为下划线，勿再改回。
-// 权限：任意登录用户（含观察者）= 条件触发者。
-// §7.1：调用方（ScenarioPanel）catch 后面板内联错误 + reportGlobalError 上报，
-// 绝不吞进 console。
+//    未登录探针：下划线 401、连字符 404），勿改回连字符。
+// 批次81：场景推演台（ScenarioPanel）的目录/注入/历史 API 与配套类型
+// （Spec / ScenarioRecord / Effect / ApplyRequest / ApplyResult）已删除；
+// meta.injections[] 元素形状并入本段（VirtualCityPredictionInjection）。
 
-/** 场景目录条目（GET scenario_catalog 的 scenarios[] 元素）。 */
-export interface VirtualCityScenarioSpec {
-  /** 稳定标识（如 earthquake / meteorite / goods_price_shock）。 */
-  kind: string;
-  /** 展示名（服务端本地化文本，前端按原样展示）。 */
-  name: string;
-  /** 分组名（市场与经济 / 社会与舆情 / 自然灾害 / 未知灾难）。 */
-  group: string;
-  description: string;
-  /** 可选强度档位（1-5）。 */
-  magnitudes: number[];
-  /** 默认强度。 */
-  default_magnitude: number;
-  /** 该场景支持的附加参数键（如 duration_months / target）。 */
-  params: string[];
-}
-
-/** 注入瞬间的指标效果（effects[] 元素）。 */
-export interface VirtualCityScenarioEffect {
-  metric: string;
-  delta: number;
-  text: string;
-}
-
-/** 场景注入记录（POST 返回的 scenario / GET scenarios 列表元素）。 */
-export interface VirtualCityScenarioRecord {
+/** report.meta.injections[] 元素（ScenarioAppliedRecord 子集：
+ *  id/kind/magnitude/applied_month/note；批次81 起随场景推演台 API 一并
+ *  收编进预测报告契约）。 */
+export interface VirtualCityPredictionInjection {
   id: string;
   kind: string;
   magnitude: number;
@@ -318,77 +300,6 @@ export interface VirtualCityScenarioRecord {
    */
   at?: number | string;
 }
-
-/** POST scenario 的响应 data 形状。 */
-export interface VirtualCityScenarioApplyResult {
-  scenario: VirtualCityScenarioRecord;
-  effects: VirtualCityScenarioEffect[];
-}
-
-/** POST scenario 的请求体（duration_months / target / note 均可选）。 */
-export interface VirtualCityScenarioApplyRequest {
-  kind: string;
-  magnitude: number;
-  duration_months?: number;
-  target?: string;
-  note?: string;
-}
-
-/**
- * GET /api/games/virtual_city/scenario_catalog（需登录）— 场景目录。
- *
- * 返回 {code:0, data:{scenarios:[...]}}；前端每次打开面板拉取一次并按 group 分组。
- * §7.1：失败面板内联 + 全局 toast 双通道展示。
- */
-export function fetchScenarioCatalog(): Promise<{ scenarios: VirtualCityScenarioSpec[] }> {
-  return http<{ scenarios: VirtualCityScenarioSpec[] }>(
-    '/api/games/virtual_city/scenario_catalog',
-  );
-}
-
-/**
- * POST /api/games/virtual_city/rooms/:id/scenario（需登录）— 注入一个场景条件。
- *
- * 返回 {code:0, data:{scenario, effects}}；effects 为注入瞬间的指标变化，
- * 面板就地展示后刷新历史列表。错误（场景不存在 / 参数非法 / 房间未运行 /
- * 本月注入超限）由服务端错误码 + message 返回，调用方原样内联展示。
- */
-export function applyVirtualCityScenario(
-  roomId: string,
-  body: VirtualCityScenarioApplyRequest,
-): Promise<VirtualCityScenarioApplyResult> {
-  return http<VirtualCityScenarioApplyResult>(
-    `/api/games/virtual_city/rooms/${encodeURIComponent(roomId)}/scenario`,
-    {
-      method: 'POST',
-      body: JSON.stringify(body),
-    },
-  );
-}
-
-/**
- * GET /api/games/virtual_city/rooms/:id/scenarios（需登录）— 最近场景注入记录。
- *
- * 返回 {code:0, data:{scenarios:[...]}}（后端取最近 20 条）。
- */
-export function fetchVirtualCityScenarios(
-  roomId: string,
-): Promise<{ scenarios: VirtualCityScenarioRecord[] }> {
-  return http<{ scenarios: VirtualCityScenarioRecord[] }>(
-    `/api/games/virtual_city/rooms/${encodeURIComponent(roomId)}/scenarios`,
-  );
-}
-
-// ── 批次 68 · 预测运行：基线快照 · 指标对比 · 预测报告 ─────────────────────
-// 契约（backend-dev 并行实现，字段/路径逐字对齐 tmpPlan/
-// 虚拟城市-预测运行报告_20261021_113136.md §4/§5）：
-//   GET /api/games/virtual_city/rooms/:id/prediction             // 最新 run
-//   GET /api/games/virtual_city/rooms/:id/prediction?run_id=PR2  // 指定 run
-//   → {code:0, data:{runs:[...], report: PredictionReport | null}}
-// 权限：任意登录用户（观察者/条件触发者同口径）。无 run 不报错——runs:[] 且
-// report:null，前端展示「暂无预测运行」。run_id 不在该房 → 35058。
-// §7.1：调用方（ScenarioPanel）catch 后面板内联错误 + reportGlobalError 上报。
-// 类型字段名与 §4 JSON snake_case 逐字一致（免映射层），注释标注语义。
 
 /** report.meta（复现层级 R1 = 观测对照：基线为注入时点 T0 观测快照）。 */
 export interface VirtualCityPredictionMeta {
@@ -406,7 +317,7 @@ export interface VirtualCityPredictionMeta {
   /** 生成时间戳（unix 毫秒）。 */
   generated_at: number;
   /** ScenarioAppliedRecord 子集：id/kind/magnitude/applied_month/note。 */
-  injections: VirtualCityScenarioRecord[];
+  injections: VirtualCityPredictionInjection[];
 }
 
 /** report.scenarios[] 元素（并入本 run 的场景详情）。 */
@@ -545,4 +456,28 @@ export function getPredictionReport(
   return http<VirtualCityPredictionState>(
     `/api/games/virtual_city/rooms/${encodeURIComponent(roomId)}/prediction${params}`,
   );
+}
+
+// ── 批次 81 · City-System 系统对话历史（§7.3-6 断线恢复的 HTTP 兜底）──────
+
+/** GET system_agent/history 的 data 形状（无会话 → messages:[]，不算错误）。 */
+export interface VirtualCitySystemAgentHistory {
+  /** wire 形状（llmtypes.Message JSON），消费前经 normalizeSystemHistory 归一化。 */
+  messages: VirtualCitySystemWireMessage[];
+}
+
+/**
+ * GET /api/games/virtual_city/rooms/:id/system_agent/history（需登录）——
+ * 当前用户在此房的系统对话会话。WS 是主通道，本函数仅作 WS 2s 未回时的兜底。
+ *
+ * 错误体（房间不存在 35001 / 未接线等）不携带 messages，故无需 35053 式
+ * 裸 fetch 保 body——http() 抛 ApiError 即可，由调用方按 §7.1 上报。
+ */
+export function fetchVirtualCitySystemAgentHistory(
+  roomId: string,
+): Promise<VirtualCitySystemAgentHistory> {
+  return http<VirtualCitySystemAgentHistory>(
+    `/api/games/virtual_city/rooms/${encodeURIComponent(roomId)}/system_agent/history`,
+    { timeoutMs: 8000 },
+  ).then((d) => ({ messages: Array.isArray(d?.messages) ? d.messages : [] }));
 }

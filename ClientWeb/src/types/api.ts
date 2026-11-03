@@ -477,6 +477,10 @@ export interface CreateRoomOptions {
   // Agent 的 LLM 线路："random"（默认，每个 mission 从线路池随机取线）或
   // 固定 model key；缺省不发送 = 沿用服务端配置（旧行为）。
   city_chrome_line?: string;
+  // 2026-11-03 §批次81 — virtualCity only。LsmAgentGame-City-System 主 Agent
+  // 的 LLM 线路："random"（默认，每轮对话从线路池随机取线）或固定 model key；
+  // 缺省不发送 = 沿用服务端配置（旧行为）。
+  city_system_line?: string;
 }
 
 /** One bot seat requested at room-creation time (werewolf only). */

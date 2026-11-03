@@ -70,6 +70,12 @@ type createRoomRequest struct {
 	// LLM 线路池随机取线(建房弹窗默认);其余 = 固定 model key。
 	// 顶层优先,亦可在 virtual_city 子对象显式携带(与 llm_lines 同策略)。
 	CityChromeLine string `json:"city_chrome_line,omitempty"`
+	// CitySystemLine 2026-11-03 §批次81 — LsmAgentGame-City-System 主 Agent
+	// 的 LLM 线路选择(仅 virtual_city 生效,其他 kind 静默忽略):
+	// ""/缺省 = 沿用服务端配置 model_key(旧行为);"random" = 每轮对话从
+	// LLM 线路池随机取线(建房弹窗默认);其余 = 固定 model key。
+	// 顶层优先,亦可在 virtual_city 子对象显式携带(与 city_chrome_line 同策略)。
+	CitySystemLine string `json:"city_system_line,omitempty"`
 }
 
 // RoomAPI serves the room management endpoints.
@@ -244,6 +250,17 @@ func mergeVirtualCityBodyFields(req createRoomRequest, kind string, cfg *service
 		cfg.CityChromeLine = line
 	} else if line := strings.TrimSpace(cfg.CityChromeLine); line != "" {
 		cfg.CityChromeLine = line
+	}
+	// 2026-11-03 §批次81 — City-System 主 Agent 线路:与 city_chrome_line
+	// 完全同构(顶层优先,子对象 virtual_city.city_system_line 亦可携带;
+	// 缺省 "" = 沿用服务端配置)。trim 后超 128 rune 直接 400。
+	if line := strings.TrimSpace(req.CitySystemLine); line != "" {
+		if len([]rune(line)) > 128 {
+			return cfg, "city_system_line too long"
+		}
+		cfg.CitySystemLine = line
+	} else if line := strings.TrimSpace(cfg.CitySystemLine); line != "" {
+		cfg.CitySystemLine = line
 	}
 	return cfg, ""
 }

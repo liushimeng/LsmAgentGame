@@ -40,7 +40,7 @@ import {
 } from '@/components/virtualCity/VirtualCityCityMap';
 import { VirtualCityMinimap } from '@/components/virtualCity/VirtualCityMinimap';
 import { VirtualCityDashboard } from '@/components/virtualCity/RealtimeBoard/VirtualCityDashboard';
-import { ScenarioPanel } from '@/components/virtualCity/ScenarioPanel';
+import { SystemDialogPanel } from '@/components/virtualCity/SystemDialogPanel';
 import { ActionPanel } from '@/components/virtualCity/ActionPanel';
 import { MonthTicker } from '@/components/virtualCity/MonthTicker';
 import { GameOverModal } from '@/components/virtualCity/GameOverModal';
@@ -99,8 +99,12 @@ export function VirtualCityGamePage() {
   useVirtualCityActionBubbles(roomId ?? '');
 
   const [leavePromptOpen, setLeavePromptOpen] = useState(false);
-  // 2026-10-21 §城市模拟定位 — 场景推演台（条件触发者；观察者同样可注入）。
-  const [scenarioOpen, setScenarioOpen] = useState(false);
+  // 2026-11-03 §批次81 — 「💬 系统对话」（条件触发者；观察者同样可用）。
+  // 取代原「🎛 场景推演台」：对话即控制面，窗口形态/最小化见 SystemDialogPanel。
+  const [systemOpen, setSystemOpen] = useState(false);
+  // 批次81 §8 一键回退：`[city_system] enabled=false` ⇒ 后端下发 false ⇒ 隐藏入口。
+  // undefined（旧后端/缺省）视为 true，向后兼容。
+  const systemDialogDisabled = gameState?.system_agent_enabled === false;
   const viewRef = useRef<VirtualCityCameraView>({ x: 0, z: 0, dist: 34 });
   const focusRef = useRef<VirtualCityFocusTarget | null>(null);
   // 批次 25 §3.4 城市时钟帧锚点：帧内 city_clock_ms + 帧到达时刻；
@@ -343,16 +347,20 @@ export function VirtualCityGamePage() {
               ▶ {t('virtualCity.startEarly' as TKey)}
             </button>
           )}
-          {/* 2026-10-21 §城市模拟定位 — 条件触发者入口（所有观察者可用）。 */}
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setScenarioOpen(true)}
-            title={t('virtualCity.scenario.subtitle' as TKey)}
-            data-testid="virtualCity-scenario-open"
-          >
-            🎛 {t('virtualCity.scenario.open' as TKey)}
-          </button>
+          {/* 2026-11-03 §批次81 — 条件触发者入口（所有观察者可用）。
+              原「🎛 场景推演台」已重构为「💬 系统对话」（对话即控制面）。
+              §8 一键回退：system_agent_enabled === false（旧后端缺省 = true）时整颗隐藏。 */}
+          {!systemDialogDisabled && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setSystemOpen(true)}
+              title={t('virtualCity.systemDialog.subtitle' as TKey)}
+              data-testid="virtualCity-system-dialog-open"
+            >
+              💬 {t('virtualCity.systemDialog.open' as TKey)}
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-danger"
@@ -474,32 +482,17 @@ export function VirtualCityGamePage() {
         />
       )}
 
-      {/* 2026-10-21 §城市模拟定位 — 场景推演台模态（与调研面板同构：overlay + 三段结构）。 */}
-      {scenarioOpen && (
-        <div
-          className="virtualCity-modal-overlay"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setScenarioOpen(false)}
-        >
-          <div className="virtualCity-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="virtualCity-modal__head">
-              <strong>🎛 {t('virtualCity.scenario.title' as TKey)}</strong>
-              <button
-                type="button"
-                className="virtualCity-tab-extra-btn"
-                onClick={() => setScenarioOpen(false)}
-                data-testid="virtualCity-scenario-close"
-              >
-                ✕ {t('virtualCity.scenario.close' as TKey)}
-              </button>
-            </div>
-            <div className="virtualCity-modal__body">
-              <ScenarioPanel roomId={roomId} playing={gameState?.status === 'playing'} />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 2026-11-03 §批次81 — 「💬 系统对话」浮动对话框（16:9 / 可最小化 / 不断线）。
+          常驻挂载：open=false 仅隐藏窗口，会话保留在服务端，重开经 history 帧恢复；
+          Agent 的 annotate 显示指令浮动标签在关闭态同样要可见。
+          focusRef 与 handleSelectDistrict 共用同一 ref（选区 → 相机聚焦）。 */}
+      <SystemDialogPanel
+        roomId={roomId}
+        open={systemOpen}
+        disabled={systemDialogDisabled}
+        onClose={() => setSystemOpen(false)}
+        focusRef={focusRef}
+      />
 
       {leavePromptOpen && (
         <ConfirmModal

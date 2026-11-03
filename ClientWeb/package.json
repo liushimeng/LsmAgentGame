@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "verify:auth-persist": "node scripts/verify_auth_persist.mjs"
+    "verify:auth-persist": "node scripts/verify_auth_persist.mjs",
+    "verify:city-show-adapter": "node scripts/verify_city_show_adapter.mjs",
+    "verify:system-history": "node scripts/verify_system_history_adapter.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.114.0",

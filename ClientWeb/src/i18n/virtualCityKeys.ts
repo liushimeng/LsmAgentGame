@@ -1051,47 +1051,8 @@ export interface VirtualCityDict {
   'virtualCity.rt.event.metric.goodsPrice': string;
   'virtualCity.rt.event.metric.residentCash': string;
 
-  // ── 2026-10-21 §城市模拟定位 — 场景推演台（ScenarioPanel / 条件触发者）──
-  // 目录键文案出处：tmpPlan/虚拟城市-模拟程序化与预测运行优化_20261021_095114.md §5.1/§5.3。
-  'virtualCity.scenario.open': string;
-  'virtualCity.scenario.title': string;
-  'virtualCity.scenario.subtitle': string;
-  'virtualCity.scenario.close': string;
-  'virtualCity.scenario.group.market': string;
-  'virtualCity.scenario.group.society': string;
-  'virtualCity.scenario.group.nature': string;
-  'virtualCity.scenario.group.unknown': string;
-  'virtualCity.scenario.group.other': string;
-  'virtualCity.scenario.magnitude': string;
-  'virtualCity.scenario.magnitudeLevel': string; // {n}
-  'virtualCity.scenario.duration': string;
-  'virtualCity.scenario.durationPlaceholder': string;
-  'virtualCity.scenario.target': string;
-  'virtualCity.scenario.targetPlaceholder': string;
-  /** target 语义化提示（后端 params=goods / stance）。 */
-  'virtualCity.scenario.targetHintGoods': string;
-  'virtualCity.scenario.targetHintStance': string;
-  'virtualCity.scenario.note': string;
-  'virtualCity.scenario.notePlaceholder': string;
-  'virtualCity.scenario.trigger': string;
-  'virtualCity.scenario.confirmBody': string; // {name} {level}
-  'virtualCity.scenario.effects': string;
-  'virtualCity.scenario.effectsNote': string;
-  'virtualCity.scenario.effectsEmpty': string;
-  'virtualCity.scenario.history': string;
-  'virtualCity.scenario.historyEmpty': string;
-  'virtualCity.scenario.loading': string;
-  'virtualCity.scenario.catalogEmpty': string;
-  'virtualCity.scenario.loadFailed': string; // {msg}
-  'virtualCity.scenario.historyFailed': string; // {msg}
-  'virtualCity.scenario.applyFailed': string; // {msg}
-  'virtualCity.scenario.notPlaying': string;
-  'virtualCity.scenario.spectatorHint': string;
-  'virtualCity.scenario.appliedAt': string; // {m}
-  'virtualCity.scenario.triggered': string; // {name}
-
-  // ── 批次 68 · 预测运行：基线快照 · 指标对比 · 预测报告（ScenarioPanel 第⑤块
-  //    + PredictionReportView）。键文案出处：tmpPlan/虚拟城市-预测运行报告_
+  // ── 批次 68 · 预测运行：基线快照 · 指标对比 · 预测报告（PredictionReportView，
+  //    系统对话报告卡）。键文案出处：tmpPlan/虚拟城市-预测运行报告_
   //    20261021_113136.md §4/§7。──
   'virtualCity.prediction.title': string;
   'virtualCity.prediction.subtitle': string;
@@ -1350,4 +1311,38 @@ export interface VirtualCityDict {
   'virtualCity.calibration.event.bias': string;
   'virtualCity.calibration.event.bankruptcy': string;
   'virtualCity.calibration.event.scenario': string;
+
+  // ── 批次81「💬 系统对话」（SystemDialogPanel / SystemDialogMessage）──
+  // 契约：lag_docs/虚拟城市/已实现/81-CitySystem-Agent与系统对话/01-方案设计.md §4/§6。
+  'virtualCity.systemDialog.title': string;
+  'virtualCity.systemDialog.subtitle': string;
+  'virtualCity.systemDialog.open': string;
+  'virtualCity.systemDialog.close': string;
+  'virtualCity.systemDialog.minimize': string;
+  'virtualCity.systemDialog.restore': string;
+  'virtualCity.systemDialog.inputPlaceholder': string;
+  'virtualCity.systemDialog.send': string;
+  'virtualCity.systemDialog.clear': string;
+  'virtualCity.systemDialog.busy': string;
+  'virtualCity.systemDialog.emptyTitle': string;
+  'virtualCity.systemDialog.emptyHint': string;
+  'virtualCity.systemDialog.errorPrefix': string;
+  'virtualCity.systemDialog.toolPrefix': string;
+  'virtualCity.systemDialog.showCommandBadge': string;
+  'virtualCity.systemDialog.reportBadge': string;
+  'virtualCity.systemDialog.minimizedBar': string;
+  'virtualCity.systemDialog.connected': string;
+  'virtualCity.systemDialog.disconnected': string;
+  /** §8 一键回退：后端 [city_system] enabled=false 时的内联停用提示。 */
+  'virtualCity.systemDialog.disabled': string;
+  'virtualCity.systemDialog.toolPending': string;
+  'virtualCity.systemDialog.toolFailed': string;
+  'virtualCity.systemDialog.toolOk': string;
+  'virtualCity.systemDialog.toolInput': string;
+  'virtualCity.systemDialog.toolOutput': string;
+  'virtualCity.systemDialog.toolRunning': string;
+  /** 建房弹窗「系统 Agent 线路」（与 cityChromeLine 同构）。 */
+  'virtualCity.citySystemLine': string;
+  'virtualCity.citySystemLineRandom': string;
+  'virtualCity.citySystemLineHint': string;
 }
