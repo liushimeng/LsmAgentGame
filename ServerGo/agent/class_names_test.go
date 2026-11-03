@@ -30,8 +30,7 @@ func TestAgentClassWerewolfMemoryCompact_Wired(t *testing.T) {
 
 // TestAgentClassCityHuman_Wired 校验虚拟城市「城市居民」唯一 AgentClassName
 // 已按 §24 登记(常量 + AllAgentClassNames + IsValidAgentClassName)——防 §130
-// 「声明了却从不接线」复发。2026-09-22 §CityHuman重构: 原 City-Player /
-// City-Voice / City-Government / City-Banker / City-Firm 五类合一。
+// 「声明了却从不接线」复发。2026-09-22 §CityHuman重构: 原多个 AgentClass 合一。
 func TestAgentClassCityHuman_Wired(t *testing.T) {
 	if AgentClassCityHuman == "" {
 		t.Fatal("AgentClassCityHuman must be non-empty (§24)")

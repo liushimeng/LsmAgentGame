@@ -211,9 +211,8 @@ const (
 	AgentClassDebateCommentator AgentClassName = "LsmAgentGame-Debate-Commentator"
 
 	// AgentClassCityHuman 是虚拟城市「城市居民」的**唯一** AgentClassName
-	// (2026-09-22 §CityHuman重构: 原 City-Player/City-Voice/City-Government/
-	// City-Banker/City-Firm 五类合并为一 —— 虚拟城市是全 Agent 真实城市模拟器,
-	// 没有玩家 Agent,City-Human 即城市居民)。
+	// (2026-09-22 §CityHuman重构: 原多个 AgentClass 合并为一 —— 虚拟城市是
+	// 全 Agent 真实城市模拟器,没有玩家 Agent,City-Human 即城市居民)。
 	// 两个调用方共用本 AgentClass,仅调用深度不同:
 	//   1. 焦点层(座位 1~12): ServerGo/agent/vcplayer/ 的 Agent struct,
 	//      LLM 每月决策(经济工具 + 感知行动工具 see/hear/smell/move/speak)。
