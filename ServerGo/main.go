@@ -1045,6 +1045,15 @@ func main() {
 	// registry)。房间级线路策略(city_system_line)已由 applyOpts 落位,
 	// ws 层在 GetOrCreate SystemAgent 时经 r.CitySystemLine() 读取。
 	gameSvcWs.SetCitySystemRuntime(cfg.CitySystem.Enabled, cfg.CitySystem.Resolved(), llmRegistry)
+	// 批次83 §2.3 启动可见性:一条 INFO 定性 city_system 运行态。配置只在
+	// 进程启动时读一次 —— 此后排查「系统对话已停用」报错看这条日志即可
+	// 定性(报错时点的进程是否持旧配置态),不再需要翻代码比对启动时点。
+	citySysRT := cfg.CitySystem.Resolved()
+	logger.L().Info("city system runtime",
+		zap.Bool("enabled", cfg.CitySystem.Enabled),
+		zap.String("model_key", citySysRT.ModelKey),
+		zap.Int("max_steps", citySysRT.MaxSteps),
+		zap.Int("request_timeout_ms", cfg.CitySystem.RequestTimeoutMs))
 
 	// 2026-10-20 §批次65 — City-Chrome 实时数据通道:全局单例启动(enabled=false
 	// 时也是离线占位实例,HTTP 快照可用、refresh 返回 35053);空闲降载探针

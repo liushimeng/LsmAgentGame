@@ -10,7 +10,8 @@ import (
 	"LsmAgentGame/game/virtual_city"
 )
 
-// TestScenarioCatalogText 目录文本非空、含分组与已知 kind。
+// TestScenarioCatalogText 目录文本非空、含分组与已知 kind
+// (批次83 起为 ScenarioCatalogDetail("") 薄包装,锚点保持)。
 func TestScenarioCatalogText(t *testing.T) {
 	text := ScenarioCatalogText()
 	if text == "" {
@@ -26,6 +27,124 @@ func TestScenarioCatalogText(t *testing.T) {
 			t.Errorf("catalog text missing %q", want)
 		}
 	}
+}
+
+// TestScenarioCatalogIndex 紧凑索引(批次83 §4.2):组头带计数、行含
+// kind/名称/强度/参数、**不含描述**;带参条目含「参数:」段,无参条目
+// 以「(Lx)」收尾。
+func TestScenarioCatalogIndex(t *testing.T) {
+	idx := ScenarioCatalogIndex()
+	if idx == "" {
+		t.Fatal("ScenarioCatalogIndex must not be empty")
+	}
+	for _, want := range []string{
+		"[" + virtual_city.ScenarioGroupMarket + "] 21 个",
+		"[" + virtual_city.ScenarioGroupTech + "] 13 个",
+		"- " + virtual_city.ScenarioGoodsPriceShock + " 商品价格冲击(L3;参数:goods)",
+		"- " + virtual_city.ScenarioEarthquake + " 地震(L3)",
+		"- " + virtual_city.ScenarioNuclearBrinkmanship + " 核冲突边缘(L5)",
+	} {
+		if !strings.Contains(idx, want) {
+			t.Errorf("index missing %q", want)
+		}
+	}
+	// 体量护栏:101 条索引应 ≈3k rune,远小于全描述内联(§4.2 动机);
+	// 上限 5k 防目录扩容后索引失控撑爆 system 前缀。
+	if n := len([]rune(idx)); n > 5000 {
+		t.Errorf("index too large: %d runes (want <= 5000)", n)
+	}
+	// 索引不含任何条目描述片段(描述只能经 Detail/list_scenarios(group) 取)。
+	for _, banned := range []string{
+		"城区建筑受损",     // earthquake 描述片段
+		"央行连续加息抑制通胀", // interest_rate_hike 描述片段
+		"地缘核对抗白热化",   // nuclear_brinkmanship 描述片段
+	} {
+		if strings.Contains(idx, banned) {
+			t.Errorf("index must not contain description fragment %q", banned)
+		}
+	}
+}
+
+// TestScenarioCatalogDetail 单组详情只含该组条目且含描述;空串 = 全部分组
+// (兼容旧语义);未知组名返回错误并列出可用分组。
+func TestScenarioCatalogDetail(t *testing.T) {
+	detail, err := ScenarioCatalogDetail(virtual_city.ScenarioGroupNature)
+	if err != nil {
+		t.Fatalf("detail(nature) error: %v", err)
+	}
+	for _, want := range []string{
+		"[" + virtual_city.ScenarioGroupNature + "]",
+		virtual_city.ScenarioBlizzard,
+		"极端暴雪阻断物流干线", // blizzard 描述片段(Detail 含描述)
+	} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("detail(nature) missing %q", want)
+		}
+	}
+	for _, banned := range []string{
+		"[" + virtual_city.ScenarioGroupMarket + "]",
+		virtual_city.ScenarioGoodsPriceShock,
+		virtual_city.ScenarioLiquidityCrisis,
+	} {
+		if strings.Contains(detail, banned) {
+			t.Errorf("detail(nature) must not contain %q", banned)
+		}
+	}
+	// 空串 = 全部分组(六个组头齐全,与旧 ScenarioCatalogText 语义一致)。
+	all, err := ScenarioCatalogDetail("")
+	if err != nil {
+		t.Fatalf("detail(\"\") error: %v", err)
+	}
+	for _, g := range scenarioGroupOrder {
+		if !strings.Contains(all, "["+g+"]") {
+			t.Errorf("detail(\"\") missing group header [%s]", g)
+		}
+	}
+	// 未知组名 → 错误(调用方转「失败:未知分组 …」回灌)。
+	if _, err := ScenarioCatalogDetail("不存在"); err == nil {
+		t.Fatal("detail(unknown group) must return error")
+	} else if !strings.Contains(err.Error(), "未知分组") || !strings.Contains(err.Error(), "可用分组") {
+		t.Errorf("error text = %q, want 未知分组 + 可用分组", err.Error())
+	}
+}
+
+// TestListScenariosGroupSchema list_scenarios 的 group 枚举 = 六个组名,
+// 描述说明缺省紧凑索引 / 传组名全量详情(批次83 §4.2)。
+func TestListScenariosGroupSchema(t *testing.T) {
+	for _, d := range BuildTools() {
+		if d.Name != ToolListScenarios {
+			continue
+		}
+		props, ok := d.InputSchema["properties"].(map[string]any)
+		if !ok {
+			t.Fatal("list_scenarios missing properties")
+		}
+		group, ok := props["group"].(map[string]any)
+		if !ok {
+			t.Fatal("list_scenarios missing group schema")
+		}
+		enum, _ := group["enum"].([]string)
+		if len(enum) != 6 {
+			t.Fatalf("group enum = %v, want 6 groups", enum)
+		}
+		for _, g := range scenarioGroupOrder {
+			found := false
+			for _, e := range enum {
+				if e == g {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("group enum missing %q", g)
+			}
+		}
+		if !strings.Contains(d.Description, "紧凑索引") {
+			t.Errorf("description must mention 紧凑索引: %q", d.Description)
+		}
+		return
+	}
+	t.Fatal("list_scenarios tool not found")
 }
 
 // TestBuildSystemBlocks 三段式头 + 角色段 + 场景目录。
@@ -55,9 +174,16 @@ func TestBuildSystemBlocks(t *testing.T) {
 			t.Errorf("system blocks missing %q", want)
 		}
 	}
-	// 场景目录已内联(不必先调 list_scenarios)。
-	if !strings.Contains(all, virtual_city.ScenarioGoodsPriceShock) {
-		t.Error("system blocks missing inline scenario catalog")
+	// 场景目录以**紧凑索引**内联(批次83):含 kind 行、不含描述;
+	// 完整描述经 list_scenarios(group=组名) 按组获取。
+	if !strings.Contains(all, "- "+virtual_city.ScenarioGoodsPriceShock+" 商品价格冲击(L3;参数:goods)") {
+		t.Error("system blocks missing inline scenario catalog index")
+	}
+	if strings.Contains(all, "城区建筑受损") {
+		t.Error("system blocks must inline index without descriptions")
+	}
+	if !strings.Contains(all, "list_scenarios(group=组名)") {
+		t.Error("role text must guide per-group detail via list_scenarios(group)")
 	}
 }
 
@@ -140,11 +266,11 @@ func TestAgentClassCitySystem_Wired(t *testing.T) {
 }
 
 // TestInjectScenarioKindEnumCoversCatalog kind 枚举 = 场景目录全量
-// (40 个场景全覆盖,目录扩缩两侧行同步)。
+// (批次83 起 101 个场景全覆盖,目录扩缩两侧行同步)。
 func TestInjectScenarioKindEnumCoversCatalog(t *testing.T) {
 	catalog := virtual_city.ScenarioCatalog()
-	if len(catalog) != 40 {
-		t.Fatalf("catalog size = %d, want 40", len(catalog))
+	if len(catalog) != 101 {
+		t.Fatalf("catalog size = %d, want 101", len(catalog))
 	}
 	enum := scenarioKindEnum()
 	if len(enum) != len(catalog) {

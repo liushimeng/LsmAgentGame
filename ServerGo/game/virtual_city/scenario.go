@@ -184,9 +184,11 @@ type scenarioDef struct {
 // scenarioDefs 场景目录唯一事实来源(顺序 = 前端分组展示顺序)。
 //
 // 批次81(2026-11-03 §批次81):既有 10 个在前,新增 30 个
-// (scenarioDefsBatch81,见 scenario_catalog_batch81.go)在后 ⇒ 共 40 个。
-// append 到新切片,既有 10 项的顺序与内容逐字段不变(零回归)。
-var scenarioDefs = append([]scenarioDef{
+// (scenarioDefsBatch81,见 scenario_catalog_batch81.go)在后;
+// 批次83(2026-11-04 §批次83)再追加 61 个(scenarioDefsBatch83,
+// 见 scenario_catalog_batch83.go)⇒ 共 101 个。逐级 append 到新切片,
+// 既有条目的顺序与内容逐字段不变(零回归)。
+var scenarioDefs = append(append([]scenarioDef{
 	// ── 市场与经济 ──
 	{
 		spec: ScenarioSpec{
@@ -371,7 +373,7 @@ var scenarioDefs = append([]scenarioDef{
 		},
 		defaultDuration: 18,
 	},
-}, scenarioDefsBatch81...)
+}, scenarioDefsBatch81...), scenarioDefsBatch83...)
 
 // ScenarioCatalog 返回场景目录(契约 §5.1)。每次调用返回独立副本 ——
 // Magnitudes/Params 切片可安全被调用方修改。

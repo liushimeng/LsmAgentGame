@@ -22,6 +22,8 @@ const virtualCitySystemJA = {
   'virtualCity.systemDialog.connected': 'システムエージェント接続済み',
   'virtualCity.systemDialog.disconnected': 'システムエージェント未接続',
   'virtualCity.systemDialog.disabled': 'システム対話はサーバー側で停止中です（[city_system] enabled=false）。コマンドは送信できません。',
+  // バッチ83 §3.1：ヘッダー ドラッグハンドルのヒント（title + aria-label）。
+  'virtualCity.systemDialog.dragHint': 'ドラッグで移動、タイトルバーのダブルクリックでリセット',
   'virtualCity.systemDialog.toolPending': '実行中',
   'virtualCity.systemDialog.toolFailed': '失敗',
   'virtualCity.systemDialog.toolOk': '成功',

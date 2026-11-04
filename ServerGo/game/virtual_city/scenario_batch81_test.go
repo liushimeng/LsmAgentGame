@@ -2,7 +2,8 @@
 // (2026-11-03 §批次81 City-System 主 Agent 与系统对话)。
 //
 // 覆盖(契约 §7.1):
-//   - 目录完整性:恰好 40 个、kind 唯一、分组属于 6 个合法组、默认强度 1–5;
+//   - 目录完整性:kind 唯一、分组属于 6 个合法组、默认强度 1–5
+//     (总数断言随批次83 扩容改为 101,见 TestScenarioCatalog_Batch81_Complete);
 //   - 确定性:任选 5 个新场景,固定 seed 双跑 applyScenarioToWorld → 逐位相等;
 //   - 月度衰减:注入新场景后跑 3 个 scenarioMonthStep 不 panic。
 package virtual_city
@@ -28,12 +29,12 @@ var batch81NewKinds = []string{
 	ScenarioAIBoom, ScenarioUnknownCivilizationContact, ScenarioCyberAttack,
 }
 
-// TestScenarioCatalog_Batch81_Complete 目录恰好 40 个;kind 唯一;分组属于
-// 6 个合法组;默认强度 1–5;30 个新 kind 全部在目录内。
+// TestScenarioCatalog_Batch81_Complete 目录总数(批次83 扩到 101);kind 唯一;
+// 分组属于 6 个合法组;默认强度 1–5;30 个批次81 新 kind 全部在目录内。
 func TestScenarioCatalog_Batch81_Complete(t *testing.T) {
 	catalog := ScenarioCatalog()
-	if len(catalog) != 40 {
-		t.Fatalf("catalog size = %d, want 40", len(catalog))
+	if len(catalog) != 101 {
+		t.Fatalf("catalog size = %d, want 101", len(catalog))
 	}
 	legalGroups := map[string]bool{
 		ScenarioGroupMarket: true, ScenarioGroupPolicy: true,
@@ -157,7 +158,7 @@ func TestScenarioBatch81_RateFieldsActive(t *testing.T) {
 	}
 }
 
-// TestScenarioBatch81_AllKindsApplicable 40 个场景全部可注入(目录条目 →
+// TestScenarioBatch81_AllKindsApplicable 全目录场景(批次83 起 101 个)均可注入(目录条目 →
 // 引擎分派无死链;防「声明了却从不接线」§130)。单房间逐个注入(持续 1 月后
 // 立即走场景月步到期腾出活动名额),任一失败即报错并附 kind。
 func TestScenarioBatch81_AllKindsApplicable(t *testing.T) {

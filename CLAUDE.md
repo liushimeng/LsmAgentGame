@@ -374,12 +374,13 @@ HTTP：`GET /api/games/virtual_city/rooms/:id/system_agent/history`、`POST .../
 
 ### 29.6 新增错误码
 
-`35058 ErrVirtualCitySystemAgentDisabled` / `35059 ErrVirtualCitySystemAgentBusy` / `35060 ErrVirtualCityAgentNotFound`。
+`35059 ErrVirtualCitySystemAgentDisabled` / `35060 ErrVirtualCitySystemAgentBusy` / `35061 ErrVirtualCityAgentNotFound`。
+（35058 已被批次 68 `ErrVirtualCityPredictionRunNotFound` 占用，批次 81 取值顺延；`errcode.go` 为准。）
 
 ### 29.7 配置
 
 `LsmAgentGame.conf` 增 `[city_system]`：`enabled` / `model_key` / `max_steps`(8) / `max_messages`(40) / `request_timeout_ms`(180000) / `tool_result_limit`(4000)。
-`enabled=false` ⇒ WS 返回 35058，前端隐藏入口（一键回退）。
+`enabled=false` ⇒ WS 返回 35059（本段只在进程启动时读取，改动后须重启）。
 
 ### 29.8 前端
 
@@ -396,3 +397,13 @@ HTTP：`GET /api/games/virtual_city/rooms/:id/system_agent/history`、`POST .../
 - `ScenarioPanel.tsx` **已删除**（功能由对话框取代；`PredictionReportView.tsx` 保留复用）。
 - 顶栏按钮 `🎛 场景推演台` → `💬 系统对话`。
 - ⚠️ `t(映射表[id])` 必须恒返回字符串（缺 key 即白屏）；新 i18n key 三语同步。
+
+### 29.9 批次 83 · 窗口优化与场景目录 101（2026-11-04）
+
+> 规范见 [`lag_docs/虚拟城市/已实现/83-系统对话窗口优化与场景目录扩充/01-方案设计.md`](lag_docs/虚拟城市/已实现/83-系统对话窗口优化与场景目录扩充/01-方案设计.md)。
+
+- **浮窗可拖拽**：header 指针把手，位置 localStorage `vc-sysdialog-pos-v1` 持久化 + 视口钳制，双击 header 复位；窄屏（≤900px）禁用。
+- **顶栏按钮常显**：点击 = 打开 + 退出最小化（**取代**批次 81「停用隐藏入口」策略；停用态照常开窗显示内联红条）。
+- **场景目录 40 → 101**：新增定义在 `game/virtual_city/scenario_catalog_batch83.go`，`scenario.go` 只改 append 链；纯数据零派发改动、零 RNG。
+- **prompt 目录内联改紧凑索引**（`citysystem.ScenarioCatalogIndex()`，无描述）+ **`list_scenarios(group)`** 按组返回详情（`ScenarioCatalogDetail(group)`），防 101 场景全量回灌被 `tool_result_limit` 截断。
+- WS / HTTP 契约零变更。

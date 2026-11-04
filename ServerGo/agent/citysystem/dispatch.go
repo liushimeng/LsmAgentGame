@@ -45,7 +45,17 @@ func (a *Agent) Dispatch(ctx context.Context, userID, name string, input map[str
 		return a.injectScenario(getStr("kind"), getInt("magnitude"),
 			getInt("duration_months"), getStr("target"), getStr("note"))
 	case ToolListScenarios:
-		return ScenarioCatalogText(), false
+		// 批次83 §4.2:缺省返回全目录紧凑索引;传合法组名返回该组完整
+		// 描述;未知组名返回失败文本(对齐 busFailure 风格回灌模型)。
+		group := strings.TrimSpace(getStr("group"))
+		if group == "" {
+			return ScenarioCatalogIndex(), false
+		}
+		detail, err := ScenarioCatalogDetail(group)
+		if err != nil {
+			return "失败:" + err.Error(), true
+		}
+		return detail, false
 	case ToolQueryCityState:
 		return a.systemSummary(getStr("scope"))
 	case ToolQueryWorldEvents:

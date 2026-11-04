@@ -26,6 +26,35 @@ import type {
 /** 会话消息上限（任务 §2 cap 200）。 */
 const MAX_MESSAGES = 200;
 
+/** 浮窗拖拽位置持久化键（批次83 §3.1；纯客户端 UI 偏好，换房不清）。 */
+export const DIALOG_POS_STORAGE_KEY = 'vc-sysdialog-pos-v1';
+
+/** 浮窗左上角位置（px，视口坐标；null = 默认位，渲染时不写 inline style）。 */
+export interface VirtualCitySystemDialogPos {
+  x: number;
+  y: number;
+}
+
+/**
+ * 从 localStorage 恢复浮窗位置（批次83 §3.1）：
+ * JSON 解析 + 有限数字校验，任何非法形态（缺键 / NaN / JSON 坏）静默丢弃返回 null；
+ * 视口越界不在读取时钳制（无元素宽度），由面板挂载 / resize 时统一重钳制。
+ */
+function loadDialogPos(): VirtualCitySystemDialogPos | null {
+  try {
+    const raw = window.localStorage.getItem(DIALOG_POS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const { x, y } = parsed as { x?: unknown; y?: unknown };
+    if (typeof x !== 'number' || typeof y !== 'number') return null;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return { x, y };
+  } catch {
+    return null;
+  }
+}
+
 let idSeq = 0;
 
 /** 生成前端消息 id（仅用于 React key 与 upsert 定位，不参与后端语义）。 */
@@ -97,11 +126,15 @@ export interface VirtualCitySystemStore {
   busy: boolean;
   /** 窗口是否最小化（收起为浮动条，不断线）。 */
   minimized: boolean;
+  /** 浮窗拖拽位置（批次83 §3.1；null = 默认位，渲染走 CSS 基础规则）。 */
+  dialogPos: VirtualCitySystemDialogPos | null;
 
   appendUser: (text: string) => void;
   upsertAssistant: (id: string, patch: Partial<VirtualCitySystemMessage>) => void;
   applyEvent: (frame: VirtualCitySystemEventFrame) => void;
   setMinimized: (minimized: boolean) => void;
+  /** 设置浮窗位置；null = 复位默认位（localStorage 写 / 清由面板拖拽收尾负责）。 */
+  setDialogPos: (pos: VirtualCitySystemDialogPos | null) => void;
   setConnected: (connected: boolean) => void;
   /** 历史整表替换（`game.virtual_city_system_history`，首屏 / 重连恢复）。 */
   setMessages: (messages: VirtualCitySystemMessage[]) => void;
@@ -113,6 +146,7 @@ export const useVirtualCitySystemStore = create<VirtualCitySystemStore>((set) =>
   connected: false,
   busy: false,
   minimized: false,
+  dialogPos: loadDialogPos(),
 
   appendUser: (text) =>
     set((s) => ({
@@ -319,6 +353,7 @@ export const useVirtualCitySystemStore = create<VirtualCitySystemStore>((set) =>
   },
 
   setMinimized: (minimized) => set({ minimized }),
+  setDialogPos: (pos) => set({ dialogPos: pos }),
   setConnected: (connected) => set({ connected }),
 
   setMessages: (messages) => set({ messages: messages.slice(-MAX_MESSAGES) }),

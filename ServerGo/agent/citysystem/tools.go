@@ -4,8 +4,8 @@
 // 契约: 批次81 方案文档 §3.2「10 个工具」表 + list_agents 元工具。
 // 工具名常量集中在本文件,ToolNames() 供单测钉死(防「声明了却从不接线」§130)。
 //
-// kind 的 enum 从 virtual_city.ScenarioCatalog() **动态生成** —— 批次81
-// 场景目录扩到 40 个后,无需同步改 wire 定义。
+// kind 的 enum 从 virtual_city.ScenarioCatalog() **动态生成** —— 目录扩容
+// (批次81 → 40 个 / 批次83 → 101 个)后,无需同步改 wire 定义。
 package citysystem
 
 import (
@@ -102,9 +102,16 @@ func BuildTools() []llmtypes.ToolDef {
 		},
 		{
 			Name: ToolListScenarios,
-			Description: "列出全部可注入场景(分组 / kind / 名称 / 默认强度 / 描述 / 参数)。" +
-				"系统提示词已内联目录,仅在需要完整参数或目录可能过期时调用。",
-			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+			Description: "列出可注入场景目录。缺省返回全目录紧凑索引(kind / 名称 / 默认强度 / 参数);" +
+				"传 group 返回该组完整描述(含场景描述与参数)。系统提示词已内联紧凑索引," +
+				"需要某组场景的完整描述与参数时按组调用。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"group": enumStrSchema(scenarioGroupOrder,
+						"可选;传组名只返回该组完整描述,缺省返回全目录紧凑索引(kind/名称/默认强度/参数)"),
+				},
+			},
 		},
 		{
 			Name: ToolQueryCityState,

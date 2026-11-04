@@ -22,6 +22,8 @@ const virtualCitySystemZH = {
   'virtualCity.systemDialog.connected': '系统 Agent 已连接',
   'virtualCity.systemDialog.disconnected': '系统 Agent 未连接',
   'virtualCity.systemDialog.disabled': '系统对话已停用（服务端 [city_system] enabled=false），暂不可发送指令。',
+  // 批次83 §3.1：header 拖拽把手提示（title + aria-label）。
+  'virtualCity.systemDialog.dragHint': '拖拽移动窗口；双击标题栏复位',
   'virtualCity.systemDialog.toolPending': '进行中',
   'virtualCity.systemDialog.toolFailed': '失败',
   'virtualCity.systemDialog.toolOk': '成功',

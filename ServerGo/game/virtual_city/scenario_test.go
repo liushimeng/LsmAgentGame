@@ -30,8 +30,8 @@ func newScenarioTestRoom(t *testing.T, roomID string, seed int64) *VirtualCityRo
 	return r
 }
 
-// TestScenarioCatalog_Complete 目录 = 40 个 kind、6 个分组、L1-L5
-// (批次68 既有 10 个 + 批次81 新增 30 个)。
+// TestScenarioCatalog_Complete 目录 = 101 个 kind、6 个分组、L1-L5
+// (批次68 既有 10 个 + 批次81 新增 30 个 + 批次83 新增 61 个)。
 func TestScenarioCatalog_Complete(t *testing.T) {
 	want := map[string]string{
 		// ── 批次68 既有 10 个 ──
@@ -81,6 +81,73 @@ func TestScenarioCatalog_Complete(t *testing.T) {
 		ScenarioAIBoom:                     ScenarioGroupTech,
 		ScenarioUnknownCivilizationContact: ScenarioGroupTech,
 		ScenarioCyberAttack:                ScenarioGroupTech,
+		// ── 批次83 新增 61 个(市场与经济 +10)──
+		ScenarioLiquidityCrisis:      ScenarioGroupMarket,
+		ScenarioOilPriceShock:        ScenarioGroupMarket,
+		ScenarioFoodCrisis:           ScenarioGroupMarket,
+		ScenarioTechBubble:           ScenarioGroupMarket,
+		ScenarioHousingBoom:          ScenarioGroupMarket,
+		ScenarioConsumerDowngrade:    ScenarioGroupMarket,
+		ScenarioExportBoom:           ScenarioGroupMarket,
+		ScenarioStockMeltup:          ScenarioGroupMarket,
+		ScenarioCurrencyAppreciation: ScenarioGroupMarket,
+		ScenarioBondMarketStorm:      ScenarioGroupMarket,
+		// ── 政策与治理 +10 ──
+		ScenarioTaxReform:             ScenarioGroupPolicy,
+		ScenarioPropertyTaxPilot:      ScenarioGroupPolicy,
+		ScenarioDigitalCurrency:       ScenarioGroupPolicy,
+		ScenarioAntiCorruption:        ScenarioGroupPolicy,
+		ScenarioImmigrationTightening: ScenarioGroupPolicy,
+		ScenarioSnapElection:          ScenarioGroupPolicy,
+		ScenarioRecallReferendum:      ScenarioGroupPolicy,
+		ScenarioPoliticalDeadlock:     ScenarioGroupPolicy,
+		ScenarioPriceControls:         ScenarioGroupPolicy,
+		ScenarioEducationReform:       ScenarioGroupPolicy,
+		// ── 社会与舆情 +8 ──
+		ScenarioGeneralStrike:      ScenarioGroupSociety,
+		ScenarioViralScandal:       ScenarioGroupSociety,
+		ScenarioInfluencerEconomy:  ScenarioGroupSociety,
+		ScenarioCharityScandal:     ScenarioGroupSociety,
+		ScenarioMentalHealthCrisis: ScenarioGroupSociety,
+		ScenarioTalentInflux:       ScenarioGroupSociety,
+		ScenarioBirthrateIncentive: ScenarioGroupSociety,
+		ScenarioSocialTrustCrisis:  ScenarioGroupSociety,
+		// ── 自然灾害 +12 ──
+		ScenarioBlizzard:           ScenarioGroupNature,
+		ScenarioColdWave:           ScenarioGroupNature,
+		ScenarioSandstorm:          ScenarioGroupNature,
+		ScenarioLandslide:          ScenarioGroupNature,
+		ScenarioLocustPlague:       ScenarioGroupNature,
+		ScenarioHailstorm:          ScenarioGroupNature,
+		ScenarioSevereThunderstorm: ScenarioGroupNature,
+		ScenarioUrbanWaterlogging:  ScenarioGroupNature,
+		ScenarioGroundSubsidence:   ScenarioGroupNature,
+		ScenarioSpringFlood:        ScenarioGroupNature,
+		ScenarioTornado:            ScenarioGroupNature,
+		ScenarioVectorBorneDisease: ScenarioGroupNature,
+		// ── 未知灾难 +11 ──
+		ScenarioGridBlackout:        ScenarioGroupUnknown,
+		ScenarioDroneSwarmAttack:    ScenarioGroupUnknown,
+		ScenarioUfoWave:             ScenarioGroupUnknown,
+		ScenarioDeepSeaSignal:       ScenarioGroupUnknown,
+		ScenarioUnknownVirusX:       ScenarioGroupUnknown,
+		ScenarioChemicalSpill:       ScenarioGroupUnknown,
+		ScenarioNuclearBrinkmanship: ScenarioGroupUnknown,
+		ScenarioAIRunawayIncident:   ScenarioGroupUnknown,
+		ScenarioSatelliteDebris:     ScenarioGroupUnknown,
+		ScenarioAnomalousFog:        ScenarioGroupUnknown,
+		ScenarioTimeAnomaly:         ScenarioGroupUnknown,
+		// ── 科技与新文明 +10 ──
+		ScenarioAGIBreakthrough:         ScenarioGroupTech,
+		ScenarioFusionCommercialization: ScenarioGroupTech,
+		ScenarioQuantumPractical:        ScenarioGroupTech,
+		ScenarioBrainMachineInterface:   ScenarioGroupTech,
+		ScenarioRobotLaborShift:         ScenarioGroupTech,
+		ScenarioLongevityTherapy:        ScenarioGroupTech,
+		ScenarioSpaceElevator:           ScenarioGroupTech,
+		ScenarioMetaverseMigration:      ScenarioGroupTech,
+		ScenarioAlienSignalDecoded:      ScenarioGroupTech,
+		ScenarioCloneEthicsCrisis:       ScenarioGroupTech,
 	}
 	catalog := ScenarioCatalog()
 	if len(catalog) != len(want) {

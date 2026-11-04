@@ -68,6 +68,9 @@ func TestDispatch_Positive(t *testing.T) {
 			"kind": virtual_city.ScenarioEarthquake, "magnitude": 3, "duration_months": 6,
 		}, "已注入场景"},
 		{ToolListScenarios, map[string]any{}, virtual_city.ScenarioGoodsPriceShock},
+		// 批次83:传组名返回该组完整详情(含描述)。
+		{ToolListScenarios, map[string]any{"group": virtual_city.ScenarioGroupNature},
+			"极端暴雪阻断物流干线"},
 		{ToolQueryCityState, map[string]any{"scope": "overview"}, "城市状态"},
 		{ToolQueryWorldEvents, map[string]any{}, "暂无真实世界事件"},
 		{ToolControlSimulation, map[string]any{"action": "status"}, "playing"},
@@ -123,6 +126,8 @@ func TestDispatch_Negative(t *testing.T) {
 		{ToolLaunchSurvey, map[string]any{
 			"question": "  ", "options": []any{"a", "b"},
 		}, "问题不能为空", ""},
+		// 批次83:list_scenarios 未知组名 → 失败文本(is_err)。
+		{ToolListScenarios, map[string]any{"group": "不存在"}, "未知分组 不存在,可用分组:", ""},
 		// 未注册的总线目标。
 		{ToolFocusCamera, map[string]any{"district": "d1"}, "agent not registered", ""},
 		{ToolCollectRealworldData, map[string]any{}, "agent not registered", ""},

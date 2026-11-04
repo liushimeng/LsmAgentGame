@@ -22,6 +22,8 @@ const virtualCitySystemEN = {
   'virtualCity.systemDialog.connected': 'System agent connected',
   'virtualCity.systemDialog.disconnected': 'System agent not connected',
   'virtualCity.systemDialog.disabled': 'System dialog is disabled on the server ([city_system] enabled=false); sending commands is unavailable.',
+  // Batch 83 §3.1: header drag-handle hint (title + aria-label).
+  'virtualCity.systemDialog.dragHint': 'Drag to move; double-click header to reset',
   'virtualCity.systemDialog.toolPending': 'running',
   'virtualCity.systemDialog.toolFailed': 'failed',
   'virtualCity.systemDialog.toolOk': 'ok',

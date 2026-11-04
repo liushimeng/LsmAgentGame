@@ -384,3 +384,17 @@
     display: none;
   }
 }
+
+/* ── 批次83 §3.1 浮窗拖拽：header 为拖拽把手 ────────────────
+ * 纯交互态（grab/grabbing 光标变化），无新颜色、无动画（§26，
+ * 不涉及 @keyframes / prefers-reduced-motion 兜底）。
+ * touch-action:none 阻止触屏拖拽被页面滚动劫持；user-select:none
+ * 防拖拽时选中 header 文本。窄屏由 JS 侧忽略 pointerdown（布局媒体查询钉死）。 */
+.virtualCity-sysdialog__head {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.virtualCity-sysdialog__head--dragging {
+  cursor: grabbing;
+}

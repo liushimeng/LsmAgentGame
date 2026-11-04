@@ -1335,6 +1335,8 @@ export interface VirtualCityDict {
   'virtualCity.systemDialog.disconnected': string;
   /** §8 一键回退：后端 [city_system] enabled=false 时的内联停用提示。 */
   'virtualCity.systemDialog.disabled': string;
+  /** 批次83 §3.1：header 拖拽把手提示（title + aria-label）。 */
+  'virtualCity.systemDialog.dragHint': string;
   'virtualCity.systemDialog.toolPending': string;
   'virtualCity.systemDialog.toolFailed': string;
   'virtualCity.systemDialog.toolOk': string;

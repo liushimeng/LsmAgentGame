@@ -347,20 +347,21 @@ export function VirtualCityGamePage() {
               ▶ {t('virtualCity.startEarly' as TKey)}
             </button>
           )}
-          {/* 2026-11-03 §批次81 — 条件触发者入口（所有观察者可用）。
+          {/* 2026-11-04 §批次83 — 条件触发者入口（所有观察者可用）**常显**。
               原「🎛 场景推演台」已重构为「💬 系统对话」（对话即控制面）。
-              §8 一键回退：system_agent_enabled === false（旧后端缺省 = true）时整颗隐藏。 */}
-          {!systemDialogDisabled && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setSystemOpen(true)}
-              title={t('virtualCity.systemDialog.subtitle' as TKey)}
-              data-testid="virtualCity-system-dialog-open"
-            >
-              💬 {t('virtualCity.systemDialog.open' as TKey)}
-            </button>
-          )}
+              批次83 §3.2 取代批次81 §8「停用隐藏入口」策略：停用
+              （system_agent_enabled === false）时按钮仍渲染，点击打开窗口看内联
+              停用红条（信息量优于整钮消失）；systemDialogDisabled 仅传面板
+              disabled prop。点击 = setSystemOpen(true)，面板内 effect 退出最小化。 */}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setSystemOpen(true)}
+            title={t('virtualCity.systemDialog.subtitle' as TKey)}
+            data-testid="virtualCity-system-dialog-open"
+          >
+            💬 {t('virtualCity.systemDialog.open' as TKey)}
+          </button>
           <button
             type="button"
             className="btn btn-danger"
