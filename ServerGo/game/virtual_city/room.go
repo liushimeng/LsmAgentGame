@@ -245,6 +245,11 @@ type VirtualCityRoom struct {
 	// 2026-09-22 §CityHuman重构:感知与发言支撑。
 	utterances []UtteranceRecord // 公开发言环形缓冲(cap 50,hear 数据源)
 
+	// metricHistory 批次84(2026-11-05 §批次84 §4.4)— 城市指标历史环
+	// (≤120 条;**不放进 World**,零新增持久化状态;采样/查询见
+	// room_metric_history.go)。
+	metricHistory []SystemMetricSnapshot
+
 	// agentPending 批次 25(§3.3):per-seat 单槽 pending —— agentSem 满槽时
 	// 登记(true 覆盖 true 幂等),信号量释放侧补跑;替代旧的无界排队 goroutine。
 	agentPending [MaxSeats]bool
@@ -1016,6 +1021,9 @@ func (r *VirtualCityRoom) trySettle(onFinish func(roomID string)) bool {
 	// 零回归,不触碰任何状态)。
 	r.refreshWorldEventsLocked()
 	finished, res := r.World.SettleMonth()
+	// 批次84 §4.4:月结成功后采样城市指标历史环(房间层,≤120 条;只追加,
+	// 不改 World 任何字段;采样在锁内,与 World 同互斥域)。
+	r.sampleSystemMetricLocked()
 	// 批次 27(§3.3 月结天气播报 P1):本月城市天气类型 ≠ 上月 → city_weather
 	// 事件(首月 lastWeatherKind=="" 恒播报)。锁内现算(WeatherAt 纯函数),
 	// emitEvent 仅追加 World.Events,广播随下方 newEvents 锁外回调(§92a)。

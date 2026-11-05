@@ -14,7 +14,11 @@ package api
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
+	"sync"
 
+	"LsmAgentGame/config"
 	"LsmAgentGame/errcode"
 	"LsmAgentGame/game/virtual_city"
 
@@ -29,6 +33,22 @@ type VirtualCityScenarioAPI struct {
 // NewVirtualCityScenarioAPI 构造(rooms 由 main.go 注入 vcMgr)。
 func NewVirtualCityScenarioAPI(rooms VirtualCityRoomSource) *VirtualCityScenarioAPI {
 	return &VirtualCityScenarioAPI{rooms: rooms}
+}
+
+// scenarioCatalogConfigOnce 目录配置只应用一次(装配层缓存,重复调用无意义)。
+var scenarioCatalogConfigOnce sync.Once
+
+// applyScenarioCatalogConfig 把 config.scenario_catalog{} 的 max_entries /
+// search_limit 应用到目录装配层(缺失 ⇒ 装配层缺省 10000 / 30)。
+//
+// config.Load() 在配置文件缺失时可能 panic(测试/早期 bootstrap)⇒ recover
+// 兜底走装配层缺省(照抄 game/werewolf 的安全读取模式)。
+func applyScenarioCatalogConfig() {
+	scenarioCatalogConfigOnce.Do(func() {
+		defer func() { _ = recover() }()
+		cfg := config.Load().ScenarioCatalog.Resolved()
+		virtual_city.SetScenarioCatalogLimits(cfg.MaxEntries, cfg.SearchLimit)
+	})
 }
 
 // injectScenarioReq POST body(契约 §5.1)。
@@ -46,11 +66,60 @@ type injectScenarioReq struct {
 
 // Catalog 处理 GET /api/games/virtual_city/scenario_catalog。
 // 与房间无关(全局目录),登录即可读。
+//
+// 批次84(2026-11-05 §批次84 §7.2)扩展:支持 group / q / limit 检索参数,
+// 响应在既有 `scenarios` 之上追加 `dimensions` 与 `total`:
+//
+//	scenarios  受 group/q/limit 过滤后的条目(**保留既有字段名**,向后兼容)
+//	items      同 scenarios 的别名(批次84 §5.1 前端 normalizeScenarioCatalog
+//	           在新形状分支读 data.items;两个键内容逐字相同,兼容新旧两种消费方)
+//	dimensions 维度索引(13 组,每组 count + ≤3 个代表 kind;恒定体积)
+//	total      匹配 group/q 的条目总数(**limit 截断前**;不受 limit 影响),
+//	           用于分页 —— 无参时 = 全目录条目数(受 scenario_catalog.max_entries
+//	           截断后的真实值);单组规模另见 dimensions[].count(契约 §7.2)
+//
+// 参数语义与 virtual_city.ScenarioCatalogSearch 一致:
+//   - group:空 = 全部;未知分组 ⇒ code 35064;
+//   - q:kind/name/description/group 子串匹配(大小写不敏感);
+//   - limit:<=0 ⇒ 缺省 30(config.scenario_catalog.search_limit);上限 200。
 func (a *VirtualCityScenarioAPI) Catalog(c *gin.Context) {
+	// 批次84:首次访问把 config.scenario_catalog{} 的上限/默认条数落到装配层。
+	applyScenarioCatalogConfig()
+	group := c.Query("group")
+	q := c.Query("q")
+	limit := 0
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			// 非法 limit(非数字)⇒ 归一为缺省(0 ⇒ 下游走缺省 30)。
+			n = 0
+		}
+		limit = n
+	}
+	// total = 命中条数(group/q 过滤后、limit 截断前);顺带完成分组名校验。
+	total, terr := virtual_city.ScenarioCatalogMatchCount(q, group)
+	if terr != nil {
+		ee := errcode.AsError(terr)
+		c.JSON(http.StatusOK, gin.H{"code": ee.Code, "message": ee.Message})
+		return
+	}
+	items, e := virtual_city.ScenarioCatalogSearchErr(q, group, limit)
+	if e != nil {
+		c.JSON(http.StatusOK, gin.H{"code": e.Code, "message": e.Message})
+		return
+	}
+	if items == nil {
+		items = []virtual_city.ScenarioSpec{}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"code":    errcode.OK,
 		"message": "ok",
-		"data":    gin.H{"scenarios": virtual_city.ScenarioCatalog()},
+		"data": gin.H{
+			"scenarios":  items,
+			"items":      items,
+			"dimensions": virtual_city.ScenarioDimensionIndex(),
+			"total":      total,
+		},
 	})
 }
 

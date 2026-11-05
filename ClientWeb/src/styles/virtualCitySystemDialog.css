@@ -398,3 +398,367 @@
 .virtualCity-sysdialog__head--dragging {
   cursor: grabbing;
 }
+
+/* ── 批次84 §5.1：目录浏览器 / 系统信息面板 / 来信卡片 / 提示条 ──────
+ *
+ * 对比度（§26 暗色硬阈值）：
+ *   正文 #e5e7eb on #1c2431 ≈ 12:1（≥4.5）；
+ *   次要 #b7bfcc on #1c2431 ≈ 9:1（≥4.5）；
+ *   徽章 #0b1220 on #d4a017 ≈ 8.9:1（≥5.0）；
+ *   选中态 #0b1220 on #d4a017 ≈ 8.9:1（≥6.0）；
+ *   错误 #2a0808 on #f87171 ≈ 7:1（≥4.5）。
+ * 全程不出现「浅色文字 + 25% 透明背景」「color: inherit + 半透明背景」
+ * 「opacity: 0.4 表 disabled」三类反模式（§26 一票否决项）。 */
+
+/* 折叠区容器（目录 + 信息各一个） */
+.virtualCity-sysdialog__sections {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--virtualCity-border);
+  background: var(--virtualCity-panel-2);
+}
+
+.virtualCity-sysdialog__section {
+  border-bottom: 1px solid var(--virtualCity-border);
+}
+.virtualCity-sysdialog__section:last-child {
+  border-bottom: 0;
+}
+
+.virtualCity-sysdialog__section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 12px;
+  color: var(--virtualCity-text);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.virtualCity-sysdialog__section-head:hover {
+  background: var(--virtualCity-panel);
+}
+.virtualCity-sysdialog__section-title {
+  flex: 1 1 auto;
+  font-weight: 600;
+}
+.virtualCity-sysdialog__section-caret {
+  flex: 0 0 auto;
+  color: var(--virtualCity-text-dim);
+}
+
+/* ── 场景目录浏览器 ─────────────────────────────────────────────── */
+.virtualCity-sysdialog__catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 10px;
+  background: var(--virtualCity-bg);
+}
+
+.virtualCity-sysdialog__catalog-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.virtualCity-sysdialog__catalog-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 10px;
+  color: var(--virtualCity-text);
+  background: var(--virtualCity-panel);
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+}
+.virtualCity-sysdialog__catalog-input:focus {
+  outline: 2px solid var(--virtualCity-accent);
+  outline-offset: 1px;
+}
+
+.virtualCity-sysdialog__catalog-total {
+  flex: 0 0 auto;
+  color: var(--virtualCity-text-dim);
+  font-size: 11px;
+}
+
+/* 维度 Tab（横向可滚动） */
+.virtualCity-sysdialog__catalog-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.virtualCity-sysdialog__catalog-tab {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  color: var(--virtualCity-text-dim);
+  background: var(--virtualCity-panel);
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.virtualCity-sysdialog__catalog-tab:hover {
+  color: var(--virtualCity-text);
+  border-color: var(--virtualCity-accent);
+}
+/* 选中态：实色金底 + 深字（对比度 ≈ 8.9:1 ≥ 6.0）。 */
+.virtualCity-sysdialog__catalog-tab--active {
+  color: #0b1220;
+  background: var(--virtualCity-accent-strong);
+  border-color: var(--virtualCity-accent-strong);
+  font-weight: 600;
+}
+
+.virtualCity-sysdialog__catalog-count {
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.virtualCity-sysdialog__catalog-hint {
+  color: var(--virtualCity-text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* 错误：实色红底 + 深字（≈7:1）。 */
+.virtualCity-sysdialog__catalog-error {
+  padding: 6px 10px;
+  color: #2a0808;
+  background: var(--virtualCity-neg);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.virtualCity-sysdialog__catalog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.virtualCity-sysdialog__catalog-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 10px;
+  color: var(--virtualCity-text);
+  background: var(--virtualCity-panel);
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.virtualCity-sysdialog__catalog-item:hover {
+  border-color: var(--virtualCity-accent);
+  background: var(--virtualCity-panel-2);
+}
+
+.virtualCity-sysdialog__catalog-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.virtualCity-sysdialog__catalog-item-name {
+  flex: 1 1 auto;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 强度徽章：实色金底 + 深字（≈8.9:1 ≥ 5.0）。 */
+.virtualCity-sysdialog__catalog-item-mag {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  color: #0b1220;
+  background: var(--virtualCity-accent-strong);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.virtualCity-sysdialog__catalog-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--virtualCity-text-dim);
+  font-size: 11px;
+}
+.virtualCity-sysdialog__catalog-item-group {
+  flex: 0 0 auto;
+}
+.virtualCity-sysdialog__catalog-item-kind {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--virtualCity-text-dim);
+  font-size: 10px;
+}
+
+.virtualCity-sysdialog__catalog-item-desc {
+  color: var(--virtualCity-text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ── 系统信息面板 ───────────────────────────────────────────────── */
+.virtualCity-sysdialog__info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  background: var(--virtualCity-bg);
+}
+
+.virtualCity-sysdialog__info-empty {
+  color: var(--virtualCity-text-dim);
+  font-size: 12px;
+}
+
+.virtualCity-sysdialog__info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.virtualCity-sysdialog__info-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  background: var(--virtualCity-panel);
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+}
+.virtualCity-sysdialog__info-label {
+  color: var(--virtualCity-text-dim);
+  font-size: 11px;
+}
+.virtualCity-sysdialog__info-value {
+  color: var(--virtualCity-text);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.virtualCity-sysdialog__info-agent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--virtualCity-panel);
+  border: 1px solid var(--virtualCity-border);
+  border-radius: 8px;
+}
+.virtualCity-sysdialog__info-agent-title {
+  color: var(--virtualCity-text);
+  font-size: 11px;
+  font-weight: 600;
+}
+.virtualCity-sysdialog__info-agent-text {
+  margin: 0;
+  max-height: 140px;
+  overflow: auto;
+  color: var(--virtualCity-text);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── 显示指令提示条（未支持 / 未接引擎 / 参数非法）───────────────── */
+.virtualCity-sysdialog__notice {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  color: #2a0808;
+  background: var(--virtualCity-neg);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.virtualCity-sysdialog__notice-text {
+  flex: 1 1 auto;
+  word-break: break-word;
+}
+.virtualCity-sysdialog__notice-close {
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  color: #2a0808;
+  background: #fecaca;
+  border: 1px solid #2a0808;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+.virtualCity-sysdialog__notice-close:hover {
+  background: #fee2e2;
+}
+
+/* ── Agent 来信卡片（📨 来自 <Agent>）───────────────────────────── */
+.virtualCity-sysmsg--agent {
+  align-self: center;
+  align-items: stretch;
+  max-width: 92%;
+}
+
+.virtualCity-sysmsg__letter-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  color: #0b1220;
+  background: var(--virtualCity-accent-strong);
+  border-radius: 8px 8px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+}
+.virtualCity-sysmsg__letter-icon {
+  flex: 0 0 auto;
+}
+.virtualCity-sysmsg__letter-from {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.virtualCity-sysmsg__letter-time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.virtualCity-sysmsg__letter-text {
+  padding: 8px 12px;
+  color: var(--virtualCity-text);
+  background: var(--virtualCity-panel-2);
+  border: 1px solid var(--virtualCity-accent);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -89,6 +89,7 @@ import {
 } from './freeViewColliders';
 import { SelectionMarker } from './SelectionMarker';
 import { useObjectInfoStore } from './objectInfo/objectInfoStore';
+import { effectiveLayerVisible, useCityShowStore } from './cityShowStore';
 
 // 批次 32 v2：CDP 验收可直接读写 objectInfo selected 状态。
 if (typeof window !== 'undefined' && window.location.search.includes('debug=1')) {
@@ -497,6 +498,11 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
   const selectedFocusRef = useRef(selectedFocus);
   selectedFocusRef.current = selectedFocus;
 
+  // 批次 84：图层显隐（water）—— 显示指令 `set_layer_visibility` 的真实落点。
+  const showLayers = useCityShowStore((s) => s.layers);
+  const showFilter = useCityShowStore((s) => s.filter);
+  const waterVisible = effectiveLayerVisible(showLayers, showFilter, 'water');
+
   return (
     <div className="virtualCity-map-host">
       {/* 批次 30 C：显式 near/far（three 缺省 1m/20km —— 1.7 m 眼高漫游下 1 m 内被裁、
@@ -521,7 +527,7 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
             （identity group，零 transform，零视觉影响）。楼栋/车辆/行人桶在各自
             组件根 group 上自标（BuildingMesh / Vehicle / PedestrianV3）。 */}
         {/* 14-3D渲染深化：城市水系（运河 + 港池 + 岸草皮） */}
-        <group userData={{ bucket: 'water' }}>
+        <group userData={{ bucket: 'water' }} visible={waterVisible}>
           <WaterLayer />
         </group>
         {/* 15-3D渲染深化：氛围层（公园落叶 Sparkles；批次 26 起远景剪影移除） */}

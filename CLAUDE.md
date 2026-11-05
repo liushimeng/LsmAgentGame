@@ -407,3 +407,17 @@ HTTP：`GET /api/games/virtual_city/rooms/:id/system_agent/history`、`POST .../
 - **场景目录 40 → 101**：新增定义在 `game/virtual_city/scenario_catalog_batch83.go`，`scenario.go` 只改 append 链；纯数据零派发改动、零 RNG。
 - **prompt 目录内联改紧凑索引**（`citysystem.ScenarioCatalogIndex()`，无描述）+ **`list_scenarios(group)`** 按组返回详情（`ScenarioCatalogDetail(group)`），防 101 场景全量回灌被 `tool_result_limit` 截断。
 - WS / HTTP 契约零变更。
+
+### 29.10 批次 84 · 全维度事件体系与 Agent 双向对话（2026-11-05）
+
+> 规范见 [`lag_docs/虚拟城市/已实现/84-全维度事件体系与Agent双向对话/01-方案设计.md`](lag_docs/虚拟城市/已实现/84-全维度事件体系与Agent双向对话/01-方案设计.md)；逐条对账见同目录 `02-全维度事件体系对账表.md`、实测数据见 `03-实施记录.md`。
+
+- **场景目录三层来源**：L1 既有 101 条（**一字不改**）+ L2 13 维度精选 182 条 + L3 **模板参数化派生** 920 变体 = **1,203 条 / 13 维度**；上限 `scenario_catalog.max_entries`（缺省 10000），截断顺序 **L3→L2→L1（L1 永不丢）**。模板派生是纯函数零 RNG：`kind = base.Kind + "__" + axis.Suffix + "_" + value.Key`，`profile = base × ΠScale + ΣAdjust`。
+- **目录规模天花板的解法**（本批核心）：`inject_scenario.kind` 的**硬 enum 移除**（万条 kind ≈260 KB 会撑爆请求体）+ **system 提示词改内联维度索引**（`ScenarioDimensionIndex()` 恒定 ≈800 B，目录扩容不再撑爆 prompt cache 前缀 §14.3）+ 新增 **`search_scenarios`** 检索工具。⚠️ `ScenarioCatalogIndex()` 已**废弃不再进 system**。
+- **City-System 工具 11 → 17**：新增 `search_scenarios` / `query_metric_history` / `query_districts` / `query_surveys` / `apply_display` / `ask_agent`；`list_agents` 扩为**类级 + 房间级 + 能力描述**。
+- **City-WebGL-Show 显示原语 6 → 14**：新增 `set_time_of_day` / `set_weather` / `set_time_speed` / `focus_entity` / `set_layer_visibility` / `set_filter` / `camera_preset` / `fly_path`。wire **只加字段不加嵌套**（旧前端静默兼容）；`citysystem/display.go` 与 `citywebgl/command.go` 是**逐字镜像**（字段名/tag/顺序/类型常量），两侧各有 JSON 锚点单测，**改一侧必须双侧同步**。
+- **修死链（批次 81 遗留）**：实证「**无任何 bus handler 按 `msg.Type` 分支**」⇒ 旧 `send_agent_message` 正文被三个 handler 全部丢弃。本批 `HandleBusMessage` 按 `msg.Type` 路由 + 载荷统一 `{"text":…}`（兼容裸字符串）。
+- **Agent 双向通讯**：`ask_agent`（等回复，30s 超时 ⇒ 35062）/ `send_agent_message`（`hub.Post` 不等回复）/ **上行来信**（任意 Agent `hub.Send`/`Post` ⇒ System 房间级 handler ⇒ 事件 `agent_message` ⇒ 对话窗「📨」卡片 + 下一轮注入 system 来信段）。**新增 Agent 只需 `hub.Register`/`RegisterWith`**，`list_agents` 与 `ask_agent` 自动可见（§130）。
+- **新错误码 35062–35065**：`ErrVirtualCityAgentNoReply` / `ErrVirtualCityAgentReplyTooLong` / `ErrVirtualCityScenarioGroupUnknown` / `ErrVirtualCityDisplayCommandInvalid`。
+- **HTTP 零新增路由**：`GET /api/games/virtual_city/scenario_catalog` 是**既有端点**（`router/router.go:277`），只扩 `group`/`q`/`limit` 与 `data.dimensions`/`data.total`，**必须保留 `data.scenarios`**。
+- ⚠️ **判「存量失败」前必须排除并行争抢**：分钟级 MC 测试在多条 SubAgent 并行跑测试时必超时；正确做法 = git worktree 干净基线 + 单独跑 + 比数值（批次 84 实证：`TestBalanceV2_AB` 基线 280s PASS，满载下 600s 超时）。

@@ -86,23 +86,20 @@ func (a *Agent) LinePolicy() string {
 	return a.linePolicy
 }
 
-// Structured 是结构化路径:参数齐备时**不过 LLM**,直接构造 1-2 条指令
+// Structured 是结构化路径:参数齐备时**不过 LLM**,直接构造指令
 // (视角跟随要快)。不 emit —— 返回值由调用方(citysystem.focusCamera)
 // 统一带 trace_id 下发,避免双发。
 //
-// 组合规则:district 优先于 (x,z)(focus_camera 契约二选一);mode 合法时
-// 追加一条 set_mode。全部参数无效 → 空切片。
+// 组合规则(批次84 扩展):
+//   - district 优先于 (x,z)(focus_camera 契约二选一);
+//   - mode 合法(orbit|fly)时追加一条 set_mode;
+//   - 批次84 新增的 phase/hour、weather、speed、entity_id/kind、
+//     layer/visible、category、preset、points 各自产出一条指令;
+//   - 全部参数无效 → 空切片;总条数 ≤ maxStructuredCommands(5)。
+//
+// 详见 structured.go::buildStructuredCommands。
 func (a *Agent) Structured(req DisplayRequest) []DisplayCommand {
-	cmds := make([]DisplayCommand, 0, 2)
-	if d := strings.TrimSpace(req.District); d != "" {
-		cmds = append(cmds, DisplayCommand{Type: DisplayFocusDistrict, District: d})
-	} else if req.X != nil && req.Z != nil {
-		cmds = append(cmds, DisplayCommand{Type: DisplayFocusPoint, X: *req.X, Z: *req.Z})
-	}
-	if mode := NormalizeMode(req.Mode); mode != "" {
-		cmds = append(cmds, DisplayCommand{Type: DisplaySetMode, Mode: mode})
-	}
-	return cmds
+	return buildStructuredCommands(req)
 }
 
 // Run 是 LLM 路径:自然语言请求 → ReAct(≤MaxSteps) → 指令序列。

@@ -1192,6 +1192,28 @@ export function FreeViewControls(props: FreeViewControlsProps) {
       focusGoal.current = null;
     }
 
+    // 批次84 · 相机预设：外部写入的一次性轨道位姿请求（目标 / 视距 / 俯仰 / 方位）。
+    // 消费后立即清空（避免每帧重复覆盖玩家的手动操作）。仅 orbit 模式生效 ——
+    // fly 模式的位姿由六自由度积分器独占，从外部强改会与玩家输入打架。
+    const goal = useFreeView.getState().orbitGoal;
+    if (goal && s.mode === 'orbit') {
+      if (goal.target) {
+        s.targetGoal.set(goal.target.x, s.targetGoal.y, goal.target.z);
+        clampTarget(s.targetGoal, p);
+        focusGoal.current = null;
+      }
+      if (goal.radius !== undefined) {
+        s.radiusGoal = clamp(goal.radius, p.minDistance ?? 2, p.maxDistance ?? 100);
+      }
+      if (goal.phi !== undefined) {
+        s.phiGoal = clamp(goal.phi, p.minPolar ?? 0.02, p.maxPolar ?? 1.545);
+      }
+      if (goal.theta !== undefined) {
+        s.thetaGoal = wrapAngle(goal.theta);
+      }
+      useFreeView.getState().setOrbitGoal(null);
+    }
+
     if (s.transitioning) {
       stepTransition(s, dt, camera);
       if (s.transitioning) return;

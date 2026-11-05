@@ -48,6 +48,12 @@ type Service struct {
 	refreshMu         sync.Mutex
 	lastManualRefresh map[string]time.Time
 	refreshNow        func() time.Time // 可注入(测试)
+
+	// dialogueMu / dialogueWaiters 是批次84「Agent 对话」的结果回传登记处:
+	// 按采集类目登记等待者,mission 完成时逐个唤醒(非阻塞投递)。
+	// 无等待者时零开销(不新建 map 之外的对象)。
+	dialogueMu      sync.Mutex
+	dialogueWaiters map[string][]chan missionOutcome
 }
 
 // Start 构造并启动全局服务(幂等:重复调用返回既有实例)。
@@ -139,6 +145,8 @@ func newService(cfg config.CityChromeConfig, reg LLMRegistry) *Service {
 	}, svc.store, svc.agent.RunMission)
 	svc.sched.SetHealthProbe(svc.client.Healthy)
 	svc.sched.SetNotify(svc.emitFanout)
+	// 批次84:mission 完成回调 → 唤醒「Agent 对话」等待者(结果上行 City-System)。
+	svc.bindMissionCompletion()
 	// 熔断初始态:未知,先按 offline 起步,首次成功 mission 翻 online。
 	svc.store.SetChannel(ChannelOffline, "等待首次 mission", now)
 	return svc
@@ -268,12 +276,25 @@ func (s *Service) SetRefreshClock(now func() time.Time) {
 //
 // 返回 accepted + queuedCategory;失败返回 *errcode.Error。
 func (s *Service) Refresh(category string) (bool, string, *errcode.Error) {
+	return s.RefreshWithGoal(category, "")
+}
+
+// RefreshWithGoal 与 Refresh **完全同语义**(同一 60s 同类目限流、同一单飞
+// 队列、同一 llmSema 节流),额外把一段「附加采集目标」写进 mission.Goal。
+//
+// 批次84:Agent 对话分支用它把用户提问写进 mission,让本次采集真正回应提问;
+// goalExtra 为空时行为与 Refresh 逐位一致(零回归)。
+func (s *Service) RefreshWithGoal(category, goalExtra string) (bool, string, *errcode.Error) {
 	if s == nil {
 		return false, "", errcode.Code(errcode.ErrCityChromeChannelOffline)
 	}
 	if !s.cfg.Enabled {
 		return false, "", errcode.CodeMsg(errcode.ErrCityChromeChannelOffline,
 			"数据通道离线(city_chrome.enabled=false)")
+	}
+	if s.sched == nil {
+		return false, "", errcode.CodeMsg(errcode.ErrCityChromeChannelOffline,
+			"数据通道未就绪(调度器未绑定)")
 	}
 	if category == "" {
 		category = s.sched.nextRotationCategory()
@@ -292,11 +313,20 @@ func (s *Service) Refresh(category string) (bool, string, *errcode.Error) {
 	}
 	s.lastManualRefresh[category] = now
 	s.refreshMu.Unlock()
-	if err := s.sched.Enqueue(BuildMission(category)); err != nil {
+	if err := s.sched.Enqueue(BuildMissionWithGoal(category, goalExtra)); err != nil {
 		s.refreshMu.Lock()
 		delete(s.lastManualRefresh, category)
 		s.refreshMu.Unlock()
 		return false, category, errcode.CodeMsg(errcode.ErrInternal, err.Error())
 	}
 	return true, category, nil
+}
+
+// bindMissionCompletion 把调度器的 mission 完成回调绑到本 Service(批次84)。
+// newService 与单测夹具都调用它,避免漏绑导致「Agent 对话」等待者永不唤醒。
+func (s *Service) bindMissionCompletion() {
+	if s == nil || s.sched == nil {
+		return
+	}
+	s.sched.SetOnComplete(s.onMissionComplete)
 }

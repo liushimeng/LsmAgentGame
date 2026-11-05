@@ -57,15 +57,22 @@ var batch83KeyKinds = []string{
 	ScenarioFusionCommercialization, ScenarioAlienSignalDecoded,
 }
 
-// TestScenarioCatalog_Batch83_Total101 目录总数 = 101(批次68 10 +
-// 批次81 30 + 批次83 61);kind 全局唯一;分组 ∈ 六常量;默认强度 1–5;
-// 默认持续 ≥ 1 月;Name/Description 非空。
+// TestScenarioCatalog_Batch83_Total101 L1 源 = 101 条(批次68 10 + 批次81 30
+// + 批次83 61);kind 全局唯一;分组合法;默认强度 1–5;默认持续 ≥ 1 月;
+// Name/Description 非空。
+//
+// ⚠ 批次84 起目录 = L1 ∪ L2 ∪ L3(规模 ≥1000),本测试只钉 L1 源不变;
+// 全目录断言见 scenario_catalog_batch84_test.go。
 func TestScenarioCatalog_Batch83_Total101(t *testing.T) {
 	catalog := ScenarioCatalog()
-	if len(catalog) != 101 {
-		t.Fatalf("catalog size = %d, want 101", len(catalog))
+	legalGroups := map[string]bool{}
+	for _, g := range ScenarioGroupOrder() {
+		legalGroups[g] = true
 	}
-	legalGroups := map[string]bool{
+	// 批次84 回归防护:L1 既有条目仍必须落在批次84 之前的 6 个合法组内
+	// (字面量,**不随 ScenarioGroupOrder 扩展而放宽**;kind→组精确金标准见
+	// TestScenarioCatalog_L1GroupGolden)。L2/L3 新条目走上面 13 组全集。
+	legalGroupsPreB84 := map[string]bool{
 		ScenarioGroupMarket: true, ScenarioGroupPolicy: true,
 		ScenarioGroupSociety: true, ScenarioGroupNature: true,
 		ScenarioGroupUnknown: true, ScenarioGroupTech: true,
@@ -76,8 +83,13 @@ func TestScenarioCatalog_Batch83_Total101(t *testing.T) {
 			t.Fatalf("duplicate kind %q", spec.Kind)
 		}
 		seen[spec.Kind] = true
-		if !legalGroups[spec.Group] {
-			t.Errorf("%s group = %q, not one of the 6 legal groups", spec.Kind, spec.Group)
+		if _, isL1 := l1GroupGolden[spec.Kind]; isL1 {
+			if !legalGroupsPreB84[spec.Group] {
+				t.Errorf("L1 %s group = %q, must stay in one of the 6 pre-batch84 groups",
+					spec.Kind, spec.Group)
+			}
+		} else if !legalGroups[spec.Group] {
+			t.Errorf("%s group = %q, not one of the legal groups", spec.Kind, spec.Group)
 		}
 		if spec.Name == "" || spec.Description == "" {
 			t.Errorf("%s missing name/description", spec.Kind)
@@ -87,9 +99,9 @@ func TestScenarioCatalog_Batch83_Total101(t *testing.T) {
 				spec.Kind, spec.DefaultMagnitude, scenarioMinMagnitude, scenarioMaxMagnitude)
 		}
 	}
-	// defaultDuration 走 scenarioDefs(ScenarioSpec 不暴露该字段)。
-	if len(scenarioDefs) != len(catalog) {
-		t.Fatalf("scenarioDefs len = %d, catalog len = %d (must match)", len(scenarioDefs), len(catalog))
+	// L1 源 = 101 条,逐条 defaultDuration ≥ 1。
+	if len(scenarioDefs) != 101 {
+		t.Fatalf("scenarioDefs(L1) len = %d, want 101", len(scenarioDefs))
 	}
 	for i := range scenarioDefs {
 		if scenarioDefs[i].defaultDuration < 1 {
@@ -150,8 +162,10 @@ func TestScenarioCatalog_Batch83_ProfileNonZero(t *testing.T) {
 	}
 }
 
-// TestScenarioCatalog_Batch83_GroupCounts 六组分布 = 文档 §4.1 目标
+// TestScenarioCatalog_Batch83_GroupCounts L1 源六组分布 = 文档 §4.1 目标
 // (市场 21 / 政策 15 / 社会 15 / 自然 21 / 未知 16 / 科技 13)。
+//
+// ⚠ 批次84 起全目录含 L2/L3 新条目,本测试只钉 L1 源分布不变。
 func TestScenarioCatalog_Batch83_GroupCounts(t *testing.T) {
 	want := map[string]int{
 		ScenarioGroupMarket: 21, ScenarioGroupPolicy: 15,
@@ -159,12 +173,12 @@ func TestScenarioCatalog_Batch83_GroupCounts(t *testing.T) {
 		ScenarioGroupUnknown: 16, ScenarioGroupTech: 13,
 	}
 	got := map[string]int{}
-	for _, spec := range ScenarioCatalog() {
-		got[spec.Group]++
+	for _, d := range scenarioDefs {
+		got[d.spec.Group]++
 	}
 	for group, n := range want {
 		if got[group] != n {
-			t.Errorf("group %s = %d entries, want %d", group, got[group], n)
+			t.Errorf("L1 group %s = %d entries, want %d", group, got[group], n)
 		}
 	}
 }

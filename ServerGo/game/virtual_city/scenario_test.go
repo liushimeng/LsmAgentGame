@@ -30,142 +30,47 @@ func newScenarioTestRoom(t *testing.T, roomID string, seed int64) *VirtualCityRo
 	return r
 }
 
-// TestScenarioCatalog_Complete 目录 = 101 个 kind、6 个分组、L1-L5
-// (批次68 既有 10 个 + 批次81 新增 30 个 + 批次83 新增 61 个)。
+// TestScenarioCatalog_Complete 目录完整性(批次84 起 L1 ∪ L2 ∪ L3):
+// L1 既有 101 条逐条仍在(金标准:kind/分组/名称/描述逐字段相等);
+// 全目录 kind 唯一、分组合法、Magnitudes=1-5、DefaultMagnitude 1-5、
+// Params 非 nil。
+//
+// ⚠ 批次84 起目录规模 ≥1000(L2 精选 + L3 模板派生),本测试不再钉死
+// 总数;总数与分组数断言见 scenario_catalog_batch84_test.go。
 func TestScenarioCatalog_Complete(t *testing.T) {
-	want := map[string]string{
-		// ── 批次68 既有 10 个 ──
-		ScenarioGoodsPriceShock: ScenarioGroupMarket,
-		ScenarioPolicyShock:     ScenarioGroupMarket,
-		ScenarioMarketCrash:     ScenarioGroupMarket,
-		ScenarioSurveyPulse:     ScenarioGroupSociety,
-		ScenarioElectionMood:    ScenarioGroupSociety,
-		ScenarioEarthquake:      ScenarioGroupNature,
-		ScenarioTsunami:         ScenarioGroupNature,
-		ScenarioExtremeDisaster: ScenarioGroupNature,
-		ScenarioMeteorite:       ScenarioGroupUnknown,
-		ScenarioAlienInvasion:   ScenarioGroupUnknown,
-		// ── 批次81 新增 30 个(市场与经济 +8)──
-		ScenarioInterestRateHike:     ScenarioGroupMarket,
-		ScenarioCurrencyDepreciation: ScenarioGroupMarket,
-		ScenarioTradeWar:             ScenarioGroupMarket,
-		ScenarioCommodityBoom:        ScenarioGroupMarket,
-		ScenarioInflationSpiral:      ScenarioGroupMarket,
-		ScenarioDeflation:            ScenarioGroupMarket,
-		ScenarioHousingBubbleBurst:   ScenarioGroupMarket,
-		ScenarioBankRun:              ScenarioGroupMarket,
-		// ── 政策与治理 +5 ──
-		ScenarioFiscalStimulus:           ScenarioGroupPolicy,
-		ScenarioAusterity:                ScenarioGroupPolicy,
-		ScenarioRegulatoryCrackdown:      ScenarioGroupPolicy,
-		ScenarioInfrastructureInvestment: ScenarioGroupPolicy,
-		ScenarioSocialWelfareExpansion:   ScenarioGroupPolicy,
-		// ── 社会与舆情 +5 ──
-		ScenarioSocialUnrest:               ScenarioGroupSociety,
-		ScenarioPandemicOutbreak:           ScenarioGroupSociety,
-		ScenarioPopulationSurge:            ScenarioGroupSociety,
-		ScenarioAgingCrisis:                ScenarioGroupSociety,
-		ScenarioConsumerConfidenceCollapse: ScenarioGroupSociety,
-		// ── 自然灾害 +6 ──
-		ScenarioFlood:            ScenarioGroupNature,
-		ScenarioTyphoon:          ScenarioGroupNature,
-		ScenarioDrought:          ScenarioGroupNature,
-		ScenarioWildfire:         ScenarioGroupNature,
-		ScenarioVolcanicEruption: ScenarioGroupNature,
-		ScenarioExtremeHeat:      ScenarioGroupNature,
-		// ── 未知灾难 +3 ──
-		ScenarioNuclearAccident: ScenarioGroupUnknown,
-		ScenarioSolarStorm:      ScenarioGroupUnknown,
-		ScenarioBioweaponLeak:   ScenarioGroupUnknown,
-		// ── 科技与新文明 +3 ──
-		ScenarioAIBoom:                     ScenarioGroupTech,
-		ScenarioUnknownCivilizationContact: ScenarioGroupTech,
-		ScenarioCyberAttack:                ScenarioGroupTech,
-		// ── 批次83 新增 61 个(市场与经济 +10)──
-		ScenarioLiquidityCrisis:      ScenarioGroupMarket,
-		ScenarioOilPriceShock:        ScenarioGroupMarket,
-		ScenarioFoodCrisis:           ScenarioGroupMarket,
-		ScenarioTechBubble:           ScenarioGroupMarket,
-		ScenarioHousingBoom:          ScenarioGroupMarket,
-		ScenarioConsumerDowngrade:    ScenarioGroupMarket,
-		ScenarioExportBoom:           ScenarioGroupMarket,
-		ScenarioStockMeltup:          ScenarioGroupMarket,
-		ScenarioCurrencyAppreciation: ScenarioGroupMarket,
-		ScenarioBondMarketStorm:      ScenarioGroupMarket,
-		// ── 政策与治理 +10 ──
-		ScenarioTaxReform:             ScenarioGroupPolicy,
-		ScenarioPropertyTaxPilot:      ScenarioGroupPolicy,
-		ScenarioDigitalCurrency:       ScenarioGroupPolicy,
-		ScenarioAntiCorruption:        ScenarioGroupPolicy,
-		ScenarioImmigrationTightening: ScenarioGroupPolicy,
-		ScenarioSnapElection:          ScenarioGroupPolicy,
-		ScenarioRecallReferendum:      ScenarioGroupPolicy,
-		ScenarioPoliticalDeadlock:     ScenarioGroupPolicy,
-		ScenarioPriceControls:         ScenarioGroupPolicy,
-		ScenarioEducationReform:       ScenarioGroupPolicy,
-		// ── 社会与舆情 +8 ──
-		ScenarioGeneralStrike:      ScenarioGroupSociety,
-		ScenarioViralScandal:       ScenarioGroupSociety,
-		ScenarioInfluencerEconomy:  ScenarioGroupSociety,
-		ScenarioCharityScandal:     ScenarioGroupSociety,
-		ScenarioMentalHealthCrisis: ScenarioGroupSociety,
-		ScenarioTalentInflux:       ScenarioGroupSociety,
-		ScenarioBirthrateIncentive: ScenarioGroupSociety,
-		ScenarioSocialTrustCrisis:  ScenarioGroupSociety,
-		// ── 自然灾害 +12 ──
-		ScenarioBlizzard:           ScenarioGroupNature,
-		ScenarioColdWave:           ScenarioGroupNature,
-		ScenarioSandstorm:          ScenarioGroupNature,
-		ScenarioLandslide:          ScenarioGroupNature,
-		ScenarioLocustPlague:       ScenarioGroupNature,
-		ScenarioHailstorm:          ScenarioGroupNature,
-		ScenarioSevereThunderstorm: ScenarioGroupNature,
-		ScenarioUrbanWaterlogging:  ScenarioGroupNature,
-		ScenarioGroundSubsidence:   ScenarioGroupNature,
-		ScenarioSpringFlood:        ScenarioGroupNature,
-		ScenarioTornado:            ScenarioGroupNature,
-		ScenarioVectorBorneDisease: ScenarioGroupNature,
-		// ── 未知灾难 +11 ──
-		ScenarioGridBlackout:        ScenarioGroupUnknown,
-		ScenarioDroneSwarmAttack:    ScenarioGroupUnknown,
-		ScenarioUfoWave:             ScenarioGroupUnknown,
-		ScenarioDeepSeaSignal:       ScenarioGroupUnknown,
-		ScenarioUnknownVirusX:       ScenarioGroupUnknown,
-		ScenarioChemicalSpill:       ScenarioGroupUnknown,
-		ScenarioNuclearBrinkmanship: ScenarioGroupUnknown,
-		ScenarioAIRunawayIncident:   ScenarioGroupUnknown,
-		ScenarioSatelliteDebris:     ScenarioGroupUnknown,
-		ScenarioAnomalousFog:        ScenarioGroupUnknown,
-		ScenarioTimeAnomaly:         ScenarioGroupUnknown,
-		// ── 科技与新文明 +10 ──
-		ScenarioAGIBreakthrough:         ScenarioGroupTech,
-		ScenarioFusionCommercialization: ScenarioGroupTech,
-		ScenarioQuantumPractical:        ScenarioGroupTech,
-		ScenarioBrainMachineInterface:   ScenarioGroupTech,
-		ScenarioRobotLaborShift:         ScenarioGroupTech,
-		ScenarioLongevityTherapy:        ScenarioGroupTech,
-		ScenarioSpaceElevator:           ScenarioGroupTech,
-		ScenarioMetaverseMigration:      ScenarioGroupTech,
-		ScenarioAlienSignalDecoded:      ScenarioGroupTech,
-		ScenarioCloneEthicsCrisis:       ScenarioGroupTech,
-	}
+	// 金标准:既有 101 条(L1)与 scenarioDefs 源逐字段相等。
 	catalog := ScenarioCatalog()
-	if len(catalog) != len(want) {
-		t.Fatalf("catalog size = %d, want %d", len(catalog), len(want))
-	}
-	seen := map[string]bool{}
+	byKind := make(map[string]ScenarioSpec, len(catalog))
 	for _, spec := range catalog {
-		group, ok := want[spec.Kind]
-		if !ok {
-			t.Fatalf("unexpected kind %q", spec.Kind)
-		}
-		if seen[spec.Kind] {
+		if byKind[spec.Kind].Kind != "" {
 			t.Fatalf("duplicate kind %q", spec.Kind)
 		}
-		seen[spec.Kind] = true
-		if spec.Group != group {
-			t.Errorf("%s group = %q, want %q", spec.Kind, spec.Group, group)
+		byKind[spec.Kind] = spec
+	}
+	if len(scenarioDefs) != 101 {
+		t.Fatalf("L1 source size = %d, want 101", len(scenarioDefs))
+	}
+	for i := range scenarioDefs {
+		src := scenarioDefs[i].spec
+		got, ok := byKind[src.Kind]
+		if !ok {
+			t.Fatalf("L1 kind %q missing from merged catalog", src.Kind)
 		}
+		if got.Group != src.Group || got.Name != src.Name ||
+			got.Description != src.Description ||
+			got.DefaultMagnitude != src.DefaultMagnitude {
+			t.Errorf("L1 kind %q drift: got %+v, want %+v", src.Kind, got, src)
+		}
+		if len(got.Params) != len(src.Params) {
+			t.Fatalf("L1 kind %q params len drift: %v vs %v", src.Kind, got.Params, src.Params)
+		}
+		for j := range src.Params {
+			if got.Params[j] != src.Params[j] {
+				t.Fatalf("L1 kind %q params drift: %v vs %v", src.Kind, got.Params, src.Params)
+			}
+		}
+	}
+	for _, spec := range catalog {
 		if spec.Name == "" || spec.Description == "" {
 			t.Errorf("%s missing name/description", spec.Kind)
 		}
@@ -188,6 +93,152 @@ func TestScenarioCatalog_Complete(t *testing.T) {
 	catalog[0].Magnitudes[0] = 99
 	if ScenarioCatalog()[0].Magnitudes[0] != 1 {
 		t.Fatal("ScenarioCatalog must return an independent copy")
+	}
+}
+
+// l1GroupGolden 既有 101 条 kind → 分组的**独立金标准**。
+//
+// 硬编码字面量(逐字还原批次84 之前的期望表),**不得**由 scenarioDefs
+// 推导 —— 推导即自指:若有人误改 L1 条目的 Group,源与合并结果会一起变,
+// 源对照测试照样绿,只有这份字面量能钉死「每个 kind 属于哪个分组」。
+// 批次81/83 测试复用本表判 L1 成员(见 TestScenarioCatalog_L1GroupGolden)。
+var l1GroupGolden = map[string]string{
+	// ── 批次68 既有 10 个 ──
+	ScenarioGoodsPriceShock: ScenarioGroupMarket,
+	ScenarioPolicyShock:     ScenarioGroupMarket,
+	ScenarioMarketCrash:     ScenarioGroupMarket,
+	ScenarioSurveyPulse:     ScenarioGroupSociety,
+	ScenarioElectionMood:    ScenarioGroupSociety,
+	ScenarioEarthquake:      ScenarioGroupNature,
+	ScenarioTsunami:         ScenarioGroupNature,
+	ScenarioExtremeDisaster: ScenarioGroupNature,
+	ScenarioMeteorite:       ScenarioGroupUnknown,
+	ScenarioAlienInvasion:   ScenarioGroupUnknown,
+	// ── 批次81 新增 30 个(市场与经济 +8)──
+	ScenarioInterestRateHike:     ScenarioGroupMarket,
+	ScenarioCurrencyDepreciation: ScenarioGroupMarket,
+	ScenarioTradeWar:             ScenarioGroupMarket,
+	ScenarioCommodityBoom:        ScenarioGroupMarket,
+	ScenarioInflationSpiral:      ScenarioGroupMarket,
+	ScenarioDeflation:            ScenarioGroupMarket,
+	ScenarioHousingBubbleBurst:   ScenarioGroupMarket,
+	ScenarioBankRun:              ScenarioGroupMarket,
+	// ── 政策与治理 +5 ──
+	ScenarioFiscalStimulus:           ScenarioGroupPolicy,
+	ScenarioAusterity:                ScenarioGroupPolicy,
+	ScenarioRegulatoryCrackdown:      ScenarioGroupPolicy,
+	ScenarioInfrastructureInvestment: ScenarioGroupPolicy,
+	ScenarioSocialWelfareExpansion:   ScenarioGroupPolicy,
+	// ── 社会与舆情 +5 ──
+	ScenarioSocialUnrest:               ScenarioGroupSociety,
+	ScenarioPandemicOutbreak:           ScenarioGroupSociety,
+	ScenarioPopulationSurge:            ScenarioGroupSociety,
+	ScenarioAgingCrisis:                ScenarioGroupSociety,
+	ScenarioConsumerConfidenceCollapse: ScenarioGroupSociety,
+	// ── 自然灾害 +6 ──
+	ScenarioFlood:            ScenarioGroupNature,
+	ScenarioTyphoon:          ScenarioGroupNature,
+	ScenarioDrought:          ScenarioGroupNature,
+	ScenarioWildfire:         ScenarioGroupNature,
+	ScenarioVolcanicEruption: ScenarioGroupNature,
+	ScenarioExtremeHeat:      ScenarioGroupNature,
+	// ── 未知灾难 +3 ──
+	ScenarioNuclearAccident: ScenarioGroupUnknown,
+	ScenarioSolarStorm:      ScenarioGroupUnknown,
+	ScenarioBioweaponLeak:   ScenarioGroupUnknown,
+	// ── 科技与新文明 +3 ──
+	ScenarioAIBoom:                     ScenarioGroupTech,
+	ScenarioUnknownCivilizationContact: ScenarioGroupTech,
+	ScenarioCyberAttack:                ScenarioGroupTech,
+	// ── 批次83 新增 61 个(市场与经济 +10)──
+	ScenarioLiquidityCrisis:      ScenarioGroupMarket,
+	ScenarioOilPriceShock:        ScenarioGroupMarket,
+	ScenarioFoodCrisis:           ScenarioGroupMarket,
+	ScenarioTechBubble:           ScenarioGroupMarket,
+	ScenarioHousingBoom:          ScenarioGroupMarket,
+	ScenarioConsumerDowngrade:    ScenarioGroupMarket,
+	ScenarioExportBoom:           ScenarioGroupMarket,
+	ScenarioStockMeltup:          ScenarioGroupMarket,
+	ScenarioCurrencyAppreciation: ScenarioGroupMarket,
+	ScenarioBondMarketStorm:      ScenarioGroupMarket,
+	// ── 政策与治理 +10 ──
+	ScenarioTaxReform:             ScenarioGroupPolicy,
+	ScenarioPropertyTaxPilot:      ScenarioGroupPolicy,
+	ScenarioDigitalCurrency:       ScenarioGroupPolicy,
+	ScenarioAntiCorruption:        ScenarioGroupPolicy,
+	ScenarioImmigrationTightening: ScenarioGroupPolicy,
+	ScenarioSnapElection:          ScenarioGroupPolicy,
+	ScenarioRecallReferendum:      ScenarioGroupPolicy,
+	ScenarioPoliticalDeadlock:     ScenarioGroupPolicy,
+	ScenarioPriceControls:         ScenarioGroupPolicy,
+	ScenarioEducationReform:       ScenarioGroupPolicy,
+	// ── 社会与舆情 +8 ──
+	ScenarioGeneralStrike:      ScenarioGroupSociety,
+	ScenarioViralScandal:       ScenarioGroupSociety,
+	ScenarioInfluencerEconomy:  ScenarioGroupSociety,
+	ScenarioCharityScandal:     ScenarioGroupSociety,
+	ScenarioMentalHealthCrisis: ScenarioGroupSociety,
+	ScenarioTalentInflux:       ScenarioGroupSociety,
+	ScenarioBirthrateIncentive: ScenarioGroupSociety,
+	ScenarioSocialTrustCrisis:  ScenarioGroupSociety,
+	// ── 自然灾害 +12 ──
+	ScenarioBlizzard:           ScenarioGroupNature,
+	ScenarioColdWave:           ScenarioGroupNature,
+	ScenarioSandstorm:          ScenarioGroupNature,
+	ScenarioLandslide:          ScenarioGroupNature,
+	ScenarioLocustPlague:       ScenarioGroupNature,
+	ScenarioHailstorm:          ScenarioGroupNature,
+	ScenarioSevereThunderstorm: ScenarioGroupNature,
+	ScenarioUrbanWaterlogging:  ScenarioGroupNature,
+	ScenarioGroundSubsidence:   ScenarioGroupNature,
+	ScenarioSpringFlood:        ScenarioGroupNature,
+	ScenarioTornado:            ScenarioGroupNature,
+	ScenarioVectorBorneDisease: ScenarioGroupNature,
+	// ── 未知灾难 +11 ──
+	ScenarioGridBlackout:        ScenarioGroupUnknown,
+	ScenarioDroneSwarmAttack:    ScenarioGroupUnknown,
+	ScenarioUfoWave:             ScenarioGroupUnknown,
+	ScenarioDeepSeaSignal:       ScenarioGroupUnknown,
+	ScenarioUnknownVirusX:       ScenarioGroupUnknown,
+	ScenarioChemicalSpill:       ScenarioGroupUnknown,
+	ScenarioNuclearBrinkmanship: ScenarioGroupUnknown,
+	ScenarioAIRunawayIncident:   ScenarioGroupUnknown,
+	ScenarioSatelliteDebris:     ScenarioGroupUnknown,
+	ScenarioAnomalousFog:        ScenarioGroupUnknown,
+	ScenarioTimeAnomaly:         ScenarioGroupUnknown,
+	// ── 科技与新文明 +10 ──
+	ScenarioAGIBreakthrough:         ScenarioGroupTech,
+	ScenarioFusionCommercialization: ScenarioGroupTech,
+	ScenarioQuantumPractical:        ScenarioGroupTech,
+	ScenarioBrainMachineInterface:   ScenarioGroupTech,
+	ScenarioRobotLaborShift:         ScenarioGroupTech,
+	ScenarioLongevityTherapy:        ScenarioGroupTech,
+	ScenarioSpaceElevator:           ScenarioGroupTech,
+	ScenarioMetaverseMigration:      ScenarioGroupTech,
+	ScenarioAlienSignalDecoded:      ScenarioGroupTech,
+	ScenarioCloneEthicsCrisis:       ScenarioGroupTech,
+}
+
+// TestScenarioCatalog_L1GroupGolden 既有 101 条 kind → 分组的**独立金标准**
+// (硬编码字面量,不依赖 scenarioDefs 源;防误改 L1 条目的 Group 而源对照
+// 测试无感)。与 TestScenarioCatalog_Batch84_L2Markers(锚定 🆕 kind)互补。
+func TestScenarioCatalog_L1GroupGolden(t *testing.T) {
+	want := l1GroupGolden
+	if len(want) != 101 {
+		t.Fatalf("golden size = %d, want 101", len(want))
+	}
+	byKind := map[string]ScenarioSpec{}
+	for _, s := range ScenarioCatalog() {
+		byKind[s.Kind] = s
+	}
+	for kind, group := range want {
+		got, ok := byKind[kind]
+		if !ok {
+			t.Fatalf("L1 golden kind %q missing from catalog", kind)
+		}
+		if got.Group != group {
+			t.Errorf("%s group = %q, want %q", kind, got.Group, group)
+		}
 	}
 }
 

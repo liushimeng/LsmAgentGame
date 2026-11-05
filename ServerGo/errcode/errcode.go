@@ -201,6 +201,12 @@ const (
 	ErrVirtualCitySystemAgentDisabled = 35059 // 系统 Agent 未启用(city_system.enabled=false)
 	ErrVirtualCitySystemAgentBusy     = 35060 // 该用户上一轮尚未结束(并发限流 1)
 	ErrVirtualCityAgentNotFound       = 35061 // send_agent_message 目标 Agent 未注册
+	// 35062–35065 — 虚拟城市批次84 全维度事件体系与 Agent 双向对话(2026-11-05)。
+	// 契约: lag_docs/虚拟城市/已实现/84-全维度事件体系与Agent双向对话/01-方案设计.md §4.6。
+	ErrVirtualCityAgentNoReply          = 35062 // 目标 Agent 在时限内未回应
+	ErrVirtualCityAgentReplyTooLong     = 35063 // 目标 Agent 回包超长(已截断)
+	ErrVirtualCityScenarioGroupUnknown  = 35064 // 场景分组未知
+	ErrVirtualCityDisplayCommandInvalid = 35065 // 显示指令参数非法
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
 	// 契约: lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md §4.4。
 	ErrVirtualCitySenseInvalid  = 35100 // 感知/移动工具参数非法(未知城区、未知 mode、目标不存在)
@@ -365,6 +371,11 @@ var DefaultMessages = map[int]string{
 	ErrVirtualCitySystemAgentDisabled: "系统 Agent 未启用（city_system.enabled=false）",
 	ErrVirtualCitySystemAgentBusy:     "该用户上一轮系统对话尚未结束，请稍候",
 	ErrVirtualCityAgentNotFound:       "目标 Agent 未注册（send_agent_message 目标不存在）",
+	// 35062–35065 — 虚拟城市批次84 全维度事件体系与 Agent 双向对话(2026-11-05)。
+	ErrVirtualCityAgentNoReply:          "目标 Agent 在时限内未回应（超时或正在忙）",
+	ErrVirtualCityAgentReplyTooLong:     "目标 Agent 回包超长（已截断后回灌）",
+	ErrVirtualCityScenarioGroupUnknown:  "场景分组未知（不在场景目录分组表内）",
+	ErrVirtualCityDisplayCommandInvalid: "显示指令参数非法（字段缺失或取值非法）",
 }
 
 // Code constructs a Coded error.

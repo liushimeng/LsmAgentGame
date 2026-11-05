@@ -35,6 +35,38 @@ const virtualCitySystemZH = {
   'virtualCity.citySystemLineRandom': '只随机',
   'virtualCity.citySystemLineHint':
     'LsmAgentGame-City-System 主 Agent 每轮对话从 LLM 线路池随机取一条线路；也可固定到某个模型线路。',
+  // 批次84 §5.1：场景目录浏览器（13 维度 Tab + 搜索 + 条目列表）。
+  'virtualCity.systemDialog.catalogTitle': '场景目录',
+  'virtualCity.systemDialog.catalogSearch': '搜索场景（名称 / kind / 描述）',
+  'virtualCity.systemDialog.catalogAll': '全部',
+  'virtualCity.systemDialog.catalogLoading': '目录加载中…',
+  'virtualCity.systemDialog.catalogEmpty': '没有匹配的场景',
+  'virtualCity.systemDialog.catalogError': '场景目录加载失败',
+  'virtualCity.systemDialog.catalogTotal': '共 {n} 条',
+  'virtualCity.systemDialog.catalogHint': '点击条目只会填入输入框，需人工确认后再发送。',
+  'virtualCity.systemDialog.catalogInject': '注入',
+  // 批次84 §5.1：系统信息面板（城市状态摘要 + Agent 回灌）。
+  'virtualCity.systemDialog.infoTitle': '系统信息',
+  'virtualCity.systemDialog.infoEmpty': '暂无城市状态数据',
+  'virtualCity.systemDialog.infoMonth': '月份',
+  'virtualCity.systemDialog.infoPopulation': '人口',
+  'virtualCity.systemDialog.infoCpi': 'CPI',
+  'virtualCity.systemDialog.infoUnemployment': '失业率',
+  'virtualCity.systemDialog.infoStock': '股指',
+  'virtualCity.systemDialog.infoTreasury': '国库',
+  'virtualCity.systemDialog.infoPolicyRate': '政策利率',
+  'virtualCity.systemDialog.infoScenarios': '活动场景',
+  'virtualCity.systemDialog.infoAgentState': 'Agent 回灌状态',
+  // 批次84 §4.3：其它 Agent 的上行来信卡片。
+  'virtualCity.systemDialog.agentMessageFrom': '来自',
+  'virtualCity.systemDialog.agentMessageUnknown': '未知 Agent',
+  // 批次84：显示指令提示（未支持 / 未接引擎 / 参数非法）。
+  'virtualCity.systemDialog.noticeUnsupportedType': '暂不支持的显示指令：{type}',
+  'virtualCity.systemDialog.noticeUnwired': '该显示能力本批未接引擎：{type}',
+  'virtualCity.systemDialog.noticeInvalidParams': '显示指令参数非法：{type}',
+  'virtualCity.systemDialog.noticeEntityNotFound': '未找到实体：{detail}',
+  'virtualCity.systemDialog.noticeUnknownCategory': '未识别的类别：{detail}',
+  'virtualCity.systemDialog.noticeDismiss': '知道了',
 };
 
 export default virtualCitySystemZH;

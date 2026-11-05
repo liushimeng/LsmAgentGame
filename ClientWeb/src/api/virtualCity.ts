@@ -10,6 +10,7 @@ import { http, ApiError, isSessionExpiredError, getAuthToken } from '@/services/
 import type { VirtualCityCityProfileProgress, VirtualCityCityResidentProfile, VirtualCitySurvey } from '@/types/virtualCity';
 import type { MissionRecord, MissionStats, RealtimeBoardRefreshResult, RealtimeFeed } from '@/types/virtualCityRealtime';
 import type { VirtualCitySystemWireMessage } from '@/types/virtualCitySystem';
+import type { VirtualCityScenarioCatalogResponse, VirtualCityScenarioCatalogItem } from '@/types/virtualCitySystem';
 
 // 2026-09-22 §CityHuman全民驱动 — GET /api/games/virtual_city/professions 已随
 // 职业卡精选层退役（03 号契约）：原拉取接口及其三个类型一并删除。
@@ -480,4 +481,88 @@ export function fetchVirtualCitySystemAgentHistory(
     `/api/games/virtual_city/rooms/${encodeURIComponent(roomId)}/system_agent/history`,
     { timeoutMs: 8000 },
   ).then((d) => ({ messages: Array.isArray(d?.messages) ? d.messages : [] }));
+}
+
+// ── 批次 84 · 场景目录浏览器（只读检索端点）────────────────────────────
+
+/** 目录检索参数（全部可选；空 = 全目录）。 */
+export interface VirtualCityScenarioCatalogQuery {
+  /** 分组名（维度）；空 = 全部。 */
+  group?: string;
+  /** 关键词（kind / 名称 / 描述 子串匹配）；空 = 不过滤。 */
+  q?: string;
+  /** 返回条数上限（后端 clamp 1..200）。 */
+  limit?: number;
+}
+
+/**
+ * GET /api/games/virtual_city/scenario_catalog（需登录）—— 场景目录检索。
+ *
+ * 批次 84 §7.2（只读端点，零副作用）：返回
+ * `{dimensions:[{group,count,samples}], items:[{kind,name,group,description,
+ *   default_magnitude,params}], total}`。
+ *
+ * ⚠️ **双形状兼容**：既有后端端点（批次 21 起）返回的是
+ * `data.scenarios: ScenarioSpec[]`（全量目录、忽略 query 参数）。批次 84 的
+ * 检索形状（dimensions/items/total）与之并存期间，前端**两种都吃**：
+ *   - 有 `dimensions` / `items` ⇒ 直接用（新契约，服务端已做检索 + 分页）；
+ *   - 只有 `scenarios` ⇒ 前端按 group / q 本地过滤 + 截断（兼容路径）。
+ * 两条路径都返回同一形状 ⇒ 组件层无分支。
+ *
+ * 说明：目录规模随批次 84 模板化派生可达 ≥1,100 条 ⇒ 前端**必须**按维度 /
+ * 关键词分页检索，不得一次性全量拉取（limit 缺省 30）。
+ */
+export function fetchVirtualCityScenarioCatalog(
+  query: VirtualCityScenarioCatalogQuery = {},
+): Promise<VirtualCityScenarioCatalogResponse> {
+  const params = new URLSearchParams();
+  if (query.group && query.group.trim()) params.set('group', query.group.trim());
+  if (query.q && query.q.trim()) params.set('q', query.q.trim());
+  const limit = Math.min(200, Math.max(1, Math.floor(query.limit ?? 30)));
+  params.set('limit', String(limit));
+  return http<VirtualCityScenarioCatalogResponse & { scenarios?: VirtualCityScenarioCatalogItem[] }>(
+    `/api/games/virtual_city/scenario_catalog?${params.toString()}`,
+    { timeoutMs: 10000 },
+  ).then((d) => normalizeScenarioCatalog(d, query, limit));
+}
+
+/** 目录响应归一化（新契约直用；旧契约 `scenarios[]` 本地过滤）。 */
+export function normalizeScenarioCatalog(
+  raw: (VirtualCityScenarioCatalogResponse & { scenarios?: VirtualCityScenarioCatalogItem[] }) | undefined,
+  query: VirtualCityScenarioCatalogQuery,
+  limit: number,
+): VirtualCityScenarioCatalogResponse {
+  const dimensions = Array.isArray(raw?.dimensions) ? raw.dimensions : [];
+  const items = Array.isArray(raw?.items) ? raw.items : [];
+  if (dimensions.length > 0 || items.length > 0) {
+    return {
+      dimensions,
+      items,
+      total: typeof raw?.total === 'number' ? raw.total : items.length,
+    };
+  }
+  // 兼容路径：既有端点返回全量 scenarios[]。
+  const all = Array.isArray(raw?.scenarios) ? raw.scenarios : [];
+  const group = (query.group ?? '').trim();
+  const q = (query.q ?? '').trim().toLowerCase();
+  const filtered = all.filter((it) => {
+    if (group && (it.group ?? '') !== group) return false;
+    if (!q) return true;
+    const hay = `${it.kind ?? ''} ${it.name ?? ''} ${it.description ?? ''} ${it.group ?? ''}`.toLowerCase();
+    return hay.includes(q);
+  });
+  // 维度索引：按 group 聚合 count + 前 3 个代表 kind。
+  const byGroup = new Map<string, { count: number; samples: string[] }>();
+  for (const it of all) {
+    const g = it.group ?? '';
+    const hit = byGroup.get(g) ?? { count: 0, samples: [] };
+    hit.count += 1;
+    if (hit.samples.length < 3 && it.kind) hit.samples.push(it.kind);
+    byGroup.set(g, hit);
+  }
+  return {
+    dimensions: [...byGroup.entries()].map(([g, v]) => ({ group: g, count: v.count, samples: v.samples })),
+    items: filtered.slice(0, limit),
+    total: filtered.length,
+  };
 }

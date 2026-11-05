@@ -37,12 +37,25 @@ import {
 import type { VirtualCitySystemDialogPos } from '@/store/virtualCitySystem.store';
 import { useVirtualCitySystemAgent } from '@/hooks/useVirtualCitySystemAgent';
 import { freeViewApi } from '@/engine3d/controls/freeViewStore';
-import { cityShowApi, useCityShowStore } from '@/components/virtualCity/cityShowStore';
+import {
+  CITY_LAYER_NAMES,
+  cityCameraApi,
+  cityEnvApi,
+  cityEntityApi,
+  cityPathApi,
+  cityShowApi,
+  layersForCategory,
+  useCityShowStore,
+  type CityLayerName,
+} from '@/components/virtualCity/cityShowStore';
 import {
   applyDisplayCommand,
   type CityShowDeps,
+  type CityShowNotice,
 } from '@/components/virtualCity/cityShowAdapter';
 import { SystemDialogMessage } from '@/components/virtualCity/SystemDialogMessage';
+import { SystemDialogCatalogPanel } from '@/components/virtualCity/SystemDialogCatalogPanel';
+import { SystemDialogInfoPanel } from '@/components/virtualCity/SystemDialogInfoPanel';
 import type { VirtualCityFocusTarget } from '@/components/virtualCity/VirtualCityCityMap';
 import type { VirtualCityDisplayCommand } from '@/types/virtualCitySystem';
 
@@ -124,6 +137,34 @@ function CityAnnotationLabel() {
   );
 }
 
+/**
+ * 批次 84：显示指令提示文案（按提示码取 i18n；缺 key 回落 safeKey 串，
+ * 绝不返回 undefined ⇒ 不白屏）。
+ */
+function noticeText(
+  t: (key: TKey, vars?: Record<string, string | number>) => string,
+  notice: CityShowNotice,
+): string {
+  switch (notice.code) {
+    case 'unsupported_type':
+      return t('virtualCity.systemDialog.noticeUnsupportedType' as TKey, { type: notice.type });
+    case 'unwired':
+      return t('virtualCity.systemDialog.noticeUnwired' as TKey, { type: notice.type });
+    case 'invalid_params':
+      return t('virtualCity.systemDialog.noticeInvalidParams' as TKey, { type: notice.type });
+    case 'entity_not_found':
+      return t('virtualCity.systemDialog.noticeEntityNotFound' as TKey, {
+        detail: notice.detail ?? notice.type,
+      });
+    case 'unknown_category':
+      return t('virtualCity.systemDialog.noticeUnknownCategory' as TKey, {
+        detail: notice.detail ?? notice.type,
+      });
+    default:
+      return notice.type;
+  }
+}
+
 interface Props {
   roomId: string;
   /** 窗口是否展开（false = 已关闭，会话仍在服务端）。 */
@@ -141,8 +182,15 @@ interface Props {
 export function SystemDialogPanel({ roomId, open, disabled = false, onClose, focusRef }: Props) {
   const t = useT();
   const setSelectedDistrict = useVirtualCityStore((s) => s.setSelectedDistrict);
+  /**
+   * 批次 84：显示指令提示（未支持 / 未接引擎 / 参数非法）—— 内联红条。
+   * 存在 cityShowStore（跨层单例）而非组件本地 state：提示由 adapter 产生，
+   * 与显示指令的其它状态同源（场景组件亦可读）。
+   */
+  const notice = useCityShowStore((s) => s.notice);
+  const setNotice = useCityShowStore((s) => s.setNotice);
 
-  // 显示指令 → 既有 3D 控制（focusRef / freeViewApi / cityShowStore）。
+  // 显示指令 → 既有 3D 控制（focusRef / freeViewApi / cityShowStore / cityTimeStore）。
   const handleShowCommand = useCallback(
     (cmd: VirtualCityDisplayCommand) => {
       const deps: CityShowDeps = {
@@ -151,6 +199,35 @@ export function SystemDialogPanel({ roomId, open, disabled = false, onClose, foc
         setMode: freeViewApi.setMode,
         setAnnotation: cityShowApi.setAnnotation,
         clearAnnotation: cityShowApi.clearAnnotation,
+        // 批次 84：高亮颜色（highlight_district 的 color 字段真正生效）。
+        setHighlight: cityShowApi.setHighlight,
+        layerApi: {
+          setLayerVisibility: (layer, visible) => {
+            if (!CITY_LAYER_NAMES.includes(layer as CityLayerName)) return false;
+            cityShowApi.setLayerVisibility(layer as CityLayerName, visible);
+            return true;
+          },
+          setFilter: (category, mode) => {
+            if (!category) {
+              cityShowApi.clearFilter();
+              return true;
+            }
+            if (layersForCategory(category).length === 0) return false;
+            cityShowApi.setFilter(category, mode);
+            return true;
+          },
+        },
+        envApi: cityEnvApi,
+        entityApi: cityEntityApi,
+        pathApi: { flyPath: (points) => cityPathApi.flyPath(points, focusRef) },
+        cameraApi: cityCameraApi,
+        clearOverrides: () => {
+          cityEnvApi.clear();
+          cityShowApi.resetLayers();
+          cityShowApi.clearFilter();
+          cityShowApi.clearHighlight();
+        },
+        onNotice: (n) => setNotice({ ...n, ts: Date.now() }),
       };
       applyDisplayCommand(cmd, deps);
     },
@@ -169,6 +246,14 @@ export function SystemDialogPanel({ roomId, open, disabled = false, onClose, foc
   useEffect(() => {
     setMinimized(false);
   }, [roomId, setMinimized]);
+
+  // 批次 84：换房时清掉**跨房残留**的显示侧单例态 ——
+  // 实体位置注册表（旧房的居民坐标）与进行中的折线飞行。
+  // （昼夜 / 天气 / 流速覆盖由 cityTimeStore.resetCityTime 在页面换房时清。）
+  useEffect(() => {
+    cityEntityApi.clear();
+    cityPathApi.cancel();
+  }, [roomId]);
 
   // 新消息到达时贴底滚动（仅当用户本来就在底部附近，避免打断往上翻历史）。
   useEffect(() => {
@@ -209,6 +294,15 @@ export function SystemDialogPanel({ roomId, open, disabled = false, onClose, foc
     setDraft('');
     stickToBottomRef.current = true;
   }, [reset]);
+
+  /**
+   * 批次 84：目录条目点击 ⇒ **只回填输入框**（不发送）。
+   * 发送必须由人点「发送」/ 回车 —— 场景注入不可被目录条目自动触发。
+   */
+  const handleCatalogPick = useCallback((text: string) => {
+    setDraft(text);
+    stickToBottomRef.current = true;
+  }, []);
 
   // ── 批次83 §3.1 浮窗拖拽：header 为把手 ──────────────────────────────
   const dialogPos = useVirtualCitySystemStore((s) => s.dialogPos);
@@ -439,6 +533,35 @@ export function SystemDialogPanel({ roomId, open, disabled = false, onClose, foc
             ✕
           </button>
         </div>
+
+        {/* 批次 84 §5.1：目录浏览器 + 系统信息面板（窗口内可折叠区，默认收起；
+            目录条目点击**只回填输入框**，不自动发送）。 */}
+        <div className="virtualCity-sysdialog__sections">
+          <SystemDialogCatalogPanel onPick={handleCatalogPick} />
+          <SystemDialogInfoPanel />
+        </div>
+
+        {/* 批次 84：显示指令提示（未支持 / 未接引擎 / 参数非法）—— 显式反馈，
+            杜绝「点了没反应」。 */}
+        {notice && (
+          <div
+            className="virtualCity-sysdialog__notice"
+            role="alert"
+            data-testid="virtualCity-system-notice"
+          >
+            <span className="virtualCity-sysdialog__notice-text">
+              {noticeText(t, notice)}
+            </span>
+            <button
+              type="button"
+              className="virtualCity-sysdialog__notice-close"
+              onClick={() => setNotice(null)}
+              aria-label={t('virtualCity.systemDialog.noticeDismiss' as TKey)}
+            >
+              {t('virtualCity.systemDialog.noticeDismiss' as TKey)}
+            </button>
+          </div>
+        )}
 
         <div
           className="virtualCity-sysdialog__body"

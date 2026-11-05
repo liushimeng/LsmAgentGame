@@ -35,6 +35,9 @@ type Config struct {
 	// CitySystem 批次81(2026-11-03 §批次81)— LsmAgentGame-City-System
 	// 主 Agent 配置段(对话即控制面)。
 	CitySystem CitySystemConfig `json:"city_system"`
+	// ScenarioCatalog 批次84(2026-11-05 §批次84)— 场景目录规模上限与
+	// 检索默认条数(缺失 ⇒ 走默认值 10000 / 30)。
+	ScenarioCatalog ScenarioCatalogConfig `json:"scenario_catalog"`
 }
 
 // §128 对话即思考重构:AgentParallelConfig 已删除(原 §122)。
@@ -1461,6 +1464,11 @@ func applyDefaults(c *Config) {
 	if c.CitySystem.ToolResultLimit == 0 {
 		c.CitySystem.ToolResultLimit = 4000
 	}
+
+	// ── 2026-11-05 §批次84 — scenario_catalog 段默认值 ───────────────
+	// 缺失 ⇒ 走 Resolved() 缺省(目录上限 10000 / 检索默认 30 条)。
+	c.ScenarioCatalog.MaxEntries = c.ScenarioCatalog.Resolved().MaxEntries
+	c.ScenarioCatalog.SearchLimit = c.ScenarioCatalog.Resolved().SearchLimit
 
 	// 2026-07-12 §127 增强 — agent 外层 LLM 调用重试次数。
 	// 2026-07-15 R131 修复: 默认 7→5(累计 backoff 1+2+4+8+8 cap=23s,留 97s

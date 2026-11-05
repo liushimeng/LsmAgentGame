@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -104,7 +105,7 @@ func TestStructured(t *testing.T) {
 				t.Fatalf("got %d cmds %+v, want %d %+v", len(got), got, len(tc.want), tc.want)
 			}
 			for i := range tc.want {
-				if got[i] != tc.want[i] {
+				if !reflect.DeepEqual(got[i], tc.want[i]) {
 					t.Fatalf("cmd[%d] = %+v, want %+v", i, got[i], tc.want[i])
 				}
 			}

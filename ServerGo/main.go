@@ -31,6 +31,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -38,6 +39,7 @@ import (
 	"LsmAgentGame/agent/citybus"
 	"LsmAgentGame/agent/debaterun"
 	"LsmAgentGame/agent/vcplayer"
+	"LsmAgentGame/agent/vctypes"
 	"LsmAgentGame/agent/wwjudge"
 	"LsmAgentGame/api"
 	"LsmAgentGame/citychrome"
@@ -1077,33 +1079,50 @@ func main() {
 	vcDashboardAPI := api.NewVirtualCityDashboardAPI(cityChromeSvc)
 
 	// 2026-11-03 §批次81 — Citybus 类级 Agent handler 注册(装配层是唯一同时
-	// import citybus 与两侧 Agent 包的位置)。
+	// import citybus 与两侧 Agent 包的位置)。批次84 §4.3.3:改接统一入口
+	// HandleBusMessage **按 msg.Type 路由**(修 §2.5b「不看 Type 丢弃正文」),
+	// 并经 RegisterWith 登记消息类型 + 能力描述(list_agents 展示)。
 	//
 	// City-Chrome:触发一次采集 mission(薄委托 citychrome.SystemBusPayload;
 	// 其 BusTrigger 注入点由本装配层绑定到 Service.SystemBusTrigger)。
 	citychrome.BusTrigger = cityChromeSvc.SystemBusTrigger
-	if err := citybus.Default().Register(string(agentroot.AgentClassCityChrome),
-		func(ctx context.Context, msg citybus.Message) (any, error) {
-			category := ""
-			if payload, ok := msg.Payload.(map[string]any); ok {
-				category, _ = payload["category"].(string)
-			}
-			return citychrome.SystemBusPayload(ctx, category)
-		}); err != nil {
+	if err := citybus.Default().RegisterWith(string(agentroot.AgentClassCityChrome),
+		citychrome.BusMessageTypes, citychrome.BusCapabilityDesc,
+		citychrome.HandleBusMessage); err != nil {
 		logger.L().Warn("register City-Chrome bus handler failed", zap.Error(err))
 	}
 	// City-Human:返回本房居民摘要(只读;薄委托 vcplayer.SystemBusResidents;
 	// 其 CityRoomSource 注入点由本装配层把 vcMgr 房间快照适配成
 	// []vcplayer.ResidentBrief —— vcplayer 禁止反向 import game/virtual_city)。
 	vcplayer.CityRoomSource = cityHumanBusSource{mgr: vcMgr}
-	if err := citybus.Default().Register(string(agentroot.AgentClassCityHuman),
-		func(ctx context.Context, msg citybus.Message) (any, error) {
-			return vcplayer.SystemBusResidents(ctx, msg.RoomID)
-		}); err != nil {
+	if err := citybus.Default().RegisterWith(string(agentroot.AgentClassCityHuman),
+		vcplayer.BusMessageTypes, vcplayer.BusCapabilityDesc,
+		vcplayer.HandleBusMessage); err != nil {
 		logger.L().Warn("register City-Human bus handler failed", zap.Error(err))
+	}
+	// 批次84:注入总线句柄 —— Chrome 采集完成后 / Human 主动汇报时经
+	// NotifySystem / ReportToSystem 把结果上行给 City-System(「Agent 来信」
+	// 链路)。未注入时上行跳过并 Warn,既有采集/摘要链路零影响。
+	citychrome.SetBusHub(citybus.Default())
+	vcplayer.SetBusHub(citybus.Default())
+	// 批次84 §4.3.3:City-Human 对话分支的 LLM 应答注入 —— 既有
+	// (*vcplayer.Agent).AnswerQuestion 通道(callProvider + 既有令牌桶节流,
+	// 零新 LLM 路径)。房间/画像/LLM 任一不可用即返回 error,vcplayer 层
+	// 自动退化为确定性说明兜底(绝不编造数据)。
+	vcplayer.CityResidentAnswerer = &cityHumanAnswerer{
+		mgr:             vcMgr,
+		registry:        llmRegistry,
+		linePoolSource:  llmRegistry.LinePool,
+		rateInterval:    time.Duration(cfg.VirtualCity.AgentLLMMinIntervalMs) * time.Millisecond,
+		maxActions:      cfg.VirtualCity.BotMaxActionsPerMonth,
+		decisionTimeout: time.Duration(cfg.VirtualCity.AgentDecisionTimeoutSec) * time.Second,
+		agents:          map[cityHumanAgentKey]*vcplayer.Agent{},
 	}
 	// 注:City-WebGL-Show 的**房间级** bus handler 由 citywebgl SubAgent
 	// 自行注册(含 main.go 大装配行),此处不注册、不 import citywebgl。
+	// vcplayer.CityResidentAnswerer 已由上方 cityHumanAnswerer 注入(批次84);
+	// 游戏内 per-seat Agent 无导出句柄,应答 Agent 按 (房间,座位) 缓存复用
+	// 同款通道与节流;任一环节不可用即退化确定性说明兜底(绝不编造数据)。
 
 	// 2026-10-20 §批次66 — 真实行情 → 游戏内市场联动:Feed→ExoQuote 装配层
 	// (唯一同时 import citychrome 与 virtual_city 的位置,引擎保持纯度)。
@@ -1403,6 +1422,96 @@ func (s cityHumanBusSource) SystemBusResidents(roomID string) ([]vcplayer.Reside
 		})
 	}
 	return out, nil
+}
+
+// cityHumanAgentKey 是对话应答 Agent 缓存键(房间 + 座位;各座 model key 与
+// 人物画像不同,按座缓存保真)。
+type cityHumanAgentKey struct {
+	roomID string
+	seat   int
+}
+
+// cityHumanAnswerer 是 vcplayer.ResidentAnswerSource 的装配层实现
+// (批次84 §4.3.3,形态与 cityHumanBusSource 同款适配器):
+//
+//	roomID → 房间 → 首个存活居民画像(virtual_city.BuildContextForAgent 的
+//	MyCard 投影,与月度决策同一投影源,零复制零漂移)→ 调既有
+//	(*vcplayer.Agent).AnswerQuestion(复用 callProvider + 令牌桶节流)。
+//
+// 节流:每个 (房间,座位) 缓存一个 City-Human Agent,令牌桶与游戏内同款
+// (SetLLMRateLimit 同 interval);缓存不复用游戏内实例 —— 房间 per-seat
+// Agent 无导出句柄(按纪律不给 game/virtual_city 新增导出符号),LLM 通道
+// 与节流机制与游戏内完全同款。拿不到房间/画像/回答失败一律返回 error,
+// vcplayer 层退化为确定性说明兜底(绝不编造数据)。
+type cityHumanAnswerer struct {
+	mgr             *virtual_city.Manager
+	registry        vcplayer.LLMRegistry
+	linePoolSource  func() *llm.LinePool
+	rateInterval    time.Duration
+	maxActions      int
+	decisionTimeout time.Duration
+
+	mu     sync.Mutex
+	agents map[cityHumanAgentKey]*vcplayer.Agent
+}
+
+// ResidentAnswer 实现 vcplayer.ResidentAnswerSource。
+func (a *cityHumanAnswerer) ResidentAnswer(ctx context.Context, roomID, question string) (string, error) {
+	r := a.mgr.Get(roomID)
+	if r == nil {
+		return "", fmt.Errorf("virtual_city room %s not found", roomID)
+	}
+	// 受访视角 = 首个存活居民(与 vcplayer 兜底 pickSpeaker 同口径:座位
+	// 升序取存活者)。BuildContextForAgent 内部持 r.mu(§92a:此处不持锁)。
+	seat := -1
+	var card vctypes.CardBrief
+	for s := 0; s < virtual_city.MaxSeats; s++ {
+		if gctx, ok := virtual_city.BuildContextForAgent(r, s); ok && gctx != nil {
+			seat, card = s, gctx.MyCard
+			break
+		}
+	}
+	if seat < 0 {
+		return "", fmt.Errorf("virtual_city room %s 没有可受访的存活居民", roomID)
+	}
+	r.MuLock()
+	userID := r.Seats[seat]
+	modelKey := r.SeatModelKeys[seat]
+	r.MuUnlock()
+	return a.agentFor(roomID, seat, userID, modelKey).AnswerQuestion(ctx, card, question)
+}
+
+// agentFor 取/建 (房间,座位) 的对话应答 Agent(缓存使令牌桶节流跨调用生效;
+// 每次新建会白拿 2 枚起始令牌,形同无节流)。
+func (a *cityHumanAnswerer) agentFor(roomID string, seat int, userID, modelKey string) *vcplayer.Agent {
+	key := cityHumanAgentKey{roomID: roomID, seat: seat}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if ag := a.agents[key]; ag != nil {
+		return ag
+	}
+	// 缓存卫生:房间已销毁的陈旧条目顺手清掉(房间 ID 长期累积防泄漏)。
+	if len(a.agents) > 256 {
+		for k := range a.agents {
+			if a.mgr.Get(k.roomID) == nil {
+				delete(a.agents, k)
+			}
+		}
+	}
+	display := virtual_city.ModelDisplayName(modelKey)
+	if modelKey == "" {
+		display = virtual_city.PoolModelDisplay
+	}
+	ag := vcplayer.NewAgent(roomID, userID, modelKey, display, seat,
+		a.maxActions, a.decisionTimeout)
+	ag.BindRegistry(a.registry)
+	if a.linePoolSource != nil {
+		ag.BindLinePoolSource(a.linePoolSource)
+	}
+	// 与游戏内同款令牌桶(同 interval);AnswerQuestion 每次取 1 枚。
+	ag.SetLLMRateLimit(a.rateInterval)
+	a.agents[key] = ag
+	return ag
 }
 
 // resolveTLSCertPath 自动 fallback(2026-09-15 §财商流P0-bugfix)。

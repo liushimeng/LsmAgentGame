@@ -24,7 +24,9 @@ export type VirtualCitySystemEventKind =
   | 'agent_end'
   | 'error'
   | 'report'
-  | 'cleared';
+  | 'cleared'
+  /** 批次 84：其它 Agent 的上行来信（payload {from, text, ts}）。 */
+  | 'agent_message';
 
 /** 一次工具调用的前端留痕（tool_start 建记录，tool_result 回填结果）。 */
 export interface VirtualCityToolCallRecord {
@@ -43,27 +45,101 @@ export interface VirtualCityToolCallRecord {
 /**
  * 结构化显示指令（City-WebGL-Show 产出，前端既有 3D 引擎执行）。
  * 服务端只做「看哪里 / 怎么显示」的翻译，渲染仍在前端（方案 §2 决策 3）。
+ *
+ * ⚠️ 批次 84：type 由 6 个扩到 **14 个**，字段与后端 json tag **逐字一致**
+ * （契约见 lag_docs/虚拟城市/已实现/84-全维度事件体系与Agent双向对话/
+ * 01-方案设计.md §4.5.2）。**只加字段、不加嵌套** ⇒ 旧前端遇未知 type
+ * 会显式提示「未支持」（不崩、不静默）。
  */
+export type VirtualCityDisplayCommandType =
+  | 'focus_district'
+  | 'focus_point'
+  | 'set_mode'
+  | 'highlight_district'
+  | 'annotate'
+  | 'clear'
+  | 'set_time_of_day'
+  | 'set_weather'
+  | 'set_time_speed'
+  | 'focus_entity'
+  | 'set_layer_visibility'
+  | 'set_filter'
+  | 'camera_preset'
+  | 'fly_path';
+
+/** 昼夜相位（set_time_of_day）。 */
+export type VirtualCityDisplayPhase = 'dawn' | 'day' | 'dusk' | 'night';
+/** 天气（set_weather）。 */
+export type VirtualCityDisplayWeather =
+  | 'clear'
+  | 'rain'
+  | 'snow'
+  | 'fog'
+  | 'haze'
+  | 'sandstorm'
+  | 'storm';
+/** 时间流速（set_time_speed）。 */
+export type VirtualCityDisplaySpeed = 'pause' | 'slow' | 'normal' | 'fast' | 'xfast';
+/** 实体类型（focus_entity）。 */
+export type VirtualCityDisplayEntityKind = 'building' | 'resident' | 'vehicle';
+/** 图层名（set_layer_visibility）。 */
+export type VirtualCityDisplayLayer =
+  | 'buildings'
+  | 'trees'
+  | 'vehicles'
+  | 'pedestrians'
+  | 'props'
+  | 'labels'
+  | 'water';
+/** 相机预设（camera_preset）。 */
+export type VirtualCityDisplayPreset = 'bird' | 'eye' | 'street' | 'top' | 'free';
+
 export interface VirtualCityDisplayCommand {
-  type: 'focus_district' | 'focus_point' | 'set_mode' | 'highlight_district' | 'annotate' | 'clear';
+  type: VirtualCityDisplayCommandType;
   district?: string;
   x?: number;
   z?: number;
-  /** 'orbit' | 'fly'。 */
+  /** 'orbit' | 'fly'（set_mode）；set_filter 下为 'highlight' | 'dim'。 */
   mode?: string;
   text?: string;
   color?: string;
   /** 全链路追踪 id（前端去重 / 排查用，不参与渲染决策）。 */
   trace_id?: string;
+  // ── 批次 84 新增字段（与后端 json tag 逐字一致）────────────────────
+  /** 昼夜相位（set_time_of_day）。 */
+  phase?: VirtualCityDisplayPhase;
+  /** 指定小时（0–23，优先于 phase）。 */
+  hour?: number;
+  /** 天气（set_weather）。 */
+  weather?: VirtualCityDisplayWeather;
+  /** 时间流速（set_time_speed）。 */
+  speed?: VirtualCityDisplaySpeed;
+  /** 实体 id（focus_entity）。 */
+  entity_id?: string;
+  /** 实体类型（focus_entity）。 */
+  kind?: VirtualCityDisplayEntityKind;
+  /** 图层名（set_layer_visibility）。 */
+  layer?: VirtualCityDisplayLayer;
+  /** 图层显隐（set_layer_visibility）。 */
+  visible?: boolean;
+  /** 类别（set_filter；空串 = 取消筛选）。 */
+  category?: string;
+  /** 相机预设（camera_preset）。 */
+  preset?: VirtualCityDisplayPreset;
+  /** 折线航点（fly_path，2–8 点）。 */
+  points?: { x: number; z: number }[];
 }
 
-/** 一条对话消息（用户提问 / Agent 回答及其工具留痕）。 */
+/** 一条对话消息（用户提问 / Agent 回答及其工具留痕 / 其它 Agent 来信）。 */
 export interface VirtualCitySystemMessage {
   id: string;
-  role: 'user' | 'assistant';
+  /** user = 人类提问；assistant = System 主 Agent；agent = 其它 Agent 的来信（批次 84）。 */
+  role: 'user' | 'assistant' | 'agent';
   /** 增量追加（assistant 流式）；agent_end 时以后端最终文本落定。 */
   text: string;
   ts: number;
+  /** role='agent' 时：来信方 Agent 名（如 LsmAgentGame-City-Chrome）。 */
+  agent_from?: string;
   /** assistant 专属：本轮工具调用序列。 */
   tool_calls?: VirtualCityToolCallRecord[];
   /** assistant 专属：本轮产生的显示指令（仅用于徽章提示，执行走 show_command 帧）。 */
@@ -125,4 +201,34 @@ export interface VirtualCitySystemHistoryFrame {
 export interface VirtualCityShowCommandFrame {
   room_id?: string;
   command: VirtualCityDisplayCommand;
+}
+
+// ── 批次 84：场景目录（只读检索端点的响应形状）──────────────────────
+
+/** 目录维度索引条目（分组名 + 条目数 + 代表 kind）。 */
+export interface VirtualCityScenarioCatalogDimension {
+  group: string;
+  count: number;
+  /** 代表 kind（最多 3 个）。 */
+  samples?: string[];
+}
+
+/** 目录条目。 */
+export interface VirtualCityScenarioCatalogItem {
+  kind: string;
+  name: string;
+  group: string;
+  description?: string;
+  /** 默认强度（1–5，映射 L1–L5）。 */
+  default_magnitude?: number;
+  /** 条目参数（后端自由结构，前端只做展示兜底）。 */
+  params?: unknown[];
+}
+
+/** GET /api/games/virtual_city/scenario_catalog 的响应。 */
+export interface VirtualCityScenarioCatalogResponse {
+  dimensions: VirtualCityScenarioCatalogDimension[];
+  items: VirtualCityScenarioCatalogItem[];
+  /** 命中总数（受 limit 影响前）。 */
+  total: number;
 }

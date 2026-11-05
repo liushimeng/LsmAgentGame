@@ -40,7 +40,63 @@ const (
 	// 批次81(2026-11-03 §批次81 场景目录扩展 10 → 40)新增两组。
 	ScenarioGroupPolicy = "政策与治理"
 	ScenarioGroupTech   = "科技与新文明"
+	// 批次84(2026-11-05 §批次84 全维度事件体系)新增七组 —— 补齐既有
+	// 目录缺失的维度(契约 §2.4 阻塞点 D)。
+	//
+	// ⚠ **既有 6 组名一律不改**(前端 i18n / 分组展示已依赖);新增 7 组
+	// 追加在 scenarioGroupOrder 末尾(前端批次84 同步扩)。
+	ScenarioGroupPublicHealth   = "公共卫生"
+	ScenarioGroupInfrastructure = "基础设施"
+	ScenarioGroupTransport      = "交通物流"
+	ScenarioGroupCulture        = "文化教育"
+	ScenarioGroupEnvironment    = "环境生态"
+	ScenarioGroupSecurity       = "公共安全"
+	ScenarioGroupDailyLife      = "民生日常"
 )
+
+// scenarioGroupOrder 场景目录分组的固定展示顺序(既有 6 组在前,批次84
+// 新增 7 组追加在后;契约 §13 对账表)。
+//
+// 用途:目录检索结果的稳定排序(分组顺序 → 目录内原顺序)与维度索引。
+var scenarioGroupOrder = []string{
+	ScenarioGroupMarket,
+	ScenarioGroupPolicy,
+	ScenarioGroupSociety,
+	ScenarioGroupNature,
+	ScenarioGroupUnknown,
+	ScenarioGroupTech,
+	ScenarioGroupPublicHealth,
+	ScenarioGroupInfrastructure,
+	ScenarioGroupTransport,
+	ScenarioGroupCulture,
+	ScenarioGroupEnvironment,
+	ScenarioGroupSecurity,
+	ScenarioGroupDailyLife,
+}
+
+// ScenarioGroupOrder 返回场景目录分组的展示顺序副本(既有 6 组 + 批次84
+// 新增 7 组,共 13 组)。调用方修改返回值不影响包级顺序。
+func ScenarioGroupOrder() []string {
+	return append([]string(nil), scenarioGroupOrder...)
+}
+
+// scenarioGroupIndex 分组名 → 展示序号(未知分组 = -1,排在末尾)。
+var scenarioGroupIndex = func() map[string]int {
+	m := make(map[string]int, len(scenarioGroupOrder))
+	for i, g := range scenarioGroupOrder {
+		m[g] = i
+	}
+	return m
+}()
+
+// scenarioGroupKnown 报告 group 是否属于 13 个合法分组(空串 = 全部,恒合法)。
+func scenarioGroupKnown(group string) bool {
+	if group == "" {
+		return true
+	}
+	_, ok := scenarioGroupIndex[group]
+	return ok
+}
 
 // 场景 kind 常量(契约 §5.1:10 个,前端按 kind 派发强度/参数控件)。
 const (
@@ -172,6 +228,12 @@ type scenarioProfile struct {
 	TreasurySpendCNY    int64   // 国库一次性支出(重建/救市/军费)
 	TreasuryMonthlyCNY  int64   // 国库月度支出(× decay)
 	ElectionBias        float64 // 选举满意度偏置(百分点;即时 + 月度线性衰减)
+	// ── 批次84(2026-11-05 §批次84 §4.1.3)新增两旋钮 ──
+	// 两者**均映射到既有 World 字段**(Labor.AvgWageCNY / Labor.RevenueCNY),
+	// **不新增任何 World 持久化状态**;既有 12 旋钮语义与既有 101 条场景的
+	// 幅度值一律不变(新旋钮既有条目恒为 0 ⇒ 零行为变化)。
+	WageShockPct    float64 // 平均工资比例冲击(负 = 工资挤压;映射 Labor.AvgWageCNY)
+	RevenueShockPct float64 // 企业营收比例冲击(负 = 产业链/需求端承压;映射 Labor.RevenueCNY)
 }
 
 // scenarioDef 目录 + 幅度 + 默认持续月数。
@@ -375,31 +437,8 @@ var scenarioDefs = append(append([]scenarioDef{
 	},
 }, scenarioDefsBatch81...), scenarioDefsBatch83...)
 
-// ScenarioCatalog 返回场景目录(契约 §5.1)。每次调用返回独立副本 ——
-// Magnitudes/Params 切片可安全被调用方修改。
-func ScenarioCatalog() []ScenarioSpec {
-	out := make([]ScenarioSpec, 0, len(scenarioDefs))
-	for i := range scenarioDefs {
-		spec := scenarioDefs[i].spec
-		spec.Magnitudes = append([]int(nil), scenarioMagnitudes...)
-		spec.Params = append([]string{}, spec.Params...)
-		if spec.DefaultMagnitude == 0 {
-			spec.DefaultMagnitude = 3
-		}
-		out = append(out, spec)
-	}
-	return out
-}
-
-// scenarioDefFor 按 kind 查目录(未知 → false)。
-func scenarioDefFor(kind string) (*scenarioDef, bool) {
-	for i := range scenarioDefs {
-		if scenarioDefs[i].spec.Kind == kind {
-			return &scenarioDefs[i], true
-		}
-	}
-	return nil, false
-}
+// ScenarioCatalog / scenarioDefFor 已迁至 scenario_catalog.go(批次84:
+// 目录改为 L1 ∪ L2 ∪ L3 三层来源统一装配 + 包级缓存 + kind 索引)。
 
 // ─────────────────────────── 注入 ───────────────────────────
 
@@ -624,6 +663,11 @@ func applyScenarioToWorld(w *World, kind string, magnitude, durationMonths int, 
 		}
 	}
 
+	// ⑩ 批次84 §4.1.3 新增两旋钮落地:平均工资 / 企业营收比例冲击。
+	// 映射既有 Labor.AvgWageCNY / Labor.RevenueCNY —— **不新增 World 字段**。
+	// 防御性下限:工资 / 营收不得为负(比例冲击极端时 clamp 到 0)。
+	w.scenarioApplyWageRevenueShock(prof, mag, effects)
+
 	// 记录(环形缓冲 cap 20)。
 	w.ScenarioSeq++
 	// 批次71 §4.5:注入留痕四字段(target / duration / seed / snapshot_id)。
@@ -831,6 +875,50 @@ func (w *World) scenarioTreasurySpend(amount int64) int64 {
 	// 流出」完整性(若将来窗口口径变化,登记即生效)。
 	w.Treasury.OtherExpense += amount
 	return amount
+}
+
+// scenarioApplyWageRevenueShock 批次84 §4.1.3 新增两旋钮落地:
+// WageShockPct → Labor.AvgWageCNY;RevenueShockPct → Labor.RevenueCNY。
+//
+// 语义:按比例调整(1 + pct × magnitude);**不得引入新 World 字段** ——
+// 只映射既有 Labor 字段;Labor 为 nil(economy_enabled=false)⇒ 跳过。
+// 防御性下限:工资 / 营收不得为负(比例冲击极端时 clamp 到 0)。
+//
+// ⚠ 既有 12 个旋钮的语义与既有 101 条场景的幅度值一律不变(新旋钮在既有
+// 条目中恒为 0 ⇒ 零行为变化)。
+func (w *World) scenarioApplyWageRevenueShock(prof scenarioProfile, mag float64, effects []ScenarioEffect) []ScenarioEffect {
+	if w == nil || w.Labor == nil {
+		return effects
+	}
+	if prof.WageShockPct != 0 {
+		old := w.Labor.AvgWageCNY
+		next := int64(float64(old) * (1 + prof.WageShockPct*mag))
+		if next < 0 {
+			next = 0
+		}
+		w.Labor.AvgWageCNY = next
+		if d := scenarioPctChange(float64(old), float64(next)); d != 0 {
+			effects = append(effects, ScenarioEffect{
+				Metric: "avg_wage", Delta: scenarioRound2(d),
+				Text: fmt.Sprintf("平均工资 %+.2f%%(¥%d)", d, next),
+			})
+		}
+	}
+	if prof.RevenueShockPct != 0 {
+		old := w.Labor.RevenueCNY
+		next := int64(float64(old) * (1 + prof.RevenueShockPct*mag))
+		if next < 0 {
+			next = 0
+		}
+		w.Labor.RevenueCNY = next
+		if d := scenarioPctChange(float64(old), float64(next)); d != 0 {
+			effects = append(effects, ScenarioEffect{
+				Metric: "firm_revenue", Delta: scenarioRound2(d),
+				Text: fmt.Sprintf("企业营收 %+.2f%%(¥%d)", d, next),
+			})
+		}
+	}
+	return effects
 }
 
 // scenarioEnsureElection 惰性初始化选举状态(与 settlement ⑨G 同口径)。

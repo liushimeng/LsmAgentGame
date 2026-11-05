@@ -1347,4 +1347,39 @@ export interface VirtualCityDict {
   'virtualCity.citySystemLine': string;
   'virtualCity.citySystemLineRandom': string;
   'virtualCity.citySystemLineHint': string;
+  // ── 批次84 §5.1：场景目录浏览器 ──────────────────────────────────────
+  'virtualCity.systemDialog.catalogTitle': string;
+  'virtualCity.systemDialog.catalogSearch': string;
+  'virtualCity.systemDialog.catalogAll': string;
+  'virtualCity.systemDialog.catalogLoading': string;
+  'virtualCity.systemDialog.catalogEmpty': string;
+  'virtualCity.systemDialog.catalogError': string;
+  /** 带占位符 {n}（命中条数）。 */
+  'virtualCity.systemDialog.catalogTotal': string;
+  'virtualCity.systemDialog.catalogHint': string;
+  'virtualCity.systemDialog.catalogInject': string;
+  // ── 批次84 §5.1：系统信息面板 ────────────────────────────────────────
+  'virtualCity.systemDialog.infoTitle': string;
+  'virtualCity.systemDialog.infoEmpty': string;
+  'virtualCity.systemDialog.infoMonth': string;
+  'virtualCity.systemDialog.infoPopulation': string;
+  'virtualCity.systemDialog.infoCpi': string;
+  'virtualCity.systemDialog.infoUnemployment': string;
+  'virtualCity.systemDialog.infoStock': string;
+  'virtualCity.systemDialog.infoTreasury': string;
+  'virtualCity.systemDialog.infoPolicyRate': string;
+  'virtualCity.systemDialog.infoScenarios': string;
+  'virtualCity.systemDialog.infoAgentState': string;
+  // ── 批次84 §4.3：Agent 来信卡片 ─────────────────────────────────────
+  'virtualCity.systemDialog.agentMessageFrom': string;
+  'virtualCity.systemDialog.agentMessageUnknown': string;
+  // ── 批次84：显示指令提示（未支持 / 未接引擎 / 参数非法）──────────────
+  /** 带占位符 {type}。 */
+  'virtualCity.systemDialog.noticeUnsupportedType': string;
+  'virtualCity.systemDialog.noticeUnwired': string;
+  'virtualCity.systemDialog.noticeInvalidParams': string;
+  /** 带占位符 {detail}。 */
+  'virtualCity.systemDialog.noticeEntityNotFound': string;
+  'virtualCity.systemDialog.noticeUnknownCategory': string;
+  'virtualCity.systemDialog.noticeDismiss': string;
 }

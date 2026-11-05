@@ -12,6 +12,8 @@
 // Agent 按配方 navigate → 读 body → 解析,2-4 步即可 web_done。
 package citychrome
 
+import "strings"
+
 // categorySites 类目 → 备选源(首选在首位)。来源:
 // lag_docs/虚拟城市/已实现/65-CityChrome实时数据通道与实时看板/02-数据源清单.md
 // 「类目 → 首选 mission 源映射」表(E2E 后修订:首选=腾讯行情直读)。
@@ -176,5 +178,26 @@ func BuildMission(category string) Mission {
 	if len(sites) > 0 {
 		m.TargetURL = sites[0].URL
 	}
+	return m
+}
+
+// BuildMissionWithGoal 在 BuildMission 基础上追加一段「附加采集目标」
+// (批次84:Agent 对话分支把用户提问写进 mission.Goal,让本次采集真正回应
+// 提问,而不是只按类目模板采)。
+//
+// extra 为空 ⇒ 返回值与 BuildMission 逐位一致(零回归);extra 超长按 rune
+// 截断(防 prompt 膨胀)。
+func BuildMissionWithGoal(category, extra string) Mission {
+	m := BuildMission(category)
+	extra = strings.TrimSpace(extra)
+	if extra == "" {
+		return m
+	}
+	const maxGoalRunes = 120
+	r := []rune(extra)
+	if len(r) > maxGoalRunes {
+		r = r[:maxGoalRunes]
+	}
+	m.Goal = m.Goal + "\n\n【本次对话提出的额外要求】" + string(r)
 	return m
 }

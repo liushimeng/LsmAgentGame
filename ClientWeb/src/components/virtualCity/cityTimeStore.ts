@@ -19,6 +19,53 @@ import type { VirtualCitySeason, VirtualCityWeatherKind } from '@/types/virtualC
 export type CitySeason = VirtualCitySeason;
 export type CityWeatherKind = VirtualCityWeatherKind;
 
+/**
+ * 批次84：显示指令的「覆盖时刻」相位（与后端 DisplayCommand 的 phase 逐字一致）。
+ * dawn / day / dusk / night 四相 —— 引擎只认时刻（0..1），相位在此折算。
+ */
+export type CityPhaseOverride = 'dawn' | 'day' | 'dusk' | 'night';
+
+/** 相位 → 当日时刻（0..1；0 = 0:00，0.5 = 正午）。 */
+const PHASE_TIME_OF_DAY: Record<CityPhaseOverride, number> = {
+  dawn: 0.25,   // 6:00
+  day: 0.5,     // 12:00
+  dusk: 0.75,   // 18:00
+  night: 0.0,   // 0:00
+};
+
+/**
+ * 批次84：显示指令天气 → 游戏侧天气类型的**近似映射**。
+ *
+ * 游戏的天气类型是 8 种（clear/cloudy/fog/drizzle/rain/storm/snow/blizzard），
+ * 显示指令用的是另一套 7 种（clear/rain/snow/fog/haze/sandstorm/storm）——
+ * 两套命名空间不完全重叠，故在此显式折算：
+ *   - haze（薄霭）→ fog 弱强度（游戏侧无独立 haze）；
+ *   - sandstorm（沙尘暴）→ storm 强强度（**近似**：游戏侧无沙尘粒子，
+ *     用强风暴 + 高雾密度近似，视觉上表现为「灰黄 + 强降水」）。
+ * 其余一一对应。
+ */
+const DISPLAY_WEATHER_MAP: Record<string, { kind: CityWeatherKind; intensity: number }> = {
+  clear: { kind: 'clear', intensity: 0 },
+  rain: { kind: 'rain', intensity: 0.85 },
+  snow: { kind: 'snow', intensity: 0.85 },
+  fog: { kind: 'fog', intensity: 0.8 },
+  haze: { kind: 'fog', intensity: 0.35 },
+  sandstorm: { kind: 'storm', intensity: 0.9 },
+  storm: { kind: 'storm', intensity: 1 },
+};
+
+/**
+ * 批次84：显示指令时间流速 → 时钟倍率（相对服务端 time_ratio 的倍数）。
+ * pause = 0（客户端时钟冻结）/ slow = 0.25 / normal = 1 / fast = 4 / xfast = 16。
+ */
+const DISPLAY_SPEED_MAP: Record<string, number> = {
+  pause: 0,
+  slow: 0.25,
+  normal: 1,
+  fast: 4,
+  xfast: 16,
+};
+
 /** 城市纪元（与后端 cityEpochBaseMs 同源：2025-01-01 08:00 +0800 = UTC 2025-01-01）。 */
 export const CITY_EPOCH_MS = Date.UTC(2025, 0, 1);
 
@@ -111,6 +158,13 @@ let tzOffsetMin = 0;
 // 批次 33：当日日出/日落（当地日分数；缺省 6:00/18:00 = 批次 27 语义）。
 let sunrise01 = 0.25;
 let sunset01 = 0.75;
+// ── 批次84：显示指令「覆盖」通道（null = 未覆盖，走服务端真值）──────────
+/** 覆盖时刻（0..1 当日时刻）。 */
+let timeOfDayOverride: number | null = null;
+/** 覆盖天气（类型 + 强度）。 */
+let weatherOverride: { kind: CityWeatherKind; intensity: number } | null = null;
+/** 覆盖时间流速（相对服务端 time_ratio 的倍数；null = 不覆盖）。 */
+let timeSpeedMultiplier: number | null = null;
 const seasonSubs = new Set<(s: CitySeason) => void>();
 
 /**
@@ -118,10 +172,20 @@ const seasonSubs = new Set<(s: CitySeason) => void>();
  * ratio = 0 表示暂停冻结（连续帧 city_clock_ms 不变 ⇒ 传 0）。
  */
 export function setCityClockAnchor(cityMs: number, at: number, ratio: number): void {
+  const r = Number.isFinite(ratio) && ratio > 0 ? ratio : 0;
+  // 批次84：时间流速覆盖生效中 ⇒ **不采纳服务端的绝对时刻**，改为保持本地
+  // 连续推进（否则每帧重锚会把覆写倍率冲掉，覆盖形同虚设）。
+  if (timeSpeedMultiplier !== null && anchor) {
+    const now = Date.now();
+    const local = anchor.cityMs
+      + Math.max(0, now - anchor.at) * anchor.ratio * timeSpeedMultiplier;
+    anchor = { cityMs: local, at: now, ratio: r };
+    return;
+  }
   anchor = {
     cityMs,
     at,
-    ratio: Number.isFinite(ratio) && ratio > 0 ? ratio : 0,
+    ratio: r,
   };
 }
 
@@ -170,21 +234,34 @@ export function currentSeason(): CitySeason {
 /** 每帧采样（廉价：模块读 + 算术，无分配热点路径外的开销）。 */
 export function sample(): CityTimeSample {
   const a = anchor;
-  const cityMs = a ? a.cityMs + Math.max(0, Date.now() - a.at) * a.ratio : 0;
+  const speedMul = timeSpeedMultiplier ?? 1;
+  const cityMs = a ? a.cityMs + Math.max(0, Date.now() - a.at) * a.ratio * speedMul : 0;
+  // 批次84：覆盖时刻优先（相位 / 小时 → 当日时刻 0..1）。
+  const effWeather = weatherOverride ? weatherOverride.kind : weather;
+  const effIntensity = weatherOverride ? weatherOverride.intensity : intensity;
   if (cityMs <= 0) {
     // 无锚点（占位帧/旧后端）：静态正午（timeOfDay01 = 0.5）= 旧版观感。
-    return { cityMs: 0, timeOfDay01: 0.5, dayIndex: 0, season, weather, intensity, sunrise01, sunset01 };
+    return {
+      cityMs: 0,
+      timeOfDay01: timeOfDayOverride ?? 0.5,
+      dayIndex: 0,
+      season,
+      weather: effWeather,
+      intensity: effIntensity,
+      sunrise01,
+      sunset01,
+    };
   }
   // 批次 33：timeOfDay01 用城市当地时间（UTC ms + 时区偏移；tz=0 时与批次 27 逐分不差）。
   const localMs = cityMs + tzOffsetMin * 60_000;
   const dayMs = localMs - CITY_EPOCH_MS;
   return {
     cityMs,
-    timeOfDay01: (((dayMs % DAY_MS) + DAY_MS) % DAY_MS) / DAY_MS,
+    timeOfDay01: timeOfDayOverride ?? ((((dayMs % DAY_MS) + DAY_MS) % DAY_MS) / DAY_MS),
     dayIndex: Math.floor((cityMs - CITY_EPOCH_MS) / DAY_MS),
     season,
-    weather,
-    intensity,
+    weather: effWeather,
+    intensity: effIntensity,
     sunrise01,
     sunset01,
   };
@@ -241,7 +318,70 @@ export function resetCityTime(): void {
   tzOffsetMin = 0;
   sunrise01 = 0.25;
   sunset01 = 0.75;
+  // 批次84：显示覆盖同样属「本房状态」，换房必须清空。
+  timeOfDayOverride = null;
+  weatherOverride = null;
+  timeSpeedMultiplier = null;
 }
+
+// ── 批次84：显示指令覆盖通道（City-WebGL-Show 的 set_time_of_day /
+//    set_weather / set_time_speed 的真实落点）────────────────────────
+
+/**
+ * 覆盖昼夜时刻（phase 与 hour 二选一；hour 优先）。
+ * 返回是否命中（非法相位 / 非有限小时 ⇒ false，调用方记「未支持」提示）。
+ */
+export function applyDisplayTimeOfDay(phase?: string, hour?: number): boolean {
+  let v: number | null = null;
+  if (typeof hour === 'number' && Number.isFinite(hour)) {
+    v = ((hour % 24) + 24) % 24 / 24;
+  } else if (phase && phase in PHASE_TIME_OF_DAY) {
+    v = PHASE_TIME_OF_DAY[phase as CityPhaseOverride];
+  }
+  if (v === null) return false;
+  timeOfDayOverride = v;
+  return true;
+}
+
+/** 覆盖天气（显示指令的 7 种天气 → 游戏侧 8 种天气近似映射）。 */
+export function applyDisplayWeather(weather: string): boolean {
+  const mapped = DISPLAY_WEATHER_MAP[weather];
+  if (!mapped) return false;
+  weatherOverride = { ...mapped };
+  return true;
+}
+
+/** 覆盖时间流速（pause / slow / normal / fast / xfast）。 */
+export function applyDisplayTimeSpeed(speed: string): boolean {
+  const mul = DISPLAY_SPEED_MAP[speed];
+  if (mul === undefined) return false;
+  timeSpeedMultiplier = mul;
+  // 立即把本地锚点对齐到「当前显示时刻」，之后按覆写倍率自由推进。
+  if (anchor) {
+    const now = Date.now();
+    anchor = {
+      cityMs: anchor.cityMs + Math.max(0, now - anchor.at) * anchor.ratio,
+      at: now,
+      ratio: anchor.ratio,
+    };
+  }
+  return true;
+}
+
+/** 清除全部显示覆盖（`clear` 显示指令 / 换房）。 */
+export function clearDisplayOverrides(): void {
+  timeOfDayOverride = null;
+  weatherOverride = null;
+  timeSpeedMultiplier = null;
+}
+
+/** 供非 React 代码（显示指令适配层）直接调用。 */
+export const cityEnvApi = {
+  setTimeOfDay: applyDisplayTimeOfDay,
+  setWeather: applyDisplayWeather,
+  setTimeSpeed: applyDisplayTimeSpeed,
+  clear: clearDisplayOverrides,
+};
 
 // ?debug=1：暴露最小注入面（§7.4/§7.5 CDP 视觉验收——强制 weather='rain'/'snow'
 // / season='winter' 截图；不进生产路径判断之外的任何逻辑）。

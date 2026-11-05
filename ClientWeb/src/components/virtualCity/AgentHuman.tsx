@@ -32,6 +32,7 @@ import { useSharedGLTF, blenderModelsEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
 import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 import { appearanceFor } from './crowdFormula';
+import { removeEntity, setEntityPosition } from './cityEntityResolver';
 import { districtSeatOffset, TOKEN_TAG_CROWD_THRESHOLD, SPEECH_BUBBLE_TTL_MS } from './AgentToken';
 import { u, worldDims, sizeTargetFor, DISTRICT_SURFACE_Y } from './cityScale';
 import {
@@ -246,6 +247,8 @@ export function AgentHuman({ player, cx, cz, index, total, isMe, speech, action 
       g.position.x = tx;
       g.position.z = tz;
       g.position.y = DISTRICT_SURFACE_Y;
+      // 批次 84：座位居民位置注册（`focus_entity` 的 resident 定位）。
+      setEntityPosition(`resident:seat:${player.seat}`, tx, tz, player.nickname);
       return;
     }
     const mdx = tx - g.position.x;
@@ -265,8 +268,16 @@ export function AgentHuman({ player, cx, cz, index, total, isMe, speech, action 
       mixer.timeScale = IDLE_TIMESCALE;
     }
     g.position.y = DISTRICT_SURFACE_Y;
+    // 批次 84：座位居民位置注册（`focus_entity` 的 resident 定位）。
+    setEntityPosition(`resident:seat:${player.seat}`, g.position.x, g.position.z, player.nickname);
     mixer?.update(step);
   });
+
+  // 批次 84：卸载时注销实体注册（防残留坐标被 `focus_entity` 误命中）。
+  useEffect(() => {
+    const id = `resident:seat:${player.seat}`;
+    return () => removeEntity(id);
+  }, [player.seat]);
 
   // ── 气泡过期（批次 23 speech 逻辑照抄；action 同款 8s）──
   // hook 必须位于下方 !player.alive 早退之前（Rules of Hooks）。

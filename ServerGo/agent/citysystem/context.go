@@ -1,6 +1,8 @@
-// Package citysystem — context.go: 会话上下文存储(2026-11-03 §批次81)。
+// Package citysystem — context.go: 会话上下文存储(2026-11-03 §批次81;
+// 2026-11-05 §批次84 增加「Agent 来信」队列)。
 //
-// 契约: 批次81 方案文档 §3.2「Context 管理」。
+// 契约: 批次81 方案文档 §3.2「Context 管理」;
+//       批次84 方案文档 §4.3.2「Agent 来信」。
 //
 // 键 = roomID + "/" + userID(每个用户在每个房间一条独立会话);
 // 值 = []llmtypes.Message(**不含 system** —— system 每轮由
@@ -9,6 +11,12 @@
 // 裁剪策略:超过 MaxMessages 时保留**最近** N-10 条 + **前 10 条**
 // (保底开头,避免丢失用户最初意图);不阻塞、不调 LLM 压缩(成本考量)。
 // 摘要压缩 Compact 已实现接口 + 单测,**默认不触发**。
+//
+// 批次84 新增:每会话一份**独立来信队列**(环形 ≤20)存放其它 Agent 的
+// 上行消息(IncomingMessage);不塞进 messages 历史(避免污染对话历史与
+// 前端历史展示)。下一轮构造 system 提示词时 `TakeIncoming` 取最近 ≤5 条
+// 注入「【来自其它 Agent 的消息】」段(时间倒序),取走即出队(同一条来信
+// 只注入一次)。
 package citysystem
 
 import (
@@ -23,11 +31,27 @@ import (
 // compactMinMessages 是触发 Compact 的最小消息数(再少压缩无意义)。
 const compactMinMessages = 4
 
+// incomingRingCap 是单会话来信队列容量(环形;超出丢最旧)。
+const incomingRingCap = 20
+
+// incomingInjectMax 是单轮注入 system 的来信条数上限(契约 §4.3.2)。
+const incomingInjectMax = 5
+
+// incomingKey 是房间级来信队列的存储键。
+//
+// 来信是**房间级**(总线 room handler 收到的上行消息,不区分用户),故键 = 房间;
+// 加 "/#incoming" 后缀与会话键 "roomID/userID" 明确区分(用户 ID 不会出现
+// 这种形式)。房间内**共享收件箱**语义:任一用户开一轮即消费,同一条来信
+// 只注入一次 system。
+func incomingKey(roomID string) string { return roomID + "/#incoming" }
+
 // ConversationStore 按 key 存会话消息(并发安全)。
 type ConversationStore struct {
 	mu            sync.RWMutex
 	maxMessages   int
 	conversations map[string][]llmtypes.Message
+	// incoming 独立来信队列(key = 会话键;环形 ≤incomingRingCap)。
+	incoming map[string][]IncomingMessage
 }
 
 // NewConversationStore 构造。maxMessages <= 0 时用 40(与 Config 缺省一致)。
@@ -38,7 +62,52 @@ func NewConversationStore(maxMessages int) *ConversationStore {
 	return &ConversationStore{
 		maxMessages:   maxMessages,
 		conversations: make(map[string][]llmtypes.Message),
+		incoming:      make(map[string][]IncomingMessage),
 	}
+}
+
+// AppendIncoming 把一条上行来信追加到 roomKey 的来信队列(环形 ≤20,
+// 超出丢最旧)。并发安全。
+func (s *ConversationStore) AppendIncoming(roomKey string, m IncomingMessage) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	q := append(s.incoming[roomKey], m)
+	if len(q) > incomingRingCap {
+		q = q[len(q)-incomingRingCap:]
+	}
+	s.incoming[roomKey] = q
+}
+
+// TakeIncoming 取走 roomKey 来信队列里**最近** ≤max 条(时间倒序,即最新在前),
+// 并从队列移除(同一条来信只注入一次 system)。队列为空返回 nil。
+//
+// max <= 0 时按 incomingInjectMax。
+func (s *ConversationStore) TakeIncoming(roomKey string, max int) []IncomingMessage {
+	if max <= 0 {
+		max = incomingInjectMax
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	q := s.incoming[roomKey]
+	if len(q) == 0 {
+		return nil
+	}
+	if max > len(q) {
+		max = len(q)
+	}
+	taken := make([]IncomingMessage, max)
+	for i := 0; i < max; i++ {
+		taken[i] = q[len(q)-1-i] // 时间倒序:最新在前
+	}
+	s.incoming[roomKey] = q[:len(q)-max]
+	return taken
+}
+
+// PendingIncoming 返回 roomKey 来信队列当前条数(只读;诊断/测试用)。
+func (s *ConversationStore) PendingIncoming(roomKey string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.incoming[roomKey])
 }
 
 // Get 返回副本(调用方随意修改,不污染存储)。

@@ -125,6 +125,8 @@ export function useVirtualCitySystemAgent(
               severity: 'error',
             });
           }
+          // 批次 84：`agent_message`（其它 Agent 的来信）**不是错误** ⇒
+          // 不触发 reportGlobalError；它由 store 落成一条独立的来信消息。
           if (f.kind === 'show_command') {
             const cmd = d_command(f.data);
             if (cmd && !isDuplicateCommand(cmd)) depsRef.current.onShowCommand(cmd);

@@ -47,6 +47,10 @@ type Agent struct {
 
 	// acquireLLM 是 LLM 并发节流槽(复用 llmSema 模式);nil = 不节流。
 	acquireLLM func(ctx context.Context) (release func(), ok bool)
+
+	// askTimeout 是 ask_agent 等待目标 Agent 回复的上限(批次84 §4.3.2)。
+	// 零值 ⇒ askAgentTimeout(30s);单测可注入更短的值。
+	askTimeout time.Duration
 }
 
 // NewAgent 构造。cfg 零值归一:MaxSteps 8 / MaxMessages 40 /
@@ -76,14 +80,15 @@ func NewAgent(room *virtual_city.VirtualCityRoom, cfg Config, reg LLMRegistry,
 		roomID = room.RoomID
 	}
 	return &Agent{
-		RoomID:   roomID,
-		ModelKey: cfg.ModelKey,
-		room:     room,
-		registry: reg,
-		hub:      hub,
-		store:    store,
-		emit:     emit,
-		cfg:      cfg,
+		RoomID:     roomID,
+		ModelKey:   cfg.ModelKey,
+		room:       room,
+		registry:   reg,
+		hub:        hub,
+		store:      store,
+		emit:       emit,
+		cfg:        cfg,
+		askTimeout: askAgentTimeout,
 	}
 }
 
@@ -126,8 +131,11 @@ func (a *Agent) Run(ctx context.Context, userID, text string) error {
 	})
 	messages := a.store.Get(key)
 
-	// 2. system(角色段 + 场景目录 + 三段式标准头)。
-	system := BuildSystemBlocks(a.cfg.MaxSteps)
+	// 2. system(角色段 + 维度索引 + 来信段 + 三段式标准头)。
+	//    来信(批次84 §4.3.2):取走最近 ≤5 条注入「【来自其它 Agent 的消息】」段;
+	//    同一条来信只注入一次(TakeIncoming 出队)。
+	incoming := a.store.TakeIncoming(incomingKey(a.RoomID), incomingInjectMax)
+	system := BuildSystemBlocks(a.cfg.MaxSteps, incoming)
 
 	// 3. 事件:开始。
 	a.emit(SystemEvent{Kind: EventAgentStart, Data: map[string]any{

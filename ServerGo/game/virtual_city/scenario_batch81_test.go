@@ -29,14 +29,21 @@ var batch81NewKinds = []string{
 	ScenarioAIBoom, ScenarioUnknownCivilizationContact, ScenarioCyberAttack,
 }
 
-// TestScenarioCatalog_Batch81_Complete 目录总数(批次83 扩到 101);kind 唯一;
-// 分组属于 6 个合法组;默认强度 1–5;30 个批次81 新 kind 全部在目录内。
+// TestScenarioCatalog_Batch81_Complete 批次81 新增 30 个 kind 全部在目录内;
+// kind 唯一、分组合法、默认强度 1–5。
+//
+// ⚠ 批次84 起目录 = L1 ∪ L2 ∪ L3(规模 ≥1000),本测试不再钉死总数;
+// L1 逐字段金标准见 TestScenarioCatalog_Complete。
 func TestScenarioCatalog_Batch81_Complete(t *testing.T) {
 	catalog := ScenarioCatalog()
-	if len(catalog) != 101 {
-		t.Fatalf("catalog size = %d, want 101", len(catalog))
+	legalGroups := map[string]bool{}
+	for _, g := range ScenarioGroupOrder() {
+		legalGroups[g] = true
 	}
-	legalGroups := map[string]bool{
+	// 批次84 回归防护:L1 既有条目仍必须落在批次84 之前的 6 个合法组内
+	// (字面量,**不随 ScenarioGroupOrder 扩展而放宽**;kind→组精确金标准见
+	// TestScenarioCatalog_L1GroupGolden)。L2/L3 新条目走上面 13 组全集。
+	legalGroupsPreB84 := map[string]bool{
 		ScenarioGroupMarket: true, ScenarioGroupPolicy: true,
 		ScenarioGroupSociety: true, ScenarioGroupNature: true,
 		ScenarioGroupUnknown: true, ScenarioGroupTech: true,
@@ -47,8 +54,13 @@ func TestScenarioCatalog_Batch81_Complete(t *testing.T) {
 			t.Fatalf("duplicate kind %q", spec.Kind)
 		}
 		seen[spec.Kind] = true
-		if !legalGroups[spec.Group] {
-			t.Errorf("%s group = %q, not one of the 6 legal groups", spec.Kind, spec.Group)
+		if _, isL1 := l1GroupGolden[spec.Kind]; isL1 {
+			if !legalGroupsPreB84[spec.Group] {
+				t.Errorf("L1 %s group = %q, must stay in one of the 6 pre-batch84 groups",
+					spec.Kind, spec.Group)
+			}
+		} else if !legalGroups[spec.Group] {
+			t.Errorf("%s group = %q, not one of the legal groups", spec.Kind, spec.Group)
 		}
 		if spec.Name == "" || spec.Description == "" {
 			t.Errorf("%s missing name/description", spec.Kind)

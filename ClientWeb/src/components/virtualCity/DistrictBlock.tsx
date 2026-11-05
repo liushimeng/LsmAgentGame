@@ -36,6 +36,11 @@ import type { CitySeason } from './cityTimeStore';
 import { seasonGrassTileUrl } from './seasonAssets';
 import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 import {
+  effectiveLayerVisible,
+  sanitizeHighlightColor,
+  useCityShowStore,
+} from './cityShowStore';
+import {
   VIRTUAL_CITY_DISTRICTS,
   formatCny,
   type VirtualCityDistrictDef,
@@ -114,6 +119,20 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
   const rentCny = Math.round(def.basePriceWan * 10000 * def.houseBeta * priceIndex * 0.0016);
 
   const idx = VIRTUAL_CITY_DISTRICTS.findIndex((d) => d.id === def.id);
+
+  // ── 批次 84：图层显隐（buildings / labels）+ 高亮颜色 ──────────────
+  // 显示指令 `set_layer_visibility` / `set_filter` 的真实落点：订阅城市显示
+  // store 的图层注册表（低频写入 ⇒ 重渲染成本可忽略）。
+  const showLayers = useCityShowStore((s) => s.layers);
+  const showFilter = useCityShowStore((s) => s.filter);
+  const buildingsVisible = effectiveLayerVisible(showLayers, showFilter, 'buildings');
+  const labelsVisible = effectiveLayerVisible(showLayers, showFilter, 'labels');
+  const highlight = useCityShowStore((s) => s.highlight);
+  // 高亮色：`highlight_district` 的 color 字段真正生效（非法色值回落主题金）。
+  const highlightColor =
+    highlight && highlight.district === def.id
+      ? sanitizeHighlightColor(highlight.color) ?? '#d4a017'
+      : '#d4a017';
 
   // 批次 28 B2：保留既有 hover 卡（房价/租金/β 不动），只补 click 详情卡
   // （hover:false = 不写全局悬浮卡，避免与本卡叠卡）。extra 动态行注入行情快照。
@@ -203,18 +222,22 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
           <ringGeometry args={[3.9, 4.15, 4, 1, Math.PI / 4]} />
           <meshBasicMaterial
-            color={selected ? '#d4a017' : '#e5e7eb'}
+            color={selected ? highlightColor : '#e5e7eb'}
             transparent
             opacity={0.9}
             side={THREE.DoubleSide}
           />
         </mesh>
       )}
-      {/* 楼群（批次 30 A2：街墙 8~14 栋 + DistrictBuildings 区级合并） */}
-      <DistrictBuildings specs={buildings} def={def} prosperity={prosperity} />
+      {/* 楼群（批次 30 A2：街墙 8~14 栋 + DistrictBuildings 区级合并）。
+          批次 84：`set_layer_visibility` 的 buildings 图层开关。 */}
+      <group visible={buildingsVisible}>
+        <DistrictBuildings specs={buildings} def={def} prosperity={prosperity} />
+      </group>
       {/* hover 信息卡（阶段 E：zIndexRange [30,0] 封顶 —— 不盖小地图 z40 /
-          error banner z50；默认 16777271 会压住一切，契约 04 文档 §4） */}
-      {hovered && (
+          error banner z50；默认 16777271 会压住一切，契约 04 文档 §4）。
+          批次 84：`labels` 图层开关。 */}
+      {hovered && labelsVisible && (
         <Html position={[0, heightBase + 1.0, 0]} center distanceFactor={16} zIndexRange={[30, 0]}>
           <div className="virtualCity-district-card">
             <div className="virtualCity-district-card__name">

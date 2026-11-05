@@ -1,9 +1,11 @@
-// Package citywebgl — tools.go: 6 个显示原语的 Anthropic wire 定义与派发
-// (2026-11-03 §批次81)。
+// Package citywebgl — tools.go: 显示原语的 Anthropic wire 定义与派发
+// (2026-11-03 §批次81 建立 6 个;2026-11-05 §批次84 扩到 14 个)。
 //
 // 每个工具调用即产出一条 DisplayCommand(emit 实时下发 + 回灌 tool_result);
 // 派发是纯函数(不触引擎),失败以 isErr 回灌让模型自行纠正。
 // 工具名常量集中在本文件,ToolNames() 供单测钉死(防「声明了却从不接线」§130)。
+//
+// 批次84 的 8 个新原语(schema + 派发)放在 tools_batch84.go,避免单文件膨胀。
 package citywebgl
 
 import (
@@ -13,22 +15,43 @@ import (
 	llmtypes "LsmAgentGame/llm/types"
 )
 
-// 显示原语工具名(6 个)。注意 clear_display 的工具名与产出指令类型
+// 显示原语工具名(14 个)。注意 clear_display 的工具名与产出指令类型
 // clear(DisplayClear)不同 —— 前端契约的指令类型以 Display* 常量为准。
 const (
+	// ── 批次81 的 6 个(取值不变,零回归)──
 	ToolFocusDistrict     = "focus_district"
 	ToolFocusPoint        = "focus_point"
 	ToolSetMode           = "set_mode"
 	ToolHighlightDistrict = "highlight_district"
 	ToolAnnotate          = "annotate"
 	ToolClearDisplay      = "clear_display"
+	// ── 批次84 新增的 8 个(与产出指令 type 同名)──
+	ToolSetTimeOfDay       = "set_time_of_day"
+	ToolSetWeather         = "set_weather"
+	ToolSetTimeSpeed       = "set_time_speed"
+	ToolFocusEntity        = "focus_entity"
+	ToolSetLayerVisibility = "set_layer_visibility"
+	ToolSetFilter          = "set_filter"
+	ToolCameraPreset       = "camera_preset"
+	ToolFlyPath            = "fly_path"
 )
 
 // annotateTextLimit 是 annotate 文本上限(prompt 纪律同口径;超限截断)。
 const annotateTextLimit = 40
 
-// BuildTools 返回全部 6 个显示原语的 Anthropic tools[] 定义。
+// cmdMaker 是产出成功指令的闭包(统一补 trace_id + 人读回执)。
+type cmdMaker func(DisplayCommand) (*DisplayCommand, string, bool)
+
+// BuildTools 返回全部 14 个显示原语的 Anthropic tools[] 定义。
 func BuildTools() []llmtypes.ToolDef {
+	tools := make([]llmtypes.ToolDef, 0, 14)
+	tools = append(tools, buildBaseTools()...)
+	tools = append(tools, buildBatch84Tools()...)
+	return tools
+}
+
+// buildBaseTools 返回批次81 的 6 个原语 schema(批次84 零改动)。
+func buildBaseTools() []llmtypes.ToolDef {
 	return []llmtypes.ToolDef{
 		{
 			Name:        ToolFocusDistrict,
@@ -96,11 +119,14 @@ func BuildTools() []llmtypes.ToolDef {
 	}
 }
 
-// ToolNames 返回全部工具名(测试/lint 用;合计 6)。
+// ToolNames 返回全部工具名(测试/lint 用;合计 14)。
 func ToolNames() []string {
 	return []string{
 		ToolFocusDistrict, ToolFocusPoint, ToolSetMode,
 		ToolHighlightDistrict, ToolAnnotate, ToolClearDisplay,
+		ToolSetTimeOfDay, ToolSetWeather, ToolSetTimeSpeed,
+		ToolFocusEntity, ToolSetLayerVisibility, ToolSetFilter,
+		ToolCameraPreset, ToolFlyPath,
 	}
 }
 
@@ -159,7 +185,8 @@ func dispatchTool(name string, input map[string]any, trace string) (*DisplayComm
 	case ToolClearDisplay:
 		return mk(DisplayCommand{Type: DisplayClear})
 	default:
-		return nil, fmt.Sprintf("失败:未知工具 %s", name), true
+		// 批次84 新增的 8 个原语(tools_batch84.go)。
+		return dispatchToolBatch84(name, input, mk)
 	}
 }
 
@@ -186,6 +213,16 @@ func numArg(input map[string]any, key string) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// boolArg 取布尔参数(仅接受真正的 bool;缺失/非布尔 → false)。
+//
+// ⚠ 刻意**不**接受 "true"/"1" 等字符串形态:set_layer_visibility 的
+// visible 缺失即失败(§批次84 派发纪律),字符串形态视为非法输入,
+// 由 isErr 回灌让模型自行纠正(比静默猜值安全)。
+func boolArg(input map[string]any, key string) (bool, bool) {
+	b, ok := input[key].(bool)
+	return b, ok
 }
 
 // jsonNumber 是 encoding/json.Number 的窄接口镜像(避免本包引 json 依赖图

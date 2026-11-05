@@ -82,11 +82,37 @@ function persist(next: Persisted): void {
   }
 }
 
+/**
+ * 轨道相机目标位姿请求（批次84 · 相机预设）。
+ *
+ * 存在理由：轨道相机的「视距 / 俯仰 / 方位」三项目前只能由鼠标拖拽与滚轮
+ * 改变（rig 在组件内部，外部无从下手）。批次84 的 `camera_preset` 显示指令
+ * 需要**从外部**把相机摆到「鸟瞰 / 平视 / 街面 / 正俯视」等预设位姿 ⇒ 在
+ * 引擎层开一条**一次性请求通道**：
+ *
+ *   - `freeViewApi.setOrbitGoal(goal)` 写入请求；
+ *   - `<FreeViewControls>` 每帧消费一次（应用到底层目标量后立刻清空）。
+ *
+ * 引擎层不感知任何游戏语义（预设名 → 参数的映射在游戏侧做，§2.1 约束 5）。
+ */
+export interface FreeViewOrbitGoal {
+  /** 聚焦点（地平面世界坐标）。 */
+  target?: { x: number; z: number };
+  /** 轨道视距（世界单位）。 */
+  radius?: number;
+  /** 轨道俯仰角（弧度，从 +Y 轴起算；0 = 正俯视，π/2 = 平视）。 */
+  phi?: number;
+  /** 轨道方位角（弧度）。 */
+  theta?: number;
+}
+
 export interface FreeViewState {
   /** 当前视角模式。 */
   mode: FreeViewMode;
   /** 进入当前模式之前的模式（`F` 键在 orbit ↔ fly 间往返用）。 */
   prevMode: FreeViewMode;
+  /** 待消费的轨道位姿请求（null = 无请求；由控制器每帧消费后清空）。 */
+  orbitGoal: FreeViewOrbitGoal | null;
 
   /** 键位帮助面板是否展开。 */
   helpOpen: boolean;
@@ -98,6 +124,8 @@ export interface FreeViewState {
   ready: boolean;
 
   setMode: (mode: FreeViewMode) => void;
+  /** 写入一次性轨道位姿请求（批次84 相机预设）。 */
+  setOrbitGoal: (goal: FreeViewOrbitGoal | null) => void;
   cycleMode: () => void;
   toggleMode: (mode: FreeViewMode) => void;
   setHelpOpen: (open: boolean) => void;
@@ -113,6 +141,7 @@ const initial = loadPersisted();
 export const useFreeView = create<FreeViewState>((set, get) => ({
   mode: initial.mode,
   prevMode: 'orbit',
+  orbitGoal: null,
   helpOpen: false,
   tier: initial.tier,
   colliding: false,
@@ -124,6 +153,8 @@ export const useFreeView = create<FreeViewState>((set, get) => ({
     persist({ mode, tier: get().tier });
     set({ mode, prevMode: cur });
   },
+  /** 写入一次性轨道位姿请求（批次84 相机预设；控制器每帧消费后清空）。 */
+  setOrbitGoal: (goal) => set({ orbitGoal: goal }),
   cycleMode: () => {
     const cur = get().mode;
     const next = FREE_VIEW_MODES[(FREE_VIEW_MODES.indexOf(cur) + 1) % FREE_VIEW_MODES.length];
@@ -158,6 +189,8 @@ export const useFreeView = create<FreeViewState>((set, get) => ({
 /** 供非 React 代码（快捷键挂在 window 上时）直接调用。 */
 export const freeViewApi = {
   setMode: (m: FreeViewMode) => useFreeView.getState().setMode(m),
+  /** 批次84：请求相机预设位姿（一次性；控制器消费后清空）。 */
+  setOrbitGoal: (goal: FreeViewOrbitGoal | null) => useFreeView.getState().setOrbitGoal(goal),
   cycleMode: () => useFreeView.getState().cycleMode(),
   toggleMode: (m: FreeViewMode) => useFreeView.getState().toggleMode(m),
   toggleHelp: () => useFreeView.getState().toggleHelp(),

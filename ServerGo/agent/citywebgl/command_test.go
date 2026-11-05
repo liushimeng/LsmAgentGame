@@ -24,6 +24,18 @@ type displayCommandAnchor struct {
 	Text     string  `json:"text,omitempty"`
 	Color    string  `json:"color,omitempty"`
 	TraceID  string  `json:"trace_id,omitempty"`
+	// ── 批次84 新增(与 citysystem/display.go 镜像逐字一致)──
+	Phase    string         `json:"phase,omitempty"`
+	Hour     *float64       `json:"hour,omitempty"`
+	Weather  string         `json:"weather,omitempty"`
+	Speed    string         `json:"speed,omitempty"`
+	EntityID string         `json:"entity_id,omitempty"`
+	Kind     string         `json:"kind,omitempty"`
+	Layer    string         `json:"layer,omitempty"`
+	Visible  *bool          `json:"visible,omitempty"`
+	Category string         `json:"category,omitempty"`
+	Preset   string         `json:"preset,omitempty"`
+	Points   []DisplayPoint `json:"points,omitempty"`
 }
 
 // displayRequestAnchor 是 citysystem/display.go::displayRequest 的逐字镜像。
@@ -33,6 +45,18 @@ type displayRequestAnchor struct {
 	Mode     string   `json:"mode,omitempty"`
 	X        *float64 `json:"x,omitempty"`
 	Z        *float64 `json:"z,omitempty"`
+	// ── 批次84 新增(与 citysystem/display.go 镜像逐字一致)──
+	Phase    string         `json:"phase,omitempty"`
+	Hour     *float64       `json:"hour,omitempty"`
+	Weather  string         `json:"weather,omitempty"`
+	Speed    string         `json:"speed,omitempty"`
+	EntityID string         `json:"entity_id,omitempty"`
+	Kind     string         `json:"kind,omitempty"`
+	Layer    string         `json:"layer,omitempty"`
+	Visible  *bool          `json:"visible,omitempty"`
+	Category string         `json:"category,omitempty"`
+	Preset   string         `json:"preset,omitempty"`
+	Points   []DisplayPoint `json:"points,omitempty"`
 }
 
 func jsonKeys(t *testing.T, v any) map[string]bool {

@@ -80,6 +80,10 @@ type Scheduler struct {
 	now   func() time.Time // 可注入(测试)
 	sleep func(time.Duration)
 
+	// onComplete 是 mission 完成回调(批次84:成功/失败各触发一次)。nil = 不回调。
+	// 回调在调度 goroutine 内执行,实现方不得阻塞(只做非阻塞投递)。
+	onComplete func(Mission, *MissionPayload, error)
+
 	mu           sync.Mutex
 	in           chan Mission
 	stopCh       chan struct{}
@@ -146,6 +150,16 @@ func (s *Scheduler) SetNotify(fn func(Feed)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.notify = fn
+}
+
+// SetOnComplete 注入 mission **完成**回调(批次84:成功与失败各触发一次,
+// 让「Agent 对话」的等待者能拿到结果或失败原因)。
+//
+// 回调在调度 goroutine 内同步执行:实现方必须是非阻塞的(只做投递)。
+func (s *Scheduler) SetOnComplete(fn func(Mission, *MissionPayload, error)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onComplete = fn
 }
 
 // SetClock 注入时钟(测试用:now/sleep)。
@@ -308,6 +322,8 @@ func (s *Scheduler) execute(m Mission) {
 		logger.L().Warn("citychrome mission dropped: circuit breaker open",
 			zap.String("category", m.Category),
 			zap.Time("until", s.breakerUntil))
+		// 批次84:任务被丢弃也要通知等待者(否则「Agent 对话」的等待者只能超时)。
+		s.complete(m, nil, fmt.Errorf("熔断器开启,本轮采集任务被丢弃"))
 		return
 	}
 	// 同站点 ≥10s 间隔纪律(契约 §6)。
@@ -330,15 +346,18 @@ func (s *Scheduler) execute(m Mission) {
 
 	if s.healthy != nil && !s.healthy(ctx) {
 		s.fail(m, fmt.Errorf("debug tool unreachable"))
+		s.complete(m, nil, fmt.Errorf("采集底座不可达(debug tool unreachable)"))
 		return
 	}
 	if s.runner == nil {
 		s.fail(m, fmt.Errorf("mission runner not bound"))
+		s.complete(m, nil, fmt.Errorf("采集执行器未绑定"))
 		return
 	}
 	payload, err := s.runner(ctx, m)
 	if err != nil {
 		s.fail(m, err)
+		s.complete(m, nil, err)
 		return
 	}
 	// 成功:合并 + 复位熔断 + 通知。
@@ -359,6 +378,21 @@ func (s *Scheduler) execute(m Mission) {
 	if s.notify != nil {
 		s.notify(s.store.Snapshot())
 	}
+	// 批次84:成功也走完成回调(唤醒「Agent 对话」等待者 → 结果上行 City-System)。
+	s.complete(m, payload, nil)
+}
+
+// complete 触发 mission 完成回调(成功/失败各一次)。
+//
+// 锁纪律(§92a):调用方**不得**持 s.mu;本方法内部只短暂取锁取回调引用。
+func (s *Scheduler) complete(m Mission, payload *MissionPayload, err error) {
+	s.mu.Lock()
+	fn := s.onComplete
+	s.mu.Unlock()
+	if fn == nil {
+		return
+	}
+	fn(m, payload, err)
 }
 
 // fail 计一次失败;连续 3 次打开熔断并指数退避(5m→10m→20m→封顶 30m)。

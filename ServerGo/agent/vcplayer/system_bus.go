@@ -75,15 +75,8 @@ func SystemBusResidents(ctx context.Context, roomID string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	var (
-		briefs []ResidentBrief
-		err    error
-	)
-	if cs, ok := CityRoomSource.(ctxAwareResidentsSource); ok {
-		briefs, err = cs.SystemBusResidentsContext(ctx, roomID)
-	} else {
-		briefs, err = CityRoomSource.SystemBusResidents(roomID)
-	}
+	// 批次84:快照读取收敛到 loadResidentBriefs(与对话分支共用,语义不变)。
+	briefs, _, err := loadResidentBriefs(ctx, roomID)
 	if err != nil {
 		return "", err
 	}

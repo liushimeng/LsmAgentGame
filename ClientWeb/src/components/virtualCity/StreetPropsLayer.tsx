@@ -56,6 +56,7 @@ import { buildingsFor, type BuildingSpec } from './building_layout';
 import { outdoorCount, crowdCapFor, synthCrowdEntry } from './crowdFormula';
 import { layoutCrowd, type CrowdPedestrian } from './crowdLayout';
 import { clearCrowdPositions } from './crowdRegistry';
+import { effectiveLayerVisible, useCityShowStore } from './cityShowStore';
 import { TreesInstanced, type TreeVariant } from './props/TreesInstanced';
 import { RoofPlantLayer } from './props/RoofPlantLayer'; // 批次 53：屋顶设备机组（GLB 实例化） // 批次 20 §3.3 → 批次 44：GLB 化 + 三变体（variant 字段即由此导入）
 import { parkFacilityClearOf } from './props/parkLayout'; // 批次 45 C1：公园设施净空（公园树 filter 消费）
@@ -1229,6 +1230,15 @@ export function StreetPropsLayer({
     clearCrowdPositions();
   }, [crowdPeds]);
 
+  // ── 批次 84：图层显隐（trees / vehicles / pedestrians / props）────────
+  // 显示指令 `set_layer_visibility` / `set_filter` 的真实落点。
+  const showLayers = useCityShowStore((s) => s.layers);
+  const showFilter = useCityShowStore((s) => s.filter);
+  const treesVisible = effectiveLayerVisible(showLayers, showFilter, 'trees');
+  const vehiclesVisible = effectiveLayerVisible(showLayers, showFilter, 'vehicles');
+  const pedestriansVisible = effectiveLayerVisible(showLayers, showFilter, 'pedestrians');
+  const propsVisible = effectiveLayerVisible(showLayers, showFilter, 'props');
+
   // 批次 20 §3.3：区内树 + 行道树合并单一 InstancedMesh 集合（3 draw call）。
   // 批次 28 B2：kind 标记 —— 区内树 tree.park / 行道树 tree.road（物件信息按实例区分）。
   const allTrees = useMemo(
@@ -1250,108 +1260,127 @@ export function StreetPropsLayer({
   return (
     <>
       {/* 行人 + 家具 + 标识（树已抽出为全局 TreesInstanced；
-          屋顶设备批次 53 起抽出为全局 RoofPlantLayer） */}
+          屋顶设备批次 53 起抽出为全局 RoofPlantLayer）。
+          批次 84：行人与街具分属 pedestrians / props 两个图层。 */}
       {layout.districtProps.map((dp) => (
         <group key={dp.districtId}>
           {/* 16 · 阶段 T：屋顶太阳能板（suburb / oldtown） */}
-          {dp.solar.map((sp, i) => (
-            <SolarPanel key={`solar-${i}`} x={sp.x} y={sp.y} z={sp.z} rotation={sp.rotation} />
-          ))}
+          <group visible={propsVisible}>
+            {dp.solar.map((sp, i) => (
+              <SolarPanel key={`solar-${i}`} x={sp.x} y={sp.y} z={sp.z} rotation={sp.rotation} />
+            ))}
+          </group>
           {/* 阶段 K→18-Z V3 体积漫步行人（站定行人 speed=0 + phase=0，见 DistrictProps） */}
-          {dp.pedestrians.map((p, i) => (
-            <PedestrianV3
-              key={`ped-${i}`}
-              path={p.path}
-              outfit={p.outfit}
-              speed={p.stationary ? 0 : p.speed}
-              phase={p.stationary ? 0 : p.phase}
-            />
-          ))}
+          <group visible={pedestriansVisible}>
+            {dp.pedestrians.map((p, i) => (
+              <PedestrianV3
+                key={`ped-${i}`}
+                path={p.path}
+                outfit={p.outfit}
+                speed={p.stationary ? 0 : p.speed}
+                phase={p.stationary ? 0 : p.phase}
+              />
+            ))}
+          </group>
           {/* 阶段 M 街道家具（按 type 分派渲染器） */}
-          {dp.furniture.map((f, i) => {
-            const key = `fur-${f.type}-${i}`;
-            switch (f.type) {
-              case 'kiosk':
-                return <VendorKiosk key={key} x={f.x} z={f.z} rotation={f.rotation} />;
-              case 'bicycle':
-                return <BicycleRack key={key} x={f.x} z={f.z} rotation={f.rotation} />;
-              case 'trash':
-                return <TrashCan key={key} x={f.x} z={f.z} rotation={f.rotation} variant={(f.variant ?? 0) as 0 | 1 | 2} />;
-              case 'phone':
-                return <PhoneBooth key={key} x={f.x} z={f.z} rotation={f.rotation} variant={(f.variant ?? 0) === 0 ? 'red' : 'green'} />;
-              case 'mailbox':
-                return <Mailbox key={key} x={f.x} z={f.z} rotation={f.rotation} />;
-              case 'parking':
-                return <ParkingMeter key={key} x={f.x} z={f.z} rotation={f.rotation} />;
-              default:
-                return null;
-            }
-          })}
-          {/* 路口标识牌（批次 38 R3：水域净空后可能缺省） */}
-          {dp.sign && (
-            <Sign
-              x={dp.sign.x}
-              z={dp.sign.z}
-              rotation={dp.sign.rotation}
-              variant={dp.sign.variant}
-            />
-          )}
+          <group visible={propsVisible}>
+            {dp.furniture.map((f, i) => {
+              const key = `fur-${f.type}-${i}`;
+              switch (f.type) {
+                case 'kiosk':
+                  return <VendorKiosk key={key} x={f.x} z={f.z} rotation={f.rotation} />;
+                case 'bicycle':
+                  return <BicycleRack key={key} x={f.x} z={f.z} rotation={f.rotation} />;
+                case 'trash':
+                  return <TrashCan key={key} x={f.x} z={f.z} rotation={f.rotation} variant={(f.variant ?? 0) as 0 | 1 | 2} />;
+                case 'phone':
+                  return <PhoneBooth key={key} x={f.x} z={f.z} rotation={f.rotation} variant={(f.variant ?? 0) === 0 ? 'red' : 'green'} />;
+                case 'mailbox':
+                  return <Mailbox key={key} x={f.x} z={f.z} rotation={f.rotation} />;
+                case 'parking':
+                  return <ParkingMeter key={key} x={f.x} z={f.z} rotation={f.rotation} />;
+                default:
+                  return null;
+              }
+            })}
+            {/* 路口标识牌（批次 38 R3：水域净空后可能缺省） */}
+            {dp.sign && (
+              <Sign
+                x={dp.sign.x}
+                z={dp.sign.z}
+                rotation={dp.sign.rotation}
+                variant={dp.sign.variant}
+              />
+            )}
+          </group>
         </group>
       ))}
 
       {/* 批次 34 §6：真实居民行人（身份/外观/换班来自 game.state.city.crowd）。
           与街区装饰行人**互斥**（crowdActive 时后者已清空），故 DC 与 mixer 数不叠加。
           批次 35 §5.3：trackIndex 注册 live 位置，市民之声气泡据此锚定本人。 */}
-      {crowdPeds.map((p) => (
-        <PedestrianV3
-          key={`crowd-${p.residentIndex}`}
-          path={p.path}
-          speed={p.stationary ? 0 : p.speed}
-          phase={p.phase}
-          appearance={p.appearance}
-          trackIndex={p.residentIndex}
-        />
-      ))}
+      <group visible={pedestriansVisible}>
+        {crowdPeds.map((p) => (
+          <PedestrianV3
+            key={`crowd-${p.residentIndex}`}
+            path={p.path}
+            speed={p.stationary ? 0 : p.speed}
+            phase={p.phase}
+            appearance={p.appearance}
+            trackIndex={p.residentIndex}
+          />
+        ))}
+      </group>
 
       {/* 批次 20 §3.3：区内树 + 行道树 → 单一全局 InstancedMesh 集合（3 draw call） */}
-      <TreesInstanced trees={allTrees} totalCap={TREE_TOTAL_CAP} />
+      <group visible={treesVisible}>
+        <TreesInstanced trees={allTrees} totalCap={TREE_TOTAL_CAP} />
+      </group>
 
       {/* 批次 53：屋顶设备机组（逐栋实例化 civic/rooftop_plant.glb，7 draw call）。
           同样抽到全局层：逐区渲染会退化成「每区一次 GlbInstanced」= 7×32 draw call。 */}
-      <RoofPlantLayer
-        districts={districts}
-        prosperityByDistrict={prosperityByDistrict}
-        prosperityFallback={PROSPERITY_FALLBACK}
-      />
+      <group visible={propsVisible}>
+        <RoofPlantLayer
+          districts={districts}
+          prosperityByDistrict={prosperityByDistrict}
+          prosperityFallback={PROSPERITY_FALLBACK}
+        />
+      </group>
 
       {/* 主干道车辆（16 · 阶段 S：双向车道，右行偏移；批次 41 C1/C2：涂装变体
           glbName + arterial 红绿灯停车线 stops 透传） */}
-      {layout.roadVehicles.map((v, i) => (
-        <Vehicle
-          key={`vehicle-${i}`}
-          from={v.from}
-          to={v.to}
-          variant={v.variant}
-          glbName={v.glbName}
-          speed={v.speed}
-          phase={v.phase}
-          stops={v.stops}
-          laneOffset={v.laneOffset}
-        />
-      ))}
+      <group visible={vehiclesVisible}>
+        {layout.roadVehicles.map((v, i) => (
+          <Vehicle
+            key={`vehicle-${i}`}
+            from={v.from}
+            to={v.to}
+            variant={v.variant}
+            glbName={v.glbName}
+            speed={v.speed}
+            phase={v.phase}
+            stops={v.stops}
+            laneOffset={v.laneOffset}
+          />
+        ))}
+      </group>
 
       {/* 主干道红绿灯：批次 24 起移至 <TrafficSignals>（VirtualCityCityMap
           RoadsLayer 汇总 trafficSignalsForCity 全局实例化渲染，含相位动画） */}
 
       {/* 主干道公交站台 */}
-      {layout.busStops.map((bs, i) => (
-        <BusStop key={`busstop-${i}`} x={bs.x} z={bs.z} rotation={bs.rotation} />
-      ))}
+      <group visible={propsVisible}>
+        {layout.busStops.map((bs, i) => (
+          <BusStop key={`busstop-${i}`} x={bs.x} z={bs.z} rotation={bs.rotation} />
+        ))}
+      </group>
 
       {/* 批次 42 C1：路缘停车咪表成排（key 含下标保证唯一；组件复用 props/ParkingMeter） */}
-      {layout.parkingMeters.map((m, i) => (
-        <ParkingMeter key={`pmeter-${i}`} x={m.x} z={m.z} rotation={m.rotation} />
-      ))}
+      <group visible={propsVisible}>
+        {layout.parkingMeters.map((m, i) => (
+          <ParkingMeter key={`pmeter-${i}`} x={m.x} z={m.z} rotation={m.rotation} />
+        ))}
+      </group>
     </>
   );
 }

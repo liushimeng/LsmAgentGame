@@ -10,7 +10,8 @@
     "typecheck": "tsc -b --noEmit",
     "verify:auth-persist": "node scripts/verify_auth_persist.mjs",
     "verify:city-show-adapter": "node scripts/verify_city_show_adapter.mjs",
-    "verify:system-history": "node scripts/verify_system_history_adapter.mjs"
+    "verify:system-history": "node scripts/verify_system_history_adapter.mjs",
+    "verify:virtual-city-system": "node scripts/verify_virtual_city_system_batch84.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.114.0",

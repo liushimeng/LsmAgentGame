@@ -35,6 +35,38 @@ const virtualCitySystemEN = {
   'virtualCity.citySystemLineRandom': 'Random only',
   'virtualCity.citySystemLineHint':
     'LsmAgentGame-City-System picks a random line from the LLM line pool for each turn; you can also pin a specific model line.',
+  // Batch 84 §5.1: scenario catalog browser (dimension tabs + search + item list).
+  'virtualCity.systemDialog.catalogTitle': 'Scenario catalog',
+  'virtualCity.systemDialog.catalogSearch': 'Search scenarios (name / kind / description)',
+  'virtualCity.systemDialog.catalogAll': 'All',
+  'virtualCity.systemDialog.catalogLoading': 'Loading catalog…',
+  'virtualCity.systemDialog.catalogEmpty': 'No matching scenario',
+  'virtualCity.systemDialog.catalogError': 'Failed to load the scenario catalog',
+  'virtualCity.systemDialog.catalogTotal': '{n} in total',
+  'virtualCity.systemDialog.catalogHint': 'Clicking an item only fills the input box; you still have to confirm and send it.',
+  'virtualCity.systemDialog.catalogInject': 'Inject',
+  // Batch 84 §5.1: system info panel (city summary + agent read-back).
+  'virtualCity.systemDialog.infoTitle': 'System info',
+  'virtualCity.systemDialog.infoEmpty': 'No city state data yet',
+  'virtualCity.systemDialog.infoMonth': 'Month',
+  'virtualCity.systemDialog.infoPopulation': 'Population',
+  'virtualCity.systemDialog.infoCpi': 'CPI',
+  'virtualCity.systemDialog.infoUnemployment': 'Unemployment',
+  'virtualCity.systemDialog.infoStock': 'Stock index',
+  'virtualCity.systemDialog.infoTreasury': 'Treasury',
+  'virtualCity.systemDialog.infoPolicyRate': 'Policy rate',
+  'virtualCity.systemDialog.infoScenarios': 'Active scenarios',
+  'virtualCity.systemDialog.infoAgentState': 'Agent read-back',
+  // Batch 84 §4.3: incoming agent letter card.
+  'virtualCity.systemDialog.agentMessageFrom': 'From',
+  'virtualCity.systemDialog.agentMessageUnknown': 'Unknown agent',
+  // Batch 84: display-command notices (unsupported / unwired / invalid).
+  'virtualCity.systemDialog.noticeUnsupportedType': 'Unsupported display command: {type}',
+  'virtualCity.systemDialog.noticeUnwired': 'This display capability is not wired to the engine in this batch: {type}',
+  'virtualCity.systemDialog.noticeInvalidParams': 'Invalid display command parameters: {type}',
+  'virtualCity.systemDialog.noticeEntityNotFound': 'Entity not found: {detail}',
+  'virtualCity.systemDialog.noticeUnknownCategory': 'Unknown category: {detail}',
+  'virtualCity.systemDialog.noticeDismiss': 'Dismiss',
 };
 
 export default virtualCitySystemEN;

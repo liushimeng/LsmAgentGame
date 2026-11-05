@@ -44,36 +44,53 @@ func (a *Agent) Dispatch(ctx context.Context, userID, name string, input map[str
 	case ToolInjectScenario:
 		return a.injectScenario(getStr("kind"), getInt("magnitude"),
 			getInt("duration_months"), getStr("target"), getStr("note"))
+	case ToolSearchScenarios:
+		return searchScenarios(getStr("query"), getStr("group"), getInt("limit"))
 	case ToolListScenarios:
-		// 批次83 §4.2:缺省返回全目录紧凑索引;传合法组名返回该组完整
-		// 描述;未知组名返回失败文本(对齐 busFailure 风格回灌模型)。
-		group := strings.TrimSpace(getStr("group"))
-		if group == "" {
-			return ScenarioCatalogIndex(), false
-		}
-		detail, err := ScenarioCatalogDetail(group)
-		if err != nil {
-			return "失败:" + err.Error(), true
-		}
-		return detail, false
+		// 批次84 §4.2:缺省返回**维度索引**(恒定体积);传合法组名返回该组
+		// 条目(limit 缺省 60 上限 200);未知组名返回失败文本(35064)。
+		return listScenarios(getStr("group"), getInt("limit"))
 	case ToolQueryCityState:
-		return a.systemSummary(getStr("scope"))
+		scope := strings.ToLower(strings.TrimSpace(getStr("scope")))
+		if extendedCityStateScopes[scope] {
+			return a.queryCityStateExtended(scope)
+		}
+		if scope == "all" {
+			// "all" = 既有房间摘要 + 批次84 新增 7 个子系统(全维度口径)。
+			base, _ := a.systemSummary(scope)
+			ext := a.allExtendedScopes()
+			if ext == "" {
+				return base, false
+			}
+			return base + "\n\n" + ext, false
+		}
+		return a.systemSummary(scope)
+	case ToolQueryMetricHistory:
+		return a.queryMetricHistory(getStr("metric"), getInt("months"))
+	case ToolQueryDistricts:
+		return a.queryDistricts(getStr("district"))
 	case ToolQueryWorldEvents:
 		return a.worldEventText()
 	case ToolQueryPrediction:
 		return a.queryPrediction(getStr("run_id"))
+	case ToolQuerySurveys:
+		return a.querySurveys()
 	case ToolControlSimulation:
 		return a.controlSimulation(getStr("action"), userID)
 	case ToolLaunchSurvey:
 		return a.launchSurvey(getStr("question"), stringSlice(input["options"]))
 	case ToolFocusCamera:
 		return a.focusCamera(ctx, getStr("district"), getStr("mode"), input)
+	case ToolApplyDisplay:
+		return a.applyDisplay(ctx, input)
 	case ToolCollectRealworldData:
 		return a.collectRealworldData(ctx, getStr("category"))
+	case ToolAskAgent:
+		return a.askAgent(ctx, getStr("target_agent"), getStr("message"))
 	case ToolSendAgentMessage:
 		return a.sendAgentMessage(ctx, getStr("target_agent"), getStr("message"))
 	case ToolListAgents:
-		return a.listAgents()
+		return a.listAgentsExtended()
 	default:
 		return "失败:未知工具 " + name, true
 	}
@@ -272,7 +289,11 @@ func (a *Agent) collectRealworldData(ctx context.Context, category string) (stri
 	return "已触发真实数据采集(结果由采集 Agent 异步产出,可在实时看板查看)。", false
 }
 
-// sendAgentMessage 经总线向目标 Agent 单向投递消息。
+// sendAgentMessage 经总线向目标 Agent **单向通知**(批次84:改用 hub.Post,
+// 不等回复 —— 对方 handler 的返回值被丢弃,也不阻塞本轮)。
+//
+// 目标未注册仍回 [35061](先经 Describe 查注册表;Post 对未注册目标是静默
+// 丢弃,不能给出确定反馈)。载荷与批次81 一致(裸字符串)。
 func (a *Agent) sendAgentMessage(ctx context.Context, targetAgent, message string) (string, bool) {
 	if a.hub == nil {
 		return "失败:Agent 总线未绑定", true
@@ -284,23 +305,24 @@ func (a *Agent) sendAgentMessage(ctx context.Context, targetAgent, message strin
 	if strings.TrimSpace(message) == "" {
 		return "失败:消息内容为空", true
 	}
-	if _, err := a.hub.Send(ctx, a.RoomID, string(agentroot.AgentClassCitySystem),
-		targetAgent, "message", message); err != nil {
-		return busFailure(err), true
+	if !a.agentRegistered(targetAgent) {
+		return busFailure(fmt.Errorf("agent not registered: %s", targetAgent)), true
 	}
-	return fmt.Sprintf("已向 %s 发送消息。", targetAgent), false
+	if err := a.hub.Post(ctx, a.RoomID, string(agentroot.AgentClassCitySystem),
+		targetAgent, BusTypeMessage, message); err != nil {
+		return "失败:" + err.Error(), true
+	}
+	return fmt.Sprintf("已向 %s 发送消息(单向通知,不等待回复)。", targetAgent), false
 }
 
-// listAgents 列出总线已注册的类级 Agent。
-func (a *Agent) listAgents() (string, bool) {
-	if a.hub == nil {
-		return "失败:Agent 总线未绑定", true
+// agentRegistered 报告 target 是否在本房可达(类级或本房房间级)。
+func (a *Agent) agentRegistered(target string) bool {
+	for _, d := range a.hub.Describe(a.RoomID) {
+		if d.ClassName == target {
+			return true
+		}
 	}
-	agents := a.hub.Agents()
-	if len(agents) == 0 {
-		return "当前无已注册的 Agent。", false
-	}
-	return fmt.Sprintf("已注册 Agent(%d):%s", len(agents), strings.Join(agents, ", ")), false
+	return false
 }
 
 // stringSlice 把 []any / []string 统一成 []string。

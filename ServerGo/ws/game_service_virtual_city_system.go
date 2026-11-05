@@ -2,7 +2,12 @@
 // Agent 的 WS 帧处理(2026-11-03 §批次81 City-System 主 Agent 与系统对话)。
 //
 // 契约: lag_docs/虚拟城市/已实现/81-CitySystem-Agent与系统对话/01-方案设计.md
-// §3.5(帧契约)/ §6.1(数据契约)。
+// §3.5(帧契约)/ §6.1(数据契约);批次84 装配层接线见
+// lag_docs/虚拟城市/已实现/84-全维度事件体系与Agent双向对话/01-方案设计.md
+// §4.3(Agent 双向通讯)/ §9.1(装配层接线清单):
+//   - City-WebGL-Show 房间级 handler 按 msg.Type 路由(run_display / message),
+//     修 §2.5b「一律按显示请求解析」的类型错误;
+//   - City-System 注册房间级上行 handler(RegisterBusHandler,接收来信)。
 //
 // 帧:
 //
@@ -28,6 +33,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -79,13 +85,26 @@ func (s *GameService) getOrCreateSystemRoomAgent(roomID string, r *virtual_city.
 		ToolResultLimit: s.vcSystemCfg.ToolResultLimit,
 	}, s.vcSystemRegistry, citybus.Default(), store, emit)
 	ag.SetLinePolicy(r.CitySystemLine())
-	// City-WebGL-Show 房间级 bus handler(批次81):msg.Payload = display.go 的
-	// displayRequest(text/district/mode/x/z);返回 []DisplayCommand(JSON 中性,
-	// citysystem 侧 parseDisplayCommands 可解析)。
+	// 批次84 §4.3.2:City-System 房间级上行 handler(接收其它 Agent 的
+	// "message" 来信 → EventAgentMessage 事件 + 来信队列,下一轮注入上下文)。
+	// 先 Unregister 再注册:同房重建/测试复用 roomID 时强制重绑到当前 Agent
+	// (RegisterRoom 对重复注册报错,不覆盖旧 handler;与下方 City-WebGL-Show
+	// 同口径)。失败只 Warn 不阻塞(来信通道降级,主对话不受影响)。
+	citybus.Default().UnregisterRoom(roomID, string(agentroot.AgentClassCitySystem))
+	if err := ag.RegisterBusHandler(citybus.Default()); err != nil {
+		logger.L().Warn("citysystem register bus handler failed",
+			zap.String("room_id", roomID), zap.Error(err))
+	}
+	// City-WebGL-Show 房间级 bus handler(批次81 + 批次84 §9.1):按 msg.Type
+	// 路由 —— "run_display"/"" 走显示请求;"message" 走对话式翻译;其余明确报错
+	// (修 §2.5b「一律按显示请求解析」:收 "message" 会 JSON 反序列化类型错误)。
+	// msg.Payload = display.go 的 displayRequest(text/district/mode/x/z/phase/…);
+	// 返回 []DisplayCommand(JSON 中性,citysystem 侧 parseDisplayCommands 可解析)。
 	// **单一发射点**:show_command 帧一律由 citysystem.Agent.emitCommands 下发
-	// (focus_camera 工具派发后统一 emit),本处 emit 置 nil —— 否则 citywebgl.Run
-	// 路径逐条 emit + citysystem 侧 emitCommands 会**双重发帧**(同 trace_id 重复)。
-	// citywebgl.NewAgent 对 nil emit 天然安全(指令只收集不实时下发)。
+	// (focus_camera/apply_display 工具派发后统一 emit),本处 emit 置 nil —— 否则
+	// citywebgl.Run 路径逐条 emit + citysystem 侧 emitCommands 会**双重发帧**
+	// (同 trace_id 重复)。citywebgl.NewAgent 对 nil emit 天然安全(指令只收集
+	// 不实时下发)。
 	showAg := citywebgl.NewAgent(citywebgl.Config{ModelKey: s.vcSystemCfg.ModelKey}, s.vcSystemRegistry, nil)
 	showAg.SetLinePolicy(r.CitySystemLine())
 	// 先 Unregister 再 Register:同房重建/测试复用 roomID 时强制重绑到当前
@@ -93,16 +112,52 @@ func (s *GameService) getOrCreateSystemRoomAgent(roomID string, r *virtual_city.
 	citybus.Default().UnregisterRoom(roomID, string(agentroot.AgentClassCityWebGLShow))
 	if err := citybus.Default().RegisterRoom(roomID, string(agentroot.AgentClassCityWebGLShow),
 		func(ctx context.Context, msg citybus.Message) (any, error) {
-			// 路径选择:参数齐备(district 或 x/z)⇒ Structured 零延迟不过 LLM;
-			// 否则 Run(自然语言 ReAct)。
-			req, err := citywebgl.ParseDisplayRequest(msg.Payload)
-			if err != nil {
-				return nil, err
+			switch msg.Type {
+			case "", "run_display":
+				// 显示路径。判据必须用 HasStructuredParams()(批次84):
+				// 旧内联判据只认 district/x/z,会把仅带 phase/weather/
+				// entity_id 等新参数的请求误落 LLM 路径(失去零延迟)。
+				req, err := citywebgl.ParseDisplayRequest(msg.Payload)
+				if err != nil {
+					return nil, err
+				}
+				if req.HasStructuredParams() {
+					return showAg.Structured(req), nil
+				}
+				return showAg.Run(ctx, req)
+			case "message":
+				// 对话分支(批次84 §4.3.3):把自然语言请求翻译成显示指令,
+				// **逐条下发前端**(需求 2「自动渲染显示」+ 需求 5「实时显示
+				// 正在干什么」),再回 System 一句中文摘要。
+				// ⚠ 只在本分支经 emitCitySystemEvent 下发(其内部对
+				// EventShowCommand 会额外发 game.virtual_city_show_command,
+				// 复用之,不自拼帧);run_display/"" 分支保持**单发射点**不变
+				// (showAg emit 恒 nil,靠 citysystem.Agent.emitCommands 发),
+				// 否则双发帧。
+				text, err := webglBusMessageText(msg.Payload)
+				if err != nil {
+					return nil, err
+				}
+				cmds, err := showAg.Run(ctx, citywebgl.DisplayRequest{Text: text})
+				if err != nil {
+					return nil, fmt.Errorf("City-WebGL-Show 显示翻译失败: %w", err)
+				}
+				for _, cmd := range cmds {
+					s.emitCitySystemEvent(roomID, citysystem.SystemEvent{
+						Kind: citysystem.EventShowCommand, Data: cmd,
+					})
+				}
+				types := make([]string, 0, len(cmds))
+				for _, c := range cmds {
+					types = append(types, c.Type)
+				}
+				if len(types) == 0 {
+					return "已翻译为 0 条显示指令(未能从描述中提取显示参数;如需渲染请用 focus_camera / apply_display)。", nil
+				}
+				return fmt.Sprintf("已翻译为 %d 条显示指令:%s", len(types), strings.Join(types, "、")), nil
+			default:
+				return nil, fmt.Errorf("City-WebGL-Show 不支持的消息类型 %q(本 Agent 支持 run_display / message)", msg.Type)
 			}
-			if req.District != "" || req.X != nil || req.Z != nil {
-				return showAg.Structured(req), nil
-			}
-			return showAg.Run(ctx, req)
 		}); err != nil {
 		logger.L().Warn("citywebgl register room handler failed",
 			zap.String("room_id", roomID), zap.Error(err))
@@ -113,10 +168,45 @@ func (s *GameService) getOrCreateSystemRoomAgent(roomID string, r *virtual_city.
 }
 
 // removeCitySystemAgent 清理房间级 SystemAgent(房间销毁路径调用)。
-// 同步注销 City-WebGL-Show 的房间级 bus handler(资源卫生)。
+// 同步注销 City-System 上行 handler 与 City-WebGL-Show 的房间级 bus handler
+// (资源卫生;批次84 §4.3.2 注册的来信通道一并回收,防泄漏)。
 func (s *GameService) removeCitySystemAgent(roomID string) {
 	s.vcSystemAgents.Delete(roomID)
+	citybus.Default().UnregisterRoom(roomID, string(agentroot.AgentClassCitySystem))
 	citybus.Default().UnregisterRoom(roomID, string(agentroot.AgentClassCityWebGLShow))
+}
+
+// webglBusMessageText 解析 City-WebGL-Show "message" 分支的载荷:
+// map[string]any{"text": "..."}(批次84 契约)/ 裸字符串(与其它 Agent 一致,
+// 兼容批次81 send_agent_message 的裸字符串载荷)。
+// 非法载荷(缺 text / text 非字符串 / text 空)返回明确中文失败说明,不 panic。
+func webglBusMessageText(payload any) (string, error) {
+	switch p := payload.(type) {
+	case string:
+		text := strings.TrimSpace(p)
+		if text == "" {
+			return "", fmt.Errorf("消息内容为空:请在 text 字段中给出显示需求描述")
+		}
+		return text, nil
+	case []byte:
+		return webglBusMessageText(string(p))
+	case map[string]any:
+		raw, ok := p["text"]
+		if !ok {
+			return "", fmt.Errorf("消息载荷缺少 text 字段:期望 {\"text\": \"...\"}")
+		}
+		text, ok := raw.(string)
+		if !ok {
+			return "", fmt.Errorf("消息载荷的 text 字段类型错误:期望字符串,实际类型 %T", raw)
+		}
+		text = strings.TrimSpace(text)
+		if text == "" {
+			return "", fmt.Errorf("消息内容为空:请在 text 字段中给出显示需求描述")
+		}
+		return text, nil
+	default:
+		return "", fmt.Errorf("消息载荷格式错误:期望 {\"text\": \"...\"},实际类型 %T", payload)
+	}
 }
 
 // handleVirtualCitySystemMessage 处理 game.virtual_city_system_message。

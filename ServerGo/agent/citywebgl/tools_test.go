@@ -3,6 +3,7 @@
 package citywebgl
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -90,7 +91,9 @@ func TestDispatchTool_Positive(t *testing.T) {
 				t.Fatalf("unexpected error: %q (cmd=%v)", text, cmd)
 			}
 			tc.want.TraceID = "tr-9"
-			if *cmd != tc.want {
+			// ⚠ DisplayCommand 含切片字段(Points)⇒ 不可用 == 比较,
+			// 统一用 reflect.DeepEqual(逐字比对字段值)。
+			if !reflect.DeepEqual(*cmd, tc.want) {
 				t.Fatalf("cmd = %+v, want %+v", *cmd, tc.want)
 			}
 			if text == "" {

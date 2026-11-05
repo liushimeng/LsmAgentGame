@@ -128,6 +128,11 @@ export interface VirtualCitySystemStore {
   minimized: boolean;
   /** 浮窗拖拽位置（批次83 §3.1；null = 默认位，渲染走 CSS 基础规则）。 */
   dialogPos: VirtualCitySystemDialogPos | null;
+  /**
+   * 批次 84：系统信息面板的 Agent 回灌文本（`query_city_state` 工具结果，
+   * 最新一条）。null = 尚未回灌（面板走 WS game.state 的字段摘要兜底）。
+   */
+  systemInfo: string | null;
 
   appendUser: (text: string) => void;
   upsertAssistant: (id: string, patch: Partial<VirtualCitySystemMessage>) => void;
@@ -147,6 +152,7 @@ export const useVirtualCitySystemStore = create<VirtualCitySystemStore>((set) =>
   busy: false,
   minimized: false,
   dialogPos: loadDialogPos(),
+  systemInfo: null,
 
   appendUser: (text) =>
     set((s) => ({
@@ -244,26 +250,52 @@ export const useVirtualCitySystemStore = create<VirtualCitySystemStore>((set) =>
         if (!tool) break;
         set((s) => {
           const { messages, id } = ensureStreamingAssistant(s.messages);
-          return {
-            messages: messages.map((m) => {
-              if (m.id !== id) return m;
-              const calls = [...(m.tool_calls ?? [])];
-              let idx = -1;
-              for (let i = calls.length - 1; i >= 0; i -= 1) {
-                if (calls[i].tool === tool) { idx = i; break; }
-              }
-              if (idx === -1) {
-                // 后端只给了 result（无对应 start）⇒ 补一条已完成记录，不丢结果。
-                return {
-                  ...m,
-                  tool_calls: [...calls, { tool, input: '', text, is_err: isErr, ts }],
-                };
-              }
-              calls[idx] = { ...calls[idx], text, is_err: isErr, ts };
-              return { ...m, tool_calls: calls };
-            }),
-          };
+          const nextMessages = messages.map((m) => {
+            if (m.id !== id) return m;
+            const calls = [...(m.tool_calls ?? [])];
+            let idx = -1;
+            for (let i = calls.length - 1; i >= 0; i -= 1) {
+              if (calls[i].tool === tool) { idx = i; break; }
+            }
+            if (idx === -1) {
+              // 后端只给了 result（无对应 start）⇒ 补一条已完成记录，不丢结果。
+              return {
+                ...m,
+                tool_calls: [...calls, { tool, input: '', text, is_err: isErr, ts }],
+              };
+            }
+            calls[idx] = { ...calls[idx], text, is_err: isErr, ts };
+            return { ...m, tool_calls: calls };
+          });
+          // 批次 84：query_city_state 的结果落 store ⇒ 系统信息面板显示
+          // Agent 回灌的城市状态摘要（不新造后端接口）。
+          if (tool === 'query_city_state' && text && !isErr) {
+            return { messages: nextMessages, systemInfo: text };
+          }
+          return { messages: nextMessages };
         });
+        break;
+      }
+
+      // 批次 84：其它 Agent 的上行来信（§7.1 新增 kind，不属于错误 ⇒ 不上报
+      // 全局 toast）。渲染成**独立的一条来信消息**（role='agent'），
+      // 不并入助手气泡，也不打断当前流式回复。
+      case 'agent_message': {
+        const from = typeof d.from === 'string' ? d.from : '';
+        const text = typeof d.text === 'string' ? d.text : '';
+        if (!text) break;
+        set((s) => ({
+          messages: [
+            ...s.messages,
+            {
+              id: nextId('am'),
+              role: 'agent' as const,
+              text,
+              ts: numTs(d.ts),
+              ...(from ? { agent_from: from } : {}),
+            },
+          ].slice(-MAX_MESSAGES),
+        }));
         break;
       }
 
@@ -343,7 +375,7 @@ export const useVirtualCitySystemStore = create<VirtualCitySystemStore>((set) =>
       }
 
       case 'cleared': {
-        set({ messages: [], busy: false });
+        set({ messages: [], busy: false, systemInfo: null });
         break;
       }
 
@@ -358,5 +390,5 @@ export const useVirtualCitySystemStore = create<VirtualCitySystemStore>((set) =>
 
   setMessages: (messages) => set({ messages: messages.slice(-MAX_MESSAGES) }),
 
-  reset: () => set({ messages: [], busy: false }),
+  reset: () => set({ messages: [], busy: false, systemInfo: null }),
 }));

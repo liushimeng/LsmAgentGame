@@ -35,6 +35,38 @@ const virtualCitySystemJA = {
   'virtualCity.citySystemLineRandom': 'ランダムのみ',
   'virtualCity.citySystemLineHint':
     'LsmAgentGame-City-System はターごとに LLM ラインプールからランダムに 1 本選びます。特定のモデル回線に固定することもできます。',
+  // バッチ84 §5.1：シナリオカタログ（ディメンションタブ + 検索 + 項目リスト）。
+  'virtualCity.systemDialog.catalogTitle': 'シナリオカタログ',
+  'virtualCity.systemDialog.catalogSearch': 'シナリオを検索（名称 / kind / 説明）',
+  'virtualCity.systemDialog.catalogAll': 'すべて',
+  'virtualCity.systemDialog.catalogLoading': 'カタログを読み込み中…',
+  'virtualCity.systemDialog.catalogEmpty': '該当するシナリオがありません',
+  'virtualCity.systemDialog.catalogError': 'シナリオカタログの読み込みに失敗しました',
+  'virtualCity.systemDialog.catalogTotal': '全 {n} 件',
+  'virtualCity.systemDialog.catalogHint': '項目をクリックすると入力欄にのみ反映されます。送信は人が確認して行います。',
+  'virtualCity.systemDialog.catalogInject': '注入',
+  // バッチ84 §5.1：システム情報パネル（都市サマリ + エージェントの読み戻し）。
+  'virtualCity.systemDialog.infoTitle': 'システム情報',
+  'virtualCity.systemDialog.infoEmpty': '都市状態データがありません',
+  'virtualCity.systemDialog.infoMonth': '月',
+  'virtualCity.systemDialog.infoPopulation': '人口',
+  'virtualCity.systemDialog.infoCpi': 'CPI',
+  'virtualCity.systemDialog.infoUnemployment': '失業率',
+  'virtualCity.systemDialog.infoStock': '株価指数',
+  'virtualCity.systemDialog.infoTreasury': '国庫',
+  'virtualCity.systemDialog.infoPolicyRate': '政策金利',
+  'virtualCity.systemDialog.infoScenarios': '発動中のシナリオ',
+  'virtualCity.systemDialog.infoAgentState': 'エージェントの読み戻し',
+  // バッチ84 §4.3：他エージェントからの受信カード。
+  'virtualCity.systemDialog.agentMessageFrom': '送信元',
+  'virtualCity.systemDialog.agentMessageUnknown': '不明なエージェント',
+  // バッチ84：表示コマンドの通知（未対応 / 未接続 / 不正）。
+  'virtualCity.systemDialog.noticeUnsupportedType': '未対応の表示コマンド：{type}',
+  'virtualCity.systemDialog.noticeUnwired': 'この表示機能は本バッチではエンジン未接続です：{type}',
+  'virtualCity.systemDialog.noticeInvalidParams': '表示コマンドのパラメータが不正です：{type}',
+  'virtualCity.systemDialog.noticeEntityNotFound': 'エンティティが見つかりません：{detail}',
+  'virtualCity.systemDialog.noticeUnknownCategory': '未知のカテゴリ：{detail}',
+  'virtualCity.systemDialog.noticeDismiss': '閉じる',
 };
 
 export default virtualCitySystemJA;

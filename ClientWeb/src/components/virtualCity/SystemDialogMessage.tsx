@@ -8,6 +8,10 @@
  *     show_commands 渲染「已调整视角」徽章；report 渲染 PredictionReportView；
  *     error 渲染内联红条（§7.1 内联层，全局 toast 由 hook 上报）。
  *
+ * 批次 84 §4.3：新增 role='agent' —— 其它 Agent 的**上行来信**，渲染成
+ * 「📨 来自 <Agent>」独立卡片（与用户 / 助手气泡明显区分，含来源 Agent、
+ * 正文与时间）。
+ *
  * 全部文案走 i18n `t()`（三语同步，缺键只降级为空串，绝不白屏）。
  */
 
@@ -121,6 +125,29 @@ interface Props {
 export function SystemDialogMessage({ message }: Props) {
   const t = useT();
   const isUser = message.role === 'user';
+  // 批次 84：其它 Agent 的上行来信（role='agent'）—— 独立卡片，不混进助手气泡。
+  const isAgentLetter = message.role === 'agent';
+
+  if (isAgentLetter) {
+    return (
+      <div
+        className="virtualCity-sysmsg virtualCity-sysmsg--agent"
+        data-testid="virtualCity-system-agent-letter"
+      >
+        <div className="virtualCity-sysmsg__letter-head">
+          <span className="virtualCity-sysmsg__letter-icon" aria-hidden="true">📨</span>
+          <span className="virtualCity-sysmsg__letter-from">
+            {t('virtualCity.systemDialog.agentMessageFrom' as TKey)}{' '}
+            {message.agent_from || t('virtualCity.systemDialog.agentMessageUnknown' as TKey)}
+          </span>
+          {message.ts ? (
+            <span className="virtualCity-sysmsg__letter-time">{fmtTime(message.ts)}</span>
+          ) : null}
+        </div>
+        <div className="virtualCity-sysmsg__letter-text">{message.text}</div>
+      </div>
+    );
+  }
 
   return (
     <div

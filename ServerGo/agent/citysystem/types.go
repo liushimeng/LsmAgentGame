@@ -41,6 +41,10 @@ const (
 	EventShowCommand = "show_command"
 	// EventReport 预测报告卡片(query_prediction_report 命中时下发)。
 	EventReport = "report"
+	// EventAgentMessage 其它 Agent 的上行来信(批次84 §4.3.2「Agent 来信」):
+	// 前端渲染「📨 来自 <Agent>」卡片;同一消息在下一轮 system 提示词
+	// 【来自其它 Agent 的消息】段注入一次。
+	EventAgentMessage = "agent_message"
 	// EventAgentEnd 一轮对话结束。
 	EventAgentEnd = "agent_end"
 	// EventError 一轮对话异常。
@@ -48,6 +52,21 @@ const (
 	// EventCleared 会话已清空(前端提示)。
 	EventCleared = "cleared"
 )
+
+// IncomingMessage 是一条来自其它 Agent 的上行消息(批次84「Agent 来信」)。
+//
+// 载荷形态与 WS 帧 game.virtual_city_system_event(kind=agent_message) 的
+// data 段逐字一致:
+//
+//	{"from":"LsmAgentGame-City-Chrome","text":"…采集到的行情摘要…","ts":1730000000000}
+//
+// 存储:ConversationStore 的**独立来信队列**(环形 ≤20,不进 messages 历史);
+// 下一轮构造 system 提示词时注入「【来自其它 Agent 的消息】」段(≤5,时间倒序)。
+type IncomingMessage struct {
+	From string `json:"from"`
+	Text string `json:"text"`
+	Ts   int64  `json:"ts"`
+}
 
 // SystemEvent 是 Agent → 前端的事件流载荷(WS 帧
 // game.virtual_city_system_event 的 data 段)。
