@@ -2,7 +2,8 @@
 // 2026-11-05 §批次84 扩展 Agent 目录能力)。
 //
 // 契约: lag_docs/虚拟城市/已实现/81-CitySystem-Agent与系统对话/01-方案设计.md §3.1;
-//       lag_docs/虚拟城市/已实现/84-全维度事件体系与Agent双向对话/01-方案设计.md §4.3.1。
+//
+//	lag_docs/虚拟城市/已实现/84-全维度事件体系与Agent双向对话/01-方案设计.md §4.3.1。
 //
 // 职责:Agent 之间的**注册 / 寻址 / 请求-响应 / 单向投递**。不感知 LLM,
 // 不感知引擎 —— handler 内部想调什么都行,本包只做路由。
@@ -16,6 +17,9 @@
 // Post 走有缓冲 channel(cap 64)异步投递,满则丢弃并告警,绝不阻塞调用方
 // (WS handler goroutine 不能被慢 Agent 拖住)。
 //
+// 批次86 §3.4:Send / Post / postLoop 的每次投递结果写入包级 outbox
+// (DefaultOutbox);SendWithRetry 提供带退避的重试(未注册不重试)。
+//
 // 并发:Register/Unregister/Send 全程持锁;handler 在**调用方 goroutine** 执行,
 // 超时由调用方 context 控制(不在此处包一层)。
 //
@@ -24,14 +28,17 @@
 //   - AgentDescriptor + Describe(roomID):结构化 Agent 目录(类级 + 房间级);
 //   - RegisterWith / RegisterRoomWith:注册 handler 的同时登记能力描述
 //     (消息类型 + 一句话描述),供 list_agents 展示。
+//
 // 旧 Register/RegisterRoom 语义保留:未登记描述 ⇒ MessageTypes 为空、Description 为空。
 package citybus
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"LsmAgentGame/logger"
 
@@ -70,8 +77,23 @@ type agentMeta struct {
 	desc  string
 }
 
-// postQueueCap 是 Post 异步队列容量(满则丢弃 + Warn,不阻塞)。
+// postQueueCap 是 Post 异步队列容量(满则丢弃 + Warn + outbox dropped,不阻塞)。
 const postQueueCap = 64
+
+// ErrAgentNotRegistered 是「目标 Agent 未注册」的哨兵错误(批次86 §3.4.2)。
+//
+// Send 用它包装具体目标,使 SendWithRetry 能据此判定「确定性失败、不重试」;
+// Error() 文案保持 "agent not registered: <to>"(既有契约零回归,
+// citysystem busFailure 的 strings.Contains 仍然命中)。
+var ErrAgentNotRegistered = errors.New("agent not registered")
+
+// SendWithRetry 的重试参数(批次86 §3.4.2):
+//
+//	sendRetryMaxAttempts 总尝试次数(含首次);
+//	sendRetryBackoff 各次重试前的退避(50ms / 150ms,指数退避)。
+const sendRetryMaxAttempts = 3
+
+var sendRetryBackoff = []time.Duration{50 * time.Millisecond, 150 * time.Millisecond}
 
 // Message 是一次 Agent 间通信的载荷。
 type Message struct {
@@ -297,18 +319,94 @@ func (h *Hub) lookup(roomID, class string) Handler {
 	return h.classes[class]
 }
 
-// Send 同步请求-响应:房间级优先,回退类级;都未注册 ⇒ error。
-func (h *Hub) Send(ctx context.Context, roomID, from, to, typ string, payload any) (any, error) {
+// send 是 Send / SendWithRetry 的实现内核(纯投递,不记 outbox)。
+func (h *Hub) send(ctx context.Context, roomID, from, to, typ string, payload any) (any, error) {
 	handler := h.lookup(roomID, to)
 	if handler == nil {
-		return nil, fmt.Errorf("agent not registered: %s", to)
+		return nil, fmt.Errorf("%w: %s", ErrAgentNotRegistered, to)
 	}
 	return handler(ctx, Message{
 		From: from, To: to, Type: typ, RoomID: roomID, Payload: payload,
 	})
 }
 
+// Send 同步请求-响应(单次,无重试):房间级优先,回退类级;都未注册 ⇒ error。
+//
+// 批次86 §3.4.1:成功记 outbox delivery="sent",失败记 delivery="failed"。
+// 语义与返回值与既有契约逐字一致(单次尝试)。
+func (h *Hub) Send(ctx context.Context, roomID, from, to, typ string, payload any) (any, error) {
+	reply, err := h.send(ctx, roomID, from, to, typ, payload)
+	rec := OutboxRecord{
+		RoomID:   roomID,
+		From:     from,
+		To:       to,
+		Type:     typ,
+		Delivery: OutboxSent,
+	}
+	if err != nil {
+		rec.Delivery = OutboxFailed
+		rec.ErrMsg = err.Error()
+	}
+	defaultOutbox.Record(rec)
+	return reply, err
+}
+
+// SendWithRetry 同步请求-响应(带重试;批次86 §3.4.2)。
+//
+// 重试策略:最多 3 次,间隔 50ms / 150ms(指数退避);仅对「目标未注册」之外的
+// 错误重试(未注册是确定性失败,重试无意义)。每次尝试各写一条 outbox:
+// 成功 ⇒ delivery="sent";失败 ⇒ delivery="failed";Retries = 已重试次数。
+// 退避等待尊重 ctx 取消(立即返回 ctx.Err(),不阻塞调用方)。
+func (h *Hub) SendWithRetry(ctx context.Context, roomID, from, to, typ string, payload any) (any, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var lastErr error
+	for attempt := 0; attempt < sendRetryMaxAttempts; attempt++ {
+		if attempt > 0 {
+			timer := time.NewTimer(sendRetryBackoff[attempt-1])
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				defaultOutbox.Record(OutboxRecord{
+					RoomID: roomID, From: from, To: to, Type: typ,
+					Delivery: OutboxFailed, ErrMsg: ctx.Err().Error(), Retries: attempt,
+				})
+				return nil, ctx.Err()
+			case <-timer.C:
+			}
+		}
+		reply, err := h.send(ctx, roomID, from, to, typ, payload)
+		if err == nil {
+			defaultOutbox.Record(OutboxRecord{
+				RoomID: roomID, From: from, To: to, Type: typ,
+				Delivery: OutboxSent, Retries: attempt,
+			})
+			return reply, nil
+		}
+		lastErr = err
+		defaultOutbox.Record(OutboxRecord{
+			RoomID: roomID, From: from, To: to, Type: typ,
+			Delivery: OutboxFailed, ErrMsg: err.Error(), Retries: attempt,
+		})
+		if errors.Is(err, ErrAgentNotRegistered) {
+			return nil, err
+		}
+	}
+	return nil, lastErr
+}
+
+// OutboxSnapshot 返回包级 outbox 留痕(新→旧;副本)。
+//
+// limit > 0 时最多返回最新 limit 条;limit ≤ 0 返回全部。
+func (h *Hub) OutboxSnapshot(limit int) []OutboxRecord {
+	return defaultOutbox.Snapshot(limit)
+}
+
 // Post 单向异步投递:队列满则丢弃并 Warn,不阻塞调用方。
+//
+// 批次86 §3.4.1:入队记 delivery="posted";队列满记 delivery="dropped"
+// (不再静默丢弃),返回值仍为 nil(不阻塞调用方,语义不变)。
 func (h *Hub) Post(ctx context.Context, roomID, from, to, typ string, payload any) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -316,6 +414,10 @@ func (h *Hub) Post(ctx context.Context, roomID, from, to, typ string, payload an
 	item := postItem{ctx: ctx, roomID: roomID, from: from, to: to, typ: typ, payload: payload}
 	select {
 	case h.posts <- item:
+		defaultOutbox.Record(OutboxRecord{
+			RoomID: roomID, From: from, To: to, Type: typ,
+			Delivery: OutboxPosted,
+		})
 		return nil
 	default:
 		logger.L().Warn("citybus: post queue full, message dropped",
@@ -323,6 +425,10 @@ func (h *Hub) Post(ctx context.Context, roomID, from, to, typ string, payload an
 			zap.String("from", from),
 			zap.String("to", to),
 			zap.String("type", typ))
+		defaultOutbox.Record(OutboxRecord{
+			RoomID: roomID, From: from, To: to, Type: typ,
+			Delivery: OutboxDropped, ErrMsg: "post queue full",
+		})
 		return nil
 	}
 }
@@ -351,6 +457,10 @@ func (h *Hub) postLoop() {
 					zap.String("to", item.to),
 					zap.String("type", item.typ),
 					zap.Error(err))
+				defaultOutbox.Record(OutboxRecord{
+					RoomID: item.roomID, From: item.from, To: item.to, Type: item.typ,
+					Delivery: OutboxFailed, ErrMsg: err.Error(),
+				})
 			}
 		}
 	}

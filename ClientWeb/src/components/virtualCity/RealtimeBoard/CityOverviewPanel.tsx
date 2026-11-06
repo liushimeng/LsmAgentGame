@@ -31,6 +31,8 @@ interface KpiRow {
   label: string;
   /** 已格式化数值（缺失时统一为「—」）。 */
   value: string;
+  /** 数值告警态（如事件积压 > 0 ⇒ 红色强调；默认 false）。 */
+  alert?: boolean;
 }
 
 /** 一个 KPI 分组。 */
@@ -71,6 +73,18 @@ export function CityOverviewPanel({ gameState }: CityOverviewPanelProps) {
   }
 
   const { cycle, market, central_bank, my } = gameState;
+  // ── 批次86 §3.3：关键指标（game.state.key_metrics）——旧后端 omit ⇒ 全组「—」。
+  const keyMetrics = gameState.key_metrics ?? null;
+  // 满意度：0..100 一位小数；缺失 ≠ 0（三态纪律）。
+  const satisfactionText = (() => {
+    const v = keyMetrics?.satisfaction;
+    if (v === undefined || v === null || !Number.isFinite(v)) return '—';
+    return `${v.toFixed(1)} / 100`;
+  })();
+  // 事件积压 > 0 ⇒ 红色告警（颜色 + 文案双通道；数值本身仍是整数）。
+  const backlog = keyMetrics?.event_queue_backlog;
+  const backlogAlert =
+    typeof backlog === 'number' && Number.isFinite(backlog) && backlog > 0;
   const society = gameState.society ?? null;
   const cm = gameState.consumer_market ?? null;
   const lm = gameState.labor_market ?? null;
@@ -130,6 +144,34 @@ export function CityOverviewPanel({ gameState }: CityOverviewPanelProps) {
     : null;
 
   const groups: KpiGroup[] = [
+    {
+      // ── 批次86 §3.3：关键指标（需求书 §五.3 硬要求）——置顶于时间与周期之前。
+      key: 'keyMetrics',
+      title: t('virtualCity.dash.keyMetrics.title' as TKey),
+      rows: [
+        {
+          key: 'population',
+          label: t('virtualCity.dash.keyMetrics.population' as TKey),
+          value: cnt(keyMetrics?.population),
+        },
+        {
+          key: 'economy',
+          label: t('virtualCity.dash.keyMetrics.economy' as TKey),
+          value: formatCny(keyMetrics?.economic_output),
+        },
+        {
+          key: 'satisfaction',
+          label: t('virtualCity.dash.keyMetrics.satisfaction' as TKey),
+          value: satisfactionText,
+        },
+        {
+          key: 'eventBacklog',
+          label: t('virtualCity.dash.keyMetrics.eventBacklog' as TKey),
+          value: cnt(keyMetrics?.event_queue_backlog),
+          alert: backlogAlert,
+        },
+      ],
+    },
     {
       key: 'time',
       title: t('virtualCity.dash.overview.time' as TKey),
@@ -511,13 +553,26 @@ export function CityOverviewPanel({ gameState }: CityOverviewPanelProps) {
   return (
     <div className="virtualCity-dash__overview" data-testid="virtualCity-dash-overview">
       {groups.map((g) => (
-        <div className="virtualCity-dash__ov-group" key={g.key}>
+        <div
+          className={
+            'virtualCity-dash__ov-group' +
+            (g.key === 'keyMetrics' ? ' virtualCity-dash__ov-group--kpi' : '')
+          }
+          key={g.key}
+        >
           <div className="virtualCity-dash__ov-group-title">{g.title}</div>
           <div className="virtualCity-dash__ov-grid">
             {g.rows.map((r) => (
               <div className="virtualCity-dash__ov-item" key={r.key}>
                 <span className="virtualCity-dash__ov-label">{r.label}</span>
-                <span className="virtualCity-dash__ov-value">{r.value}</span>
+                <span
+                  className={
+                    'virtualCity-dash__ov-value' +
+                    (r.alert ? ' virtualCity-dash__ov-value--alert' : '')
+                  }
+                >
+                  {r.value}
+                </span>
               </div>
             ))}
           </div>

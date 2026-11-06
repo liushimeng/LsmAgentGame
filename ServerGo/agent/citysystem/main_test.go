@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"LsmAgentGame/config"
+	"LsmAgentGame/game/virtual_city"
 	"LsmAgentGame/logger"
 )
 
@@ -13,5 +14,15 @@ import (
 // 线路策略并发用例会多 goroutine 首次触发日志,-race 下会误报)。
 func TestMain(m *testing.M) {
 	_ = logger.Init(&config.Config{})
-	os.Exit(m.Run())
+	// 批次86:场景注入会落盘快照到 ./virtual_city_saves/<roomID>/;
+	// 测试重定向到临时目录,避免污染仓库工作目录。
+	dir, _ := os.MkdirTemp("", "vc-citysystem-test-")
+	if dir != "" {
+		virtual_city.SetSnapshotDir(dir)
+	}
+	code := m.Run()
+	if dir != "" {
+		_ = os.RemoveAll(dir)
+	}
+	os.Exit(code)
 }

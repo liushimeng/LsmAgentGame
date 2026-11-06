@@ -13,6 +13,7 @@ package virtual_city
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -245,6 +246,15 @@ func TestSeats12_DistrictsRingTwoFrozen(t *testing.T) {
 	}
 }
 
+// testRoomSeq 测试房间 id 自增序列(批次86)。
+//
+// ⚠ 为什么不能写死同一个 roomID:批次86 起 Start 会按 roomID 读
+// ./virtual_city_saves/<roomID>/recovery.json 做灾难恢复,而 trySettle
+// 会写该文件 ⇒ 同一 ID 的下一个测试房会**恢复到上一个测试的月结点**
+// (表现为「stale agent month」/ 数值口径漂移)。生产环境的 roomID 来自
+// DB 持久化的房间,不存在复用;测试必须自造唯一 id。
+var testRoomSeq uint64
+
 // newRoomWithSeats 构造一个已入座 n 个 bot 的房(无 loader/无 LLM 注册表;
 // 发卡走合成兜底)。
 func newRoomWithSeats(t *testing.T, n int) *VirtualCityRoom {
@@ -252,7 +262,7 @@ func newRoomWithSeats(t *testing.T, n int) *VirtualCityRoom {
 	if n < 0 || n > MaxSeats {
 		t.Fatalf("n=%d out of [0,%d]", n, MaxSeats)
 	}
-	r := NewVirtualCityRoom("room-seats", 3000, 7, 4)
+	r := NewVirtualCityRoom(fmt.Sprintf("room-seats-%d", atomic.AddUint64(&testRoomSeq, 1)), 3000, 7, 4)
 	botUsers := make(map[int]string, n)
 	botModels := make(map[int]string, n)
 	for seat := 0; seat < n; seat++ {

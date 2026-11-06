@@ -33,6 +33,9 @@ func TestMain(m *testing.M) {
 		}
 	}
 	SetCalibrationRunsDir(dir)
+	// 批次86:快照写盘目录一并重定向到临时目录(ApplyScenario / 月结恢复点
+	// 都会落盘),避免污染仓库工作目录。
+	SetSnapshotDir(dir)
 	code := m.Run()
 	if cleanup {
 		_ = os.RemoveAll(dir)

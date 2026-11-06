@@ -66,6 +66,8 @@ import { BoardSection } from './BoardSection';
 import { CityOverviewPanel } from './CityOverviewPanel';
 import { DataSourcesPanel } from './DataSourcesPanel';
 import { CalibrationPanel } from './CalibrationPanel';
+import { EventLifecyclePanel } from './EventLifecyclePanel';
+import { SnapshotPanel } from './SnapshotPanel';
 import {
   DASHBOARD_CATALOG,
   DASHBOARD_GROUP_IDS,
@@ -336,6 +338,17 @@ export function VirtualCityDashboard({
         return <DataSourcesPanel sources={snapshot?.data_sources ?? []} />;
       case 'calibration':
         return <CalibrationPanel gameState={gameState} />;
+      // 批次86：可靠性与可观测性 —— 事件生命周期留痕 / 存档管理。
+      case 'event-lifecycle':
+        return (
+          <EventLifecyclePanel
+            roomId={roomId}
+            gameState={gameState}
+            readOnly={readOnly}
+          />
+        );
+      case 'snapshots':
+        return <SnapshotPanel roomId={roomId} readOnly={readOnly} />;
       default:
         return null;
     }

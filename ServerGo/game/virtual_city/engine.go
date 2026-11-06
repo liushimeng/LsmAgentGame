@@ -227,6 +227,12 @@ type World struct {
 	// WorldEventAutoKinds 该月已自动注入的 scenario_kind 集合。
 	WorldEventAutoKinds map[string]bool
 
+	// ── 批次86(2026-11-06 §可靠性与可观测性)──
+	// EventLifecycleLog 事件生命周期留痕环(≤50,新→旧;4 阶段结构化:
+	// 触发/决策/执行/结果)。见 event_lifecycle.go。
+	// 零 rand —— 不参与 StateHash(仅审计留痕与看板展示)。
+	EventLifecycleLog []EventLifecycleTrace
+
 	// ── 批次71(2026-10-21 §校准与验证框架)──
 	// OffLedger 账外调整登记簿(不经 Ledger 的现金变动登记;见 offledger.go)。
 	// NewWorld 恒置;惰性初始化 nil 安全。

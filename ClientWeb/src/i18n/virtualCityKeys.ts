@@ -1387,4 +1387,101 @@ export interface VirtualCityDict {
   /** 带占位符 {detail}。focus_entity 的 vehicle:<id> 未命中。 */
   'virtualCity.systemDialog.noticeVehicleNotFound': string;
   'virtualCity.systemDialog.noticeDismiss': string;
+
+  // ── 批次86 · 可靠性与可观测性（方案 §5）──────────────────────────────
+  // 文案在 locales/virtualCityDash-{zh,en,ja}.ts（与看板外壳同文件）。
+  /** 城市总览顶部「关键指标」组（需求书 §五.3）。 */
+  'virtualCity.dash.keyMetrics.title': string;
+  'virtualCity.dash.keyMetrics.population': string;
+  'virtualCity.dash.keyMetrics.economy': string;
+  'virtualCity.dash.keyMetrics.satisfaction': string;
+  'virtualCity.dash.keyMetrics.eventBacklog': string;
+  /** 第 13 / 14 个看板维度。 */
+  'virtualCity.dash.dim.eventLifecycle': string;
+  'virtualCity.dash.dim.snapshots': string;
+
+  // 事件生命周期留痕面板（EventLifecyclePanel）
+  /** 带占位符 {n}（留痕条数）。 */
+  'virtualCity.dash.eventLifecycle.total': string;
+  'virtualCity.dash.eventLifecycle.refresh': string;
+  'virtualCity.dash.eventLifecycle.loading': string;
+  /** 带占位符 {msg}。 */
+  'virtualCity.dash.eventLifecycle.loadFailed': string;
+  'virtualCity.dash.eventLifecycle.empty': string;
+  'virtualCity.dash.eventLifecycle.replay': string;
+  'virtualCity.dash.eventLifecycle.replaying': string;
+  /** 带占位符 {msg}。 */
+  'virtualCity.dash.eventLifecycle.replayFailed': string;
+  'virtualCity.dash.eventLifecycle.hashMatch': string;
+  'virtualCity.dash.eventLifecycle.hashMismatch': string;
+  'virtualCity.dash.eventLifecycle.noSnapshot': string;
+  'virtualCity.dash.eventLifecycle.readOnly': string;
+  'virtualCity.dash.eventLifecycle.triggeredAt': string;
+  'virtualCity.dash.eventLifecycle.detail': string;
+  'virtualCity.dash.eventLifecycle.phase.trigger': string;
+  'virtualCity.dash.eventLifecycle.phase.decision': string;
+  'virtualCity.dash.eventLifecycle.phase.execution': string;
+  'virtualCity.dash.eventLifecycle.phase.result': string;
+  'virtualCity.dash.eventLifecycle.passed': string;
+  'virtualCity.dash.eventLifecycle.rejected': string;
+  'virtualCity.dash.eventLifecycle.outcome': string;
+  'virtualCity.dash.eventLifecycle.magnitude': string;
+  'virtualCity.dash.eventLifecycle.duration': string;
+  'virtualCity.dash.eventLifecycle.target': string;
+  'virtualCity.dash.eventLifecycle.metric': string;
+  'virtualCity.dash.eventLifecycle.resultOutcome': string;
+  'virtualCity.dash.eventLifecycle.errCode': string;
+  'virtualCity.dash.eventLifecycle.errMsg': string;
+  'virtualCity.dash.eventLifecycle.stateHash': string;
+  'virtualCity.dash.eventLifecycle.snapshot': string;
+  // 触发来源（未知回落原字符串）
+  'virtualCity.dash.eventLifecycle.source.manual': string;
+  'virtualCity.dash.eventLifecycle.source.agent_tool': string;
+  'virtualCity.dash.eventLifecycle.source.realworld_rule': string;
+  'virtualCity.dash.eventLifecycle.source.auto_inject': string;
+  'virtualCity.dash.eventLifecycle.source.replay': string;
+  'virtualCity.dash.eventLifecycle.source.system': string;
+  // 结果状态（未知 / 空回落「待判定」）
+  'virtualCity.dash.eventLifecycle.result.success': string;
+  'virtualCity.dash.eventLifecycle.result.failed': string;
+  'virtualCity.dash.eventLifecycle.result.rolled_back': string;
+  'virtualCity.dash.eventLifecycle.result.pending': string;
+
+  // 存档管理面板（SnapshotPanel）
+  'virtualCity.dash.snapshot.save': string;
+  'virtualCity.dash.snapshot.saving': string;
+  'virtualCity.dash.snapshot.refresh': string;
+  'virtualCity.dash.snapshot.loading': string;
+  /** 带占位符 {msg}。 */
+  'virtualCity.dash.snapshot.listFailed': string;
+  /** 带占位符 {msg}。 */
+  'virtualCity.dash.snapshot.saveFailed': string;
+  'virtualCity.dash.snapshot.restore': string;
+  /** 带占位符 {msg}。 */
+  'virtualCity.dash.snapshot.restoreFailed': string;
+  'virtualCity.dash.snapshot.delete': string;
+  /** 带占位符 {msg}。 */
+  'virtualCity.dash.snapshot.deleteFailed': string;
+  'virtualCity.dash.snapshot.rollback': string;
+  'virtualCity.dash.snapshot.rollingBack': string;
+  /** 带占位符 {msg}。 */
+  'virtualCity.dash.snapshot.rollbackFailed': string;
+  'virtualCity.dash.snapshot.noRollback': string;
+  'virtualCity.dash.snapshot.readOnly': string;
+  'virtualCity.dash.snapshot.empty': string;
+  /** 带占位符 {id}（二次确认文案）。 */
+  'virtualCity.dash.snapshot.confirmRestore': string;
+  /** 带占位符 {id}（二次确认文案）。 */
+  'virtualCity.dash.snapshot.confirmDelete': string;
+  /** 带占位符 {id}（二次确认文案）。 */
+  'virtualCity.dash.snapshot.confirmRollback': string;
+  'virtualCity.dash.snapshot.col.createdAt': string;
+  'virtualCity.dash.snapshot.col.month': string;
+  'virtualCity.dash.snapshot.col.size': string;
+  'virtualCity.dash.snapshot.col.stateHash': string;
+  // 快照用途（未知回落原字符串）
+  'virtualCity.dash.snapshot.reason.manual': string;
+  'virtualCity.dash.snapshot.reason.auto_rollback': string;
+  'virtualCity.dash.snapshot.reason.recovery': string;
+  'virtualCity.dash.snapshot.reason.replay': string;
 }

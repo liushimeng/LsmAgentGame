@@ -109,3 +109,6 @@ go-web-debug-tool/GoWebDebugTool
 
 # 批次72 校准运行记录写盘(ServerGo 工作目录)
 calibration_runs/
+
+# 批次86 虚拟城市快照写盘(服务器工作目录;测试应经 SetSnapshotDir 重定向)
+virtual_city_saves/

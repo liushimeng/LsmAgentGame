@@ -114,6 +114,26 @@ export const DASHBOARD_CATALOG: DashboardDimension[] = [
     unit: 'mixed',
     refresh: 'push',
   },
+  {
+    // 批次86：第 13 个维度「事件生命周期」——4 阶段留痕时间线 + 回放。
+    id: 'event-lifecycle',
+    group: 'city',
+    titleKey: 'virtualCity.dash.dim.eventLifecycle',
+    source: 'game_state',
+    scope: 'room',
+    unit: 'mixed',
+    refresh: 'pull',
+  },
+  {
+    // 批次86：第 14 个维度「存档管理」——存档 / 读档 / 删除 / 回滚。
+    id: 'snapshots',
+    group: 'city',
+    titleKey: 'virtualCity.dash.dim.snapshots',
+    source: 'game_state',
+    scope: 'room',
+    unit: 'mixed',
+    refresh: 'pull',
+  },
   // ── 市场金融 ──
   {
     id: 'market',

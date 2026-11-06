@@ -24,6 +24,8 @@ import type {
 import type { VirtualCityCalibration } from './virtualCityCalibration';
 import type { WorldEventsSnapshot } from './virtualCityWorldEvent';
 import type { VirtualCitySenseResult } from './virtualCitySense';
+// 批次86：可靠性与可观测性契约类型（key_metrics / event_lifecycle / 快照）。
+import type { VirtualCityEventLifecycleTrace, VirtualCityKeyMetrics } from './virtualCityReliability';
 
 // ─── 虚拟城市 (VirtualCity) types ───
 //
@@ -394,6 +396,9 @@ export * from './virtualCitySense';
 
 // 批次71：校准与验证契约类型（game.state.calibration）——同上，迁出独立文件。
 export * from './virtualCityCalibration';
+
+// 批次86：可靠性与可观测性契约类型（key_metrics / event_lifecycle / 快照）——同上。
+export * from './virtualCityReliability';
 
 /** 仅本人座位填充；观战者 null。 */
 export interface VirtualCityMyState {
@@ -811,6 +816,11 @@ export interface VirtualCityGameState {
    * 旧后端 omit → **缺省视为 true**（向后兼容，行为不变）。
    */
   system_agent_enabled?: boolean;
+  /** 批次86 §3.3：关键指标（人口 / 经济产出 / 满意度 / 事件队列积压）。
+   *  后端恒下发（空态零值）；旧后端 omit ⇒ 面板显示「—」，绝不崩。 */
+  key_metrics?: VirtualCityKeyMetrics;
+  /** 批次86 §3.1：事件生命周期留痕环（新→旧 ≤50；恒为数组，空 = 无留痕）。 */
+  event_lifecycle?: VirtualCityEventLifecycleTrace[];
 }
 
 // ── 市长选举（批次 20 文档 3 A1/A3；game.state.public_services 选举段）────

@@ -28,7 +28,7 @@ import (
 )
 
 // New constructs the *gin.Engine.
-func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcScenarioAPI *api.VirtualCityScenarioAPI, vcPredictionAPI *api.VirtualCityPredictionAPI, vcCityAPI *api.VirtualCityAPI, vcRealtimeAPI *api.VirtualCityRealtimeAPI, vcDashboardAPI *api.VirtualCityDashboardAPI, vcSystemAPI *api.VirtualCitySystemAPI, knowledgeAPI *api.KnowledgeAPI) *gin.Engine {
+func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captchaAPI *api.CaptchaAPI, versionAPI *api.VersionAPI, userAPI *api.UserAPI, gitLogAPI *api.GitLogAPI, roomAPI *api.RoomAPI, adminAPI *api.AdminAPI, walletAPI *api.WalletAPI, llmAPI *api.LlmAPI, wikiAPI *api.WikiAPI, modelAdminAPI *api.ModelAdminAPI, modelLogAPI *api.ModelLogAPI, modelWalletAPI *api.ModelWalletAPI, modelGrantAPI *api.ModelGrantAPI, modelAgentMemoryAPI *api.ModelAgentMemoryAPI, propAPI *api.PropAPI, sourceStatsAPI *api.SourceStatsAPI, recallChatAPI *api.RecallChatAPI, werewolf20260812API *api.Werewolf20260812API, werewolfReviewAPI *api.WerewolfReviewAPI, debateAPI *api.DebateAPI, vcSurveyAPI *api.VirtualCitySurveyAPI, vcScenarioAPI *api.VirtualCityScenarioAPI, vcPredictionAPI *api.VirtualCityPredictionAPI, vcCityAPI *api.VirtualCityAPI, vcRealtimeAPI *api.VirtualCityRealtimeAPI, vcDashboardAPI *api.VirtualCityDashboardAPI, vcSystemAPI *api.VirtualCitySystemAPI, vcReliabilityAPI *api.VirtualCityReliabilityAPI, knowledgeAPI *api.KnowledgeAPI) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 
@@ -286,6 +286,15 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		// WS 为主通道,HTTP 为首屏历史/兜底)。
 		vcGames.GET("/rooms/:id/system_agent/history", vcSystemAPI.History)
 		vcGames.POST("/rooms/:id/system_agent/reset", vcSystemAPI.Reset)
+		// 2026-11-06 §批次86 — 可靠性与可观测性:存档 / 读档 / 留痕 / 回放
+		// (契约 §4;登录即可,观察者显式操作)。
+		vcGames.POST("/rooms/:id/snapshot", vcReliabilityAPI.Snapshot)
+		vcGames.GET("/rooms/:id/snapshots", vcReliabilityAPI.ListSnapshots)
+		vcGames.POST("/rooms/:id/snapshot/restore", vcReliabilityAPI.RestoreSnapshot)
+		vcGames.DELETE("/rooms/:id/snapshot/:snapshot_id", vcReliabilityAPI.DeleteSnapshot)
+		vcGames.POST("/rooms/:id/snapshot/rollback", vcReliabilityAPI.Rollback)
+		vcGames.GET("/rooms/:id/event_lifecycle", vcReliabilityAPI.EventLifecycle)
+		vcGames.POST("/rooms/:id/event_lifecycle/replay", vcReliabilityAPI.ReplayTrace)
 	}
 
 	// 2026-10-20 §批次65 — City-Chrome 实时看板(需登录;契约 §3.5)。

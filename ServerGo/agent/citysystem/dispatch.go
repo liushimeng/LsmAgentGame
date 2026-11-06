@@ -127,7 +127,7 @@ func (a *Agent) injectScenario(kind string, magnitude, durationMonths int, targe
 	if kind == "" {
 		return "失败:缺少场景 kind(请从场景目录选择)", true
 	}
-	rec, effects, e := a.room.ApplyScenario(kind, magnitude, durationMonths, target, note)
+	rec, effects, e := a.room.ApplyScenarioFromAgent(kind, magnitude, durationMonths, target, note)
 	if e != nil {
 		return "失败:" + e.Error(), true
 	}

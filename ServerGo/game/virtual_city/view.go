@@ -122,6 +122,12 @@ type ClientGameState struct {
 	// 显示/隐藏「💬 系统对话」按钮;false 时 WS 帧返回 35058(一键回退)。
 	// 由 ws 层在 BuildClientState 之后按服务端配置填充(视图层不感知配置)。
 	SystemAgentEnabled bool `json:"system_agent_enabled"`
+	// KeyMetrics 批次86 §3.3:关键指标(人口/经济/满意度/事件队列积压)。
+	// ⚠ 总是下发(空态零值,不 omit)—— 前端首屏不依赖网络也能渲染骨架。
+	KeyMetrics KeyMetricsJSON `json:"key_metrics"`
+	// EventLifecycle 批次86 §4.2:事件生命周期留痕(新→旧,≤50;恒为数组)。
+	// ⚠ 视图代码见 view_key_metrics.go。
+	EventLifecycle []EventLifecycleTrace `json:"event_lifecycle"`
 }
 
 // ConsumerMarketJSON 是 consumer_market 子结构(P1 §6.1)。
@@ -980,6 +986,8 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 		LedgerRecent:    make([]LedgerJSON, 0),
 		EventsRecent:    make([]EventJSON, 0),
 		ScenariosRecent: make([]ScenarioAppliedRecord, 0),
+		// 批次86 §4.2:留痕恒为数组(未开局 / 无留痕 ⇒ [])。
+		EventLifecycle: make([]EventLifecycleTrace, 0),
 	}
 	// 批次 27(§3.4):时间比例/季节/天气现算。置于 world==nil 早退分支之前
 	// —— 未开局房同样下发纪元附近的占位值(前端仅渲染,无业务分支)。
@@ -1016,6 +1024,9 @@ func BuildClientState(roomID string, viewer int, world *World, seats [MaxSeats]s
 	}
 	// 批次80:真实世界事件流快照(事件 → 注入 → 城市结果因果链)。
 	cs.WorldEvents = BuildWorldEventsJSON(world)
+	// 批次86 §3.3 / §4.2:关键指标 + 事件生命周期留痕(恒下发,空态零值/[])。
+	cs.KeyMetrics = BuildKeyMetricsJSON(world)
+	cs.EventLifecycle = buildEventLifecycleJSON(world, 0)
 	// 2026-09-21 §虚拟城市:城市背景层快照(未建城 nil → omitempty)。
 	cs.City = citySnap
 	cs.Status = world.Status

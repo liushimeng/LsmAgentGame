@@ -42,7 +42,10 @@ export type VirtualCityPanelTab =
   //   'city-overview' 城市总览（新增聚合面板）/ 'datasources' 数据源清单（新增）。
   | 'city-overview' | 'datasources'
   // 批次71：第 12 个看板维度「校准」（game.state.calibration：回归不变量 + D 指标 + 红线）。
-  | 'calibration';
+  | 'calibration'
+  // 批次86：可靠性与可观测性 —— 事件生命周期留痕（4 阶段时间线 + 回放）
+  //   与存档管理（存档 / 读档 / 删除 / 回滚）。
+  | 'event-lifecycle' | 'snapshots';
 
 /** 市场快照（走势迷你图 + 相对上月箭头用）。 */
 export interface VirtualCityMarketPoint {

@@ -286,6 +286,8 @@ func TestViewContainerJSONTags(t *testing.T) {
 			"world_events",
 			// 批次81:City-System 主 Agent 对话入口开关(city_system.enabled)。
 			"system_agent_enabled",
+			// 批次86 §3.3 / §4.2:关键指标 + 事件生命周期留痕。
+			"key_metrics", "event_lifecycle",
 		}},
 		{"WorldEventsJSON", WorldEventsJSON{}, []string{
 			"auto_enabled", "updated_at", "injected_this_month", "items",

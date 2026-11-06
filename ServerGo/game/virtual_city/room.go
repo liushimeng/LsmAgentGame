@@ -763,22 +763,17 @@ func (r *VirtualCityRoom) Start(loader *profession.Loader) *errcode.Error {
 			p.Domain = cardDomains[seat]
 		}
 	}
-	// P1(§6.5):NewWorld 恒置 EconomyEnabled=true,此处按房间级开关回写。
-	r.World.EconomyEnabled = r.economyEnabled
-	// P1-4(§财商流P1-4 §11):NewWorld 恒置 InsuranceEnabled=true,此处按开关回写。
-	r.World.InsuranceEnabled = r.insuranceEnabled
-	// 批次52(§5):NewWorld 恒置 FamilyEnabled=true,此处按开关回写(回滚阀)。
-	r.World.FamilyEnabled = r.familyEnabled
-	// 批次80:自动注入安全阀参数落进 World(开启 / 每月条数 / 强度上限)。
-	applyAutoScenarioLimits(r.World, r.worldEvent.autoEnabled,
-		r.worldEvent.maxPerMonth, r.worldEvent.maxMagnitude)
-	// 批次20(文档3 A2):市长选举接线 —— NewCivicElection 默认 Enabled=false
-	// (零值=false 家族,勿按上面 InsuranceEnabled 的反向语义写);房间级
-	// 开关 true 才启用。false 时 MonthlyStep 完全 no-op,与升级前逐分不差。
-	if r.World.Election != nil {
-		r.World.Election.Enabled = r.electionEnabled
-	}
+	// P1(§6.5)/ P1-4(§11)/ 批次52(§5)/ 批次80 / 批次20(文档3 A2):房间级
+	// 开关与自动注入安全阀统一回写(实现见 applyWorldConfigLocked)。
+	r.applyWorldConfigLocked(r.World)
 	r.World.StartGame()
+	// 批次86 §3.2.4:灾难恢复 —— 本房存在 recovery.json ⇒ 用快照整体替换
+	// 新建 World(恢复点 = 最近一次成功月结;不存在 ⇒ 正常开局,零回归)。
+	recoveredMonth := 0
+	if rw := r.tryRecoverWorldLocked(); rw != nil {
+		r.World = rw
+		recoveredMonth = rw.Month
+	}
 	// 2026-09-21 §虚拟城市(契约 03 §6):resident_count>0 时建城(确定性:
 	// 房间 seed 派生独立 rng);B5:线路池可用时房间信号量容量 = 总线路数。
 	r.startCityLocked()
@@ -808,9 +803,13 @@ func (r *VirtualCityRoom) Start(loader *profession.Loader) *errcode.Error {
 	// game.state.my 卡面与昵称呈现)。
 	occupied := r.occupiedLocked()
 	age := r.World.Age()
+	startMonth := 1
+	if recoveredMonth > 0 { // 批次86 §3.2.4:读档开局沿用恢复月。
+		startMonth = recoveredMonth
+	}
 	startedPayload := map[string]any{
 		"room_id": r.RoomID, "game_kind": "virtual_city",
-		"month": 1, "age": age, "start_age": age,
+		"month": startMonth, "age": age, "start_age": age,
 	}
 	hooks := r.hooks
 	r.mu.Unlock()
@@ -1081,6 +1080,8 @@ func (r *VirtualCityRoom) trySettle(onFinish func(roomID string)) bool {
 		}
 		return true
 	}
+	// 批次86 §3.2.4:月结成功后异步写灾难恢复点(锁外;失败只 warn,不阻断)。
+	r.writeRecoveryPointAsync()
 	if hooks.OnState != nil {
 		hooks.OnState(roomID)
 	}
@@ -1505,33 +1506,12 @@ func (r *VirtualCityRoom) ListSurveys() []Survey {
 // **锁外**立即广播,随后 OnState 刷新 scenarios_recent。
 // 返回:注入记录 / 即时效果 / 错误(35002 未运行、35055 未知场景、
 // 35056 参数非法、35057 活动场景达上限)。
+//
+// 批次86:函数体已迁至 room_event_lifecycle.go(留痕接线 + §4 行数上限),
+// 此处仅转发,并把触发来源标为 manual。
 func (r *VirtualCityRoom) ApplyScenario(kind string, magnitude, durationMonths int, target, note string) (*ScenarioAppliedRecord, []ScenarioEffect, *errcode.Error) {
-	r.mu.Lock()
-	if r.World == nil || r.Status != StatusPlaying {
-		r.mu.Unlock()
-		return nil, nil, errcode.Code(errcode.ErrVirtualCityNotPlaying) // 35002
-	}
-	evIdx := len(r.World.Events)
-	rec, effects, _, e := applyScenarioToWorld(r.World, kind, magnitude, durationMonths, target, note, time.Now().UnixMilli(), r.seed)
-	var ev EventRecord
-	hasEvent := len(r.World.Events) > evIdx
-	if hasEvent {
-		ev = r.World.Events[evIdx]
-	}
-	hooks := r.hooks
-	roomID := r.RoomID
-	r.mu.Unlock()
-	if e != nil {
-		return nil, nil, e
-	}
-	// ── 锁外回调(§92a)──
-	if hasEvent && hooks.OnEvent != nil {
-		hooks.OnEvent(roomID, ev)
-	}
-	if hooks.OnState != nil {
-		hooks.OnState(roomID)
-	}
-	return rec, effects, nil
+	return r.applyScenarioFromSource(kind, magnitude, durationMonths, target, note,
+		TriggerSourceManual, "ApplyScenario")
 }
 
 // ListScenarios 返回注入记录(最近 ≤20 条,按注入序 = 旧→新,与

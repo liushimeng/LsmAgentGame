@@ -29,6 +29,9 @@ import (
 	"strings"
 
 	"LsmAgentGame/errcode"
+	"LsmAgentGame/logger"
+
+	"go.uber.org/zap"
 )
 
 // 场景目录分组(仅前端展示分组;契约 §5.1)。
@@ -442,7 +445,8 @@ var scenarioDefs = append(append([]scenarioDef{
 
 // ─────────────────────────── 注入 ───────────────────────────
 
-// applyScenarioToWorld 是场景注入的引擎入口(调用方持房间锁)。
+// applyScenarioToWorld 是场景注入的引擎入口(调用方持房间锁;批次86 起为
+// 带留痕包装的**薄壳**,既有调用方零改动)。
 //
 // 返回:记录 / 即时效果 / 活动态(供房间层写入 World.Scenarios)/ 错误。
 // 全部校验在此完成(未知 kind → 35055,参数非法 → 35056,活动上限 → 35057);
@@ -451,37 +455,119 @@ var scenarioDefs = append(append([]scenarioDef{
 // ⚠ 批次71 §4.5:新增 seed 入参(注入记录的 Seed 字段 = 房间层 seed ⇒
 // 注入可复现)。调用方(r)同步改。
 func applyScenarioToWorld(w *World, kind string, magnitude, durationMonths int, target, note string, at int64, seed int64) (*ScenarioAppliedRecord, []ScenarioEffect, *ScenarioActive, *errcode.Error) {
+	return applyScenarioToWorldTraced(w, kind, magnitude, durationMonths, target, note, at, seed, nil)
+}
+
+// applyScenarioToWorldTraced 是带「事件生命周期留痕」的注入入口(批次86 §3.1.3)。
+//
+// trace == nil ⇒ 与 applyScenarioToWorld 逐字一致(零回归:不写留痕环、
+// 不拍快照、StateHash 不变)。
+// trace != nil ⇒ ① 拍 StateHashBefore + 注入前存快照(§3.2,reason=auto_rollback);
+// ② 逐闸门记录决策(unknown_kind / magnitude_limit / params / active_limit);
+// ③ 记录执行参数(强度 / 持续月数 / target);④ 记录结果 + StateHashAfter;
+// ⑤ panic ⇒ 尽力恢复快照 + 标记 rolled_back + 原样上抛(不吞)。
+// 留痕由本函数统一追加进 World.EventLifecycleLog(含失败与 panic 路径)。
+//
+// ⚠ 快照落盘子目录 = ./virtual_city_saves/<roomID>/,roomID 取自 trace.roomID
+// (房间层建 trace 时写入;空 ⇒ 跳过快照,trace.SnapshotID 保持空 ⇒ 不可回放)。
+func applyScenarioToWorldTraced(w *World, kind string, magnitude, durationMonths int, target, note string, at int64, seed int64, trace *EventLifecycleTrace) (*ScenarioAppliedRecord, []ScenarioEffect, *ScenarioActive, *errcode.Error) {
+	roomID := ""
+	if trace != nil {
+		roomID = trace.roomID
+		initEventLifecycleTrace(trace, w, kind, at)
+	}
 	if w == nil {
-		return nil, nil, nil, errcode.Code(errcode.ErrVirtualCityNotPlaying)
+		e := errcode.Code(errcode.ErrVirtualCityNotPlaying)
+		finalizeTraceFailure(trace, nil, e)
+		return nil, nil, nil, e
 	}
 	def, ok := scenarioDefFor(strings.TrimSpace(kind))
 	if !ok {
-		return nil, nil, nil, errcode.Code(errcode.ErrVirtualCityScenarioUnknown)
+		e := errcode.Code(errcode.ErrVirtualCityScenarioUnknown)
+		addGateDecision(trace, EventGateUnknownKind, false, "未知场景 kind:"+strings.TrimSpace(kind))
+		finalizeTraceFailure(trace, w, e)
+		return nil, nil, nil, e
 	}
+	addGateDecision(trace, EventGateUnknownKind, true, "")
 	if magnitude == 0 {
 		magnitude = def.spec.DefaultMagnitude
 	}
 	if magnitude < scenarioMinMagnitude || magnitude > scenarioMaxMagnitude {
-		return nil, nil, nil, errcode.CodeMsg(errcode.ErrVirtualCityScenarioParamsInvalid,
+		e := errcode.CodeMsg(errcode.ErrVirtualCityScenarioParamsInvalid,
 			fmt.Sprintf("场景强度须为 %d-%d(收到 %d)", scenarioMinMagnitude, scenarioMaxMagnitude, magnitude))
+		addGateDecision(trace, EventGateMagnitudeLimit, false,
+			fmt.Sprintf("强度 %d 越界(须 %d-%d)", magnitude, scenarioMinMagnitude, scenarioMaxMagnitude))
+		finalizeTraceFailure(trace, w, e)
+		return nil, nil, nil, e
 	}
+	addGateDecision(trace, EventGateMagnitudeLimit, true, "")
 	if durationMonths == 0 {
 		durationMonths = def.defaultDuration
 	}
 	if durationMonths < 1 || durationMonths > scenarioMaxDurationMonths {
-		return nil, nil, nil, errcode.CodeMsg(errcode.ErrVirtualCityScenarioParamsInvalid,
+		e := errcode.CodeMsg(errcode.ErrVirtualCityScenarioParamsInvalid,
 			fmt.Sprintf("持续月数须为 1-%d(收到 %d)", scenarioMaxDurationMonths, durationMonths))
+		addGateDecision(trace, EventGateParams, false,
+			fmt.Sprintf("持续月数 %d 越界(须 1-%d)", durationMonths, scenarioMaxDurationMonths))
+		finalizeTraceFailure(trace, w, e)
+		return nil, nil, nil, e
 	}
+	addGateDecision(trace, EventGateParams, true, "")
 	if len(w.Scenarios) >= scenarioMaxActive {
-		return nil, nil, nil, errcode.Code(errcode.ErrVirtualCityScenarioActiveLimit)
+		e := errcode.Code(errcode.ErrVirtualCityScenarioActiveLimit)
+		addGateDecision(trace, EventGateActiveLimit, false,
+			fmt.Sprintf("活动场景 %d 个已达上限 %d", len(w.Scenarios), scenarioMaxActive))
+		finalizeTraceFailure(trace, w, e)
+		return nil, nil, nil, e
 	}
+	addGateDecision(trace, EventGateActiveLimit, true, "")
 
 	target = strings.TrimSpace(target)
 	goodsTargets, policyDir, e := scenarioValidateTarget(def.spec.Kind, target)
 	if e != nil {
+		addGateDecision(trace, EventGateParams, false, "target 非法:"+target)
+		finalizeTraceFailure(trace, w, e)
 		return nil, nil, nil, e
 	}
+	addGateDecision(trace, EventGateParams, true, "")
 	note = truncateRunes(strings.TrimSpace(note), scenarioNoteMaxRunes)
+
+	// ③ 执行参数(决策全通过 ⇒ pass)。
+	if trace != nil {
+		trace.ExecutionMagnitude = magnitude
+		trace.ExecutionDuration = durationMonths
+		trace.ExecutionTarget = target
+		trace.DecisionOutcome = EventDecisionPass
+	}
+
+	// ── 注入前快照 + panic 兜底(批次86 §3.1.3 ①⑤)──
+	// 快照必须在任何状态改写之前拍(下方 recordEvent 起即开始改写)。
+	if trace != nil {
+		snapID, snapErr := saveSnapshotForTrace(w, roomID, SnapshotReasonAutoRollback)
+		trace.SnapshotID = snapID
+		if snapErr != nil {
+			logger.L().Warn("virtual_city auto-rollback snapshot skipped",
+				zap.String("room_id", roomID), zap.String("kind", kind), zap.Error(snapErr))
+		}
+		defer func() {
+			if rec := recover(); rec != nil {
+				if snapErr == nil && snapID != "" {
+					if rerr := restoreSnapshotIntoWorld(w, roomID, snapID); rerr != nil {
+						logger.L().Warn("virtual_city auto-rollback restore failed",
+							zap.String("room_id", roomID), zap.String("snapshot_id", snapID), zap.Error(rerr))
+					} else {
+						trace.ResultOutcome = EventResultRolledBack
+					}
+				}
+				if trace.ResultOutcome == "" {
+					trace.ResultOutcome = EventResultFailed
+				}
+				trace.StateHashAfter = w.StateHash()
+				w.appendEventLifecycleTraceLocked(*trace)
+				panic(rec) // 恢复后原样上抛(不吞)
+			}
+		}()
+	}
 
 	// 批次73 O2:真实场景注入事件(scenario_id = 场景 id;target 座位/实体
 	// 进 actors;step 代理口径 inject)。
@@ -714,6 +800,13 @@ func applyScenarioToWorld(w *World, kind string, magnitude, durationMonths int, 
 	w.emitEvent(EventScenario, -1, fmt.Sprintf(
 		"场景注入『%s』L%d(持续 %d 个月,目标:%s)%s",
 		def.spec.Name, magnitude, durationMonths, scenarioTargetLabel(target), scenarioEventEffectSummary(effects)))
+	// ④ 结果(批次86 §3.1.3):效果副本 + After 哈希 + 追加留痕。
+	if trace != nil {
+		trace.ExecutionEffects = append([]ScenarioEffect(nil), effects...)
+		trace.ResultOutcome = EventResultSuccess
+		trace.StateHashAfter = w.StateHash()
+		w.appendEventLifecycleTraceLocked(*trace)
+	}
 	return rec, effects, active, nil
 }
 

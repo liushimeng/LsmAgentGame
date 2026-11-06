@@ -1043,6 +1043,9 @@ func main() {
 	// 2026-11-03 §批次81 — City-System 主 Agent 会话 HTTP 入口(rooms = vcMgr,
 	// agents = ws 层实现;WS 为主通道,HTTP 为首屏历史/兜底)。
 	vcSystemAPI := api.NewVirtualCitySystemAPI(vcMgr, gameSvcWs)
+	// 2026-11-06 §批次86 — 可靠性与可观测性:存档 / 读档 / 留痕 / 回放 HTTP
+	// 入口(房间源 = vcMgr;契约 §4)。
+	vcReliabilityAPI := api.NewVirtualCityReliabilityAPI(vcMgr)
 	// 批次81:City-System 运行时配置注入 ws 层(enabled / 归一化配置 / LLM
 	// registry)。房间级线路策略(city_system_line)已由 applyOpts 落位,
 	// ws 层在 GetOrCreate SystemAgent 时经 r.CitySystemLine() 读取。
@@ -1188,7 +1191,7 @@ func main() {
 	_ = kbRetrievalChain // 预留给未来 MCP tools/call 内部使用
 	kbAPI := api.NewKnowledgeAPI(kbLoader)
 
-	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, vcSurveyAPI, vcScenarioAPI, vcPredictionAPI, vcCityAPI, vcRealtimeAPI, vcDashboardAPI, vcSystemAPI, kbAPI)
+	httpHandler := router.New(cfg, authAPI, gameAPI, captchaAPI, versionAPI, userAPI, gitLogAPI, roomAPI, adminAPI, walletAPI, llmAPI, wikiAPI, modelAdminAPI, modelLogAPI, modelWalletAPI, modelGrantAPI, modelAgentMemoryAPI, propAPI, sourceStatsAPI, recallChatAPI, werewolf20260812API, werewolfReviewAPI, debateAPI, vcSurveyAPI, vcScenarioAPI, vcPredictionAPI, vcCityAPI, vcRealtimeAPI, vcDashboardAPI, vcSystemAPI, vcReliabilityAPI, kbAPI)
 	// Mount WS upgrade handler on the HTTPS server so the frontend can connect
 	// to the same host:port as the page (wss://HOST:39001/ws). The separate WSS
 	// server on port 39002 remains for backward compatibility.

@@ -207,6 +207,9 @@ const (
 	ErrVirtualCityAgentReplyTooLong     = 35063 // 目标 Agent 回包超长(已截断)
 	ErrVirtualCityScenarioGroupUnknown  = 35064 // 场景分组未知
 	ErrVirtualCityDisplayCommandInvalid = 35065 // 显示指令参数非法
+	// 35066–35067 — 虚拟城市批次86 可靠性与可观测性(2026-11-06)。
+	ErrVirtualCitySnapshotNotFound   = 35066 // 快照不存在 / 已损坏 / 无可关联快照
+	ErrVirtualCityEventTraceNotFound = 35067 // 事件生命周期留痕不存在
 	// 35100–35103 — 虚拟城市 City-Human 感知与行动工具(2026-09-22 §CityHuman重构)。
 	// 契约: lag_docs/虚拟城市/已实现/12-CityHuman重构/虚拟城市-CityHuman-Agent合并与感知系统设计-v1.md §4.4。
 	ErrVirtualCitySenseInvalid  = 35100 // 感知/移动工具参数非法(未知城区、未知 mode、目标不存在)
@@ -376,6 +379,9 @@ var DefaultMessages = map[int]string{
 	ErrVirtualCityAgentReplyTooLong:     "目标 Agent 回包超长（已截断后回灌）",
 	ErrVirtualCityScenarioGroupUnknown:  "场景分组未知（不在场景目录分组表内）",
 	ErrVirtualCityDisplayCommandInvalid: "显示指令参数非法（字段缺失或取值非法）",
+	// 35066–35067 — 虚拟城市批次86 可靠性与可观测性(2026-11-06)。
+	ErrVirtualCitySnapshotNotFound:   "快照不存在或已损坏",
+	ErrVirtualCityEventTraceNotFound: "事件生命周期留痕不存在",
 }
 
 // Code constructs a Coded error.

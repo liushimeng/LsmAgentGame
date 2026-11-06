@@ -8,6 +8,8 @@
 
 import { http, ApiError, isSessionExpiredError, getAuthToken } from '@/services/http';
 import type { VirtualCityCityProfileProgress, VirtualCityCityResidentProfile, VirtualCitySurvey } from '@/types/virtualCity';
+// 批次86：可靠性与可观测性（存档 / 读档 / 事件生命周期留痕 / 回放）。
+import type { VirtualCityEventLifecycleTrace, VirtualCitySnapshotMeta } from '@/types/virtualCity';
 import type { MissionRecord, MissionStats, RealtimeBoardRefreshResult, RealtimeFeed } from '@/types/virtualCityRealtime';
 import type { VirtualCitySystemWireMessage } from '@/types/virtualCitySystem';
 import type { VirtualCityScenarioCatalogResponse, VirtualCityScenarioCatalogItem } from '@/types/virtualCitySystem';
@@ -565,4 +567,113 @@ export function normalizeScenarioCatalog(
     items: filtered.slice(0, limit),
     total: filtered.length,
   };
+}
+
+// ── 批次 86 · 可靠性与可观测性：存档 / 读档 / 事件留痕 / 回放 ─────────────
+//
+// 契约（backend-dev 并行实现，字段/路径逐字对齐批次 86 方案 §4）：
+//   POST   /api/games/virtual_city/rooms/:id/snapshot              手动存档
+//   GET    /api/games/virtual_city/rooms/:id/snapshots             列出快照
+//   POST   /api/games/virtual_city/rooms/:id/snapshot/restore      读档
+//   DELETE /api/games/virtual_city/rooms/:id/snapshot/:snapshot_id 删除快照
+//   GET    /api/games/virtual_city/rooms/:id/event_lifecycle       事件生命周期留痕
+//   POST   /api/games/virtual_city/rooms/:id/event_lifecycle/replay 回放
+//
+// 权限：任意登录用户（与场景推演 / 调研同口径）。房间不存在 → 35001；
+// 业务错误由 virtual_city.VirtualCityRoom 持锁方法返回并原样透传。
+// §7.1：调用方（SnapshotPanel / EventLifecyclePanel）catch 后面板内联红条
+// + reportGlobalError 上报，绝不吞进 console。
+// ⚠️ 路径一律用下划线 `virtual_city`（后端 router 的 r.Group("/api/games/virtual_city")）。
+
+/** 留痕查询缺省条数（契约 §4：limit 缺省 50；后端 clamp >0）。 */
+const EVENT_LIFECYCLE_DEFAULT_LIMIT = 50;
+
+/**
+ * POST /api/games/virtual_city/rooms/:id/snapshot（需登录）—— 手动存档。
+ *
+ * body `{reason?}`（缺省 = 引擎取 manual）；返回 `{snapshot: SnapshotMeta}`。
+ */
+export function snapshotVirtualCityRoom(
+  roomId: string,
+  reason?: string,
+): Promise<{ snapshot: VirtualCitySnapshotMeta }> {
+  return http<{ snapshot: VirtualCitySnapshotMeta }>(
+    `/api/games/virtual_city/rooms/${encodeURIComponent(roomId)}/snapshot`,
+    { method: 'POST', body: JSON.stringify(reason ? { reason } : {}) },
+  );
+}
+
+/**
+ * GET /api/games/virtual_city/rooms/:id/snapshots（需登录）—— 列出快照。
+ *
+ * 恒返回数组（空 = []，不返回 null），按 created_at 降序。
+ */
+export function fetchVirtualCitySnapshots(
+  roomId: string,
+): Promise<{ snapshots: VirtualCitySnapshotMeta[] }> {
+  return http<{ snapshots: VirtualCitySnapshotMeta[] }>(
+    `/api/games/virtual_city/rooms/${encodeURIComponent(roomId)}/snapshots`,
+  );
+}
+
+/**
+ * POST /api/games/virtual_city/rooms/:id/snapshot/restore（需登录）—— 读档。
+ *
+ * body `{snapshot_id}`（必填）；返回 `{snapshot: SnapshotMeta}`。
+ */
+export function restoreVirtualCitySnapshot(
+  roomId: string,
+  snapshotId: string,
+): Promise<{ snapshot: VirtualCitySnapshotMeta }> {
+  return http<{ snapshot: VirtualCitySnapshotMeta }>(
+    `/api/games/virtual_city/rooms/${encodeURIComponent(roomId)}/snapshot/restore`,
+    { method: 'POST', body: JSON.stringify({ snapshot_id: snapshotId }) },
+  );
+}
+
+/**
+ * DELETE /api/games/virtual_city/rooms/:id/snapshot/:snapshot_id（需登录）—— 删除快照。
+ *
+ * 不存在 = no-op（不报错）；返回 `{ok: true}`。
+ */
+export function deleteVirtualCitySnapshot(
+  roomId: string,
+  snapshotId: string,
+): Promise<{ ok: true }> {
+  return http<{ ok: true }>(
+    `/api/games/virtual_city/rooms/${encodeURIComponent(roomId)}/snapshot/${encodeURIComponent(snapshotId)}`,
+    { method: 'DELETE' },
+  );
+}
+
+/**
+ * GET /api/games/virtual_city/rooms/:id/event_lifecycle（需登录）—— 事件生命周期留痕。
+ *
+ * query `limit`（缺省 50，clamp 1..200）；恒返回 `{traces: [], total}`。
+ * `total` 为命中条数（不受 limit 截断影响）。
+ */
+export function fetchVirtualCityEventLifecycle(
+  roomId: string,
+  limit: number = EVENT_LIFECYCLE_DEFAULT_LIMIT,
+): Promise<{ traces: VirtualCityEventLifecycleTrace[]; total: number }> {
+  const lim = Math.min(200, Math.max(1, Math.floor(limit) || EVENT_LIFECYCLE_DEFAULT_LIMIT));
+  return http<{ traces: VirtualCityEventLifecycleTrace[]; total: number }>(
+    `/api/games/virtual_city/rooms/${encodeURIComponent(roomId)}/event_lifecycle?limit=${lim}`,
+  );
+}
+
+/**
+ * POST /api/games/virtual_city/rooms/:id/event_lifecycle/replay（需登录）—— 回放。
+ *
+ * body `{trace_id}`（必填）；返回 `{trace, state_hash_match}`。
+ * `state_hash_match` = 回放重放后的状态哈希与原 trace 一致（确定性验证）。
+ */
+export function replayVirtualCityTrace(
+  roomId: string,
+  traceId: string,
+): Promise<{ trace: VirtualCityEventLifecycleTrace; state_hash_match: boolean }> {
+  return http<{ trace: VirtualCityEventLifecycleTrace; state_hash_match: boolean }>(
+    `/api/games/virtual_city/rooms/${encodeURIComponent(roomId)}/event_lifecycle/replay`,
+    { method: 'POST', body: JSON.stringify({ trace_id: traceId }) },
+  );
 }

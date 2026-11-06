@@ -65,8 +65,13 @@ type OffLedgerBook struct {
 	SeatNet [MaxSeats]int64
 	// Digest 登记流水摘要(增量 FNV-1a 64;StateHash 纳入)。
 	Digest uint64
-	// total 全书累计账外净流(未导出;经 Total() 读取)。
-	total int64
+	// TotalNet 全书累计账外净流(经 Total() 读取)。
+	//
+	// ⚠ 批次86:由未导出 `total` 改为**导出** —— 世界快照经 JSON 落盘,
+	// 未导出字段会丢失;而 StateHash 的 ledger 段纳入 Total() ⇒ 不导出
+	// 会导致「快照 round-trip 后 StateHash 不一致」(契约 §7.1 硬性断言)。
+	// Entries 是 200 条环形缓冲,无法由 Entries 重算全量累计 ⇒ 必须落盘。
+	TotalNet int64
 }
 
 // Record 登记一笔账外调整(不可变条目;追加后裁尾保持容量上限)。
@@ -86,7 +91,7 @@ func (b *OffLedgerBook) Record(month, seat int, reason string, amount int64, not
 	if seat >= 0 && seat < MaxSeats {
 		b.SeatNet[seat] += amount
 	}
-	b.total += amount
+	b.TotalNet += amount
 	b.Digest = offLedgerDigestStep(b.Digest, month, seat, reason, amount)
 }
 
@@ -103,7 +108,7 @@ func (b *OffLedgerBook) Total() int64 {
 	if b == nil {
 		return 0
 	}
-	return b.total
+	return b.TotalNet
 }
 
 // Recent 最近 n 条账外调整(**最新在前**;n ≤ 0 返回空切片而非 nil)。
