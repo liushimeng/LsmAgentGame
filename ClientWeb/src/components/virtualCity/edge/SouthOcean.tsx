@@ -38,6 +38,7 @@ import {
   useObjectInfoProps,
   instancedEventsRaycast,
 } from '../objectInfo/useObjectInfoProps';
+import { filterAllowsInstance, useCityShowStore } from '../cityShowStore';
 
 // ── 坐标带常量（方案 §2.1）─────────────────────────────────────
 /** 沙滩：z ∈ [58,64]，x ∈ [−120,+120]。 */
@@ -71,20 +72,30 @@ export function SouthOcean() {
   const oceanInfo = useObjectInfoProps('edge.south-ocean', { anchorY: 1.0 });
   const lighthouseInfo = useObjectInfoProps('edge.lighthouse', { anchorY: 6 });
   const sailboatInfo = useObjectInfoProps('edge.sailboat', { anchorY: 2 });
+  // 批次 85 §3.2.3：逐件实例级筛选（按类别显隐，退化口径）——
+  // 沙滩/海面/浮标 = edge.south-ocean；灯塔/帆船/岸吊/货轮各自独立 tag。
+  const filter = useCityShowStore((s) => s.filter);
+  const vis = (tag: string) => filterAllowsInstance(filter, tag);
   return (
     <group {...oceanInfo}>
-      <Beach />
-      <OceanSurface />
-      <SouthPort />
+      <group visible={vis('edge.south-ocean')}>
+        <Beach />
+        <OceanSurface />
+      </group>
+      <group visible={vis('edge.crane')}>
+        <SouthPort />
+      </group>
       {/* 灯塔 @ 防波堤端（GLB；children fallback 红白条纹塔，§27.3 契约） */}
-      <group {...lighthouseInfo}>
+      <group {...lighthouseInfo} visible={vis('edge.lighthouse')}>
         <Model url={modelUrl('ocean', 'lighthouse')} position={[75, 0, 72]}>
           <ProceduralLighthouse />
         </Model>
       </group>
-      <CargoShip />
+      <group visible={vis('edge.cargo-ship')}>
+        <CargoShip />
+      </group>
       {/* 帆船 ×2 静态泊位（GlbInstanced：2 实例共享子网格 draw call） */}
-      <group {...sailboatInfo}>
+      <group {...sailboatInfo} visible={vis('edge.sailboat')}>
         <GlbInstanced
           url={modelUrl('ocean', 'sailboat')}
           instances={[
@@ -99,7 +110,10 @@ export function SouthOcean() {
           }
         />
       </group>
-      <Buoys />
+      {/* 浮标（tag 同 edge.south-ocean；独立 wrapper 保渲染顺序在最后） */}
+      <group visible={vis('edge.south-ocean')}>
+        <Buoys />
+      </group>
     </group>
   );
 }

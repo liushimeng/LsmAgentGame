@@ -20,6 +20,7 @@
 import { useSharedTexture } from '@/engine3d';
 import { groundTileUrl } from '@/assets/images/virtualCity';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+import { useInstanceFilterVisible, filterAllowsInstance, useCityShowStore } from '../cityShowStore';
 import { NorthMountains } from './NorthMountains';
 import { WestDesert } from './WestDesert';
 import { EastForest } from './EastForest';
@@ -49,9 +50,12 @@ function EdgePatch({
     repeat: [Math.max(1, Math.round(patch.w / 8)), Math.max(1, Math.round(patch.d / 8))],
   });
   const info = useObjectInfoProps(infoId, { anchorY: 0.5 });
+  // 批次 85 §3.2.3：实例级筛选（tag = infoId，如 edge.north-mountains）。
+  const filterVisible = useInstanceFilterVisible(infoId);
   return (
     <mesh
       {...info}
+      visible={filterVisible}
       rotation={[-Math.PI / 2, 0, 0]}
       position={[patch.cx, 0.02, patch.cz]}
       receiveShadow
@@ -67,6 +71,10 @@ function EdgePatch({
 }
 
 export function CityEdgeLayer() {
+  // 批次 85 §3.2.3：逐缘带实例级筛选（patch 在 EdgePatch 内部自裁；
+  // 带组件在这里套 visible 闸门；SouthOcean 内部逐件自裁）。
+  const filter = useCityShowStore((s) => s.filter);
+  const vis = (tag: string) => filterAllowsInstance(filter, tag);
   return (
     <group>
       {/* 三缘地表 patch（南缘沙滩/海面在 SouthOcean 内） */}
@@ -74,9 +82,9 @@ export function CityEdgeLayer() {
       <EdgePatch tile="sand_tile" patch={WEST_PATCH} infoId="edge.west-desert" />
       <EdgePatch tile="forest_floor_tile" patch={EAST_PATCH} infoId="edge.east-forest" />
       {/* 四缘环境带 */}
-      <NorthMountains />
-      <WestDesert />
-      <EastForest />
+      <group visible={vis('edge.north-mountains')}><NorthMountains /></group>
+      <group visible={vis('edge.west-desert')}><WestDesert /></group>
+      <group visible={vis('edge.east-forest')}><EastForest /></group>
       <SouthOcean />
     </group>
   );

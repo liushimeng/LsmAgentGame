@@ -25,6 +25,14 @@ import {
 } from '../cityShowAdapter';
 import { districtCenter, type VirtualCityDistrictId } from '@/types/virtualCity';
 import type { VirtualCityDisplayCommand } from '@/types/virtualCitySystem';
+// 批次 85：物体级显示控制单测（车辆注册表 / labels DOM / set_filter 类别粒度）
+// —— 同一 verify 入口打包执行（模块加载即自跑）。
+import './cityVehicleRegistry.test';
+import './cityLabelsDom.test';
+import './cityFilterCategories.test';
+import './cityShowAdapterEntity.test';
+import './cityShowCommandDedup.test';
+import './cityShowNoticeRow.test';
 
 // ── 零依赖断言 helper ────────────────────────────────────────
 

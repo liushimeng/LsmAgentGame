@@ -201,3 +201,90 @@ func asString(v any) string {
 	}
 	return ""
 }
+
+// TestBusHandler_DescribeAllAgents 批次85 §3.3.3 收尾(跨线交接):hub.Describe
+// 对**全部 4 个 Agent**给出非空 Description 与 MessageTypes(含 City-System
+// 自己的 RegisterRoom → RegisterRoomWith 迁移),list_agents 文本不再出现
+// 「未登记描述」。
+func TestBusHandler_DescribeAllAgents(t *testing.T) {
+	room := newTestRoom(t, "R-bus-desc")
+	a, _ := newTestAgent(t, room, &fakeRegistry{p: &fakeProvider{}})
+	hub := a.hub
+
+	// City-System 自己(本批迁移:RegisterRoomWith 带 types + desc)。
+	if err := a.RegisterBusHandler(hub); err != nil {
+		t.Fatalf("RegisterBusHandler: %v", err)
+	}
+	// 其余 3 个 Agent 与装配层同款 RegisterWith / RegisterRoomWith(带描述;
+	// 职责线 3 已迁 main.go / ws 侧)。
+	if err := hub.RegisterRoomWith(room.RoomID, agentClassCityWebGLShow,
+		[]string{"run_display"}, "渲染显示 Agent",
+		func(context.Context, citybus.Message) (any, error) {
+			return []displayCommand{}, nil
+		}); err != nil {
+		t.Fatalf("register webgl: %v", err)
+	}
+	if err := hub.RegisterWith(string(agentroot.AgentClassCityChrome),
+		[]string{"collect", "message"}, "采集真实世界行情与新闻",
+		func(context.Context, citybus.Message) (any, error) { return "ok", nil }); err != nil {
+		t.Fatalf("register chrome: %v", err)
+	}
+	if err := hub.RegisterWith(string(agentroot.AgentClassCityHuman),
+		[]string{"message"}, "城市居民 Agent",
+		func(context.Context, citybus.Message) (any, error) { return "ok", nil }); err != nil {
+		t.Fatalf("register human: %v", err)
+	}
+
+	// hub.Describe:4 个 Agent 全部非空 Description / MessageTypes。
+	list := hub.Describe(room.RoomID)
+	if len(list) != 4 {
+		t.Fatalf("describe count = %d, want 4: %+v", len(list), list)
+	}
+	sawSystem := false
+	for _, d := range list {
+		if strings.TrimSpace(d.Description) == "" {
+			t.Errorf("agent %s has empty description (§3.3.3)", d.ClassName)
+		}
+		if len(d.MessageTypes) == 0 {
+			t.Errorf("agent %s has empty message types (§3.3.3)", d.ClassName)
+		}
+		if d.ClassName == string(agentroot.AgentClassCitySystem) {
+			sawSystem = true
+			// MessageTypes = 实测口径(handleBusMessage 仅接受 message 分支)。
+			if len(d.MessageTypes) != 1 || d.MessageTypes[0] != BusTypeMessage {
+				t.Errorf("City-System message types = %v, want [%q]",
+					d.MessageTypes, BusTypeMessage)
+			}
+			if d.Description != BusCapabilityDesc {
+				t.Errorf("City-System desc = %q, want BusCapabilityDesc", d.Description)
+			}
+		}
+	}
+	if !sawSystem {
+		t.Fatal("City-System must be described (RegisterRoomWith migration)")
+	}
+
+	// list_agents 文本不得再出现「未登记描述」。
+	text, isErr := a.Dispatch(context.Background(), "owner-1", ToolListAgents, map[string]any{})
+	if isErr {
+		t.Fatalf("list_agents: %s", text)
+	}
+	if strings.Contains(text, "未登记描述") {
+		t.Fatalf("list_agents still shows 未登记描述: %q", text)
+	}
+	if !strings.Contains(text, BusCapabilityDesc) {
+		t.Fatalf("list_agents must show City-System desc: %q", text)
+	}
+}
+
+// TestBusMessageTypes_Measured BusMessageTypes 与 handleBusMessage 实测口径
+// 一致:["message"](其余类型不入队,防御用例已钉)。
+func TestBusMessageTypes_Measured(t *testing.T) {
+	if len(BusMessageTypes) != 1 || BusMessageTypes[0] != BusTypeMessage {
+		t.Fatalf("BusMessageTypes = %v, want [%q] (handleBusMessage 实测口径)",
+			BusMessageTypes, BusTypeMessage)
+	}
+	if strings.TrimSpace(BusCapabilityDesc) == "" {
+		t.Fatal("BusCapabilityDesc must be non-empty")
+	}
+}

@@ -1120,8 +1120,10 @@ func main() {
 	}
 	// 注:City-WebGL-Show 的**房间级** bus handler 由 citywebgl SubAgent
 	// 自行注册(含 main.go 大装配行),此处不注册、不 import citywebgl。
-	// vcplayer.CityResidentAnswerer 已由上方 cityHumanAnswerer 注入(批次84);
-	// 游戏内 per-seat Agent 无导出句柄,应答 Agent 按 (房间,座位) 缓存复用
+	// vcplayer.CityResidentAnswerer 已由上方 cityHumanAnswerer 注入(批次84)。
+	// 批次85 §3.3:应答 Agent 优先取**游戏内实例**(virtual_city.AgentForSeat
+	// 只读句柄)—— 与月度决策共享令牌桶与 BindLLMCallHook,对话消耗计入
+	// 房间 LLM 统计;未命中(人类座位/未装配)回退按 (房间,座位) 缓存的
 	// 同款通道与节流;任一环节不可用即退化确定性说明兜底(绝不编造数据)。
 
 	// 2026-10-20 §批次66 — 真实行情 → 游戏内市场联动:Feed→ExoQuote 装配层
@@ -1438,10 +1440,12 @@ type cityHumanAgentKey struct {
 //	MyCard 投影,与月度决策同一投影源,零复制零漂移)→ 调既有
 //	(*vcplayer.Agent).AnswerQuestion(复用 callProvider + 令牌桶节流)。
 //
-// 节流:每个 (房间,座位) 缓存一个 City-Human Agent,令牌桶与游戏内同款
-// (SetLLMRateLimit 同 interval);缓存不复用游戏内实例 —— 房间 per-seat
-// Agent 无导出句柄(按纪律不给 game/virtual_city 新增导出符号),LLM 通道
-// 与节流机制与游戏内完全同款。拿不到房间/画像/回答失败一律返回 error,
+// 取 Agent 顺序(批次85 §3.3.2):先 room.AgentForSeat(seat) —— 命中即用
+// **游戏内实例**(与月度决策共用令牌桶 + 共用 BindLLMCallHook,对话消耗
+// 计入房间 LLM 统计;只调 AnswerQuestion,不重复 SetLLMRateLimit/BindRegistry
+// 等会重置桶或覆盖配置的装配调用);未命中(人类座位/未装配)再按
+// (房间,座位) 缓存新建同款通道 Agent(令牌桶与游戏内同款 interval,
+// SetLLMRateLimit)。拿不到房间/画像/回答失败一律返回 error,
 // vcplayer 层退化为确定性说明兜底(绝不编造数据)。
 type cityHumanAnswerer struct {
 	mgr             *virtual_city.Manager
@@ -1478,6 +1482,16 @@ func (a *cityHumanAnswerer) ResidentAnswer(ctx context.Context, roomID, question
 	userID := r.Seats[seat]
 	modelKey := r.SeatModelKeys[seat]
 	r.MuUnlock()
+	// 批次85 §3.3.2:优先用**游戏内实例**发问 —— 与月度决策共享令牌桶与
+	// BindLLMCallHook,对话消耗计入房间 LLM 统计。只调 AnswerQuestion,不
+	// 重复 SetLLMRateLimit/BindRegistry 等装配调用(会重置令牌桶或覆盖配置,
+	// 房间创建时的装配即权威)。AgentForSeat 自持 r.mu(§92a),返回后在锁外
+	// 使用句柄安全(Agent 方法自带锁)。
+	if ag := r.AgentForSeat(seat); ag != nil {
+		return ag.AnswerQuestion(ctx, card, question)
+	}
+	// 未命中(人类座位 / 游戏内 Agent 未装配)回退既有缓存实例 ——
+	// 行为与批次 84 逐字一致(零回归)。
 	return a.agentFor(roomID, seat, userID, modelKey).AnswerQuestion(ctx, card, question)
 }
 

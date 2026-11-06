@@ -66,6 +66,9 @@ const virtualCitySystemEN = {
   'virtualCity.systemDialog.noticeInvalidParams': 'Invalid display command parameters: {type}',
   'virtualCity.systemDialog.noticeEntityNotFound': 'Entity not found: {detail}',
   'virtualCity.systemDialog.noticeUnknownCategory': 'Unknown category: {detail}',
+  // Batch 85 §3.2: object-level display control (degradation disclosure / vehicle not found).
+  'virtualCity.systemDialog.noticeFilterShowhide': 'Current implementation shows/hides by category (no per-instance tinting): {detail}',
+  'virtualCity.systemDialog.noticeVehicleNotFound': 'Vehicle not found: {detail}',
   'virtualCity.systemDialog.noticeDismiss': 'Dismiss',
 };
 

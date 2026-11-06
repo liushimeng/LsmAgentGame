@@ -194,7 +194,7 @@ func TestBuildDisplayRequest_Valid(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			r, err := buildDisplayRequest(tc.input)
+			r, _, err := buildDisplayRequest(tc.input)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -234,7 +234,7 @@ func TestBuildDisplayRequest_Invalid(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := buildDisplayRequest(tc.input)
+			_, _, err := buildDisplayRequest(tc.input)
 			if err == nil {
 				t.Fatal("expected error")
 			}

@@ -64,6 +64,7 @@ import {
   detectQualityTier,
 } from '@/engine3d';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+import { vehicleRegistry } from '../cityVehicleRegistry';
 import { signalLitColor } from './TrafficSignals';
 
 type VehicleVariant = 'sedan' | 'truck' | 'bus' | 'taxi';
@@ -88,6 +89,12 @@ interface GlbLampEntry {
 }
 
 interface Props {
+  /**
+   * 批次 85 §3.2.1：车辆稳定实例 id（如 `sedan-0`；StreetPropsLayer 按
+   * `<variant>-<序号>` 生成）。提供后本组件向 `cityVehicleRegistry` 节流上报
+   * 世界坐标，供 `focus_entity` 的 `vehicle:<id>` 解析定位；缺省不上报。
+   */
+  id?: string;
   /** 起始坐标。 */
   from: [number, number];
   /** 终点坐标（沿 from→to 直线路径循环）。 */
@@ -161,6 +168,12 @@ const REDUCED_MOTION =
   typeof window.matchMedia === 'function' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// ── 批次 85 §3.2.1：车辆位置上报节流（focus_entity 的 vehicle:<id> 定位）──
+/** 每 N 帧才允许写一次注册表（60fps 下 ≈4Hz）。 */
+const VEHICLE_REPORT_EVERY_N_FRAMES = 15;
+/** 或位移 ≥ 此世界单位数（3 m）也上报（低帧率下仍能跟上大位移）。 */
+const VEHICLE_REPORT_MIN_MOVE = 0.3;
+
 // ── v2.13 阶段 D：车轮常量（米制经 cityScale.u() 换算）──────────
 /**
  * 批次 30 P0-7：轮径/离地按车型走真实米制（原统一 r=u(0.35)=⌀0.70 m 对 bus/truck
@@ -227,6 +240,7 @@ function hubPositions(l: number, w: number, r: number): Array<[number, number, n
 // 批次 28 A1：memo —— from/to（layout useMemo 的元组）/ variant / glbName / speed /
 // phase / stops（layout 产出数组）/ laneOffset / palette 全为稳定引用。
 export const Vehicle = memo(function Vehicle({
+  id,
   from,
   to,
   variant = 'sedan',
@@ -335,6 +349,31 @@ export const Vehicle = memo(function Vehicle({
   // 批次 41 C2：当前速度倍率（0..1，1 = 巡航；红灯前按 v=√(2·a·d) 曲线压低后回升）
   const vRef = useRef(1);
 
+  // ── 批次 85 §3.2.1：位置上报（节流：每 N 帧或位移 ≥ 阈值才写注册表）──
+  const reportFrameRef = useRef(0);
+  const reportPosRef = useRef<{ x: number; z: number } | null>(null);
+  const reportVehiclePos = (g: THREE.Group) => {
+    if (!id) return;
+    reportFrameRef.current += 1;
+    const last = reportPosRef.current;
+    const moved = last
+      ? Math.hypot(g.position.x - last.x, g.position.z - last.z)
+      : Infinity;
+    if (
+      reportFrameRef.current < VEHICLE_REPORT_EVERY_N_FRAMES &&
+      moved < VEHICLE_REPORT_MIN_MOVE
+    ) {
+      return;
+    }
+    reportFrameRef.current = 0;
+    reportPosRef.current = { x: g.position.x, z: g.position.z };
+    vehicleRegistry.register(id, reportPosRef.current, variant);
+  };
+  // 卸载注销（防残留坐标被 `focus_entity` 误命中）。
+  useEffect(() => () => {
+    if (id) vehicleRegistry.unregister(id);
+  }, [id]);
+
   useFrame(({ clock }, delta) => {
     // 批次 30 B2：车灯随昼夜（昼 0.25/0.35 → 夜 1.6/0.9；读 cityTimeStore 同源快照）。
     const day = getDayNight()?.dayFactor01 ?? 1;
@@ -353,6 +392,8 @@ export const Vehicle = memo(function Vehicle({
     for (const e of lamps.sign) e.mat.emissiveIntensity = e.base * (0.8 + 0.6 * nightK);
     const g = groupRef.current;
     if (!g) return;
+    // 批次 85：位置上报（静止/移动都节流写注册表；REDUCED_MOTION 下同样上报）。
+    reportVehiclePos(g);
     if (REDUCED_MOTION) return;
     // ── 批次 41 C2：信号耦合（无 stops 的车零扰动，targetMul 恒 1 = 原匀速巡航）──
     // 速度用 0..1 倍率表达：世界速度 = speed·pathLen·vRef（speed 已含 ÷len 换算）。

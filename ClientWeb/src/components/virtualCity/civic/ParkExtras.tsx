@@ -28,6 +28,7 @@ import { u, sizeTargetFor } from '../cityScale';
 import { getDayNight } from '../cityTimeStore';
 import { PAVILION_SPOT, PLAYGROUND_SPOT, FITNESS_SPOT, RESTROOM_SPOT, parkWorld } from '../props/parkLayout';
 import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+import { useInstanceFilterVisible } from '../cityShowStore';
 
 const WOOD = '#8a5a44';
 const WOOD_LIGHT = '#a87055';
@@ -167,6 +168,8 @@ function ParkMajorPiece({
   fallbackParts: (x: number, z: number) => MergePart[];
 }) {
   const info = useObjectInfoProps(infoId, { anchorY });
+  // 批次 85 §3.2.3：实例级筛选（tag = 本件的 objectInfo id，如 park.pavilion）。
+  const filterVisible = useInstanceFilterVisible(infoId);
   const url = blenderModelsEnabled() ? modelUrl('civic', glbName) : '';
   const sizeTarget = useMemo(
     () => sizeTargetFor(dimsKey, { label: `civic/${glbName}` }),
@@ -180,7 +183,7 @@ function ParkMajorPiece({
   useEffect(() => () => geo.dispose(), [geo]);
 
   return (
-    <group {...info} position={[spot.x, 0, spot.z]} rotation={[0, spot.rot, 0]}>
+    <group {...info} visible={filterVisible} position={[spot.x, 0, spot.z]} rotation={[0, spot.rot, 0]}>
       {cloned ? <primitive object={cloned} /> : (
         <mesh geometry={geo}>
           <meshStandardMaterial vertexColors roughness={FLAT_ROUGH} metalness={FLAT_METAL} />
@@ -260,6 +263,9 @@ export function ParkExtras() {
   // 公厕（批次 18-AA 原位原样；批次 45 只把它从旧 flatGeo 拆出独立挂 info）
   const [wcX, wcZ] = parkWorld(RESTROOM_SPOT.x, RESTROOM_SPOT.z);
   const wcInfo = useObjectInfoProps('civic.park-extras', { anchorY: 1.5 });
+  // 批次 85 §3.2.3：实例级筛选 —— 檐下灯随凉亭（park.pavilion）、公厕独立 tag。
+  const pavilionVisible = useInstanceFilterVisible('park.pavilion');
+  const wcVisible = useInstanceFilterVisible('civic.park-extras');
 
   const wcGeo = useMemo(() => mergeParts(restroomParts(wcX, wcZ)), [wcX, wcZ]);
   useEffect(() => () => wcGeo.dispose(), [wcGeo]);
@@ -286,10 +292,12 @@ export function ParkExtras() {
         spot={{ x: fitX, z: fitZ, rot: FITNESS_SPOT.rot }}
         infoId="park.fitness" anchorY={1.4} fallbackParts={fitnessParts}
       />
-      {/* 凉亭檐下灯（C4：公园夜景锚点；GLB/fallback 两路共有） */}
-      <PavilionEaveLamp x={pavX} z={pavZ} />
-      {/* 公厕（不动；独立 objectInfo 挂点） */}
-      <group {...wcInfo}>
+      {/* 凉亭檐下灯（C4：公园夜景锚点；GLB/fallback 两路共有）。批次 85：随凉亭显隐。 */}
+      <group visible={pavilionVisible}>
+        <PavilionEaveLamp x={pavX} z={pavZ} />
+      </group>
+      {/* 公厕（不动；独立 objectInfo 挂点）。批次 85：实例级筛选（civic.park-extras）。 */}
+      <group {...wcInfo} visible={wcVisible}>
         <mesh geometry={wcGeo}>
           <meshStandardMaterial vertexColors roughness={FLAT_ROUGH} metalness={FLAT_METAL} />
         </mesh>

@@ -65,6 +65,45 @@ function fmtTime(ts: number): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+/**
+ * 批次 84：显示指令提示文案（按提示码取 i18n；缺 key 回落 safeKey 串，
+ * 绝不返回 undefined ⇒ 不白屏）。批次 85 起从 SystemDialogPanel 移入本文件
+ * （顶栏横幅与消息流留痕共用一份文案逻辑，避免两处口径漂移）。
+ */
+export function noticeText(
+  t: (key: TKey, vars?: Record<string, string | number>) => string,
+  notice: { code: string; type: string; detail?: string },
+): string {
+  switch (notice.code) {
+    case 'unsupported_type':
+      return t('virtualCity.systemDialog.noticeUnsupportedType' as TKey, { type: notice.type });
+    case 'unwired':
+      return t('virtualCity.systemDialog.noticeUnwired' as TKey, { type: notice.type });
+    case 'invalid_params':
+      return t('virtualCity.systemDialog.noticeInvalidParams' as TKey, { type: notice.type });
+    case 'entity_not_found': {
+      // 批次 85：车辆 id 形如 `vehicle:<id>`，给出「车辆未找到」专属文案。
+      const detail = notice.detail ?? notice.type;
+      return detail.startsWith('vehicle:')
+        ? t('virtualCity.systemDialog.noticeVehicleNotFound' as TKey, {
+            detail: detail.replace(/^vehicle:/, ''),
+          })
+        : t('virtualCity.systemDialog.noticeEntityNotFound' as TKey, { detail });
+    }
+    case 'unknown_category':
+      return t('virtualCity.systemDialog.noticeUnknownCategory' as TKey, {
+        detail: notice.detail ?? notice.type,
+      });
+    case 'filter_showhide':
+      // 批次 85 §3.2.3：实例级筛选退化为「按类别显隐」——明示口径，不静默。
+      return t('virtualCity.systemDialog.noticeFilterShowhide' as TKey, {
+        detail: notice.detail ?? notice.type,
+      });
+    default:
+      return notice.type;
+  }
+}
+
 /** 单条工具调用卡（默认折叠；⏳ = 已 start 未 result）。 */
 function ToolCallCard({ rec }: { rec: VirtualCityToolCallRecord }) {
   const t = useT();
@@ -145,6 +184,23 @@ export function SystemDialogMessage({ message }: Props) {
           ) : null}
         </div>
         <div className="virtualCity-sysmsg__letter-text">{message.text}</div>
+      </div>
+    );
+  }
+
+  // 批次 85 C2：显示指令提示**留痕行**（关窗 / 最小化期间产生的提示转入消息流，
+  // 历史里永久可见；文案按当前语言实时渲染，复用横幅同一套 notice 文案逻辑）。
+  if (message.role === 'notice') {
+    return (
+      <div className="virtualCity-sysmsg" data-testid="virtualCity-system-notice-row">
+        <div className="virtualCity-sysdialog__notice" role="status">
+          <span className="virtualCity-sysdialog__notice-text">
+            {message.notice ? noticeText(t, message.notice) : message.text}
+          </span>
+          {message.ts ? (
+            <span className="virtualCity-sysmsg__letter-time">{fmtTime(message.ts)}</span>
+          ) : null}
+        </div>
       </div>
     );
   }

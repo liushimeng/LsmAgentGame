@@ -387,15 +387,16 @@ func TestToolSchemas_Bounds(t *testing.T) {
 	}
 }
 
-// TestQueryCityStateScopes 13 个 scope(批次84 §4.2 #4)。
+// TestQueryCityStateScopes 19 个 scope(批次85 E2E F1:6 个既有 +
+// 13 个维度名全集)。
 func TestQueryCityStateScopes(t *testing.T) {
-	if len(queryCityStateScopes) != 13 {
-		t.Fatalf("scopes = %v, want 13", queryCityStateScopes)
+	if len(queryCityStateScopes) != 19 {
+		t.Fatalf("scopes = %v, want 19", queryCityStateScopes)
 	}
 	for _, want := range []string{
 		"overview", "market", "labor", "treasury", "election", "all",
-		"infrastructure", "public_health", "environment", "security",
-		"transport", "culture", "daily",
+		"市场与经济", "政策与治理", "社会与舆情", "自然灾害", "未知灾难", "科技与新文明",
+		"公共卫生", "基础设施", "交通物流", "文化教育", "环境生态", "公共安全", "民生日常",
 	} {
 		found := false
 		for _, s := range queryCityStateScopes {
@@ -408,9 +409,9 @@ func TestQueryCityStateScopes(t *testing.T) {
 			t.Errorf("query_city_state scope missing %q", want)
 		}
 	}
-	// 扩展 scope 集合 = 7 个新增。
-	if len(extendedCityStateScopes) != 7 {
-		t.Fatalf("extended scopes = %d, want 7", len(extendedCityStateScopes))
+	// 维度 scope 集合 = 13 个(批次85 E2E F1 补齐 6 个)。
+	if len(extendedCityStateScopes) != 13 {
+		t.Fatalf("extended scopes = %d, want 13", len(extendedCityStateScopes))
 	}
 }
 

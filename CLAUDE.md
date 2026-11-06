@@ -421,3 +421,19 @@ HTTP：`GET /api/games/virtual_city/rooms/:id/system_agent/history`、`POST .../
 - **新错误码 35062–35065**：`ErrVirtualCityAgentNoReply` / `ErrVirtualCityAgentReplyTooLong` / `ErrVirtualCityScenarioGroupUnknown` / `ErrVirtualCityDisplayCommandInvalid`。
 - **HTTP 零新增路由**：`GET /api/games/virtual_city/scenario_catalog` 是**既有端点**（`router/router.go:277`），只扩 `group`/`q`/`limit` 与 `data.dimensions`/`data.total`，**必须保留 `data.scenarios`**。
 - ⚠️ **判「存量失败」前必须排除并行争抢**：分钟级 MC 测试在多条 SubAgent 并行跑测试时必超时；正确做法 = git worktree 干净基线 + 单独跑 + 比数值（批次 84 实证：`TestBalanceV2_AB` 基线 280s PASS，满载下 600s 超时）。
+
+### 29.11 批次 85 · 全维度状态视图与物体级显示控制（2026-11-05）
+
+> 规范见 [`lag_docs/虚拟城市/已实现/85-全维度状态视图与物体级显示控制/01-方案设计.md`](lag_docs/虚拟城市/已实现/85-全维度状态视图与物体级显示控制/01-方案设计.md)。
+
+- **观察闭环**：新增只读 `VirtualCityRoom.SystemDimensionStatus(dim)`（持锁只读、**禁回调房间** §92a、nil 安全、返回副本）；`query_city_state` **13 个 scope 全部**末尾追加「【本维度进行中】+【相关世界事件】」—— 5 个实质 scope 既有内容**一字不动**仅追加；`environment`/`security` **重写**，删除「子系统未启用」空答复。归集判据**宁缺勿滥**：`ScenarioKind` 优先、`Kind` 兜底，归不到具体维度一律不计入（**绝不编造**）。`query_world_events` 加 `dimension` 可选入参（未知 ⇒ 35064）。
+- **物体级显示**：`cityVehicleRegistry.ts` 车辆实例位置注册表（`props/Vehicle.tsx` **双阈值节流**：每 15 帧或位移 ≥0.3 世界单位）+ `cityEntityResolver` 解析链**第 5 级** `vehicle:<id>`（既有 1~4 级优先级零改动）；`labels` 图层改**条件渲染不产出 DOM**（`cityLabels.tsx::LabelsGate`，非 opacity/display 糊弄）。
+- ⚠️ **`set_filter` 退化为「按类别显隐」并明示**：GLB `clone(true)` **跨实例共享材质引用**，逐实例调色须新建材质实例（违反 DC 纪律 §28/46），且楼群按材质签名**合并 mesh** 不可安全实现 —— 按预案退化并 `onNotice({code:'filter_showhide'})` 明示。真降饱和须引擎侧安全 tint 入口（独立批次）。`engine3d/` 本批**零改动**。
+- **wire 契约零结构变更** ⇒ `citysystem/display.go` 与 `citywebgl/command.go` 的逐字镜像**无需同步**（只有改字段才要双侧同步，见 §29.10）。
+- **居民对话共享令牌桶**：新增只读 `VirtualCityRoom.AgentForSeat(seat)`（`World==nil`/越界/非居民返回 nil 不 panic）；装配层先取游戏内实例 ⇒ 与月度决策**共用同一 `TokenBucket` + 同一 `BindLLMCallHook`**，对话消耗计入房间 LLM 统计。⚠️ 用游戏内实例时**不得**调 `SetLLMRateLimit`/`Bind*`（会重置满桶/覆盖配置），只调 `AnswerQuestion`。
+- **`list_agents` 描述补齐**：4 个 Agent 全部迁到 `RegisterWith`/`RegisterRoomWith`，`hub.Describe` 零「未登记描述」；`BusMessageTypes`/`BusCapabilityDesc` 由各 Agent 包**导出常量**（避免两处字面量漂移），`MessageTypes` 取值**实测自 handler 的 `switch msg.Type` 分支**，勿臆测。
+- ⚠️ **`omitempty` 是「空值有语义」字段的陷阱**（E2E 实证）：`displayRequest.category` 带 `omitempty`，空值在总线 JSON 往返时**静默丢失** ⇒「取消筛选」（`category:""`）不可达。空值有语义的字段要么绕开总线直产指令，要么双侧同步去 `omitempty`。**镜像结构改一侧必须双侧同步**。
+- ⚠️ **`query_city_state` 的 scope = 6 既有 + 13 个中文维度名（共 19）**，与 `ScenarioGroup*` **同值**，模型可直接把维度索引的组名当 scope 传。**只给 7 个维度 scope 会导致其余 6 维度「模型不调工具 ⇒ 观察闭环失效」**（E2E 实证）。
+- ⚠️ **显示指令双帧是兜底不是冗余**：`system_event{kind:show_command}` 的 `data` 是**扁平指令**、`game.virtual_city_show_command` 是嵌套 `{command}` —— `d_command` 必须**双形状兼容**，否则只剩单通道、丢一条帧即丢指令（E2E 实证 SE 通道曾是死代码）。
+- ⚠️ **页面 WS 重连必须重新入房**：`VirtualCityGamePage` 的 join effect 只在 mount 发一次 `game.spectate`，重连后对房间广播**永久失聪**（丢帧、无报错）。hook 级 `onOpen` 补发已覆盖系统对话链路；全 `game.*` 帧待页面 owner 收口。
+- ⚠️ **UI 类 E2E 断言前先 assert 目标容器在场**：本批 phase2c 因 `Locator.click` 超时导致对话窗全程关闭，三条 notice 用例集体假阴性。**单元测试全绿 ≠ 功能可用**（3 个真缺陷全部由活体验收抓到）。

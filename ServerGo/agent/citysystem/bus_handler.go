@@ -43,6 +43,20 @@ import (
 // 亦兼容批次81 的裸字符串载荷)。
 const BusTypeMessage = "message"
 
+// BusMessageTypes 是 City-System 支持的总线消息类型(装配层 RegisterWith
+// 登记用;与 citychrome.BusMessageTypes 同款)。
+//
+// 实测口径(2026-11-05 §批次85 §3.3.3 收尾):handleBusMessage 仅接受
+// BusTypeMessage("message")分支,其余 msg.Type 回执「仅支持 message」且
+// 不入队 ⇒ 此处只登记 ["message"],不臆测。
+var BusMessageTypes = []string{BusTypeMessage}
+
+// BusCapabilityDesc 是 City-System 的一句话能力描述(装配层 RegisterWith
+// 登记用;供 hub.Describe / list_agents 展示;与 citychrome.BusCapabilityDesc
+// 同款)。
+const BusCapabilityDesc = "虚拟城市系统主 Agent:接收其它 Agent 上行消息(Agent 来信)," +
+	"经 17 个工具查询城市状态 / 检索注入场景 / 控制模拟与 3D 显示,驱动系统对话。"
+
 // RegisterBusHandler 把 City-System 注册为**房间级**总线 handler
 // (批次84 §4.3.2),接收其它 Agent 的上行消息("message" 类型)。
 //
@@ -65,7 +79,11 @@ func (a *Agent) RegisterBusHandler(hub *citybus.Hub) error {
 	if a == nil || a.RoomID == "" {
 		return fmt.Errorf("citysystem: room id is empty")
 	}
-	return hub.RegisterRoom(a.RoomID, string(agentroot.AgentClassCitySystem),
+	// 批次85 §3.3.3 收尾:RegisterRoom → RegisterRoomWith(补消息类型 +
+	// 能力描述,让 list_agents 对全部 Agent 给出非空描述;与 citychrome /
+	// citywebgl / vcplayer 的迁移同款)。
+	return hub.RegisterRoomWith(a.RoomID, string(agentroot.AgentClassCitySystem),
+		BusMessageTypes, BusCapabilityDesc,
 		func(_ context.Context, msg citybus.Message) (any, error) {
 			return a.handleBusMessage(msg), nil
 		})

@@ -1381,5 +1381,10 @@ export interface VirtualCityDict {
   /** 带占位符 {detail}。 */
   'virtualCity.systemDialog.noticeEntityNotFound': string;
   'virtualCity.systemDialog.noticeUnknownCategory': string;
+  // ── 批次85 §3.2：物体级显示控制提示（退化明示 / 车辆未找到）──────────
+  /** 带占位符 {detail}。实例级筛选退化为「按类别显隐」的口径明示。 */
+  'virtualCity.systemDialog.noticeFilterShowhide': string;
+  /** 带占位符 {detail}。focus_entity 的 vehicle:<id> 未命中。 */
+  'virtualCity.systemDialog.noticeVehicleNotFound': string;
   'virtualCity.systemDialog.noticeDismiss': string;
 }

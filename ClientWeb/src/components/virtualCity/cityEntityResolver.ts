@@ -10,10 +10,14 @@
  *   2. `resident:<n>` —— 批次 35 `crowdRegistry` 的上街居民 live 位置；
  *   3. `<districtId>` —— 城区中心（`districtCenter`）；
  *   4. `building:<districtId>:<idx>` —— 批次 30 街墙布局的第 idx 栋楼
- *      （相对区中心的偏移 + 区中心 = 世界坐标，真实可算）。
+ *      （相对区中心的偏移 + 区中心 = 世界坐标，真实可算）；
+ *   5. `vehicle:<id>`（批次 85 §3.2.1）—— `cityVehicleRegistry` 的车辆实例
+ *      live 位置（id 形如 `vehicle:sedan-0`）。**追加在既有链路之后**，
+ *      既有 1~4 级的优先级零改动（零回归）。
  *
  * 解析不到 ⇒ 返回 null ⇒ 调用方**显式提示**「未找到实体」，绝不静默吞掉
  * （批次 84 §11：前端显示指令类型不全导致「点了没反应」是主要风险）。
+ * ⚠ 车辆未命中同样回 null（`entity_not_found`），**不用 `nearest()` 瞎聚**。
  */
 
 import {
@@ -23,6 +27,7 @@ import {
 } from '@/types/virtualCity';
 import { buildingsFor } from './building_layout';
 import { getCrowdPosition } from './crowdRegistry';
+import { vehicleRegistry } from './cityVehicleRegistry';
 
 /** 实体类型（与后端 `kind` 字段逐字一致）。 */
 export type CityEntityKind = 'building' | 'resident' | 'vehicle';
@@ -68,7 +73,7 @@ const DISTRICT_IDS = new Set<string>(VIRTUAL_CITY_DISTRICTS.map((d) => d.id));
 /**
  * 解析实体 id → 世界坐标。
  *
- * @param entityId 实体 id（注册表 id / `resident:<n>` / 城区 id / `building:<区>:<序>`）
+ * @param entityId 实体 id（注册表 id / `resident:<n>` / 城区 id / `building:<区>:<序>` / `vehicle:<id>`）
  * @param _kind 实体类型（预留：当前解析按 id 形态即可判定类型；不认识的类型同样尝试通用解析）
  */
 export function resolveEntity(entityId: string, _kind?: string): CityEntityPosition | null {
@@ -106,6 +111,15 @@ export function resolveEntity(entityId: string, _kind?: string): CityEntityPosit
         return { x: c.x + spec.x, z: c.z + spec.z, label: `${def.id}#${idx}` };
       }
     }
+    return null;
+  }
+
+  // 5. vehicle:<id>（批次 85 §3.2.1：车辆实例注册表）。
+  //    追加在既有链路之后，1~4 级优先级零改动；未命中回 null（不瞎聚）。
+  const vMatch = /^vehicle:(.+)$/.exec(id);
+  if (vMatch) {
+    const pos = vehicleRegistry.lookup(vMatch[1]);
+    if (pos) return { x: pos.x, z: pos.z, label: id };
     return null;
   }
 

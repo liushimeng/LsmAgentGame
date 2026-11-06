@@ -22,7 +22,9 @@
  *   set_time_speed     → 覆盖时间流速（同上）
  *   focus_entity       → 实体聚焦（cityEntityResolver 解析 + focusRef）
  *   set_layer_visibility→ 图层显隐（cityShowStore 图层注册表）
- *   set_filter         → 类别筛选（按图层隔离 / 隐藏）
+ *   set_filter         → 类别筛选（按图层隔离 / 隐藏；批次 85 起 category 支持
+ *                        物件类别 / 车辆类型的「类别 → 实例」粒度，退化为按类别
+ *                        显隐并以 `filter_showhide` 提示明示口径）
  *   camera_preset      → 相机预设（引擎一次性轨道位姿请求）
  *   fly_path           → 折线飞行（focusRef 节奏写入）
  *
@@ -34,6 +36,7 @@
 import type { MutableRefObject } from 'react';
 import { districtCenter, type VirtualCityDistrictId } from '@/types/virtualCity';
 import type { VirtualCityDisplayCommand } from '@/types/virtualCitySystem';
+import { resolveCityFilterCategory } from './cityFilterCategories';
 
 /** 视角模式（与 engine3d/controls/freeViewStore 的 FreeViewMode 同集）。 */
 export type CityShowMode = 'orbit' | 'fly';
@@ -48,8 +51,13 @@ export type CityShowNoticeCode =
   | 'invalid_params'
   /** focus_entity 未解析到实体。 */
   | 'entity_not_found'
-  /** set_filter 的 category 无法映射到已知图层。 */
-  | 'unknown_category';
+  /** set_filter 的 category 无法映射到已知图层 / 物件类别。 */
+  | 'unknown_category'
+  /**
+   * 批次 85 §3.2.3：实例级筛选（物件类别 / 车辆类型）走「按类别显隐」——
+   * 引擎无安全的逐实例调色入口，退化实现**明示不静默**（信息性提示，指令已生效）。
+   */
+  | 'filter_showhide';
 
 /** 一条显示指令提示。 */
 export interface CityShowNotice {
@@ -280,6 +288,17 @@ export function applyDisplayCommand(
       const mode = cmd.mode === 'dim' ? 'dim' : 'highlight';
       const ok = deps.layerApi.setFilter(category, mode);
       if (!ok) return fail(cmd.type, 'unknown_category', category);
+      // 批次 85 §3.2.3：物件类别 / 车辆类型的实例级筛选 —— 引擎无安全的逐实例
+      // 调色入口（GLB clone(true) 跨实例共享材质引用；逐实例调色须新建材质实例，
+      // 违反 draw call 纪律）⇒ 退化为「按类别显隐」。**明示不静默**：生效同时
+      // 回调 onNotice 说明口径（信息性提示，不影响 applied=true）。
+      if (resolveCityFilterCategory(category).scope === 'instance') {
+        deps.onNotice?.({
+          code: 'filter_showhide',
+          type: cmd.type,
+          detail: category,
+        });
+      }
       return { type: cmd.type, applied: true };
     }
 

@@ -8,6 +8,16 @@
 // query_districts / query_surveys / apply_display / ask_agent)与 3 个扩展工具
 // (list_scenarios 维度索引 / query_city_state 扩 scope / list_agents 双层目录)。
 //
+// 批次85(2026-11-05 §批次85 §3.1.2):query_city_state 全 13 scope 末尾
+// 追加观察闭环两段(「本维度进行中」+「相关世界事件」;environment/security
+// 重写,删除「子系统未启用」空答复);映射集中在 scopeDimension。
+//
+// 批次85 E2E 修复(F1):维度 scope 7 → 13(补市场与经济 / 政策与治理 /
+// 社会与舆情 / 自然灾害 / 未知灾难 / 科技与新文明),13 个维度组全部可被
+// query_city_state 直接查;scope 值 = ScenarioGroup* 维度名(模型从
+// list_scenarios 维度索引看到的组名可直接当 scope 传),7 个英文旧键经
+// cityStateScopeAliases 归一,零回归。
+//
 // 纪律(与 dispatch.go 一致):
 //   - 一律 isErr=true + "失败:" + err.Error();*errcode.Error 的 350xx 码随
 //     Error() 保留在文本里回灌给模型;
@@ -18,6 +28,7 @@ package citysystem
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -301,8 +312,10 @@ func (a *Agent) allExtendedScopes() string {
 	w := a.room.EngineLocked()
 	var b strings.Builder
 	for _, scope := range []string{
-		"infrastructure", "public_health", "environment", "security",
-		"transport", "culture", "daily",
+		virtual_city.ScenarioGroupInfrastructure, virtual_city.ScenarioGroupPublicHealth,
+		virtual_city.ScenarioGroupEnvironment, virtual_city.ScenarioGroupSecurity,
+		virtual_city.ScenarioGroupTransport, virtual_city.ScenarioGroupCulture,
+		virtual_city.ScenarioGroupDailyLife,
 	} {
 		if s := renderExtendedScopeLocked(scope, w); s != "" {
 			b.WriteString(s)
@@ -313,17 +326,25 @@ func (a *Agent) allExtendedScopes() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// queryCityStateExtended 批次84 新增的 7 个 scope(契约 §4.2 #4)。
+// queryCityStateExtended 批次84 新增 7 个 + 批次85 E2E F1 补齐 6 个的
+// **13 个维度 scope**(契约 §4.2 #4;scope = ScenarioGroup* 维度名,
+// 7 个英文别名经 canonicalCityStateScope 归一后同样可达)。
 //
-// 原则:**对应子系统未启用时明确返回「未启用」,绝不编造数据**。逐 scope:
+// 原则:**子系统缺失时如实说明「暂无该维度指标」,绝不编造数据**。逐 scope:
 //
 //	infrastructure  产业链(SupplyChain)+ 产业集群(Clusters)     → 缺则未启用
 //	public_health   公共服务 PublicSvc(医疗/教育/养老/住房/就业) → 缺则未启用
-//	environment     引擎无环境生态子系统                          → 恒「未启用」
-//	security        引擎无治安子系统(Regulators 是市场监管)      → 恒「未启用」
+//	environment     批次85 §3.1.2 重写:食品/杂项消费价格指数(供给传导
+//	                最接近指标)+ 本维度活动场景计数;无数据明说「暂无该维度
+//	                指标」,不再答「子系统未启用」
+//	security        批次85 §3.1.2 重写:市场监管罚款(保留既有口径)+
+//	                居民现金损失类场景;不再答「子系统未启用」
 //	transport       交通类商品价格指数(Goods)+ 产业链层级        → 缺则未启用
 //	culture         教育质量(PublicSvc)+ 教育类商品价格指数      → 缺则未启用
 //	daily           消费篮子 8 类价格指数(Goods)+ 社会结构(Society) → 缺则未启用
+//
+// 批次85 §3.1.2:每个 scope 输出**末尾追加观察闭环两段**(「本维度进行中」
+// +「相关世界事件」,锁外经只读桥 SystemDimensionStatus 取视图,§92a)。
 //
 // 持 r.mu 只读快照;**不回调房间**(§92a)。
 func (a *Agent) queryCityStateExtended(scope string) (string, bool) {
@@ -337,16 +358,35 @@ func (a *Agent) queryCityStateExtended(scope string) (string, bool) {
 	if text == "" {
 		return fmt.Sprintf("失败:scope 只能是 %s", strings.Join(queryCityStateScopes, "|")), true
 	}
+	// 批次85 §3.1.2:末尾追加观察闭环两段(锁外调用,§92a)。
+	if sec := a.dimensionObservation(scope); sec != "" {
+		text += "\n" + sec
+	}
 	return text, false
 }
 
-// renderExtendedScopeLocked 渲染一个批次84 新增 scope 的状态文本
-// (持锁只读;w 可为 nil)。未知 scope 返回空串。
+// renderExtendedScopeLocked 渲染一个维度 scope 的状态文本(持锁只读;
+// w 可为 nil)。scope 先经 canonicalCityStateScope 归一(7 个英文别名亦可)。
+// 未知 scope 返回空串。
+//
+// 批次85 E2E F1:维度 scope 7 → 13(补市场与经济 / 政策与治理 /
+// 社会与舆情 / 自然灾害 / 未知灾难 / 科技与新文明)。新增 6 个的实质内容
+// 只用既有真实指标(§29.11 无数据明说「暂无该维度指标」,绝不编造):
+//
+//	市场与经济  CPI / 股指 / 黄金 / 八区房价(Goods+Market)     → 缺则暂无
+//	政策与治理  国库 / 政策利率 / 市长选举(Treasury+CB+Election)→ 缺则暂无
+//	社会与舆情  财富基尼 / 总财富 / 中位数 / 圈层(Society)+
+//	            满意度偏置(Election.SentimentBias,最接近指标)→ 缺则暂无
+//	自然灾害    食品价格指数 + 产业链层级价格指数(供给受损传导最接近
+//	            指标)                                       → 缺则暂无
+//	未知灾难    引擎无未知灾难专属指标,如实说明 + 活动场景计数
+//	科技与新文明 引擎无科技研发子系统,如实说明 + 活动场景计数
 func renderExtendedScopeLocked(scope string, w *virtual_city.World) string {
+	scope = canonicalCityStateScope(scope)
 	var b strings.Builder
 	header := func(name string) { fmt.Fprintf(&b, "%s(M%d):\n", name, monthOf(w)) }
 	switch scope {
-	case "infrastructure":
+	case virtual_city.ScenarioGroupInfrastructure:
 		header("基础设施")
 		if w != nil && w.SupplyChain != nil {
 			n := len(w.SupplyChain.Nodes)
@@ -372,7 +412,7 @@ func renderExtendedScopeLocked(scope string, w *virtual_city.World) string {
 		} else {
 			b.WriteString("产业集群子系统未启用\n")
 		}
-	case "public_health":
+	case virtual_city.ScenarioGroupPublicHealth:
 		header("公共卫生")
 		if w != nil && w.PublicSvc != nil {
 			fmt.Fprintf(&b, "医疗质量 %.2f | 教育质量 %.2f | 养老水平 %.2f | 住房可负担 %.2f | 就业服务 %.2f\n",
@@ -384,17 +424,58 @@ func renderExtendedScopeLocked(scope string, w *virtual_city.World) string {
 		} else {
 			b.WriteString("公共服务(医疗)子系统未启用\n")
 		}
-	case "environment":
+	case virtual_city.ScenarioGroupEnvironment:
+		// 批次85 §3.1.2:重写 —— 删除「子系统未启用」空答复,改为
+		// 「活动场景 + 世界事件(见末尾观察闭环两段)+ 可得的最接近指标」。
+		// 引擎无独立环境生态子系统;如实给出供给侧传导的最接近指标
+		// (食品/杂项消费价格指数,真实 Goods 字段),没有就说「暂无该维度
+		// 指标」,绝不编造。
 		header("环境生态")
-		b.WriteString("环境生态子系统未启用(当前引擎未建模环境/生态维度;可注入「环境生态」维度场景观察影响)\n")
-	case "security":
+		foodIdx := false
+		if w != nil && w.Goods != nil {
+			if it := w.Goods.Items["food"]; it != nil {
+				fmt.Fprintf(&b, "食品类商品价格指数 %.1f(环比 %+.1f%%)\n", it.PriceIdx, it.MomChange*100)
+				foodIdx = true
+			}
+			if it := w.Goods.Items["misc"]; it != nil {
+				fmt.Fprintf(&b, "杂项(含文娱旅游)商品价格指数 %.1f(环比 %+.1f%%)\n", it.PriceIdx, it.MomChange*100)
+				foodIdx = true
+			}
+		}
+		if !foodIdx {
+			b.WriteString("暂无该维度指标(消费篮子数据不可用;生态影响经供给传导)\n")
+		}
+		n := 0
+		if w != nil {
+			for _, sc := range w.Scenarios {
+				if sc != nil && virtual_city.ScenarioDimensionOf(sc.Kind) == virtual_city.ScenarioGroupEnvironment {
+					n++
+				}
+			}
+		}
+		fmt.Fprintf(&b, "本维度活动场景 %d 个(明细见「本维度进行中」)\n", n)
+	case virtual_city.ScenarioGroupSecurity:
+		// 批次85 §3.1.2:重写 —— 删除「子系统未启用」空答复;保留既有
+		// 市场监管罚款口径(零回归),补居民现金损失类场景
+		// (CashDamageFrac>0,真实 profile 字段,跨维度如实列出)。
 		header("公共安全")
-		b.WriteString("公共安全(治安)子系统未启用(当前引擎未建模治安维度)\n")
 		if w != nil && w.Regulators != nil {
+			// 既有内容一字不动(仅删除其上方的「未启用」行)。
 			fmt.Fprintf(&b, "参考:市场监管(证券/反垄断/消协/隐私)累计罚款 %d 元,上月警告 %d 次\n",
 				w.Regulators.FinesTotalCNY, w.Regulators.LastMonthWarnings)
+		} else {
+			b.WriteString("暂无该维度指标(市场监管数据不可用)\n")
 		}
-	case "transport":
+		cash := virtual_city.CashDamageScenarioBriefs(w)
+		if len(cash) == 0 {
+			b.WriteString("居民现金损失类场景:无\n")
+		} else {
+			fmt.Fprintf(&b, "居民现金损失类场景 %d 个:\n", len(cash))
+			for _, s := range cash {
+				fmt.Fprintf(&b, "  - %s L%d(剩 %d 月)\n", s.Name, s.Magnitude, s.RemainingMonths)
+			}
+		}
+	case virtual_city.ScenarioGroupTransport:
 		header("交通物流")
 		if w != nil && w.Goods != nil {
 			if it, ok := w.Goods.Items["transport"]; ok && it != nil {
@@ -408,7 +489,7 @@ func renderExtendedScopeLocked(scope string, w *virtual_city.World) string {
 		if w != nil && w.SupplyChain != nil {
 			fmt.Fprintf(&b, "物流依托产业链 %d 个节点(层级价格指数见 scope=infrastructure)\n", len(w.SupplyChain.Nodes))
 		}
-	case "culture":
+	case virtual_city.ScenarioGroupCulture:
 		header("文化教育")
 		if w != nil && w.PublicSvc != nil {
 			fmt.Fprintf(&b, "教育质量 %.2f\n", w.PublicSvc.EduQuality)
@@ -423,7 +504,7 @@ func renderExtendedScopeLocked(scope string, w *virtual_city.World) string {
 				fmt.Fprintf(&b, "教育类商品价格指数 %.1f\n", it.PriceIdx)
 			}
 		}
-	case "daily":
+	case virtual_city.ScenarioGroupDailyLife:
 		header("民生日常")
 		if w != nil && w.Goods != nil {
 			fmt.Fprintf(&b, "CPI 同比 %.1f%% 环比 %.1f%%\n", w.Goods.CPIYoY*100, w.Goods.CPIMom*100)
@@ -440,10 +521,147 @@ func renderExtendedScopeLocked(scope string, w *virtual_city.World) string {
 		} else {
 			b.WriteString("社会结构统计未启用\n")
 		}
+	case virtual_city.ScenarioGroupMarket:
+		// 批次85 E2E F1:市场与经济 —— 复用 market scope 的真实指标
+		// (CPI / 股指 / 黄金 / 八区房价)。
+		header("市场与经济")
+		ok := false
+		if w != nil && w.Goods != nil {
+			fmt.Fprintf(&b, "CPI 同比 %.1f%% 环比 %.1f%%\n", w.Goods.CPIYoY*100, w.Goods.CPIMom*100)
+			ok = true
+		}
+		if w != nil && w.Market != nil {
+			chg := ""
+			if w.Market.LastStockRawDelta != 0 {
+				chg = fmt.Sprintf("(%+.1f%%)", w.Market.LastStockRawDelta*100)
+			}
+			fmt.Fprintf(&b, "股指 %.1f%s | 黄金 %.1f\n", w.Market.StockIndex, chg, w.Market.GoldPrice)
+			if n := len(w.Market.DistrictIdx); n > 0 {
+				sum := 0.0
+				for _, v := range w.Market.DistrictIdx {
+					sum += v
+				}
+				fmt.Fprintf(&b, "八区房价指数 平均 %.3f\n", sum/float64(n))
+			}
+			ok = true
+		}
+		if !ok {
+			b.WriteString("暂无该维度指标(市场/消费数据不可用)\n")
+		}
+		fmt.Fprintf(&b, "本维度活动场景 %d 个(明细见「本维度进行中」)\n",
+			scenarioCountOfDimension(w, virtual_city.ScenarioGroupMarket))
+	case virtual_city.ScenarioGroupPolicy:
+		// 批次85 E2E F1:政策与治理 —— 复用 treasury / election scope 的
+		// 真实指标(国库 / 政策利率 / 市长选举)。
+		header("政策与治理")
+		ok := false
+		if w != nil && w.Treasury != nil {
+			fmt.Fprintf(&b, "国库 ¥%d(上月收 %d / 支 %d,连续赤字 %d 月)\n",
+				w.Treasury.Cash, w.Treasury.LastMonthRevenue,
+				w.Treasury.LastMonthExpense, w.Treasury.DeficitRun)
+			ok = true
+		}
+		if w != nil && w.CB != nil {
+			fmt.Fprintf(&b, "政策利率 %.2f%% | 信贷窗口 %.2f\n", w.CB.PolicyRate*100, w.CB.CreditWindowFactor)
+			ok = true
+		}
+		if w != nil && w.Election != nil {
+			state := "未启用"
+			if w.Election.Enabled {
+				state = fmt.Sprintf("已启用(每 %d 月一届,上次 M%d,现任市长座位 %d)",
+					w.Election.IntervalMonths, w.Election.LastElectionMonth, w.Election.MayorSeat)
+			}
+			fmt.Fprintf(&b, "市长选举:%s | 满意度偏置 %+.1f\n", state, w.Election.SentimentBias)
+			ok = true
+		}
+		if !ok {
+			b.WriteString("暂无该维度指标(财政/选举数据不可用)\n")
+		}
+		fmt.Fprintf(&b, "本维度活动场景 %d 个(明细见「本维度进行中」)\n",
+			scenarioCountOfDimension(w, virtual_city.ScenarioGroupPolicy))
+	case virtual_city.ScenarioGroupSociety:
+		// 批次85 E2E F1:社会与舆情 —— 社会结构(Society)+ 满意度偏置
+		// (Election.SentimentBias,舆情最接近指标;如实标注来源)。
+		header("社会与舆情")
+		ok := false
+		if w != nil && w.Society != nil {
+			fmt.Fprintf(&b, "财富基尼 %.3f | 总财富 %.0f 元 | 中位数财富 %.0f 元\n",
+				w.Society.Gini, float64(w.Society.TotalWealth), float64(w.Society.MedianWealth))
+			fmt.Fprintf(&b, "圈层 %d/%d/%d(生存/积累/自由)\n",
+				w.Society.Circles[0], w.Society.Circles[1], w.Society.Circles[2])
+			ok = true
+		}
+		if w != nil && w.Election != nil {
+			fmt.Fprintf(&b, "满意度偏置 %+.1f(选举口径,舆情最接近指标)\n", w.Election.SentimentBias)
+			ok = true
+		}
+		if !ok {
+			b.WriteString("暂无该维度指标(社会结构/满意度数据不可用)\n")
+		}
+		fmt.Fprintf(&b, "本维度活动场景 %d 个(明细见「本维度进行中」)\n",
+			scenarioCountOfDimension(w, virtual_city.ScenarioGroupSociety))
+	case virtual_city.ScenarioGroupNature:
+		// 批次85 E2E F1:自然灾害 —— 活动场景 + 世界事件(见末尾观察闭环
+		// 两段)+ 可得的供给受损类指标(食品价格 / 产业链价格,供给传导
+		// 最接近指标)。
+		header("自然灾害")
+		ok := false
+		if w != nil && w.Goods != nil {
+			if it := w.Goods.Items["food"]; it != nil {
+				fmt.Fprintf(&b, "食品类商品价格指数 %.1f(环比 %+.1f%%;供给受损传导最接近指标)\n",
+					it.PriceIdx, it.MomChange*100)
+				ok = true
+			}
+		}
+		if w != nil && w.SupplyChain != nil && len(w.SupplyChain.PriceIndex) > 0 {
+			b.WriteString("产业链层级价格指数 ")
+			for i, v := range w.SupplyChain.PriceIndex {
+				if i > 0 {
+					b.WriteString(" / ")
+				}
+				fmt.Fprintf(&b, "%.2f", v)
+			}
+			b.WriteString("(供给链受损传导)\n")
+			ok = true
+		}
+		if !ok {
+			b.WriteString("暂无该维度指标(供给数据不可用;灾害影响经供给传导)\n")
+		}
+		fmt.Fprintf(&b, "本维度活动场景 %d 个(明细见「本维度进行中」)\n",
+			scenarioCountOfDimension(w, virtual_city.ScenarioGroupNature))
+	case virtual_city.ScenarioGroupUnknown:
+		// 批次85 E2E F1:未知灾难 —— 引擎无未知灾难专属指标,如实说明
+		// (§29.11 不编造);影响经活动场景与世界事件观察。
+		header("未知灾难")
+		b.WriteString("暂无该维度专属指标(未知类影响无法归入既有指标体系;影响经活动场景与世界事件观察)\n")
+		fmt.Fprintf(&b, "本维度活动场景 %d 个(明细见「本维度进行中」)\n",
+			scenarioCountOfDimension(w, virtual_city.ScenarioGroupUnknown))
+	case virtual_city.ScenarioGroupTech:
+		// 批次85 E2E F1:科技与新文明 —— 引擎无科技研发子系统,如实说明
+		// (§29.11 不编造);影响经活动场景与世界事件观察。
+		header("科技与新文明")
+		b.WriteString("暂无该维度专属指标(引擎无科技研发子系统;影响经活动场景与世界事件观察)\n")
+		fmt.Fprintf(&b, "本维度活动场景 %d 个(明细见「本维度进行中」)\n",
+			scenarioCountOfDimension(w, virtual_city.ScenarioGroupTech))
 	default:
 		return ""
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// scenarioCountOfDimension 统计某维度分组下进行中的活动场景数(持锁只读;
+// w 为 nil → 0;归不到该维度的场景不计入,宁缺勿滥)。
+func scenarioCountOfDimension(w *virtual_city.World, group string) int {
+	n := 0
+	if w == nil {
+		return 0
+	}
+	for _, sc := range w.Scenarios {
+		if sc != nil && virtual_city.ScenarioDimensionOf(sc.Kind) == group {
+			n++
+		}
+	}
+	return n
 }
 
 // monthOf 返回世界主钟月份(w 为 nil → 0)。
@@ -591,4 +809,161 @@ func (a *Agent) listAgentsExtended() (string, bool) {
 	}
 	b.WriteString("ask_agent / send_agent_message 的 target_agent 请用上述类名。")
 	return b.String(), false
+}
+
+// ─────────────── 批次85 §3.1.2 观察闭环(维度状态视图渲染) ───────────────
+
+// scopeDimension 是 query_city_state scope → 维度分组名的**集中映射**
+// (批次85 §3.1.2;一处定义,防 13 处硬编码漂移)。
+//
+// 批次85 E2E F1 扩到 **13 个维度 scope**(维度名 = ScenarioGroup* 取值,
+// 自映射)+ overview/market/labor/treasury/election/all 6 个**没有**对应
+// 维度分组 ⇒ 空串 = 全局口径(聚合全部维度的活动场景与世界事件,段头
+// 「全局进行中」)。批次84 的 7 个英文维度键先经 canonicalCityStateScope
+// 归一,不在此表重复登记。
+var scopeDimension = map[string]string{
+	virtual_city.ScenarioGroupMarket:         virtual_city.ScenarioGroupMarket,
+	virtual_city.ScenarioGroupPolicy:         virtual_city.ScenarioGroupPolicy,
+	virtual_city.ScenarioGroupSociety:        virtual_city.ScenarioGroupSociety,
+	virtual_city.ScenarioGroupNature:         virtual_city.ScenarioGroupNature,
+	virtual_city.ScenarioGroupUnknown:        virtual_city.ScenarioGroupUnknown,
+	virtual_city.ScenarioGroupTech:           virtual_city.ScenarioGroupTech,
+	virtual_city.ScenarioGroupPublicHealth:   virtual_city.ScenarioGroupPublicHealth,
+	virtual_city.ScenarioGroupInfrastructure: virtual_city.ScenarioGroupInfrastructure,
+	virtual_city.ScenarioGroupTransport:      virtual_city.ScenarioGroupTransport,
+	virtual_city.ScenarioGroupCulture:        virtual_city.ScenarioGroupCulture,
+	virtual_city.ScenarioGroupEnvironment:    virtual_city.ScenarioGroupEnvironment,
+	virtual_city.ScenarioGroupSecurity:       virtual_city.ScenarioGroupSecurity,
+	virtual_city.ScenarioGroupDailyLife:      virtual_city.ScenarioGroupDailyLife,
+	"overview": "",
+	"market":   "",
+	"labor":    "",
+	"treasury": "",
+	"election": "",
+	"all":      "",
+}
+
+// cityStateScopeAliases 是批次84 的 7 个英文维度 scope 键 → 13 个维度名的
+// **向后兼容别名**(批次85 E2E F1 改用维度名后,既有调用 / 测试零回归)。
+// 仅作归一化入口,不进工具枚举(queryCityStateScopes)。
+var cityStateScopeAliases = map[string]string{
+	"infrastructure": virtual_city.ScenarioGroupInfrastructure,
+	"public_health":  virtual_city.ScenarioGroupPublicHealth,
+	"environment":    virtual_city.ScenarioGroupEnvironment,
+	"security":       virtual_city.ScenarioGroupSecurity,
+	"transport":      virtual_city.ScenarioGroupTransport,
+	"culture":        virtual_city.ScenarioGroupCulture,
+	"daily":          virtual_city.ScenarioGroupDailyLife,
+}
+
+// canonicalCityStateScope 把 query_city_state 的 scope 归一到工具枚举口径:
+// 别名(7 个英文维度键)→ 维度名;其余原样返回(6 个既有 scope 与 13 个
+// 维度名本就是规范取值)。幂等。
+func canonicalCityStateScope(scope string) string {
+	if dim, ok := cityStateScopeAliases[scope]; ok {
+		return dim
+	}
+	return scope
+}
+
+// dimensionObservation 渲染 query_city_state 各 scope 末尾的观察闭环
+// (批次85 §3.1.2):「本维度进行中」+「相关世界事件」两段。
+//
+// 映射集中在 scopeDimension(scope 先经 canonicalCityStateScope 归一,
+// 7 个英文别名同样命中维度口径);6 个无专属维度 scope 走全局口径
+// (「全局进行中」段,聚合全部维度)。两段都空 ⇒
+// 「当前该维度无进行中场景、无相关事件」(明确而非空白)。
+// 调用须在**房间锁外**(内部经只读桥 SystemDimensionStatus,§92a)。
+func (a *Agent) dimensionObservation(scope string) string {
+	if a.room == nil {
+		return ""
+	}
+	scope = canonicalCityStateScope(scope)
+	if dim, ok := scopeDimension[scope]; ok && dim != "" {
+		return renderDimensionObservation(a.room.SystemDimensionStatus(dim), false)
+	}
+	// 6 个无专属维度 scope(含 all / 未知 scope 兜底)⇒ 全局口径。
+	return renderDimensionObservation(a.globalDimensionView(), true)
+}
+
+// globalDimensionView 聚合 13 个维度的视图(批次85 §3.1.2 全局口径)。
+// 逐维度经只读桥取视图后合并、按时间重排(新→旧);事件合计截 5 条
+// (与维度视图 ≤5 同口径,防回灌膨胀)。调用须在房间锁外(§92a)。
+func (a *Agent) globalDimensionView() virtual_city.DimensionStatusView {
+	merged := virtual_city.DimensionStatusView{
+		ActiveScenarios: []virtual_city.ScenarioBrief{},
+		RecentEvents:    []virtual_city.WorldEventBrief{},
+	}
+	if a.room == nil {
+		return merged
+	}
+	for _, g := range knownScenarioGroups() {
+		v := a.room.SystemDimensionStatus(g)
+		merged.ActiveScenarios = append(merged.ActiveScenarios, v.ActiveScenarios...)
+		merged.RecentEvents = append(merged.RecentEvents, v.RecentEvents...)
+	}
+	sort.SliceStable(merged.ActiveScenarios, func(i, j int) bool {
+		return merged.ActiveScenarios[i].AppliedMonth > merged.ActiveScenarios[j].AppliedMonth
+	})
+	sort.SliceStable(merged.RecentEvents, func(i, j int) bool {
+		return merged.RecentEvents[i].ObservedAt > merged.RecentEvents[j].ObservedAt
+	})
+	if len(merged.RecentEvents) > dimensionRecentEventsCap {
+		merged.RecentEvents = merged.RecentEvents[:dimensionRecentEventsCap]
+	}
+	return merged
+}
+
+// dimensionRecentEventsCap 是观察闭环「相关世界事件」段的条数上限(≤5,
+// 与 room_dimension_status.go 的维度视图同口径)。
+const dimensionRecentEventsCap = 5
+
+// renderDimensionObservation 渲染观察闭环两段(批次85 §3.1.2 样式):
+//
+//	【本维度进行中】
+//	- 供水管道破裂 L3(剩 4 月,作用范围 全域,注入于 M7)
+//	【相关世界事件】
+//	- 东财行情:沪指收涨 1.2%(已注入)
+//
+// global=true(6 个无专属维度 scope)⇒ 段头「全局进行中」,场景行带
+// [维度] 前缀。两段都空 ⇒ 「当前该维度无进行中场景、无相关事件」。
+func renderDimensionObservation(v virtual_city.DimensionStatusView, global bool) string {
+	if len(v.ActiveScenarios) == 0 && len(v.RecentEvents) == 0 {
+		return "当前该维度无进行中场景、无相关事件"
+	}
+	var b strings.Builder
+	if len(v.ActiveScenarios) > 0 {
+		title := "本维度进行中"
+		if global {
+			title = "全局进行中"
+		}
+		fmt.Fprintf(&b, "【%s】\n", title)
+		for _, s := range v.ActiveScenarios {
+			prefix := ""
+			if global {
+				prefix = "[" + virtual_city.ScenarioDimensionOf(s.Kind) + "] "
+			}
+			target := strings.TrimSpace(s.Target)
+			if target == "" {
+				target = "全域"
+			}
+			fmt.Fprintf(&b, "- %s%s L%d(剩 %d 月,作用范围 %s,注入于 M%d)\n",
+				prefix, s.Name, s.Magnitude, s.RemainingMonths, target, s.AppliedMonth)
+		}
+	}
+	if len(v.RecentEvents) > 0 {
+		b.WriteString("【相关世界事件】\n")
+		for _, e := range v.RecentEvents {
+			state := "未注入"
+			if e.Injected {
+				state = "已注入"
+			}
+			title := e.Title
+			if e.Source != "" {
+				title = e.Source + ":" + title
+			}
+			fmt.Fprintf(&b, "- %s(%s)\n", title, state)
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
 }

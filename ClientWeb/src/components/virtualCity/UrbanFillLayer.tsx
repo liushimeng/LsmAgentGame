@@ -27,6 +27,7 @@ import { DISTRICT_SURFACE_Y } from './cityScale';
 import { emptyCells } from './cityGrid';
 import { TreesInstanced, type InstanceTree } from './props/TreesInstanced';
 import { currentSeason, subscribeSeason } from './cityTimeStore';
+import { useInstanceFilterVisible } from './cityShowStore';
 import type { CitySeason } from './cityTimeStore';
 import { seasonGrassTileUrl } from './seasonAssets';
 import { useEffect, useState } from 'react';
@@ -162,6 +163,9 @@ export function UrbanFillLayer() {
     return out;
   }, []);
 
+  // 批次 85 §3.2.3：园林树实例级筛选（tree.park）。
+  const treesFilterVisible = useInstanceFilterVisible('tree.park');
+
   return (
     <group>
       {GREEN_CELLS.map(([cx, cz]) => (
@@ -188,8 +192,11 @@ export function UrbanFillLayer() {
           </mesh>
         </group>
       ))}
-      {/* 园林树（1 draw call/段；批次 44 GLB 实例化） */}
-      <TreesInstanced trees={trees} totalCap={128} />
+      {/* 园林树（1 draw call/段；批次 44 GLB 实例化）。
+          批次 85 §3.2.3：实例级筛选（tree.park —— 绿地园林树 kind=park）。 */}
+      <group visible={treesFilterVisible}>
+        <TreesInstanced trees={trees} totalCap={128} />
+      </group>
     </group>
   );
 }

@@ -33,22 +33,41 @@ import (
 // 转发给 City-WebGL-Show("run_display") → 解析返回的显示指令并统一下发。
 //
 // 校验失败一律 isErr=true + 失败文本(不转发);成功返回指令类型摘要。
+//
+// 批次85 E2E C7:显式空 category = **取消筛选**(契约 §3.2.3,前端
+// cityShowAdapter 对 category 空的 set_filter 走 setFilter('','highlight'))。
+// 渲染侧无法表达「显式给了空 category」—— displayRequest.category 带
+// omitempty(总线 JSON 往返丢空值),且 citywebgl.Structured 对空 category
+// 静默丢弃 —— 故 set_filter 取消指令在**本侧直接产出**、经 emitCommands
+// 下发(show_command 单一发射点不变);其余参数仍经总线让渲染 Agent 翻译。
 func (a *Agent) applyDisplay(ctx context.Context, input map[string]any) (string, bool) {
 	if a.hub == nil {
 		return "失败:Agent 总线未绑定", true
 	}
-	req, err := buildDisplayRequest(input)
+	req, cancelFilter, err := buildDisplayRequest(input)
 	if err != nil {
 		return "失败:" + err.Error(), true
 	}
-	res, err := a.hub.Send(ctx, a.RoomID, string(agentroot.AgentClassCitySystem),
-		agentClassCityWebGLShow, "run_display", req)
-	if err != nil {
-		return busFailure(err), true
+	cmds := make([]displayCommand, 0, 2)
+	if cancelFilter {
+		// 取消筛选指令(空 category);mode 用缺省 highlight(与渲染侧
+		// Structured 的 set_filter 缺省一致,前端对空 category 恒按
+		// highlight 取消处理)。
+		cmds = append(cmds, displayCommand{
+			Type: DisplaySetFilter, Category: "", Mode: DisplayFilterModes[0],
+		})
 	}
-	cmds, err := parseDisplayCommands(res)
-	if err != nil {
-		return "失败:" + err.Error(), true
+	if displayRequestForwardable(req) {
+		res, err := a.hub.Send(ctx, a.RoomID, string(agentroot.AgentClassCitySystem),
+			agentClassCityWebGLShow, "run_display", req)
+		if err != nil {
+			return busFailure(err), true
+		}
+		busCmds, err := parseDisplayCommands(res)
+		if err != nil {
+			return "失败:" + err.Error(), true
+		}
+		cmds = append(cmds, busCmds...)
 	}
 	if len(cmds) == 0 {
 		return "显示 Agent 未返回任何指令(请检查参数或稍后再试)。", false
@@ -57,51 +76,71 @@ func (a *Agent) applyDisplay(ctx context.Context, input map[string]any) (string,
 	return "已下发显示指令:" + describeDisplayCommands(cmds), false
 }
 
+// displayRequestForwardable 报告请求是否携带渲染 Agent 可翻译的参数
+// (口径对齐 citywebgl.HasStructuredParams)。空 category **不算**
+// (总线 wire 表达不了「显式空值」,取消筛选由 applyDisplay 本侧直产)。
+func displayRequestForwardable(r displayRequest) bool {
+	return r.Text != "" || r.District != "" || r.Mode != "" ||
+		r.X != nil || r.Z != nil ||
+		r.Phase != "" || r.Hour != nil || r.Weather != "" || r.Speed != "" ||
+		r.EntityID != "" || r.Kind != "" || r.Layer != "" || r.Visible != nil ||
+		r.Category != "" || r.Preset != "" || len(r.Points) > 0
+}
+
 // buildDisplayRequest 把工具入参归一化为中性 displayRequest,并做**严格校验**。
+//
+// 返回 (req, cancelFilter, err):cancelFilter=true 表示调用方**显式传了
+// category 键且值为空**(取消筛选,批次85 E2E C7 契约 §3.2.3)——
+// 空 category 是合法的、有意义的指令,**不是缺参**;判据是「category 键
+// 是否存在」(逗号 ok 形式),不是取值是否非空 —— 「没传 category 键」才是
+// 缺参。JSON null 视作「传了空值」(同取消筛选语义)。
 //
 // 校验规则(契约 §4.5.1;非法取值一律拒绝,不静默忽略):
 //   - phase / weather / speed / layer / kind / preset / mode 必须命中枚举;
 //   - hour ∈ [0,24] 且为有限数;
 //   - layer 与 visible 必须同给(图层显隐是一个动作的两半);
 //   - entity_id 与 kind:kind 可空;给了 kind 必须命中枚举;
+//   - category 可空(空串 = 取消筛选);非字符串取值报错;
 //   - points ∈ [2,8] 个有限 {x,z} 点;
-//   - 至少给一个显示参数(全空 ⇒ 失败,防误发空指令)。
-func buildDisplayRequest(input map[string]any) (displayRequest, error) {
+//   - 至少给一个显示参数(全空 ⇒ 失败,防误发空指令;
+//     显式空 category 算「给了」)。
+func buildDisplayRequest(input map[string]any) (displayRequest, bool, error) {
 	req := displayRequest{}
 	got := false
+	cancelFilter := false
 
 	if v, ok := input["phase"]; ok && v != nil {
 		p := normalizeEnum(toString(v), DisplayPhases)
 		if p == "" {
-			return req, fmt.Errorf("phase 只能 dawn|day|dusk|night(收到 %q)", toString(v))
+			return req, false, fmt.Errorf("phase 只能 dawn|day|dusk|night(收到 %q)", toString(v))
 		}
 		req.Phase, got = p, true
 	}
 	if v, ok := input["hour"]; ok && v != nil {
 		h, ok := toFloat64(v)
 		if !ok || !isFinite(h) || h < hourMin || h > hourMax {
-			return req, fmt.Errorf("hour 必须是 %v-%v 之间的有限数", hourMin, hourMax)
+			return req, false, fmt.Errorf("hour 必须是 %v-%v 之间的有限数", hourMin, hourMax)
 		}
 		req.Hour, got = &h, true
 	}
 	if v, ok := input["weather"]; ok && v != nil {
 		w := normalizeEnum(toString(v), DisplayWeathers)
 		if w == "" {
-			return req, fmt.Errorf("weather 只能 clear|rain|snow|fog|haze|sandstorm|storm(收到 %q)", toString(v))
+			return req, false, fmt.Errorf("weather 只能 clear|rain|snow|fog|haze|sandstorm|storm(收到 %q)", toString(v))
 		}
 		req.Weather, got = w, true
 	}
 	if v, ok := input["speed"]; ok && v != nil {
 		s := normalizeEnum(toString(v), DisplaySpeeds)
 		if s == "" {
-			return req, fmt.Errorf("speed 只能 pause|slow|normal|fast|xfast(收到 %q)", toString(v))
+			return req, false, fmt.Errorf("speed 只能 pause|slow|normal|fast|xfast(收到 %q)", toString(v))
 		}
 		req.Speed, got = s, true
 	}
 	if v, ok := input["layer"]; ok && v != nil {
 		l := normalizeEnum(toString(v), DisplayLayers)
 		if l == "" {
-			return req, fmt.Errorf("layer 只能 buildings|trees|vehicles|pedestrians|props|labels|water(收到 %q)", toString(v))
+			return req, false, fmt.Errorf("layer 只能 buildings|trees|vehicles|pedestrians|props|labels|water(收到 %q)", toString(v))
 		}
 		req.Layer = l
 		got = true
@@ -109,52 +148,59 @@ func buildDisplayRequest(input map[string]any) (displayRequest, error) {
 	if v, ok := input["visible"]; ok && v != nil {
 		b, ok := toBool(v)
 		if !ok {
-			return req, fmt.Errorf("visible 必须是布尔值(true 显示 / false 隐藏)")
+			return req, false, fmt.Errorf("visible 必须是布尔值(true 显示 / false 隐藏)")
 		}
 		req.Visible = &b
 		got = true
 	}
 	if (req.Layer == "") != (req.Visible == nil) {
-		return req, fmt.Errorf("layer 与 visible 必须同时给出(图层显隐是一个动作的两半)")
+		return req, false, fmt.Errorf("layer 与 visible 必须同时给出(图层显隐是一个动作的两半)")
 	}
 	if v, ok := input["entity_id"]; ok && v != nil {
 		e := strings.TrimSpace(toString(v))
 		if e == "" {
-			return req, fmt.Errorf("entity_id 不能为空")
+			return req, false, fmt.Errorf("entity_id 不能为空")
 		}
 		req.EntityID, got = e, true
 	}
 	if v, ok := input["kind"]; ok && v != nil {
 		k := normalizeEnum(toString(v), DisplayEntityKinds)
 		if k == "" {
-			return req, fmt.Errorf("kind 只能 building|resident|vehicle(收到 %q)", toString(v))
+			return req, false, fmt.Errorf("kind 只能 building|resident|vehicle(收到 %q)", toString(v))
 		}
 		req.Kind, got = k, true
 	}
-	if v, ok := input["category"]; ok && v != nil {
-		c := strings.TrimSpace(toString(v))
-		if c != "" {
-			req.Category, got = c, true
+	// category:键存在即「已给出」(哪怕值为空串 = 取消筛选,批次85 C7)。
+	// 用逗号 ok 判存在性,区分「没传键」(缺参)与「传了空值」(取消)。
+	if raw, ok := input["category"]; ok {
+		s, isStr := raw.(string)
+		if raw != nil && !isStr {
+			return req, false, fmt.Errorf("category 必须是字符串(空串 = 取消筛选)")
+		}
+		c := strings.TrimSpace(s)
+		req.Category, got = c, true
+		if c == "" {
+			cancelFilter = true
 		}
 	}
 	if v, ok := input["preset"]; ok && v != nil {
 		p := normalizeEnum(toString(v), DisplayCameraPresets)
 		if p == "" {
-			return req, fmt.Errorf("preset 只能 bird|eye|street|top|free(收到 %q)", toString(v))
+			return req, false, fmt.Errorf("preset 只能 bird|eye|street|top|free(收到 %q)", toString(v))
 		}
 		req.Preset, got = p, true
 	}
 	if v, ok := input["points"]; ok && v != nil {
 		pts, err := parsePoints(v)
 		if err != nil {
-			return req, err
+			return req, false, err
 		}
 		req.Points, got = pts, true
 	}
 	if !got {
-		return req, fmt.Errorf("至少给出一个显示参数(phase/hour/weather/speed/layer+visible/entity_id/kind/category/preset/points)")
+		return req, false, fmt.Errorf("至少给出一个显示参数(phase/hour/weather/speed/layer+visible/entity_id/kind/category/preset/points)")
 	}
-	return req, nil
+	return req, cancelFilter, nil
 }
 
 // parsePoints 解析 fly_path 的 points:2-8 个有限 {x,z} 点。

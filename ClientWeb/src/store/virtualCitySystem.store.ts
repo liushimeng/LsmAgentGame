@@ -135,6 +135,11 @@ export interface VirtualCitySystemStore {
   systemInfo: string | null;
 
   appendUser: (text: string) => void;
+  /**
+   * 批次 85 C2：追加一条「显示指令提示」留痕消息（role='notice'）——
+   * 关窗 / 最小化期间产生的提示转入消息流，历史里永久留痕不丢。
+   */
+  appendNotice: (notice: NonNullable<VirtualCitySystemMessage['notice']>) => void;
   upsertAssistant: (id: string, patch: Partial<VirtualCitySystemMessage>) => void;
   applyEvent: (frame: VirtualCitySystemEventFrame) => void;
   setMinimized: (minimized: boolean) => void;
@@ -159,6 +164,14 @@ export const useVirtualCitySystemStore = create<VirtualCitySystemStore>((set) =>
       messages: [
         ...s.messages,
         { id: nextId('u'), role: 'user' as const, text, ts: Date.now() },
+      ].slice(-MAX_MESSAGES),
+    })),
+
+  appendNotice: (notice) =>
+    set((s) => ({
+      messages: [
+        ...s.messages,
+        { id: nextId('n'), role: 'notice' as const, text: '', ts: Date.now(), notice },
       ].slice(-MAX_MESSAGES),
     })),
 
@@ -300,8 +313,14 @@ export const useVirtualCitySystemStore = create<VirtualCitySystemStore>((set) =>
       }
 
       case 'show_command': {
-        const cmd = d.command as VirtualCityDisplayCommand | undefined;
-        if (!cmd || typeof cmd.type !== 'string') break;
+        // 批次 85 C2：兼容两种 wire 形状 —— 扁平（data 即指令本体，实证服务端
+        // emitCommands 的下发形状）与嵌套（data.command）。旧实现只认嵌套 ⇒
+        // show_commands 徽章恒空。
+        const raw = (d.command && typeof d.command === 'object' ? d.command : d) as
+          | VirtualCityDisplayCommand
+          | undefined;
+        const cmd = raw && typeof raw.type === 'string' ? raw : undefined;
+        if (!cmd) break;
         set((s) => {
           const { messages, id } = ensureStreamingAssistant(s.messages);
           return {

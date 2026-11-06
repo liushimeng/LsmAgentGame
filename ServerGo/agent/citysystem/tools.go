@@ -13,9 +13,14 @@
 //     把请求体撑到数百 KB;改为普通 string + 描述引导「先用 search_scenarios 查」。
 //   - `list_scenarios` 无参 ⇒ 返回**维度索引**(维度名 · 条目数 · 代表 kind),
 //     恒定体积;传 group ⇒ 该组条目(带 limit)。
+//
+// ⚠ 批次85(2026-11-05 §批次85 §3.1.3):`query_world_events` 新增可选入参
+// `dimension`(13 个分组名 enum;空 = 全部)按维度过滤世界事件 —— 不新增
+// 工具、不改其余工具 schema(17 个工具面不动)。
 package citysystem
 
 import (
+	"LsmAgentGame/game/virtual_city"
 	llmtypes "LsmAgentGame/llm/types"
 )
 
@@ -40,27 +45,51 @@ const (
 	ToolListAgents           = "list_agents"
 )
 
-// queryCityStateScopes 是 query_city_state 的 scope 枚举。
+// queryCityStateScopes 是 query_city_state 的 scope 枚举(恰 19 个)。
 //
-// 批次84 扩展 6 → 13(契约 §4.2 #4):新增 7 个维度作用域对应场景目录的
-// 7 个新分组(公共卫生 / 基础设施 / 交通物流 / 文化教育 / 环境生态 /
-// 公共安全 / 民生日常)。**对应子系统未启用时明确返回「未启用」,绝不编造**。
+// 批次84 扩展 6 → 13;批次85 E2E F1 再扩到 19 = 6 个既有 scope
+// (overview/market/labor/treasury/election/all,语义零回归)+ **13 个维度名
+// 全集** —— 维度 scope 的取值与 virtual_city.ScenarioGroup* 常量**逐字一致**
+// (如 ScenarioGroupNature == "自然灾害"),模型从 list_scenarios 维度索引里
+// 看到的组名可直接当 scope 传(问「某维度怎么样」⇒ 传该维度名)。
+//
+// ⚠ 批次84 的 7 个英文维度键(infrastructure/public_health/environment/
+// security/transport/culture/daily)不再是枚举取值,但经
+// cityStateScopeAliases **继续接受**(向后兼容,零回归)。
 var queryCityStateScopes = []string{
 	"overview", "market", "labor", "treasury", "election", "all",
-	"infrastructure", "public_health", "environment", "security",
-	"transport", "culture", "daily",
+	virtual_city.ScenarioGroupMarket,
+	virtual_city.ScenarioGroupPolicy,
+	virtual_city.ScenarioGroupSociety,
+	virtual_city.ScenarioGroupNature,
+	virtual_city.ScenarioGroupUnknown,
+	virtual_city.ScenarioGroupTech,
+	virtual_city.ScenarioGroupPublicHealth,
+	virtual_city.ScenarioGroupInfrastructure,
+	virtual_city.ScenarioGroupTransport,
+	virtual_city.ScenarioGroupCulture,
+	virtual_city.ScenarioGroupEnvironment,
+	virtual_city.ScenarioGroupSecurity,
+	virtual_city.ScenarioGroupDailyLife,
 }
 
-// extendedCityStateScopes 是批次84 新增的 7 个 scope(既有 6 个仍由房间侧
-// SystemSummaryText 渲染,零回归)。
+// extendedCityStateScopes 是 query_city_state 的 13 个维度 scope(既有 6 个
+// 仍由房间侧 SystemSummaryText 渲染,零回归)。取值 = 13 个 ScenarioGroup*
+// 维度名(批次85 E2E F1:13 个维度组全部可被 query_city_state 直接查)。
 var extendedCityStateScopes = map[string]bool{
-	"infrastructure": true,
-	"public_health":  true,
-	"environment":    true,
-	"security":       true,
-	"transport":      true,
-	"culture":        true,
-	"daily":          true,
+	virtual_city.ScenarioGroupMarket:        true,
+	virtual_city.ScenarioGroupPolicy:        true,
+	virtual_city.ScenarioGroupSociety:       true,
+	virtual_city.ScenarioGroupNature:        true,
+	virtual_city.ScenarioGroupUnknown:       true,
+	virtual_city.ScenarioGroupTech:          true,
+	virtual_city.ScenarioGroupPublicHealth:  true,
+	virtual_city.ScenarioGroupInfrastructure: true,
+	virtual_city.ScenarioGroupTransport:     true,
+	virtual_city.ScenarioGroupCulture:       true,
+	virtual_city.ScenarioGroupEnvironment:   true,
+	virtual_city.ScenarioGroupSecurity:      true,
+	virtual_city.ScenarioGroupDailyLife:     true,
 }
 
 // metricHistoryMetrics 是 query_metric_history 的 metric 枚举
@@ -198,14 +227,17 @@ func BuildTools() []llmtypes.ToolDef {
 		{
 			Name: ToolQueryCityState,
 			Description: "查询城市当前状态摘要(只读,不消耗任何资源)。" +
-				"scope=overview 总览 / market 市场 / labor 劳动力 / treasury 财政 / " +
-				"election 选举 / all 全部 / infrastructure 基础设施 / public_health 公共卫生 / " +
-				"environment 环境生态 / security 公共安全 / transport 交通物流 / " +
-				"culture 文化教育 / daily 民生日常。子系统未启用时明确返回「未启用」。",
+				"**问某个维度的状况就直接传该维度名**(如「自然灾害怎么样」⇒ scope=自然灾害):" +
+				"市场与经济 / 政策与治理 / 社会与舆情 / 自然灾害 / 未知灾难 / 科技与新文明 / " +
+				"公共卫生 / 基础设施 / 交通物流 / 文化教育 / 环境生态 / 公共安全 / 民生日常 " +
+				"(与场景目录分组名一致);另有 overview 总览 / market 市场 / labor 劳动力 / " +
+				"treasury 财政 / election 选举 / all 全部。维度 scope 末尾附「本维度进行中」" +
+				"与「相关世界事件」观察闭环;暂无该维度指标时如实说明,不编造。",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"scope": enumStrSchema(queryCityStateScopes, "查询范围(缺省 overview)"),
+					"scope": enumStrSchema(queryCityStateScopes,
+						"查询范围:13 个维度名任一(问「X 怎么样」⇒ 传 X)或 overview/market/labor/treasury/election/all(缺省 overview)"),
 				},
 				"required": []string{},
 			},
@@ -240,8 +272,16 @@ func BuildTools() []llmtypes.ToolDef {
 		{
 			Name: ToolQueryWorldEvents,
 			Description: "查询真实世界事件流(批次80 自动注入引擎的反馈链):" +
-				"事件标题 / 来源 / 是否已注入 / 即时效果 / 次月城市结果。",
-			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+				"事件标题 / 来源 / 是否已注入 / 即时效果 / 次月城市结果。" +
+				"dimension 可选(批次85):按维度过滤,空 = 全部;" +
+				"归不到该维度的事件不计入过滤结果(宁缺勿滥)。",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"dimension": enumStrSchema(knownScenarioGroups(),
+						"维度名(可空 = 全部;取 13 个场景分组名;归不到具体维度的事件不计入)"),
+				},
+			},
 		},
 		{
 			Name: ToolQueryPrediction,
@@ -308,6 +348,7 @@ func BuildTools() []llmtypes.ToolDef {
 				"speed 时间流速(pause 暂停/slow 慢/normal 常速/fast 快/xfast 极快)、" +
 				"layer+visible 图层显隐(buildings 建筑/trees 树/vehicles 车/pedestrians 行人/" +
 				"props 道具/labels 标牌/water 水体)、entity_id+kind 实体聚焦(建筑/居民/车辆)、" +
+				"category 类别筛选高亮(如 park;**传空串 = 取消当前筛选**)、" +
 				"preset 机位预设(bird 鸟瞰/eye 平视/street 街道/top 正俯视/free 自由)、" +
 				"points 折线飞行路径(2-8 个 {x,z} 世界坐标点)。可组合多个参数。",
 			InputSchema: map[string]any{
@@ -321,7 +362,7 @@ func BuildTools() []llmtypes.ToolDef {
 					"visible":   boolSchema("是否显示该图层(true 显示 / false 隐藏)"),
 					"entity_id": strSchema("实体 id(必须来自上下文中出现过的真实 id,严禁臆造)"),
 					"kind":      enumStrSchema(DisplayEntityKinds, "实体类别(building|resident|vehicle)"),
-					"category":  strSchema("按类别筛选高亮的类目(可空)"),
+					"category":  strSchema("按类别筛选高亮的类目(传空串 = 取消当前筛选;不传该字段 = 不改动筛选)"),
 					"preset":    enumStrSchema(DisplayCameraPresets, "机位预设(bird|eye|street|top|free)"),
 					"points":    pointsSchema("折线飞行路径点(2-8 个 {x,z} 世界坐标)"),
 				},

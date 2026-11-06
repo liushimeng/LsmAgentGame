@@ -29,8 +29,13 @@ import type { MutableRefObject } from 'react';
 import { wsClient, type WsEnvelope } from '@/services/ws';
 import { reportGlobalError } from '@/services/globalError';
 import { useVirtualCitySystemStore } from '@/store/virtualCitySystem.store';
+import { useVirtualCityStore } from '@/store/virtualCity.store';
 import { fetchVirtualCitySystemAgentHistory } from '@/api/virtualCity';
 import { normalizeSystemHistory } from '@/components/virtualCity/systemHistoryAdapter';
+import {
+  forgetShowCommand,
+  isDuplicateCommand,
+} from '@/components/virtualCity/cityShowCommandDedup';
 import type {
   VirtualCityDisplayCommand,
   VirtualCityShowCommandFrame,
@@ -56,24 +61,10 @@ const WS_HISTORY_TIMEOUT_MS = 2000;
 
 /**
  * 显示指令去重（`game.virtual_city_show_command` 与 `system_event.kind=show_command`
- * 可能描述同一条指令；focus / set_mode / annotate 虽幂等，重复 annotate 会重启
- * 浮动标签的 8s 消隐计时）。key = trace_id 优先，否则整条指令 JSON。
+ * 描述同一条指令；focus / set_mode / annotate 虽幂等，重复 annotate 会重启
+ * 浮动标签的 8s 消隐计时）。批次 85 C2 修复：语义收窄为「首条必达、只吞邻近
+ * 重复」，实现抽到纯叶模块 `cityShowCommandDedup`（可单测）。
  */
-const recentCommandKeys: string[] = [];
-const recentCommandSet = new Set<string>();
-const RECENT_COMMAND_CAP = 128;
-
-function isDuplicateCommand(cmd: VirtualCityDisplayCommand): boolean {
-  const key = cmd.trace_id || JSON.stringify(cmd);
-  if (recentCommandSet.has(key)) return true;
-  recentCommandSet.add(key);
-  recentCommandKeys.push(key);
-  if (recentCommandKeys.length > RECENT_COMMAND_CAP) {
-    const dropped = recentCommandKeys.shift();
-    if (dropped !== undefined) recentCommandSet.delete(dropped);
-  }
-  return false;
-}
 
 export function useVirtualCitySystemAgent(
   roomId: string,
@@ -100,6 +91,26 @@ export function useVirtualCitySystemAgent(
   const historyApplyRef = useRef<((raw: unknown) => void) | null>(null);
 
   useEffect(() => {
+    /**
+     * 显示指令送达（批次 85 C2 修复）：去重 → 回调 → 抛错不吞。
+     *  - `isDuplicateCommand` 放行时记账（首条必达、只吞邻近重复）；
+     *  - 回调抛错 ⇒ `forgetShowCommand` 撤账（双帧孪生可重试）+ 全局 toast
+     *    （§7.1：错误绝不吞进 console / 空 catch）。
+     */
+    const deliver = (cmd: VirtualCityDisplayCommand | null) => {
+      if (!cmd || typeof cmd.type !== 'string') return;
+      if (isDuplicateCommand(cmd)) return;
+      try {
+        depsRef.current.onShowCommand(cmd);
+      } catch (e) {
+        forgetShowCommand(cmd);
+        reportGlobalError({
+          message: `显示指令执行失败（${cmd.type}）：${e instanceof Error ? e.message : String(e)}`,
+          severity: 'error',
+        });
+      }
+    };
+
     const unsub = wsClient.on((env: WsEnvelope) => {
       const p = (env.payload || {}) as Record<string, unknown>;
       // 只处理当前房间的帧（无 room_id 的帧不过滤，与 useVirtualCity 同口径）。
@@ -128,8 +139,7 @@ export function useVirtualCitySystemAgent(
           // 批次 84：`agent_message`（其它 Agent 的来信）**不是错误** ⇒
           // 不触发 reportGlobalError；它由 store 落成一条独立的来信消息。
           if (f.kind === 'show_command') {
-            const cmd = d_command(f.data);
-            if (cmd && !isDuplicateCommand(cmd)) depsRef.current.onShowCommand(cmd);
+            deliver(d_command(f.data));
           }
           break;
         }
@@ -151,8 +161,7 @@ export function useVirtualCitySystemAgent(
 
         case 'game.virtual_city_show_command': {
           const f = p as unknown as VirtualCityShowCommandFrame;
-          const cmd = f?.command;
-          if (cmd && !isDuplicateCommand(cmd)) depsRef.current.onShowCommand(cmd);
+          deliver(f?.command ?? null);
           break;
         }
 
@@ -160,7 +169,27 @@ export function useVirtualCitySystemAgent(
           break;
       }
     });
-    return () => unsub();
+    // 批次 85 C2：断线重连后**重新入房** —— 房间成员集合随连接生命周期丢失
+    // （Hub 按连接登记观战者），重连后不补 `game.spectate` / `game.join` 的话，
+    // `BroadcastRoomIncludingSpectators` 的 system_event / show_command 帧对本页
+    // **永久失聪**（C2「无提示无报错」的送达侧根因）。首连的入房由
+    // VirtualCityGamePage 的 join effect 负责（避免双发），此后每次重连在此补发。
+    let openedOnce = false;
+    const offRejoin = wsClient.onOpen(() => {
+      if (!openedOnce) {
+        openedOnce = true;
+        return;
+      }
+      const seat = useVirtualCityStore.getState().mySeat;
+      wsClient.send(typeof seat === 'number' && seat >= 0 ? 'game.join' : 'game.spectate', {
+        room_id: roomIdRef.current,
+        game_kind: 'virtual_city',
+      });
+    });
+    return () => {
+      unsub();
+      offRejoin();
+    };
   }, []);
 
   /**
@@ -278,10 +307,20 @@ export function useVirtualCitySystemAgent(
 
 export type VirtualCitySystemAgentApi = ReturnType<typeof useVirtualCitySystemAgent>;
 
-/** 取 `data.command`（system_event 的 show_command 负载）。 */
+/**
+ * 取显示指令（system_event kind=show_command 的负载）。批次 85 C2：兼容两种
+ * wire 形状 —— 嵌套 `data.command` 与**扁平** `data` 即指令本体（实证
+ * `citysystem.emitCommands` 下发扁平形状，`displayCommand` 无 command 字段）。
+ * 旧实现只认嵌套 ⇒ system_event 通道整条死代码（双帧去重形同虚设、
+ * `show_commands` 徽章恒空、丢一条帧即整条指令丢失）。
+ */
 function d_command(data: Record<string, unknown> | undefined): VirtualCityDisplayCommand | null {
-  const cmd = data?.command;
-  if (!cmd || typeof cmd !== 'object') return null;
-  const c = cmd as VirtualCityDisplayCommand;
-  return typeof c.type === 'string' ? c : null;
+  if (!data || typeof data !== 'object') return null;
+  const nested = data.command;
+  if (nested && typeof nested === 'object') {
+    const c = nested as VirtualCityDisplayCommand;
+    if (typeof c.type === 'string') return c;
+  }
+  if (typeof data.type === 'string') return data as unknown as VirtualCityDisplayCommand;
+  return null;
 }

@@ -15,16 +15,20 @@ import { Fountain } from './props/Fountain';
 import { ParkGrounds } from './props/ParkGrounds';
 import { ConstructionSite } from './props/ConstructionSite';
 import { ParkingLot } from './props/ParkingLot';
+import { filterAllowsInstance, useCityShowStore } from './cityShowStore';
 import { districtCenter } from '@/types/virtualCity';
 
 export function LandmarksLayer() {
   const park = districtCenter('central_park');
+  // 批次 85 §3.2.3：逐地标实例级筛选（tag = objectInfo 注册表 id）。
+  const filter = useCityShowStore((s) => s.filter);
+  const vis = (tag: string) => filterAllowsInstance(filter, tag);
   return (
     <group>
-      <Fountain x={park.x} z={park.z} />
-      <ParkGrounds />
-      <ConstructionSite />
-      <ParkingLot />
+      <group visible={vis('landmark.fountain')}><Fountain x={park.x} z={park.z} /></group>
+      <group visible={vis('landmark.park-grounds')}><ParkGrounds /></group>
+      <group visible={vis('landmark.construction-site')}><ConstructionSite /></group>
+      <group visible={vis('landmark.parking-lot')}><ParkingLot /></group>
     </group>
   );
 }

@@ -130,14 +130,20 @@ export interface VirtualCityDisplayCommand {
   points?: { x: number; z: number }[];
 }
 
-/** 一条对话消息（用户提问 / Agent 回答及其工具留痕 / 其它 Agent 来信）。 */
+/** 一条对话消息（用户提问 / Agent 回答及其工具留痕 / 其它 Agent 来信 / 显示指令提示留痕）。 */
 export interface VirtualCitySystemMessage {
   id: string;
-  /** user = 人类提问；assistant = System 主 Agent；agent = 其它 Agent 的来信（批次 84）。 */
-  role: 'user' | 'assistant' | 'agent';
+  /** user = 人类提问；assistant = System 主 Agent；agent = 其它 Agent 的来信（批次 84）；notice = 显示指令提示留痕（批次 85）。 */
+  role: 'user' | 'assistant' | 'agent' | 'notice';
   /** 增量追加（assistant 流式）；agent_end 时以后端最终文本落定。 */
   text: string;
   ts: number;
+  /**
+   * role='notice' 时：显示指令提示的结构化载荷（文案按当前语言实时渲染，
+   * 不随语言切换固化）。形状与 cityShowAdapter 的 `CityShowNotice` 对齐
+   * （code / type / detail），在此独立声明以保持 types 层零依赖。
+   */
+  notice?: { code: string; type: string; detail?: string };
   /** role='agent' 时：来信方 Agent 名（如 LsmAgentGame-City-Chrome）。 */
   agent_from?: string;
   /** assistant 专属：本轮工具调用序列。 */

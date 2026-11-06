@@ -56,7 +56,7 @@ import { buildingsFor, type BuildingSpec } from './building_layout';
 import { outdoorCount, crowdCapFor, synthCrowdEntry } from './crowdFormula';
 import { layoutCrowd, type CrowdPedestrian } from './crowdLayout';
 import { clearCrowdPositions } from './crowdRegistry';
-import { effectiveLayerVisible, useCityShowStore } from './cityShowStore';
+import { effectiveLayerVisible, filterAllowsInstance, useCityShowStore } from './cityShowStore';
 import { TreesInstanced, type TreeVariant } from './props/TreesInstanced';
 import { RoofPlantLayer } from './props/RoofPlantLayer'; // 批次 53：屋顶设备机组（GLB 实例化） // 批次 20 §3.3 → 批次 44：GLB 化 + 三变体（variant 字段即由此导入）
 import { parkFacilityClearOf } from './props/parkLayout'; // 批次 45 C1：公园设施净空（公园树 filter 消费）
@@ -1238,6 +1238,18 @@ export function StreetPropsLayer({
   const vehiclesVisible = effectiveLayerVisible(showLayers, showFilter, 'vehicles');
   const pedestriansVisible = effectiveLayerVisible(showLayers, showFilter, 'pedestrians');
   const propsVisible = effectiveLayerVisible(showLayers, showFilter, 'props');
+  // ── 批次 85 §3.2.3：实例级筛选（按类别显隐，退化口径）────────────────
+  // tag = objectInfo 注册表 id；无筛选 / 图层级筛选恒 true（零回归）。
+  const instVisible = (tag: string) => filterAllowsInstance(showFilter, tag);
+  /** 街道家具 type → objectInfo tag（批次 28 注册表 id）。 */
+  const FURNITURE_TAG: Record<string, string> = {
+    kiosk: 'prop.vendor-kiosk',
+    bicycle: 'prop.bicycle-rack',
+    trash: 'prop.trash-can',
+    phone: 'prop.phone-booth',
+    mailbox: 'prop.mailbox',
+    parking: 'prop.parking-meter',
+  };
 
   // 批次 20 §3.3：区内树 + 行道树合并单一 InstancedMesh 集合（3 draw call）。
   // 批次 28 B2：kind 标记 —— 区内树 tree.park / 行道树 tree.road（物件信息按实例区分）。
@@ -1257,6 +1269,24 @@ export function StreetPropsLayer({
     [layout],
   );
 
+  // 批次 85 §3.2.1：车辆稳定实例 id（`<variant>-<序号>`，如 `sedan-0`）——
+  // Vehicle 组件据此向 cityVehicleRegistry 节流上报，供 `focus_entity` 的
+  // `vehicle:<id>` 解析（id 稳定 = layout useMemo 稳定，同房同序）。
+  const vehicleIds = useMemo(() => {
+    const counts: Record<string, number> = {};
+    return layout.roadVehicles.map((v) => {
+      const n = counts[v.variant] ?? 0;
+      counts[v.variant] = n + 1;
+      return `${v.variant}-${n}`;
+    });
+  }, [layout]);
+
+  // 批次 85：树的实例级筛选结果（kind → tree.<kind> tag；showFilter 变化才重算）。
+  const filteredTrees = useMemo(
+    () => allTrees.filter((t) => filterAllowsInstance(showFilter, `tree.${t.kind}`)),
+    [allTrees, showFilter],
+  );
+
   return (
     <>
       {/* 行人 + 家具 + 标识（树已抽出为全局 TreesInstanced；
@@ -1264,14 +1294,16 @@ export function StreetPropsLayer({
           批次 84：行人与街具分属 pedestrians / props 两个图层。 */}
       {layout.districtProps.map((dp) => (
         <group key={dp.districtId}>
-          {/* 16 · 阶段 T：屋顶太阳能板（suburb / oldtown） */}
-          <group visible={propsVisible}>
+          {/* 16 · 阶段 T：屋顶太阳能板（suburb / oldtown）。
+              批次 85：实例级筛选（prop.solar-panel）。 */}
+          <group visible={propsVisible && instVisible('prop.solar-panel')}>
             {dp.solar.map((sp, i) => (
               <SolarPanel key={`solar-${i}`} x={sp.x} y={sp.y} z={sp.z} rotation={sp.rotation} />
             ))}
           </group>
-          {/* 阶段 K→18-Z V3 体积漫步行人（站定行人 speed=0 + phase=0，见 DistrictProps） */}
-          <group visible={pedestriansVisible}>
+          {/* 阶段 K→18-Z V3 体积漫步行人（站定行人 speed=0 + phase=0，见 DistrictProps）。
+              批次 85：实例级筛选（actor.pedestrian）。 */}
+          <group visible={pedestriansVisible && instVisible('actor.pedestrian')}>
             {dp.pedestrians.map((p, i) => (
               <PedestrianV3
                 key={`ped-${i}`}
@@ -1282,10 +1314,12 @@ export function StreetPropsLayer({
               />
             ))}
           </group>
-          {/* 阶段 M 街道家具（按 type 分派渲染器） */}
+          {/* 阶段 M 街道家具（按 type 分派渲染器）。
+              批次 85：逐件实例级筛选（prop.<种类>）。 */}
           <group visible={propsVisible}>
             {dp.furniture.map((f, i) => {
               const key = `fur-${f.type}-${i}`;
+              if (!instVisible(FURNITURE_TAG[f.type] ?? 'prop')) return null;
               switch (f.type) {
                 case 'kiosk':
                   return <VendorKiosk key={key} x={f.x} z={f.z} rotation={f.rotation} />;
@@ -1303,8 +1337,8 @@ export function StreetPropsLayer({
                   return null;
               }
             })}
-            {/* 路口标识牌（批次 38 R3：水域净空后可能缺省） */}
-            {dp.sign && (
+            {/* 路口标识牌（批次 38 R3：水域净空后可能缺省）。批次 85：prop.sign。 */}
+            {dp.sign && instVisible('prop.sign') && (
               <Sign
                 x={dp.sign.x}
                 z={dp.sign.z}
@@ -1319,7 +1353,7 @@ export function StreetPropsLayer({
       {/* 批次 34 §6：真实居民行人（身份/外观/换班来自 game.state.city.crowd）。
           与街区装饰行人**互斥**（crowdActive 时后者已清空），故 DC 与 mixer 数不叠加。
           批次 35 §5.3：trackIndex 注册 live 位置，市民之声气泡据此锚定本人。 */}
-      <group visible={pedestriansVisible}>
+      <group visible={pedestriansVisible && instVisible('actor.pedestrian')}>
         {crowdPeds.map((p) => (
           <PedestrianV3
             key={`crowd-${p.residentIndex}`}
@@ -1332,14 +1366,17 @@ export function StreetPropsLayer({
         ))}
       </group>
 
-      {/* 批次 20 §3.3：区内树 + 行道树 → 单一全局 InstancedMesh 集合（3 draw call） */}
+      {/* 批次 20 §3.3：区内树 + 行道树 → 单一全局 InstancedMesh 集合（3 draw call）。
+          批次 85：树按 kind（tree.road / tree.park）实例级筛选 —— 实例化输入过滤
+          （不拆 draw call，仅收窄实例数）。 */}
       <group visible={treesVisible}>
-        <TreesInstanced trees={allTrees} totalCap={TREE_TOTAL_CAP} />
+        <TreesInstanced trees={filteredTrees} totalCap={TREE_TOTAL_CAP} />
       </group>
 
       {/* 批次 53：屋顶设备机组（逐栋实例化 civic/rooftop_plant.glb，7 draw call）。
-          同样抽到全局层：逐区渲染会退化成「每区一次 GlbInstanced」= 7×32 draw call。 */}
-      <group visible={propsVisible}>
+          同样抽到全局层：逐区渲染会退化成「每区一次 GlbInstanced」= 7×32 draw call。
+          批次 85：实例级筛选（prop.roof-plant）。 */}
+      <group visible={propsVisible && instVisible('prop.roof-plant')}>
         <RoofPlantLayer
           districts={districts}
           prosperityByDistrict={prosperityByDistrict}
@@ -1348,35 +1385,40 @@ export function StreetPropsLayer({
       </group>
 
       {/* 主干道车辆（16 · 阶段 S：双向车道，右行偏移；批次 41 C1/C2：涂装变体
-          glbName + arterial 红绿灯停车线 stops 透传） */}
+          glbName + arterial 红绿灯停车线 stops 透传）。
+          批次 85：车辆按车型（vehicle.<variant>）实例级显隐 —— 用 visible 闸门
+          而非卸载（保住行进相位，隐藏车仍在注册表里可被 focus_entity 定位）。 */}
       <group visible={vehiclesVisible}>
         {layout.roadVehicles.map((v, i) => (
-          <Vehicle
-            key={`vehicle-${i}`}
-            from={v.from}
-            to={v.to}
-            variant={v.variant}
-            glbName={v.glbName}
-            speed={v.speed}
-            phase={v.phase}
-            stops={v.stops}
-            laneOffset={v.laneOffset}
-          />
+          <group key={`vehicle-${i}`} visible={instVisible(`vehicle.${v.variant}`)}>
+            <Vehicle
+              id={vehicleIds[i]}
+              from={v.from}
+              to={v.to}
+              variant={v.variant}
+              glbName={v.glbName}
+              speed={v.speed}
+              phase={v.phase}
+              stops={v.stops}
+              laneOffset={v.laneOffset}
+            />
+          </group>
         ))}
       </group>
 
       {/* 主干道红绿灯：批次 24 起移至 <TrafficSignals>（VirtualCityCityMap
           RoadsLayer 汇总 trafficSignalsForCity 全局实例化渲染，含相位动画） */}
 
-      {/* 主干道公交站台 */}
-      <group visible={propsVisible}>
+      {/* 主干道公交站台。批次 85：实例级筛选（prop.bus-stop）。 */}
+      <group visible={propsVisible && instVisible('prop.bus-stop')}>
         {layout.busStops.map((bs, i) => (
           <BusStop key={`busstop-${i}`} x={bs.x} z={bs.z} rotation={bs.rotation} />
         ))}
       </group>
 
-      {/* 批次 42 C1：路缘停车咪表成排（key 含下标保证唯一；组件复用 props/ParkingMeter） */}
-      <group visible={propsVisible}>
+      {/* 批次 42 C1：路缘停车咪表成排（key 含下标保证唯一；组件复用 props/ParkingMeter）。
+          批次 85：实例级筛选（prop.parking-meter）。 */}
+      <group visible={propsVisible && instVisible('prop.parking-meter')}>
         {layout.parkingMeters.map((m, i) => (
           <ParkingMeter key={`pmeter-${i}`} x={m.x} z={m.z} rotation={m.rotation} />
         ))}

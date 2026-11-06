@@ -89,7 +89,12 @@ import {
 } from './freeViewColliders';
 import { SelectionMarker } from './SelectionMarker';
 import { useObjectInfoStore } from './objectInfo/objectInfoStore';
-import { effectiveLayerVisible, useCityShowStore } from './cityShowStore';
+import {
+  effectiveLayerVisible,
+  filterAllowsInstance,
+  useCityShowStore,
+  useInstanceFilterVisible,
+} from './cityShowStore';
 
 // 批次 32 v2：CDP 验收可直接读写 objectInfo selected 状态。
 if (typeof window !== 'undefined' && window.location.search.includes('debug=1')) {
@@ -101,6 +106,7 @@ import { DistrictBlock } from './DistrictBlock';
 // AgentToken.tsx 保留 —— 小地图仍用 districtSeatOffset 落位公式）。
 import { AgentHuman } from './AgentHuman';
 import { CityVoiceBubbleLayer } from './CityVoiceBubbleLayer';
+import { LabelsGate } from './cityLabels';
 import { useVirtualCityStore } from '@/store/virtualCity.store';
 import { Road, lampsForRoad } from './Road';
 import { StreetLightsInstanced } from './props/StreetLightsInstanced';
@@ -265,9 +271,11 @@ function Ground() {
   // 批次 32 v2：地面不参与「选中」（点空白 = 不选中任何物体，只关当前选中）。
   // hover 信息卡保留。
   const info = useObjectInfoProps('ground.city', { anchorY: 0.3, selectDisabled: true });
+  // 批次 85 §3.2.3：实例级筛选（ground.city）。
+  const filterVisible = useInstanceFilterVisible('ground.city');
 
   return (
-    <mesh {...info} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+    <mesh {...info} visible={filterVisible} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
       <planeGeometry args={[WORLD_GROUND_SIZE, WORLD_GROUND_SIZE]} />
       <meshStandardMaterial
         map={tex ?? undefined}
@@ -318,28 +326,45 @@ function RoadsLayer() {
     };
   }, []);
 
+  // 批次 85 §3.2.3：道路族逐件实例级筛选（road.* / prop.trash-can）。
+  const filter = useCityShowStore((s) => s.filter);
+  const vis = (tag: string) => filterAllowsInstance(filter, tag);
   return (
     <>
-      {ROAD_NETWORK.segments.map((r) => (
-        <Road
-          key={r.key}
-          from={r.from}
-          to={r.to}
-          kind={r.kind}
-          yOffset={r.yOffset}
-        />
-      ))}
-      {/* 批次 31：全路网标线/人行道合并层（5 draw call，见 RoadMarkings） */}
-      <RoadMarkings segments={ROAD_NETWORK.segments} junctions={ROAD_NETWORK.junctions} />
-      <StreetLightsInstanced lamps={lamps} />
+      {/* 批次 85：路面与标线同属 road.surface 语义（拆开会出现「有标线没路面」）。 */}
+      <group visible={vis('road.surface')}>
+        {ROAD_NETWORK.segments.map((r) => (
+          <Road
+            key={r.key}
+            from={r.from}
+            to={r.to}
+            kind={r.kind}
+            yOffset={r.yOffset}
+          />
+        ))}
+        {/* 批次 31：全路网标线/人行道合并层（5 draw call，见 RoadMarkings） */}
+        <RoadMarkings segments={ROAD_NETWORK.segments} junctions={ROAD_NETWORK.junctions} />
+      </group>
+      <group visible={vis('road.street-light')}>
+        <StreetLightsInstanced lamps={lamps} />
+      </group>
       {/* 批次 24：全城红绿灯（≈6 draw call，16s 相位：绿 6/黄 2/红 8，A/B 组错半周期） */}
-      <TrafficSignals signals={signals} />
+      <group visible={vis('road.traffic-signal')}>
+        <TrafficSignals signals={signals} />
+      </group>
       {/* 批次 43：全城行人过街信号灯（GLB 实例化；相位取机动车反色 ⇒ 永不同时放行） */}
-      <PedestrianSignals signals={pedSignals} />
+      <group visible={vis('road.pedestrian-signal')}>
+        <PedestrianSignals signals={pedSignals} />
+      </group>
       {/* 批次 43：宽路口悬臂式信号灯（GLB 实例化；立柱在路口外缘，横臂伸过路面上空） */}
-      <MastArmSignals spots={mastArms} />
-      {/* 批次 24：全城路侧垃圾桶（GLB 实例化 2~6 draw call；缺失回退程序化桶密度减半） */}
-      <RoadsideBins bins={bins} />
+      <group visible={vis('road.mast-arm-signal')}>
+        <MastArmSignals spots={mastArms} />
+      </group>
+      {/* 批次 24：全城路侧垃圾桶（GLB 实例化 2~6 draw call；缺失回退程序化桶密度减半）。
+          批次 85：与街具垃圾桶同 tag（prop.trash-can）。 */}
+      <group visible={vis('prop.trash-can')}>
+        <RoadsideBins bins={bins} />
+      </group>
     </>
   );
 }
@@ -364,6 +389,9 @@ function WaterLayer() {
   const canalLen = CANAL_HALF_X * 2;
   // 批次 28 B2：两岸草皮收边并入 water.canal 语义（运河岸线的一部分）。
   const bankInfo = useObjectInfoProps('water.canal', { anchorY: 0.3 });
+  // 批次 85 §3.2.3：水系逐件实例级筛选（water.canal / water.harbour / water.mist）。
+  const filter = useCityShowStore((s) => s.filter);
+  const vis = (tag: string) => filterAllowsInstance(filter, tag);
   // 港池（cityObstacles.PORT_POOL_WATER 同源；此处只消费不重定义）
   const poolW = 7;
   const poolD = 15;
@@ -371,35 +399,41 @@ function WaterLayer() {
   const poolZ = -1.5;
   return (
     <>
-      {/* 城市运河（92×3，横贯 x ∈ [-46, 46]） */}
-      <WaterPlane x={0} z={CANAL_Z} w={canalLen} d={3} />
-      {/* 物流港港池（7×15，方格网西侧外沿） */}
-      <WaterPlane x={poolX} z={poolZ} w={poolW} d={poolD} infoId="water.harbour" />
-      {/* 两岸草皮收边（窄条，色 #3f7a3a 与中央公园草地呼应） */}
-      {[-1, 1].map((side) => (
-        <mesh
-          {...bankInfo}
-          key={`bank-${side}`}
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[0, 0.024, CANAL_Z + side * 1.85]}
-          receiveShadow
-        >
-          <planeGeometry args={[canalLen, 0.7]} />
-          <meshStandardMaterial
-            map={bankTex ?? undefined}
-            color={bankTex ? '#ffffff' : '#3f7a3a'}
-            roughness={0.95}
-          />
-        </mesh>
-      ))}
-      {/* 阶段 P：运河两岸薄雾（覆盖水体外缘各 1.5 单位的过渡带） */}
-      <WaterMist x={0} z={CANAL_Z + 2.35} w={canalLen} d={1.5} opacity={0.18} />
-      <WaterMist x={0} z={CANAL_Z - 2.35} w={canalLen} d={1.5} opacity={0.18} />
-      {/* 港池四周薄雾 */}
-      <WaterMist x={poolX + poolW / 2 + 0.85} z={poolZ} w={1.5} d={poolD} opacity={0.15} />
-      <WaterMist x={poolX - poolW / 2 - 0.85} z={poolZ} w={1.5} d={poolD} opacity={0.15} />
-      <WaterMist x={poolX} z={poolZ + poolD / 2 + 0.85} w={poolW} d={1.5} opacity={0.15} />
-      <WaterMist x={poolX} z={poolZ - poolD / 2 - 0.85} w={poolW} d={1.5} opacity={0.15} />
+      {/* 城市运河（92×3，横贯 x ∈ [-46, 46]）。批次 85：water.canal。 */}
+      <group visible={vis('water.canal')}>
+        <WaterPlane x={0} z={CANAL_Z} w={canalLen} d={3} />
+        {/* 两岸草皮收边（窄条，色 #3f7a3a 与中央公园草地呼应） */}
+        {[-1, 1].map((side) => (
+          <mesh
+            {...bankInfo}
+            key={`bank-${side}`}
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[0, 0.024, CANAL_Z + side * 1.85]}
+            receiveShadow
+          >
+            <planeGeometry args={[canalLen, 0.7]} />
+            <meshStandardMaterial
+              map={bankTex ?? undefined}
+              color={bankTex ? '#ffffff' : '#3f7a3a'}
+              roughness={0.95}
+            />
+          </mesh>
+        ))}
+      </group>
+      {/* 物流港港池（7×15，方格网西侧外沿）。批次 85：water.harbour。 */}
+      <group visible={vis('water.harbour')}>
+        <WaterPlane x={poolX} z={poolZ} w={poolW} d={poolD} infoId="water.harbour" />
+      </group>
+      {/* 阶段 P：运河两岸薄雾（覆盖水体外缘各 1.5 单位的过渡带）。批次 85：water.mist。 */}
+      <group visible={vis('water.mist')}>
+        <WaterMist x={0} z={CANAL_Z + 2.35} w={canalLen} d={1.5} opacity={0.18} />
+        <WaterMist x={0} z={CANAL_Z - 2.35} w={canalLen} d={1.5} opacity={0.18} />
+        {/* 港池四周薄雾 */}
+        <WaterMist x={poolX + poolW / 2 + 0.85} z={poolZ} w={1.5} d={poolD} opacity={0.15} />
+        <WaterMist x={poolX - poolW / 2 - 0.85} z={poolZ} w={1.5} d={poolD} opacity={0.15} />
+        <WaterMist x={poolX} z={poolZ + poolD / 2 + 0.85} w={poolW} d={1.5} opacity={0.15} />
+        <WaterMist x={poolX} z={poolZ - poolD / 2 - 0.85} w={poolW} d={1.5} opacity={0.15} />
+      </group>
     </>
   );
 }
@@ -537,8 +571,11 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
           <CityEdgeLayer />
         </group>
         {/* 16 · 阶段 U：天空云层（6 团 Billboard 云，慢速漂移；y=60-80 在相机
-            轨道最高点之上，任何缩放都不会遮盖城市——视觉验收三轮回归结论） */}
-        <CloudLayer />
+            轨道最高点之上，任何缩放都不会遮盖城市——视觉验收三轮回归结论）。
+            批次 85 §3.2.3：实例级筛选（sky.cloud）。 */}
+        <group visible={filterAllowsInstance(showFilter, 'sky.cloud')}>
+          <CloudLayer />
+        </group>
         {/* 16 · 阶段 T：功能地标（喷泉 / 园路花坛 / 塔吊工地 / 停车场） */}
         <group userData={{ bucket: 'landmarks' }}>
           <LandmarksLayer />
@@ -557,10 +594,13 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
             onSelect={onSelectDistrict}
           />
         ))}
-        {/* P1-A：单 plane → 分层 <Road /> 道路（含路灯阵列）；批次 61：方格网 + 运河跨河桥 */}
+        {/* P1-A：单 plane → 分层 <Road /> 道路（含路灯阵列）；批次 61：方格网 + 运河跨河桥。
+            批次 85 §3.2.3：跨河桥实例级筛选（road.bridge）。 */}
         <group userData={{ bucket: 'roads' }}>
           <RoadsLayer />
-          <CanalBridges net={ROAD_NETWORK} />
+          <group visible={filterAllowsInstance(showFilter, 'road.bridge')}>
+            <CanalBridges net={ROAD_NETWORK} />
+          </group>
         </group>
         {/* 批次 61：空街区单元填充城市功能用地（绿地 / 停车场 / 市政设施）——
             避免方格化后出现「大片空地」，同时给搬迁后的市政设施留位 */}
@@ -601,8 +641,11 @@ export const VirtualCityCityMap = memo(function VirtualCityCityMap({
             />
           );
         })}
-        {/* 批次 23：市民之声气泡层（市政厅上空，eventFeed city_voice 驱动，不依赖座位） */}
-        <CityVoiceBubbleLayer />
+        {/* 批次 23：市民之声气泡层（市政厅上空，eventFeed city_voice 驱动，不依赖座位）。
+            批次 85 §3.2.2：气泡属 labels 图层 —— 关闭时整体不挂载（不进 DOM）。 */}
+        <LabelsGate>
+          <CityVoiceBubbleLayer />
+        </LabelsGate>
         {/* 批次 32：自由视角控制器（替代批次 22 的 OrbitControls/WalkControls 双挂载）。
             三态共用一套积分器：俯瞰 orbit / 全自由六自由度 fly / 街景漫游 walk；
             切换走 600 ms 位姿过渡（球面·线性插值 + 四元数 slerp），无画面跳变。

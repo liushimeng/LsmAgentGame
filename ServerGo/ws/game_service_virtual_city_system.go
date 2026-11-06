@@ -110,7 +110,13 @@ func (s *GameService) getOrCreateSystemRoomAgent(roomID string, r *virtual_city.
 	// 先 Unregister 再 Register:同房重建/测试复用 roomID 时强制重绑到当前
 	// 房间的 emit(RegisterRoom 对重复注册报错,不覆盖旧 handler)。
 	citybus.Default().UnregisterRoom(roomID, string(agentroot.AgentClassCityWebGLShow))
-	if err := citybus.Default().RegisterRoom(roomID, string(agentroot.AgentClassCityWebGLShow),
+	// 批次85 §3.3.3:RegisterRoom → RegisterRoomWith 补能力描述(list_agents
+	// 展示,修批次84 §8-10「未登记描述」)。MessageTypes 实测自下方 handler 的
+	// switch msg.Type 分支(""/"run_display"/"message";"" 是 run_display 的
+	// 缺省别名)。
+	if err := citybus.Default().RegisterRoomWith(roomID, string(agentroot.AgentClassCityWebGLShow),
+		[]string{"", "run_display", "message"},
+		"渲染显示 Agent:把结构化/自然语言显示请求翻译为 DisplayCommand 显示原语(run_display 缺省零延迟直通,message 走对话式翻译并逐条下发前端,回中文摘要)。",
 		func(ctx context.Context, msg citybus.Message) (any, error) {
 			switch msg.Type {
 			case "", "run_display":

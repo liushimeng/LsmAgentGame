@@ -522,7 +522,11 @@ func TestApplyDisplay_ForwardsNormalizedRequest(t *testing.T) {
 }
 
 // TestQueryCityState_AllCoversExtended scope=all 覆盖批次84 新增 7 个子系统
-// (全维度口径;子系统未启用时明确「未启用」,绝不编造)。
+// (全维度口径)。
+//
+// ⚠ 批次85 §3.1.2 契约更新:environment / security **不再**答「子系统未启用」
+// (那是批次84 的旧契约,批次85 已重写为「活动场景 + 世界事件 + 可得指标」);
+// 本用例同步改钉新契约 —— 两 scope 给出实质指标且不含「子系统未启用」字样。
 func TestQueryCityState_AllCoversExtended(t *testing.T) {
 	f := newExtFixture(t)
 	text, isErr := f.agent.Dispatch(context.Background(), "owner-1", ToolQueryCityState,
@@ -535,12 +539,22 @@ func TestQueryCityState_AllCoversExtended(t *testing.T) {
 			t.Errorf("scope=all missing %q in %q", want, text)
 		}
 	}
-	// environment / security 无对应子系统 ⇒ 明确「未启用」(不编造)。
-	if !strings.Contains(text, "环境生态子系统未启用") {
-		t.Errorf("environment must report 未启用, got %q", text)
+	// 批次85:environment / security 不再「子系统未启用」,给出实质内容。
+	if strings.Contains(text, "环境生态子系统未启用") {
+		t.Errorf("environment must not report 子系统未启用 (batch85), got %q", text)
 	}
-	if !strings.Contains(text, "公共安全(治安)子系统未启用") {
-		t.Errorf("security must report 未启用, got %q", text)
+	if strings.Contains(text, "公共安全(治安)子系统未启用") {
+		t.Errorf("security must not report 子系统未启用 (batch85), got %q", text)
+	}
+	if !strings.Contains(text, "食品类商品价格指数") {
+		t.Errorf("environment must give nearest indicator, got %q", text)
+	}
+	if !strings.Contains(text, "参考:市场监管(证券/反垄断/消协/隐私)累计罚款") {
+		t.Errorf("security must keep regulator fines (zero regression), got %q", text)
+	}
+	// 观察闭环两段(global 口径;空态有明确回执)。
+	if !strings.Contains(text, "全局进行中") && !strings.Contains(text, "当前该维度无进行中场景、无相关事件") {
+		t.Errorf("scope=all must carry observation loop, got %q", text)
 	}
 }
 

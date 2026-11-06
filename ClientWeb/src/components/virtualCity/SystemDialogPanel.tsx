@@ -44,23 +44,25 @@ import {
   cityEntityApi,
   cityPathApi,
   cityShowApi,
-  layersForCategory,
+  resolveCityFilterCategory,
   useCityShowStore,
   type CityLayerName,
 } from '@/components/virtualCity/cityShowStore';
 import {
   applyDisplayCommand,
   type CityShowDeps,
-  type CityShowNotice,
 } from '@/components/virtualCity/cityShowAdapter';
-import { SystemDialogMessage } from '@/components/virtualCity/SystemDialogMessage';
+import {
+  SystemDialogMessage,
+  noticeText,
+} from '@/components/virtualCity/SystemDialogMessage';
+import { CityAnnotationLabel } from '@/components/virtualCity/cityLabels';
+import { clearVehicleRegistry } from '@/components/virtualCity/cityVehicleRegistry';
 import { SystemDialogCatalogPanel } from '@/components/virtualCity/SystemDialogCatalogPanel';
 import { SystemDialogInfoPanel } from '@/components/virtualCity/SystemDialogInfoPanel';
 import type { VirtualCityFocusTarget } from '@/components/virtualCity/VirtualCityCityMap';
 import type { VirtualCityDisplayCommand } from '@/types/virtualCitySystem';
 
-/** 标注浮动标签自动消隐时长（方案 §4.4：8s）。 */
-const ANNOTATION_TTL_MS = 8000;
 /** 自动滚底的「贴底」容差（px）。 */
 const STICK_BOTTOM_TOLERANCE = 48;
 
@@ -102,68 +104,14 @@ function isHeadButtonTarget(target: EventTarget | null): boolean {
 }
 
 /**
- * Agent `annotate` 指令的 DOM 浮动标签（8s 自动消隐）。
- * 独立成组件：窗口关闭 / 最小化后标注仍要可见（视角已被拉动是既成事实）。
+ * Agent `annotate` 指令的 DOM 浮动标签 —— 批次 85 起抽到 `cityLabels.tsx`
+ * （受 `labels` 图层闸门控制是否渲染，单测可直渲 DOM），此处仅引用。
  */
-function CityAnnotationLabel() {
-  const annotation = useCityShowStore((s) => s.annotation);
-  const clearAnnotation = useCityShowStore((s) => s.clearAnnotation);
-  const timerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!annotation) return undefined;
-    const ts = annotation.ts;
-    timerRef.current = window.setTimeout(() => {
-      // 仅当标注未被更新（ts 未变）才消除，避免新标注被旧定时器误清。
-      if (useCityShowStore.getState().annotation?.ts === ts) clearAnnotation();
-    }, ANNOTATION_TTL_MS);
-    return () => {
-      if (timerRef.current !== null) {
-        window.clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [annotation, clearAnnotation]);
-
-  if (!annotation) return null;
-  return (
-    <div
-      className="virtualCity-sysdialog-annotation"
-      role="status"
-      data-testid="virtualCity-system-annotation"
-    >
-      📍 {annotation.text}
-    </div>
-  );
-}
 
 /**
- * 批次 84：显示指令提示文案（按提示码取 i18n；缺 key 回落 safeKey 串，
- * 绝不返回 undefined ⇒ 不白屏）。
+ * 批次 84：显示指令提示文案 —— 批次 85 移至 `SystemDialogMessage.tsx`
+ * （顶栏横幅与消息流留痕共用同一套文案逻辑，避免两处口径漂移）。
  */
-function noticeText(
-  t: (key: TKey, vars?: Record<string, string | number>) => string,
-  notice: CityShowNotice,
-): string {
-  switch (notice.code) {
-    case 'unsupported_type':
-      return t('virtualCity.systemDialog.noticeUnsupportedType' as TKey, { type: notice.type });
-    case 'unwired':
-      return t('virtualCity.systemDialog.noticeUnwired' as TKey, { type: notice.type });
-    case 'invalid_params':
-      return t('virtualCity.systemDialog.noticeInvalidParams' as TKey, { type: notice.type });
-    case 'entity_not_found':
-      return t('virtualCity.systemDialog.noticeEntityNotFound' as TKey, {
-        detail: notice.detail ?? notice.type,
-      });
-    case 'unknown_category':
-      return t('virtualCity.systemDialog.noticeUnknownCategory' as TKey, {
-        detail: notice.detail ?? notice.type,
-      });
-    default:
-      return notice.type;
-  }
-}
 
 interface Props {
   roomId: string;
@@ -189,6 +137,10 @@ export function SystemDialogPanel({ roomId, open, disabled = false, onClose, foc
    */
   const notice = useCityShowStore((s) => s.notice);
   const setNotice = useCityShowStore((s) => s.setNotice);
+  // 批次 85 C2：open 是 props —— onNotice 闭包读不到它的即时值（handleShowCommand
+  // 的 useCallback 依赖表刻意精简），ref 承载、回调里读 current。
+  const openRef = useRef(open);
+  openRef.current = open;
 
   // 显示指令 → 既有 3D 控制（focusRef / freeViewApi / cityShowStore / cityTimeStore）。
   const handleShowCommand = useCallback(
@@ -212,7 +164,9 @@ export function SystemDialogPanel({ roomId, open, disabled = false, onClose, foc
               cityShowApi.clearFilter();
               return true;
             }
-            if (layersForCategory(category).length === 0) return false;
+            // 批次 85：类别词汇 = 图层名 / 物件类别 / 车辆类型（cityFilterCategories
+            // 统一口径）；全不中才回 unknown_category。
+            if (resolveCityFilterCategory(category).scope === 'unknown') return false;
             cityShowApi.setFilter(category, mode);
             return true;
           },
@@ -227,7 +181,14 @@ export function SystemDialogPanel({ roomId, open, disabled = false, onClose, foc
           cityShowApi.clearFilter();
           cityShowApi.clearHighlight();
         },
-        onNotice: (n) => setNotice({ ...n, ts: Date.now() }),
+        onNotice: (n) => {
+          setNotice({ ...n, ts: Date.now() });
+          // 批次 85 C2：关窗 / 最小化期间横幅不渲染 ⇒ 提示转入消息流**留痕**
+          // （role='notice' 行，历史里永久可见，不丢提示）。
+          if (!openRef.current || useVirtualCitySystemStore.getState().minimized) {
+            useVirtualCitySystemStore.getState().appendNotice(n);
+          }
+        },
       };
       applyDisplayCommand(cmd, deps);
     },
@@ -250,9 +211,11 @@ export function SystemDialogPanel({ roomId, open, disabled = false, onClose, foc
   // 批次 84：换房时清掉**跨房残留**的显示侧单例态 ——
   // 实体位置注册表（旧房的居民坐标）与进行中的折线飞行。
   // （昼夜 / 天气 / 流速覆盖由 cityTimeStore.resetCityTime 在页面换房时清。）
+  // 批次 85：车辆注册表同清（组件卸载的 unregister 兜底之外的显式清残留）。
   useEffect(() => {
     cityEntityApi.clear();
     cityPathApi.cancel();
+    clearVehicleRegistry();
   }, [roomId]);
 
   // 新消息到达时贴底滚动（仅当用户本来就在底部附近，避免打断往上翻历史）。

@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Html } from '@react-three/drei';
 import { useVirtualCityStore } from '@/store/virtualCity.store';
 import { SPEECH_BUBBLE_TTL_MS } from './AgentToken';
+import { SpeechBubble } from './cityLabels';
 import { getCrowdPosition } from './crowdRegistry';
 import { CITY_HALL_BUBBLE_ANCHOR } from './civic/CityHall';
 import type { VirtualCityCrowdEntry } from '@/types/virtualCity';
@@ -110,12 +111,11 @@ export function CityVoiceBubbleLayer() {
             position={[pos.x, VOICE_ANCHOR_Y, pos.z]}
             zIndexRange={[40, 0]}
           >
-            <div className="virtualCity-speech-bubble virtualCity-speech-bubble--voice" role="status">
-              {v.name && <span className="virtualCity-speech-bubble__name">🗣 {v.name}</span>}
-              <span className="virtualCity-speech-bubble__text">
-                {v.text.length > 60 ? `${v.text.slice(0, 60)}…` : v.text}
-              </span>
-            </div>
+            <SpeechBubble
+              variant="voice"
+              name={v.name ? `🗣 ${v.name}` : ''}
+              text={v.text.length > 60 ? `${v.text.slice(0, 60)}…` : v.text}
+            />
           </Html>
         ) : null,
       )}
@@ -130,12 +130,11 @@ export function CityVoiceBubbleLayer() {
               position={[0, i * 0.55, 0]}
               zIndexRange={[40 - i, 0]}
             >
-              <div className="virtualCity-speech-bubble virtualCity-speech-bubble--voice" role="status">
-                {x.v.name && <span className="virtualCity-speech-bubble__name">🗣 {x.v.name}</span>}
-                <span className="virtualCity-speech-bubble__text">
-                  {x.v.text.length > 60 ? `${x.v.text.slice(0, 60)}…` : x.v.text}
-                </span>
-              </div>
+              <SpeechBubble
+                variant="voice"
+                name={x.v.name ? `🗣 ${x.v.name}` : ''}
+                text={x.v.text.length > 60 ? `${x.v.text.slice(0, 60)}…` : x.v.text}
+              />
             </Html>
           ))}
         </group>

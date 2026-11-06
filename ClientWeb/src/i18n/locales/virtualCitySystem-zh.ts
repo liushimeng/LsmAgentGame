@@ -66,6 +66,9 @@ const virtualCitySystemZH = {
   'virtualCity.systemDialog.noticeInvalidParams': '显示指令参数非法：{type}',
   'virtualCity.systemDialog.noticeEntityNotFound': '未找到实体：{detail}',
   'virtualCity.systemDialog.noticeUnknownCategory': '未识别的类别：{detail}',
+  // 批次85 §3.2：物体级显示控制（退化明示 / 车辆未找到）。
+  'virtualCity.systemDialog.noticeFilterShowhide': '当前实现为类别显隐（未做逐实例调色）：{detail}',
+  'virtualCity.systemDialog.noticeVehicleNotFound': '未找到车辆：{detail}',
   'virtualCity.systemDialog.noticeDismiss': '知道了',
 };
 

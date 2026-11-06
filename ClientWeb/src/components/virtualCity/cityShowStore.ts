@@ -17,6 +17,11 @@
  * 另加 `notice` —— **未支持 / 未接引擎**的显示指令提示（§11 风险缓解：
  * 「点了没反应」必须显式提示，禁止静默吞掉）。
  *
+ * 批次 85「物体级显示控制」：类别词汇与匹配（图层名 / 物件类别 / 车辆类型
+ * → 类别 → 实例粒度）抽到纯叶模块 `cityFilterCategories.ts`（store / adapter /
+ * 场景组件三方共用同一口径）；本文件 re-export 保持既有 import 站点零改动，
+ * 并新增 `useInstanceFilterVisible` 供场景组件按实例 tag 裁量显隐。
+ *
  * 昼夜 / 天气 / 时间流速的覆盖**不在本 store**：它们的真实渲染落点是
  * `cityTimeStore`（采样器直读），见 `cityEnvApi`。
  *
@@ -27,6 +32,32 @@
 
 import { create } from 'zustand';
 import type { CityShowNotice } from './cityShowAdapter';
+import {
+  CITY_LAYER_NAMES,
+  filterAllowsInstance,
+  type CityFilter,
+  type CityFilterMode,
+  type CityLayerName,
+} from './cityFilterCategories';
+
+// ── 批次 85：类别词汇 / 匹配迁至 cityFilterCategories.ts（纯叶模块）——
+// 既有 import 站点（SystemDialogPanel / DistrictBlock / StreetPropsLayer /
+// VirtualCityCityMap 等）继续从本文件取，零改动。
+export {
+  CITY_LAYER_NAMES,
+  CATEGORY_LAYER_MAP,
+  layersForCategory,
+  resolveCityFilterCategory,
+  cityFilterMatchesTag,
+  filterAllowsInstance,
+  effectiveLayerVisible,
+} from './cityFilterCategories';
+export type {
+  CityLayerName,
+  CityFilterMode,
+  CityFilter,
+  CityFilterCategoryResolution,
+} from './cityFilterCategories';
 
 // ── 批次 84：显示能力的**命令式句柄**统一出口（非 React，adapter 直调）──
 // 与既有 `cityShowApi` 同款模式：具体实现分散在各自的薄适配层
@@ -45,52 +76,11 @@ export interface CityAnnotation {
   ts: number;
 }
 
-/**
- * 批次 84：可切换显隐的图层名（与后端 DisplayCommand 的 `layer` 字段逐字一致）。
- *
- * 落点（游戏侧薄适配层）：
- *   buildings   → DistrictBlock 内的 <DistrictBuildings>
- *   trees       → StreetPropsLayer 内的 <TreesInstanced>
- *   vehicles    → StreetPropsLayer 内的车辆列表
- *   pedestrians → StreetPropsLayer 内的行人列表（装饰行人 + 真实居民）
- *   props       → 街具 / 标识 / 屋顶设备 / 公交站台 / 停车咪表
- *   labels      → 城区悬浮信息卡（<Html>）
- *   water       → VirtualCityCityMap 的水系 group
- */
-export type CityLayerName =
-  | 'buildings'
-  | 'trees'
-  | 'vehicles'
-  | 'pedestrians'
-  | 'props'
-  | 'labels'
-  | 'water';
-
-/** 全部图层名（顺序即 UI 展示顺序）。 */
-export const CITY_LAYER_NAMES: readonly CityLayerName[] = [
-  'buildings',
-  'trees',
-  'vehicles',
-  'pedestrians',
-  'props',
-  'labels',
-  'water',
-];
-
 /** 图层默认全可见。 */
 function defaultLayers(): Record<CityLayerName, boolean> {
   const out = {} as Record<CityLayerName, boolean>;
   for (const n of CITY_LAYER_NAMES) out[n] = true;
   return out;
-}
-
-/** 类别筛选模式（后端 DisplayCommand 的 `mode` 字段）。 */
-export type CityFilterMode = 'highlight' | 'dim';
-
-/** 类别筛选（`category` 为空 = 取消筛选）。 */
-export interface CityFilter {
-  category: string;
-  mode: CityFilterMode;
 }
 
 /**
@@ -196,52 +186,16 @@ export const cityShowApi = {
     useCityShowStore.getState().setNotice(notice),
 };
 
-// ── 批次 84：类别筛选 → 图层映射 ─────────────────────────────────
+// ── 批次 85：实例级筛选可见性 ─────────────────────────────────────
 
 /**
- * 类别 → 图层集合。
+ * 实例级筛选可见性 hook（场景组件按自身对象 tag 查一次）。
  *
- * 后端 `set_filter` 只给一个 `category` 字符串（自由文本），前端按**已知同义
- * 词**映射到图层集合；未识别的类别 ⇒ 空集合 ⇒ 记「未支持」提示（不静默）。
+ * tag = objectInfo 注册表 id（如 `vehicle.sedan` / `prop.trash-can` /
+ * `civic.city-hall` / `building.tower` / `district.finance`）；返回值供
+ * `<group visible={...}>` / 列表过滤 / 早退使用。无筛选或图层级筛选恒 true
+ * （图层级由 `effectiveLayerVisible` 收口）。
  */
-export const CATEGORY_LAYER_MAP: Record<string, CityLayerName[]> = {
-  building: ['buildings'],
-  buildings: ['buildings'],
-  tree: ['trees'],
-  trees: ['trees'],
-  vehicle: ['vehicles'],
-  vehicles: ['vehicles'],
-  pedestrian: ['pedestrians'],
-  pedestrians: ['pedestrians'],
-  'street-prop': ['props'],
-  props: ['props'],
-  label: ['labels'],
-  labels: ['labels'],
-  water: ['water'],
-  district: ['labels'],
-  civic: ['props'],
-  landmark: ['props'],
-};
-
-/** 类别 → 图层集合（未识别返回空数组）。 */
-export function layersForCategory(category: string): CityLayerName[] {
-  const key = (category || '').trim().toLowerCase();
-  return CATEGORY_LAYER_MAP[key] ? [...CATEGORY_LAYER_MAP[key]] : [];
-}
-
-/**
- * 生效可见性 = 显式图层开关 ∧ 筛选允许。
- *
- * - filter.mode='highlight' ⇒ 只有命中类别的图层可见（其余隐藏 = 隔离高亮）；
- * - filter.mode='dim'       ⇒ 命中类别的图层隐藏（其余不变）。
- */
-export function effectiveLayerVisible(
-  layers: Record<CityLayerName, boolean>,
-  filter: CityFilter | null,
-  layer: CityLayerName,
-): boolean {
-  if (!layers[layer]) return false;
-  if (!filter) return true;
-  const hit = layersForCategory(filter.category).includes(layer);
-  return filter.mode === 'dim' ? !hit : hit;
+export function useInstanceFilterVisible(tag: string): boolean {
+  return useCityShowStore((s) => filterAllowsInstance(s.filter, tag));
 }

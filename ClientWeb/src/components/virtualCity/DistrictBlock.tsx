@@ -29,6 +29,7 @@ import type { TKey } from '@/i18n';
 import { districtTexture, districtTextureStem, groundTileUrl, pbrNormalUrl, pbrRoughUrl } from '@/assets/images/virtualCity';
 import { buildingsFor } from './building_layout';
 import { DistrictBuildings } from './DistrictBuildings';
+import { DISTRICT_ARCHETYPE } from './building_shapes';
 import { DISTRICT_FLOORS, DISTRICT_SURFACE_Y, buildingHeight, prosperityOf } from './cityScale';
 import { useSharedPBR, useSharedTexture, withPBR } from '@/engine3d';
 import { currentSeason, subscribeSeason } from './cityTimeStore';
@@ -37,6 +38,7 @@ import { seasonGrassTileUrl } from './seasonAssets';
 import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 import {
   effectiveLayerVisible,
+  filterAllowsInstance,
   sanitizeHighlightColor,
   useCityShowStore,
 } from './cityShowStore';
@@ -127,6 +129,12 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
   const showFilter = useCityShowStore((s) => s.filter);
   const buildingsVisible = effectiveLayerVisible(showLayers, showFilter, 'buildings');
   const labelsVisible = effectiveLayerVisible(showLayers, showFilter, 'labels');
+  // 批次 85 §3.2.3：实例级筛选（按类别显隐，退化口径）——
+  // 城区整体（district.<id>）与楼群（building.<archetype>；区级合并渲染 ⇒
+  // 同区楼群同原型，`building.<archetype>` 以「区」为最小显隐单位）。
+  const districtVisible = filterAllowsInstance(showFilter, `district.${def.id}`);
+  const archetype = DISTRICT_ARCHETYPE[def.id] ?? 'slab';
+  const buildingsInstanceVisible = filterAllowsInstance(showFilter, `building.${archetype}`);
   const highlight = useCityShowStore((s) => s.highlight);
   // 高亮色：`highlight_district` 的 color 字段真正生效（非法色值回落主题金）。
   const highlightColor =
@@ -167,6 +175,7 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
   return (
     <group
       position={[def.x, 0, def.z]}
+      visible={districtVisible}
       onPointerOver={handleOver}
       onPointerOut={handleOut}
       onClick={info.onClick}
@@ -230,8 +239,9 @@ export const DistrictBlock = memo(function DistrictBlock({ def, priceIndex, play
         </mesh>
       )}
       {/* 楼群（批次 30 A2：街墙 8~14 栋 + DistrictBuildings 区级合并）。
-          批次 84：`set_layer_visibility` 的 buildings 图层开关。 */}
-      <group visible={buildingsVisible}>
+          批次 84：`set_layer_visibility` 的 buildings 图层开关。
+          批次 85：实例级筛选 `building.<archetype>`（区为最小单位）。 */}
+      <group visible={buildingsVisible && buildingsInstanceVisible}>
         <DistrictBuildings specs={buildings} def={def} prosperity={prosperity} />
       </group>
       {/* hover 信息卡（阶段 E：zIndexRange [30,0] 封顶 —— 不盖小地图 z40 /

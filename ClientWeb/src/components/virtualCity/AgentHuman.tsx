@@ -20,6 +20,8 @@
  * 冒泡（§5）：speak 气泡 12s（批次 23 链路不动）+ 动作气泡 8s（action/move/sense，
  * 批次 35 新增），动作气泡渲染在 speech 之下（无 speech 时占其位）。
  * 保留 AgentToken 的：名牌 Html / isMe 金环（移到脚底）/ objectInfo 悬浮卡 / a11y。
+ * 批次 85 §3.2.2：名牌 / 双气泡 / a11y 名牌经 `LabelsGate` 受 `labels` 图层
+ * 控制**是否渲染**（关闭 = 不进 DOM）；DOM 结构抽到 cityLabels.tsx（可单测）。
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -32,6 +34,8 @@ import { useSharedGLTF, blenderModelsEnabled } from '@/engine3d';
 import { modelUrl } from '@/assets/models';
 import { useObjectInfoProps } from './objectInfo/useObjectInfoProps';
 import { appearanceFor } from './crowdFormula';
+import { AgentNameTag, LabelsGate, SpeechBubble } from './cityLabels';
+import { useInstanceFilterVisible } from './cityShowStore';
 import { removeEntity, setEntityPosition } from './cityEntityResolver';
 import { districtSeatOffset, TOKEN_TAG_CROWD_THRESHOLD, SPEECH_BUBBLE_TTL_MS } from './AgentToken';
 import { u, worldDims, sizeTargetFor, DISTRICT_SURFACE_Y } from './cityScale';
@@ -317,6 +321,10 @@ export function AgentHuman({ player, cx, cz, index, total, isMe, speech, action 
     ],
   });
 
+  // 批次 85 §3.2.3：实例级筛选（actor.player，按类别显隐）—— hook 必须在
+  // 下方 !player.alive 早退之前调用（Rules of Hooks）。
+  const filterVisible = useInstanceFilterVisible('actor.player');
+
   // ── 程序化 fallback 几何（站姿：不摆臂；useMemo + 卸载 dispose，照抄 PedestrianV3）──
   const torsoGeo = useMemo(() => new THREE.BoxGeometry(u(0.32), TORSO_H, u(0.18)), []);
   const headGeo = useMemo(() => new THREE.SphereGeometry(HEAD_R, 12, 10), []);
@@ -346,6 +354,7 @@ export function AgentHuman({ player, cx, cz, index, total, isMe, speech, action 
     <group
       {...info}
       ref={groupRef}
+      visible={filterVisible}
       position={initialPosRef.current}
       userData={{ bucket: 'agents' }}
     >
@@ -388,63 +397,52 @@ export function AgentHuman({ player, cx, cz, index, total, isMe, speech, action 
           <meshBasicMaterial color="#d4a017" transparent opacity={0.95} side={THREE.DoubleSide} />
         </mesh>
       )}
-      {/* 名牌：座位号 + 昵称 + 职业图标 + 状态图标 + 净资产 + 🤖（照抄 AgentToken） */}
-      <Html position={[0, TAG_Y, 0]} center distanceFactor={12} zIndexRange={[9, 0]}>
-        <div
-          className={
-            'virtualCity-token-tag' +
-            (isMe ? ' virtualCity-token-tag--me' : '') +
-            (player.is_bot ? ' virtualCity-token-tag--bot' : '') +
-            (crowded ? ' virtualCity-token-tag--compact' : '')
-          }
-        >
-          <span className="virtualCity-token-tag__seat">{player.seat + 1}</span>
-          {(!crowded || isMe) && (
-            <span className="virtualCity-token-tag__name" title={player.nickname || player.account}>
-              {player.nickname || player.account}
-            </span>
-          )}
-          <span className="virtualCity-token-tag__emoji">{emoji}</span>
-          <span className="virtualCity-token-tag__status">
-            {STATUS_ICON_EMOJI[player.status_icon] ?? ''}
+      {/* 批次 85 §3.2.2：名牌 / 气泡 / a11y 名牌统一受 `labels` 图层闸门 ——
+          关闭时 `<Html>` 整体不挂载（不进 DOM），不是 opacity 糊弄。 */}
+      <LabelsGate>
+        {/* 名牌：座位号 + 昵称 + 职业图标 + 状态图标 + 净资产 + 🤖（照抄 AgentToken） */}
+        <Html position={[0, TAG_Y, 0]} center distanceFactor={12} zIndexRange={[9, 0]}>
+          <AgentNameTag
+            seat={player.seat + 1}
+            name={player.nickname || player.account}
+            emoji={emoji}
+            statusIcon={STATUS_ICON_EMOJI[player.status_icon] ?? ''}
+            netWorthText={formatCny(player.net_worth)}
+            isMe={isMe}
+            isBot={player.is_bot}
+            modelDisplay={player.model_display}
+            compact={crowded}
+          />
+        </Html>
+        {/* 批次 35 §5.1：动作气泡（💭/🚶/👀；8s TTL）。有 speak 气泡时下移一层，
+            无 speak 时占其位 —— 两者可并存。 */}
+        {action && !actionExpired && (
+          <Html
+            center
+            distanceFactor={12}
+            position={[0, showSpeech ? ACTION_BUBBLE_Y_STACKED : BUBBLE_Y, 0]}
+            zIndexRange={[39, 0]}
+          >
+            <SpeechBubble
+              variant="action"
+              icon={ACTION_ICON_EMOJI[action.type] ?? ACTION_ICON_EMOJI.action}
+              text={clipText(action.text, 60)}
+            />
+          </Html>
+        )}
+        {/* 批次 23：speak 气泡（公开发话，12s TTL 后消失） */}
+        {speech && !speechExpired && (
+          <Html center distanceFactor={12} position={[0, BUBBLE_Y, 0]} zIndexRange={[40, 0]}>
+            <SpeechBubble text={clipText(speech.text, 60)} />
+          </Html>
+        )}
+        {/* a11y：屏幕阅读器可读名牌（视觉隐藏由 CSS 处理） */}
+        <Html position={[0, -0.05, 0]} center style={{ pointerEvents: 'none' }} zIndexRange={[0, 0]}>
+          <span className="virtualCity-sr-only">
+            {`${player.seat + 1} ${player.nickname} ${player.profession.title} ${t('virtualCity.netWorth' as TKey)} ${formatCny(player.net_worth)}`}
           </span>
-          <span className="virtualCity-token-tag__nw">{formatCny(player.net_worth)}</span>
-          {player.is_bot && (
-            <span className="virtualCity-token-tag__bot" title={player.model_display}>🤖</span>
-          )}
-        </div>
-      </Html>
-      {/* 批次 35 §5.1：动作气泡（💭/🚶/👀；8s TTL）。有 speak 气泡时下移一层，
-          无 speak 时占其位 —— 两者可并存。 */}
-      {action && !actionExpired && (
-        <Html
-          center
-          distanceFactor={12}
-          position={[0, showSpeech ? ACTION_BUBBLE_Y_STACKED : BUBBLE_Y, 0]}
-          zIndexRange={[39, 0]}
-        >
-          <div className="virtualCity-speech-bubble virtualCity-speech-bubble--action" role="status">
-            <span className="virtualCity-speech-bubble__icon" aria-hidden="true">
-              {ACTION_ICON_EMOJI[action.type] ?? ACTION_ICON_EMOJI.action}
-            </span>
-            <span className="virtualCity-speech-bubble__text">{clipText(action.text, 60)}</span>
-          </div>
         </Html>
-      )}
-      {/* 批次 23：speak 气泡（公开发话，12s TTL 后消失） */}
-      {speech && !speechExpired && (
-        <Html center distanceFactor={12} position={[0, BUBBLE_Y, 0]} zIndexRange={[40, 0]}>
-          <div className="virtualCity-speech-bubble" role="status">
-            <span className="virtualCity-speech-bubble__text">{clipText(speech.text, 60)}</span>
-          </div>
-        </Html>
-      )}
-      {/* a11y：屏幕阅读器可读名牌（视觉隐藏由 CSS 处理） */}
-      <Html position={[0, -0.05, 0]} center style={{ pointerEvents: 'none' }} zIndexRange={[0, 0]}>
-        <span className="virtualCity-sr-only">
-          {`${player.seat + 1} ${player.nickname} ${player.profession.title} ${t('virtualCity.netWorth' as TKey)} ${formatCny(player.net_worth)}`}
-        </span>
-      </Html>
+      </LabelsGate>
     </group>
   );
 }

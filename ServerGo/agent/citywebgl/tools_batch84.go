@@ -73,7 +73,7 @@ func buildBatch84Tools() []llmtypes.ToolDef {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"entity_id": map[string]any{"type": "string", "description": "实体 id(必填;只能来自请求参数或上下文中出现过的 id,不得编造)"},
+					"entity_id": map[string]any{"type": "string", "description": "实体 id(必填;只能来自请求参数或上下文中出现过的 id,不得编造;形态如 resident:seat:2 / building:<区>:<序> / vehicle:<id>)"},
 					"kind":      map[string]any{"type": "string", "enum": DisplayEntityKinds, "description": "实体类别(可选;building|resident|vehicle)"},
 				},
 				"required": []string{"entity_id"},
@@ -93,11 +93,11 @@ func buildBatch84Tools() []llmtypes.ToolDef {
 		},
 		{
 			Name:        ToolSetFilter,
-			Description: "按类别筛选并高亮(产出 set_filter 指令);category 留空 = 取消筛选。mode 决定呈现:highlight 高亮 / dim 变暗。",
+			Description: "按类别筛选并高亮(产出 set_filter 指令);category 留空 = 取消筛选。mode 决定呈现:highlight 高亮 / dim 变暗。category 支持图层名 / 物件类别 / 车辆类型。",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"category": map[string]any{"type": "string", "description": "类别(可选;留空 = 取消筛选)"},
+					"category": map[string]any{"type": "string", "description": "类别(可选;留空 = 取消筛选;支持图层名 / 物件类别(如 park、fire-station 等物件类别) / 车辆类型(sedan|truck|bus|taxi))"},
 					"mode":     map[string]any{"type": "string", "enum": DisplayFilterModes, "description": "呈现方式(可选,默认 highlight;只能 highlight|dim)"},
 				},
 			},

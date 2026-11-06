@@ -66,6 +66,9 @@ const virtualCitySystemJA = {
   'virtualCity.systemDialog.noticeInvalidParams': '表示コマンドのパラメータが不正です：{type}',
   'virtualCity.systemDialog.noticeEntityNotFound': 'エンティティが見つかりません：{detail}',
   'virtualCity.systemDialog.noticeUnknownCategory': '未知のカテゴリ：{detail}',
+  // バッチ85 §3.2：オブジェクト単位の表示制御（劣化明示 / 車両未検出）。
+  'virtualCity.systemDialog.noticeFilterShowhide': '現在の実装はカテゴリ単位の表示/非表示です（インスタンス単位の色調整なし）：{detail}',
+  'virtualCity.systemDialog.noticeVehicleNotFound': '車両が見つかりません：{detail}',
   'virtualCity.systemDialog.noticeDismiss': '閉じる',
 };
 

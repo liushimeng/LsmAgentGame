@@ -21,6 +21,7 @@ import (
 
 	agentroot "LsmAgentGame/agent"
 	"LsmAgentGame/errcode"
+	"LsmAgentGame/game/virtual_city"
 )
 
 // Dispatch 派发单个工具调用。input 为 Anthropic tool_use.input(map);
@@ -51,26 +52,35 @@ func (a *Agent) Dispatch(ctx context.Context, userID, name string, input map[str
 		// 条目(limit 缺省 60 上限 200);未知组名返回失败文本(35064)。
 		return listScenarios(getStr("group"), getInt("limit"))
 	case ToolQueryCityState:
-		scope := strings.ToLower(strings.TrimSpace(getStr("scope")))
+		// 批次85 E2E F1:scope 归一(7 个英文维度键别名 → 13 个维度名,
+		// 维度名与 ScenarioGroup* 同值,模型可直接传「自然灾害」等组名)。
+		scope := canonicalCityStateScope(strings.ToLower(strings.TrimSpace(getStr("scope"))))
 		if extendedCityStateScopes[scope] {
 			return a.queryCityStateExtended(scope)
 		}
+		text, isErr := a.systemSummary(scope)
+		if isErr {
+			return text, true
+		}
 		if scope == "all" {
 			// "all" = 既有房间摘要 + 批次84 新增 7 个子系统(全维度口径)。
-			base, _ := a.systemSummary(scope)
-			ext := a.allExtendedScopes()
-			if ext == "" {
-				return base, false
+			if ext := a.allExtendedScopes(); ext != "" {
+				text += "\n\n" + ext
 			}
-			return base + "\n\n" + ext, false
 		}
-		return a.systemSummary(scope)
+		// 批次85 §3.1.2:全部 scope 末尾追加观察闭环两段
+		// (all 与 5 个无专属维度 scope 走全局聚合口径)。
+		if sec := a.dimensionObservation(scope); sec != "" {
+			text += "\n" + sec
+		}
+		return text, false
 	case ToolQueryMetricHistory:
 		return a.queryMetricHistory(getStr("metric"), getInt("months"))
 	case ToolQueryDistricts:
 		return a.queryDistricts(getStr("district"))
 	case ToolQueryWorldEvents:
-		return a.worldEventText()
+		// 批次85 §3.1.3:dimension 可选过滤(空 = 全部)。
+		return a.worldEventText(getStr("dimension"))
 	case ToolQueryPrediction:
 		return a.queryPrediction(getStr("run_id"))
 	case ToolQuerySurveys:
@@ -146,11 +156,35 @@ func (a *Agent) systemSummary(scope string) (string, bool) {
 }
 
 // worldEventText 查询真实世界事件流文本(持锁只读快照)。
-func (a *Agent) worldEventText() (string, bool) {
+//
+// 批次85 §3.1.3:dimension 可选过滤(空 = 全部;取 13 个分组名),
+// 复用维度归集判据(virtual_city.WorldEventDimensionOf —— ScenarioKind
+// 优先、Kind 兜底;归不到该维度的事件不计入)。未知维度 ⇒ 35064 失败文本
+// 回灌模型(与 list_scenarios 未知分组同口径)。
+func (a *Agent) worldEventText(dimension string) (string, bool) {
 	if a.room == nil {
 		return "失败:房间未绑定", true
 	}
-	return worldEventText(a.room.WorldEventLogView()), false
+	dimension = strings.TrimSpace(dimension)
+	if dimension != "" && !scenarioGroupKnown(dimension) {
+		return "失败:" + errcode.CodeMsg(errcode.ErrVirtualCityScenarioGroupUnknown,
+			fmt.Sprintf("未知维度 %s,可用维度:%s", dimension,
+				strings.Join(knownScenarioGroups(), "|"))).Error(), true
+	}
+	records := a.room.WorldEventLogView()
+	if dimension != "" {
+		filtered := make([]virtual_city.WorldEventRecord, 0, len(records))
+		for _, rec := range records {
+			if virtual_city.WorldEventDimensionOf(rec) == dimension {
+				filtered = append(filtered, rec)
+			}
+		}
+		if len(filtered) == 0 {
+			return fmt.Sprintf("维度 %s 暂无相关世界事件(归不到该维度的事件不计入)。", dimension), false
+		}
+		records = filtered
+	}
+	return worldEventText(records), false
 }
 
 // scenarioTargetLabel 目标标签(空 = 全域)。
