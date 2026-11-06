@@ -70,6 +70,17 @@ const virtualCitySystemZH = {
   'virtualCity.systemDialog.noticeFilterShowhide': '当前实现为类别显隐（未做逐实例调色）：{detail}',
   'virtualCity.systemDialog.noticeVehicleNotFound': '未找到车辆：{detail}',
   'virtualCity.systemDialog.noticeDismiss': '知道了',
+  // 批次87 §4.3 / §4.4：系统对话错误可见性 + 输入锁文案。
+  'virtualCity.systemDialog.errorRoomNotFound': '当前房间已不存在，请重新进入房间后再试。',
+  'virtualCity.systemDialog.errorDisabled': '服务端已停用系统对话（[city_system] enabled=false），暂不可发送指令。',
+  'virtualCity.systemDialog.errorBusy': '你上一轮系统对话还没结束，请等它返回后再发送。',
+  'virtualCity.systemDialog.errorAgentNotFound': '请求的目标 Agent 未注册（目标不存在）。',
+  'virtualCity.systemDialog.errorNoReply': '目标 Agent 在时限内没有回应，请稍后再试。',
+  'virtualCity.systemDialog.errorReplyTooLong': '目标 Agent 的回包超长已被截断，可换个更聚焦的问法。',
+  'virtualCity.systemDialog.errorGroupUnknown': '场景分组未知（不在场景目录分组表内）。',
+  'virtualCity.systemDialog.errorDisplayInvalid': '显示指令参数非法，已忽略该显示指令。',
+  'virtualCity.systemDialog.timeout': '本轮超时未返回，请重试或稍后再问。',
+  'virtualCity.systemDialog.connectionLost': '连接已断开，正在重连…',
 };
 
 export default virtualCitySystemZH;

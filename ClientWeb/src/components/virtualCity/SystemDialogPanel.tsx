@@ -120,6 +120,10 @@ interface Props {
   /**
    * 批次81 §8 一键回退：后端 `[city_system] enabled=false`（game.state
    * `system_agent_enabled === false`）⇒ 面板内联提示 + 禁发。缺省 false。
+   *
+   * 批次 87 §4.6：**由页面统一解析**（`resolveSystemAgentDisabled`）——
+   * 两路信号取或：① `game.state.system_agent_enabled` **明确 false**（字段缺失
+   * 视为可用，向后兼容旧后端）；② 本地停用态（服务端回 35059「已停用」）。
    */
   disabled?: boolean;
   onClose: () => void;
@@ -196,7 +200,7 @@ export function SystemDialogPanel({ roomId, open, disabled = false, onClose, foc
   );
 
   const {
-    messages, busy, connected, minimized, setMinimized, sendMessage, reset,
+    messages, busy, transportConnected, minimized, setMinimized, sendMessage, reset,
   } = useVirtualCitySystemAgent(roomId, { focusRef, onShowCommand: handleShowCommand });
 
   const [draft, setDraft] = useState('');
@@ -465,12 +469,15 @@ export function SystemDialogPanel({ roomId, open, disabled = false, onClose, foc
           <span className="virtualCity-sysdialog__subtitle">
             {t('virtualCity.systemDialog.subtitle')}
           </span>
+          {/* 批次 87 P1-5：连接指示器改读**传输层**连接态（`wsClient.status`）——
+              `store.connected` 只在收到 agent_start / agent_end 才为 true ⇒
+              空闲时误显「系统 Agent 未连接」（误导性告警）。 */}
           <span
             className={
               'virtualCity-sysdialog__conn'
-              + (connected ? ' virtualCity-sysdialog__conn--on' : '')
+              + (transportConnected ? ' virtualCity-sysdialog__conn--on' : '')
             }
-            title={connected
+            title={transportConnected
               ? t('virtualCity.systemDialog.connected' as TKey)
               : t('virtualCity.systemDialog.disconnected' as TKey)}
             data-testid="virtualCity-system-dialog-conn"

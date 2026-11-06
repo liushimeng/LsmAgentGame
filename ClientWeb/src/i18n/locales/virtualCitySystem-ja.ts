@@ -70,6 +70,17 @@ const virtualCitySystemJA = {
   'virtualCity.systemDialog.noticeFilterShowhide': '現在の実装はカテゴリ単位の表示/非表示です（インスタンス単位の色調整なし）：{detail}',
   'virtualCity.systemDialog.noticeVehicleNotFound': '車両が見つかりません：{detail}',
   'virtualCity.systemDialog.noticeDismiss': '閉じる',
+  // バッチ87 §4.3 / §4.4：システム対話のエラー可視化 + 入力ロックの文案。
+  'virtualCity.systemDialog.errorRoomNotFound': 'この部屋は存在しません。部屋に入り直して再試行してください。',
+  'virtualCity.systemDialog.errorDisabled': 'サーバー側でシステム対話は停止中です（[city_system] enabled=false）。コマンドは送信できません。',
+  'virtualCity.systemDialog.errorBusy': '前のシステム対話がまだ終了していません。完了までお待ちください。',
+  'virtualCity.systemDialog.errorAgentNotFound': '指定されたエージェントが登録されていません（対象が存在しません）。',
+  'virtualCity.systemDialog.errorNoReply': '対象エージェントが時間内に応答しませんでした。再試行してください。',
+  'virtualCity.systemDialog.errorReplyTooLong': '対象エージェントの応答が長すぎたため切り詰められました。より絞り込んだ質問をお試しください。',
+  'virtualCity.systemDialog.errorGroupUnknown': '未知のシナリオグループです（カタログにありません）。',
+  'virtualCity.systemDialog.errorDisplayInvalid': '表示コマンドのパラメータが不正です。当該コマンドは無視されました。',
+  'virtualCity.systemDialog.timeout': 'このターンはタイムアウトしました。再試行するか、後でもう一度お試しください。',
+  'virtualCity.systemDialog.connectionLost': '接続が切断されました。再接続しています…',
 };
 
 export default virtualCitySystemJA;

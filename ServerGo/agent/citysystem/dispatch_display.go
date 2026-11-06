@@ -34,13 +34,16 @@ import (
 //
 // 校验失败一律 isErr=true + 失败文本(不转发);成功返回指令类型摘要。
 //
+// userID 用于显示指令的定向投递(批次87 P1-6):相机/图层是**客户端本地**
+// 状态,只发给发起用户(全房强拉相机是骚扰)。
+//
 // 批次85 E2E C7:显式空 category = **取消筛选**(契约 §3.2.3,前端
 // cityShowAdapter 对 category 空的 set_filter 走 setFilter('','highlight'))。
 // 渲染侧无法表达「显式给了空 category」—— displayRequest.category 带
 // omitempty(总线 JSON 往返丢空值),且 citywebgl.Structured 对空 category
 // 静默丢弃 —— 故 set_filter 取消指令在**本侧直接产出**、经 emitCommands
 // 下发(show_command 单一发射点不变);其余参数仍经总线让渲染 Agent 翻译。
-func (a *Agent) applyDisplay(ctx context.Context, input map[string]any) (string, bool) {
+func (a *Agent) applyDisplay(ctx context.Context, userID string, input map[string]any) (string, bool) {
 	if a.hub == nil {
 		return "失败:Agent 总线未绑定", true
 	}
@@ -72,7 +75,7 @@ func (a *Agent) applyDisplay(ctx context.Context, input map[string]any) (string,
 	if len(cmds) == 0 {
 		return "显示 Agent 未返回任何指令(请检查参数或稍后再试)。", false
 	}
-	a.emitCommands(cmds)
+	a.emitCommands(userID, cmds)
 	return "已下发显示指令:" + describeDisplayCommands(cmds), false
 }
 

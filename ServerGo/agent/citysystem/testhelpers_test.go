@@ -100,17 +100,31 @@ func (r *fakeRegistry) Get(string) (llmtypes.LLMProvider, string, error) { retur
 func (r *fakeRegistry) GetThinkingEnabled(string) (bool, int)            { return r.enabled, r.budget }
 func (r *fakeRegistry) ListEnabled() []llmtypes.ModelInfo                { return r.list }
 
+// capturedEvent 是测试专用的「事件 + 归属用户」记录(批次87 P1-6)。
+//
+// 归属 userID 是 emit 回调的**首个参数**(投递路由用),不进 wire 载荷;
+// 故只在测试侧记录,生产结构 SystemEvent 保持零新增字段。
+//
+// 嵌入 SystemEvent ⇒ 既有断言(e.Kind / e.Data)写法不变。
+type capturedEvent struct {
+	SystemEvent
+	UserID string
+}
+
 // newTestAgent 构造带 fake registry / 独立 hub 的 Agent,返回事件收集器。
-func newTestAgent(t *testing.T, room *virtual_city.VirtualCityRoom, reg LLMRegistry) (*Agent, *[]SystemEvent) {
+//
+// emit 回调签名带 userID(批次87 P1-6):会话事件定向投递。收集器同时记录
+// 每条事件的归属 userID,便于断言「哪些事件是房间级(userID=="")」。
+func newTestAgent(t *testing.T, room *virtual_city.VirtualCityRoom, reg LLMRegistry) (*Agent, *[]capturedEvent) {
 	t.Helper()
 	hub := citybus.New()
 	t.Cleanup(hub.Close)
 	store := NewConversationStore(40)
 	var mu sync.Mutex
-	events := make([]SystemEvent, 0, 16)
-	emit := func(e SystemEvent) {
+	events := make([]capturedEvent, 0, 16)
+	emit := func(userID string, e SystemEvent) {
 		mu.Lock()
-		events = append(events, e)
+		events = append(events, capturedEvent{SystemEvent: e, UserID: userID})
 		mu.Unlock()
 	}
 	a := NewAgent(room, Config{ModelKey: "TestModel"}, reg, hub, store, emit)
@@ -127,14 +141,14 @@ func newTestHub(t *testing.T) *citybus.Hub {
 }
 
 // collectEvents 快照事件列表(测试内单线程使用,无需加锁)。
-func collectEvents(events *[]SystemEvent) []SystemEvent {
-	out := make([]SystemEvent, len(*events))
+func collectEvents(events *[]capturedEvent) []capturedEvent {
+	out := make([]capturedEvent, len(*events))
 	copy(out, *events)
 	return out
 }
 
 // hasEventKind 报告事件流是否包含指定 kind。
-func hasEventKind(events []SystemEvent, kind string) bool {
+func hasEventKind(events []capturedEvent, kind string) bool {
 	for _, e := range events {
 		if e.Kind == kind {
 			return true

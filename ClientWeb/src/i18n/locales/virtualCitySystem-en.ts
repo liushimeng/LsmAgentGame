@@ -70,6 +70,17 @@ const virtualCitySystemEN = {
   'virtualCity.systemDialog.noticeFilterShowhide': 'Current implementation shows/hides by category (no per-instance tinting): {detail}',
   'virtualCity.systemDialog.noticeVehicleNotFound': 'Vehicle not found: {detail}',
   'virtualCity.systemDialog.noticeDismiss': 'Dismiss',
+  // Batch 87 §4.3 / §4.4: system dialog error visibility + busy-guard copy.
+  'virtualCity.systemDialog.errorRoomNotFound': 'This room no longer exists; please re-enter a room and try again.',
+  'virtualCity.systemDialog.errorDisabled': 'The server has disabled the system dialog ([city_system] enabled=false); sending commands is unavailable.',
+  'virtualCity.systemDialog.errorBusy': 'Your previous system dialog turn is still running; please wait for it to finish before sending again.',
+  'virtualCity.systemDialog.errorAgentNotFound': 'The requested agent is not registered (target does not exist).',
+  'virtualCity.systemDialog.errorNoReply': 'The target agent did not reply in time; please try again later.',
+  'virtualCity.systemDialog.errorReplyTooLong': 'The target agent reply was too long and got truncated; try a more focused question.',
+  'virtualCity.systemDialog.errorGroupUnknown': 'Unknown scenario group (not in the scenario catalog).',
+  'virtualCity.systemDialog.errorDisplayInvalid': 'Invalid display command parameters; that display command was ignored.',
+  'virtualCity.systemDialog.timeout': 'This turn timed out without a reply; please retry or ask again later.',
+  'virtualCity.systemDialog.connectionLost': 'Connection lost, reconnecting…',
 };
 
 export default virtualCitySystemEN;

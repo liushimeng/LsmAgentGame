@@ -20,7 +20,7 @@ import (
 // Agent 假件(返回固定指令序列;nil = 空返回)。
 type displayFixture struct {
 	agent  *Agent
-	events *[]SystemEvent
+	events *[]capturedEvent
 	mu     sync.Mutex
 	busReq []displayRequest
 }
@@ -55,7 +55,7 @@ func (f *displayFixture) busCalls() []displayRequest {
 }
 
 // collectShowCommands 提取事件流里的 show_command 显示指令。
-func collectShowCommands(events []SystemEvent) []displayCommand {
+func collectShowCommands(events []capturedEvent) []displayCommand {
 	out := []displayCommand{}
 	for _, e := range events {
 		if e.Kind != EventShowCommand {

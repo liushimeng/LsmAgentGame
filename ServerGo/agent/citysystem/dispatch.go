@@ -82,7 +82,7 @@ func (a *Agent) Dispatch(ctx context.Context, userID, name string, input map[str
 		// 批次85 §3.1.3:dimension 可选过滤(空 = 全部)。
 		return a.worldEventText(getStr("dimension"))
 	case ToolQueryPrediction:
-		return a.queryPrediction(getStr("run_id"))
+		return a.queryPrediction(getStr("run_id"), userID)
 	case ToolQuerySurveys:
 		return a.querySurveys()
 	case ToolControlSimulation:
@@ -90,9 +90,9 @@ func (a *Agent) Dispatch(ctx context.Context, userID, name string, input map[str
 	case ToolLaunchSurvey:
 		return a.launchSurvey(getStr("question"), stringSlice(input["options"]))
 	case ToolFocusCamera:
-		return a.focusCamera(ctx, getStr("district"), getStr("mode"), input)
+		return a.focusCamera(ctx, userID, getStr("district"), getStr("mode"), input)
 	case ToolApplyDisplay:
-		return a.applyDisplay(ctx, input)
+		return a.applyDisplay(ctx, userID, input)
 	case ToolCollectRealworldData:
 		return a.collectRealworldData(ctx, getStr("category"))
 	case ToolAskAgent:
@@ -196,7 +196,10 @@ func scenarioTargetLabel(target string) string {
 }
 
 // queryPrediction 查询预测报告:文本摘要 + 报告卡片数据(下发给前端渲染)。
-func (a *Agent) queryPrediction(runID string) (string, bool) {
+//
+// userID 用于报告卡片事件的定向投递(批次87 P1-6):报告卡片是本轮会话的
+// 上下文产物,只回给发起用户。
+func (a *Agent) queryPrediction(runID, userID string) (string, bool) {
 	if a.room == nil {
 		return "失败:房间未绑定", true
 	}
@@ -208,7 +211,7 @@ func (a *Agent) queryPrediction(runID string) (string, bool) {
 		return "暂无预测运行报告。", false
 	}
 	// 报告卡片数据随事件流下发(前端渲染完整报告)。
-	a.emit(SystemEvent{Kind: EventReport, Data: rep})
+	a.emit(userID, SystemEvent{Kind: EventReport, Data: rep})
 	return predictionReportText(rep), false
 }
 
@@ -262,7 +265,10 @@ func (a *Agent) launchSurvey(question string, options []string) (string, bool) {
 // 显示指令的 wire 契约由本包的**中性结构** displayRequest / displayCommand
 // 承载(display.go),不 import citywebgl —— 渲染显示 Agent 是可独立演进的
 // 责任线,其实现细节不得泄漏进 System Agent。
-func (a *Agent) focusCamera(ctx context.Context, district, mode string, input map[string]any) (string, bool) {
+//
+// userID 用于显示指令的定向投递(批次87 P1-6):3D 相机是**客户端本地**状态,
+// 由 Agent 工具派发的显示指令只发给发起用户(全房强拉相机是骚扰)。
+func (a *Agent) focusCamera(ctx context.Context, userID, district, mode string, input map[string]any) (string, bool) {
 	if a.hub == nil {
 		return "失败:Agent 总线未绑定", true
 	}
@@ -289,17 +295,22 @@ func (a *Agent) focusCamera(ctx context.Context, district, mode string, input ma
 	if len(cmds) == 0 {
 		return "显示 Agent 未返回任何指令(请检查参数或稍后再试)。", false
 	}
-	a.emitCommands(cmds)
+	a.emitCommands(userID, cmds)
 	return "已下发视角指令:" + describeDisplayCommands(cmds), false
 }
 
 // emitCommands 逐条下发显示指令(前端 3D 引擎消费)。
-func (a *Agent) emitCommands(cmds []displayCommand) {
+//
+// userID 是本轮操作者(批次87 P1-6):Agent 工具(focus_camera / apply_display)
+// 派发的显示指令**只发给发起用户** —— 3D 相机是客户端本地状态,全房强拉
+// 相机是骚扰。房间级的「自动渲染显示」不走本函数(WS 层的 City-WebGL-Show
+// bus handler 直接 emit,批次84 §4.3.3 全房语义)。
+func (a *Agent) emitCommands(userID string, cmds []displayCommand) {
 	for _, cmd := range cmds {
 		if cmd.TraceID == "" {
 			cmd.TraceID = NewTraceID()
 		}
-		a.emit(SystemEvent{Kind: EventShowCommand, Data: cmd})
+		a.emit(userID, SystemEvent{Kind: EventShowCommand, Data: cmd})
 	}
 }
 

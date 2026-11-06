@@ -76,7 +76,11 @@ func (s *GameService) getOrCreateSystemRoomAgent(roomID string, r *virtual_city.
 		return v.(*systemRoomAgent)
 	}
 	store := citysystem.NewConversationStore(s.vcSystemCfg.MaxMessages)
-	emit := func(ev citysystem.SystemEvent) { s.emitCitySystemEvent(roomID, ev) }
+	// 批次87 P1-6:emit 回调带 userID —— 会话类事件定向投递(仅发起用户),
+	// userID=="" 的房间级事件(Agent 来信)仍全房广播。
+	emit := func(userID string, ev citysystem.SystemEvent) {
+		s.emitCitySystemEvent(roomID, userID, ev)
+	}
 	ag := citysystem.NewAgent(r, citysystem.Config{
 		ModelKey:        s.vcSystemCfg.ModelKey,
 		MaxSteps:        s.vcSystemCfg.MaxSteps,
@@ -149,7 +153,10 @@ func (s *GameService) getOrCreateSystemRoomAgent(roomID string, r *virtual_city.
 					return nil, fmt.Errorf("City-WebGL-Show 显示翻译失败: %w", err)
 				}
 				for _, cmd := range cmds {
-					s.emitCitySystemEvent(roomID, citysystem.SystemEvent{
+					// userID="" ⇒ 房间级投递(批次87 P1-6:该 show_command 由
+					// City-WebGL-Show 房间级 bus handler 派发,沿用批次84
+					//「自动渲染显示」的全房语义,不改)。
+					s.emitCitySystemEvent(roomID, "", citysystem.SystemEvent{
 						Kind: citysystem.EventShowCommand, Data: cmd,
 					})
 				}
@@ -215,6 +222,21 @@ func webglBusMessageText(payload any) (string, error) {
 	}
 }
 
+// systemRoomIDFromPayload 尽力从**非法载荷**里解析出 room_id(批次87 P1-2)。
+//
+// 为什么需要:载荷校验失败(如 room_id 缺失 / text 为空)时,主解析已经失败,
+// 但只要 room_id 本身存在,错误帧仍应带上它 —— 前端才能把错误归属到房间。
+// 解析不出时返回空串(前端按「无房间归属」处理,与旧行为一致)。
+func systemRoomIDFromPayload(payload json.RawMessage) string {
+	var probe struct {
+		RoomID string `json:"room_id"`
+	}
+	if err := json.Unmarshal(payload, &probe); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(probe.RoomID)
+}
+
 // handleVirtualCitySystemMessage 处理 game.virtual_city_system_message。
 func (s *GameService) handleVirtualCitySystemMessage(c *Client, env Envelope) {
 	var req struct {
@@ -222,21 +244,22 @@ func (s *GameService) handleVirtualCitySystemMessage(c *Client, env Envelope) {
 		Text   string `json:"text"`
 	}
 	if err := json.Unmarshal(env.Payload, &req); err != nil || req.RoomID == "" || strings.TrimSpace(req.Text) == "" {
-		s.sendError(c, env.Seq, errcode.ErrValidationFailed, "invalid game.virtual_city_system_message payload")
+		s.sendErrorRoom(c, env.Seq, errcode.ErrValidationFailed,
+			"invalid game.virtual_city_system_message payload", systemRoomIDFromPayload(env.Payload))
 		return
 	}
 	if !s.vcSystemEnabled {
-		s.sendError(c, env.Seq, errcode.ErrVirtualCitySystemAgentDisabled, "")
+		s.sendErrorRoom(c, env.Seq, errcode.ErrVirtualCitySystemAgentDisabled, "", req.RoomID)
 		return
 	}
 	r := s.vcMgr.Get(req.RoomID)
 	if r == nil {
-		s.sendError(c, env.Seq, errcode.ErrVirtualCityRoomNotFound, "")
+		s.sendErrorRoom(c, env.Seq, errcode.ErrVirtualCityRoomNotFound, "", req.RoomID)
 		return
 	}
 	sa := s.getOrCreateSystemRoomAgent(req.RoomID, r)
 	if _, loaded := sa.busy.LoadOrStore(c.UserID, struct{}{}); loaded {
-		s.sendError(c, env.Seq, errcode.ErrVirtualCitySystemAgentBusy, "")
+		s.sendErrorRoom(c, env.Seq, errcode.ErrVirtualCitySystemAgentBusy, "", req.RoomID)
 		return
 	}
 	s.sendOK(c, env.Seq, "game.virtual_city_system_accepted", map[string]any{"room_id": req.RoomID})
@@ -261,22 +284,27 @@ func (s *GameService) handleVirtualCitySystemReset(c *Client, env Envelope) {
 		RoomID string `json:"room_id"`
 	}
 	if err := json.Unmarshal(env.Payload, &req); err != nil || req.RoomID == "" {
-		s.sendError(c, env.Seq, errcode.ErrValidationFailed, "invalid game.virtual_city_system_reset payload")
+		s.sendErrorRoom(c, env.Seq, errcode.ErrValidationFailed,
+			"invalid game.virtual_city_system_reset payload", systemRoomIDFromPayload(env.Payload))
 		return
 	}
 	if !s.vcSystemEnabled {
-		s.sendError(c, env.Seq, errcode.ErrVirtualCitySystemAgentDisabled, "")
+		s.sendErrorRoom(c, env.Seq, errcode.ErrVirtualCitySystemAgentDisabled, "", req.RoomID)
 		return
 	}
 	r := s.vcMgr.Get(req.RoomID)
 	if r == nil {
-		s.sendError(c, env.Seq, errcode.ErrVirtualCityRoomNotFound, "")
+		s.sendErrorRoom(c, env.Seq, errcode.ErrVirtualCityRoomNotFound, "", req.RoomID)
 		return
 	}
 	sa := s.getOrCreateSystemRoomAgent(req.RoomID, r)
 	sa.agent.Reset(c.UserID)
 	s.sendOK(c, env.Seq, "game.virtual_city_system_cleared", map[string]any{"room_id": req.RoomID})
-	s.hub.BroadcastRoomIncludingSpectators(req.RoomID, wsEnvelope("game.virtual_city_system_event", 0, map[string]any{
+	// 批次87 P1-6:`cleared` 是**发起用户自己**的会话状态(会话存储按
+	// roomID/userID 隔离)⇒ 定向投递。若全房广播,别人的「清空对话」会
+	// 把同房其它用户的会话面板一起清空(前端 store 的 cleared 分支直接
+	// 清空全部消息)。
+	s.hub.BroadcastRoomToUser(req.RoomID, c.UserID, wsEnvelope("game.virtual_city_system_event", 0, map[string]any{
 		"room_id": req.RoomID, "kind": citysystem.EventCleared,
 		"data": map[string]any{"user_id": c.UserID},
 	}))
@@ -289,11 +317,12 @@ func (s *GameService) handleVirtualCitySystemHistory(c *Client, env Envelope) {
 		RoomID string `json:"room_id"`
 	}
 	if err := json.Unmarshal(env.Payload, &req); err != nil || req.RoomID == "" {
-		s.sendError(c, env.Seq, errcode.ErrValidationFailed, "invalid game.virtual_city_system_history payload")
+		s.sendErrorRoom(c, env.Seq, errcode.ErrValidationFailed,
+			"invalid game.virtual_city_system_history payload", systemRoomIDFromPayload(env.Payload))
 		return
 	}
 	if s.vcMgr.Get(req.RoomID) == nil {
-		s.sendError(c, env.Seq, errcode.ErrVirtualCityRoomNotFound, "")
+		s.sendErrorRoom(c, env.Seq, errcode.ErrVirtualCityRoomNotFound, "", req.RoomID)
 		return
 	}
 	msgs := s.SystemAgentHistory(req.RoomID, c.UserID)
@@ -302,16 +331,36 @@ func (s *GameService) handleVirtualCitySystemHistory(c *Client, env Envelope) {
 	})
 }
 
-// emitCitySystemEvent 把 Agent 事件广播为 game.virtual_city_system_event;
+// emitCitySystemEvent 把 Agent 事件下发为 game.virtual_city_system_event;
 // show_command 额外发一条 game.virtual_city_show_command(契约 §3.5/§6.1)。
 //
+// 投递范围(批次87 P1-6):
+//   - userID != "" ⇒ **定向**给该用户(会话私有事件:agent_start / text /
+//     thinking / tool_start / tool_result / report / error / agent_end,
+//     以及由 Agent 工具派发的 show_command)。理由:会话存储已按
+//     roomID/userID 隔离,全房广播会让同房 B 的面板并入 A 的流式回复,
+//     且对话内容经线缆外泄给全房。
+//   - userID == "" ⇒ **全房**(房间级事件:其它 Agent 来信 agent_message;
+//     以及 City-WebGL-Show 房间级 bus handler 派发的 show_command ——
+//     批次84「自动渲染显示」既有语义)。
+//
+// ⚠ 两条孪生帧(game.virtual_city_system_event 与 game.virtual_city_show_command)
+// 必须**同范围**投递,否则前端只收到其中一条 ⇒ 显示指令丢失。
+//
 // 调用方 = Agent 的 Run goroutine;hub 广播自身并发安全(内部 RLock)。
-func (s *GameService) emitCitySystemEvent(roomID string, ev citysystem.SystemEvent) {
-	s.hub.BroadcastRoomIncludingSpectators(roomID, wsEnvelope("game.virtual_city_system_event", 0, map[string]any{
+func (s *GameService) emitCitySystemEvent(roomID, userID string, ev citysystem.SystemEvent) {
+	deliver := func(env Envelope) {
+		if userID != "" {
+			s.hub.BroadcastRoomToUser(roomID, userID, env)
+			return
+		}
+		s.hub.BroadcastRoomIncludingSpectators(roomID, env)
+	}
+	deliver(wsEnvelope("game.virtual_city_system_event", 0, map[string]any{
 		"room_id": roomID, "kind": ev.Kind, "data": ev.Data,
 	}))
 	if ev.Kind == citysystem.EventShowCommand {
-		s.hub.BroadcastRoomIncludingSpectators(roomID, wsEnvelope("game.virtual_city_show_command", 0, map[string]any{
+		deliver(wsEnvelope("game.virtual_city_show_command", 0, map[string]any{
 			"room_id": roomID, "command": ev.Data,
 		}))
 	}

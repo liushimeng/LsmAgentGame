@@ -111,7 +111,11 @@ func (a *Agent) handleBusMessage(msg citybus.Message) any {
 	in := IncomingMessage{From: from, Text: text, Ts: now}
 
 	// 1) 立即下发前端(「Agent 来信」卡片)。
-	a.emit(SystemEvent{Kind: EventAgentMessage, Data: map[string]any{
+	//
+	// ⚠ userID 传空 ⇒ **房间级**投递(批次87 P1-6):来信是房间级事件
+	// (入队 incomingKey(roomID),注入所有用户的下一轮),与「用户 ↔ 系统」
+	// 私有会话事件不同。
+	a.emit("", SystemEvent{Kind: EventAgentMessage, Data: map[string]any{
 		"from": in.From, "text": in.Text, "ts": in.Ts,
 	}})
 	// 2) 入来信队列(环形 ≤20;下一轮 system 注入一次)。

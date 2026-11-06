@@ -93,6 +93,7 @@ export function GlobalToast() {
     'global-toast' +
     (severity === 'success' ? ' global-toast--success' : '') +
     (severity === 'info' ? ' global-toast--info' : '') +
+    (severity === 'warning' ? ' global-toast--warning' : '') +
     (severity === 'error' ? ' global-toast--error' : '');
 
   return createPortal(

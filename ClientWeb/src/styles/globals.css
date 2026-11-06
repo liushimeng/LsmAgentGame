@@ -174,3 +174,9 @@
  * 独立成文件：选择器全部为新增 .virtualCity-sysdialog* / .virtualCity-sysmsg*
  * 前缀，与既有规则零级联冲突。只追加在链尾，不调整既有 @import 顺序（§2.1 约束 4）。 */
 @import './virtualCitySystemDialog.css';
+
+/* 2026-11-06 §批次87 — 全局顶层 toast（components/common/GlobalToast.tsx）的
+   唯一样式来源。此前全仓无 `.global-toast` 规则 ⇒ §7.1 的「全局顶层」通道
+   实为无样式裸 div（可能被视口裁掉）。只追加在链尾，不调整既有 @import 顺序
+   （CLAUDE.md §2.1 约束 4）。 */
+@import './globalToast.css';

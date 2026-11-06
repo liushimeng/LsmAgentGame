@@ -263,38 +263,51 @@ func ptrTimeEnv(env virtual_city.TimeEnv) *virtual_city.TimeEnv {
 	return &env
 }
 
+// vcClientState 构造虚拟城市客户端快照并盖上 City-System 入口开关。
+//
+// **唯一构造入口** —— 4 个调用点(座位广播 / 观战广播 / game.state 玩家 /
+// game.state 观战)统一走它,杜绝再次漏盖 system_agent_enabled(批次87 P0-1)。
+//
+// 为什么必须收口:system_agent_enabled 是**服务端配置派生**的布尔量,前端
+// 见到 false 即判「系统对话已停用」并禁用整个面板(§29.8)。若由每个调用点
+// 各自记得赋值,新调用点(HTTP 快照 / 回放 / 导出)必然再次漏盖 ⇒ 假停用。
+// 收口后「漏盖」在结构上不可能发生。
+//
+// world 由调用方决定:
+//   - 广播路径传 r.Engine()(房间已开局);
+//   - game.state 玩家分支沿用 PlaceholderWorld 兜底(房间尚未 Start);
+//   - game.state 观战分支沿用「未开局 ⇒ 回 30001」的原语义(调用方先行判空)。
+func (s *GameService) vcClientState(roomID string, viewer int,
+	r *virtual_city.VirtualCityRoom, world *virtual_city.World) *virtual_city.ClientGameState {
+	cs := virtual_city.BuildClientState(roomID, viewer, world,
+		r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
+		r.SnapshotModelKeys(), r.SnapshotTranscripts(),
+		r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CityClockMs(), r.CitySnapshotView(),
+		ptrTimeEnv(r.TimeEnv()))
+	// 批次81:系统对话入口开关(city_system.enabled)。
+	cs.SystemAgentEnabled = s.vcSystemEnabled
+	return cs
+}
+
 // broadcastVirtualCityState 逐座位单发(脱敏)+ 观战者推送(协议 §3,§7)。
 func (s *GameService) broadcastVirtualCityState(roomID string) {
 	r := s.vcMgr.Get(roomID)
 	if r == nil {
 		return
 	}
-	seats := r.SnapshotSeats()
-	nicks := r.SnapshotNicknames()
-	bots := r.SnapshotBotSeats()
-	models := r.SnapshotModelKeys()
-	transcripts := r.SnapshotTranscripts()
 	world := r.Engine()
-	gameStartedAt := r.GameStartedAtUnix()
-	nextMonth := r.NextMonthAtUnix()
-	citySnap := r.CitySnapshotView() // 2026-09-21 §虚拟城市:城市背景层快照(未建城 nil)
-	cityClock := r.CityClockMs()     // 2026-09-26 §批次25:城市时钟(60× 叙事层)
-	// 批次 27(§3.4):时间环境(比例 + 天气种子)—— BuildClientState 现算
-	// time_ratio/season/weather/weather_intensity 四字段。
-	env := r.TimeEnv()
-	// 玩家座位单发。
+	seats := r.SnapshotSeats()
+	// 玩家座位单发(快照统一走 vcClientState —— 批次87 P0-1 收口)。
 	for seat := 0; seat < virtual_city.MaxSeats; seat++ {
 		uid := seats[seat]
 		if uid == "" {
 			continue
 		}
-		cs := virtual_city.BuildClientState(roomID, seat, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, cityClock, citySnap, &env)
-		cs.SystemAgentEnabled = s.vcSystemEnabled // 批次81:系统对话入口开关
+		cs := s.vcClientState(roomID, seat, r, world)
 		s.hub.BroadcastTo(uid, wsEnvelope("game.state", 0, cs))
 	}
 	// 观战者(viewer = -1)。
-	cs := virtual_city.BuildClientState(roomID, -1, world, seats, nicks, bots, models, transcripts, gameStartedAt, nextMonth, cityClock, citySnap, &env)
-	cs.SystemAgentEnabled = s.vcSystemEnabled // 批次81:系统对话入口开关
+	cs := s.vcClientState(roomID, -1, r, world)
 	for _, uid := range s.hub.connectedSpectatorUserIDs(roomID) {
 		s.hub.BroadcastTo(uid, wsEnvelope("game.state", 0, cs))
 	}

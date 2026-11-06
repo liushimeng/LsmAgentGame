@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useVirtualCityStore } from '@/store/virtualCity.store';
+import { useVirtualCitySystemStore } from '@/store/virtualCitySystem.store';
 import { selectSeatedCount, selectSeatCapacity, selectSeatsReady } from '@/store/virtualCity.store';
 import { useI18nStore } from '@/store/i18n.store';
 import { useVirtualCity } from '@/hooks/useVirtualCity';
@@ -41,6 +42,7 @@ import {
 import { VirtualCityMinimap } from '@/components/virtualCity/VirtualCityMinimap';
 import { VirtualCityDashboard } from '@/components/virtualCity/RealtimeBoard/VirtualCityDashboard';
 import { SystemDialogPanel } from '@/components/virtualCity/SystemDialogPanel';
+import { resolveSystemAgentDisabled } from '@/components/virtualCity/citySystemAvailability';
 import { ActionPanel } from '@/components/virtualCity/ActionPanel';
 import { MonthTicker } from '@/components/virtualCity/MonthTicker';
 import { GameOverModal } from '@/components/virtualCity/GameOverModal';
@@ -104,7 +106,13 @@ export function VirtualCityGamePage() {
   const [systemOpen, setSystemOpen] = useState(false);
   // 批次81 §8 一键回退：`[city_system] enabled=false` ⇒ 后端下发 false ⇒ 隐藏入口。
   // undefined（旧后端/缺省）视为 true，向后兼容。
-  const systemDialogDisabled = gameState?.system_agent_enabled === false;
+  // 批次87 §4.6：停用判定统一走 `resolveSystemAgentDisabled` —— 只有**明确 false**
+  // 才停用（字段缺失视为可用），并与本地停用态（服务端 35059）取或。
+  const systemAgentLocallyDisabled = useVirtualCitySystemStore((s) => s.agentDisabled);
+  const systemDialogDisabled = resolveSystemAgentDisabled(
+    gameState?.system_agent_enabled,
+    systemAgentLocallyDisabled,
+  );
   const viewRef = useRef<VirtualCityCameraView>({ x: 0, z: 0, dist: 34 });
   const focusRef = useRef<VirtualCityFocusTarget | null>(null);
   // 批次 25 §3.4 城市时钟帧锚点：帧内 city_clock_ms + 帧到达时刻；

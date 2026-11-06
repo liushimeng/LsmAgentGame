@@ -21,7 +21,7 @@ import (
 type extFixture struct {
 	agent  *Agent
 	room   *virtual_city.VirtualCityRoom
-	events *[]SystemEvent
+	events *[]capturedEvent
 }
 
 func newExtFixture(t *testing.T) *extFixture {

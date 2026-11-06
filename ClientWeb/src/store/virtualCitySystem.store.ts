@@ -120,10 +120,22 @@ function lastStreamingIndex(messages: VirtualCitySystemMessage[]): number {
 export interface VirtualCitySystemStore {
   /** 会话消息（新→旧追加，cap 200）。 */
   messages: VirtualCitySystemMessage[];
-  /** 是否收到过 agent_start / agent_end（通道可达信号，任务 §2）。 */
+  /**
+   * 「最近一次交互可达」信号（收到过 agent_start / agent_end / error 才为 true）。
+   *
+   * ⚠ 批次 87 P1-5：语义**收窄**为「最近一次交互可达」——它**不是**传输层连接
+   * 态（空闲时恒为 false 而 WS 其实健康）。面板的连接指示器改读
+   * `wsClient.connected`（传输层），本字段不得再作为指示器的唯一来源。
+   */
   connected: boolean;
   /** agent_start → agent_end / error / cleared 之间为 true（输入禁用）。 */
   busy: boolean;
+  /**
+   * 批次 87 P1-2：**本地停用态** —— 服务端明确回 35059「系统对话已停用」时置
+   * true。面板据此显示停用红条 + 禁发，不再只依赖 `game.state` 字段
+   * （后端漏盖 / 旧后端时也能正确表现）。服务端恢复 `enabled=true` 时清零。
+   */
+  agentDisabled: boolean;
   /** 窗口是否最小化（收起为浮动条，不断线）。 */
   minimized: boolean;
   /** 浮窗拖拽位置（批次83 §3.1；null = 默认位，渲染走 CSS 基础规则）。 */
@@ -146,6 +158,22 @@ export interface VirtualCitySystemStore {
   /** 设置浮窗位置；null = 复位默认位（localStorage 写 / 清由面板拖拽收尾负责）。 */
   setDialogPos: (pos: VirtualCitySystemDialogPos | null) => void;
   setConnected: (connected: boolean) => void;
+  /**
+   * 批次 87 P1-3：显式设置 busy（发送即置 true 的**乐观锁**；四路解锁见
+   * `citySystemBusyGuard`：agent_end / error / 看门狗超时 / WS 断连）。
+   */
+  setBusy: (busy: boolean) => void;
+  /** 批次 87 P1-2：置本地停用态（35059 ⇒ true；服务端恢复 ⇒ false）。 */
+  setAgentDisabled: (disabled: boolean) => void;
+  /**
+   * 批次 87 P1-2：追加一条**独立**的错误消息（role='assistant' + `error` 字段）
+   * —— 复用 `SystemDialogMessage` 既有的红条渲染路径。
+   *
+   * 与 `applyEvent('error')` 的差别：后者把错误**写进正在流式的助手气泡**；
+   * 本方法是**独立一条**（服务端在开跑前就拒绝 ⇒ 没有助手气泡可写），
+   * 且**不打断**既有流式气泡（只把它收尾为 streaming=false）。
+   */
+  appendError: (message: string) => void;
   /** 历史整表替换（`game.virtual_city_system_history`，首屏 / 重连恢复）。 */
   setMessages: (messages: VirtualCitySystemMessage[]) => void;
   reset: () => void;
@@ -155,6 +183,7 @@ export const useVirtualCitySystemStore = create<VirtualCitySystemStore>((set) =>
   messages: [],
   connected: false,
   busy: false,
+  agentDisabled: false,
   minimized: false,
   dialogPos: loadDialogPos(),
   systemInfo: null,
@@ -406,6 +435,35 @@ export const useVirtualCitySystemStore = create<VirtualCitySystemStore>((set) =>
   setMinimized: (minimized) => set({ minimized }),
   setDialogPos: (pos) => set({ dialogPos: pos }),
   setConnected: (connected) => set({ connected }),
+  setBusy: (busy) => set({ busy }),
+
+  // 批次 87 P1-2：本地停用态（35059 ⇒ true）。
+  setAgentDisabled: (disabled) => set({ agentDisabled: disabled }),
+
+  // 批次 87 P1-2：独立一条错误消息（内联红条）。
+  appendError: (message) =>
+    set((s) => {
+      const arr = s.messages.slice();
+      const last = arr[arr.length - 1];
+      // 正在流式的助手气泡先收尾（streaming=false）——否则后续增量会另起一条气泡。
+      if (last && last.role === 'assistant' && last.streaming) {
+        arr[arr.length - 1] = { ...last, streaming: false };
+      }
+      return {
+        messages: [
+          ...arr,
+          {
+            id: nextId('e'),
+            role: 'assistant' as const,
+            text: '',
+            ts: Date.now(),
+            error: message,
+          },
+        ].slice(-MAX_MESSAGES),
+        // 错误 ⇒ 本轮不再等待（解锁输入）。
+        busy: false,
+      };
+    }),
 
   setMessages: (messages) => set({ messages: messages.slice(-MAX_MESSAGES) }),
 

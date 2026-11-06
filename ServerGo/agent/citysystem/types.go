@@ -70,6 +70,9 @@ type IncomingMessage struct {
 
 // SystemEvent 是 Agent → 前端的事件流载荷(WS 帧
 // game.virtual_city_system_event 的 data 段)。
+//
+// ⚠ 归属用户(userID)**不放在本结构里** —— 它是 emit 回调的**首个参数**
+// (批次87 P1-6),只用于服务端投递路由;wire 载荷结构零变更。
 type SystemEvent struct {
 	Kind string `json:"kind"`
 	Data any    `json:"data"`

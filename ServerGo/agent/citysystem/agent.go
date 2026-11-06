@@ -36,7 +36,13 @@ type Agent struct {
 	hub      *citybus.Hub
 	store    *ConversationStore
 	// emit 事件流出(WS 层注入);nil 时 NewAgent 置为 no-op。
-	emit func(SystemEvent)
+	//
+	// ⚠ 首批参数 userID = **发起该轮对话的用户**(批次87 P1-6):会话内容是
+	// 「用户 ↔ 系统」的私有对话(存储已按 roomID/userID 隔离),若事件流仍
+	// 全房广播,同房 B 的面板会把 A 的流式回复并进自己的气泡,且对话内容经
+	// 线缆外泄给全房。userID == "" 表示**房间级**事件(如其它 Agent 来信
+	// agent_message),由 WS 层按全房投递。
+	emit func(userID string, ev SystemEvent)
 
 	// cfg 运行参数(零值已由 NewAgent 归一)。
 	cfg Config
@@ -56,7 +62,7 @@ type Agent struct {
 // NewAgent 构造。cfg 零值归一:MaxSteps 8 / MaxMessages 40 /
 // RequestTimeout 180s / ToolResultLimit 4000。
 func NewAgent(room *virtual_city.VirtualCityRoom, cfg Config, reg LLMRegistry,
-	hub *citybus.Hub, store *ConversationStore, emit func(SystemEvent)) *Agent {
+	hub *citybus.Hub, store *ConversationStore, emit func(userID string, ev SystemEvent)) *Agent {
 	if cfg.MaxSteps <= 0 {
 		cfg.MaxSteps = 8
 	}
@@ -73,7 +79,7 @@ func NewAgent(room *virtual_city.VirtualCityRoom, cfg Config, reg LLMRegistry,
 		store = NewConversationStore(cfg.MaxMessages)
 	}
 	if emit == nil {
-		emit = func(SystemEvent) {}
+		emit = func(string, SystemEvent) {}
 	}
 	roomID := ""
 	if room != nil {
@@ -137,8 +143,8 @@ func (a *Agent) Run(ctx context.Context, userID, text string) error {
 	incoming := a.store.TakeIncoming(incomingKey(a.RoomID), incomingInjectMax)
 	system := BuildSystemBlocks(a.cfg.MaxSteps, incoming)
 
-	// 3. 事件:开始。
-	a.emit(SystemEvent{Kind: EventAgentStart, Data: map[string]any{
+	// 3. 事件:开始(定向到发起用户 —— 批次87 P1-6)。
+	a.emit(userID, SystemEvent{Kind: EventAgentStart, Data: map[string]any{
 		"user_id": userID, "text": text,
 	}})
 
@@ -161,9 +167,9 @@ func (a *Agent) Run(ctx context.Context, userID, text string) error {
 
 	// 6. 事件:结束(异常时先补一条 error)。
 	if err != nil {
-		a.emit(SystemEvent{Kind: EventError, Data: map[string]string{"message": err.Error()}})
+		a.emit(userID, SystemEvent{Kind: EventError, Data: map[string]string{"message": err.Error()}})
 	}
-	a.emit(SystemEvent{Kind: EventAgentEnd, Data: map[string]any{"text": finalText}})
+	a.emit(userID, SystemEvent{Kind: EventAgentEnd, Data: map[string]any{"text": finalText}})
 	return err
 }
 
@@ -186,7 +192,7 @@ func (a *Agent) runLoop(ctx context.Context, userID string,
 		if ctx.Err() != nil {
 			return finalText, nil, fmt.Errorf("citysystem: context done: %w", ctx.Err())
 		}
-		resp, err := a.callLLM(ctx, system, messages)
+		resp, err := a.callLLM(ctx, userID, system, messages)
 		if err != nil {
 			return finalText, nil, fmt.Errorf("citysystem: llm step %d: %w", step, err)
 		}
@@ -201,14 +207,14 @@ func (a *Agent) runLoop(ctx context.Context, userID string,
 		results := make([]llmtypes.ContentBlock, 0, len(tus))
 		for _, tu := range tus {
 			inputJSON, _ := json.Marshal(tu.Input)
-			a.emit(SystemEvent{Kind: EventToolStart, Data: ToolCallRecord{
+			a.emit(userID, SystemEvent{Kind: EventToolStart, Data: ToolCallRecord{
 				Tool: tu.Name, Input: string(inputJSON), Ts: time.Now().UnixMilli(),
 			}})
 			text, isErr := a.Dispatch(ctx, userID, tu.Name, tu.Input)
 			// [step i/N] 进度前缀(促收敛):先截断再加前缀,前缀恒完整。
 			text = fmt.Sprintf("[step %d/%d] %s",
 				step+1, a.cfg.MaxSteps, truncateRunes(text, a.cfg.ToolResultLimit))
-			a.emit(SystemEvent{Kind: EventToolResult, Data: ToolCallRecord{
+			a.emit(userID, SystemEvent{Kind: EventToolResult, Data: ToolCallRecord{
 				Tool: tu.Name, Input: string(inputJSON), Text: text,
 				IsErr: isErr, Ts: time.Now().UnixMilli(),
 			}})
@@ -237,7 +243,10 @@ func (a *Agent) runLoop(ctx context.Context, userID string,
 // callLLM 单步 LLM 调用:出站消息修整(sanitizeForWire,§14.1)+ 节流槽 +
 // thinking 注入 + ChatStreamAccumulate(§197)。
 // text_delta / thinking_delta 经 emit 流式下发(前端打字机)。
-func (a *Agent) callLLM(ctx context.Context, system []llmtypes.SystemBlock,
+//
+// userID 用于流式事件的定向投递(批次87 P1-6):流式增量必须只回到发起用户,
+// 否则同房其它用户的面板会并入别人的回复。
+func (a *Agent) callLLM(ctx context.Context, userID string, system []llmtypes.SystemBlock,
 	messages []llmtypes.Message) (llmtypes.LLMResponse, error) {
 	if a.registry == nil {
 		return llmtypes.LLMResponse{}, fmt.Errorf("citysystem: llm registry not bound")
@@ -272,9 +281,9 @@ func (a *Agent) callLLM(ctx context.Context, system []llmtypes.SystemBlock,
 		}
 		switch ev.DeltaType {
 		case "text_delta":
-			a.emit(SystemEvent{Kind: EventText, Data: map[string]string{"delta": ev.Delta}})
+			a.emit(userID, SystemEvent{Kind: EventText, Data: map[string]string{"delta": ev.Delta}})
 		case "thinking_delta":
-			a.emit(SystemEvent{Kind: EventThinking, Data: map[string]string{"delta": ev.Delta}})
+			a.emit(userID, SystemEvent{Kind: EventThinking, Data: map[string]string{"delta": ev.Delta}})
 		}
 		return nil
 	}

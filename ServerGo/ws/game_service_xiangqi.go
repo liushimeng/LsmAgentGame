@@ -641,11 +641,9 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 				s.sendError(c, env.Seq, errcode.ErrRoomNotFound, "")
 				return
 			}
-			cs := virtual_city.BuildClientState(req.RoomID, -1, r.Engine(),
-				r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
-				r.SnapshotModelKeys(), r.SnapshotTranscripts(),
-				r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CityClockMs(), r.CitySnapshotView(),
-				ptrTimeEnv(r.TimeEnv()))
+			// 批次87 P0-1:统一走 vcClientState(否则漏盖 system_agent_enabled
+			// ⇒ 前端判「系统对话已停用」的假停用)。
+			cs := s.vcClientState(req.RoomID, -1, r, r.Engine())
 			s.sendOK(c, env.Seq, "game.state", cs)
 			return
 		}
@@ -764,11 +762,9 @@ func (s *GameService) handleGetState(c *Client, env Envelope) {
 		if eng == nil {
 			eng = virtual_city.PlaceholderWorld(r.SeedView())
 		}
-		cs := virtual_city.BuildClientState(req.RoomID, seat, eng,
-			r.SnapshotSeats(), r.SnapshotNicknames(), r.SnapshotBotSeats(),
-			r.SnapshotModelKeys(), r.SnapshotTranscripts(),
-			r.GameStartedAtUnix(), r.NextMonthAtUnix(), r.CityClockMs(), r.CitySnapshotView(),
-			ptrTimeEnv(r.TimeEnv()))
+		// 批次87 P0-1:统一走 vcClientState(否则漏盖 system_agent_enabled
+		// ⇒ 前端判「系统对话已停用」的假停用)。
+		cs := s.vcClientState(req.RoomID, seat, r, eng)
 		s.sendOK(c, env.Seq, "game.state", cs)
 	}
 }

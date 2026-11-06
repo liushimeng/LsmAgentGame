@@ -21,7 +21,13 @@
 //   Never let an API failure silently disappear into a console log or a
 //   page-scoped toast that the user can't see under a modal.
 
-export type GlobalErrorSeverity = 'error' | 'success' | 'info';
+/**
+ * 全局提示的严重级别。
+ *
+ * ⚠ 批次 87：新增 `warning` —— 「系统对话」看门狗超时 / WS 断连属于「需要注意
+ * 但不是失败」的场景（用户仍可继续操作），与 `error`（操作失败）区分开。
+ */
+export type GlobalErrorSeverity = 'error' | 'success' | 'info' | 'warning';
 
 export interface GlobalErrorEvent {
   message: string;

@@ -922,6 +922,48 @@ func (h *Hub) BroadcastRoomIncludingSpectatorsExcluding(roomID string, env Envel
 	}
 }
 
+// BroadcastRoomToUser 定向投递:只发给**指定用户**在该房间内的连接
+// (玩家 + 观战者),外加该用户名的其它在线连接(兜底:发起者可能尚未
+// 完成入房登记,例如刚发出指令就刷新页面)。
+//
+// 用途(批次87 P1-6):City-System 的会话事件是「用户 ↔ 系统」的私有对话
+// (存储已按 roomID/userID 隔离),若仍全房广播,同房 B 的面板会把 A 的
+// 流式回复并进自己的气泡,且对话内容经线缆外泄给全房。
+//
+// 语义边界:**绝不发给他人**;同一用户的多个连接各收一份(去重按
+// *Client,与 collectRoomAndSpectatorsLocked 一致)。
+func (h *Hub) BroadcastRoomToUser(roomID, userID string, env Envelope) {
+	if userID == "" {
+		return
+	}
+	h.mu.RLock()
+	seen := make(map[*Client]struct{})
+	targets := make([]*Client, 0, 2)
+	for _, c := range h.collectRoomAndSpectatorsLocked(roomID, nil) {
+		if c.UserID != userID {
+			continue
+		}
+		seen[c] = struct{}{}
+		targets = append(targets, c)
+	}
+	if set, ok := h.clients[userID]; ok {
+		for c := range set {
+			if _, dup := seen[c]; dup {
+				continue
+			}
+			seen[c] = struct{}{}
+			targets = append(targets, c)
+		}
+	}
+	h.mu.RUnlock()
+	for _, c := range targets {
+		select {
+		case c.send <- env:
+		default:
+		}
+	}
+}
+
 // RoomSpectatorCount returns the number of currently connected spectator
 // clients for the given room. The lobby uses this for the "观战 N" indicator.
 func (h *Hub) RoomSpectatorCount(roomID string) int {

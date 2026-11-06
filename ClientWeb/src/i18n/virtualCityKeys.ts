@@ -1388,6 +1388,29 @@ export interface VirtualCityDict {
   'virtualCity.systemDialog.noticeVehicleNotFound': string;
   'virtualCity.systemDialog.noticeDismiss': string;
 
+  // ── 批次87 §4.3 / §4.4：系统对话错误可见性 + 输入锁文案 ────────────────
+  // 文案在 locales/virtualCitySystem-{zh,en,ja}.ts（与系统对话同文件）。
+  /** game.error 35001：房间不存在。 */
+  'virtualCity.systemDialog.errorRoomNotFound': string;
+  /** game.error 35059：服务端已停用系统对话（同时置本地停用态）。 */
+  'virtualCity.systemDialog.errorDisabled': string;
+  /** game.error 35060：上一轮系统对话尚未结束。 */
+  'virtualCity.systemDialog.errorBusy': string;
+  /** game.error 35061：目标 Agent 未注册。 */
+  'virtualCity.systemDialog.errorAgentNotFound': string;
+  /** game.error 35062：目标 Agent 在时限内未回应。 */
+  'virtualCity.systemDialog.errorNoReply': string;
+  /** game.error 35063：目标 Agent 回包超长。 */
+  'virtualCity.systemDialog.errorReplyTooLong': string;
+  /** game.error 35064：场景分组未知。 */
+  'virtualCity.systemDialog.errorGroupUnknown': string;
+  /** game.error 35065：显示指令参数非法。 */
+  'virtualCity.systemDialog.errorDisplayInvalid': string;
+  /** 看门狗超时（BUSY_WATCHDOG_MS）未收到 agent_end/error 时的提示。 */
+  'virtualCity.systemDialog.timeout': string;
+  /** WS 断连（传输层）时的提示。 */
+  'virtualCity.systemDialog.connectionLost': string;
+
   // ── 批次86 · 可靠性与可观测性（方案 §5）──────────────────────────────
   // 文案在 locales/virtualCityDash-{zh,en,ja}.ts（与看板外壳同文件）。
   /** 城市总览顶部「关键指标」组（需求书 §五.3）。 */

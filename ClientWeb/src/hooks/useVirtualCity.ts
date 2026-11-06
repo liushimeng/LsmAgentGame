@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { wsClient, type WsEnvelope } from '@/services/ws';
 import { reportGlobalError } from '@/services/globalError';
 import { useVirtualCityStore } from '@/store/virtualCity.store';
+import { isCitySystemErrorCode } from '@/components/virtualCity/citySystemErrorCodes';
 import type {
   VirtualCityAction,
   VirtualCityErrorFrame,
@@ -151,6 +152,11 @@ export function useVirtualCity(roomId: string) {
           // §7.1：game.error 双通道 —— store.lastError 页面就地 banner
           // + reportGlobalError 全局 toast（useTexasHoldem 同款处理）。
           const e = p as unknown as VirtualCityErrorFrame;
+          // 批次87 P1-2：City-System 相关错误码（35001 / 35059–35065）由「系统对话」
+          // hook **独占**处理（会话流内联红条 + 全局 toast）⇒ 此处跳过，避免同一
+          // 错误弹两次 toast / 出现与对话无关的页面级 banner。
+          // ⚠ 无房间（roomId 为空 ⇒ 面板未挂载）时不跳过，交回通用通道兜底。
+          if (isCitySystemErrorCode(e.code) && roomIdRef.current) break;
           setLastError({ code: e.code, message: e.message });
           reportGlobalError({
             message: e.message || `游戏操作失败(code=${e.code})`,

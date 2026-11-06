@@ -5,10 +5,12 @@
  * （vite 自带）把 `src/components/virtualCity/__tests__/*.test.ts` 打包成
  * 临时 ESM 后 import 执行；用例内部自带断言，失败抛错 ⇒ 进程非零退出。
  *
- * 覆盖三份用例：
+ * 覆盖四份用例：
  *   - virtualCitySystemStore.test.ts（agent_message 来信 + systemInfo）
  *   - systemDialogCatalog.test.ts（点条目只回填、不发送）
  *   - virtualCitySystemI18n.test.ts（三语键集合一致）
+ *   - virtualCitySystemErrorHandling.test.ts（批次87：game.error 白名单 +
+ *     双通道展示 + 35059 本地停用态 + 乐观 busy/看门狗 + 停用三态）
  *
  * 用法：npm run verify:virtual-city-system
  */
@@ -26,6 +28,7 @@ const entries = [
   'virtualCitySystemStore.test.ts',
   'systemDialogCatalog.test.ts',
   'virtualCitySystemI18n.test.ts',
+  'virtualCitySystemErrorHandling.test.ts',
 ];
 
 for (const name of entries) {

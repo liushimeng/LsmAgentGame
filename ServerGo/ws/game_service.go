@@ -1358,6 +1358,21 @@ func (s *GameService) sendError(c *Client, seq int64, code int, msg string) {
 	})}
 }
 
+// sendErrorRoom 发带 room_id 的 game.error 帧(批次87 P1-2/P2-8)。
+//
+// 为什么需要变体:通用 sendError 只带 {code,message} —— 前端收到 game.error
+// 时无法判断「是哪个房间/哪次操作被拒」,只能靠错误码白名单猜。City-System
+// 三个 handler(系统对话 message / reset / history)的错误都发生在**某个具体
+// 房间**内,带上 room_id 后前端可精确归属与过滤(旧前端忽略该字段即可 ⇒
+// 向后兼容)。
+//
+// ⚠ 帧结构只**增加** room_id 字段,其余与 sendError 一致(仍为 game.error)。
+func (s *GameService) sendErrorRoom(c *Client, seq int64, code int, msg, roomID string) {
+	c.send <- Envelope{Type: "game.error", Seq: seq, Payload: mustMarshal(map[string]any{
+		"code": code, "message": msg, "room_id": roomID,
+	})}
+}
+
 func mustMarshal(v any) json.RawMessage {
 	data, err := json.Marshal(v)
 	if err != nil {

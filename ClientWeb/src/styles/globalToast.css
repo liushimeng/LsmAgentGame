@@ -1,0 +1,112 @@
+/* 批次 87 —— 全局顶层 toast（GlobalToast）样式。
+ *
+ * 背景：`components/common/GlobalToast.tsx` 一直挂载在 AppLayout（z-index 1000），
+ * 是 CLAUDE.md §7.1「全局顶层 toast」这一层的落地载体 —— 但**此前全仓没有任何
+ * `.global-toast` 样式规则**（只有 `styles/werewolf.css:39` 的一句注释），
+ * 导致该层实际上是一个**无样式的裸 div**（静态定位、贴文档流末尾、可能被
+ * 视口裁掉）⇒ §7.1 的「全局顶层」通道形同虚设。本批补齐该样式。
+ *
+ * 对比度（CLAUDE.md §26 暗色主题硬阈值）：
+ *   - 正文 var(--fg) #e6edf3 on var(--card) #1c2230 ≈ 13.4:1（≥4.5 ✓）
+ *   - 徽章/图标色（error #ff7b72 ≈ 5.8:1 / warning #e3b341 ≈ 8.5:1 /
+ *     success #56d364 ≈ 9.1:1 / info #79c0ff ≈ 7.9:1）均 ≥5.0 ✓
+ *
+ * 级联位置：只追加在 `globals.css` 链尾（不调整既有 @import 顺序，
+ * CLAUDE.md §2.1 约束 4）；选择器为全局 `.global-toast*` 前缀，与既有
+ * 游戏私有前缀（.virtualCity-* / .ww-* …）零冲突。
+ */
+
+.global-toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: min(560px, 92vw);
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--muted);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--fg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+  line-height: 1.5;
+  animation: global-toast-in 160ms ease-out;
+}
+
+.global-toast__icon {
+  flex: 0 0 auto;
+  line-height: 1.5;
+}
+
+.global-toast__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.global-toast__close {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.global-toast__close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--fg);
+}
+
+/* 严重级别配色：只改左侧色条与图标色，正文始终 var(--fg)（对比度恒定）。 */
+.global-toast--error {
+  border-left-color: #ff7b72;
+}
+.global-toast--error .global-toast__icon {
+  color: #ff7b72;
+}
+
+.global-toast--warning {
+  border-left-color: #e3b341;
+}
+.global-toast--warning .global-toast__icon {
+  color: #e3b341;
+}
+
+.global-toast--success {
+  border-left-color: #56d364;
+}
+.global-toast--success .global-toast__icon {
+  color: #56d364;
+}
+
+.global-toast--info {
+  border-left-color: #79c0ff;
+}
+.global-toast--info .global-toast__icon {
+  color: #79c0ff;
+}
+
+@keyframes global-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .global-toast {
+    animation: none;
+  }
+}

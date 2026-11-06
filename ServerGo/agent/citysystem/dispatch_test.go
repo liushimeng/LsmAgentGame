@@ -19,7 +19,7 @@ import (
 type dispatchFixture struct {
 	agent  *Agent
 	room   *virtual_city.VirtualCityRoom
-	events *[]SystemEvent
+	events *[]capturedEvent
 }
 
 func newDispatchFixture(t *testing.T) *dispatchFixture {
@@ -262,7 +262,7 @@ func TestDispatch_ErrcodePassthrough(t *testing.T) {
 
 // ─────────────────────────── 辅助 ───────────────────────────
 
-func kinds(events []SystemEvent) []string {
+func kinds(events []capturedEvent) []string {
 	out := make([]string, 0, len(events))
 	for _, e := range events {
 		out = append(out, e.Kind)

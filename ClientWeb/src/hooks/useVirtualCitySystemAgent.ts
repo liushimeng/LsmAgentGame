@@ -20,12 +20,21 @@
  * WS 连接由 `AppLayout` 唯一持有（§16）；本 hook 只按帧名订阅并过滤 room_id
  * （规则同 `useVirtualCity`：无 room_id 的帧不过滤）。
  *
- * 错误展示（§7.1 双通道）：`error` 事件 → 消息内联红条（store 落 error 字段）
- * + `reportGlobalError` 全局 toast；两者都做，绝不吞进 console。
+ * 错误展示（§7.1 双通道）：
+ *   - `error` **事件** → 消息内联红条（store 落 error 字段）+ `reportGlobalError`
+ *     全局 toast；两者都做，绝不吞进 console；
+ *   - `game.error` **帧**（批次 87 P1-2）→ 服务端在开跑前拒绝（35059 停用 /
+ *     35060 并发 / 35001 房间不存在 …）⇒ 经 `citySystemErrorCodes` 白名单过滤后
+ *     同样双通道展示；非白名单码（其它游戏的帧）一律忽略。
+ *
+ * 批次 87 输入锁（乐观 busy + 看门狗）：
+ *   - 发送**即**置 busy（不等 `agent_start`）⇒ 连点被前端自身挡住；
+ *   - 四路解锁：`agent_end` / `error` 事件 / 看门狗超时 / WS 断连。
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
+import { useT } from '@/hooks/useT';
 import { wsClient, type WsEnvelope } from '@/services/ws';
 import { reportGlobalError } from '@/services/globalError';
 import { useVirtualCitySystemStore } from '@/store/virtualCitySystem.store';
@@ -36,6 +45,12 @@ import {
   forgetShowCommand,
   isDuplicateCommand,
 } from '@/components/virtualCity/cityShowCommandDedup';
+import {
+  createBusyGuard,
+  type BusyGuard,
+} from '@/components/virtualCity/citySystemBusyGuard';
+import { handleCitySystemErrorFrame } from '@/components/virtualCity/citySystemErrorCodes';
+import { applyRoomSwitchReset } from '@/components/virtualCity/citySystemRoomSwitch';
 import type {
   VirtualCityDisplayCommand,
   VirtualCityShowCommandFrame,
@@ -70,9 +85,9 @@ export function useVirtualCitySystemAgent(
   roomId: string,
   deps: VirtualCitySystemAgentDeps,
 ) {
+  const t = useT();
   const messages = useVirtualCitySystemStore((s) => s.messages);
   const busy = useVirtualCitySystemStore((s) => s.busy);
-  const connected = useVirtualCitySystemStore((s) => s.connected);
   const minimized = useVirtualCitySystemStore((s) => s.minimized);
   const setMinimized = useVirtualCitySystemStore((s) => s.setMinimized);
 
@@ -81,6 +96,28 @@ export function useVirtualCitySystemAgent(
   // deps 每次渲染都是新对象 ⇒ 用 ref 承载，订阅 effect 只挂一次（不随父组件重渲染反复解绑）。
   const depsRef = useRef(deps);
   depsRef.current = deps;
+
+  // ── 批次 87：文案随语言变化 ⇒ 用 ref 承载（看门狗触发时才取值）──────────
+  const tRef = useRef(t);
+  tRef.current = t;
+
+  /**
+   * 批次 87 P1-3 / P1-4：输入锁（乐观 busy + 看门狗）。
+   *
+   * 四路解锁：`agent_end` / `error` 事件 → `settle()`；看门狗超时 → 自解锁；
+   * WS 断连 → `releaseOnDisconnect()`。
+   */
+  const guardRef = useRef<BusyGuard | null>(null);
+  if (guardRef.current === null) {
+    guardRef.current = createBusyGuard({
+      setBusy: (b) => useVirtualCitySystemStore.getState().setBusy(b),
+      isBusy: () => useVirtualCitySystemStore.getState().busy,
+      appendInline: (text) => useVirtualCitySystemStore.getState().appendError(text),
+      reportGlobal: (message) => reportGlobalError({ message, severity: 'warning' }),
+      timeoutText: () => tRef.current('virtualCity.systemDialog.timeout'),
+      disconnectedText: () => tRef.current('virtualCity.systemDialog.connectionLost'),
+    });
+  }
 
   // ── 历史恢复控制（§7.3-6）────────────────────────────────────────────
   // WS history 帧与 HTTP 兜底**先到先得**：resolved 后另一路丢弃。
@@ -136,10 +173,47 @@ export function useVirtualCitySystemAgent(
               severity: 'error',
             });
           }
+          // 批次 87 P1-4：`agent_end` / `error` / `cleared` ⇒ 本轮结束 ⇒ 停看门狗
+          // （busy 由 store 的 applyEvent 清）。
+          if (f.kind === 'agent_end' || f.kind === 'error' || f.kind === 'cleared') {
+            guardRef.current?.settle();
+          }
           // 批次 84：`agent_message`（其它 Agent 的来信）**不是错误** ⇒
           // 不触发 reportGlobalError；它由 store 落成一条独立的来信消息。
           if (f.kind === 'show_command') {
             deliver(d_command(f.data));
+          }
+          break;
+        }
+
+        /**
+         * 批次 87 P1-2：服务端拒绝帧 `game.error`（载荷 `{code, message}`，本批后端
+         * 补 `room_id`）。此前本 hook **无此分支** ⇒ 拒绝完全静默。
+         *
+         * 过滤：只处理 City-System 错误码白名单（`citySystemErrorCodes`），其余
+         * （其它游戏的帧）一律忽略；带 `room_id` 时还须与当前房间一致。
+         * 双通道：内联红条（会话流）+ 全局 toast。35059 额外置本地停用态。
+         */
+        case 'game.error': {
+          const handled = handleCitySystemErrorFrame(p, roomIdRef.current, {
+            appendInlineError: (text) =>
+              useVirtualCitySystemStore.getState().appendError(text),
+            reportGlobal: (message) => reportGlobalError({ message, severity: 'error' }),
+            setAgentDisabled: (d) => useVirtualCitySystemStore.getState().setAgentDisabled(d),
+            text: (key) => tRef.current(key),
+          });
+          // 服务端已拒绝本轮 ⇒ 本地不再等待（停看门狗；`appendError` 已解锁 busy）。
+          if (handled) guardRef.current?.settle();
+          break;
+        }
+
+        /**
+         * 批次 87 P1-2 自愈：服务端恢复 `system_agent_enabled=true` ⇒ 解除本地
+         * 停用态（35059 写入的）。字段缺失 / 非 true 时**不动**本地态。
+         */
+        case 'game.state': {
+          if (p.system_agent_enabled === true) {
+            useVirtualCitySystemStore.getState().setAgentDisabled(false);
           }
           break;
         }
@@ -189,7 +263,25 @@ export function useVirtualCitySystemAgent(
     return () => {
       unsub();
       offRejoin();
+      guardRef.current?.dispose();
     };
+  }, []);
+
+  /**
+   * 批次 87 P1-5 / P1-4：**传输层**连接态（`wsClient.status`）——
+   *   - 面板的连接指示器改读它（`transportConnected`）：`store.connected` 只在
+   *     收到 agent_start / agent_end 才为 true ⇒ 空闲时误显「未连接」；
+   *   - 断连（reconnecting / closed）⇒ 解锁 busy（第四路解锁）+ 提示「正在重连」。
+   */
+  const [transportConnected, setTransportConnected] = useState(() => wsClient.connected);
+  useEffect(() => {
+    const off = wsClient.onStatus((status) => {
+      setTransportConnected(status === 'open');
+      if (status === 'reconnecting' || status === 'closed') {
+        guardRef.current?.releaseOnDisconnect();
+      }
+    });
+    return off;
   }, []);
 
   /**
@@ -204,6 +296,16 @@ export function useVirtualCitySystemAgent(
   useEffect(() => {
     historyResolvedRef.current = false;
     sawLiveRef.current = false;
+    // 批次 87：换房 ⇒ 停看门狗（上一房的在途轮次不再等待）。
+    guardRef.current?.settle();
+    // 批次 87 收尾：换房 ⇒ **清空会话**（store 是单例，messages/busy/systemInfo
+    // 跨房残留 ⇒ 新房无历史时会把旧房对话显示出来）+ 清本地停用态（停用与否
+    // 由新房的 game.state / 35059 重新判定）。**先清后拉**，历史恢复链路
+    // （historyApplyRef / historyResolvedRef / sawLiveRef）语义不变。
+    applyRoomSwitchReset({
+      reset: () => useVirtualCitySystemStore.getState().reset(),
+      setAgentDisabled: (d) => useVirtualCitySystemStore.getState().setAgentDisabled(d),
+    });
     let cancelled = false;
     let httpTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -276,12 +378,20 @@ export function useVirtualCitySystemAgent(
   /**
    * 发送一句自然语言指令。先本地落一条 user 消息（立即回显），再发 WS；
    * 空串直接忽略（发送按钮同样禁用，双保险）。
+   *
+   * 批次 87 P1-3：**发送即置 busy**（乐观锁，不等 `agent_start`）——首 token 延迟
+   * 可达数秒，其间输入框仍可点 ⇒ 连点撞服务端并发限流 35060（且此前完全静默）。
+   * `busy` 为 true 时**直接忽略**本次发送（前端自锁，双保险）。
    */
   const sendMessage = useCallback((text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
+    const st = useVirtualCitySystemStore.getState();
+    if (st.busy) return; // 上一轮仍在执行 ⇒ 忽略（不撞服务端 35060）
     sawLiveRef.current = true; // 新对话已在途 ⇒ 迟到历史不得覆盖（§7.3-6）
-    useVirtualCitySystemStore.getState().appendUser(trimmed);
+    st.appendUser(trimmed);
+    // 置 busy + 启动看门狗（重复发送只重置计时，不叠加）。
+    guardRef.current?.arm();
     wsClient.send('game.virtual_city_system_message', {
       room_id: roomId,
       text: trimmed,
@@ -291,13 +401,18 @@ export function useVirtualCitySystemAgent(
   /** 清空对话：发 WS reset + 本地立即清空（服务端会回 cleared 事件，幂等）。 */
   const reset = useCallback(() => {
     wsClient.send('game.virtual_city_system_reset', { room_id: roomId });
+    guardRef.current?.settle();
     useVirtualCitySystemStore.getState().reset();
   }, [roomId]);
 
   return {
     messages,
     busy,
-    connected,
+    /**
+     * 批次 87 P1-5：**传输层**连接态（`wsClient.status === 'open'`）—— 面板连接
+     * 指示器的主判据。`store.connected`（最近一次交互可达）不再作为指示器来源。
+     */
+    transportConnected,
     minimized,
     setMinimized,
     sendMessage,
