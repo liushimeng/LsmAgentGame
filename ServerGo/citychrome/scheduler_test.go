@@ -26,11 +26,19 @@ func (c *fakeClock) sleepFunc() func(time.Duration) {
 }
 
 // newTestScheduler 构造注入 fake clock/runner 的调度器。
+// 行情档位钉死 1800/1800(批次88:交易时段分档的档位语义由
+// market_hours_test.go 全量覆盖,本文件专注轮转/熔断机器;钉死档位让
+// 轮转间隔断言与 fake clock 时刻的开市状态无关)。
 func newTestScheduler(t *testing.T, runner MissionRunner) (*Scheduler, *fakeClock) {
 	t.Helper()
 	clk := &fakeClock{now: time.Unix(1_700_000_000, 0)}
 	st := NewFeedStore(12, 20)
-	s := NewScheduler(SchedulerConfig{RefreshSeconds: 1800, QueueCapacity: 8}, st, runner)
+	s := NewScheduler(SchedulerConfig{
+		RefreshSeconds:     1800,
+		QuoteOpenSeconds:   1800,
+		QuoteClosedSeconds: 1800,
+		QueueCapacity:      8,
+	}, st, runner)
 	s.SetClock(clk.nowFunc(), clk.sleepFunc())
 	return s, clk
 }
@@ -233,12 +241,15 @@ func TestScheduler_RotationAndIdleUnload(t *testing.T) {
 }
 
 // TestScheduler_PerCategoryCadence 批次76 §五.6 分级调度:news 分钟级(600s)、
-// macro 日级(此处用 7200s 缩短用例)、行情类目统一间隔(1800s)各自独立计时。
+// macro 日级(此处用 7200s 缩短用例)、行情类目统一间隔(1800s,批次88 钉死
+// 开/休市档位同值,让断言与 fake clock 时刻的开市状态无关)各自独立计时。
 func TestScheduler_PerCategoryCadence(t *testing.T) {
 	clk := &fakeClock{now: time.Unix(1_700_000_000, 0)}
 	st := NewFeedStore(12, 20)
 	s := NewScheduler(SchedulerConfig{
 		RefreshSeconds:      1800,
+		QuoteOpenSeconds:    1800,
+		QuoteClosedSeconds:  1800,
 		NewsRefreshSeconds:  600,
 		MacroRefreshSeconds: 7200,
 		QueueCapacity:       8,
@@ -334,5 +345,49 @@ func TestScheduler_SingleFlightByChannel(t *testing.T) {
 	}
 	if s.QueueLen() != 8 {
 		t.Errorf("QueueLen = %d, want 8", s.QueueLen())
+	}
+}
+
+// TestScheduler_QuoteDueCatchUpAtOpen 批次88:休市档(7200s)不提前轮转;
+// 一开市档位切到 600s,距上次运行 ≥600s 立即 due(追赶抓取)。
+// 场景:A股午休 11:45 CST(2026-03-02 03:45 UTC)最后一次轮转 → 午休末
+// 12:59 CST(距上次 44min,介于 600s 与 7200s 之间)按休市档不 due;
+// 13:00 CST(05:00 UTC)一开市立即 due 且为轮转序首位。
+func TestScheduler_QuoteDueCatchUpAtOpen(t *testing.T) {
+	clk := &fakeClock{now: time.Date(2026, 3, 2, 3, 45, 0, 0, time.UTC)}
+	st := NewFeedStore(12, 20)
+	s := NewScheduler(SchedulerConfig{
+		NewsRefreshSeconds:  864000, // 拉开 news/macro,隔离行情档位断言
+		MacroRefreshSeconds: 864000,
+		QueueCapacity:       8,
+	}, st, nil)
+	s.SetClock(clk.nowFunc(), clk.sleepFunc())
+	for _, cat := range MissionCategories {
+		s.lastRunAt[cat] = clk.now // 全部刚跑过(排除冷启动语义)
+	}
+	drainDue := func() []string {
+		var got []string
+		for {
+			s.maybeRotate()
+			select {
+			case m := <-s.in:
+				got = append(got, m.Category)
+			default:
+				return got
+			}
+		}
+	}
+	// 午休中:a_share 休市档 ⇒ 不 due(开市档 600s 下本应早已到期,开市后见下)。
+	clk.now = time.Date(2026, 3, 2, 4, 59, 0, 0, time.UTC)
+	for _, cat := range drainDue() {
+		if cat == CategoryAShare {
+			t.Fatalf("a_share must NOT be due during lunch break (closed tier 7200s)")
+		}
+	}
+	// 13:00 CST 开市(距上次 45min):档位 600s ⇒ 立即 due,轮转序首位。
+	clk.now = time.Date(2026, 3, 2, 5, 0, 0, 0, time.UTC)
+	got := drainDue()
+	if len(got) == 0 || got[0] != CategoryAShare {
+		t.Fatalf("a_share must be due immediately at open (catch-up), got %v", got)
 	}
 }

@@ -30,7 +30,7 @@ func sampleFeed() Feed {
 }
 
 func TestFeedCompactJSON_Overview(t *testing.T) {
-	text, err := FeedCompactJSON(sampleFeed(), "overview", "", "", "")
+	text, err := FeedCompactJSON(sampleFeed(), "overview", "", "", "", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestFeedCompactJSON_Overview(t *testing.T) {
 }
 
 func TestFeedCompactJSON_Quotes(t *testing.T) {
-	text, err := FeedCompactJSON(sampleFeed(), "quotes", "", "", "")
+	text, err := FeedCompactJSON(sampleFeed(), "quotes", "", "", "", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestFeedCompactJSON_Quotes(t *testing.T) {
 		t.Errorf("quotes should include both categories: %s", text)
 	}
 	// category 过滤。
-	text, err = FeedCompactJSON(sampleFeed(), "quotes", CategoryCrypto, "", "")
+	text, err = FeedCompactJSON(sampleFeed(), "quotes", CategoryCrypto, "", "", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestFeedCompactJSON_Quotes(t *testing.T) {
 }
 
 func TestFeedCompactJSON_News(t *testing.T) {
-	text, err := FeedCompactJSON(sampleFeed(), "news", "", "", "")
+	text, err := FeedCompactJSON(sampleFeed(), "news", "", "", "", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,14 +76,14 @@ func TestFeedCompactJSON_News(t *testing.T) {
 }
 
 func TestFeedCompactJSON_Errors(t *testing.T) {
-	if _, err := FeedCompactJSON(sampleFeed(), "hack", "", "", ""); err == nil {
+	if _, err := FeedCompactJSON(sampleFeed(), "hack", "", "", "", IntervalTiers{}); err == nil {
 		t.Error("unknown op should fail")
 	}
-	if _, err := FeedCompactJSON(sampleFeed(), "quotes", "mars", "", ""); err == nil {
+	if _, err := FeedCompactJSON(sampleFeed(), "quotes", "mars", "", "", IntervalTiers{}); err == nil {
 		t.Error("unknown category should fail")
 	}
 	// op 缺省 = overview。
-	if _, err := FeedCompactJSON(sampleFeed(), "", "", "", ""); err != nil {
+	if _, err := FeedCompactJSON(sampleFeed(), "", "", "", "", IntervalTiers{}); err != nil {
 		t.Errorf("empty op should default overview: %v", err)
 	}
 }
@@ -100,7 +100,7 @@ func TestFeedCompactJSON_NewsKeyword(t *testing.T) {
 		},
 	}
 	// 命中:大小写不敏感。
-	text, err := FeedCompactJSON(f, "news", "", "gold", "")
+	text, err := FeedCompactJSON(f, "news", "", "gold", "", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestFeedCompactJSON_NewsKeyword(t *testing.T) {
 		t.Errorf("keyword should filter out non-matching titles: %s", text)
 	}
 	// 中文命中。
-	text, err = FeedCompactJSON(f, "news", "", "黄金", "")
+	text, err = FeedCompactJSON(f, "news", "", "黄金", "", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestFeedCompactJSON_NewsKeyword(t *testing.T) {
 		t.Errorf("chinese keyword filter failed: %s", text)
 	}
 	// 不命中 ⇒ 空数组(非 null)。
-	text, err = FeedCompactJSON(f, "news", "", "不存在的词", "")
+	text, err = FeedCompactJSON(f, "news", "", "不存在的词", "", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestFeedCompactJSON_NewsKeyword(t *testing.T) {
 		t.Errorf("non-matching keyword should yield empty news: %s", text)
 	}
 	// 空串 = 不过滤。
-	text, err = FeedCompactJSON(f, "news", "", "", "")
+	text, err = FeedCompactJSON(f, "news", "", "", "", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestFeedCompactJSON_NewsKeyword(t *testing.T) {
 		}
 	}
 	// 其余 op 忽略 keyword。
-	text, err = FeedCompactJSON(f, "overview", "", "黄金", "")
+	text, err = FeedCompactJSON(f, "overview", "", "黄金", "", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,8 +211,12 @@ func TestService_DisabledOffline(t *testing.T) {
 // ── 批次78 §3.5:realworld_info 扩 op ────────────────────────────────
 
 // TestFeedCompactJSON_OverviewAgeStale op=overview:各类目带 age_seconds/stale。
+// 批次88:stale = age > 2×档位(开市 600/休市 7200)。此处取 age≈15000s
+// (> 2×7200s),任意档位下恒 stale —— 与运行时刻的开市状态无关,确定性断言;
+// 档位敏感的开/休市对照见 market_hours_test.go
+// TestRealworldStale_MarketHoursAware(注入固定 now)。
 func TestFeedCompactJSON_OverviewAgeStale(t *testing.T) {
-	old := time.Now().Unix() - 7200 // 2 小时前(行情类目间隔 1800s ⇒ stale)。
+	old := time.Now().Unix() - 15000 // 约 4.2 小时前(> 2×7200s 休市档上限)。
 	f := Feed{
 		Channel: ChannelStatus{Status: ChannelOnline},
 		Categories: map[string]RealtimeCategory{
@@ -224,7 +228,7 @@ func TestFeedCompactJSON_OverviewAgeStale(t *testing.T) {
 			}},
 		},
 	}
-	text, err := FeedCompactJSON(f, "overview", "", "", "")
+	text, err := FeedCompactJSON(f, "overview", "", "", "", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,11 +243,11 @@ func TestFeedCompactJSON_OverviewAgeStale(t *testing.T) {
 		t.Fatalf("bad json: %v (%s)", err, text)
 	}
 	a := out.Categories[CategoryAShare]
-	if a.AgeSeconds < 7000 {
-		t.Errorf("a_share age_seconds = %d, want >= 7000", a.AgeSeconds)
+	if a.AgeSeconds < 14900 {
+		t.Errorf("a_share age_seconds = %d, want >= 14900", a.AgeSeconds)
 	}
 	if !a.Stale {
-		t.Error("a_share should be stale (age > 2×1800s)")
+		t.Error("a_share should be stale (age > 2×7200s, any tier)")
 	}
 	if out.Categories[CategoryMacro].Stale {
 		t.Error("macro (fresh) must not be stale")
@@ -254,7 +258,7 @@ func TestFeedCompactJSON_OverviewAgeStale(t *testing.T) {
 func TestFeedCompactJSON_QuotesSymbolFilter(t *testing.T) {
 	f := sampleFeed()
 	// 命中(大小写不敏感)。
-	text, err := FeedCompactJSON(f, "quotes", "", "", "btc")
+	text, err := FeedCompactJSON(f, "quotes", "", "", "btc", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +266,7 @@ func TestFeedCompactJSON_QuotesSymbolFilter(t *testing.T) {
 		t.Errorf("symbol filter failed: %s", text)
 	}
 	// 未命中 ⇒ 空数组。
-	text, err = FeedCompactJSON(f, "quotes", "", "", "NOPE")
+	text, err = FeedCompactJSON(f, "quotes", "", "", "NOPE", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +284,7 @@ func TestFeedCompactJSON_History(t *testing.T) {
 		Quotes: []RealtimeQuote{quote("000001", "上证指数", 3660.00, -1.2)}})
 	f := st.Snapshot()
 
-	text, err := FeedCompactJSON(f, "history", "", "", "000001")
+	text, err := FeedCompactJSON(f, "history", "", "", "000001", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +318,7 @@ func TestFeedCompactJSON_History(t *testing.T) {
 		t.Errorf("price = %v, want 3660", out.Price)
 	}
 	// 未命中 ⇒ points 为空数组。
-	text, err = FeedCompactJSON(f, "history", "", "", "NOPE")
+	text, err = FeedCompactJSON(f, "history", "", "", "NOPE", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +326,7 @@ func TestFeedCompactJSON_History(t *testing.T) {
 		t.Errorf("unmatched symbol should yield empty points: %s", text)
 	}
 	// symbol 缺省 ⇒ 错误文本(不 panic)。
-	if _, err := FeedCompactJSON(f, "history", "", "", ""); err == nil {
+	if _, err := FeedCompactJSON(f, "history", "", "", "", IntervalTiers{}); err == nil {
 		t.Error("history without symbol should error")
 	}
 }
@@ -406,7 +410,7 @@ func TestSourcesCompactJSON(t *testing.T) {
 // TestFeedCompactJSON_OpSources op=sources 经 FeedCompactJSON 也能取到清单
 // (健康度需 MissionLog,由 Service.RealworldInfo 注入)。
 func TestFeedCompactJSON_OpSources(t *testing.T) {
-	text, err := FeedCompactJSON(sampleFeed(), "sources", "", "", "")
+	text, err := FeedCompactJSON(sampleFeed(), "sources", "", "", "", IntervalTiers{})
 	if err != nil {
 		t.Fatal(err)
 	}

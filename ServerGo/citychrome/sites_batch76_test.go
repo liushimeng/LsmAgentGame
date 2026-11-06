@@ -145,13 +145,13 @@ func TestFeedCompactJSONNewCategories(t *testing.T) {
 		},
 		News: []RealtimeNews{{ID: "x", Title: "t", Source: "财联社·电报", Category: CategoryNews}},
 	}
-	if _, err := FeedCompactJSON(f, "quotes", CategoryMacro, "", ""); err != nil {
+	if _, err := FeedCompactJSON(f, "quotes", CategoryMacro, "", "", IntervalTiers{}); err != nil {
 		t.Errorf("quotes macro: %v", err)
 	}
-	if _, err := FeedCompactJSON(f, "news", CategoryNews, "", ""); err != nil {
+	if _, err := FeedCompactJSON(f, "news", CategoryNews, "", "", IntervalTiers{}); err != nil {
 		t.Errorf("news news: %v", err)
 	}
-	_, err := FeedCompactJSON(f, "quotes", "bogus", "", "")
+	_, err := FeedCompactJSON(f, "quotes", "bogus", "", "", IntervalTiers{})
 	if err == nil || !strings.Contains(err.Error(), "macro") || !strings.Contains(err.Error(), "news") {
 		t.Errorf("bogus category error should list 8 categories, got: %v", err)
 	}

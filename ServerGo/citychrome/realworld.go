@@ -35,6 +35,10 @@ const realworldHistoryCap = HistoryCap
 
 // FeedCompactJSON 生成 realworld_info 的紧凑 JSON(契约 §3.7;批次78 §3.5 扩 op)。
 //   - op=overview:channel 状态 + 各类目最近更新时间(含 age_seconds/stale)+ 头条 3 条;
+//     stale = age_seconds > 2×tiers.Seconds(cat, now)(批次88 同口径:档位按
+//     交易时段开市/休市取值,与调度轮转同一时刻、同一档位、**同一解析路径**
+//     IntervalTiers.Seconds —— 休市降频时段不假性报 stale,非默认配置下阈值
+//     仍恒等于 2×调度真实轮转间隔);
 //   - op=quotes:全部类目(或指定 category)各前 5 条报价(可选 symbol 过滤);
 //   - op=news:最近 10 条(或指定 category);
 //   - op=history:指定 symbol 的自采价点(≤48 个)+ 所属类目 + 最新价;
@@ -44,8 +48,10 @@ const realworldHistoryCap = HistoryCap
 // keyword(批次77 §3.5)**仅 op=news 生效**:标题大小写不敏感包含过滤;
 // 空串 = 不过滤;其余 op 忽略 keyword。
 // symbol(批次78 §3.5)仅 op=quotes/op=history 生效;op=history 缺省时返回错误。
+// tiers 是类目轮转间隔档位(批次88;配置档位优先、包默认兜底,零值 = 包默认;
+// Service 侧由 config 构造,见 Service.intervalTiers)。
 // 返回人读 JSON 文本。
-func FeedCompactJSON(f Feed, op, category, keyword, symbol string) (string, error) {
+func FeedCompactJSON(f Feed, op, category, keyword, symbol string, tiers IntervalTiers) (string, error) {
 	if op == "" {
 		op = "overview"
 	}
@@ -54,7 +60,7 @@ func FeedCompactJSON(f Feed, op, category, keyword, symbol string) (string, erro
 	}
 	switch op {
 	case "overview":
-		return compactOverview(f, category)
+		return compactOverview(f, category, time.Now(), tiers)
 	case "quotes":
 		return compactQuotes(f, category, symbol)
 	case "news":
@@ -91,8 +97,11 @@ type compactPoint struct {
 	P float64 `json:"p"`
 }
 
-func compactOverview(f Feed, category string) (string, error) {
-	now := time.Now().Unix()
+// compactOverview 组装 op=overview 的紧凑 JSON。nowT 是判定时刻:age_seconds
+// 与 stale 档位(tiers.Seconds)取**同一时刻、同一解析路径**(批次88 同口径),
+// 测试可注入固定时刻复现;tiers 零值 = 包默认档位。
+func compactOverview(f Feed, category string, nowT time.Time, tiers IntervalTiers) (string, error) {
+	now := nowT.Unix()
 	cats := map[string]map[string]any{}
 	keys := make([]string, 0, len(f.Categories))
 	for k := range f.Categories {
@@ -116,7 +125,7 @@ func compactOverview(f Feed, category string) (string, error) {
 		if c.UpdatedAt > 0 && now > c.UpdatedAt {
 			age = now - c.UpdatedAt
 		}
-		interval := categoryRefreshInterval(k)
+		interval := tiers.Seconds(k, nowT)
 		cats[k] = map[string]any{
 			"updated_at":  c.UpdatedAt,
 			"age_seconds": age,

@@ -73,6 +73,8 @@ func Start(cfg config.CityChromeConfig, reg LLMRegistry) *Service {
 		zap.String("debug_tool_url", cfg.DebugToolURL),
 		zap.String("model_key", cfg.ModelKey),
 		zap.Int("refresh_seconds", cfg.RefreshSeconds),
+		zap.Int("quote_open_refresh_seconds", cfg.QuoteOpenRefreshSeconds),
+		zap.Int("quote_closed_refresh_seconds", cfg.QuoteClosedRefreshSeconds),
 		zap.Int("news_refresh_seconds", cfg.NewsRefreshSeconds),
 		zap.Int("macro_refresh_seconds", cfg.MacroRefreshSeconds))
 	if cfg.Enabled {
@@ -140,6 +142,8 @@ func newService(cfg config.CityChromeConfig, reg LLMRegistry) *Service {
 	})
 	svc.sched = NewScheduler(SchedulerConfig{
 		RefreshSeconds:      cfg.RefreshSeconds,
+		QuoteOpenSeconds:    cfg.QuoteOpenRefreshSeconds,
+		QuoteClosedSeconds:  cfg.QuoteClosedRefreshSeconds,
 		NewsRefreshSeconds:  cfg.NewsRefreshSeconds,
 		MacroRefreshSeconds: cfg.MacroRefreshSeconds,
 	}, svc.store, svc.agent.RunMission)
@@ -229,7 +233,19 @@ func (s *Service) RealworldInfo(op, category, keyword, symbol string) (string, e
 	if op == "sources" {
 		return SourcesCompactJSON(s.mlog, category)
 	}
-	return FeedCompactJSON(s.Feed(), op, category, keyword, symbol)
+	return FeedCompactJSON(s.Feed(), op, category, keyword, symbol, s.intervalTiers())
+}
+
+// intervalTiers 把配置档位映射为共享解析结构(批次88 同口径:与调度器
+// Scheduler.tiers 同一形状、同一字段来源 —— stale 阈值恒等于 2×调度真实
+// 轮转间隔)。0 值字段由 IntervalTiers.Seconds 回退包默认档位。
+func (s *Service) intervalTiers() IntervalTiers {
+	return IntervalTiers{
+		QuoteOpenSeconds:   s.cfg.QuoteOpenRefreshSeconds,
+		QuoteClosedSeconds: s.cfg.QuoteClosedRefreshSeconds,
+		NewsSeconds:        s.cfg.NewsRefreshSeconds,
+		MacroSeconds:       s.cfg.MacroRefreshSeconds,
+	}
 }
 
 // OnFeed 订阅 Feed 更新(广播出口:WS 层 listener 注入;每次成功 mission 后回调)。

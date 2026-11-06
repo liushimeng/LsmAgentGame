@@ -331,3 +331,36 @@ func nonEmptyOrLocal(s, fallback string) string {
 	}
 	return s
 }
+
+// TestCityChromeConfig_QuoteTierDefaults 批次88 §三.2/§五.6:行情开/休市档
+// 默认 600/7200,显式值保留,下限钳制 60/600。
+func TestCityChromeConfig_QuoteTierDefaults(t *testing.T) {
+	c := &Config{}
+	applyDefaults(c)
+	if c.CityChrome.QuoteOpenRefreshSeconds != 600 {
+		t.Errorf("QuoteOpenRefreshSeconds default = %d, want 600", c.CityChrome.QuoteOpenRefreshSeconds)
+	}
+	if c.CityChrome.QuoteClosedRefreshSeconds != 7200 {
+		t.Errorf("QuoteClosedRefreshSeconds default = %d, want 7200", c.CityChrome.QuoteClosedRefreshSeconds)
+	}
+	// 显式值优先(用户的显式选择优先)。
+	c2 := &Config{}
+	c2.CityChrome.QuoteOpenRefreshSeconds = 300
+	c2.CityChrome.QuoteClosedRefreshSeconds = 3600
+	applyDefaults(c2)
+	if c2.CityChrome.QuoteOpenRefreshSeconds != 300 || c2.CityChrome.QuoteClosedRefreshSeconds != 3600 {
+		t.Errorf("explicit values must survive applyDefaults: %d/%d",
+			c2.CityChrome.QuoteOpenRefreshSeconds, c2.CityChrome.QuoteClosedRefreshSeconds)
+	}
+	// 下限钳制:开市档 ≥60,休市档 ≥600。
+	c3 := &Config{}
+	c3.CityChrome.QuoteOpenRefreshSeconds = 10
+	c3.CityChrome.QuoteClosedRefreshSeconds = 100
+	applyDefaults(c3)
+	if c3.CityChrome.QuoteOpenRefreshSeconds != 60 {
+		t.Errorf("QuoteOpenRefreshSeconds clamp = %d, want 60", c3.CityChrome.QuoteOpenRefreshSeconds)
+	}
+	if c3.CityChrome.QuoteClosedRefreshSeconds != 600 {
+		t.Errorf("QuoteClosedRefreshSeconds clamp = %d, want 600", c3.CityChrome.QuoteClosedRefreshSeconds)
+	}
+}

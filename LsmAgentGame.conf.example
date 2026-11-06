@@ -290,8 +290,13 @@
     "auth_token": "CITY_CHROME_AUTH_TOKEN_PLACEHOLDER",
     // City-Chrome Agent 的 LLM 模型 key。
     "model_key": "DeepSeek-model",
-    // 行情 6 类目轮转间隔秒(默认 1800;各自独立计时)。
+    // 行情 6 类目轮转间隔秒(legacy:批次88 起由 quote_open/closed 取代,
+    // 不再决定行情档位;保留兼容旧配置)。
     "refresh_seconds": 1800,
+    // 行情开市档轮转间隔秒(批次88 交易时段感知;默认 600,下限 60)。
+    "quote_open_refresh_seconds": 600,
+    // 行情休市档轮转间隔秒(批次88 非交易时段降频;默认 7200,下限 600)。
+    "quote_closed_refresh_seconds": 7200,
     // news 类目轮转间隔秒(批次76 分级调度;默认 600,下限 60)。
     "news_refresh_seconds": 600,
     // macro 类目轮转间隔秒(批次76 分级调度;默认 86400,下限 3600)。

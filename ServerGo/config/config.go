@@ -718,7 +718,14 @@ type CityChromeConfig struct {
 	// ModelKey City-Chrome Agent 的 LLM 模型 key(registry.Get)。
 	ModelKey string `json:"model_key"`
 	// RefreshSeconds 行情类目轮转间隔秒(默认 1800;批次76 起 6 行情类目各自独立计时)。
+	// 批次88 起行情档位由 QuoteOpen/ClosedRefreshSeconds 取代(交易时段分档);
+	// 本字段保留兼容旧配置,不再决定行情轮转间隔。
 	RefreshSeconds int `json:"refresh_seconds"`
+	// QuoteOpenRefreshSeconds 行情开市档轮转间隔秒(批次88 §三.2/§五.6;
+	// 默认 600,下限 60)。
+	QuoteOpenRefreshSeconds int `json:"quote_open_refresh_seconds"`
+	// QuoteClosedRefreshSeconds 行情休市档轮转间隔秒(批次88;默认 7200,下限 600)。
+	QuoteClosedRefreshSeconds int `json:"quote_closed_refresh_seconds"`
 	// NewsRefreshSeconds news 类目轮转间隔秒(批次76 §五.6;默认 600,下限 60)。
 	NewsRefreshSeconds int `json:"news_refresh_seconds"`
 	// MacroRefreshSeconds macro 类目轮转间隔秒(批次76 §五.6;默认 86400,下限 3600)。
@@ -1426,6 +1433,19 @@ func applyDefaults(c *Config) {
 	}
 	if c.CityChrome.MacroRefreshSeconds < 3600 {
 		c.CityChrome.MacroRefreshSeconds = 3600
+	}
+	// 批次88 §三.2/§五.6 交易时段感知:行情开市分钟级(600)/休市降频(7200)。
+	if c.CityChrome.QuoteOpenRefreshSeconds == 0 {
+		c.CityChrome.QuoteOpenRefreshSeconds = 600
+	}
+	if c.CityChrome.QuoteOpenRefreshSeconds < 60 {
+		c.CityChrome.QuoteOpenRefreshSeconds = 60
+	}
+	if c.CityChrome.QuoteClosedRefreshSeconds == 0 {
+		c.CityChrome.QuoteClosedRefreshSeconds = 7200
+	}
+	if c.CityChrome.QuoteClosedRefreshSeconds < 600 {
+		c.CityChrome.QuoteClosedRefreshSeconds = 600
 	}
 	if c.CityChrome.MaxStepsPerMission == 0 {
 		c.CityChrome.MaxStepsPerMission = 14

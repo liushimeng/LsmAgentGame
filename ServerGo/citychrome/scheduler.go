@@ -1,9 +1,11 @@
 // Package citychrome — scheduler.go: 类目轮转调度 + 熔断退避 + 单飞任务队列
 // (契约 §3.6;批次76 修订:单指针轮转 → 类目级分级调度)。
 //
-//   - 轮转(批次76 §五.6 分级调度):8 类目各自独立计时,每 tick(5s)按
-//     MissionCategories 顺序取「距上次运行 ≥ 类目专属间隔」的首个类目入队;
-//     行情 6 类目共用 refresh_seconds(默认 1800s),news 分钟级
+//   - 轮转(批次76 §五.6 分级调度;批次88 交易时段感知修订):8 类目各自
+//     独立计时,每 tick(5s)按 MissionCategories 顺序取「距上次运行 ≥ 类目
+//     专属间隔」的首个类目入队;行情 6 类目按交易时段分档 —— 开市
+//     quote_open_refresh_seconds(默认 600s,分钟级)/休市
+//     quote_closed_refresh_seconds(默认 7200s,降频 12×),news 分钟级
 //     (news_refresh_seconds,默认 600s),macro 日级(macro_refresh_seconds,
 //     默认 86400s)。冷启动时未运行过的类目视为到期,逐 tick 顺序补齐;
 //   - 单飞:全局同时只跑 1 个 mission(单 worker 串行队列),LLM 调用走 llmSema
@@ -29,32 +31,80 @@ import (
 // 熔断/退避常量(契约 §3.6)。
 const (
 	breakerThreshold = 3                // 连续失败次数阈值
-	backoffBase      = 5 * time.Minute // 首次退避
+	backoffBase      = 5 * time.Minute  // 首次退避
 	backoffMax       = 30 * time.Minute // 封顶
 	siteMinInterval  = 10 * time.Second // 同站点访问最小间隔(契约 §6)
 )
 
 // 默认类目刷新间隔(秒)——与 config.CityChromeConfig 的 applyDefaults 缺省
-// 一致(批次76 §五.6 分级调度)。此处是**包内唯一事实来源**:调度器
-// NewScheduler 的缺省与批次78 §3.5 的 realworld_info stale 判定共用。
+// 一致(批次76 §五.6 分级调度;批次88 §三.2/§五.6 交易时段分档)。
+// 批次88 返工起:调度轮转与 realworld_info stale 判定统一经 IntervalTiers
+// .Seconds 解析(配置档位优先、本常量兜底)——「stale 阈值恒等于 2×调度器
+// 真实轮转间隔」由同一解析路径保证。
 const (
-	defaultQuoteRefreshSeconds = 1800  // 行情 6 类目(a_share/hk/us/metal/futures/crypto)
-	defaultNewsRefreshSeconds  = 600   // news 类目(分钟级)
-	defaultMacroRefreshSeconds = 86400 // macro 类目(日级)
+	// defaultQuoteRefreshSeconds 是批次88 前的行情统一间隔(1800s)。
+	// 批次88 起行情档位由 defaultQuoteOpen/ClosedRefreshSeconds 取代;
+	// RefreshSeconds 字段仅保留兼容旧配置,不再决定行情轮转档位。
+	defaultQuoteRefreshSeconds = 1800
+	// defaultQuoteOpenRefreshSeconds 行情开市档(分钟级,与 news 600s 同口径)。
+	defaultQuoteOpenRefreshSeconds = 600
+	// defaultQuoteClosedRefreshSeconds 行情休市档(非交易时段降频 12×)。
+	defaultQuoteClosedRefreshSeconds = 7200
+	defaultNewsRefreshSeconds        = 600   // news 类目(分钟级)
+	defaultMacroRefreshSeconds       = 86400 // macro 类目(日级)
 )
 
-// categoryRefreshInterval 返回类目的刷新间隔(秒):行情 6 类目 1800s,
-// news 600s,macro 86400s(与 Scheduler.categoryInterval 同口径)。
-// 批次78 §3.5:realworld_info op=overview 的 stale = age_seconds > 2× 本值。
-func categoryRefreshInterval(cat string) int64 {
+// IntervalTiers 是类目轮转间隔档位(秒)。**0 值字段 ⇒ 回退包默认档位**
+// (行情开/休市 600/7200、news 600、macro 86400)。
+// 调度器(Scheduler.categoryInterval)与 realworld_info stale 判定
+// (FeedCompactJSON)共用本结构的 Seconds 解析 —— 可配置值优先于包默认,
+// 同一时刻、同一档位,故任意合法配置下 stale 阈值恒等于 2×调度真实轮转
+// 间隔(批次88 同口径)。
+type IntervalTiers struct {
+	QuoteOpenSeconds   int // 行情开市档(0 ⇒ 600)
+	QuoteClosedSeconds int // 行情休市档(0 ⇒ 7200)
+	NewsSeconds        int // news 档(0 ⇒ 600)
+	MacroSeconds       int // macro 档(0 ⇒ 86400)
+}
+
+// Seconds 返回类目 cat 在 now 时刻的轮转间隔(秒;可配置值优先于包默认)。
+// 行情 6 类目按交易时段开市/休市分档(CategoryMarketOpen,纯函数);
+// news/macro 固定档(不受时段约束)。
+func (t IntervalTiers) Seconds(cat string, now time.Time) int64 {
 	switch cat {
 	case CategoryNews:
+		if t.NewsSeconds > 0 {
+			return int64(t.NewsSeconds)
+		}
 		return defaultNewsRefreshSeconds
 	case CategoryMacro:
+		if t.MacroSeconds > 0 {
+			return int64(t.MacroSeconds)
+		}
 		return defaultMacroRefreshSeconds
-	default:
-		return defaultQuoteRefreshSeconds
 	}
+	open, closed := int64(defaultQuoteOpenRefreshSeconds), int64(defaultQuoteClosedRefreshSeconds)
+	if t.QuoteOpenSeconds > 0 {
+		open = int64(t.QuoteOpenSeconds)
+	}
+	if t.QuoteClosedSeconds > 0 {
+		closed = int64(t.QuoteClosedSeconds)
+	}
+	if CategoryMarketOpen(cat, now) {
+		return open
+	}
+	return closed
+}
+
+// categoryRefreshInterval 返回类目在**包缺省档位**下的刷新间隔(秒)
+// (= 零值 IntervalTiers 的解析结果;批次88 修订:行情开市 600s /
+// 休市 7200s,news 600s、macro 86400s)。
+//
+// ⚠ 批次88 返工后用途收窄:生产 stale 判定(realworld.go)与调度轮转
+// (Scheduler.categoryInterval)均走 IntervalTiers.Seconds(配置档位优先),
+// 本函数只是「零配置档位」便捷入口/测试锚点,不再声称唯一事实来源。
+func categoryRefreshInterval(cat string, now time.Time) int64 {
+	return IntervalTiers{}.Seconds(cat, now)
 }
 
 // MissionRunner 是一次 mission 执行器(Agent.RunMission 签名;测试注入 fake)。
@@ -62,10 +112,19 @@ type MissionRunner func(ctx context.Context, m Mission) (*MissionPayload, error)
 
 // SchedulerConfig 是调度器参数。
 type SchedulerConfig struct {
-	RefreshSeconds      int // 行情类目轮转间隔秒(默认 1800;批次76 起 6 行情类目各自独立计时)
-	NewsRefreshSeconds  int // news 类目轮转间隔秒(批次76;默认 600,分钟级)
-	MacroRefreshSeconds int // macro 类目轮转间隔秒(批次76;默认 86400,日级)
-	QueueCapacity       int // 任务队列容量(默认 8)
+	// RefreshSeconds 是批次88 前的行情统一间隔(legacy:保留兼容,不再决定
+	// 行情轮转档位 —— 批次88 起由 QuoteOpen/QuoteClosedSeconds 取代)。
+	RefreshSeconds int
+	// QuoteOpenSeconds 行情开市档轮转间隔秒(批次88 §三.2/§五.6;0 ⇒ 包默认 600)。
+	QuoteOpenSeconds int
+	// QuoteClosedSeconds 行情休市档轮转间隔秒(批次88;0 ⇒ 包默认 7200)。
+	QuoteClosedSeconds int
+	// NewsRefreshSeconds news 类目轮转间隔秒(批次76;默认 600,分钟级)。
+	NewsRefreshSeconds int
+	// MacroRefreshSeconds macro 类目轮转间隔秒(批次76;默认 86400,日级)。
+	MacroRefreshSeconds int
+	// QueueCapacity 任务队列容量(默认 8)。
+	QueueCapacity int
 }
 
 // Scheduler 是全局单飞任务队列 + 轮转 + 熔断退避。
@@ -99,6 +158,12 @@ type Scheduler struct {
 func NewScheduler(cfg SchedulerConfig, store *FeedStore, runner MissionRunner) *Scheduler {
 	if cfg.RefreshSeconds <= 0 {
 		cfg.RefreshSeconds = defaultQuoteRefreshSeconds
+	}
+	if cfg.QuoteOpenSeconds <= 0 {
+		cfg.QuoteOpenSeconds = defaultQuoteOpenRefreshSeconds
+	}
+	if cfg.QuoteClosedSeconds <= 0 {
+		cfg.QuoteClosedSeconds = defaultQuoteClosedRefreshSeconds
 	}
 	if cfg.NewsRefreshSeconds <= 0 {
 		cfg.NewsRefreshSeconds = defaultNewsRefreshSeconds
@@ -234,17 +299,24 @@ func (s *Scheduler) ConsecutiveFails() int {
 	return s.fails
 }
 
-// categoryInterval 返回类目专属轮转间隔(批次76 §五.6 分级调度):
-// 行情 6 类目共用 RefreshSeconds;news/Macro 各自独立(默认 600s/86400s)。
-func (s *Scheduler) categoryInterval(cat string) time.Duration {
-	sec := s.cfg.RefreshSeconds
-	switch cat {
-	case CategoryNews:
-		sec = s.cfg.NewsRefreshSeconds
-	case CategoryMacro:
-		sec = s.cfg.MacroRefreshSeconds
+// categoryInterval 返回类目专属轮转间隔(批次76 §五.6 分级调度;批次88 修订:
+// 行情 6 类目按交易时段分档 —— 开市 QuoteOpenSeconds / 休市 QuoteClosedSeconds,
+// 可配置值优先于包默认 600/7200;news/Macro 仍按各自配置)。
+// 解析统一走 IntervalTiers.Seconds —— 与 realworld stale 判定同一路径,
+// 「stale 阈值恒等于 2×本间隔」由构造保证(批次88 同口径)。
+func (s *Scheduler) categoryInterval(cat string, now time.Time) time.Duration {
+	return time.Duration(s.tiers().Seconds(cat, now)) * time.Second
+}
+
+// tiers 把 SchedulerConfig 映射为共享档位解析结构(批次88:与 Service 侧
+// stale 判定构造同一形状、同一字段,保证两边逐档一致)。
+func (s *Scheduler) tiers() IntervalTiers {
+	return IntervalTiers{
+		QuoteOpenSeconds:   s.cfg.QuoteOpenSeconds,
+		QuoteClosedSeconds: s.cfg.QuoteClosedSeconds,
+		NewsSeconds:        s.cfg.NewsRefreshSeconds,
+		MacroSeconds:       s.cfg.MacroRefreshSeconds,
 	}
-	return time.Duration(sec) * time.Second
 }
 
 // nextRotationCategory 返回下一个到期类目(不推进计时;手动刷新 category 缺省
@@ -264,9 +336,10 @@ func (s *Scheduler) nextRotationCategory() string {
 // ok=false 表示当前无类目到期 —— maybeRotate 必须据此跳过,否则会每 tick
 // 强制入队同一类目(批次76 踩坑:回退值被误当成到期结果 ⇒ 死循环)。
 func (s *Scheduler) dueCategoryLocked() (string, bool) {
+	now := s.now() // 批次88:档位判定与计时取同一时刻(同口径)。
 	for _, cat := range MissionCategories {
 		last, ok := s.lastRunAt[cat]
-		if !ok || s.now().Sub(last) >= s.categoryInterval(cat) {
+		if !ok || now.Sub(last) >= s.categoryInterval(cat, now) {
 			return cat, true
 		}
 	}

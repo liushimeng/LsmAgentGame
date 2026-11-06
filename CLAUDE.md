@@ -311,6 +311,7 @@ i18n、`t_lsm_game_user.language` 字段、`/api/user/*` 偏好接口，以及�
 - **硬约束**：不得双标题（`behavior`/`macro`/`insurance` 纯标题 CSS 隐藏，保险「本月保费」保留）；刷新失败一看板内联红条；通道徽章只反映外部行情通道。
 - **批次 77 采集遥测**：`MissionRecord` 环（cap 20）+ `GET /api/virtual_city/realtime_board` 的 `data.missions[]`；⚠️ WS `game.realtime_feed` 帧**不含** missions。
 - **批次 80 真实世界事件**：`FeedStore` → `DeriveWorldEvents`（R1–R10 纯函数、零 RNG）→ `applyScenarioToWorld` 注入 → `WorldEventLog`（环 ≤50）；前端第 11 子 Tab「事件流」。
+- **批次 88 采集分级调度**（2026-11-06）：行情 6 类目按交易时段分档轮转——开市 `quote_open_refresh_seconds`（默认 600s）/ 休市 `quote_closed_refresh_seconds`（默认 7200s）；news 600s、macro 86400s 不变；时段模型 `citychrome/market_hours.go`（纯函数、含美股 DST、节假日按工作日近似）；`realworld_info` 的 stale 与调度经 `IntervalTiers.Seconds` 单一解析路径同口径（stale = 2×真实轮转间隔）；`refresh_seconds` 仅兼容保留、不再决定行情档位。详见 [`lag_docs/虚拟城市/已实现/88-交易时段感知分级调度/`](lag_docs/虚拟城市/已实现/88-交易时段感知分级调度/)。
 
 ## 29. 虚拟城市 · City-System 主 Agent 与「系统对话」（批次 81）
 
