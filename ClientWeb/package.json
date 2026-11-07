@@ -15,7 +15,7 @@
     "verify:virtual-city-realtime": "node scripts/verify_virtual_city_realtime_batch89.mjs"
   },
   "dependencies": {
-    "@react-three/drei": "^9.114.0",
+    "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^8.17.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
