@@ -18,7 +18,13 @@ import type {
   VirtualCitySurvey,
 } from '@/types/virtualCity';
 import { VIRTUAL_CITY_MIN_SEATS, virtualCityOccupiedSeats, virtualCitySeatCapacity } from '@/types/virtualCity';
-import type { MissionRecord, MissionStats, RealtimeFeed } from '@/types/virtualCityRealtime';
+import type {
+  Anomaly,
+  MetricSpec,
+  MissionRecord,
+  MissionStats,
+  RealtimeFeed,
+} from '@/types/virtualCityRealtime';
 
 /**
  * 右侧面板 Tab（聊天 / Agent 思维独立于 Tab 栈之外）。
@@ -135,6 +141,14 @@ interface VirtualCityStore {
   // null = 快照未回读（不渲染统计条）；非 null = 服务端下发的聚合值。
   realtimeStats: MissionStats | null;
 
+  // ── 批次89：指标口径卡（MetricSpec）——HTTP 快照回读；WS 帧不携带 ──
+  // null = 快照未回读（不渲染口径面板）；[] = 无口径卡（空态）。
+  realtimeMetricSpecs: MetricSpec[] | null;
+
+  // ── 批次89：异常告警清单（Anomaly）——HTTP 快照回读；WS 帧不携带 ──
+  // null = 快照未回读；[] = 当前无异常（空态）。
+  realtimeAnomalies: Anomaly[] | null;
+
   // ── UI ──
   panelTab: VirtualCityPanelTab;
   selectedDistrict: VirtualCityDistrictId | null;
@@ -170,6 +184,10 @@ interface VirtualCityStore {
   setRealtimeMissions: (missions: MissionRecord[]) => void;
   /** 批次78：stats 整表替换（仅 HTTP 快照 / 手动刷新回读；无记录为 null）。 */
   setRealtimeStats: (stats: MissionStats | null) => void;
+  /** 批次89：口径卡整表替换（仅 HTTP 快照 / 手动刷新回读；无口径卡为 []）。 */
+  setRealtimeMetricSpecs: (specs: MetricSpec[]) => void;
+  /** 批次89：异常告警整表替换（仅 HTTP 快照 / 手动刷新回读；无异常为 []）。 */
+  setRealtimeAnomalies: (anomalies: Anomaly[]) => void;
   reset: () => void;
 }
 
@@ -191,6 +209,8 @@ export const useVirtualCityStore = create<VirtualCityStore>((set) => ({
   realtimeFeed: null,
   realtimeMissions: null,
   realtimeStats: null,
+  realtimeMetricSpecs: null,
+  realtimeAnomalies: null,
   panelTab: 'finance',
   selectedDistrict: null,
 
@@ -291,6 +311,8 @@ export const useVirtualCityStore = create<VirtualCityStore>((set) => ({
   setRealtimeFeed: (feed) => set({ realtimeFeed: feed }),
   setRealtimeMissions: (missions) => set({ realtimeMissions: missions }),
   setRealtimeStats: (stats) => set({ realtimeStats: stats }),
+  setRealtimeMetricSpecs: (specs) => set({ realtimeMetricSpecs: specs }),
+  setRealtimeAnomalies: (anomalies) => set({ realtimeAnomalies: anomalies }),
 
   reset: () =>
     set({

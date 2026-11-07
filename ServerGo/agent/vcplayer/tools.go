@@ -397,7 +397,7 @@ func BuildTools() []llmtypes.ToolDef {
 				"op=overview(通道状态+各类目最近更新与新鲜度 age_seconds/stale+头条 3 条,默认)/" +
 				"quotes(行情,各类目前 5 条,可带 symbol 精确过滤)/news(最近 10 条新闻)/" +
 				"history(某 symbol 的自采价点序列 {t,p},symbol 必填)/" +
-				"sources(采集源清单与各类目健康度:最近来源/成功失败次数)。" +
+				"sources(采集源清单与各类目健康度:最近来源/成功失败次数;同时返回指标口径卡 calibers:每条报价的 spec= 字段指向对应口径卡的 id,查 id 即得该指标的定义与计算式)。" +
 				"category 可选:a_share|hk|us|metal|futures|crypto|macro|news;不传 = 全部类目。" +
 				"真实世界数据仅供你参考叙事与聊天谈资,不影响游戏内市场机制。",
 			InputSchema: map[string]any{

@@ -47,14 +47,26 @@ func IsMissionCategory(s string) bool {
 }
 
 // RealtimeQuote 单条实时报价(契约 §3.2,字段名逐字对齐)。
+//
+// 批次89 新增 5 字段(unit / source_url / confidence / anomaly / spec_id)——
+// **只加字段,既有 7 字段一字不动**(零 wire 破坏)。
+// ⚠️ `omitempty` **只用于 anomaly 与 spec_id**(空值有语义 = 无异常 /
+// 无口径卡,前端据此降级为「该指标暂无口径卡」);unit / source_url /
+// confidence 恒有值(缺省 ""/""/0),**不得**加 omitempty
+// (批次84 教训:空值有语义字段会静默丢失)。
 type RealtimeQuote struct {
-	Symbol    string  `json:"symbol"`               // 站点口径代码或名称,如 "000001"/"上证指数"/"BTC"
-	Name      string  `json:"name"`                 // 显示名
-	Price     float64 `json:"price"`                // 最新价
-	ChangePct float64 `json:"change_pct"`           // 百分比,-100~+100
-	Currency  string  `json:"currency,omitempty"`   // 币种(可选)
-	UpdatedAt int64   `json:"updated_at"`           // Unix 秒
-	Source    string  `json:"source"`               // 采集来源站点名
+	Symbol     string  `json:"symbol"`               // 站点口径代码或名称,如 "000001"/"上证指数"/"BTC"
+	Name       string  `json:"name"`                 // 显示名
+	Price      float64 `json:"price"`                // 最新价
+	ChangePct  float64 `json:"change_pct"`           // 百分比,-100~+100
+	Currency   string  `json:"currency,omitempty"`   // 币种(可选)
+	UpdatedAt  int64   `json:"updated_at"`           // Unix 秒
+	Source     string  `json:"source"`               // 采集来源站点名
+	Unit       string  `json:"unit"`                 // 计量单位(见 metric_spec.go §3.3 取值表)
+	SourceURL  string  `json:"source_url"`           // 采集源页面链接(免登录可浏览)
+	Confidence float64 `json:"confidence"`           // 0..1 置信度(新鲜度×权威度×惩罚)
+	Anomaly    string  `json:"anomaly,omitempty"`    // ""|high|low|stale|jump
+	SpecID     string  `json:"spec_id,omitempty"`     // 命中口径卡的 ID(见 MetricSpec.ID);未命中为空
 }
 
 // RealtimePoint 自采价点(服务端入环;契约 §3.2)。

@@ -124,6 +124,9 @@ export function VirtualCityDashboard({
   const setRealtimeMissions = useVirtualCityStore((s) => s.setRealtimeMissions);
   // 批次78：采集健康度聚合（stats 与 missions 一样只随 HTTP 快照回读）。
   const setRealtimeStats = useVirtualCityStore((s) => s.setRealtimeStats);
+  // 批次89：口径卡目录 + 异常告警清单（同样只随 HTTP 快照回读，WS 帧不携带）。
+  const setRealtimeMetricSpecs = useVirtualCityStore((s) => s.setRealtimeMetricSpecs);
+  const setRealtimeAnomalies = useVirtualCityStore((s) => s.setRealtimeAnomalies);
 
   const [snapshot, setSnapshot] = useState<VirtualCityDashboardSnapshot | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -146,6 +149,14 @@ export function VirtualCityDashboard({
         if (rt && !useVirtualCityStore.getState().realtimeFeed) {
           setRealtimeFeed(rt);
         }
+        // 批次89：看板快照也带 metric_specs / anomalies（设计文档 §3.5）。
+        // ⚠ 只在**非空**时写入 —— 通道离线的 35053 兜底快照是空数组，
+        //   无条件写会把 realtime_board 端点已回读的真数据冲掉。
+        //   （realtime_board 端点那条路径是无条件整表替换，动态清单以它为准。）
+        const dashSpecs = r?.dashboard?.metric_specs ?? [];
+        const dashAnoms = r?.dashboard?.anomalies ?? [];
+        if (dashSpecs.length) setRealtimeMetricSpecs(dashSpecs);
+        if (dashAnoms.length) setRealtimeAnomalies(dashAnoms);
       })
       .catch(() => {
         // 目录不可达 → 静态目录兜底（Tab 仍全量渲染）；不弹错（首屏拉取非操作错误）。
@@ -154,6 +165,7 @@ export function VirtualCityDashboard({
     // ② 实时看板快照（late-joiner 补齐 game.realtime_feed 帧间隙）。
     //    批次77：missions 不进 WS 帧，快照拿到就整表替换（无记录为 []）。
     //    批次78：stats 同理（无记录为 null）。
+    //    批次89：metric_specs / anomalies 同理（缺省为 []）。
     fetchRealtimeBoard()
       .then((r) => {
         if (cancelled) return;
@@ -162,6 +174,8 @@ export function VirtualCityDashboard({
         if (f) setRealtimeFeed(f);
         setRealtimeMissions(r.missions ?? []);
         setRealtimeStats(r.stats ?? null);
+        setRealtimeMetricSpecs(r.metric_specs ?? []);
+        setRealtimeAnomalies(r.anomalies ?? []);
       })
       .catch(() => {
         // best-effort：WS 帧会补齐；不置空以免冲掉已有数据。
@@ -169,7 +183,7 @@ export function VirtualCityDashboard({
     return () => {
       cancelled = true;
     };
-  }, [setRealtimeFeed, setRealtimeMissions, setRealtimeStats]);
+  }, [setRealtimeFeed, setRealtimeMissions, setRealtimeStats, setRealtimeMetricSpecs, setRealtimeAnomalies]);
 
   // ── 目录合并：静态目录为权威，后端目录按 id 覆盖 title_key / group ──────
   const dimensions = useMemo<DashboardDimension[]>(() => {
@@ -233,12 +247,15 @@ export function VirtualCityDashboard({
       // 拉一次快照让 accepted 后的通道状态即时可见（失败静默，等 WS 帧）。
       // 批次77：missions 不进 WS 帧，一并随快照回读（无记录为 []）。
       // 批次78：stats 同理（无记录为 null）。
+      // 批次89：metric_specs / anomalies 同理（缺省为 []）。
       try {
         const r = await fetchRealtimeBoard();
         const f = r?.feed ?? null;
         if (f) setRealtimeFeed(f);
         setRealtimeMissions(r.missions ?? []);
         setRealtimeStats(r.stats ?? null);
+        setRealtimeMetricSpecs(r.metric_specs ?? []);
+        setRealtimeAnomalies(r.anomalies ?? []);
       } catch {
         // best-effort：WS 帧会补齐
       }
@@ -249,7 +266,7 @@ export function VirtualCityDashboard({
     } finally {
       setRefreshing(false);
     }
-  }, [refreshing, setRealtimeFeed, setRealtimeMissions, setRealtimeStats, t]);
+  }, [refreshing, setRealtimeFeed, setRealtimeMissions, setRealtimeStats, setRealtimeMetricSpecs, setRealtimeAnomalies, t]);
 
   const toggleCollapsed = useCallback((id: string) => {
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));

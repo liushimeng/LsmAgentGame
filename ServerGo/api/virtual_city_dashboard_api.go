@@ -48,12 +48,17 @@ func NewVirtualCityDashboardAPI(svc *citychrome.Service) *VirtualCityDashboardAP
 }
 
 // dashboardSnapshot 是 data.dashboard 的载荷(字段与前端看板类型一一对应)。
+//
+// 批次89:追加 metric_specs(口径卡目录)+ anomalies(异常告警清单)—— 与
+// GET /api/virtual_city/realtime_board 的 data 同名字段**同源同口径**。
 type dashboardSnapshot struct {
-	SchemaVersion int                              `json:"schema_version"`
-	GeneratedAt   int64                            `json:"generated_at"`
+	SchemaVersion int                               `json:"schema_version"`
+	GeneratedAt   int64                             `json:"generated_at"`
 	Dimensions    []virtual_city.DashboardDimension `json:"dimensions"`
-	DataSources   []virtual_city.DataSource        `json:"data_sources"`
-	Realtime      citychrome.Feed                  `json:"realtime"`
+	DataSources   []virtual_city.DataSource         `json:"data_sources"`
+	Realtime      citychrome.Feed                   `json:"realtime"`
+	MetricSpecs   []citychrome.MetricSpec           `json:"metric_specs"`
+	Anomalies     []citychrome.Anomaly              `json:"anomalies"`
 }
 
 // Dashboard 处理 GET /api/virtual_city/dashboard。
@@ -75,8 +80,28 @@ func (a *VirtualCityDashboardAPI) Dashboard(c *gin.Context) {
 			Dimensions:    virtual_city.DashboardDimensions(),
 			DataSources:   virtual_city.DashboardDataSources(),
 			Realtime:      a.realtimeFeed(),
+			MetricSpecs:   a.metricSpecs(),
+			Anomalies:     a.anomalies(),
 		}},
 	})
+}
+
+// metricSpecs 返回看板内的口径卡目录(批次89)。
+// svc==nil(通道未启动)⇒ **空数组**(非 null;前端会直接遍历)。
+func (a *VirtualCityDashboardAPI) metricSpecs() []citychrome.MetricSpec {
+	if a.svc == nil {
+		return []citychrome.MetricSpec{}
+	}
+	return a.svc.MetricSpecs()
+}
+
+// anomalies 返回看板内的异常告警清单(批次89)。
+// svc==nil(通道未启动)⇒ **空数组**(非 null;前端会直接遍历)。
+func (a *VirtualCityDashboardAPI) anomalies() []citychrome.Anomaly {
+	if a.svc == nil {
+		return []citychrome.Anomaly{}
+	}
+	return a.svc.Anomalies(time.Now())
 }
 
 // realtimeFeed 返回看板内嵌的实时通道快照。

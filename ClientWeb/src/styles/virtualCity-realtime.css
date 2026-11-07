@@ -997,3 +997,446 @@
   color: #bfdbfe;
   text-decoration: underline;
 }
+
+/* ══ 批次 89 · 真实数据口径卡与异常告警层 ═══════════════════════════════
+ *
+ * 选择器全部为新增 .virtualCity-rt__anom* / .virtualCity-rt__conf* /
+ * .virtualCity-rt__caliber* / .virtualCity-rt__spec* / .virtualCity-rt__sev*
+ * 前缀，与既有规则零级联冲突（追加在链尾文件内，未改动既有 @import 顺序，
+ * CLAUDE.md §2.1 约束 4）。
+ *
+ * §26 对比度口径（暗色主题）：
+ *   · 正文/列表 ≥4.5:1、状态徽章 ≥5:1、focus/selected ≥6:1。
+ *   · 异常徽章**实色底 + 浅字**（禁 rgba(...,0.45) 起跳的浅字半透明底）。
+ *   · 异常徽章**必带图标 + 文案**（禁只靠颜色区分）。
+ *   · 置信度既有细条**又有百分比数字**（禁只靠颜色/长度传达信息）。
+ *   · 禁用/降级态用实色灰底（禁 opacity 表状态）。
+ */
+
+/* ── 报价行：名称 / 单位 / 质量带 ────────────────────────────────────── */
+
+/* 名称文本独立成块 ⇒ 溢出省略只作用在名称上，单位小字不被裁掉。 */
+.virtualCity-rt__qname-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 单位小字（批次 89）：实色底深边框，字色 #cbd5e1 on #1e293b ≈ 8:1（≥4.5:1）。 */
+.virtualCity-rt__qunit {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* 币种小字：批次 89 名称列新增了单位小字 ⇒ 币种不再被压缩。
+   （只加 flex:none，不改既有 .virtualCity-rt__qcur 的其它声明 ⇒ 既有规则字节不变。） */
+.virtualCity-rt__qname > .virtualCity-rt__qcur {
+  flex: none;
+}
+
+/* 质量带（整行铺开，grid-column: 1/-1）：异常徽章 + 置信度。
+   侧栏仅 340~380px，第 5 列并排会把「价格」挤没 ⇒ 走整行带
+   （与批次 78 MissionLogPanel「站点尝试带」同范式）。 */
+.virtualCity-rt__qmeta {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 2px 0 3px;
+  border-top: 1px dashed #263250;
+}
+
+/* 涨跌徽章所在列（批次 89 抽出独立格，样式沿用既有 .virtualCity-rt__chg）。 */
+.virtualCity-rt__qchgcell {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
+}
+
+/* ── 异常徽章（high / low / stale / jump 四态）─────────────────────────
+ * 实色底 + 浅字：正文对比度均 ≥7:1（≥5:1 门槛）；图标 + 文案双通道。
+ */
+.virtualCity-rt__anom {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.virtualCity-rt__anom-icon {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.virtualCity-rt__anom-text {
+  letter-spacing: 0.2px;
+}
+
+/* high（涨幅异常）= 红底浅字。 */
+.virtualCity-rt__anom--high {
+  background: #7f1d1d;
+  border-color: #b91c1c;
+  color: #fee2e2;
+}
+
+/* low（跌幅异常）= 绿底浅字。 */
+.virtualCity-rt__anom--low {
+  background: #14532d;
+  border-color: #15803d;
+  color: #bbf7d0;
+}
+
+/* stale（数据陈旧）= 灰底浅字（禁 opacity 表状态）。 */
+.virtualCity-rt__anom--stale {
+  background: #334155;
+  border-color: #64748b;
+  color: #e2e8f0;
+}
+
+/* jump（价格跳变）= 紫底浅字。 */
+.virtualCity-rt__anom--jump {
+  background: #4c1d95;
+  border-color: #6d28d9;
+  color: #ddd6fe;
+}
+
+/* jump 徽章轻微呼吸提示（§26 三件套：keyframes + prefers-reduced-motion 兜底）。 */
+.virtualCity-rt__anom--jump {
+  animation: virtualCity-rt-anom-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes virtualCity-rt-anom-pulse {
+  0%, 100% { border-color: #6d28d9; }
+  50% { border-color: #a78bfa; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .virtualCity-rt__anom--jump {
+    animation: none;
+  }
+}
+
+/* ── 严重度徽章（L1 / L2 / L3，实色底深浅字）─────────────────────────── */
+.virtualCity-rt__sev {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.virtualCity-rt__sev--1 {
+  background: #374151;
+  border-color: #6b7280;
+  color: #f3f4f6;
+}
+
+.virtualCity-rt__sev--2 {
+  background: #92400e;
+  border-color: #b45309;
+  color: #fde68a;
+}
+
+.virtualCity-rt__sev--3 {
+  background: #991b1b;
+  border-color: #dc2626;
+  color: #fecaca;
+}
+
+/* ── 置信度（细条 + 百分比数字，双通道传达）──────────────────────────── */
+.virtualCity-rt__conf {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+
+.virtualCity-rt__conf-bar {
+  display: inline-block;
+  width: 44px;
+  height: 5px;
+  border-radius: 3px;
+  background: #334155;
+  border: 1px solid #475569;
+  overflow: hidden;
+}
+
+.virtualCity-rt__conf-fill {
+  display: block;
+  height: 100%;
+  background: #60a5fa;
+}
+
+.virtualCity-rt__conf-text {
+  font-variant-numeric: tabular-nums;
+  color: #e5e7eb;
+  font-weight: 600;
+}
+
+/* ── 口径卡（报价行展开区）──────────────────────────────────────────── */
+.virtualCity-rt__caliber {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: #16213a;
+  border: 1px solid #2a3654;
+}
+
+.virtualCity-rt__caliber-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #f9fafb;
+}
+
+.virtualCity-rt__caliber-none {
+  font-size: 11.5px;
+  color: #cbd5e1;
+  line-height: 1.55;
+}
+
+.virtualCity-rt__caliber-list {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 3px 8px;
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.virtualCity-rt__caliber-list dt {
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.virtualCity-rt__caliber-list dd {
+  margin: 0;
+  color: #e5e7eb;
+  word-break: break-word;
+}
+
+.virtualCity-rt__caliber-code {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #bfdbfe;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.virtualCity-rt__caliber-link {
+  color: #93c5fd;
+  font-size: 11.5px;
+  text-decoration: none;
+}
+
+.virtualCity-rt__caliber-link:hover {
+  color: #bfdbfe;
+  text-decoration: underline;
+}
+
+.virtualCity-rt__caliber-id {
+  font-size: 10.5px;
+  color: #9ca3af;
+  word-break: break-all;
+}
+
+/* ── 「口径与异常」子面板（MetricSpecPanel）─────────────────────────── */
+.virtualCity-rt__specpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.virtualCity-rt__specpanel-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.virtualCity-rt__specpanel-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.virtualCity-rt__specpanel-count {
+  font-size: 11px;
+  font-weight: 400;
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+}
+
+.virtualCity-rt__specpanel-empty {
+  padding: 10px;
+  border-radius: 8px;
+  background: #16213a;
+  border: 1px solid #2a3654;
+  color: #cbd5e1;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+/* 类目分组。 */
+.virtualCity-rt__specgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 0;
+}
+
+.virtualCity-rt__specgroup-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #fbbf24;
+  letter-spacing: 0.3px;
+}
+
+/* 单条口径卡。 */
+.virtualCity-rt__spec {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: #16213a;
+  border: 1px solid #2a3654;
+}
+
+.virtualCity-rt__spec-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.virtualCity-rt__spec-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #f9fafb;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.virtualCity-rt__spec-unit {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.virtualCity-rt__spec-list {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 3px 8px;
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.virtualCity-rt__spec-list dt {
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.virtualCity-rt__spec-list dd {
+  margin: 0;
+  color: #e5e7eb;
+  word-break: break-word;
+}
+
+.virtualCity-rt__spec-id {
+  font-size: 10.5px;
+  color: #9ca3af;
+  word-break: break-all;
+}
+
+/* ── 异常告警行 ─────────────────────────────────────────────────────── */
+.virtualCity-rt__anomrow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: #16213a;
+  border: 1px solid #2a3654;
+}
+
+.virtualCity-rt__anomrow-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+
+.virtualCity-rt__anomrow-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f9fafb;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.virtualCity-rt__anomrow-value {
+  font-size: 11.5px;
+  color: #e5e7eb;
+  font-variant-numeric: tabular-nums;
+}
+
+.virtualCity-rt__anomrow-detail {
+  margin: 0;
+  font-size: 11.5px;
+  color: #cbd5e1;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.virtualCity-rt__anomrow-meta {
+  font-size: 10.5px;
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+}

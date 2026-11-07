@@ -122,6 +122,54 @@ const virtualCityRealtimeJA = {
   'virtualCity.rt.event.metric.goldPrice': '金価格',
   'virtualCity.rt.event.metric.goodsPrice': '物価指数',
   'virtualCity.rt.event.metric.residentCash': '住民現金合計',
+  // ── バッチ89 · 指標の口径カードと異常アラート ──
+  // キー出典：lag_docs/虚拟城市/已实现/89-真实数据口径卡与异常告警/01-方案设计.md §3 / §7。
+  /** リアルタイムボードのサブタブ「口径と異常」。 */
+  'virtualCity.rt.sub.specs': '口径と異常',
+  // 単位（バックエンド unit 値表、設計書 §3.3）
+  'virtualCity.rt.unit.point': 'ポイント',
+  'virtualCity.rt.unit.cny': '人民元',
+  'virtualCity.rt.unit.hkd': '香港ドル',
+  'virtualCity.rt.unit.usd': '米ドル',
+  'virtualCity.rt.unit.cny_per_g': '元/グラム',
+  'virtualCity.rt.unit.usd_per_oz': 'ドル/オンス',
+  'virtualCity.rt.unit.usd_per_bbl': 'ドル/バレル',
+  'virtualCity.rt.unit.cny_per_t': '元/トン',
+  'virtualCity.rt.unit.pct': 'パーセント',
+  'virtualCity.rt.unit.cny_trillion': '兆元',
+  'virtualCity.rt.unit.text': 'テキスト',
+  // 異常バッジ（バックエンド kind 値域、設計書 §3.1 / §3.4）
+  'virtualCity.rt.anomaly.high': '急騰異常',
+  'virtualCity.rt.anomaly.low': '急落異常',
+  'virtualCity.rt.anomaly.stale': 'データ鮮度低下',
+  'virtualCity.rt.anomaly.jump': '価格ジャンプ',
+  'virtualCity.rt.anomaly.severity1': 'L1 軽微',
+  'virtualCity.rt.anomaly.severity2': 'L2 中程度',
+  'virtualCity.rt.anomaly.severity3': 'L3 重大',
+  'virtualCity.rt.anomaly.value': 'トリガー値',
+  /** stale 異常のトリガー単位（鮮度低下の秒数、{n} 秒）。 */
+  'virtualCity.rt.anomaly.seconds': '{n} 秒',
+  'virtualCity.rt.anomaly.observedAt': '観測時刻',
+  // 見積行の追加項目（単位 / 信頼度）
+  'virtualCity.rt.confidence': '信頼度',
+  // 口径カード（見積行の展開部と口径パネルで共用）
+  'virtualCity.rt.caliber.title': '口径カード',
+  'virtualCity.rt.caliber.none': 'この指標に口径カードはありません（出典と単位のみ表示）',
+  'virtualCity.rt.caliber.definition': '定義',
+  'virtualCity.rt.caliber.formula': '計算式',
+  'virtualCity.rt.caliber.source': '出典',
+  'virtualCity.rt.caliber.refresh': '更新頻度',
+  'virtualCity.rt.caliber.unit': '単位',
+  'virtualCity.rt.caliber.link': '元記事',
+  'virtualCity.rt.caliber.linkOpen': '元記事を開く',
+  'virtualCity.rt.caliber.id': '口径 ID',
+  // 「口径と異常」サブパネル（MetricSpecPanel）
+  'virtualCity.rt.specpanel.specsTitle': '指標の口径カード',
+  'virtualCity.rt.specpanel.specsCount': '{n} 件',
+  'virtualCity.rt.specpanel.specsEmpty': '口径カードはまだありません（データチャネルの応答待ち）',
+  'virtualCity.rt.specpanel.anomTitle': '異常アラート',
+  'virtualCity.rt.specpanel.anomCount': '{n} 件',
+  'virtualCity.rt.specpanel.anomEmpty': '現在異常アラートはありません',
 };
 
 export default virtualCityRealtimeJA;

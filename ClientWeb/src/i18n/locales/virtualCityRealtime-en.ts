@@ -122,6 +122,54 @@ const virtualCityRealtimeEN = {
   'virtualCity.rt.event.metric.goldPrice': 'Gold price',
   'virtualCity.rt.event.metric.goodsPrice': 'Goods price index',
   'virtualCity.rt.event.metric.residentCash': 'Resident cash total',
+  // ── Batch 89 · Metric caliber cards & anomaly alerts ──
+  // Keys: lag_docs/虚拟城市/已实现/89-真实数据口径卡与异常告警/01-方案设计.md §3 / §7.
+  /** Realtime board sub-tab "Caliber & Anomalies". */
+  'virtualCity.rt.sub.specs': 'Caliber & Anomalies',
+  // Units (backend `unit` value table, design doc §3.3)
+  'virtualCity.rt.unit.point': 'Index points',
+  'virtualCity.rt.unit.cny': 'CNY',
+  'virtualCity.rt.unit.hkd': 'HKD',
+  'virtualCity.rt.unit.usd': 'USD',
+  'virtualCity.rt.unit.cny_per_g': 'CNY per gram',
+  'virtualCity.rt.unit.usd_per_oz': 'USD per ounce',
+  'virtualCity.rt.unit.usd_per_bbl': 'USD per barrel',
+  'virtualCity.rt.unit.cny_per_t': 'CNY per tonne',
+  'virtualCity.rt.unit.pct': 'Percent',
+  'virtualCity.rt.unit.cny_trillion': 'CNY trillion',
+  'virtualCity.rt.unit.text': 'Text',
+  // Anomaly badges (backend `kind` domain, design doc §3.1 / §3.4)
+  'virtualCity.rt.anomaly.high': 'Abnormal rise',
+  'virtualCity.rt.anomaly.low': 'Abnormal fall',
+  'virtualCity.rt.anomaly.stale': 'Stale data',
+  'virtualCity.rt.anomaly.jump': 'Price jump',
+  'virtualCity.rt.anomaly.severity1': 'L1 Minor',
+  'virtualCity.rt.anomaly.severity2': 'L2 Moderate',
+  'virtualCity.rt.anomaly.severity3': 'L3 Severe',
+  'virtualCity.rt.anomaly.value': 'Trigger value',
+  /** stale anomaly trigger unit (staleness seconds, {n} s). */
+  'virtualCity.rt.anomaly.seconds': '{n} s',
+  'virtualCity.rt.anomaly.observedAt': 'Observed at',
+  // Quote row additions (unit / confidence)
+  'virtualCity.rt.confidence': 'Confidence',
+  // Caliber card (shared by the quote row expander and the caliber panel)
+  'virtualCity.rt.caliber.title': 'Metric caliber',
+  'virtualCity.rt.caliber.none': 'No caliber card for this metric (source and unit only)',
+  'virtualCity.rt.caliber.definition': 'Definition',
+  'virtualCity.rt.caliber.formula': 'Formula',
+  'virtualCity.rt.caliber.source': 'Source',
+  'virtualCity.rt.caliber.refresh': 'Refresh tier',
+  'virtualCity.rt.caliber.unit': 'Unit',
+  'virtualCity.rt.caliber.link': 'Source link',
+  'virtualCity.rt.caliber.linkOpen': 'Open source',
+  'virtualCity.rt.caliber.id': 'Caliber ID',
+  // "Caliber & Anomalies" sub-panel (MetricSpecPanel)
+  'virtualCity.rt.specpanel.specsTitle': 'Metric caliber cards',
+  'virtualCity.rt.specpanel.specsCount': '{n} entries',
+  'virtualCity.rt.specpanel.specsEmpty': 'No caliber cards yet (waiting for the data channel)',
+  'virtualCity.rt.specpanel.anomTitle': 'Anomaly alerts',
+  'virtualCity.rt.specpanel.anomCount': '{n} entries',
+  'virtualCity.rt.specpanel.anomEmpty': 'No anomaly alerts at the moment',
 };
 
 export default virtualCityRealtimeEN;

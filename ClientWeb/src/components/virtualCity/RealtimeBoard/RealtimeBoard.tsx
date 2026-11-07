@@ -25,10 +25,11 @@ import { QuoteTable } from './QuoteTable';
 import { NewsList } from './NewsList';
 import { MissionLogPanel } from './MissionLogPanel';
 import { WorldEventPanel } from './WorldEventPanel';
+import { MetricSpecPanel } from './MetricSpecPanel';
 
 type RtSubTab =
   | 'overview' | 'a_share' | 'hk' | 'us' | 'metal' | 'futures' | 'crypto'
-  | 'macro' | 'news' | 'events' | 'missions';
+  | 'macro' | 'news' | 'events' | 'missions' | 'specs';
 
 /** 行情子 Tab → feed.categories 键（overview / news 无类目数据）。 */
 const QUOTE_SUBTABS: RtSubTab[] = ['a_share', 'hk', 'us', 'metal', 'futures', 'crypto', 'macro'];
@@ -52,6 +53,9 @@ export function RealtimeBoard() {
   // 批次80：真实世界事件流（数据源 = game.state.world_events，随 game.state 帧刷新；
   // 不走 HTTP 快照、也不进 WS game.realtime_feed 帧 ⇒ 后端未上线时为 undefined）。
   const worldEvents = useVirtualCityStore((s) => s.gameState?.world_events);
+  // 批次89：口径卡目录 + 异常告警清单（静态目录 ⇒ 只随 HTTP 快照回读，WS 帧不携带）。
+  const metricSpecs = useVirtualCityStore((s) => s.realtimeMetricSpecs);
+  const anomalies = useVirtualCityStore((s) => s.realtimeAnomalies);
   const [sub, setSub] = useState<RtSubTab>('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +79,9 @@ export function RealtimeBoard() {
         useVirtualCityStore.getState().setRealtimeFeed(r.feed ?? null);
         useVirtualCityStore.getState().setRealtimeMissions(r.missions ?? []);
         useVirtualCityStore.getState().setRealtimeStats(r.stats ?? null);
+        // 批次89：口径卡 + 异常清单同样只随 HTTP 快照回读。
+        useVirtualCityStore.getState().setRealtimeMetricSpecs(r.metric_specs ?? []);
+        useVirtualCityStore.getState().setRealtimeAnomalies(r.anomalies ?? []);
       } catch {
         // best-effort：WS 帧会补齐
       }
@@ -115,6 +122,8 @@ export function RealtimeBoard() {
     { key: 'events', labelKey: 'virtualCity.rt.sub.events' },
     // 批次77:采集任务遥测（HTTP 快照回读，WS 帧不携带 missions）。
     { key: 'missions', labelKey: 'virtualCity.rt.sub.missions' },
+    // 批次89:口径卡 + 异常告警（HTTP 快照回读，WS 帧不携带）。
+    { key: 'specs', labelKey: 'virtualCity.rt.sub.specs' },
   ];
 
   return (
@@ -174,9 +183,18 @@ export function RealtimeBoard() {
       {/* 首屏快照未到且无 feed：整板空态。
           ⚠ 批次80 例外：「事件流」子页的数据源是 game.state.world_events，
             与外部行情通道无关 ⇒ 即使 feed 未到也照常渲染（否则通道离线时
-            事件流不可达，而通道离线恰恰是「无事件」的常见成因）。 */}
+            事件流不可达，而通道离线恰恰是「无事件」的常见成因）。
+          ⚠ 批次89 例外：「口径与异常」子页的数据源是 HTTP 快照的
+            metric_specs / anomalies（静态目录 + 派生清单），与 feed 帧无关
+            ⇒ 同样在 feed 未到时照常渲染（面板内自带空态）。 */}
       {sub === 'events' ? (
         <WorldEventPanel events={worldEvents} />
+      ) : sub === 'specs' ? (
+        <MetricSpecPanel
+          metricSpecs={metricSpecs}
+          anomalies={anomalies}
+          nowSec={nowSec}
+        />
       ) : !feed ? (
         <div className="virtualCity-panel__empty virtualCity-rt__empty">
           <span className="virtualCity-rt__empty-icon" aria-hidden="true">📡</span>
@@ -197,7 +215,13 @@ export function RealtimeBoard() {
                 </div>
               );
             }
-            return <QuoteTable category={cat} />;
+            return (
+              <QuoteTable
+                category={cat}
+                categoryKey={sub}
+                metricSpecs={metricSpecs}
+              />
+            );
           })()}
         </>
       )}

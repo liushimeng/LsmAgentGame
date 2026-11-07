@@ -10,6 +10,7 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"LsmAgentGame/citychrome"
 	"LsmAgentGame/errcode"
@@ -33,7 +34,10 @@ func NewVirtualCityRealtimeAPI(svc *citychrome.Service) *VirtualCityRealtimeAPI 
 // svc 离线分支同样带 missions: []);stats 为采集健康度聚合(批次78 §3.4:
 // total/ok/fail/running/success_rate/avg_steps/avg_duration_ms/last_error,
 // 无记录时全零)。
-// ⚠️ WS game.realtime_feed 帧结构不动 —— missions/stats 只随 HTTP 快照/手动刷新回读。
+// 批次89:data 追加 metric_specs(口径卡目录)+ anomalies(异常告警清单);
+// 两字段在 svc=nil 离线分支为**空数组**(非 null)—— 前端会直接遍历。
+// ⚠️ WS game.realtime_feed 帧结构不动 —— missions/stats/metric_specs/anomalies
+// 只随 HTTP 快照/手动刷新回读。
 func (a *VirtualCityRealtimeAPI) Board(c *gin.Context) {
 	if a.svc == nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -44,8 +48,10 @@ func (a *VirtualCityRealtimeAPI) Board(c *gin.Context) {
 					Categories: map[string]citychrome.RealtimeCategory{},
 					News:       []citychrome.RealtimeNews{},
 				},
-				"missions": a.missionsOrNil(),
-				"stats":    a.statsOrNil(),
+				"missions":     a.missionsOrNil(),
+				"stats":        a.statsOrNil(),
+				"metric_specs": a.metricSpecsOrNil(),
+				"anomalies":    a.anomaliesOrNil(),
 			},
 		})
 		return
@@ -54,11 +60,31 @@ func (a *VirtualCityRealtimeAPI) Board(c *gin.Context) {
 		"code":    errcode.OK,
 		"message": "ok",
 		"data": gin.H{
-			"feed":     a.svc.Feed(),
-			"missions": a.missionsOrNil(),
-			"stats":    a.statsOrNil(),
+			"feed":         a.svc.Feed(),
+			"missions":     a.missionsOrNil(),
+			"stats":        a.statsOrNil(),
+			"metric_specs": a.metricSpecsOrNil(),
+			"anomalies":    a.anomaliesOrNil(),
 		},
 	})
+}
+
+// metricSpecsOrNil 返回 Board 的 metric_specs 字段(批次89 §4.1):svc 在线取
+// 静态口径卡目录,svc 为 nil 时返回空切片(JSON 序列化为 [] 而非 null)。
+func (a *VirtualCityRealtimeAPI) metricSpecsOrNil() []citychrome.MetricSpec {
+	if a.svc == nil {
+		return []citychrome.MetricSpec{}
+	}
+	return a.svc.MetricSpecs()
+}
+
+// anomaliesOrNil 返回 Board 的 anomalies 字段(批次89 §4.2):svc 在线取当前
+// 快照的异常告警清单,svc 为 nil 时返回空切片(JSON 序列化为 [] 而非 null)。
+func (a *VirtualCityRealtimeAPI) anomaliesOrNil() []citychrome.Anomaly {
+	if a.svc == nil {
+		return []citychrome.Anomaly{}
+	}
+	return a.svc.Anomalies(time.Now())
 }
 
 // statsOrNil 返回 Board 的 stats 字段(批次78 §3.4):svc 在线取遥测聚合,

@@ -395,12 +395,25 @@ func TestSourcesCompactJSON(t *testing.T) {
 		t.Errorf("last_ok_at = %d, want 1002 (started_at+duration)", aShare.LastOKAt)
 	}
 	// 类目过滤。
+	//
+	// ⚠️ 批次89:op=sources 追加 calibers 口径卡目录后,calibers 是**全局
+	// 静态目录**(不按 category 过滤,见 allCompactCalibers),故断言改查
+	// sources 的 categories 数组(原断言是整段 JSON 的粗粒度子串匹配,
+	// 语义不变、精度提高)。
 	text2, err := SourcesCompactJSON(mlog, CategoryMetal)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(text2, `"category":"a_share"`) {
-		t.Errorf("category filter failed: %s", text2)
+	var filtered struct {
+		Categories []struct {
+			Category string `json:"category"`
+		} `json:"categories"`
+	}
+	if err := json.Unmarshal([]byte(text2), &filtered); err != nil {
+		t.Fatalf("bad json: %v (%s)", err, text2)
+	}
+	if len(filtered.Categories) != 1 || filtered.Categories[0].Category != CategoryMetal {
+		t.Errorf("category filter failed: %+v", filtered.Categories)
 	}
 	if !strings.Contains(text2, "fx678.com") {
 		t.Errorf("metal sites should include 金投网 fx678.com: %s", text2)

@@ -8,6 +8,20 @@
  * 独立成文件：types/virtualCity.ts 已 1789 行逼近 §4 的 1800 行硬上限。
  */
 
+/**
+ * 批次 89 · 异常种类（后端 `DeriveAnomalies` 的 kind 值域，逐字对齐）。
+ *
+ * ⚠ 阈值边界口径（**严格超过 `>`**）：恰好等于阈值**不触发**。
+ *   设计文档 §4.2 的阈值边界写法与 §9.1 验收的「恰好等于阈值不触发」自相矛盾，
+ *   已由主 Agent 收口裁定取后者 ⇒ 与后端 `anomaly.go` 的 `>` 表述一致。
+ *
+ * - high：涨幅**超过**类目阈值（§4.2 阈值表）
+ * - low：跌幅**超过**类目阈值
+ * - stale：陈旧（age **>** 2 × 该类目调度档位，批次 88 口径）
+ * - jump：跳变（|price-prev|/prev **>** 2 × 类目阈值）
+ */
+export type RtAnomalyKind = 'high' | 'low' | 'stale' | 'jump';
+
 /** 单条实时报价（站点口径）。 */
 export interface RealtimeQuote {
   /** 站点口径代码或名称，如 "000001"/"上证指数"/"BTC"。 */
@@ -21,6 +35,106 @@ export interface RealtimeQuote {
   updated_at: number;
   /** 采集来源站点名。 */
   source: string;
+  /**
+   * 批次 89 · 计量单位（如 "point" / "cny" / "usd_per_oz"）。
+   *
+   * 后端恒给值（缺省 ""），**不得**标可选 —— 批次 84 教训：
+   * 空值有语义的字段加 `omitempty` 会在 JSON 往返时静默丢失。
+   */
+  unit: string;
+  /**
+   * 批次 89 · 采集源页面链接（免登录可浏览）。
+   *
+   * 后端恒给值（缺省 ""），命中口径卡时取 `MetricSpec.source_url`。
+   */
+  source_url: string;
+  /**
+   * 批次 89 · 置信度 0..1（新鲜度 × 源权威度 × 异常惩罚，保留 3 位小数）。
+   *
+   * 后端恒给值（缺省 0）。前端**不复制阈值口径**，只渲染后端给的数。
+   */
+  confidence: number;
+  /**
+   * 批次 89 · 异常标记（空串 / 缺省 = 无异常）。
+   *
+   * 取值见 {@link RtAnomalyKind}；后端 `omitempty` ⇒ 无异常时字段缺省。
+   */
+  anomaly?: RtAnomalyKind | '';
+  /**
+   * 批次 89 · 命中的口径卡 id（如 "a_share.index.sh"）。
+   *
+   * 后端在 `DeriveQuoteQuality` 里用 `LookupMetricSpec` 命中口径卡时填入
+   * 该卡的 `MetricSpec.id`，**未命中时为空串 / 缺省**。
+   *
+   * ⚠ 为什么需要它：后端口径卡的 `Keywords`（含 "sh000001" 这类站点代码别名）
+   *   是 `json:"-"` **不下发** ⇒ 前端无法复刻后端的模糊匹配；站点口径名与
+   *   指标名不一致时（如站点名「沪指」vs 指标名「上证指数」）后端已命中、
+   *   前端却匹配不到 ⇒ 显示「该指标暂无口径卡」，批次 89 的核心价值打折。
+   *   ⇒ 后端下发 `spec_id` 做**显式关联**，前端据此精确命中。
+   *
+   * 可选字段（后端未命中时整个键缺省）。
+   */
+  spec_id?: string;
+}
+
+/**
+ * 批次 89 · 指标口径卡（后端 `metric_spec.go` 静态注册表）。
+ *
+ * 字段名与后端 JSON **逐字一致**（snake_case）。仅随 HTTP 快照下发
+ * （`GET /api/virtual_city/realtime_board` 的 `data.metric_specs`、
+ * `GET /api/virtual_city/dashboard` 的 `data.dashboard.metric_specs`），
+ * **不进 WS `game.realtime_feed` 帧**（静态目录不占高频帧）。
+ */
+export interface MetricSpec {
+  /** 唯一 id（如 "a_share.index.sh"）。 */
+  id: string;
+  /** 类目：a_share|hk|us|metal|futures|crypto|macro|news。 */
+  category: string;
+  /** 指标显示名（如 "上证指数"）。 */
+  indicator: string;
+  /** 计量单位（与 {@link RealtimeQuote.unit} 同取值表）。 */
+  unit: string;
+  /** 口径说明：这个数到底是什么。 */
+  caliber: string;
+  /** 计算式（如 "change_pct = (price - prev_close) / prev_close * 100"）。 */
+  formula: string;
+  /** 来源站点名。 */
+  source: string;
+  /** 来源站点 / 接口地址。 */
+  source_url: string;
+  /** 刷新档位说明（如 "交易时段 600s / 休市 7200s"）。 */
+  refresh: string;
+}
+
+/**
+ * 批次 89 · 异常告警条目（后端 `DeriveAnomalies` 输出）。
+ *
+ * 字段名与后端 JSON **逐字一致**。仅随 HTTP 快照下发
+ * （`data.anomalies` / `data.dashboard.anomalies`），**不进 WS 帧**。
+ */
+export interface Anomaly {
+  /** 行情类目。 */
+  category: string;
+  /** 站点口径代码。 */
+  symbol: string;
+  /** 显示名。 */
+  name: string;
+  /** 异常种类（见 {@link RtAnomalyKind}）。 */
+  kind: RtAnomalyKind;
+  /** 严重度 1..3（越大越严重）。 */
+  severity: number;
+  /**
+   * 触发值 —— ⚠ **单位随 kind 变**（后端 `Anomaly.Value` 口径，逐字对齐）：
+   * - high / low / jump = **幅度百分比**（change_pct 或跳变幅度，单位 %）
+   * - stale = **陈旧秒数**（age_seconds，单位秒）
+   *
+   * ⇒ 前端渲染必须按 kind 分支：stale 不追加 `%` 后缀。
+   */
+  value: number;
+  /** 触发依据（含阈值与实测值；后端文案用「超过阈值」口径）。 */
+  detail: string;
+  /** Unix 秒。 */
+  observed_at: number;
 }
 
 /** 自采价点（服务端入环，看板客户端聚合 OHLC 用）。 */

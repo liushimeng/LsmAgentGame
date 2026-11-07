@@ -438,3 +438,32 @@ HTTP：`GET /api/games/virtual_city/rooms/:id/system_agent/history`、`POST .../
 - ⚠️ **显示指令双帧是兜底不是冗余**：`system_event{kind:show_command}` 的 `data` 是**扁平指令**、`game.virtual_city_show_command` 是嵌套 `{command}` —— `d_command` 必须**双形状兼容**，否则只剩单通道、丢一条帧即丢指令（E2E 实证 SE 通道曾是死代码）。
 - ⚠️ **页面 WS 重连必须重新入房**：`VirtualCityGamePage` 的 join effect 只在 mount 发一次 `game.spectate`，重连后对房间广播**永久失聪**（丢帧、无报错）。hook 级 `onOpen` 补发已覆盖系统对话链路；全 `game.*` 帧待页面 owner 收口。
 - ⚠️ **UI 类 E2E 断言前先 assert 目标容器在场**：本批 phase2c 因 `Locator.click` 超时导致对话窗全程关闭，三条 notice 用例集体假阴性。**单元测试全绿 ≠ 功能可用**（3 个真缺陷全部由活体验收抓到）。
+
+### 29.12 批次 89 · 真实数据口径卡与异常告警层（2026-11-06）
+
+> 规范见 [`lag_docs/虚拟城市/已实现/89-真实数据口径卡与异常告警/01-方案设计.md`](lag_docs/虚拟城市/已实现/89-真实数据口径卡与异常告警/01-方案设计.md) 与 `02-实施记录.md`。
+> 落规范 §三.2「关键指标附口径说明与计算式，异常值给出告警标记」+ §三.2「同源同口径」+ §五.2 归一化层。
+
+- **口径卡（静态目录，27 条）**：`ServerGo/citychrome/metric_spec.go` + `metric_spec_batch89_{market,macro}.go`；
+  `MetricSpec{id,category,indicator,unit,caliber,formula,source,source_url,refresh}`（`Keywords` 为 `json:"-"` 不下发）。
+  `MetricSpecs()` 返回**副本**；`LookupMetricSpec(cat,symbol,name)` 命中查找。
+- **派生层（纯函数，派生量不进存储层）**：`ServerGo/citychrome/anomaly.go` —— `DeriveQuoteQuality(feed,now,tiers) Feed`
+  与 `DeriveAnomalies(feed,now,tiers) []Anomaly`。⚠️ **`FeedStore` 只存原始值**；置信度随时间衰减，冻结在采集时刻会失真 ⇒ 一律在 `Service.Feed()` 出口派生。
+- **`RealtimeQuote` 加 5 字段**：`unit` / `source_url` / `confidence`(0..1) / `anomaly`(`""|high|low|stale|jump`) / `spec_id`。
+  ⚠️ **`omitempty` 只给 `anomaly` 与 `spec_id`**（空值有语义 = 无异常/无口径卡）；`unit`/`source_url`/`confidence` 恒有值，**不得**加 `omitempty`（批次 84 教训）。
+- **异常判定**：阈值唯一（`metric_spec.go`：`a_share 3.0 / hk 4.0 / us 3.5 / metal 2.0 / futures 3.0 / crypto 5.0 / macro 1.0` %）；
+  `stale` 阈值 **必须复用批次 88 的 `2 × tiers.Seconds(cat, now)`**（与调度轮转、`realworld_info` stale 同表达式，**禁止另立口径**）。
+- **出口**：`metric_specs[]` / `anomalies[]` 随 `GET /api/virtual_city/realtime_board` 与 `GET /api/virtual_city/dashboard` 下发（**不进 WS 帧**，与批次 77/78 `missions`/`stats` 同约定）；WS 帧内报价带 5 字段。
+- **Agent 侧**：`realworld_info` quote 行追加 `unit/confidence/anomaly/spec=`；口径卡目录并入 **既有 `op=sources` 的 `calibers[]`**（**不新增 op** ⇒ `vcplayer/prompt.go` 零改动，§14.3 prompt cache 纪律）；`calibers` 是全局静态目录，**不按 category 过滤**。
+- **前端**：`RealtimeBoard/QuoteTable.tsx`（单位/异常徽章/置信度条 + 展开区口径卡）、`MetricSpecPanel.tsx`（新增「口径与异常」子 Tab）、
+  `boardUtils.ts::findMetricSpec`（**四段匹配链：① `spec_id` 精确 → ② indicator 精确 → ③ id/symbol → ④ 包含兜底**）。
+  ⚠️ `MetricSpec.Keywords` 不下发 ⇒ **必须有 `spec_id` 才能可靠关联**（站点口径代码 `000001` 与指标名「上证指数」对不上）。
+- ⚠️ **口径卡覆盖面必须等于采集器实际可产出的标的集合**（活体验收实证：`上证50` 因裸词关键词 `"上证"` 错配到上证指数的卡 = 给用户看另一指标的定义）。
+  后端匹配链 = ① symbol 精确 → ② 名称精确 → ③ 包含匹配**取最长命中**；**禁止裸词关键词**（`"上证"` ⊂ `"上证50"`）。
+  **护栏测试**：`TestMetricSpecs_CollectorCoverage` 的夹具**直接解析 `sites.go` 首选 URL 的 symbol 清单**——新增采集标的未登记口径卡 ⇒ 测试直接红。
+  `DefaultUnit(a_share)=point`（该类目采集的全是指数，不是个股金额）。
+- ⚠️ **阈值边界 = 严格超过（`>`）**，恰好等于阈值**不触发**（原设计文档 §4.2 写 `≥` 与 §9.1 自相矛盾，收口取后者；前端一律「超过阈值」措辞，**禁** `≥`）。
+- ⚠️ **严重度公式 `1 + min(2, floor(ratio − 1))`**：原式 `1+min(2,floor(ratio))` 使 `severity=1` **永不可达**（触发条件本身要求 ratio>1）。ratio∈(1,2)→轻微、=2→中等、≥3→严重。
+- ⚠️ **`Anomaly.value` 单位随 kind 变**：`stale` = **陈旧秒数**，其余 = 幅度 % ⇒ 前端必须按 kind 分支渲染（stale **不追加 `%`**）。
+- ⚠️ **登录态注入须 `lsm.auth` + `lsm.token` 两个键**：只给 `lsm.auth` 会让 `auth.store.ts::hydrateFromStorage` 的 `hasToken` 判否 ⇒ 登录弹窗顶出 + 看板「通道离线」（**假阴性**，非后端缺陷）。
+

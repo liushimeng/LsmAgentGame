@@ -1050,6 +1050,56 @@ export interface VirtualCityDict {
   'virtualCity.rt.event.metric.goldPrice': string;
   'virtualCity.rt.event.metric.goodsPrice': string;
   'virtualCity.rt.event.metric.residentCash': string;
+  // ── 批次 89 · 真实数据口径卡与异常告警层 ──
+  // 键文案出处：lag_docs/虚拟城市/已实现/89-真实数据口径卡与异常告警/01-方案设计.md §3 / §7。
+  /** 实时看板子 Tab「口径与异常」。 */
+  'virtualCity.rt.sub.specs': string;
+  // 单位（后端 unit 取值表，设计文档 §3.3）
+  'virtualCity.rt.unit.point': string;
+  'virtualCity.rt.unit.cny': string;
+  'virtualCity.rt.unit.hkd': string;
+  'virtualCity.rt.unit.usd': string;
+  'virtualCity.rt.unit.cny_per_g': string;
+  'virtualCity.rt.unit.usd_per_oz': string;
+  'virtualCity.rt.unit.usd_per_bbl': string;
+  'virtualCity.rt.unit.cny_per_t': string;
+  'virtualCity.rt.unit.pct': string;
+  'virtualCity.rt.unit.cny_trillion': string;
+  'virtualCity.rt.unit.text': string;
+  // 异常徽章（后端 kind 值域，设计文档 §3.1 / §3.4）
+  'virtualCity.rt.anomaly.high': string;
+  'virtualCity.rt.anomaly.low': string;
+  'virtualCity.rt.anomaly.stale': string;
+  'virtualCity.rt.anomaly.jump': string;
+  'virtualCity.rt.anomaly.severity1': string;
+  'virtualCity.rt.anomaly.severity2': string;
+  'virtualCity.rt.anomaly.severity3': string;
+  'virtualCity.rt.anomaly.value': string;
+  /** stale 异常的触发值单位（陈旧秒数，{n} 秒）。 */
+  'virtualCity.rt.anomaly.seconds': string; // {n}
+  'virtualCity.rt.anomaly.observedAt': string;
+  /** 报价行置信度标签。 */
+  'virtualCity.rt.confidence': string;
+  // 口径卡（报价行展开区 + 口径面板共用）
+  'virtualCity.rt.caliber.title': string;
+  'virtualCity.rt.caliber.none': string;
+  'virtualCity.rt.caliber.definition': string;
+  'virtualCity.rt.caliber.formula': string;
+  'virtualCity.rt.caliber.source': string;
+  'virtualCity.rt.caliber.refresh': string;
+  'virtualCity.rt.caliber.unit': string;
+  'virtualCity.rt.caliber.link': string;
+  'virtualCity.rt.caliber.linkOpen': string;
+  'virtualCity.rt.caliber.id': string;
+  // 「口径与异常」子面板（MetricSpecPanel）
+  'virtualCity.rt.specpanel.specsTitle': string;
+  /** 口径卡条数（{n} 条）。 */
+  'virtualCity.rt.specpanel.specsCount': string; // {n}
+  'virtualCity.rt.specpanel.specsEmpty': string;
+  'virtualCity.rt.specpanel.anomTitle': string;
+  /** 异常告警条数（{n} 条）。 */
+  'virtualCity.rt.specpanel.anomCount': string; // {n}
+  'virtualCity.rt.specpanel.anomEmpty': string;
 
   // ── 批次 68 · 预测运行：基线快照 · 指标对比 · 预测报告（PredictionReportView，
   //    系统对话报告卡）。键文案出处：tmpPlan/虚拟城市-预测运行报告_

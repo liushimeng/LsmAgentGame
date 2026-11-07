@@ -129,6 +129,54 @@ const virtualCityRealtimeZH = {
   'virtualCity.rt.event.metric.goldPrice': '黄金价',
   'virtualCity.rt.event.metric.goodsPrice': '商品价格指数',
   'virtualCity.rt.event.metric.residentCash': '居民现金合计',
+  // ── 批次 89 · 真实数据口径卡与异常告警层 ──
+  // 键文案出处：lag_docs/虚拟城市/已实现/89-真实数据口径卡与异常告警/01-方案设计.md §3 / §7。
+  /** 实时看板子 Tab「口径与异常」。 */
+  'virtualCity.rt.sub.specs': '口径与异常',
+  // 单位（后端 unit 取值表，设计文档 §3.3）
+  'virtualCity.rt.unit.point': '点位',
+  'virtualCity.rt.unit.cny': '人民币',
+  'virtualCity.rt.unit.hkd': '港币',
+  'virtualCity.rt.unit.usd': '美元',
+  'virtualCity.rt.unit.cny_per_g': '人民币/克',
+  'virtualCity.rt.unit.usd_per_oz': '美元/盎司',
+  'virtualCity.rt.unit.usd_per_bbl': '美元/桶',
+  'virtualCity.rt.unit.cny_per_t': '人民币/吨',
+  'virtualCity.rt.unit.pct': '百分比',
+  'virtualCity.rt.unit.cny_trillion': '万亿元',
+  'virtualCity.rt.unit.text': '文本',
+  // 异常徽章（后端 kind 值域，设计文档 §3.1 / §3.4）
+  'virtualCity.rt.anomaly.high': '涨幅异常',
+  'virtualCity.rt.anomaly.low': '跌幅异常',
+  'virtualCity.rt.anomaly.stale': '数据陈旧',
+  'virtualCity.rt.anomaly.jump': '价格跳变',
+  'virtualCity.rt.anomaly.severity1': 'L1 轻微',
+  'virtualCity.rt.anomaly.severity2': 'L2 中等',
+  'virtualCity.rt.anomaly.severity3': 'L3 严重',
+  'virtualCity.rt.anomaly.value': '触发值',
+  /** stale 异常的触发值单位（陈旧秒数，{n} 秒）。 */
+  'virtualCity.rt.anomaly.seconds': '{n} 秒',
+  'virtualCity.rt.anomaly.observedAt': '观测时间',
+  // 报价行增量（单位 / 置信度）
+  'virtualCity.rt.confidence': '置信度',
+  // 口径卡（报价行展开区 + 口径面板共用）
+  'virtualCity.rt.caliber.title': '口径卡',
+  'virtualCity.rt.caliber.none': '该指标暂无口径卡（仅显示来源与单位）',
+  'virtualCity.rt.caliber.definition': '指标定义',
+  'virtualCity.rt.caliber.formula': '计算式',
+  'virtualCity.rt.caliber.source': '来源',
+  'virtualCity.rt.caliber.refresh': '刷新档位',
+  'virtualCity.rt.caliber.unit': '单位',
+  'virtualCity.rt.caliber.link': '原文链接',
+  'virtualCity.rt.caliber.linkOpen': '查看原文',
+  'virtualCity.rt.caliber.id': '口径 ID',
+  // 「口径与异常」子面板（MetricSpecPanel）
+  'virtualCity.rt.specpanel.specsTitle': '指标口径卡',
+  'virtualCity.rt.specpanel.specsCount': '{n} 条',
+  'virtualCity.rt.specpanel.specsEmpty': '暂无口径卡（等待数据通道回读）',
+  'virtualCity.rt.specpanel.anomTitle': '异常告警',
+  'virtualCity.rt.specpanel.anomCount': '{n} 条',
+  'virtualCity.rt.specpanel.anomEmpty': '当前无异常告警',
 };
 
 export default virtualCityRealtimeZH;

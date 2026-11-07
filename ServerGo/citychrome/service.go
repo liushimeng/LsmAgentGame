@@ -188,11 +188,31 @@ func (s *Service) SetRoomPresence(fn func() bool) {
 func (s *Service) Enabled() bool { return s != nil && s.cfg.Enabled }
 
 // Feed 返回当前快照(深拷贝;未 Start 由调用方 nil 守卫,此处再兜一层)。
+//
+// 批次89:本方法是**派生量的统一出口** —— 快照经 DeriveQuoteQuality 补齐
+// unit / source_url / confidence / anomaly(看板 WS、HTTP 快照、Agent 工具
+// realworld_info 同源同口径)。派生量**不进存储层**(置信度随时间衰减,
+// 冻结在采集时刻会失真)。
 func (s *Service) Feed() Feed {
 	if s == nil {
 		return Feed{Categories: map[string]RealtimeCategory{}, News: []RealtimeNews{}}
 	}
-	return s.store.Snapshot()
+	return DeriveQuoteQuality(s.store.Snapshot(), time.Now(), s.intervalTiers())
+}
+
+// MetricSpecs 返回真实数据的口径卡目录(批次89 §4.1;静态目录,深拷贝)。
+// nil-safe:服务未启动时返回空切片(非 nil)。
+func (s *Service) MetricSpecs() []MetricSpec {
+	return MetricSpecs()
+}
+
+// Anomalies 返回当前快照的异常告警清单(批次89 §4.2)。
+// now 为判定时刻(入参 ⇒ 可确定性单测);nil-safe:服务未启动时返回空切片。
+func (s *Service) Anomalies(now time.Time) []Anomaly {
+	if s == nil {
+		return []Anomaly{}
+	}
+	return DeriveAnomalies(s.store.Snapshot(), now, s.intervalTiers())
 }
 
 // Channel 返回通道状态。
@@ -268,12 +288,18 @@ func (s *Service) OnFeed(fn func(Feed)) func() {
 }
 
 // emitFanout 调度器 notify 回调:扇出全部 listener。
+//
+// 批次89:扇出前先经 DeriveQuoteQuality 补齐派生量(unit / source_url /
+// confidence / anomaly)—— WS game.realtime_feed 帧的 RealtimeQuote 携带
+// 4 个新字段(帧形状不变、不加顶层字段),与 HTTP 快照 / Agent 工具同源同口径。
+// 派生是纯函数、不碰存储层(派生量不进 FeedStore)。
 func (s *Service) emitFanout(f Feed) {
+	derived := DeriveQuoteQuality(f, time.Now(), s.intervalTiers())
 	s.listenersMu.RLock()
 	defer s.listenersMu.RUnlock()
 	for _, fn := range s.listeners {
 		if fn != nil {
-			fn(f)
+			fn(derived)
 		}
 	}
 }

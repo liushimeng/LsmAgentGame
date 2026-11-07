@@ -10,7 +10,14 @@ import { http, ApiError, isSessionExpiredError, getAuthToken } from '@/services/
 import type { VirtualCityCityProfileProgress, VirtualCityCityResidentProfile, VirtualCitySurvey } from '@/types/virtualCity';
 // 批次86：可靠性与可观测性（存档 / 读档 / 事件生命周期留痕 / 回放）。
 import type { VirtualCityEventLifecycleTrace, VirtualCitySnapshotMeta } from '@/types/virtualCity';
-import type { MissionRecord, MissionStats, RealtimeBoardRefreshResult, RealtimeFeed } from '@/types/virtualCityRealtime';
+import type {
+  Anomaly,
+  MetricSpec,
+  MissionRecord,
+  MissionStats,
+  RealtimeBoardRefreshResult,
+  RealtimeFeed,
+} from '@/types/virtualCityRealtime';
 import type { VirtualCitySystemWireMessage } from '@/types/virtualCitySystem';
 import type { VirtualCityScenarioCatalogResponse, VirtualCityScenarioCatalogItem } from '@/types/virtualCitySystem';
 
@@ -117,21 +124,36 @@ export async function fetchCityResident(
 /**
  * GET /api/virtual_city/realtime_board（需登录）— 实时看板快照。
  *
- * 返回 {code:0, data:{feed: Feed, missions: MissionRecord[], stats: MissionStats}}；
+ * 返回 {code:0, data:{feed: Feed, missions: MissionRecord[], stats: MissionStats,
+ * metric_specs: MetricSpec[], anomalies: Anomaly[]}}；
  * late-joiner 首屏靠它补齐 game.realtime_feed 帧间隙。数据是全局的（与房间无关）。
  * 批次77：missions 为采集任务遥测（新→旧 ≤20 条，无记录为 []）——**仅走本端点**，
  * WS game.realtime_feed 帧不携带，快照/手动刷新回读更新。
  * 批次78：stats 为采集健康度聚合（MissionStats，无记录时全零）——同样**仅走本端点**。
+ * 批次89：metric_specs（口径卡静态目录）+ anomalies（异常告警清单）——同样**仅走本端点**
+ * （静态目录不进 WS 高频帧）。**兜底一律给空数组而非 undefined**（缺 key 时 `?? []`）。
  * §7.1：首屏拉取失败不算操作错误 —— 调用方静默兜底置空即可。
  */
 export function fetchRealtimeBoard(): Promise<{
   feed: RealtimeFeed;
   missions: MissionRecord[];
   stats: MissionStats;
+  metric_specs: MetricSpec[];
+  anomalies: Anomaly[];
 }> {
-  return http<{ feed: RealtimeFeed; missions: MissionRecord[]; stats: MissionStats }>(
-    '/api/virtual_city/realtime_board',
-  );
+  return http<{
+    feed: RealtimeFeed;
+    missions: MissionRecord[];
+    stats: MissionStats;
+    metric_specs?: MetricSpec[];
+    anomalies?: Anomaly[];
+  }>('/api/virtual_city/realtime_board').then((r) => ({
+    feed: r.feed,
+    missions: r.missions ?? [],
+    stats: r.stats,
+    metric_specs: r.metric_specs ?? [],
+    anomalies: r.anomalies ?? [],
+  }));
 }
 
 /**
@@ -206,6 +228,20 @@ export interface VirtualCityDashboardSnapshot {
   data_sources: VirtualCityDashboardDataSource[];
   /** 实时通道快照（与 GET /api/virtual_city/realtime_board 的 feed 同构）。 */
   realtime: RealtimeFeed | null;
+  /**
+   * 批次 89 · 指标口径卡目录（静态注册表）。
+   *
+   * 与 `GET /api/virtual_city/realtime_board` 的 `data.metric_specs` 同构。
+   * 缺省给空数组（后端未升级时）。
+   */
+  metric_specs: MetricSpec[];
+  /**
+   * 批次 89 · 异常告警清单。
+   *
+   * 与 `GET /api/virtual_city/realtime_board` 的 `data.anomalies` 同构。
+   * 缺省给空数组（后端未升级时）。
+   */
+  anomalies: Anomaly[];
 }
 
 /** 通道离线错误码（后端在通道离线时返回，但 data.dashboard 仍完整）。 */
@@ -230,7 +266,15 @@ async function fetchDashboardTolerant(): Promise<VirtualCityDashboardSnapshot | 
       const body = (await res.json().catch(() => null)) as
         | { data?: { dashboard?: VirtualCityDashboardSnapshot } }
         | null;
-      return body?.data?.dashboard ?? null;
+      const dash = body?.data?.dashboard ?? null;
+      if (!dash) return null;
+      // 批次89：metric_specs / anomalies 缺省给空数组（后端未升级时）——
+      // 绝不 undefined（前端消费方一律按数组处理）。
+      return {
+        ...dash,
+        metric_specs: dash.metric_specs ?? [],
+        anomalies: dash.anomalies ?? [],
+      };
     } finally {
       clearTimeout(timer);
     }
@@ -250,9 +294,31 @@ export async function fetchVirtualCityDashboard(): Promise<{
   dashboard: VirtualCityDashboardSnapshot;
 }> {
   try {
-    return await http<{ dashboard: VirtualCityDashboardSnapshot }>(
+    const r = await http<{ dashboard: VirtualCityDashboardSnapshot }>(
       '/api/virtual_city/dashboard',
     );
+    // 批次89：metric_specs / anomalies 缺省给空数组（后端未升级时）。
+    const dash = r?.dashboard;
+    if (!dash) {
+      return {
+        dashboard: {
+          schema_version: 1,
+          generated_at: 0,
+          dimensions: [],
+          data_sources: [],
+          realtime: null,
+          metric_specs: [],
+          anomalies: [],
+        },
+      };
+    }
+    return {
+      dashboard: {
+        ...dash,
+        metric_specs: dash.metric_specs ?? [],
+        anomalies: dash.anomalies ?? [],
+      },
+    };
   } catch (e) {
     if (e instanceof ApiError && e.code === VIRTUAL_CITY_DASHBOARD_CHANNEL_OFFLINE) {
       // 通道离线：目录仍完整 → 裸 fetch 兜底取回；取不到则按「目录不可用」降级。
@@ -265,6 +331,8 @@ export async function fetchVirtualCityDashboard(): Promise<{
           dimensions: [],
           data_sources: [],
           realtime: null,
+          metric_specs: [],
+          anomalies: [],
         },
       };
     }
