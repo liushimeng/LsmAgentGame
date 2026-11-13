@@ -523,12 +523,16 @@ func (s *RoomService) CreateRoomWithAgents(ctx context.Context, gameKind, userID
 		roomName = fmt.Sprintf("%s房间-%s", gameKindCN(gameKind), roomID[:6])
 	}
 	room := models.TLsmGameRoom{
-		ID:           roomID,
-		Name:         roomName,
-		GameKind:     gameKind,
-		Capacity:     cap,
-		CurrentCount: 0,
-		Status:       "open",
+		ID:       roomID,
+		Name:     roomName,
+		GameKind: gameKind,
+		Capacity: cap,
+		// 2026-11-13 §测试房自助解散 — 落库建房者 user_id(HTTP 建房恒带
+		// token,uid 一定非空),DELETE /api/rooms/:id 凭此判据放行;
+		// 历史房(空值)不可自助解散。
+		CreatorUserID: userID,
+		CurrentCount:  0,
+		Status:        "open",
 	}
 
 	// Human creator seat: a RANDOM non-agent seat.

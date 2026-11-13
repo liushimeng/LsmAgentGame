@@ -260,8 +260,9 @@ i18n、`t_lsm_game_user.language` 字段、`/api/user/*` 偏好接口，以及�
 > 目标：测试房间不堆积、服务器不被测试流量卡死。适用于一切自动建房的脚本 / SubAgent / CLI 验收。
 
 - **一次一房**：单次测试运行**只创建 1 个房间**，禁止循环累积建房。
-- **测完必散**：脚本收尾（`try/finally`）必须断开全部连接——CDP 关 Tab / 杀调试浏览器（`pkill -f remote-debugging-port=<port>`，软渲染渲染循环是最大资源头）→ 服务端自动 `spectator auto-clean` + 空房 5 min 删除计时器接管。
-- **立即解散**残留房：`POST /api/admin/rooms/cleanup?age_minutes=1`（admin）或 `DELETE /api/admin/rooms/:room_id`（super-admin kill switch，幂等，广播 `game.removed`）。
+- **测完必散（主通道）**：`DELETE /api/rooms/:id`（带建房同账号 token）——**创建者自助解散**（2026-11-13 新增，`t_lsm_game_room.creator_user_id` 为判据）：停 full-agent 房 LLM 决策循环 + 事务删 player/room/chat 行 + 广播 `game.removed`，幂等（重复调返 30001）。脚本必须 `try/finally` 收尾调用。
+- **连接也要断**：CDP 关 Tab / 杀调试浏览器（`pkill -f remote-debugging-port=<port>`，软渲染渲染循环是最大资源头）；不断开时服务端空房 5 min 删除计时器兜底。
+- **管理员通道**（历史房 creator 为空 / 他人房）：`POST /api/admin/rooms/cleanup?age_minutes=1`（admin）或 `DELETE /api/admin/rooms/:room_id`（super，幂等）。
 - **禁止**把 `playing` 状态测试房遗留给下一会话；开新一轮测试前先清点遗留并解散。
 
 ## 24. AgentClassName 与 User-Agent 拼装约定

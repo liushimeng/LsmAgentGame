@@ -215,6 +215,54 @@ func (s *RoomService) ForceDisbandRoom(ctx context.Context, roomID, adminID, rea
 	return res, nil
 }
 
+// DisbandRoomByCreator 2026-11-13 §测试房自助解散 — 创建者本人解散自己的
+// 房间(DELETE /api/rooms/:id)。定位:自动化测试建房→测完释放资源的自助
+// 通道,替代仅 super admin 可调的 DELETE /api/admin/rooms/:room_id(测试账号
+// test_01~04 均非 admin,403)。
+//
+// 权限判据 = t_lsm_game_room.creator_user_id(建房时由 CreateRoomWithAgents
+// 落库;虚拟城市 full-agent 房创建者不入座,但 HTTP 建房一定带 token,uid
+// 一定有)。**历史房(creator 为空)不可自助解散** —— 空值无主,只能管理员
+// 强删,防止任意登录用户清掉升级前创建的房间。
+//
+// 复用整条 ForceDisbandRoom 清理链,不重写清理逻辑:
+// RemoveRoomState(停 Agent/LLM 决策循环)→ 事务删 player/room/chat 行 →
+// 广播 game.removed。reason 固定 "creator-disband"(审计日志区分管理员强删)。
+//
+// 返回签名与 ForceDisbandRoom 一致(error;实为 *errcode.Error,调用方经
+// errcode.AsError 归一)。
+func (s *RoomService) DisbandRoomByCreator(ctx context.Context, roomID, userID string) (DisbandResult, error) {
+	res := DisbandResult{RoomID: roomID}
+	if strings.TrimSpace(roomID) == "" {
+		return res, errcode.CodeMsg(errcode.ErrValidationFailed, "room_id required")
+	}
+	if s.db == nil {
+		return res, errcode.Code(errcode.ErrInternal)
+	}
+
+	// 先查房做权限判定(不存在 → ErrRoomNotFound,与 JoinRoom 同语义),
+	// 再进 ForceDisbandRoom 清理链。roomID 是 UUID,查房与清理之间不可能
+	// 被同 ID 换房(TOCTOU 不可达)。
+	var room models.TLsmGameRoom
+	if err := s.db.WithContext(ctx).Where("id = ?", roomID).First(&room).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return res, errcode.Code(errcode.ErrRoomNotFound)
+		}
+		logger.L().Error("creator disband: load room",
+			zap.String("room_id", roomID), zap.Error(err))
+		return res, errcode.Code(errcode.ErrDB)
+	}
+	if room.CreatorUserID == "" || room.CreatorUserID != userID {
+		logger.L().Warn("creator disband denied",
+			zap.String("room_id", roomID),
+			zap.String("caller", userID),
+			zap.Bool("legacy_room", room.CreatorUserID == ""))
+		return res, errcode.CodeMsg(errcode.ErrPermissionDenied,
+			"仅房间创建者可解散;历史房间请联系管理员")
+	}
+	return s.ForceDisbandRoom(ctx, roomID, userID, "creator-disband")
+}
+
 // HardDeleteRoom drops a room from the DB by ID regardless of occupancy.
 // It is the boot-cleanup companion to ForceDisbandRoom used for rooms that
 // are already known to have no in-memory GameState (no need to call

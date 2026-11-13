@@ -92,8 +92,16 @@ type RoomChangeNotifier interface {
 }
 
 // NewRoomAPI wires the handler.
+//
+// hub == nil 必须落成 nil 接口(而非持有 typed-nil *ws.Hub 的非 nil 接口,
+// 否则各 handler 的 `if a.hub != nil` 判空失效,nil Hub 上调
+// NotifyRoomChanged 即 SIGSEGV —— 2026-11-13 §测试房自助解散单测实证)。
 func NewRoomAPI(svc *service.RoomService, hub *ws.Hub) *RoomAPI {
-	return &RoomAPI{svc: svc, hub: hub}
+	var notifier RoomChangeNotifier
+	if hub != nil {
+		notifier = hub
+	}
+	return &RoomAPI{svc: svc, hub: notifier}
 }
 
 // List GET /api/games/:kind/rooms — list open rooms for a game kind.
@@ -338,4 +346,69 @@ func (a *RoomAPI) LeaveSpectate(c *gin.Context) {
 		a.hub.NotifyRoomChanged(roomID, "spectator_left", userID)
 	}
 	c.JSON(http.StatusOK, gin.H{"code": errcode.OK, "message": "ok"})
+}
+
+// Disband DELETE /api/rooms/:id — 2026-11-13 §测试房自助解散。
+//
+// 创建者本人解散自己的房间,复用 RoomService.ForceDisbandRoom 整条清理链
+// (RemoveRoomState 停 Agent/LLM 循环 → 事务删 player/room/chat → 广播
+// game.removed)。定位:自动化测试建房→测完释放资源的自助通道(无人空房的
+// full-agent 房 LLM 决策循环每分钟照跑,只能靠解散停掉)。
+//
+// 权限语义(判据 = t_lsm_game_room.creator_user_id,建房时落库):
+//   - caller == 创建者        → 放行,200 + code=0,data 带 room_id/players_deleted;
+//   - caller != 创建者        → HTTP 403 + ErrPermissionDenied;
+//   - 历史房(creator 为空)  → HTTP 403 + ErrPermissionDenied(无主房只能
+//     管理员 DELETE /api/admin/rooms/:room_id 强删);
+//   - 房不存在                → 200 + ErrRoomNotFound(与 Join/Leave 同 信封
+//     风格;对幂等重试的脚本友好)。
+//
+// 任何登录用户可调(AuthRequired 组中间件),但只有创建者能通过判据 ——
+// 虚拟城市 full-agent 房创建者不入座,本端点是其唯一的自助释放通道。
+func (a *RoomAPI) Disband(c *gin.Context) {
+	roomID := c.Param("id")
+	userID := c.GetString("user_id")
+	if roomID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    errcode.ErrValidationFailed,
+			"message": "room_id required",
+		})
+		return
+	}
+	// 防御:组上已有 AuthRequired,正常请求 user_id 恒非空。
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"code":    errcode.ErrAuthMissingToken,
+			"message": errcode.DefaultMessages[errcode.ErrAuthMissingToken],
+		})
+		return
+	}
+	res, derr := a.svc.DisbandRoomByCreator(c.Request.Context(), roomID, userID)
+	if derr != nil {
+		e := errcode.AsError(derr)
+		// 权限拒绝显式用 HTTP 403(脚本可直接判状态码);其余服务端错误
+		// 沿用本文件 Join/Leave 的 200 + code 信封风格。
+		if e.Code == errcode.ErrPermissionDenied {
+			c.JSON(http.StatusForbidden, gin.H{"code": e.Code, "message": e.Message})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"code": e.Code, "message": e.Message})
+		return
+	}
+	// 大厅实时刷新:房间行已删,NotifyRoomChanged 会下发 status="removed"
+	// 占位快照,前端 useLobbyLiveUpdate 据此移除房间卡片(action=room_deleted)。
+	if a.hub != nil {
+		a.hub.NotifyRoomChanged(res.RoomID, "room_deleted", userID)
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    errcode.OK,
+		"message": "ok",
+		"data": gin.H{
+			"room_id":         res.RoomID,
+			"game_kind":       res.GameKind,
+			"players_deleted": res.PlayersDeleted,
+			"reason":          res.Reason,
+			"removed_at":      res.RemovedAt,
+		},
+	})
 }

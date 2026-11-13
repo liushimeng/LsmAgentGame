@@ -196,6 +196,9 @@ func New(cfg *config.Config, authAPI *api.AuthAPI, gameAPI *api.GameAPI, captcha
 		rooms.POST("/rooms/:id/spectate", roomAPI.Spectate)
 		rooms.POST("/rooms/:id/leave_spectate", roomAPI.LeaveSpectate)
 		rooms.GET("/rooms/:id", roomAPI.Detail)
+		// 2026-11-13 §测试房自助解散 — 创建者本人解散(判据 creator_user_id,
+		// service.DisbandRoomByCreator);复用 ForceDisbandRoom 清理链。
+		rooms.DELETE("/rooms/:id", roomAPI.Disband)
 	}
 
 	// Werewolf prop REST (2026-07-21 §道具系统):
