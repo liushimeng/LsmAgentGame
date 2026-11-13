@@ -143,6 +143,33 @@ def make_icosphere(name: str, r: float, subdiv: int, pos):
     return obj
 
 
+def make_prism(name: str, w: float, h: float, d: float, pos, rot=None):
+    """等腰三角柱（批次 90 新增）：X 宽 w × Y 进深 d × Z 高 h，**底边贴 pos.z**。
+
+    山花 tympanum / 三角山墙 / 阶梯挡墙端头用。from_pydata 直建（无 bpy.ops 图元），
+    法线统一 bmesh 外向重算（from_pydata 的手写面序不保证外向）。
+    """
+    import bmesh
+    mesh = bpy.data.meshes.new(name + '_Mesh')
+    y0, y1 = -d / 2.0, d / 2.0
+    verts = [(-w / 2.0, y0, 0.0), (w / 2.0, y0, 0.0), (0.0, y0, h),
+             (-w / 2.0, y1, 0.0), (w / 2.0, y1, 0.0), (0.0, y1, h)]
+    faces = [(0, 1, 2), (5, 4, 3),
+             (0, 3, 4, 1), (1, 4, 5, 2), (2, 5, 3, 0)]
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+    obj = _new_object(name, mesh, pos)
+    # 法线外向重算（from_pydata 手写面序不可靠）
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(obj.data)
+    bm.free()
+    if rot is not None:
+        obj.rotation_euler = (rot[0], rot[1], rot[2])
+    return obj
+
+
 def make_taper(name: str, r_bot: float, r_top: float, h: float, segs: int, pos, rot=None):
     """**上下不同半径**的圆台（树干收分 / 根盘 / 枝条渐细 / 锥形树冠层）。
 
@@ -490,11 +517,15 @@ def bake_transforms() -> list:
     return baked
 
 
-def export_glb(out_path: str, apply: bool = True, animations: bool = True) -> None:
+def export_glb(out_path: str, apply: bool = True, animations: bool = True,
+               image_format: str = 'AUTO') -> None:
     """导出当前场景为 .glb。
 
     apply=True:  导出前 apply 所有**修饰器**（视觉与 gltf-viewer 一致）
     animations=True: 导出当前所有 armature action（行人 walk 动画依赖此）
+    image_format: 'AUTO'（默认，既有行为逐字节不变）/ 'JPEG' / 'WEBP' / 'PNG' ——
+        只影响**场景里已存在的图像**（批次 90 贴图烘焙通路新增；无图像资产不受影响）。
+        程序噪声磨损图 PNG 压缩不动（256² 噪声 ≈ 60-100 KB），JPEG 约 1/4。
 
     ⚠️ `apply` 走的是 `bpy.ops.export_scene.gltf(export_apply=...)`，语义是
     **Apply Modifiers**，**不会**烘焙 object 的 transform。节点 identity 由导出前
@@ -524,6 +555,7 @@ def export_glb(out_path: str, apply: bool = True, animations: bool = True) -> No
         export_lights=False,
         export_cameras=False,
         use_selection=True,
+        export_image_format=image_format,
     )
     print(f'[export_glb] wrote {out_path}', flush=True)
 
@@ -746,6 +778,23 @@ CITY_PALETTE = {
     'forest_alpine':  '#2c4030',
     # 高山草甸/灌丛（林线以上的草坡与杜鹃灌丛，比 forest_alpine 亮一档偏黄绿）
     'meadow_alpine':  '#55663c',
+    # ── 市政地标（批次 90 新增；市政厅/水塔/通信塔是「地标语义」单列一族）────
+    # 新古典市政厅外墙暖米石（石灰石贴面：比 concrete 暖一档 —— 重要公共建筑惯例）
+    'stone_cream':    '#b3a894',
+    # 市政厅糙石勒脚/窗框/线脚（同族暗两档的暖灰）
+    'stone_cream_dark': '#7e7466',
+    # 钟面乳白瓷盘（夜间微亮的目标槽 CityHall_Clock）
+    'clock_face':     '#f0ead8',
+    # 橡木大门扇（深木色，比通用 wood 暗一档）
+    'door_oak':       '#4a3320',
+    # 青铜件（钟框/指针/壁灯架/塔顶风向杆，metallic 0.85）
+    'bronze':         '#8a6a3a',
+    # 塔顶旗帜红（市政旗；与消防红 truck_red 拉开：偏枣红一档）
+    'flag_red':       '#bf3930',
+    # 水塔罐体青灰涂层（经年涂装的球罐面）
+    'tank_paint':     '#a3b2bd',
+    # 水塔罐体深 navy 名带/分带线（"LSM CITY" 色带）
+    'tank_band':      '#274b6e',
 }
 # 白/黑/警示红单列在表外（不是"材质语义"而是全城通用）：黑橡胶轮胎、红消防标识。
 

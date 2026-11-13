@@ -2,15 +2,14 @@
  * 市政厅（18-AA · §5.2 CityHall）
  *   3 层石材体量 + 门廊 4 柱 + 钟楼（4 面钟）+ 旗杆。布点 (-9.0, -1.7)。
  *
- * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
- *   - modelUrl 返回 '' → 走 fallback（程序化几何，与原行为像素一致）
- *   - .glb 加载成功 → 渲染真实模型，children 不渲染
- *   - 切换开关：engine3d blenderModelsEnabled()（localStorage disable-blender-models=1）强制 fallback
+ * 批次 90 昼夜发光：从裸 <Model> 迁到 <CivicGlbPiece>（范式同 GasStation）。
+ *   - 降级链（blenderModelsEnabled → modelUrl → 加载中/失败 ⇒ fallback）由 CivicGlbPiece
+ *     内置；原程序化几何保留为 fallback，改本地坐标（position 统一由外层持有）
+ *   - litMaterials 昼夜调制：钟面 CityHall_Clock 0.6 / 门灯 CityHall_Lantern 1.6
+ *     （材质名 includes 匹配 GLB 的 CityHall_Clock_Mat / CityHall_Lantern_Mat）
  */
-import { u, worldDims, sizeTargetFor, buildingHeight } from '../cityScale';
-import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
-import { modelUrl } from '@/assets/models';
-import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+import { u, worldDims, buildingHeight } from '../cityScale';
+import { CivicGlbPiece } from './CivicGlb';
 
 const STONE = '#a8a4a0';
 const STONE_DARK = '#7a7a76';
@@ -20,7 +19,7 @@ const GOLD = '#d4a017';
 /**
  * 市政厅布点（世界坐标）：主楼/模型 group 原点。
  * 批次 23 起导出为市民之声气泡锚点基准（CityVoiceBubbleLayer），
- * CityHall 本体的两处落位（Model / fallback group）同用一份，防止坐标漂移。
+ * CityHall 本体（CivicGlbPiece position / fallback）同用一份，防止坐标漂移。
  */
 export const CITY_HALL_POSITION = { x: 0, z: 36 } as const;
 
@@ -42,8 +41,11 @@ const TOWER_TOP_Y = TOWER_BASE_Y + TOWER_H;
 const SPIRE_H = HALL.y - TOWER_TOP_Y;
 /** 檐口外挑（单侧 0.2 m）。 */
 const EAVE = u(0.2);
-/** GLB 尺寸/落地校验目标（dev 态；city_hall.glb 原点在基座，minY=0）。 */
-const CITY_HALL_SIZE_TARGET = sizeTargetFor('cityHall', { label: 'civic/city_hall' });
+/** 夜间自发光（CivicGlbPiece 昼夜调制，材质名 includes 匹配 GLB 的 *_Mat）：钟面 0.6 / 门灯 1.6。 */
+const LIT = {
+  CityHall_Clock: 0.6,
+  CityHall_Lantern: 1.6,
+};
 
 /** 市民之声气泡锚点：钟楼尖顶（= 表值总高 20.0 m）再上浮 0.6，悬浮于市政厅上空。 */
 export const CITY_HALL_BUBBLE_ANCHOR: [number, number, number] = [
@@ -54,34 +56,22 @@ export const CITY_HALL_BUBBLE_ANCHOR: [number, number, number] = [
 
 /** 全局开关：测试/回滚用，缺省 false = 用 .glb */
 export function CityHall() {
-  const url = modelUrl('civic', 'city_hall');
-  // 批次 28 B2：市政厅信息交互（根组包住 GLB/fallback 双路径，零几何改动）。
-  const info = useObjectInfoProps('civic.city-hall', { anchorY: 5 });
-  // url 缺失或全局开关关闭 → 直接渲染原程序化几何
-  if (!url || !blenderEnabled()) {
-    return (
-      <group {...info}>
-        <CityHallFallback />
-      </group>
-    );
-  }
   return (
-    <group {...info}>
-      <Model
-        url={url}
-        sizeTarget={CITY_HALL_SIZE_TARGET}
-        position={[CITY_HALL_POSITION.x, 0, CITY_HALL_POSITION.z]}
-        castShadow
-        receiveShadow
-      >
-        <CityHallFallback />
-      </Model>
-    </group>
+    <CivicGlbPiece
+      glbName="city_hall"
+      dimsKey="cityHall"
+      infoId="civic.city-hall"
+      anchorY={5}
+      position={[CITY_HALL_POSITION.x, 0, CITY_HALL_POSITION.z]}
+      litMaterials={LIT}
+      fallback={<CityHallFallback />}
+    />
   );
 }
 
 /**
  * 保留原程序化几何作为 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。
+ * 批次 90：本地坐标（原根组 position 改由 CivicGlbPiece 外层持有，几何零改动）。
  *
  * 批次 29 度量衡统一：占地轮廓 / 总高 / 尖顶高度全部由 REAL_DIMS_M.cityHall 导出
  * （主楼 = 表值 − 檐口外挑；尖顶顶面恰为表值总高 20.0 m）；同时修掉两处「旧 1 单位
@@ -93,7 +83,7 @@ function CityHallFallback() {
   const bodyW = HALL.x - EAVE * 2;   // 14.0 m（表值轮廓 − 双侧檐口）
   const bodyD = HALL.z - EAVE * 2;   // 8.0 m
   return (
-    <group position={[CITY_HALL_POSITION.x, 0, CITY_HALL_POSITION.z]}>
+    <group>
       {/* 主楼：14.0 × 9.0(3 层) × 8.0 m */}
       <mesh position={[0, HALL_BODY_H / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[bodyW, HALL_BODY_H, bodyD]} />

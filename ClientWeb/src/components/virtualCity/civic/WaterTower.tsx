@@ -2,12 +2,12 @@
  * 水塔（18-AA · §5.2 WaterTower）
  *   锥形支架 + 罐体 + 检修梯 + 字样带。布点 (-22, 2)。
  *
- * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
+ * 批次 90 昼夜发光：从裸 <Model> 迁到 <CivicGlbPiece>（范式同 GasStation）；
+ * litMaterials 罐顶障碍灯 WaterTower_Obstruction 2.0（材质名 includes 匹配 *_Mat）。
+ * 降级链由 CivicGlbPiece 内置；原程序化几何保留为 fallback（本地坐标，外层持有 position）。
  */
-import { u, worldDims, sizeTargetFor } from '../cityScale';
-import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
-import { modelUrl } from '@/assets/models';
-import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+import { u, worldDims } from '../cityScale';
+import { CivicGlbPiece } from './CivicGlb';
 
 const TANK_GREEN = '#5a7a4e';
 const TANK_LIGHT = '#7a9a6e';
@@ -21,33 +21,30 @@ const TOWER = worldDims('waterTower');
 const TANK_R = TOWER.x / 2;
 /** 罐顶圆盖（厚 0.3 m）——顶面接总高。 */
 const CAP_H = u(0.3);
-/** GLB 尺寸/落地校验目标（dev 态）。 */
-const WATER_TOWER_SIZE_TARGET = sizeTargetFor('waterTower', { label: 'civic/water_tower' });
+/** 夜间自发光（CivicGlbPiece 昼夜调制）：罐顶障碍灯 2.0（WaterTower_Obstruction_Mat）。 */
+const LIT = {
+  WaterTower_Obstruction: 2.0,
+};
 
 export function WaterTower() {
-  const url = modelUrl('civic', 'water_tower');
-  // 批次 28 B2：水塔信息交互。
-  const info = useObjectInfoProps('civic.water-tower', { anchorY: 5 });
-  if (!url || !blenderEnabled()) {
-    return (
-      <group {...info}>
-        <WaterTowerFallback />
-      </group>
-    );
-  }
   return (
-    <group {...info}>
-      <Model url={url} sizeTarget={WATER_TOWER_SIZE_TARGET} position={[36, 0, -12]} castShadow>
-        <WaterTowerFallback />
-      </Model>
-    </group>
+    <CivicGlbPiece
+      glbName="water_tower"
+      dimsKey="waterTower"
+      infoId="civic.water-tower"
+      anchorY={5}
+      position={[36, 0, -12]}
+      litMaterials={LIT}
+      fallback={<WaterTowerFallback />}
+    />
   );
 }
 
-/** 程序化几何 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。 */
+/** 程序化几何 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。
+ * 批次 90：本地坐标（原根组 position 改由 CivicGlbPiece 外层持有，几何零改动）。 */
 function WaterTowerFallback() {
   return (
-    <group position={[36, 0, -12]}>
+    <group>
       {/* 锥形支架：4 斜腿 + 顶部圈梁 */}
       {[-1, 1].map((sx) =>
         [-1, 1].map((sz) => (

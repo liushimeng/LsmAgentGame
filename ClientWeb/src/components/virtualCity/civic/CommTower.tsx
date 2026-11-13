@@ -2,12 +2,12 @@
  * 通讯塔（18-AA · §5.2 CommTower）
  *   格构塔（4 柱 + 6 层横撑）+ 微波板 3 面 + 航空障碍灯。布点 (-6, 10)。
  *
- * 19-Blender3D模型集成：用 <Model url={...}> 包一层，原程序化几何保留为 children fallback。
+ * 批次 90 昼夜发光：从裸 <Model> 迁到 <CivicGlbPiece>（范式同 GasStation）；
+ * litMaterials 航空障碍灯 CommTower_Warn 2.0（材质名 includes 匹配 CommTower_Warn_Mat）。
+ * 降级链由 CivicGlbPiece 内置；原程序化几何保留为 fallback（本地坐标，外层持有 position）。
  */
-import { u, worldDims, sizeTargetFor } from '../cityScale';
-import { Model, blenderModelsEnabled as blenderEnabled } from '@/engine3d';
-import { modelUrl } from '@/assets/models';
-import { useObjectInfoProps } from '../objectInfo/useObjectInfoProps';
+import { u, worldDims } from '../cityScale';
+import { CivicGlbPiece } from './CivicGlb';
 
 const TOWER_DARK = '#5a6270';
 const PANEL_WHITE = '#e8e8e8';
@@ -34,33 +34,30 @@ const CABIN_H = u(0.6);
 const LIGHT_R = u(0.1);
 const DISH_S = u(3);
 const DISH_Z = u(16);
-/** GLB 尺寸/落地校验目标（dev 态）。 */
-const COMM_TOWER_SIZE_TARGET = sizeTargetFor('commTower', { label: 'civic/comm_tower' });
+/** 夜间自发光（CivicGlbPiece 昼夜调制）：航空障碍灯 2.0（含塔顶闪灯 CommTower_Warn_Mat）。 */
+const LIT = {
+  CommTower_Warn: 2.0,
+};
 
 export function CommTower() {
-  const url = modelUrl('civic', 'comm_tower');
-  // 批次 28 B2：通讯塔信息交互。
-  const info = useObjectInfoProps('civic.comm-tower', { anchorY: 6 });
-  if (!url || !blenderEnabled()) {
-    return (
-      <group {...info}>
-        <CommTowerFallback />
-      </group>
-    );
-  }
   return (
-    <group {...info}>
-      <Model url={url} sizeTarget={COMM_TOWER_SIZE_TARGET} position={[24, 0, 0]} castShadow>
-        <CommTowerFallback />
-      </Model>
-    </group>
+    <CivicGlbPiece
+      glbName="comm_tower"
+      dimsKey="commTower"
+      infoId="civic.comm-tower"
+      anchorY={6}
+      position={[24, 0, 0]}
+      litMaterials={LIT}
+      fallback={<CommTowerFallback />}
+    />
   );
 }
 
-/** 程序化几何 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。 */
+/** 程序化几何 fallback（19-Blender3D模型集成 · 02 架构设计 §5.2 降级链）。
+ * 批次 90：本地坐标（原根组 position 改由 CivicGlbPiece 外层持有，几何零改动）。 */
 function CommTowerFallback() {
   return (
-    <group position={[24, 0, 0]}>
+    <group>
       {/* 塔基垫脚 ×4（外缘 = ±FOOT ⇒ 定义表值占地 10×10） */}
       {[-1, 1].map((sx) =>
         [-1, 1].map((sz) => (

@@ -255,6 +255,15 @@ i18n、`t_lsm_game_user.language` 字段、`/api/user/*` 偏好接口，以及�
 - **报告清理**：修复完成后删除已处理的 `TestReport/*.md`；无问题报告加 `_无问题` 后缀归档。
 - **绝对禁止**自动修复流程写入 `CLAUDE.md` / `AGENTS.md`。
 
+### 22.1 自动化测试房间纪律（2026-11-13 起硬约束）
+
+> 目标：测试房间不堆积、服务器不被测试流量卡死。适用于一切自动建房的脚本 / SubAgent / CLI 验收。
+
+- **一次一房**：单次测试运行**只创建 1 个房间**，禁止循环累积建房。
+- **测完必散**：脚本收尾（`try/finally`）必须断开全部连接——CDP 关 Tab / 杀调试浏览器（`pkill -f remote-debugging-port=<port>`，软渲染渲染循环是最大资源头）→ 服务端自动 `spectator auto-clean` + 空房 5 min 删除计时器接管。
+- **立即解散**残留房：`POST /api/admin/rooms/cleanup?age_minutes=1`（admin）或 `DELETE /api/admin/rooms/:room_id`（super-admin kill switch，幂等，广播 `game.removed`）。
+- **禁止**把 `playing` 状态测试房遗留给下一会话；开新一轮测试前先清点遗留并解散。
+
 ## 24. AgentClassName 与 User-Agent 拼装约定
 
 > **所有 Agent 都必须设置** `AgentClassName`，统一登记在 [`ServerGo/agent/class_names.go`](ServerGo/agent/class_names.go)。命名 `<Game>-<Role>`。
@@ -300,6 +309,13 @@ i18n、`t_lsm_game_user.language` 字段、`/api/user/*` 偏好接口，以及�
 7. **`.py` 生产源全部入库**。
 
 > **两个可执行护栏**：`3d_script/verify_glb_aabb.py`（全量 GLB 校验，新增/重导后必跑）；`ClientWeb/src/engine3d/glbSizeGuard.ts`（dev 态载入即校验，只告警不改几何）。
+>
+> **贴图烘焙通路（批次 90）**：`weathered_pbr` 的程序磨损经 `3d_script/bake_texture.py`
+> 烘成 256² baseColor（JPEG）内嵌 GLB（前端链路对内嵌贴图零剥离）。带烘焙桶的资产
+> 导出用 `export_glb(..., image_format='JPEG')`，并跑 `3d_script/audit_glb_textures.py`
+> 数值门禁（p80 亮侧分位 ±8% + 最长子串匹配）。⚠ Cycles DIFFUSE 颜色 pass 会把基色乘
+> `(1−metallic)`——烘前 metallic 置 0 已在工具内处理；无 boolean 管线下「凹入」结构
+> 必须转「外凸」表达（city_hall 门廊教训，详见批次 90 实施记录）。
 
 ## 28. 虚拟城市 · 实时看板（批次 69）
 
